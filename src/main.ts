@@ -49,13 +49,10 @@ async function renderChunk(event: MouseEvent) {
   });
   currentLine += LINES_PER_CHUNK;
   if (!hasRendered) {
-    wrapper.innerHTML += html;
+    wrapper.innerHTML = html;
     wrapper = wrapper.querySelector('[data-code]');
   } else {
-    const element = document.createElement('div');
-    element.style.display = 'contents';
-    element.innerHTML = html;
-    wrapper.appendChild(element);
+    wrapper.insertAdjacentHTML('beforeend', html);
   }
   timings.push(Date.now() - start);
   hasRendered = true;
