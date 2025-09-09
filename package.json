@@ -21,6 +21,7 @@
     "vite": "^7.1.2"
   },
   "dependencies": {
-    "shiki": "^3.9.2"
+    "shiki": "^3.9.2",
+    "shiki-stream": "^0.1.2"
   }
 }
