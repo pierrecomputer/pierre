@@ -5,13 +5,13 @@ export function createFakeContentStream(data: string) {
         const chunks: string[] = [];
         let remaining = data;
         while (remaining.length > 0) {
-          const chunkSize = Math.floor(Math.random() * 20) + 2;
+          const chunkSize = Math.floor(Math.random() * 100) + 2;
           chunks.push(remaining.slice(0, chunkSize));
           remaining = remaining.slice(chunkSize);
         }
         return chunks;
       })();
-      let timeout = -1;
+      let timeout: NodeJS.Timeout | null = null;
       function pushNext() {
         const nextData = randomizedData.shift();
         if (nextData == null) {
@@ -23,9 +23,9 @@ export function createFakeContentStream(data: string) {
         }
         controller.enqueue(nextData);
         if (timeout != null) {
-          cancelAnimationFrame(timeout);
+          clearTimeout(timeout);
         }
-        timeout = requestAnimationFrame(pushNext);
+        timeout = setTimeout(pushNext, Math.random() + 100);
       }
       pushNext();
     },
