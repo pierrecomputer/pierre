@@ -36,6 +36,7 @@ export function createWrapperNodes(
   const pre = document.createElement('pre');
   pre.tabIndex = 0;
   pre.dataset.theme = 'dark';
+  pre.dataset.pre = '';
   pre.style = getEditorStyles(highlighter);
   const code = document.createElement('code');
   code.dataset.code = '';

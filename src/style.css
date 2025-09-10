@@ -15,11 +15,21 @@
   box-sizing: border-box;
 }
 
-.content {
+html,
+body {
+  display: block;
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
   display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  width: 100%;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
 }
 
 a {
@@ -29,11 +39,6 @@ a {
 }
 a:hover {
   color: #747bff;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
 }
 
 button {
@@ -69,6 +74,20 @@ code {
   max-width: 100%;
   box-sizing: border-box;
   z-index: 2;
+}
+
+.content {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  width: 100%;
+}
+
+[data-pre] {
+  overflow-y: auto;
+  scrollbar-width: none;
+  min-height: 0;
 }
 
 [data-code] {

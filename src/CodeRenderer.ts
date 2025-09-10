@@ -1,11 +1,8 @@
-import { createStreamingHighlighter } from './createStreamingHighlighter';
 import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
 import type {
-  BundledHighlighterOptions,
   HighlighterGeneric,
   StringLiteralUnion,
   ThemedToken,
-  ThemeRegistrationAny,
 } from '@shikijs/core';
 import {
   createRow,
@@ -14,6 +11,7 @@ import {
 } from './utils/html_render_utils';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 import { queueRender } from './UnversialRenderer';
+import { getSharedHighlighter } from './SharedHighlighter';
 
 interface CodeTokenOptionsBase {
   lang: BundledLanguage;
@@ -21,56 +19,43 @@ interface CodeTokenOptionsBase {
 }
 
 interface CodeTokenOptionsSingleTheme extends CodeTokenOptionsBase {
-  theme: ThemeRegistrationAny | StringLiteralUnion<string, string>;
+  theme: BundledTheme;
   themes?: never;
 }
 
 interface CodeTokenOptionsMultiThemes extends CodeTokenOptionsBase {
   theme?: never;
-  themes: Partial<
-    Record<string, ThemeRegistrationAny | StringLiteralUnion<string, string>>
-  >;
+  themes: { dark: BundledTheme; light: BundledTheme };
 }
 
-type CodeTokenOptions =
+type CodeRendererOptions =
   | CodeTokenOptionsSingleTheme
   | CodeTokenOptionsMultiThemes;
 
 export class CodeRenderer {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  highlighter: HighlighterGeneric<any, any> | undefined;
-  codeTransformerOptions: CodeTokenOptions;
-  highlighterOptions: BundledHighlighterOptions<BundledLanguage, BundledTheme>;
+  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme> | undefined;
+  options: CodeRendererOptions;
   stream: ReadableStream<string>;
-
-  constructor(
-    stream: ReadableStream<string>,
-    codeTransformerOptions: CodeTokenOptions,
-    highlighterOptions: BundledHighlighterOptions<BundledLanguage, BundledTheme>
-  ) {
-    this.stream = stream;
-    this.codeTransformerOptions = codeTransformerOptions;
-    this.highlighterOptions = highlighterOptions;
-  }
-
-  // private pre: HTMLElement = document.createElement('pre');
+  private pre: HTMLPreElement = document.createElement('pre');
   private code: HTMLElement = document.createElement('code');
 
-  async setup(wrapper: HTMLElement) {
-    this.highlighter = await createStreamingHighlighter(
-      this.highlighterOptions
-    );
-    const { pre, code } = createWrapperNodes(this.highlighter);
-    // this.pre = pre;
-    this.code = code;
-    wrapper.appendChild(pre);
+  constructor(stream: ReadableStream<string>, options: CodeRendererOptions) {
+    this.stream = stream;
+    this.options = options;
+  }
 
+  async setup(wrapper: HTMLElement) {
+    this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
+    const { pre, code } = createWrapperNodes(this.highlighter);
+    this.pre = pre;
+    wrapper.appendChild(this.pre);
+    this.code = code;
     this.stream
       .pipeThrough(
         new CodeToTokenTransformStream({
           highlighter: this.highlighter,
           allowRecalls: true,
-          ...this.codeTransformerOptions,
+          ...this.options,
         })
       )
       .pipeTo(
@@ -93,7 +78,7 @@ export class CodeRenderer {
   private queuedTokens: (ThemedToken | RecallToken)[] = [];
   render = () => {
     const isScrolledToBottom =
-      window.innerHeight + window.scrollY >= document.body.offsetHeight - 1;
+      this.pre.scrollTop + this.pre.clientHeight >= this.pre.scrollHeight - 1;
 
     for (const token of this.queuedTokens) {
       if ('recall' in token) {
@@ -124,7 +109,7 @@ export class CodeRenderer {
     }
 
     if (isScrolledToBottom) {
-      window.scrollTo({ top: document.body.scrollHeight });
+      this.pre.scrollTop = this.pre.scrollHeight;
     }
 
     this.queuedTokens.length = 0;
@@ -134,5 +119,18 @@ export class CodeRenderer {
     const { row, content } = createRow(this.currentLineIndex);
     this.code.appendChild(row);
     this.currentLineElement = content;
+  }
+
+  private getHighlighterOptions() {
+    const { lang, themes: _themes, theme } = this.options;
+    const langs: BundledLanguage[] = [lang];
+    const themes: BundledTheme[] = [];
+    if (theme != null) {
+      themes.push(theme);
+    } else if (themes) {
+      themes.push(_themes.dark);
+      themes.push(_themes.light);
+    }
+    return { langs, themes };
   }
 }
