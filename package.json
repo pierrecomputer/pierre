@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev-react": "vite --mode react",
     "build": "bun run tsc && vite build",
+    "build-react": "bun run tsc && vite build --mode react --config vite.config.ts",
     "preview": "vite preview",
     "tsc": "tsc",
     "lint": "eslint .",
@@ -16,6 +18,9 @@
   "devDependencies": {
     "@eslint/js": "9.33.0",
     "@types/node": "24.3.1",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
     "eslint": "9.33.0",
     "prettier": "3.6.2",
     "typescript": "5.9.2",
@@ -24,6 +29,8 @@
   },
   "dependencies": {
     "@shikijs/core": "3.12.2",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
     "shiki": "3.12.2"
   }
 }
