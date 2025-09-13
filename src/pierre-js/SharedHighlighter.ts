@@ -8,9 +8,14 @@ import {
   loadWasm,
 } from 'shiki';
 
-let highlighter:
-  | Promise<HighlighterGeneric<BundledLanguage, BundledTheme>>
+type PierreHighlighter = HighlighterGeneric<BundledLanguage, BundledTheme>;
+
+type CachedOrLoadingHighlighterType =
+  | Promise<PierreHighlighter>
+  | PierreHighlighter
   | undefined;
+
+let highlighter: CachedOrLoadingHighlighterType;
 
 const loadedThemes = new Map<BundledTheme, true | Promise<void>>();
 const loadedLanguages = new Map<BundledLanguage, true | Promise<void>>();
@@ -26,7 +31,7 @@ export async function getSharedHighlighter({
   langs,
   preferWasmHighlighter = false,
 }: HighlighterOptions) {
-  if (highlighter == null) {
+  if (isHighlighterNull(highlighter)) {
     // NOTE(amadeus): We should probably build in some logic for rejection
     // handling...
     highlighter = new Promise((resolve) => {
@@ -53,17 +58,23 @@ export async function getSharedHighlighter({
               : createJavaScriptRegexEngine(),
           });
         })
-        .then(resolve);
+        .then((instance) => {
+          highlighter = instance;
+          resolve(instance);
+        });
     });
     return highlighter;
   }
+  const instance = isHighlighterLoading(highlighter)
+    ? await highlighter
+    : highlighter;
   const loaders: Promise<void>[] = [];
   for (const language of langs) {
     const loadedOrLoading = loadedLanguages.get(language);
     // We haven't loaded this language yet, so lets queue it up
     if (loadedOrLoading == null) {
-      const promise = highlighter
-        .then((h) => h.loadLanguage(language))
+      const promise = instance
+        .loadLanguage(language)
         .then(() => void loadedLanguages.set(language, true));
       loadedLanguages.set(language, promise);
       loaders.push(promise);
@@ -78,8 +89,8 @@ export async function getSharedHighlighter({
     const loadedOrLoading = loadedThemes.get(theme);
     // We haven't loaded this theme yet, so lets queue it up
     if (loadedOrLoading == null) {
-      const promise = highlighter
-        .then((h) => h.loadTheme(theme))
+      const promise = instance
+        .loadTheme(theme)
         .then(() => void loadedThemes.set(theme, true));
       loadedThemes.set(theme, promise);
       loaders.push(promise);
@@ -90,7 +101,32 @@ export async function getSharedHighlighter({
       loaders.push(loadedOrLoading);
     }
   }
-  return (await Promise.all([highlighter, ...loaders] as const))[0];
+  if (loaders.length > 0) {
+    await Promise.all(loaders);
+  }
+  return instance;
+}
+
+export function isHighlighterLoaded(
+  h: CachedOrLoadingHighlighterType = highlighter
+): h is PierreHighlighter {
+  return h != null && !('then' in h);
+}
+
+export function isHighlighterLoading(
+  h: CachedOrLoadingHighlighterType = highlighter
+): h is Promise<PierreHighlighter> {
+  return h != null && 'then' in h;
+}
+
+export function isHighlighterNull(
+  h: CachedOrLoadingHighlighterType = highlighter
+): h is undefined {
+  return h == null;
+}
+
+export async function preloadHighlighter(options: HighlighterOptions) {
+  return void (await getSharedHighlighter(options));
 }
 
 export async function disposeHighlighter() {

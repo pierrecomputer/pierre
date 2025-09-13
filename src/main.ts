@@ -1,7 +1,8 @@
+import type { BundledLanguage, BundledTheme } from 'shiki';
 import './style.css';
 import { CodeConfigs } from './test_files/';
 import { createFakeContentStream } from './utils/createFakeContentStream';
-import { CodeRenderer } from 'pierrejs';
+import { CodeRenderer, isHighlighterNull, preloadHighlighter } from 'pierrejs';
 
 async function startStreaming(event: MouseEvent) {
   const container = document.getElementById('content');
@@ -17,6 +18,19 @@ async function startStreaming(event: MouseEvent) {
   }
 }
 
+function handlePreload() {
+  if (isHighlighterNull()) {
+    const langs: BundledLanguage[] = [];
+    const themes: BundledTheme[] = [];
+    for (const item of CodeConfigs) {
+      langs.push(item.options.lang);
+      themes.push(item.options.themes.dark);
+      themes.push(item.options.themes.light);
+    }
+    preloadHighlighter({ langs, themes });
+  }
+}
+
 document.getElementById('toggle-theme')?.addEventListener('click', () => {
   const codes = document.querySelectorAll('[data-theme]');
   for (const code of codes) {
@@ -25,6 +39,8 @@ document.getElementById('toggle-theme')?.addEventListener('click', () => {
   }
 });
 
-document
-  .getElementById('stream-code')
-  ?.addEventListener('click', startStreaming);
+const streamCode = document.getElementById('stream-code');
+if (streamCode != null) {
+  streamCode.addEventListener('click', startStreaming);
+  streamCode.addEventListener('mouseenter', handlePreload);
+}

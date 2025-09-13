@@ -3,6 +3,8 @@ import '../style.css';
 import { CodeConfigs } from '../test_files/';
 import { CodeRenderer, type CodeRendererProps } from './CodeRenderer';
 import { createFakeContentStream } from '../utils/createFakeContentStream';
+import type { BundledLanguage, BundledTheme } from 'shiki';
+import { isHighlighterNull, preloadHighlighter } from 'pierrejs';
 
 export function App() {
   const [codez, setCodez] = useState<CodeRendererProps[]>([]);
@@ -27,11 +29,26 @@ export function App() {
     );
   }, []);
 
+  const handlePreload = useCallback(() => {
+    if (isHighlighterNull()) {
+      const langs: BundledLanguage[] = [];
+      const themes: BundledTheme[] = [];
+      for (const item of CodeConfigs) {
+        langs.push(item.options.lang);
+        themes.push(item.options.themes.dark);
+        themes.push(item.options.themes.light);
+      }
+      preloadHighlighter({ langs, themes });
+    }
+  }, []);
+
   return (
     <>
       <div className="tools">
         <button onClick={toggleTheme}>Toggle Theme</button>
-        <button onClick={handleStartStreaming}>Stream Code</button>
+        <button onClick={handleStartStreaming} onMouseEnter={handlePreload}>
+          Stream Code
+        </button>
         <div>
           [<a href="/">RAW</a> / <strong>REACT</strong>]
         </div>
