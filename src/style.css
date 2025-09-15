@@ -164,6 +164,11 @@ code {
   background-color: color-mix(in srgb, var(--shiki-light-bg) 95%, black);
 }
 
+[data-theme='dark'] [data-line]:hover [data-column-number],
+[data-theme='dark'] [data-line]:hover [data-column-content] {
+  background-color: color-mix(in srgb, var(--shiki-dark-bg) 95%, white);
+}
+
 [data-column-number] {
   padding-right: 8px;
   text-align: right;
