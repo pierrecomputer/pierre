@@ -107,6 +107,7 @@ export class CodeRenderer {
         new CodeToTokenTransformStream({
           highlighter: this.highlighter,
           allowRecalls: true,
+          cssVariablePrefix: '--pjs-',
           ...this.options,
         })
       )
