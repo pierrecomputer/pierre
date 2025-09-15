@@ -1,16 +1,23 @@
-import type { CodeRenderer } from '../CodeRenderer';
+import type { CodeRenderer } from 'pierrejs';
 
 export function createScrollFixer() {
   let isScrolledToBottom = false;
   return {
     onPreRender(instance: CodeRenderer) {
+      const { pre } = instance;
+      if (pre == null) {
+        throw new Error('onPostRender: pre wrapper does not exist');
+      }
       isScrolledToBottom =
-        instance.pre.scrollTop + instance.pre.clientHeight >=
-        instance.pre.scrollHeight - 1;
+        pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 1;
     },
     onPostRender(instance: CodeRenderer) {
+      const { pre } = instance;
+      if (pre == null) {
+        throw new Error('onPostRender: pre wrapper does not exist');
+      }
       if (isScrolledToBottom) {
-        instance.pre.scrollTop = instance.pre.scrollHeight;
+        pre.scrollTop = pre.scrollHeight;
       }
     },
   };

@@ -3,15 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"
+    />
     <title>PierreJS R&amp;D</title>
   </head>
   <body>
-    <div class="tools">
-      <button id="toggle-theme">Toggle Theme</button>
-      <button id="stream-code">Stream Code</button>
+    <div id="root">
+      <div class="tools">
+        <button id="toggle-theme">Toggle Theme</button>
+        <button id="stream-code">Stream Code</button>
+        <div>[<strong>RAW</strong> / <a href="/react">REACT</a>]</div>
+      </div>
+      <div id="content" class="content" />
     </div>
-    <div id="content" class="content"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

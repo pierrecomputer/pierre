@@ -1,4 +1,4 @@
-import { queueRender } from '../UnversialRenderer';
+import { queueRender } from '../pierre-js/UnversialRenderer';
 
 export function createFakeContentStream(data: string, letterByLetter = false) {
   return new ReadableStream<string>({

@@ -1,4 +1,4 @@
-import { disposeHighlighter } from '../SharedHighlighter';
+import { disposeHighlighter } from 'pierrejs';
 
 let totalInstances = 0;
 let completed = 0;

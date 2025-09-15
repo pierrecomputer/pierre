@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    {
+      "source": "/react",
+      "destination": "/index-react.html"
+    },
+    {
+      "source": "/react/",
+      "destination": "/index-react.html"
+    }
+  ]
+}
+

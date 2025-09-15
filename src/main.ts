@@ -1,59 +1,44 @@
+import type { BundledLanguage, BundledTheme } from 'shiki';
 import './style.css';
-import testContent from './tests/example.txt?raw';
-import testContent2 from './tests/example2.txt?raw';
-import { createFakeContentStream } from './utils/fakeContentStream';
-import { CodeRenderer } from './CodeRenderer';
-import { createScrollFixer } from './utils/createScrollFixer';
-import { createHighlighterCleanup } from './utils/createHighlighterCleanup';
-
-const CODE = [
-  {
-    content: testContent,
-    letterByLetter: false,
-    options: {
-      lang: 'typescript',
-      themes: { dark: 'tokyo-night', light: 'vitesse-light' },
-      defaultColor: false,
-      ...createScrollFixer(),
-      ...createHighlighterCleanup(),
-    } as const,
-  },
-  {
-    content: testContent2,
-    letterByLetter: true,
-    options: {
-      lang: 'markdown',
-      themes: { dark: 'solarized-dark', light: 'solarized-light' },
-      defaultColor: false,
-      ...createScrollFixer(),
-      ...createHighlighterCleanup(),
-    } as const,
-  },
-] as const;
+import { CodeConfigs, toggleTheme } from './test_files/';
+import { createFakeContentStream } from './utils/createFakeContentStream';
+import { CodeRenderer, isHighlighterNull, preloadHighlighter } from 'pierrejs';
 
 async function startStreaming(event: MouseEvent) {
-  const wrapper = document.getElementById('content');
-  if (wrapper == null) return;
+  const container = document.getElementById('content');
+  if (container == null) return;
   if (event.currentTarget instanceof HTMLElement) {
     event.currentTarget.parentNode?.removeChild(event.currentTarget);
   }
-  for (const { content, letterByLetter, options } of CODE) {
-    const instance = new CodeRenderer(
-      createFakeContentStream(content, letterByLetter),
-      options
-    );
-    instance.setup(wrapper);
+  for (const { content, letterByLetter, options } of CodeConfigs) {
+    const pre = document.createElement('pre');
+    container.appendChild(pre);
+    const instance = new CodeRenderer(options);
+    instance.setup(createFakeContentStream(content, letterByLetter), pre);
   }
 }
 
-document.getElementById('toggle-theme')?.addEventListener('click', () => {
-  const codes = document.querySelectorAll('[data-theme]');
-  for (const code of codes) {
-    if (!(code instanceof HTMLElement)) return;
-    code.dataset.theme = code.dataset.theme === 'light' ? 'dark' : 'light';
+function handlePreload() {
+  if (isHighlighterNull()) {
+    const langs: BundledLanguage[] = [];
+    const themes: BundledTheme[] = [];
+    for (const item of CodeConfigs) {
+      langs.push(item.options.lang);
+      if ('themes' in item.options) {
+        themes.push(item.options.themes.dark);
+        themes.push(item.options.themes.light);
+      } else if ('theme' in item.options) {
+        themes.push(item.options.theme);
+      }
+    }
+    preloadHighlighter({ langs, themes });
   }
-});
+}
 
-document
-  .getElementById('stream-code')
-  ?.addEventListener('click', startStreaming);
+document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);
+
+const streamCode = document.getElementById('stream-code');
+if (streamCode != null) {
+  streamCode.addEventListener('click', startStreaming);
+  streamCode.addEventListener('mouseenter', handlePreload);
+}

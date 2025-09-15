@@ -18,8 +18,16 @@
   box-sizing: border-box;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #ffffff;
+    background-color: #242424;
+  }
+}
+
 html,
-body {
+body,
+#root {
   display: block;
   margin: 0;
   padding: 0;
@@ -35,7 +43,7 @@ body {
   -ms-text-size-adjust: 100%;
 }
 
-body {
+#root {
   margin: 0;
   min-width: 320px;
   display: grid;
@@ -47,9 +55,10 @@ a {
   font-weight: 500;
   color: #646cff;
   text-decoration: inherit;
-}
-a:hover {
-  color: #747bff;
+
+  &:hover {
+    color: #747bff;
+  }
 }
 
 button {
@@ -61,10 +70,18 @@ button {
   font-family: inherit;
   background-color: #f9f9f9;
   cursor: pointer;
+
+  &:hover {
+    border-color: #646cff;
+  }
 }
-button:hover {
-  border-color: #646cff;
+
+@media (prefers-color-scheme: dark) {
+  button {
+    background-color: #1a1a1a;
+  }
 }
+
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
@@ -85,6 +102,14 @@ code {
   max-width: 100%;
   box-sizing: border-box;
   z-index: 2;
+  display: flex;
+  gap: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tools {
+    background-color: rgba(36, 36, 36, 0.8);
+  }
 }
 
 .content {
@@ -95,7 +120,7 @@ code {
   width: 100%;
 }
 
-[data-pre] {
+[data-pierrejs] {
   overflow-y: auto;
   scrollbar-width: none;
   min-height: 0;
@@ -124,12 +149,40 @@ code {
 
 [data-line]:hover [data-column-number],
 [data-line]:hover [data-column-content] {
-  background-color: color-mix(in srgb, var(--shiki-dark-bg) 95%, white);
+  background-color: color-mix(
+    in srgb,
+    var(--pjs-light-bg, var(--pjs-bg)) 95%,
+    black
+  );
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-line]:hover [data-column-number],
+  [data-line]:hover [data-column-content] {
+    background-color: color-mix(
+      in srgb,
+      var(--pjs-dark-bg, var(--pjs-bg)) 95%,
+      white
+    );
+  }
 }
 
 [data-theme='light'] [data-line]:hover [data-column-number],
 [data-theme='light'] [data-line]:hover [data-column-content] {
-  background-color: color-mix(in srgb, var(--shiki-light-bg) 95%, black);
+  background-color: color-mix(
+    in srgb,
+    var(--pjs-light-bg, var(--pjs-bg)) 95%,
+    black
+  );
+}
+
+[data-theme='dark'] [data-line]:hover [data-column-number],
+[data-theme='dark'] [data-line]:hover [data-column-content] {
+  background-color: color-mix(
+    in srgb,
+    var(--pjs-dark-bg, var(--pjs-bg)) 95%,
+    white
+  );
 }
 
 [data-column-number] {
@@ -140,7 +193,13 @@ code {
   padding-inline: 8px;
   user-select: none;
   min-width: 32px;
-  color: color-mix(in srgb, currentColor 50%, #000);
+  color: color-mix(in srgb, currentColor 50%, #fff);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-column-number] {
+    color: color-mix(in srgb, currentColor 50%, #000);
+  }
 }
 
 [data-theme='light'] [data-column-number] {
@@ -152,28 +211,56 @@ code {
   min-height: 22px;
 }
 
-[data-theme='light'] {
-  background-color: var(--shiki-light-bg);
-  color: var(--shiki-light);
+[data-pierrejs] {
+  background-color: var(--pjs-light-bg);
+  color: var(--pjs-light);
 
   & span {
-    color: var(--shiki-light);
+    color: var(--pjs-light);
   }
 
   & [data-column-number] {
-    background-color: var(--shiki-light-bg);
+    background-color: var(--pjs-light-bg);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-pierrejs] {
+    background-color: var(--pjs-dark-bg);
+    color: var(--pjs-dark);
+
+    & span {
+      color: var(--pjs-dark);
+    }
+
+    & [data-column-number] {
+      background-color: var(--pjs-dark-bg);
+    }
+  }
+}
+
+[data-theme='light'] {
+  background-color: var(--pjs-light-bg);
+  color: var(--pjs-light);
+
+  & span {
+    color: var(--pjs-light);
+  }
+
+  & [data-column-number] {
+    background-color: var(--pjs-light-bg);
   }
 }
 
 [data-theme='dark'] {
-  background-color: var(--shiki-dark-bg);
-  color: var(--shiki-dark);
+  background-color: var(--pjs-dark-bg);
+  color: var(--pjs-dark);
 
   & span {
-    color: var(--shiki-dark);
+    color: var(--pjs-dark);
   }
 
   & [data-column-number] {
-    background-color: var(--shiki-dark-bg);
+    background-color: var(--pjs-dark-bg);
   }
 }
