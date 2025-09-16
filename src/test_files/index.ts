@@ -10,7 +10,7 @@ export const CodeConfigs = [
     content: tsContent,
     letterByLetter: false,
     options: {
-      lang: 'typescript',
+      lang: 'tsx',
       theme: 'tokyo-night',
       defaultColor: false,
       ...createScrollFixer(),
