@@ -1,0 +1,6 @@
+export const PER_FILE_DIFF_BREAK_REGEX = /(?=^diff --git)/gm;
+export const FILE_CONTEXT_BLOB = /(?=^@@ )/gm;
+export const HUNK_HEADER = /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@(?: (.*))?/m;
+export const DIFF_GIT_HEADER = /^diff --git a\/(.+?) b\/(.+)/;
+
+export const EMPTY_LINE = Symbol('pjs-empty-line');
