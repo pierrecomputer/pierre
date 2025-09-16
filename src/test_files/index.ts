@@ -1,7 +1,9 @@
 import { createScrollFixer } from '../utils/createScrollFixer';
 import mdContent from './example_md.txt?raw';
 import tsContent from './example_ts.txt?raw';
+import diffContent from './diff.patch?raw';
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
+import type { BundledLanguage } from 'shiki';
 
 export { mdContent, tsContent };
 
@@ -48,3 +50,15 @@ export function toggleTheme() {
     }
   }
 }
+
+export const DIFF_CONTENT = diffContent;
+
+export const DIFF_CONTENT_FORMATS: Record<string, BundledLanguage | undefined> =
+  {
+    js: 'javascript',
+    html: 'html',
+    json: 'json',
+    ts: 'typescript',
+    tsx: 'typescript',
+    css: 'css',
+  };
