@@ -2,26 +2,45 @@ import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
 import type { Root, Element, RootContent, ElementContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 import type {
+  CodeOptionsMultipleThemes,
   DecorationItem,
   HighlighterGeneric,
   ShikiTransformer,
-  StringLiteralUnion,
   ThemedToken,
 } from '@shikijs/core';
 import {
+  createHunkSeparator,
   createRow,
   createSpanFromToken,
   formatCSSVariablePrefix,
-  setupWrapperNodes,
+  createCodeNode,
+  setupPreNode,
 } from './utils/html_render_utils';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 import { queueRender } from './UnversialRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
 import type { FileMetadata, Hunk, HunkTypes, LinesHunk } from './types';
 
+interface CodeToHastBase {
+  lang: BundledLanguage;
+  defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
+  transformers: ShikiTransformer[];
+  decorations?: DecorationItem[];
+}
+
+interface CodeToHastTheme extends CodeToHastBase {
+  theme: BundledTheme;
+  themes?: never;
+}
+
+interface CodeToHastThemes extends CodeToHastBase {
+  theme?: never;
+  themes: { dark: BundledTheme; light: BundledTheme };
+}
+
 interface CodeTokenOptionsBase {
   lang?: BundledLanguage;
-  defaultColor?: StringLiteralUnion<'light' | 'dark'> | 'light-dark()' | false;
+  defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
   preferWasmHighlighter?: boolean;
   startingLineIndex?: number;
 
@@ -31,8 +50,7 @@ interface CodeTokenOptionsBase {
   onStreamStart?(controller: WritableStreamDefaultController): unknown;
   onStreamWrite?(token: ThemedToken | RecallToken): unknown;
   onStreamClose?(): unknown;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onStreamAbort?(reason: any): unknown;
+  onStreamAbort?(reason: unknown): unknown;
 }
 
 interface CodeTokenOptionsSingleTheme extends CodeTokenOptionsBase {
@@ -45,14 +63,21 @@ interface CodeTokenOptionsMultiThemes extends CodeTokenOptionsBase {
   themes: { dark: BundledTheme; light: BundledTheme };
 }
 
+interface RenderHunkProps {
+  hunk: Hunk;
+  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+  state: SharedRenderState;
+  codeDeletions: HTMLElement;
+  codeAdditions: HTMLElement;
+  transformer: ShikiTransformer;
+}
+
 export type CodeRendererOptions =
   | CodeTokenOptionsSingleTheme
   | CodeTokenOptionsMultiThemes;
 
 interface SharedRenderState {
   startingLine: number;
-  renderingAdditions: boolean;
-  hunk: Hunk;
   lineTypes: Record<number, HunkTypes>;
   spans: Record<number, number | undefined>;
   decorations: DecorationItem[];
@@ -114,87 +139,16 @@ export class CodeRenderer {
     const { themes, theme } = this.options;
     const splitView =
       diff.type === 'changed' || diff.type === 'renamed-changed';
-    const { pre, code } = setupWrapperNodes(
+    const pre = setupPreNode(
       themes != null
         ? { pre: wrapper, themes, highlighter, splitView }
         : { pre: wrapper, theme, highlighter, splitView }
     );
 
     this.pre = pre;
-    this.code = code;
-    const state: SharedRenderState = {
-      hunk: {} as Hunk,
-      spans: {},
-      startingLine: 0,
-      renderingAdditions: false,
-      lineTypes: {},
-      decorations: [],
-    };
-    const options = (() => {
-      const transformers: ShikiTransformer[] = [
-        {
-          name: 'derpin-the-perp',
-          code(code) {
-            code.properties['data-code'] = '';
-            return code;
-          },
-          pre(pre) {
-            pre.properties['data-theme'] = 'dark';
-            delete pre.properties.class;
-            // NOTE(amadeus): This kinda sucks -- basically we can't apply our
-            // line node changes until AFTER decorations have been applied
-            const code = findCodeElement(pre);
-            // FIXME(amadeus): Do the span processing in here as well...
-            const children: ElementContent[] = [];
-            if (code != null) {
-              let index = 1;
-              for (const node of code.children) {
-                if (node.type !== 'element') {
-                  children.push(node);
-                  continue;
-                }
-                if (index === 1 && state.spans[0] != null) {
-                  children.push(
-                    createEmptyRowBuffer(
-                      state.spans[0],
-                      state.renderingAdditions
-                    )
-                  );
-                }
-                children.push(convertLine(node, index, state));
-                const span = state.spans[index];
-                if (span != null) {
-                  children.push(
-                    createEmptyRowBuffer(span, state.renderingAdditions)
-                  );
-                }
-
-                index++;
-              }
-              code.children = children;
-            }
-            return pre;
-          },
-        },
-      ];
-      if ('theme' in this.options) {
-        return {
-          lang: this.options.lang ?? ('text' as BundledLanguage),
-          defaultColor: this.options.defaultColor,
-          theme: this.options.theme,
-          transformers,
-        };
-      }
-
-      if ('themes' in this.options) {
-        return {
-          lang: this.options.lang ?? ('text' as BundledLanguage),
-          defaultColor: this.options.defaultColor,
-          themes: this.options.themes,
-          transformers,
-        };
-      }
-    })();
+    const codeAdditions = createCodeNode({ columnType: 'additions' });
+    const codeDeletions = createCodeNode({ columnType: 'deletions' });
+    const { state, transformer } = createTransformerWithState();
     const element = document.createElement('div');
     element.dataset.fileInfo = '';
     if (diff.hunks.length === 0) {
@@ -208,26 +162,70 @@ export class CodeRenderer {
       if (!hasRenderedHunk) {
         hasRenderedHunk = true;
       } else {
-        const separator = document.createElement('div');
-        separator.dataset.separator = '';
-        this.code.appendChild(separator);
+        codeAdditions.appendChild(createHunkSeparator());
+        codeDeletions.appendChild(createHunkSeparator());
       }
-      this.renderHunk(hunk, highlighter, state, options);
+      this.renderHunk({
+        hunk,
+        highlighter,
+        state,
+        codeAdditions,
+        codeDeletions,
+        transformer,
+      });
+    }
+    if (codeDeletions.childNodes.length > 0) {
+      this.pre.appendChild(codeDeletions);
+    }
+    if (codeAdditions.childNodes.length > 0) {
+      this.pre.appendChild(codeAdditions);
     }
   }
 
-  renderHunk(
-    hunk: Hunk,
-    highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>,
-    state: SharedRenderState,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    options: any
-  ) {
+  createHastOptions(
+    transformer: ShikiTransformer,
+    decorations?: DecorationItem[]
+  ): CodeToHastTheme | CodeToHastThemes {
+    // REFERENCE CODE
+    // decorations: [
+    //   { start: 4, end: 105, properties: { 'data-lol': 'wot' } },
+    // ],
+    if ('theme' in this.options && this.options.theme != null) {
+      return {
+        theme: this.options.theme,
+        lang: this.options.lang ?? ('text' as BundledLanguage),
+        defaultColor: this.options.defaultColor,
+        transformers: [transformer],
+        decorations,
+      };
+    }
+
+    if ('themes' in this.options) {
+      return {
+        themes: this.options.themes,
+        lang: this.options.lang ?? ('text' as BundledLanguage),
+        defaultColor: this.options.defaultColor,
+        transformers: [transformer],
+        decorations,
+      };
+    }
+    throw new Error();
+  }
+
+  renderHunk({
+    hunk,
+    highlighter,
+    state,
+    codeAdditions,
+    codeDeletions,
+    transformer,
+  }: RenderHunkProps) {
     let lineIndex = 0;
-    const callbak = (linesHunk: LinesHunk, linesHunkIndex: number) => {
-      const oppositeHunk = state.renderingAdditions
-        ? hunk.deletedLines[linesHunkIndex]
-        : hunk.additionLines[linesHunkIndex];
+    let opposingLines = hunk.additionLines;
+    const processLines = (linesHunk: LinesHunk, linesHunkIndex: number) => {
+      // Figure out if the opposite group of lines is taller than our current
+      // one, if so we'll have to add a spanner node to fill the space
+      const oppositeHunk = opposingLines[linesHunkIndex];
       if (
         oppositeHunk != null &&
         oppositeHunk.lines.length > linesHunk.lines.length
@@ -235,53 +233,52 @@ export class CodeRenderer {
         state.spans[lineIndex + linesHunk.lines.length] =
           oppositeHunk.lines.length - linesHunk.lines.length;
       }
-      let ret = '';
+      // Get a mapping of the line type (change or context) and convert into a
+      // string
+      let processedLines = '';
       let index = lineIndex;
       for (const line of linesHunk.lines) {
         state.lineTypes[index + 1] = linesHunk.type;
-        ret += line;
+        processedLines += line;
         index++;
       }
       lineIndex += linesHunk.lines.length;
-      return ret;
+      return processedLines;
     };
     if (hunk.deletedLines.length > 0) {
       state.startingLine = hunk.deletedStart - 1;
-      state.hunk = hunk;
-      state.renderingAdditions = false;
       state.lineTypes = {};
       state.spans = {};
       lineIndex = 0;
       const deletions = hunk.deletedLines
-        .map(callbak)
+        .map(processLines)
         .join('')
         .replace(/\n$/, '');
-      const nodes = highlighter.codeToHast(deletions, {
-        ...options,
-        // REFERENCE CODE
-        // decorations: [
-        //   { start: 4, end: 105, properties: { 'data-lol': 'wot' } },
-        // ],
-      });
-      this.code?.insertAdjacentHTML(
+      const nodes = highlighter.codeToHast(
+        deletions,
+        this.createHastOptions(transformer)
+      );
+      codeDeletions.insertAdjacentHTML(
         'beforeend',
         toHtml(this.getNodesToRender(nodes))
       );
     }
 
     if (hunk.additionLines.length > 0) {
-      state.renderingAdditions = true;
+      opposingLines = hunk.deletedLines;
       state.lineTypes = {};
       state.spans = {};
       lineIndex = 0;
       const additions = hunk.additionLines
-        .map(callbak)
+        .map(processLines)
         .join('')
         .replace(/\n$/, '');
       state.startingLine = hunk.additionStart - 1;
-      state.hunk = hunk;
-      const nodes = highlighter.codeToHast(additions, options);
-      this.code?.insertAdjacentHTML(
+      const nodes = highlighter.codeToHast(
+        additions,
+        this.createHastOptions(transformer)
+      );
+      codeAdditions.insertAdjacentHTML(
         'beforeend',
         toHtml(this.getNodesToRender(nodes))
       );
@@ -309,14 +306,14 @@ export class CodeRenderer {
     highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>
   ) {
     const { themes, theme } = this.options;
-    const { pre, code } = setupWrapperNodes(
+    const pre = setupPreNode(
       themes != null
         ? { pre: wrapper, themes, highlighter, splitView: false }
         : { pre: wrapper, theme, highlighter, splitView: false }
     );
 
     this.pre = pre;
-    this.code = code;
+    this.code = createCodeNode({ pre });
     if (this.stream != null) {
       // Should we be doing this?
       this.stream.cancel();
@@ -428,52 +425,43 @@ export class CodeRenderer {
   }
 }
 
-function createEmptyRowBuffer(
-  size: number,
-  renderingAdditions: boolean
-): Element {
-  return {
-    tagName: 'div',
-    type: 'element',
-    properties: {
-      'data-buffer': '',
-      style: `grid-row: span ${size}`,
-      [renderingAdditions ? 'data-additions' : 'data-deletions']: '',
-    },
-    children: [],
-  };
-}
-
 function convertLine(
   node: Element,
   line: number,
   state: SharedRenderState
 ): ElementContent {
-  node.tagName = 'div';
-  node.properties['data-column-content'] = '';
-  delete node.properties.class;
+  // We want to conver the default node for a line into a div and we don't want
+  // to include any shiki baggage by default, so we just re-create it to be
+  // safe
+  node = {
+    type: 'element',
+    tagName: 'div',
+    properties: {
+      ['data-column-content']: '',
+    },
+    children: node.children,
+  };
+  // NOTE(amadeus): We need to push newline characters into empty rows or else
+  // copy/pasta will have issues
+  if (node.children.length === 0) {
+    node.children.push({ type: 'text', value: '\n' });
+  }
   const children = [node];
   const lineNr = state.startingLine + line;
+  // NOTE(amadeus): This should probably be based on a setting
   children.unshift({
     tagName: 'div',
     type: 'element',
     properties: { 'data-column-number': '' },
     children: [{ type: 'text', value: `${lineNr}` }],
   });
-  const properties: Record<string, string> = {
-    'data-line': `${lineNr}`,
-  };
-  if (state.renderingAdditions) {
-    properties['data-additions'] = '';
-  } else {
-    properties['data-deletions'] = '';
-  }
-  properties['data-line-type'] = state.lineTypes[line];
-
   return {
     tagName: 'div',
     type: 'element',
-    properties,
+    properties: {
+      ['data-line']: `${lineNr}`,
+      ['data-line-type']: state.lineTypes[line],
+    },
     children,
   };
 }
@@ -491,4 +479,64 @@ function findCodeElement(nodes: Root | Element): Element | undefined {
     }
   }
   return undefined;
+}
+
+function createEmptyRowBuffer(size: number): Element {
+  return {
+    tagName: 'div',
+    type: 'element',
+    properties: { 'data-buffer': '', style: `grid-row: span ${size}` },
+    children: [],
+  };
+}
+
+function createTransformerWithState(): {
+  state: SharedRenderState;
+  transformer: ShikiTransformer;
+} {
+  const state: SharedRenderState = {
+    spans: {},
+    startingLine: 0,
+    lineTypes: {},
+    decorations: [],
+  };
+  return {
+    state,
+    transformer: {
+      code(code) {
+        code.properties['data-code'] = '';
+        return code;
+      },
+      pre(pre) {
+        // FIXME(amadeus): We should probably not do this...
+        pre.properties['data-theme'] = 'dark';
+        delete pre.properties.class;
+        // NOTE(amadeus): This kinda sucks -- basically we can't apply our
+        // line node changes until AFTER decorations have been applied
+        const code = findCodeElement(pre);
+        const children: ElementContent[] = [];
+        if (code != null) {
+          let index = 1;
+          for (const node of code.children) {
+            if (node.type !== 'element') {
+              continue;
+            }
+            // Do we need to inject an empty span above the first line line?
+            if (index === 1 && state.spans[0] != null) {
+              children.push(createEmptyRowBuffer(state.spans[0]));
+            }
+            children.push(convertLine(node, index, state));
+            const span = state.spans[index];
+            if (span != null) {
+              children.push(createEmptyRowBuffer(span));
+            }
+
+            index++;
+          }
+          code.children = children;
+        }
+        return pre;
+      },
+    },
+  };
 }

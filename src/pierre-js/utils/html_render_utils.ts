@@ -52,17 +52,35 @@ interface SetupWrapperThemes extends ThemesVariant, SetupWrapperBase {}
 
 type SetupWrapperNodesProps = SetupWrapperTheme | SetupWrapperThemes;
 
-export function setupWrapperNodes(props: SetupWrapperNodesProps) {
+export function setupPreNode(props: SetupWrapperNodesProps) {
   const { pre } = props;
   // Clean out container
   pre.innerHTML = '';
   pre.tabIndex = 0;
   pre.dataset.pierrejs = '';
   setWrapperProps(props);
+  return pre;
+}
+
+interface CreateCodeNodeProps {
+  pre?: HTMLPreElement;
+  columnType?: 'additions' | 'deletions';
+}
+
+export function createCodeNode({ pre, columnType }: CreateCodeNodeProps) {
   const code = document.createElement('code');
   code.dataset.code = '';
-  pre.appendChild(code);
-  return { pre, code };
+  if (columnType != null) {
+    code.dataset[columnType] = '';
+  }
+  pre?.appendChild(code);
+  return code;
+}
+
+export function createHunkSeparator() {
+  const separator = document.createElement('div');
+  separator.dataset.separator = '';
+  return separator;
 }
 
 function setWrapperProps(
