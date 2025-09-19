@@ -49,6 +49,9 @@ function handlePreloadDiff() {
 function renderDiff() {
   const container = document.getElementById('content');
   if (container == null) return;
+  if (loadDiff != null) {
+    loadDiff.parentElement?.removeChild(loadDiff);
+  }
   container.dataset.diff = '';
   parsedPatch = parsedPatch ?? parsePatchContent(DIFF_CONTENT);
   for (const file of parsedPatch.files) {

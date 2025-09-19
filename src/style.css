@@ -142,7 +142,7 @@ code {
   padding-top: 50px;
 }
 
-[data-pierrejs] {
+[data-pjs] {
   min-height: 0;
   padding-block: 4px;
 }

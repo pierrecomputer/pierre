@@ -58,7 +58,7 @@ export function setupPreNode(props: SetupWrapperNodesProps) {
   // Clean out container
   pre.innerHTML = '';
   pre.tabIndex = 0;
-  pre.dataset.pierrejs = '';
+  pre.dataset.pjs = '';
   setWrapperProps(props);
   return pre;
 }

@@ -34,7 +34,7 @@ export const CodeConfigs = [
 ] as const;
 
 export function toggleTheme() {
-  for (const pre of document.querySelectorAll('[data-themed]')) {
+  for (const pre of document.querySelectorAll('[data-pjs]')) {
     if (!(pre instanceof HTMLElement)) return;
 
     const currentTheme = pre.dataset.theme;
