@@ -34,7 +34,7 @@
   color: var(--pjs-fg);
 
   [data-column-content] span {
-    color: var(--pjs-light);
+    color: light-dark(var(--pjs-light), var(--pjs-dark));
     font-weight: var(--pjs-light-font-weight);
     font-style: var(--pjs-light-font-style);
   }
@@ -45,7 +45,6 @@
     color-scheme: dark;
 
     [data-column-content] span {
-      color: var(--pjs-dark);
       font-weight: var(--pjs-dark-font-weight);
       font-style: var(--pjs-dark-font-style);
     }
@@ -56,7 +55,6 @@
   color-scheme: light;
 
   [data-column-content] span {
-    color: var(--pjs-light);
     font-weight: var(--pjs-light-font-weight);
     font-style: var(--pjs-light-font-style);
   }
@@ -66,7 +64,6 @@
   color-scheme: dark;
 
   [data-column-content] span {
-    color: var(--pjs-dark);
     font-weight: var(--pjs-dark-font-weight);
     font-style: var(--pjs-dark-font-style);
   }
