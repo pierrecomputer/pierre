@@ -37,18 +37,13 @@ export function toggleTheme() {
   for (const pre of document.querySelectorAll('[data-pjs]')) {
     if (!(pre instanceof HTMLElement)) return;
 
-    const currentTheme = pre.dataset.theme;
-    const systemDark = window.matchMedia(
-      '(prefers-color-scheme: dark)'
-    ).matches;
+    const currentTheme =
+      pre.dataset.theme ??
+      (window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light');
 
-    if (currentTheme === 'light') {
-      pre.dataset.theme = 'dark';
-    } else if (currentTheme === 'dark') {
-      delete pre.dataset.theme;
-    } else {
-      pre.dataset.theme = systemDark ? 'light' : 'dark';
-    }
+    pre.dataset.theme = currentTheme === 'dark' ? 'light' : 'dark';
   }
 }
 

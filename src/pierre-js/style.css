@@ -32,20 +32,44 @@
 
   background-color: var(--pjs-bg);
   color: var(--pjs-fg);
+
+  [data-column-content] span {
+    color: var(--pjs-light);
+    font-weight: var(--pjs-light-font-weight);
+    font-style: var(--pjs-light-font-style);
+  }
 }
 
 @media (prefers-color-scheme: dark) {
   [data-pjs] {
     color-scheme: dark;
+
+    [data-column-content] span {
+      color: var(--pjs-dark);
+      font-weight: var(--pjs-dark-font-weight);
+      font-style: var(--pjs-dark-font-style);
+    }
   }
 }
 
 [data-pjs][data-theme='light'] {
   color-scheme: light;
+
+  [data-column-content] span {
+    color: var(--pjs-light);
+    font-weight: var(--pjs-light-font-weight);
+    font-style: var(--pjs-light-font-style);
+  }
 }
 
 [data-pjs][data-theme='dark'] {
   color-scheme: dark;
+
+  [data-column-content] span {
+    color: var(--pjs-dark);
+    font-weight: var(--pjs-dark-font-weight);
+    font-style: var(--pjs-dark-font-style);
+  }
 }
 
 [data-type='split'][data-overflow='wrap'] {

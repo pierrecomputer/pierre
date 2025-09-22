@@ -66,7 +66,6 @@ function renderDiff() {
   for (const file of parsedPatch.files) {
     const decorations = DIFF_DECORATIONS[file.name];
     const pre = document.createElement('pre');
-    pre.dataset.theme = 'dark';
     container.appendChild(pre);
     const instance = new DiffRenderer({
       lang: getFiletypeFromMetadata(file),

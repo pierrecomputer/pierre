@@ -5,11 +5,13 @@ import type {
   DecorationItem,
   HighlighterGeneric,
   ShikiTransformer,
+  CodeToHastOptions,
 } from '@shikijs/core';
 import {
   createHunkSeparator,
   createCodeNode,
   setupPreNode,
+  formatCSSVariablePrefix,
 } from './utils/html_render_utils';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 import { getSharedHighlighter } from './SharedHighlighter';
@@ -19,23 +21,6 @@ export interface DiffDecorationItem extends DecorationItem {
   type: 'additions' | 'deletions';
   // Kinda hate this API for now... need to think about it more...
   hunkIndex: number;
-}
-
-interface CodeToHastBase {
-  lang: BundledLanguage;
-  defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
-  transformers: ShikiTransformer[];
-  decorations?: DecorationItem[];
-}
-
-interface CodeToHastTheme extends CodeToHastBase {
-  theme: BundledTheme;
-  themes?: never;
-}
-
-interface CodeToHastThemes extends CodeToHastBase {
-  theme?: never;
-  themes: { dark: BundledTheme; light: BundledTheme };
 }
 
 interface CodeTokenOptionsBase {
@@ -194,12 +179,13 @@ export class DiffRenderer {
   private createHastOptions(
     transformer: ShikiTransformer,
     decorations?: DecorationItem[]
-  ): CodeToHastTheme | CodeToHastThemes {
+  ): CodeToHastOptions {
     if ('theme' in this.options && this.options.theme != null) {
       return {
         theme: this.options.theme,
+        cssVariablePrefix: formatCSSVariablePrefix(),
         lang: this.options.lang ?? ('text' as BundledLanguage),
-        defaultColor: this.options.defaultColor,
+        defaultColor: this.options.defaultColor ?? false,
         transformers: [transformer],
         decorations,
       };
@@ -208,8 +194,9 @@ export class DiffRenderer {
     if ('themes' in this.options) {
       return {
         themes: this.options.themes,
+        cssVariablePrefix: formatCSSVariablePrefix(),
         lang: this.options.lang ?? ('text' as BundledLanguage),
-        defaultColor: this.options.defaultColor,
+        defaultColor: this.options.defaultColor ?? false,
         transformers: [transformer],
         decorations,
       };
