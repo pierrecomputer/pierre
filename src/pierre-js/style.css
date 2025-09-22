@@ -1,19 +1,18 @@
 :root {
-  --pjs-surface: #f5f5f7;
-  --pjs-color: #111;
+  --pjs-bg: #fff;
+  --pjs-fg: #000;
 }
 
 [data-pjs] {
   color-scheme: light dark;
 
-  --pjs-bg: light-dark(var(--pjs-surface), var(--pjs-color));
-  --pjs-fg: light-dark(var(--pjs-color), var(--pjs-surface));
-
   --pjs-mixer: light-dark(black, white);
 
+  --pjs-bg: light-dark(var(--pjs-light-bg), var(--pjs-dark-bg));
   --pjs-bg-buffer: color-mix(in srgb, var(--pjs-bg) 97%, var(--pjs-mixer));
   --pjs-bg-hover: color-mix(in srgb, var(--pjs-bg) 95%, var(--pjs-mixer));
 
+  --pjs-fg: light-dark(var(--pjs-light), var(--pjs-dark));
   --pjs-fg-number: color-mix(in srgb, currentColor 65%, transparent);
 
   --pjs-bg-deletions: color-mix(in srgb, var(--pjs-bg) 90%, rgb(255, 0, 0));
@@ -39,6 +38,10 @@
   [data-pjs] {
     color-scheme: dark;
   }
+}
+
+[data-pjs][data-theme='light'] {
+  color-scheme: light;
 }
 
 [data-pjs][data-theme='dark'] {

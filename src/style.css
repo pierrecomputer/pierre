@@ -1,28 +1,24 @@
 :root {
+  color-scheme: light dark;
+
+  --fg: light-dark(#213547, #ffffff);
+  --bg: light-dark(#ffffff, #213547);
+
   font-family:
     'Berkeley Mono', 'JetBrains Mono', 'Fira Code', 'Source Code Pro',
     'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
     'Courier New', monospace;
-  font-size: 16px;
-  line-height: 1.375;
-  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
 
-  color-scheme: light dark;
-  color: #213547;
-  background-color: #ffffff;
+  color: var(--fg);
+  background-color: var(--bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   box-sizing: border-box;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #ffffff;
-    background-color: #242424;
-  }
 }
 
 html,
@@ -114,6 +110,9 @@ code {
 }
 
 @media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
   .tools-container {
     background-color: rgba(36, 36, 36, 0.8);
   }
@@ -144,24 +143,24 @@ code {
 
 [data-pjs] {
   min-height: 0;
-  padding-block: 4px;
+  /* padding-block: 4px; mdo-do: do we need this? bg color doesn't blend which sucks */
   overflow-y: auto;
   scrollbar-width: none;
   overscroll-behavior-y: contain;
 }
 
 [data-file-info] {
-  background-color: #000;
-  color: #fff;
   padding: 10px;
   font-weight: 700;
+  color: light-dark(black, white);
+  background-color: color-mix(in srgb, var(--fg) 5%, transparent);
+  border-block: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
 }
 
 [data-code] {
   tab-size: 2;
   font-size: 14px;
-  line-height: 1.5714285714;
-  font-weight: 500;
+  line-height: 20px;
 }
 
 [data-column-number] {
