@@ -34,15 +34,12 @@ export const CodeConfigs = [
 ] as const;
 
 export function toggleTheme() {
-  for (const pre of document.querySelectorAll('[data-pjs]')) {
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+  for (const pre of document.querySelectorAll('[data-pjs],html')) {
     if (!(pre instanceof HTMLElement)) return;
-
-    const currentTheme =
-      pre.dataset.theme ??
-      (window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light');
-
+    const currentTheme = pre.dataset.theme ?? systemTheme;
     pre.dataset.theme = currentTheme === 'dark' ? 'light' : 'dark';
   }
 }

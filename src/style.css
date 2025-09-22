@@ -21,6 +21,19 @@
   box-sizing: border-box;
 }
 
+html[data-theme='light'] {
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: light-dark(white, black);
+}
+
 html,
 body,
 #root {
@@ -63,17 +76,12 @@ button {
   padding-inline: 8px;
   font-weight: 500;
   font-family: inherit;
-  background-color: #f9f9f9;
+  background-color: var(--bg);
+  color: var(--fg);
   cursor: pointer;
 
   &:hover {
     border-color: #646cff;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  button {
-    background-color: #1a1a1a;
   }
 }
 
@@ -99,7 +107,7 @@ code {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: color-mix(in srgb, var(--bg) 90%, transparent);
 }
 
 .tools {
@@ -107,15 +115,6 @@ code {
   display: flex;
   gap: 12px;
   align-items: center;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-  }
-  .tools-container {
-    background-color: rgba(36, 36, 36, 0.8);
-  }
 }
 
 .content {
@@ -151,9 +150,9 @@ code {
 [data-file-info] {
   padding: 10px;
   font-weight: 700;
-  color: light-dark(black, white);
-  background-color: color-mix(in srgb, var(--fg) 5%, transparent);
-  border-block: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+  background-color: color-mix(in srgb, var(--bg) 98%, var(--fg));
+  border-block: 1px solid color-mix(in srgb, var(--bg) 95%, var(--fg));
 }
 
 [data-code] {
