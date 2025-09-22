@@ -79,17 +79,17 @@ export function parsePatchContent(data: string): ParsedPatch {
         continue;
       }
       const hunkData: Hunk = {
-        additionEnd: parseInt(match[4]),
+        additionCount: parseInt(match[4]),
         additionLines: [],
         additionStart: parseInt(match[3]),
-        deletedEnd: parseInt(match[2]),
+        deletedCount: parseInt(match[2]),
         deletedLines: [],
         deletedStart: parseInt(match[1]),
         hunkContext: match[5],
       };
       if (
-        isNaN(hunkData.additionEnd) ||
-        isNaN(hunkData.additionEnd) ||
+        isNaN(hunkData.additionCount) ||
+        isNaN(hunkData.additionCount) ||
         isNaN(hunkData.additionStart) ||
         isNaN(hunkData.deletedStart)
       ) {

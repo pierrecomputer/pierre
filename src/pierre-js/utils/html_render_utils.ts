@@ -65,7 +65,7 @@ export function setupPreNode(props: SetupWrapperNodesProps) {
 
 interface CreateCodeNodeProps {
   pre?: HTMLPreElement;
-  columnType?: 'additions' | 'deletions';
+  columnType?: 'additions' | 'deletions' | 'unified';
 }
 
 export function createCodeNode({ pre, columnType }: CreateCodeNodeProps) {

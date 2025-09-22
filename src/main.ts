@@ -63,6 +63,9 @@ function renderDiff() {
   }
   container.dataset.diff = '';
   parsedPatch = parsedPatch ?? parsePatchContent(DIFF_CONTENT);
+  const unified =
+    (document.getElementById('unified') as HTMLInputElement | undefined)
+      ?.checked ?? false;
   for (const file of parsedPatch.files) {
     const decorations = DIFF_DECORATIONS[file.name];
     const pre = document.createElement('pre');
@@ -70,6 +73,7 @@ function renderDiff() {
     const instance = new DiffRenderer({
       lang: getFiletypeFromMetadata(file),
       themes: { dark: 'tokyo-night', light: 'solarized-light' },
+      unified,
     });
     instance.setup(file, pre, decorations);
   }

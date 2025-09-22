@@ -20,10 +20,10 @@ export interface ParsedPatch {
 }
 
 export interface Hunk {
-  additionEnd: number;
+  additionCount: number;
   additionLines: LinesHunk[];
   additionStart: number;
-  deletedEnd: number;
+  deletedCount: number;
   deletedLines: LinesHunk[];
   deletedStart: number;
   hunkContext: string | undefined;
