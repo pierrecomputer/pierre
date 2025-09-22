@@ -143,7 +143,6 @@ code {
 
 [data-pjs] {
   min-height: 0;
-  /* padding-block: 4px; mdo-do: do we need this? bg color doesn't blend which sucks */
   overflow-y: auto;
   scrollbar-width: none;
   overscroll-behavior-y: contain;
