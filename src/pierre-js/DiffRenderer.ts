@@ -50,7 +50,7 @@ interface RenderHunkProps {
 }
 
 interface LineInfo {
-  type: 'change' | 'change-deletion' | 'change-addition' | 'context';
+  type: 'change-deletion' | 'change-addition' | 'context';
   number: number;
 }
 
@@ -236,48 +236,50 @@ export class DiffRenderer {
     if (hunk.hunkContent == null) return;
     const { unified = false } = this.options;
 
-    const additionInfo: Record<number, LineInfo | undefined> = {};
+    const additionLineInfo: Record<number, LineInfo | undefined> = {};
     const additionSpans: Record<number, number> = {};
     let additionLineIndex = 1;
     let additionLineNumber = hunk.additionStart;
     let additionContent: string | undefined;
-    let additionSize = 0;
+    let additionGroupSize = 0;
 
-    const deletionInfo: Record<number, LineInfo | undefined> = {};
+    const deletionLineInfo: Record<number, LineInfo | undefined> = {};
     const deletionSpans: Record<number, number> = {};
     let deletionLineIndex = 1;
     let deletionLineNumber = hunk.deletedStart;
-    let deletionSize = 0;
+    let deletionGroupSize = 0;
     let deletionContent: string | undefined;
 
     const unifiedInfo: Record<number, LineInfo | undefined> = {};
     let unifiedContent: string | undefined;
     let unifiedLineIndex = 1;
 
-    let lastType: HUNK_LINE_TYPE | undefined;
-
     function createSpanIfNecessary() {
       if (
+        !unified &&
         lastType !== 'context' &&
         lastType != null &&
-        additionSize !== deletionSize
+        additionGroupSize !== deletionGroupSize
       ) {
-        if (additionSize > deletionSize) {
-          deletionSpans[deletionLineIndex - 1] = additionSize - deletionSize;
-        } else if (deletionSize > additionSize) {
-          additionSpans[additionLineIndex - 1] = deletionSize - additionSize;
+        if (additionGroupSize > deletionGroupSize) {
+          deletionSpans[deletionLineIndex - 1] =
+            additionGroupSize - deletionGroupSize;
+        } else if (deletionGroupSize > additionGroupSize) {
+          additionSpans[additionLineIndex - 1] =
+            deletionGroupSize - additionGroupSize;
         }
       }
     }
 
+    let lastType: HUNK_LINE_TYPE | undefined;
     for (const rawLine of hunk.hunkContent.split(SPLIT_WITH_NEWLINES)) {
       const { line, type } = parseLineType(rawLine);
       if (type === 'context') {
         createSpanIfNecessary();
       }
       if (type === 'context') {
-        additionSize = 0;
-        deletionSize = 0;
+        additionGroupSize = 0;
+        deletionGroupSize = 0;
         if (unified) {
           unifiedContent = (unifiedContent ?? '') + line;
           unifiedInfo[unifiedLineIndex] = {
@@ -288,11 +290,11 @@ export class DiffRenderer {
         } else {
           additionContent = (additionContent ?? '') + line;
           deletionContent = (deletionContent ?? '') + line;
-          additionInfo[additionLineIndex] = {
+          additionLineInfo[additionLineIndex] = {
             type: 'context',
             number: additionLineNumber,
           };
-          deletionInfo[deletionLineIndex] = {
+          deletionLineInfo[deletionLineIndex] = {
             type: 'context',
             number: deletionLineNumber,
           };
@@ -312,11 +314,11 @@ export class DiffRenderer {
           unifiedLineIndex++;
         } else {
           deletionContent = (deletionContent ?? '') + line;
-          deletionInfo[deletionLineIndex] = {
-            type: 'change',
+          deletionLineInfo[deletionLineIndex] = {
+            type: 'change-deletion',
             number: deletionLineNumber,
           };
-          deletionSize++;
+          deletionGroupSize++;
           deletionLineIndex++;
         }
         deletionLineNumber++;
@@ -330,11 +332,11 @@ export class DiffRenderer {
           unifiedLineIndex++;
         } else {
           additionContent = (additionContent ?? '') + line;
-          additionInfo[additionLineIndex] = {
-            type: 'change',
+          additionLineInfo[additionLineIndex] = {
+            type: 'change-addition',
             number: additionLineNumber,
           };
-          additionSize++;
+          additionGroupSize++;
           additionLineIndex++;
         }
         additionLineNumber++;
@@ -363,7 +365,7 @@ export class DiffRenderer {
       // Remove trailing blank line
       deletionContent = deletionContent.replace(/\n$/, '');
       state.spans = deletionSpans;
-      state.lineInfo = deletionInfo;
+      state.lineInfo = deletionLineInfo;
       const nodes = highlighter.codeToHast(
         deletionContent,
         this.createHastOptions(transformer, deletionDecorations)
@@ -378,7 +380,7 @@ export class DiffRenderer {
       // Remove trailing blank line
       additionContent = additionContent.replace(/\n$/, '');
       state.spans = additionSpans;
-      state.lineInfo = additionInfo;
+      state.lineInfo = additionLineInfo;
       const nodes = highlighter.codeToHast(
         additionContent,
         this.createHastOptions(transformer, additionDecorations)
