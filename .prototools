@@ -1,0 +1,7 @@
+bun = "1.2.22"
+proto = "0.53.0"
+
+[settings]
+auto-clean = true
+auto-install = true
+telemetry = false

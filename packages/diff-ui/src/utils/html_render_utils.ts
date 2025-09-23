@@ -1,10 +1,12 @@
-import type { BundledLanguage, BundledTheme, HighlighterGeneric } from 'shiki';
+import type { ThemesType } from '../types';
 import {
   getTokenStyleObject,
   stringifyTokenStyle,
   type ThemedToken,
+  type BundledLanguage,
+  type BundledTheme,
+  type HighlighterGeneric,
 } from 'shiki';
-import type { ThemesType } from 'pierrejs';
 
 interface ThemeVariant {
   themes?: never;

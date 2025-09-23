@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "outDir": "dist",
+    "emitDeclarationOnly": false,
+    "baseUrl": ".",
+    "rootDir": "src",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "references": [
+    {
+      "path": "../shiki-stream"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-import type { Root, Element, RootContent, ElementContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
+import type { Root, RootContent, Element, ElementContent } from 'hast';
 import type {
   CodeOptionsMultipleThemes,
   DecorationItem,

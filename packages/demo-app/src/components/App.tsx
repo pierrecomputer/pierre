@@ -1,10 +1,11 @@
+import { isHighlighterNull, preloadHighlighter } from '@pierre/diff-ui';
+import * as React from 'react';
 import { useCallback, useState } from 'react';
-import '../style.css';
-import { CodeConfigs, toggleTheme } from '../test_files/';
-import { CodeRenderer, type CodeRendererProps } from './CodeRenderer';
-import { createFakeContentStream } from '../utils/createFakeContentStream';
 import type { BundledLanguage, BundledTheme } from 'shiki';
-import { isHighlighterNull, preloadHighlighter } from 'pierrejs';
+import { CodeConfigs, toggleTheme } from '../mocks/';
+import '../style.css';
+import { createFakeContentStream } from '../utils/createFakeContentStream';
+import { CodeRenderer, type CodeRendererProps } from './CodeRenderer';
 
 export function App() {
   const [codez, setCodez] = useState<CodeRendererProps[]>([]);

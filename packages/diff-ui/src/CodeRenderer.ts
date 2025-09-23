@@ -1,19 +1,22 @@
-import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
+import {
+  CodeToTokenTransformStream,
+  type RecallToken,
+} from '@pierre/shiki-stream';
 import type {
   CodeOptionsMultipleThemes,
   HighlighterGeneric,
   ThemedToken,
 } from '@shikijs/core';
+import type { BundledLanguage, BundledTheme } from 'shiki';
+import { getSharedHighlighter } from './SharedHighlighter';
+import { queueRender } from './UnversialRenderer';
 import {
+  createCodeNode,
   createRow,
   createSpanFromToken,
   formatCSSVariablePrefix,
-  createCodeNode,
   setupPreNode,
 } from './utils/html_render_utils';
-import type { BundledLanguage, BundledTheme } from 'shiki';
-import { queueRender } from './UnversialRenderer';
-import { getSharedHighlighter } from './SharedHighlighter';
 
 interface CodeTokenOptionsBase {
   lang?: BundledLanguage;

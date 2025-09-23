@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*.{ts,tsx,json}"],
+  "references": [
+    {
+      "path": "../diff-ui"
+    }
+  ]
+}

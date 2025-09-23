@@ -1,4 +1,4 @@
-import { disposeHighlighter } from 'pierrejs';
+import { disposeHighlighter } from '@pierre/diff-ui';
 
 let totalInstances = 0;
 let completed = 0;

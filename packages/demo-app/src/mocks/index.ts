@@ -5,7 +5,7 @@ import diffContent from './diff.patch?raw';
 import diffContent2 from './diff2.patch?raw';
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import type { BundledLanguage } from 'shiki';
-import type { DiffDecorationItem, FileMetadata } from 'pierrejs';
+import type { DiffDecorationItem, FileMetadata } from '@pierre/diff-ui';
 
 export { mdContent, tsContent };
 

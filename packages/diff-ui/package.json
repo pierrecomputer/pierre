@@ -1,0 +1,26 @@
+{
+  "name": "@pierre/diff-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "@types/hast": "catalog:"
+  },
+  "dependencies": {
+    "@pierre/shiki-stream": "workspace:*",
+    "@shikijs/core": "catalog:",
+    "hast-util-to-html": "catalog:",
+    "shiki": "catalog:"
+  }
+}

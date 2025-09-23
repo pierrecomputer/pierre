@@ -1,7 +1,8 @@
 import {
   CodeRenderer as CodeRendererClass,
   type CodeRendererOptions,
-} from 'pierrejs';
+} from '@pierre/diff-ui';
+import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 export type { CodeRendererOptions };

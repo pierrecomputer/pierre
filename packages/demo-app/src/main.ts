@@ -6,7 +6,7 @@ import {
   DIFF_DECORATIONS,
   getFiletypeFromMetadata,
   toggleTheme,
-} from './test_files/';
+} from './mocks/';
 import { createFakeContentStream } from './utils/createFakeContentStream';
 import {
   CodeRenderer,
@@ -16,7 +16,7 @@ import {
   parsePatchContent,
   type ParsedPatch,
   type FileMetadata,
-} from 'pierrejs';
+} from '@pierre/diff-ui';
 
 function startStreaming() {
   const container = document.getElementById('content');

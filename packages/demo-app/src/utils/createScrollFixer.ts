@@ -1,4 +1,4 @@
-import type { CodeRenderer } from 'pierrejs';
+import type { CodeRenderer } from '@pierre/diff-ui';
 
 export function createScrollFixer() {
   let isScrolledToBottom = false;

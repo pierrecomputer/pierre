@@ -1,0 +1,27 @@
+{
+  "name": "@pierre/js-demo-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "tsc": "tsc --build",
+    "prod": "bun run build && bun run preview",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "dependencies": {
+    "@pierre/diff-ui": "workspace:*",
+    "@shikijs/core": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "shiki": "catalog:"
+  }
+}
