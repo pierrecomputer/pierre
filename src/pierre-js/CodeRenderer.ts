@@ -146,12 +146,12 @@ export class CodeRenderer {
       if ('recall' in token) {
         if (this.currentLineElement == null) {
           throw new Error(
-            'Whoopsie, no current line element, shouldnt be possible to get here'
+            'CodeRenderer.render: no current line element, shouldnt be possible to get here'
           );
         }
         if (token.recall > this.currentLineElement.childNodes.length) {
           throw new Error(
-            'Whoopsie, recall is larger than the line... probably a bug...'
+            `CodeRenderer.render: Token recall exceed the current line, there's probably a bug...`
           );
         }
         for (let i = 0; i < token.recall; i++) {

@@ -451,7 +451,7 @@ function convertLine(
   const children = [node];
   const lineInfo = state.lineInfo[line];
   if (lineInfo == null) {
-    throw new Error('Whoopsie');
+    throw new Error(`convertLine: line ${line}, contains no state.lineInfo`);
   }
   // NOTE(amadeus): This should probably be based on a setting
   children.unshift({
