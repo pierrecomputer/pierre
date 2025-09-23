@@ -1,0 +1,2191 @@
+diff --git a/index.html b/index.html
+index c347e7b..4434b11 100644
+--- a/index.html
++++ b/index.html
+@@ -20,6 +20,10 @@
+             <input id="wrap-lines" type="checkbox" />
+             Wrap Lines
+           </label>
++          <label>
++            <input id="unified" type="checkbox" />
++            Unified Diffs
++          </label>
+           <!-- <div>[<strong>RAW</strong> / <a href="/react">REACT</a>]</div> -->
+         </div>
+       </div>
+diff --git a/src/main.ts b/src/main.ts
+index ea706d2..a2bffaf 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -63,6 +63,9 @@ function renderDiff() {
+   }
+   container.dataset.diff = '';
+   parsedPatch = parsedPatch ?? parsePatchContent(DIFF_CONTENT);
++  const unified =
++    (document.getElementById('unified') as HTMLInputElement | undefined)
++      ?.checked ?? false;
+   for (const file of parsedPatch.files) {
+     const decorations = DIFF_DECORATIONS[file.name];
+     const pre = document.createElement('pre');
+@@ -70,6 +73,7 @@ function renderDiff() {
+     const instance = new DiffRenderer({
+       lang: getFiletypeFromMetadata(file),
+       themes: { dark: 'tokyo-night', light: 'solarized-light' },
++      unified,
+     });
+     instance.setup(file, pre, decorations);
+   }
+diff --git a/src/pierre-js/DiffRenderer.ts b/src/pierre-js/DiffRenderer.ts
+index bef6a5f..0971e74 100644
+--- a/src/pierre-js/DiffRenderer.ts
++++ b/src/pierre-js/DiffRenderer.ts
+@@ -15,7 +15,9 @@ import {
+ } from './utils/html_render_utils';
+ import type { BundledLanguage, BundledTheme } from 'shiki';
+ import { getSharedHighlighter } from './SharedHighlighter';
+-import type { FileMetadata, Hunk, HunkTypes, LinesHunk } from './types';
++import type { FileMetadata, Hunk, HUNK_LINE_TYPE } from './types';
++import { SPLIT_WITH_NEWLINES } from './constants';
++import { parseLineType } from './utils/parseLineType';
+ 
+ export interface DiffDecorationItem extends DecorationItem {
+   type: 'additions' | 'deletions';
+@@ -27,6 +29,7 @@ interface CodeTokenOptionsBase {
+   lang?: BundledLanguage;
+   defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
+   preferWasmHighlighter?: boolean;
++  unified?: boolean;
+ 
+   // FIXME(amadeus): Figure out how to incorporate these mb?
+   onPreRender?(instance: DiffRenderer): unknown;
+@@ -37,16 +40,22 @@ interface RenderHunkProps {
+   hunk: Hunk;
+   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+   state: SharedRenderState;
+-  codeDeletions: HTMLElement;
+-  codeAdditions: HTMLElement;
+   transformer: ShikiTransformer;
+   deletionDecorations: DiffDecorationItem[] | undefined;
+   additionDecorations: DiffDecorationItem[] | undefined;
++
++  codeAdditions: HTMLElement;
++  codeDeletions: HTMLElement;
++  codeUnified: HTMLElement;
++}
++
++interface LineInfo {
++  type: 'change-deletion' | 'change-addition' | 'context';
++  number: number;
+ }
+ 
+ interface SharedRenderState {
+-  startingLine: number;
+-  lineTypes: Record<number, HunkTypes>;
++  lineInfo: Record<number, LineInfo | undefined>;
+   spans: Record<number, number | undefined>;
+   decorations: DecorationItem[];
+ }
+@@ -113,8 +122,11 @@ export class DiffRenderer {
+     highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>,
+     decorations?: DiffDecorationItem[]
+   ) {
+-    const { themes, theme } = this.options;
+-    const split = diff.type === 'changed' || diff.type === 'renamed-changed';
++    const { themes, theme, unified = false } = this.options;
++    const split =
++      unified === true
++        ? false
++        : diff.type === 'changed' || diff.type === 'renamed-changed';
+     const pre = setupPreNode(
+       themes != null
+         ? { pre: wrapper, themes, highlighter, split }
+@@ -124,6 +136,7 @@ export class DiffRenderer {
+     this.pre = pre;
+     const codeAdditions = createCodeNode({ columnType: 'additions' });
+     const codeDeletions = createCodeNode({ columnType: 'deletions' });
++    const codeUnified = createCodeNode({ columnType: 'unified' });
+     const { state, transformer } = createTransformerWithState();
+     const element = document.createElement('div');
+     element.dataset.fileInfo = '';
+@@ -134,14 +147,15 @@ export class DiffRenderer {
+     }
+     this.pre.parentNode?.insertBefore(element, this.pre);
+     let hunkIndex = 0;
+-    let hasRenderedHunk = false;
+     const decorationSet = new Set(decorations);
+     for (const hunk of diff.hunks) {
+-      if (!hasRenderedHunk) {
+-        hasRenderedHunk = true;
+-      } else {
+-        codeAdditions.appendChild(createHunkSeparator());
+-        codeDeletions.appendChild(createHunkSeparator());
++      if (hunkIndex > 0) {
++        if (unified) {
++          codeUnified.appendChild(createHunkSeparator());
++        } else {
++          codeAdditions.appendChild(createHunkSeparator());
++          codeDeletions.appendChild(createHunkSeparator());
++        }
+       }
+       const additionDecorations: DiffDecorationItem[] = [];
+       const deletionDecorations: DiffDecorationItem[] = [];
+@@ -154,17 +168,18 @@ export class DiffRenderer {
+         }
+         decorationSet.delete(decoration);
+       }
+-      this.renderHunk({
++      this.renderHunks({
+         hunk,
+         highlighter,
+         state,
+-        codeAdditions,
+-        codeDeletions,
+         transformer,
+         additionDecorations:
+           additionDecorations.length > 0 ? additionDecorations : undefined,
+         deletionDecorations:
+           deletionDecorations.length > 0 ? deletionDecorations : undefined,
++        codeAdditions,
++        codeDeletions,
++        codeUnified,
+       });
+       hunkIndex++;
+     }
+@@ -174,6 +189,9 @@ export class DiffRenderer {
+     if (codeAdditions.childNodes.length > 0) {
+       this.pre.appendChild(codeAdditions);
+     }
++    if (codeUnified.childNodes.length > 0) {
++      this.pre.appendChild(codeUnified);
++    }
+   }
+ 
+   private createHastOptions(
+@@ -204,52 +222,152 @@ export class DiffRenderer {
+     throw new Error();
+   }
+ 
+-  private renderHunk({
++  private renderHunks({
+     hunk,
+     highlighter,
+     state,
+-    codeAdditions,
+-    codeDeletions,
+     transformer,
+     additionDecorations,
+     deletionDecorations,
++    codeAdditions,
++    codeDeletions,
++    codeUnified,
+   }: RenderHunkProps) {
+-    let lineIndex = 0;
+-    let opposingLines = hunk.additionLines;
+-    const processLines = (linesHunk: LinesHunk, linesHunkIndex: number) => {
+-      // Figure out if the opposite group of lines is taller than our current
+-      // one, if so we'll have to add a spanner node to fill the space
+-      const oppositeHunk = opposingLines[linesHunkIndex];
++    if (hunk.hunkContent == null) return;
++    const { unified = false } = this.options;
++
++    const additionLineInfo: Record<number, LineInfo | undefined> = {};
++    const additionSpans: Record<number, number> = {};
++    let additionLineIndex = 1;
++    let additionLineNumber = hunk.additionStart;
++    let additionContent: string | undefined;
++    let additionGroupSize = 0;
++
++    const deletionLineInfo: Record<number, LineInfo | undefined> = {};
++    const deletionSpans: Record<number, number> = {};
++    let deletionLineIndex = 1;
++    let deletionLineNumber = hunk.deletedStart;
++    let deletionGroupSize = 0;
++    let deletionContent: string | undefined;
++
++    const unifiedInfo: Record<number, LineInfo | undefined> = {};
++    let unifiedContent: string | undefined;
++    let unifiedLineIndex = 1;
++
++    function createSpanIfNecessary() {
+       if (
+-        oppositeHunk != null &&
+-        oppositeHunk.lines.length > linesHunk.lines.length
++        !unified &&
++        lastType !== 'context' &&
++        lastType != null &&
++        additionGroupSize !== deletionGroupSize
+       ) {
+-        state.spans[lineIndex + linesHunk.lines.length] =
+-          oppositeHunk.lines.length - linesHunk.lines.length;
++        if (additionGroupSize > deletionGroupSize) {
++          deletionSpans[deletionLineIndex - 1] =
++            additionGroupSize - deletionGroupSize;
++        } else if (deletionGroupSize > additionGroupSize) {
++          additionSpans[additionLineIndex - 1] =
++            deletionGroupSize - additionGroupSize;
++        }
+       }
+-      // Get a mapping of the line type (change or context) and convert into a
+-      // string
+-      let processedLines = '';
+-      let index = lineIndex;
+-      for (const line of linesHunk.lines) {
+-        state.lineTypes[index + 1] = linesHunk.type;
+-        processedLines += line;
+-        index++;
++    }
++
++    let lastType: HUNK_LINE_TYPE | undefined;
++    for (const rawLine of hunk.hunkContent.split(SPLIT_WITH_NEWLINES)) {
++      const { line, type } = parseLineType(rawLine);
++      if (type === 'context') {
++        createSpanIfNecessary();
+       }
+-      lineIndex += linesHunk.lines.length;
+-      return processedLines;
+-    };
+-    if (hunk.deletedLines.length > 0) {
+-      state.startingLine = hunk.deletedStart - 1;
+-      state.lineTypes = {};
++      if (type === 'context') {
++        additionGroupSize = 0;
++        deletionGroupSize = 0;
++        if (unified) {
++          unifiedContent = (unifiedContent ?? '') + line;
++          unifiedInfo[unifiedLineIndex] = {
++            type: 'context',
++            number: additionLineNumber,
++          };
++          unifiedLineIndex++;
++        } else {
++          additionContent = (additionContent ?? '') + line;
++          deletionContent = (deletionContent ?? '') + line;
++          additionLineInfo[additionLineIndex] = {
++            type: 'context',
++            number: additionLineNumber,
++          };
++          deletionLineInfo[deletionLineIndex] = {
++            type: 'context',
++            number: deletionLineNumber,
++          };
++          additionLineIndex++;
++          deletionLineIndex++;
++        }
++
++        additionLineNumber++;
++        deletionLineNumber++;
++      } else if (type === 'deletion') {
++        if (unified) {
++          unifiedContent = (unifiedContent ?? '') + line;
++          unifiedInfo[unifiedLineIndex] = {
++            type: 'change-deletion',
++            number: deletionLineNumber,
++          };
++          unifiedLineIndex++;
++        } else {
++          deletionContent = (deletionContent ?? '') + line;
++          deletionLineInfo[deletionLineIndex] = {
++            type: 'change-deletion',
++            number: deletionLineNumber,
++          };
++          deletionGroupSize++;
++          deletionLineIndex++;
++        }
++        deletionLineNumber++;
++      } else if (type === 'addition') {
++        if (unified) {
++          unifiedContent = (unifiedContent ?? '') + line;
++          unifiedInfo[unifiedLineIndex] = {
++            type: 'change-addition',
++            number: additionLineNumber,
++          };
++          unifiedLineIndex++;
++        } else {
++          additionContent = (additionContent ?? '') + line;
++          additionLineInfo[additionLineIndex] = {
++            type: 'change-addition',
++            number: additionLineNumber,
++          };
++          additionGroupSize++;
++          additionLineIndex++;
++        }
++        additionLineNumber++;
++      }
++
++      lastType = type;
++    }
++    createSpanIfNecessary();
++
++    if (unifiedContent != null) {
++      // Remove trailing blank line
++      unifiedContent = unifiedContent.replace(/\n$/, '');
+       state.spans = {};
+-      lineIndex = 0;
+-      const deletions = hunk.deletedLines
+-        .map(processLines)
+-        .join('')
+-        .replace(/\n$/, '');
++      state.lineInfo = unifiedInfo;
+       const nodes = highlighter.codeToHast(
+-        deletions,
++        unifiedContent,
++        this.createHastOptions(transformer, deletionDecorations)
++      );
++      codeUnified.insertAdjacentHTML(
++        'beforeend',
++        toHtml(this.getNodesToRender(nodes))
++      );
++    }
++
++    if (deletionContent != null) {
++      // Remove trailing blank line
++      deletionContent = deletionContent.replace(/\n$/, '');
++      state.spans = deletionSpans;
++      state.lineInfo = deletionLineInfo;
++      const nodes = highlighter.codeToHast(
++        deletionContent,
+         this.createHastOptions(transformer, deletionDecorations)
+       );
+       codeDeletions.insertAdjacentHTML(
+@@ -258,18 +376,13 @@ export class DiffRenderer {
+       );
+     }
+ 
+-    if (hunk.additionLines.length > 0) {
+-      opposingLines = hunk.deletedLines;
+-      state.lineTypes = {};
+-      state.spans = {};
+-      lineIndex = 0;
+-      const additions = hunk.additionLines
+-        .map(processLines)
+-        .join('')
+-        .replace(/\n$/, '');
+-      state.startingLine = hunk.additionStart - 1;
++    if (additionContent != null) {
++      // Remove trailing blank line
++      additionContent = additionContent.replace(/\n$/, '');
++      state.spans = additionSpans;
++      state.lineInfo = additionLineInfo;
+       const nodes = highlighter.codeToHast(
+-        additions,
++        additionContent,
+         this.createHastOptions(transformer, additionDecorations)
+       );
+       codeAdditions.insertAdjacentHTML(
+@@ -331,20 +444,23 @@ function convertLine(
+     node.children.push({ type: 'text', value: '\n' });
+   }
+   const children = [node];
+-  const lineNr = state.startingLine + line;
++  const lineInfo = state.lineInfo[line];
++  if (lineInfo == null) {
++    throw new Error('Whoopsie');
++  }
+   // NOTE(amadeus): This should probably be based on a setting
+   children.unshift({
+     tagName: 'div',
+     type: 'element',
+     properties: { 'data-column-number': '' },
+-    children: [{ type: 'text', value: `${lineNr}` }],
++    children: [{ type: 'text', value: `${lineInfo.number}` }],
+   });
+   return {
+     tagName: 'div',
+     type: 'element',
+     properties: {
+-      ['data-line']: `${lineNr}`,
+-      ['data-line-type']: state.lineTypes[line],
++      ['data-line']: `${lineInfo.number}`,
++      ['data-line-type']: lineInfo.type,
+     },
+     children,
+   };
+@@ -383,8 +499,7 @@ function createTransformerWithState(): {
+ } {
+   const state: SharedRenderState = {
+     spans: {},
+-    startingLine: 0,
+-    lineTypes: {},
++    lineInfo: {},
+     decorations: [],
+   };
+   return {
+diff --git a/src/pierre-js/constants.ts b/src/pierre-js/constants.ts
+index 6cdd210..9482b11 100644
+--- a/src/pierre-js/constants.ts
++++ b/src/pierre-js/constants.ts
+@@ -2,3 +2,4 @@ export const PER_FILE_DIFF_BREAK_REGEX = /(?=^diff --git)/gm;
+ export const FILE_CONTEXT_BLOB = /(?=^@@ )/gm;
+ export const HUNK_HEADER = /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@(?: (.*))?/m;
+ export const DIFF_GIT_HEADER = /^diff --git a\/(.+?) b\/(.+)/;
++export const SPLIT_WITH_NEWLINES = /(?<=\n)/;
+diff --git a/src/pierre-js/index.ts b/src/pierre-js/index.ts
+index 5e2975d..280cf06 100644
+--- a/src/pierre-js/index.ts
++++ b/src/pierre-js/index.ts
+@@ -6,5 +6,6 @@ export * from './UnversialRenderer';
+ export * from './createStreamingHighlighter';
+ export * from './shiki-stream';
+ export * from './utils/html_render_utils';
+-export * from './utils/parsePatchContent.ts';
++export * from './utils/parseLineType';
++export * from './utils/parsePatchContent';
+ export type * from './types';
+diff --git a/src/pierre-js/style.css b/src/pierre-js/style.css
+index 97e4629..4006ed2 100644
+--- a/src/pierre-js/style.css
++++ b/src/pierre-js/style.css
+@@ -69,18 +69,18 @@
+   }
+ }
+ 
+-[data-type='split'][data-overflow='wrap'] {
++[data-pjs][data-type='split'][data-overflow='wrap'] {
+   display: grid;
+   grid-auto-flow: dense;
+   grid-template-columns: repeat(2, var(--pjs-code-grid));
+ }
+ 
+-[data-type='split'][data-overflow='scroll'] {
++[data-pjs][data-type='split'][data-overflow='scroll'] {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+ }
+ 
+-[data-code] {
++[data-pjs] [data-code] {
+   display: block;
+   display: grid;
+   grid-auto-flow: dense;
+@@ -90,24 +90,24 @@
+   overscroll-behavior-x: contain;
+ }
+ 
+-[data-type='split'][data-overflow='wrap'] [data-code] {
++[data-pjs][data-type='split'][data-overflow='wrap'] [data-code] {
+   display: contents;
+ }
+ 
+-[data-line] {
++[data-pjs] [data-line] {
+   display: grid;
+   grid-template-columns: subgrid;
+   grid-column: 1 / 3;
+ }
+ 
+-[data-buffer] {
++[data-pjs] [data-buffer] {
+   grid-column: 1 / 3;
+   user-select: none;
+   background-color: var(--pjs-bg-buffer);
+   min-height: 1lh;
+ }
+ 
+-[data-separator] {
++[data-pjs] [data-separator] {
+   grid-column: span 2;
+   height: 4px;
+   background-color: var(--pjs-bg-buffer);
+@@ -118,41 +118,32 @@
+   color: var(--pjs-fg);
+ }
+ 
+-[data-type='split'][data-overflow='wrap'] [data-deletions] [data-line],
+-[data-type='split'][data-overflow='wrap'] [data-deletions] [data-buffer],
+-[data-type='split'][data-overflow='wrap'] [data-deletions] [data-separator] {
+-  grid-column: 1 / 3;
++[data-pjs][data-type='split'][data-overflow='wrap'] [data-deletions] {
++  [data-line],
++  [data-buffer],
++  [data-separator] {
++    grid-column: 1 / 3;
++  }
+ }
+ 
+-[data-type='split'][data-overflow='wrap'] [data-additions] [data-line],
+-[data-type='split'][data-overflow='wrap'] [data-additions] [data-buffer],
+-[data-type='split'][data-overflow='wrap'] [data-additions] [data-separator] {
+-  grid-column: 3 / 5;
++[data-pjs][data-type='split'][data-overflow='wrap'] [data-additions] {
++  [data-separator],
++  [data-buffer],
++  [data-line] {
++    grid-column: 3 / 5;
++  }
+ }
+ 
+-[data-line]:hover [data-column-number],
+-[data-line]:hover [data-column-content] {
+-  background-color: var(--pjs-bg-hover);
+-}
+-
+-[data-additions] [data-line-type='change']:hover [data-column-content] {
+-  background-color: var(--pjs-bg-additions-number);
+-}
+-
+-[data-deletions] [data-line-type='change']:hover [data-column-content] {
+-  background-color: var(--pjs-bg-deletions-number);
+-}
+-
+-[data-overflow='wrap'] [data-column-content] {
++[data-pjs][data-overflow='wrap'] [data-column-content] {
+   white-space: pre-wrap;
+ }
+ 
+-[data-overflow='scroll'] [data-column-content] {
++[data-pjs][data-overflow='scroll'] [data-column-content] {
+   white-space: pre;
+   min-height: 1lh;
+ }
+ 
+-[data-column-number] {
++[data-pjs] [data-column-number] {
+   text-align: right;
+   position: sticky;
+   left: 0;
+@@ -161,25 +152,46 @@
+   color: var(--pjs-fg-number);
+ }
+ 
+-[data-pjs] [data-additions] [data-line-type='change'] [data-column-number] {
+-  background-color: var(--pjs-bg-additions-number);
+-}
+-
+-[data-pjs] [data-deletions] [data-line-type='change'] [data-column-number] {
+-  background-color: var(--pjs-bg-deletions-number);
+-}
+-
+-[data-additions] [data-line-type='change'],
+-[data-additions] [data-line-type='change'] [data-column-number] {
++[data-pjs] [data-line-type='change-addition'] {
+   background-color: var(--pjs-bg-additions);
++
++  [data-column-number] {
++    background-color: var(--pjs-bg-additions-number);
++  }
+ }
+ 
+-[data-deletions] [data-line-type='change'],
+-[data-deletions] [data-line-type='change'] [data-column-number] {
++[data-pjs] [data-line-type='change-deletion'] {
+   background-color: var(--pjs-bg-deletions);
++
++  [data-column-number] {
++    background-color: var(--pjs-bg-deletions-number);
++  }
+ }
+ 
+-[data-annotation] {
++[data-pjs] [data-line]:hover {
++  [data-column-number],
++  [data-column-content] {
++    background-color: var(--pjs-bg-hover);
++  }
++
++  &[data-line-type='change-addition'] [data-column-number] {
++    background-color: var(--pjs-bg-additions-number);
++  }
++
++  &[data-line-type='change-addition'] [data-column-content] {
++    background-color: var(--pjs-bg-additions-number);
++  }
++
++  &[data-line-type='change-deletion'] [data-column-number] {
++    background-color: var(--pjs-bg-deletions-number);
++  }
++
++  &[data-line-type='change-deletion'] [data-column-content] {
++    background-color: var(--pjs-bg-deletions-number);
++  }
++}
++
++[data-pjs] [data-annotation] {
+   display: inline-block;
+   background-color: var(--pjs-bg-annotation);
+   white-space: pre-wrap;
+diff --git a/src/pierre-js/types.ts b/src/pierre-js/types.ts
+index b84dfe7..c3cbd7b 100644
+--- a/src/pierre-js/types.ts
++++ b/src/pierre-js/types.ts
+@@ -5,8 +5,6 @@ export interface ThemesType {
+   light: BundledTheme;
+ }
+ 
+-export type HunkTypes = 'context' | 'change';
+-
+ export type FileTypes =
+   | 'changed'
+   | 'renamed-pure'
+@@ -20,23 +18,19 @@ export interface ParsedPatch {
+ }
+ 
+ export interface Hunk {
+-  additionEnd: number;
+-  additionLines: LinesHunk[];
++  additionCount: number;
+   additionStart: number;
+-  deletedEnd: number;
+-  deletedLines: LinesHunk[];
++  deletedCount: number;
+   deletedStart: number;
++  hunkContent: string | undefined;
+   hunkContext: string | undefined;
+ }
+ 
+-export interface LinesHunk {
+-  type: HunkTypes;
+-  lines: string[];
+-}
+-
+ export interface FileMetadata {
+   name: string;
+   prevName: string | undefined;
+   type: FileTypes;
+   hunks: Hunk[];
+ }
++
++export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion';
+diff --git a/src/pierre-js/utils/html_render_utils.ts b/src/pierre-js/utils/html_render_utils.ts
+index 1e0354f..c4382a1 100644
+--- a/src/pierre-js/utils/html_render_utils.ts
++++ b/src/pierre-js/utils/html_render_utils.ts
+@@ -65,7 +65,7 @@ export function setupPreNode(props: SetupWrapperNodesProps) {
+ 
+ interface CreateCodeNodeProps {
+   pre?: HTMLPreElement;
+-  columnType?: 'additions' | 'deletions';
++  columnType?: 'additions' | 'deletions' | 'unified';
+ }
+ 
+ export function createCodeNode({ pre, columnType }: CreateCodeNodeProps) {
+diff --git a/src/pierre-js/utils/parseLineType.ts b/src/pierre-js/utils/parseLineType.ts
+new file mode 100644
+index 0000000..af369d5
+--- /dev/null
++++ b/src/pierre-js/utils/parseLineType.ts
+@@ -0,0 +1,22 @@
++import type { HUNK_LINE_TYPE } from '../types';
++
++export interface ParseLineTypeReturn {
++  line: string;
++  type: HUNK_LINE_TYPE;
++}
++
++export function parseLineType(line: string): ParseLineTypeReturn {
++  const firstChar = line.substring(0, 1);
++  if (firstChar !== '+' && firstChar !== '-' && firstChar !== ' ') {
++    throw new Error(`parseLineType: Invalid firstChar: ${firstChar}, ${line}`);
++  }
++  return {
++    line: line.substring(1),
++    type:
++      firstChar === ' '
++        ? 'context'
++        : firstChar === '+'
++          ? 'addition'
++          : 'deletion',
++  };
++}
+diff --git a/src/pierre-js/utils/parsePatchContent.ts b/src/pierre-js/utils/parsePatchContent.ts
+index 6d76a4b..f0c5b40 100644
+--- a/src/pierre-js/utils/parsePatchContent.ts
++++ b/src/pierre-js/utils/parsePatchContent.ts
+@@ -3,14 +3,9 @@ import {
+   FILE_CONTEXT_BLOB,
+   HUNK_HEADER,
+   PER_FILE_DIFF_BREAK_REGEX,
++  SPLIT_WITH_NEWLINES,
+ } from '../constants';
+-import type {
+-  FileMetadata,
+-  Hunk,
+-  HunkTypes,
+-  LinesHunk,
+-  ParsedPatch,
+-} from '../types';
++import type { FileMetadata, Hunk, ParsedPatch } from '../types';
+ 
+ export function parsePatchContent(data: string): ParsedPatch {
+   const rawFiles = data.split(PER_FILE_DIFF_BREAK_REGEX);
+@@ -31,7 +26,7 @@ export function parsePatchContent(data: string): ParsedPatch {
+     const hunks = file.split(FILE_CONTEXT_BLOB);
+     currentFile = undefined;
+     for (const hunk of hunks) {
+-      const lines = hunk.split(/(?<=\n)/);
++      const lines = hunk.split(SPLIT_WITH_NEWLINES);
+       const firstLine = lines.shift();
+       if (firstLine == null) {
+         console.error('parsePatchContent: invalid hunk', hunk);
+@@ -79,50 +74,22 @@ export function parsePatchContent(data: string): ParsedPatch {
+         continue;
+       }
+       const hunkData: Hunk = {
+-        additionEnd: parseInt(match[4]),
+-        additionLines: [],
++        additionCount: parseInt(match[4]),
+         additionStart: parseInt(match[3]),
+-        deletedEnd: parseInt(match[2]),
+-        deletedLines: [],
++        deletedCount: parseInt(match[2]),
+         deletedStart: parseInt(match[1]),
++        hunkContent: lines.length > 0 ? lines.join('') : undefined,
+         hunkContext: match[5],
+       };
+       if (
+-        isNaN(hunkData.additionEnd) ||
+-        isNaN(hunkData.additionEnd) ||
++        isNaN(hunkData.additionCount) ||
++        isNaN(hunkData.additionCount) ||
+         isNaN(hunkData.additionStart) ||
+         isNaN(hunkData.deletedStart)
+       ) {
+         console.error('parsePatchContent: invalid hunk metadata', hunkData);
+         continue;
+       }
+-      const { deletedLines, additionLines } = hunkData;
+-      for (const line of lines) {
+-        const fixedLine = line.substring(1);
+-        if (line.startsWith(' ')) {
+-          if (currentFile.type !== 'new') {
+-            const lastDeletedHunk = getLastOfType('context', deletedLines);
+-            lastDeletedHunk.lines.push(fixedLine);
+-          }
+-
+-          if (currentFile.type !== 'deleted') {
+-            const lastAdditionHunk = getLastOfType('context', additionLines);
+-            lastAdditionHunk.lines.push(fixedLine);
+-          }
+-        } else if (line.startsWith('-')) {
+-          const lastDeletedHunk = getLastOfType('change', deletedLines);
+-          if (currentFile.type !== 'deleted') {
+-            getLastOfType('change', additionLines);
+-          }
+-          lastDeletedHunk.lines.push(fixedLine);
+-        } else if (line.startsWith('+')) {
+-          const lastAdditionHunk = getLastOfType('change', additionLines);
+-          if (currentFile.type !== 'new') {
+-            getLastOfType('change', deletedLines);
+-          }
+-          lastAdditionHunk.lines.push(fixedLine);
+-        }
+-      }
+       currentFile.hunks.push(hunkData);
+     }
+     if (currentFile != null) {
+@@ -131,16 +98,3 @@ export function parsePatchContent(data: string): ParsedPatch {
+   }
+   return { patchMetadata, files };
+ }
+-
+-function getLastOfType(type: HunkTypes, arr: LinesHunk[]): LinesHunk {
+-  let lastLinesHunk = arr[arr.length - 1];
+-  if (lastLinesHunk?.type === type) {
+-    return lastLinesHunk;
+-  }
+-  lastLinesHunk = {
+-    type,
+-    lines: [],
+-  };
+-  arr.push(lastLinesHunk);
+-  return lastLinesHunk;
+-}
+diff --git a/src/test_files/diff2.patch b/src/test_files/diff2.patch
+new file mode 100644
+index 0000000..6bca528
+--- /dev/null
++++ b/src/test_files/diff2.patch
+@@ -0,0 +1,1374 @@
++From 0935498e173fedd0d5413bbbb98710ee7d0a3d36 Mon Sep 17 00:00:00 2001
++From: Amadeus Demarzi <amadeusdemarzi@gmail.com>
++Date: Mon, 22 Sep 2025 16:47:53 -0700
++Subject: [PATCH 1/3] Initial cursed version of unified diffs...
++
++I need to probably take a look at parsing and probalby defer a lot of
++individual line parsing later on (both will save on performance and
++probably be easier to switch between the types...)
++
++Real goal would be -- is there a way i can use exactly the same HTML to
++switch between the type? :thonk:
++---
++ index.html                               |   4 +
++ src/main.ts                              |   4 +
++ src/pierre-js/DiffRenderer.ts            | 158 +++++++++++++++++------
++ src/pierre-js/style.css                  |  30 +++--
++ src/pierre-js/types.ts                   |   4 +-
++ src/pierre-js/utils/html_render_utils.ts |   2 +-
++ src/pierre-js/utils/parsePatchContent.ts |   8 +-
++ 7 files changed, 157 insertions(+), 53 deletions(-)
++
++diff --git a/index.html b/index.html
++index c347e7b..4434b11 100644
++--- a/index.html
+++++ b/index.html
++@@ -20,6 +20,10 @@
++             <input id="wrap-lines" type="checkbox" />
++             Wrap Lines
++           </label>
+++          <label>
+++            <input id="unified" type="checkbox" />
+++            Unified Diffs
+++          </label>
++           <!-- <div>[<strong>RAW</strong> / <a href="/react">REACT</a>]</div> -->
++         </div>
++       </div>
++diff --git a/src/main.ts b/src/main.ts
++index ea706d2..a2bffaf 100644
++--- a/src/main.ts
+++++ b/src/main.ts
++@@ -63,6 +63,9 @@ function renderDiff() {
++   }
++   container.dataset.diff = '';
++   parsedPatch = parsedPatch ?? parsePatchContent(DIFF_CONTENT);
+++  const unified =
+++    (document.getElementById('unified') as HTMLInputElement | undefined)
+++      ?.checked ?? false;
++   for (const file of parsedPatch.files) {
++     const decorations = DIFF_DECORATIONS[file.name];
++     const pre = document.createElement('pre');
++@@ -70,6 +73,7 @@ function renderDiff() {
++     const instance = new DiffRenderer({
++       lang: getFiletypeFromMetadata(file),
++       themes: { dark: 'tokyo-night', light: 'solarized-light' },
+++      unified,
++     });
++     instance.setup(file, pre, decorations);
++   }
++diff --git a/src/pierre-js/DiffRenderer.ts b/src/pierre-js/DiffRenderer.ts
++index bef6a5f..6b512c9 100644
++--- a/src/pierre-js/DiffRenderer.ts
+++++ b/src/pierre-js/DiffRenderer.ts
++@@ -15,7 +15,7 @@ import {
++ } from './utils/html_render_utils';
++ import type { BundledLanguage, BundledTheme } from 'shiki';
++ import { getSharedHighlighter } from './SharedHighlighter';
++-import type { FileMetadata, Hunk, HunkTypes, LinesHunk } from './types';
+++import type { FileMetadata, Hunk, LinesHunk } from './types';
++ 
++ export interface DiffDecorationItem extends DecorationItem {
++   type: 'additions' | 'deletions';
++@@ -27,6 +27,7 @@ interface CodeTokenOptionsBase {
++   lang?: BundledLanguage;
++   defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
++   preferWasmHighlighter?: boolean;
+++  unified?: boolean;
++ 
++   // FIXME(amadeus): Figure out how to incorporate these mb?
++   onPreRender?(instance: DiffRenderer): unknown;
++@@ -37,16 +38,25 @@ interface RenderHunkProps {
++   hunk: Hunk;
++   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
++   state: SharedRenderState;
++-  codeDeletions: HTMLElement;
++-  codeAdditions: HTMLElement;
++   transformer: ShikiTransformer;
++   deletionDecorations: DiffDecorationItem[] | undefined;
++   additionDecorations: DiffDecorationItem[] | undefined;
++ }
++ 
+++interface RenderHunkComponents {
+++  codeAdditions: HTMLElement;
+++  codeDeletions: HTMLElement;
+++}
+++
++ interface SharedRenderState {
++-  startingLine: number;
++-  lineTypes: Record<number, HunkTypes>;
+++  lineInfo: Record<
+++    number,
+++    | {
+++        type: 'change' | 'change-deletion' | 'change-addition' | 'context';
+++        number: number;
+++      }
+++    | undefined
+++  >;
++   spans: Record<number, number | undefined>;
++   decorations: DecorationItem[];
++ }
++@@ -113,8 +123,11 @@ export class DiffRenderer {
++     highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>,
++     decorations?: DiffDecorationItem[]
++   ) {
++-    const { themes, theme } = this.options;
++-    const split = diff.type === 'changed' || diff.type === 'renamed-changed';
+++    const { themes, theme, unified = false } = this.options;
+++    const split =
+++      unified === true
+++        ? false
+++        : diff.type === 'changed' || diff.type === 'renamed-changed';
++     const pre = setupPreNode(
++       themes != null
++         ? { pre: wrapper, themes, highlighter, split }
++@@ -124,6 +137,7 @@ export class DiffRenderer {
++     this.pre = pre;
++     const codeAdditions = createCodeNode({ columnType: 'additions' });
++     const codeDeletions = createCodeNode({ columnType: 'deletions' });
+++    const codeUnified = createCodeNode({ columnType: 'unified' });
++     const { state, transformer } = createTransformerWithState();
++     const element = document.createElement('div');
++     element.dataset.fileInfo = '';
++@@ -134,14 +148,15 @@ export class DiffRenderer {
++     }
++     this.pre.parentNode?.insertBefore(element, this.pre);
++     let hunkIndex = 0;
++-    let hasRenderedHunk = false;
++     const decorationSet = new Set(decorations);
++     for (const hunk of diff.hunks) {
++-      if (!hasRenderedHunk) {
++-        hasRenderedHunk = true;
++-      } else {
++-        codeAdditions.appendChild(createHunkSeparator());
++-        codeDeletions.appendChild(createHunkSeparator());
+++      if (hunkIndex > 0) {
+++        if (unified) {
+++          codeUnified.appendChild(createHunkSeparator());
+++        } else {
+++          codeAdditions.appendChild(createHunkSeparator());
+++          codeDeletions.appendChild(createHunkSeparator());
+++        }
++       }
++       const additionDecorations: DiffDecorationItem[] = [];
++       const deletionDecorations: DiffDecorationItem[] = [];
++@@ -154,18 +169,21 @@ export class DiffRenderer {
++         }
++         decorationSet.delete(decoration);
++       }
++-      this.renderHunk({
+++      const props: RenderHunkProps = {
++         hunk,
++         highlighter,
++         state,
++-        codeAdditions,
++-        codeDeletions,
++         transformer,
++         additionDecorations:
++           additionDecorations.length > 0 ? additionDecorations : undefined,
++         deletionDecorations:
++           deletionDecorations.length > 0 ? deletionDecorations : undefined,
++-      });
+++      };
+++      if (unified && diff.type !== 'new' && diff.type !== 'deleted') {
+++        this.renderUnifiedHunks(props, codeUnified);
+++      } else {
+++        this.renderSplitHunks(props, { codeAdditions, codeDeletions });
+++      }
++       hunkIndex++;
++     }
++     if (codeDeletions.childNodes.length > 0) {
++@@ -174,6 +192,9 @@ export class DiffRenderer {
++     if (codeAdditions.childNodes.length > 0) {
++       this.pre.appendChild(codeAdditions);
++     }
+++    if (codeUnified.childNodes.length > 0) {
+++      this.pre.appendChild(codeUnified);
+++    }
++   }
++ 
++   private createHastOptions(
++@@ -204,17 +225,19 @@ export class DiffRenderer {
++     throw new Error();
++   }
++ 
++-  private renderHunk({
++-    hunk,
++-    highlighter,
++-    state,
++-    codeAdditions,
++-    codeDeletions,
++-    transformer,
++-    additionDecorations,
++-    deletionDecorations,
++-  }: RenderHunkProps) {
+++  private renderSplitHunks(
+++    {
+++      hunk,
+++      highlighter,
+++      state,
+++      transformer,
+++      additionDecorations,
+++      deletionDecorations,
+++    }: RenderHunkProps,
+++    { codeAdditions, codeDeletions }: RenderHunkComponents
+++  ) {
++     let lineIndex = 0;
+++    let currentLine = 0;
++     let opposingLines = hunk.additionLines;
++     const processLines = (linesHunk: LinesHunk, linesHunkIndex: number) => {
++       // Figure out if the opposite group of lines is taller than our current
++@@ -232,7 +255,11 @@ export class DiffRenderer {
++       let processedLines = '';
++       let index = lineIndex;
++       for (const line of linesHunk.lines) {
++-        state.lineTypes[index + 1] = linesHunk.type;
+++        state.lineInfo[index + 1] = {
+++          number: currentLine,
+++          type: linesHunk.type,
+++        };
+++        currentLine++;
++         processedLines += line;
++         index++;
++       }
++@@ -240,8 +267,8 @@ export class DiffRenderer {
++       return processedLines;
++     };
++     if (hunk.deletedLines.length > 0) {
++-      state.startingLine = hunk.deletedStart - 1;
++-      state.lineTypes = {};
+++      currentLine = hunk.deletedStart;
+++      state.lineInfo = {};
++       state.spans = {};
++       lineIndex = 0;
++       const deletions = hunk.deletedLines
++@@ -260,14 +287,14 @@ export class DiffRenderer {
++ 
++     if (hunk.additionLines.length > 0) {
++       opposingLines = hunk.deletedLines;
++-      state.lineTypes = {};
+++      state.lineInfo = {};
++       state.spans = {};
++       lineIndex = 0;
+++      currentLine = hunk.additionStart;
++       const additions = hunk.additionLines
++         .map(processLines)
++         .join('')
++         .replace(/\n$/, '');
++-      state.startingLine = hunk.additionStart - 1;
++       const nodes = highlighter.codeToHast(
++         additions,
++         this.createHastOptions(transformer, additionDecorations)
++@@ -279,6 +306,59 @@ export class DiffRenderer {
++     }
++   }
++ 
+++  private renderUnifiedHunks(
+++    { hunk, highlighter, state, transformer }: RenderHunkProps,
+++    codeUnified: HTMLElement
+++  ) {
+++    let lineIndex = 1;
+++    let currentLine = hunk.additionStart;
+++    let deletionLineIndex = hunk.deletedStart;
+++    let content = '';
+++    let hunkIndex = 0;
+++    for (const additionLinesHunk of hunk.additionLines) {
+++      const deletedLinesHunk = hunk.deletedLines[hunkIndex];
+++      if (deletedLinesHunk == null) {
+++        throw new Error('Whoopsie');
+++      }
+++      if (deletedLinesHunk.type === 'change') {
+++        for (const line of deletedLinesHunk.lines) {
+++          state.lineInfo[lineIndex] = {
+++            number: deletionLineIndex,
+++            type: `${deletedLinesHunk.type}-deletion`,
+++          };
+++          content += line;
+++          deletionLineIndex++;
+++          lineIndex++;
+++        }
+++      } else {
+++        deletionLineIndex += deletedLinesHunk.lines.length;
+++      }
+++      for (const line of additionLinesHunk.lines) {
+++        state.lineInfo[lineIndex] = {
+++          number: currentLine,
+++          type:
+++            additionLinesHunk.type === 'context'
+++              ? additionLinesHunk.type
+++              : `${additionLinesHunk.type}-addition`,
+++        };
+++        content += line;
+++        currentLine++;
+++        lineIndex++;
+++      }
+++      hunkIndex++;
+++    }
+++    content = content.replace(/\n$/, '');
+++    const nodes = highlighter.codeToHast(
+++      content,
+++      // NOTE(amadeus): Figure out decorations?
+++      this.createHastOptions(transformer)
+++    );
+++    codeUnified.insertAdjacentHTML(
+++      'beforeend',
+++      toHtml(this.getNodesToRender(nodes))
+++    );
+++  }
+++
++   private getNodesToRender(nodes: Root) {
++     let firstChild: RootContent | Element | Root | null = nodes.children[0];
++     while (firstChild != null) {
++@@ -331,20 +411,23 @@ function convertLine(
++     node.children.push({ type: 'text', value: '\n' });
++   }
++   const children = [node];
++-  const lineNr = state.startingLine + line;
+++  const lineInfo = state.lineInfo[line];
+++  if (lineInfo == null) {
+++    throw new Error('Whoopsie');
+++  }
++   // NOTE(amadeus): This should probably be based on a setting
++   children.unshift({
++     tagName: 'div',
++     type: 'element',
++     properties: { 'data-column-number': '' },
++-    children: [{ type: 'text', value: `${lineNr}` }],
+++    children: [{ type: 'text', value: `${lineInfo.number}` }],
++   });
++   return {
++     tagName: 'div',
++     type: 'element',
++     properties: {
++-      ['data-line']: `${lineNr}`,
++-      ['data-line-type']: state.lineTypes[line],
+++      ['data-line']: `${lineInfo.number}`,
+++      ['data-line-type']: lineInfo.type,
++     },
++     children,
++   };
++@@ -383,8 +466,7 @@ function createTransformerWithState(): {
++ } {
++   const state: SharedRenderState = {
++     spans: {},
++-    startingLine: 0,
++-    lineTypes: {},
+++    lineInfo: {},
++     decorations: [],
++   };
++   return {
++diff --git a/src/pierre-js/style.css b/src/pierre-js/style.css
++index 97e4629..60051c0 100644
++--- a/src/pierre-js/style.css
+++++ b/src/pierre-js/style.css
++@@ -135,14 +135,6 @@
++   background-color: var(--pjs-bg-hover);
++ }
++ 
++-[data-additions] [data-line-type='change']:hover [data-column-content] {
++-  background-color: var(--pjs-bg-additions-number);
++-}
++-
++-[data-deletions] [data-line-type='change']:hover [data-column-content] {
++-  background-color: var(--pjs-bg-deletions-number);
++-}
++-
++ [data-overflow='wrap'] [data-column-content] {
++   white-space: pre-wrap;
++ }
++@@ -161,19 +153,31 @@
++   color: var(--pjs-fg-number);
++ }
++ 
+++[data-pjs]
+++  [data-unified]
+++  [data-line-type='change-addition']
+++  [data-column-number],
++ [data-pjs] [data-additions] [data-line-type='change'] [data-column-number] {
++   background-color: var(--pjs-bg-additions-number);
++ }
++ 
+++[data-pjs]
+++  [data-unified]
+++  [data-line-type='change-deletion']
+++  [data-column-number],
++ [data-pjs] [data-deletions] [data-line-type='change'] [data-column-number] {
++   background-color: var(--pjs-bg-deletions-number);
++ }
++ 
+++[data-unified] [data-line-type='change-addition'],
+++[data-unified] [data-line-type='change-addition'] [data-column-number],
++ [data-additions] [data-line-type='change'],
++ [data-additions] [data-line-type='change'] [data-column-number] {
++   background-color: var(--pjs-bg-additions);
++ }
++ 
+++[data-unified] [data-line-type='change-deletion'],
+++[data-unified] [data-line-type='change-deletion'] [data-column-number],
++ [data-deletions] [data-line-type='change'],
++ [data-deletions] [data-line-type='change'] [data-column-number] {
++   background-color: var(--pjs-bg-deletions);
++@@ -186,3 +190,13 @@
++   word-break: break-all;
++   overflow-wrap: break-word;
++ }
+++
+++[data-unified] [data-line-type='change-addition']:hover [data-column-content],
+++[data-additions] [data-line-type='change']:hover [data-column-content] {
+++  background-color: var(--pjs-bg-additions-number);
+++}
+++
+++[data-unified] [data-line-type='change-deletion']:hover [data-column-content],
+++[data-deletions] [data-line-type='change']:hover [data-column-content] {
+++  background-color: var(--pjs-bg-deletions-number);
+++}
++diff --git a/src/pierre-js/types.ts b/src/pierre-js/types.ts
++index b84dfe7..a4d737c 100644
++--- a/src/pierre-js/types.ts
+++++ b/src/pierre-js/types.ts
++@@ -20,10 +20,10 @@ export interface ParsedPatch {
++ }
++ 
++ export interface Hunk {
++-  additionEnd: number;
+++  additionCount: number;
++   additionLines: LinesHunk[];
++   additionStart: number;
++-  deletedEnd: number;
+++  deletedCount: number;
++   deletedLines: LinesHunk[];
++   deletedStart: number;
++   hunkContext: string | undefined;
++diff --git a/src/pierre-js/utils/html_render_utils.ts b/src/pierre-js/utils/html_render_utils.ts
++index 1e0354f..c4382a1 100644
++--- a/src/pierre-js/utils/html_render_utils.ts
+++++ b/src/pierre-js/utils/html_render_utils.ts
++@@ -65,7 +65,7 @@ export function setupPreNode(props: SetupWrapperNodesProps) {
++ 
++ interface CreateCodeNodeProps {
++   pre?: HTMLPreElement;
++-  columnType?: 'additions' | 'deletions';
+++  columnType?: 'additions' | 'deletions' | 'unified';
++ }
++ 
++ export function createCodeNode({ pre, columnType }: CreateCodeNodeProps) {
++diff --git a/src/pierre-js/utils/parsePatchContent.ts b/src/pierre-js/utils/parsePatchContent.ts
++index 6d76a4b..0a5a8a9 100644
++--- a/src/pierre-js/utils/parsePatchContent.ts
+++++ b/src/pierre-js/utils/parsePatchContent.ts
++@@ -79,17 +79,17 @@ export function parsePatchContent(data: string): ParsedPatch {
++         continue;
++       }
++       const hunkData: Hunk = {
++-        additionEnd: parseInt(match[4]),
+++        additionCount: parseInt(match[4]),
++         additionLines: [],
++         additionStart: parseInt(match[3]),
++-        deletedEnd: parseInt(match[2]),
+++        deletedCount: parseInt(match[2]),
++         deletedLines: [],
++         deletedStart: parseInt(match[1]),
++         hunkContext: match[5],
++       };
++       if (
++-        isNaN(hunkData.additionEnd) ||
++-        isNaN(hunkData.additionEnd) ||
+++        isNaN(hunkData.additionCount) ||
+++        isNaN(hunkData.additionCount) ||
++         isNaN(hunkData.additionStart) ||
++         isNaN(hunkData.deletedStart)
++       ) {
++
++From 0828e402be9d0b52a9161f1714cf3f8f56643ee9 Mon Sep 17 00:00:00 2001
++From: Amadeus Demarzi <amadeusdemarzi@gmail.com>
++Date: Mon, 22 Sep 2025 18:50:27 -0700
++Subject: [PATCH 2/3] Improved unified/split diff rendering
++
++Refactored some aspects of diff parsing to make the render flows a bit
++more compatible.  There's probably more I can clean this up but it's
++nicer than it was in the prior commit
++---
++ src/pierre-js/DiffRenderer.ts            | 287 +++++++++++++----------
++ src/pierre-js/constants.ts               |   1 +
++ src/pierre-js/index.ts                   |   3 +-
++ src/pierre-js/types.ts                   |  12 +-
++ src/pierre-js/utils/parseLineType.ts     |  22 ++
++ src/pierre-js/utils/parsePatchContent.ts |  54 +----
++ 6 files changed, 191 insertions(+), 188 deletions(-)
++ create mode 100644 src/pierre-js/utils/parseLineType.ts
++
++diff --git a/src/pierre-js/DiffRenderer.ts b/src/pierre-js/DiffRenderer.ts
++index 6b512c9..d031f20 100644
++--- a/src/pierre-js/DiffRenderer.ts
+++++ b/src/pierre-js/DiffRenderer.ts
++@@ -15,7 +15,9 @@ import {
++ } from './utils/html_render_utils';
++ import type { BundledLanguage, BundledTheme } from 'shiki';
++ import { getSharedHighlighter } from './SharedHighlighter';
++-import type { FileMetadata, Hunk, LinesHunk } from './types';
+++import type { FileMetadata, Hunk, HUNK_LINE_TYPE } from './types';
+++import { SPLIT_WITH_NEWLINES } from './constants';
+++import { parseLineType } from './utils/parseLineType';
++ 
++ export interface DiffDecorationItem extends DecorationItem {
++   type: 'additions' | 'deletions';
++@@ -41,22 +43,19 @@ interface RenderHunkProps {
++   transformer: ShikiTransformer;
++   deletionDecorations: DiffDecorationItem[] | undefined;
++   additionDecorations: DiffDecorationItem[] | undefined;
++-}
++ 
++-interface RenderHunkComponents {
++   codeAdditions: HTMLElement;
++   codeDeletions: HTMLElement;
+++  codeUnified: HTMLElement;
+++}
+++
+++interface LineInfo {
+++  type: 'change' | 'change-deletion' | 'change-addition' | 'context';
+++  number: number;
++ }
++ 
++ interface SharedRenderState {
++-  lineInfo: Record<
++-    number,
++-    | {
++-        type: 'change' | 'change-deletion' | 'change-addition' | 'context';
++-        number: number;
++-      }
++-    | undefined
++-  >;
+++  lineInfo: Record<number, LineInfo | undefined>;
++   spans: Record<number, number | undefined>;
++   decorations: DecorationItem[];
++ }
++@@ -169,7 +168,7 @@ export class DiffRenderer {
++         }
++         decorationSet.delete(decoration);
++       }
++-      const props: RenderHunkProps = {
+++      this.renderHunks({
++         hunk,
++         highlighter,
++         state,
++@@ -178,12 +177,10 @@ export class DiffRenderer {
++           additionDecorations.length > 0 ? additionDecorations : undefined,
++         deletionDecorations:
++           deletionDecorations.length > 0 ? deletionDecorations : undefined,
++-      };
++-      if (unified && diff.type !== 'new' && diff.type !== 'deleted') {
++-        this.renderUnifiedHunks(props, codeUnified);
++-      } else {
++-        this.renderSplitHunks(props, { codeAdditions, codeDeletions });
++-      }
+++        codeAdditions,
+++        codeDeletions,
+++        codeUnified,
+++      });
++       hunkIndex++;
++     }
++     if (codeDeletions.childNodes.length > 0) {
++@@ -225,58 +222,150 @@ export class DiffRenderer {
++     throw new Error();
++   }
++ 
++-  private renderSplitHunks(
++-    {
++-      hunk,
++-      highlighter,
++-      state,
++-      transformer,
++-      additionDecorations,
++-      deletionDecorations,
++-    }: RenderHunkProps,
++-    { codeAdditions, codeDeletions }: RenderHunkComponents
++-  ) {
++-    let lineIndex = 0;
++-    let currentLine = 0;
++-    let opposingLines = hunk.additionLines;
++-    const processLines = (linesHunk: LinesHunk, linesHunkIndex: number) => {
++-      // Figure out if the opposite group of lines is taller than our current
++-      // one, if so we'll have to add a spanner node to fill the space
++-      const oppositeHunk = opposingLines[linesHunkIndex];
+++  private renderHunks({
+++    hunk,
+++    highlighter,
+++    state,
+++    transformer,
+++    additionDecorations,
+++    deletionDecorations,
+++    codeAdditions,
+++    codeDeletions,
+++    codeUnified,
+++  }: RenderHunkProps) {
+++    if (hunk.hunkContent == null) return;
+++    const { unified = false } = this.options;
+++
+++    const additionInfo: Record<number, LineInfo | undefined> = {};
+++    const additionSpans: Record<number, number> = {};
+++    let additionLineIndex = 1;
+++    let additionLineNumber = hunk.additionStart;
+++    let additionContent: string | undefined;
+++    let additionSize = 0;
+++
+++    const deletionInfo: Record<number, LineInfo | undefined> = {};
+++    const deletionSpans: Record<number, number> = {};
+++    let deletionLineIndex = 1;
+++    let deletionLineNumber = hunk.deletedStart;
+++    let deletionSize = 0;
+++    let deletionContent: string | undefined;
+++
+++    const unifiedInfo: Record<number, LineInfo | undefined> = {};
+++    let unifiedContent: string | undefined;
+++    let unifiedLineIndex = 1;
+++
+++    let lastType: HUNK_LINE_TYPE | undefined;
+++
+++    function createSpanIfNecessary() {
++       if (
++-        oppositeHunk != null &&
++-        oppositeHunk.lines.length > linesHunk.lines.length
+++        lastType !== 'context' &&
+++        lastType != null &&
+++        additionSize !== deletionSize
++       ) {
++-        state.spans[lineIndex + linesHunk.lines.length] =
++-          oppositeHunk.lines.length - linesHunk.lines.length;
+++        if (additionSize > deletionSize) {
+++          deletionSpans[deletionLineIndex - 1] = additionSize - deletionSize;
+++        } else if (deletionSize > additionSize) {
+++          additionSpans[additionLineIndex - 1] = deletionSize - additionSize;
+++        }
+++      }
+++    }
+++
+++    for (const rawLine of hunk.hunkContent.split(SPLIT_WITH_NEWLINES)) {
+++      const { line, type } = parseLineType(rawLine);
+++      if (type === 'context') {
+++        createSpanIfNecessary();
++       }
++-      // Get a mapping of the line type (change or context) and convert into a
++-      // string
++-      let processedLines = '';
++-      let index = lineIndex;
++-      for (const line of linesHunk.lines) {
++-        state.lineInfo[index + 1] = {
++-          number: currentLine,
++-          type: linesHunk.type,
++-        };
++-        currentLine++;
++-        processedLines += line;
++-        index++;
+++      if (type === 'context') {
+++        additionSize = 0;
+++        deletionSize = 0;
+++        if (unified) {
+++          unifiedContent = (unifiedContent ?? '') + line;
+++          unifiedInfo[unifiedLineIndex] = {
+++            type: 'context',
+++            number: additionLineNumber,
+++          };
+++          unifiedLineIndex++;
+++        } else {
+++          additionContent = (additionContent ?? '') + line;
+++          deletionContent = (deletionContent ?? '') + line;
+++          additionInfo[additionLineIndex] = {
+++            type: 'context',
+++            number: additionLineNumber,
+++          };
+++          deletionInfo[deletionLineIndex] = {
+++            type: 'context',
+++            number: deletionLineNumber,
+++          };
+++          additionLineIndex++;
+++          deletionLineIndex++;
+++        }
+++
+++        additionLineNumber++;
+++        deletionLineNumber++;
+++      } else if (type === 'deletion') {
+++        if (unified) {
+++          unifiedContent = (unifiedContent ?? '') + line;
+++          unifiedInfo[unifiedLineIndex] = {
+++            type: 'change-deletion',
+++            number: deletionLineNumber,
+++          };
+++          unifiedLineIndex++;
+++        } else {
+++          deletionContent = (deletionContent ?? '') + line;
+++          deletionInfo[deletionLineIndex] = {
+++            type: 'change',
+++            number: deletionLineNumber,
+++          };
+++          deletionSize++;
+++          deletionLineIndex++;
+++        }
+++        deletionLineNumber++;
+++      } else if (type === 'addition') {
+++        if (unified) {
+++          unifiedContent = (unifiedContent ?? '') + line;
+++          unifiedInfo[unifiedLineIndex] = {
+++            type: 'change-addition',
+++            number: additionLineNumber,
+++          };
+++          unifiedLineIndex++;
+++        } else {
+++          additionContent = (additionContent ?? '') + line;
+++          additionInfo[additionLineIndex] = {
+++            type: 'change',
+++            number: additionLineNumber,
+++          };
+++          additionSize++;
+++          additionLineIndex++;
+++        }
+++        additionLineNumber++;
++       }
++-      lineIndex += linesHunk.lines.length;
++-      return processedLines;
++-    };
++-    if (hunk.deletedLines.length > 0) {
++-      currentLine = hunk.deletedStart;
++-      state.lineInfo = {};
+++
+++      lastType = type;
+++    }
+++    createSpanIfNecessary();
+++
+++    if (unifiedContent != null) {
+++      // Remove trailing blank line
+++      unifiedContent = unifiedContent.replace(/\n$/, '');
++       state.spans = {};
++-      lineIndex = 0;
++-      const deletions = hunk.deletedLines
++-        .map(processLines)
++-        .join('')
++-        .replace(/\n$/, '');
+++      state.lineInfo = unifiedInfo;
+++      const nodes = highlighter.codeToHast(
+++        unifiedContent,
+++        this.createHastOptions(transformer, deletionDecorations)
+++      );
+++      codeUnified.insertAdjacentHTML(
+++        'beforeend',
+++        toHtml(this.getNodesToRender(nodes))
+++      );
+++    }
+++
+++    if (deletionContent != null) {
+++      // Remove trailing blank line
+++      deletionContent = deletionContent.replace(/\n$/, '');
+++      state.spans = deletionSpans;
+++      state.lineInfo = deletionInfo;
++       const nodes = highlighter.codeToHast(
++-        deletions,
+++        deletionContent,
++         this.createHastOptions(transformer, deletionDecorations)
++       );
++       codeDeletions.insertAdjacentHTML(
++@@ -285,18 +374,13 @@ export class DiffRenderer {
++       );
++     }
++ 
++-    if (hunk.additionLines.length > 0) {
++-      opposingLines = hunk.deletedLines;
++-      state.lineInfo = {};
++-      state.spans = {};
++-      lineIndex = 0;
++-      currentLine = hunk.additionStart;
++-      const additions = hunk.additionLines
++-        .map(processLines)
++-        .join('')
++-        .replace(/\n$/, '');
+++    if (additionContent != null) {
+++      // Remove trailing blank line
+++      additionContent = additionContent.replace(/\n$/, '');
+++      state.spans = additionSpans;
+++      state.lineInfo = additionInfo;
++       const nodes = highlighter.codeToHast(
++-        additions,
+++        additionContent,
++         this.createHastOptions(transformer, additionDecorations)
++       );
++       codeAdditions.insertAdjacentHTML(
++@@ -306,59 +390,6 @@ export class DiffRenderer {
++     }
++   }
++ 
++-  private renderUnifiedHunks(
++-    { hunk, highlighter, state, transformer }: RenderHunkProps,
++-    codeUnified: HTMLElement
++-  ) {
++-    let lineIndex = 1;
++-    let currentLine = hunk.additionStart;
++-    let deletionLineIndex = hunk.deletedStart;
++-    let content = '';
++-    let hunkIndex = 0;
++-    for (const additionLinesHunk of hunk.additionLines) {
++-      const deletedLinesHunk = hunk.deletedLines[hunkIndex];
++-      if (deletedLinesHunk == null) {
++-        throw new Error('Whoopsie');
++-      }
++-      if (deletedLinesHunk.type === 'change') {
++-        for (const line of deletedLinesHunk.lines) {
++-          state.lineInfo[lineIndex] = {
++-            number: deletionLineIndex,
++-            type: `${deletedLinesHunk.type}-deletion`,
++-          };
++-          content += line;
++-          deletionLineIndex++;
++-          lineIndex++;
++-        }
++-      } else {
++-        deletionLineIndex += deletedLinesHunk.lines.length;
++-      }
++-      for (const line of additionLinesHunk.lines) {
++-        state.lineInfo[lineIndex] = {
++-          number: currentLine,
++-          type:
++-            additionLinesHunk.type === 'context'
++-              ? additionLinesHunk.type
++-              : `${additionLinesHunk.type}-addition`,
++-        };
++-        content += line;
++-        currentLine++;
++-        lineIndex++;
++-      }
++-      hunkIndex++;
++-    }
++-    content = content.replace(/\n$/, '');
++-    const nodes = highlighter.codeToHast(
++-      content,
++-      // NOTE(amadeus): Figure out decorations?
++-      this.createHastOptions(transformer)
++-    );
++-    codeUnified.insertAdjacentHTML(
++-      'beforeend',
++-      toHtml(this.getNodesToRender(nodes))
++-    );
++-  }
++-
++   private getNodesToRender(nodes: Root) {
++     let firstChild: RootContent | Element | Root | null = nodes.children[0];
++     while (firstChild != null) {
++diff --git a/src/pierre-js/constants.ts b/src/pierre-js/constants.ts
++index 6cdd210..9482b11 100644
++--- a/src/pierre-js/constants.ts
+++++ b/src/pierre-js/constants.ts
++@@ -2,3 +2,4 @@ export const PER_FILE_DIFF_BREAK_REGEX = /(?=^diff --git)/gm;
++ export const FILE_CONTEXT_BLOB = /(?=^@@ )/gm;
++ export const HUNK_HEADER = /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@(?: (.*))?/m;
++ export const DIFF_GIT_HEADER = /^diff --git a\/(.+?) b\/(.+)/;
+++export const SPLIT_WITH_NEWLINES = /(?<=\n)/;
++diff --git a/src/pierre-js/index.ts b/src/pierre-js/index.ts
++index 5e2975d..280cf06 100644
++--- a/src/pierre-js/index.ts
+++++ b/src/pierre-js/index.ts
++@@ -6,5 +6,6 @@ export * from './UnversialRenderer';
++ export * from './createStreamingHighlighter';
++ export * from './shiki-stream';
++ export * from './utils/html_render_utils';
++-export * from './utils/parsePatchContent.ts';
+++export * from './utils/parseLineType';
+++export * from './utils/parsePatchContent';
++ export type * from './types';
++diff --git a/src/pierre-js/types.ts b/src/pierre-js/types.ts
++index a4d737c..c3cbd7b 100644
++--- a/src/pierre-js/types.ts
+++++ b/src/pierre-js/types.ts
++@@ -5,8 +5,6 @@ export interface ThemesType {
++   light: BundledTheme;
++ }
++ 
++-export type HunkTypes = 'context' | 'change';
++-
++ export type FileTypes =
++   | 'changed'
++   | 'renamed-pure'
++@@ -21,22 +19,18 @@ export interface ParsedPatch {
++ 
++ export interface Hunk {
++   additionCount: number;
++-  additionLines: LinesHunk[];
++   additionStart: number;
++   deletedCount: number;
++-  deletedLines: LinesHunk[];
++   deletedStart: number;
+++  hunkContent: string | undefined;
++   hunkContext: string | undefined;
++ }
++ 
++-export interface LinesHunk {
++-  type: HunkTypes;
++-  lines: string[];
++-}
++-
++ export interface FileMetadata {
++   name: string;
++   prevName: string | undefined;
++   type: FileTypes;
++   hunks: Hunk[];
++ }
+++
+++export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion';
++diff --git a/src/pierre-js/utils/parseLineType.ts b/src/pierre-js/utils/parseLineType.ts
++new file mode 100644
++index 0000000..af369d5
++--- /dev/null
+++++ b/src/pierre-js/utils/parseLineType.ts
++@@ -0,0 +1,22 @@
+++import type { HUNK_LINE_TYPE } from '../types';
+++
+++export interface ParseLineTypeReturn {
+++  line: string;
+++  type: HUNK_LINE_TYPE;
+++}
+++
+++export function parseLineType(line: string): ParseLineTypeReturn {
+++  const firstChar = line.substring(0, 1);
+++  if (firstChar !== '+' && firstChar !== '-' && firstChar !== ' ') {
+++    throw new Error(`parseLineType: Invalid firstChar: ${firstChar}, ${line}`);
+++  }
+++  return {
+++    line: line.substring(1),
+++    type:
+++      firstChar === ' '
+++        ? 'context'
+++        : firstChar === '+'
+++          ? 'addition'
+++          : 'deletion',
+++  };
+++}
++diff --git a/src/pierre-js/utils/parsePatchContent.ts b/src/pierre-js/utils/parsePatchContent.ts
++index 0a5a8a9..f0c5b40 100644
++--- a/src/pierre-js/utils/parsePatchContent.ts
+++++ b/src/pierre-js/utils/parsePatchContent.ts
++@@ -3,14 +3,9 @@ import {
++   FILE_CONTEXT_BLOB,
++   HUNK_HEADER,
++   PER_FILE_DIFF_BREAK_REGEX,
+++  SPLIT_WITH_NEWLINES,
++ } from '../constants';
++-import type {
++-  FileMetadata,
++-  Hunk,
++-  HunkTypes,
++-  LinesHunk,
++-  ParsedPatch,
++-} from '../types';
+++import type { FileMetadata, Hunk, ParsedPatch } from '../types';
++ 
++ export function parsePatchContent(data: string): ParsedPatch {
++   const rawFiles = data.split(PER_FILE_DIFF_BREAK_REGEX);
++@@ -31,7 +26,7 @@ export function parsePatchContent(data: string): ParsedPatch {
++     const hunks = file.split(FILE_CONTEXT_BLOB);
++     currentFile = undefined;
++     for (const hunk of hunks) {
++-      const lines = hunk.split(/(?<=\n)/);
+++      const lines = hunk.split(SPLIT_WITH_NEWLINES);
++       const firstLine = lines.shift();
++       if (firstLine == null) {
++         console.error('parsePatchContent: invalid hunk', hunk);
++@@ -80,11 +75,10 @@ export function parsePatchContent(data: string): ParsedPatch {
++       }
++       const hunkData: Hunk = {
++         additionCount: parseInt(match[4]),
++-        additionLines: [],
++         additionStart: parseInt(match[3]),
++         deletedCount: parseInt(match[2]),
++-        deletedLines: [],
++         deletedStart: parseInt(match[1]),
+++        hunkContent: lines.length > 0 ? lines.join('') : undefined,
++         hunkContext: match[5],
++       };
++       if (
++@@ -96,33 +90,6 @@ export function parsePatchContent(data: string): ParsedPatch {
++         console.error('parsePatchContent: invalid hunk metadata', hunkData);
++         continue;
++       }
++-      const { deletedLines, additionLines } = hunkData;
++-      for (const line of lines) {
++-        const fixedLine = line.substring(1);
++-        if (line.startsWith(' ')) {
++-          if (currentFile.type !== 'new') {
++-            const lastDeletedHunk = getLastOfType('context', deletedLines);
++-            lastDeletedHunk.lines.push(fixedLine);
++-          }
++-
++-          if (currentFile.type !== 'deleted') {
++-            const lastAdditionHunk = getLastOfType('context', additionLines);
++-            lastAdditionHunk.lines.push(fixedLine);
++-          }
++-        } else if (line.startsWith('-')) {
++-          const lastDeletedHunk = getLastOfType('change', deletedLines);
++-          if (currentFile.type !== 'deleted') {
++-            getLastOfType('change', additionLines);
++-          }
++-          lastDeletedHunk.lines.push(fixedLine);
++-        } else if (line.startsWith('+')) {
++-          const lastAdditionHunk = getLastOfType('change', additionLines);
++-          if (currentFile.type !== 'new') {
++-            getLastOfType('change', deletedLines);
++-          }
++-          lastAdditionHunk.lines.push(fixedLine);
++-        }
++-      }
++       currentFile.hunks.push(hunkData);
++     }
++     if (currentFile != null) {
++@@ -131,16 +98,3 @@ export function parsePatchContent(data: string): ParsedPatch {
++   }
++   return { patchMetadata, files };
++ }
++-
++-function getLastOfType(type: HunkTypes, arr: LinesHunk[]): LinesHunk {
++-  let lastLinesHunk = arr[arr.length - 1];
++-  if (lastLinesHunk?.type === type) {
++-    return lastLinesHunk;
++-  }
++-  lastLinesHunk = {
++-    type,
++-    lines: [],
++-  };
++-  arr.push(lastLinesHunk);
++-  return lastLinesHunk;
++-}
++
++From a54ba4c471977facc60bacef01ee2a2d8780c2fb Mon Sep 17 00:00:00 2001
++From: Amadeus Demarzi <amadeusdemarzi@gmail.com>
++Date: Tue, 23 Sep 2025 11:42:08 -0700
++Subject: [PATCH 3/3] Clean up some split vs unified code
++
++* Rework addition/deletion styles to be more universal regardless of
++  split vs unified
++* Make css better organized/cleaner
++---
++ src/pierre-js/DiffRenderer.ts |  50 +++++++--------
++ src/pierre-js/style.css       | 112 +++++++++++++++++-----------------
++ 2 files changed, 81 insertions(+), 81 deletions(-)
++
++diff --git a/src/pierre-js/DiffRenderer.ts b/src/pierre-js/DiffRenderer.ts
++index d031f20..0971e74 100644
++--- a/src/pierre-js/DiffRenderer.ts
+++++ b/src/pierre-js/DiffRenderer.ts
++@@ -50,7 +50,7 @@ interface RenderHunkProps {
++ }
++ 
++ interface LineInfo {
++-  type: 'change' | 'change-deletion' | 'change-addition' | 'context';
+++  type: 'change-deletion' | 'change-addition' | 'context';
++   number: number;
++ }
++ 
++@@ -236,48 +236,50 @@ export class DiffRenderer {
++     if (hunk.hunkContent == null) return;
++     const { unified = false } = this.options;
++ 
++-    const additionInfo: Record<number, LineInfo | undefined> = {};
+++    const additionLineInfo: Record<number, LineInfo | undefined> = {};
++     const additionSpans: Record<number, number> = {};
++     let additionLineIndex = 1;
++     let additionLineNumber = hunk.additionStart;
++     let additionContent: string | undefined;
++-    let additionSize = 0;
+++    let additionGroupSize = 0;
++ 
++-    const deletionInfo: Record<number, LineInfo | undefined> = {};
+++    const deletionLineInfo: Record<number, LineInfo | undefined> = {};
++     const deletionSpans: Record<number, number> = {};
++     let deletionLineIndex = 1;
++     let deletionLineNumber = hunk.deletedStart;
++-    let deletionSize = 0;
+++    let deletionGroupSize = 0;
++     let deletionContent: string | undefined;
++ 
++     const unifiedInfo: Record<number, LineInfo | undefined> = {};
++     let unifiedContent: string | undefined;
++     let unifiedLineIndex = 1;
++ 
++-    let lastType: HUNK_LINE_TYPE | undefined;
++-
++     function createSpanIfNecessary() {
++       if (
+++        !unified &&
++         lastType !== 'context' &&
++         lastType != null &&
++-        additionSize !== deletionSize
+++        additionGroupSize !== deletionGroupSize
++       ) {
++-        if (additionSize > deletionSize) {
++-          deletionSpans[deletionLineIndex - 1] = additionSize - deletionSize;
++-        } else if (deletionSize > additionSize) {
++-          additionSpans[additionLineIndex - 1] = deletionSize - additionSize;
+++        if (additionGroupSize > deletionGroupSize) {
+++          deletionSpans[deletionLineIndex - 1] =
+++            additionGroupSize - deletionGroupSize;
+++        } else if (deletionGroupSize > additionGroupSize) {
+++          additionSpans[additionLineIndex - 1] =
+++            deletionGroupSize - additionGroupSize;
++         }
++       }
++     }
++ 
+++    let lastType: HUNK_LINE_TYPE | undefined;
++     for (const rawLine of hunk.hunkContent.split(SPLIT_WITH_NEWLINES)) {
++       const { line, type } = parseLineType(rawLine);
++       if (type === 'context') {
++         createSpanIfNecessary();
++       }
++       if (type === 'context') {
++-        additionSize = 0;
++-        deletionSize = 0;
+++        additionGroupSize = 0;
+++        deletionGroupSize = 0;
++         if (unified) {
++           unifiedContent = (unifiedContent ?? '') + line;
++           unifiedInfo[unifiedLineIndex] = {
++@@ -288,11 +290,11 @@ export class DiffRenderer {
++         } else {
++           additionContent = (additionContent ?? '') + line;
++           deletionContent = (deletionContent ?? '') + line;
++-          additionInfo[additionLineIndex] = {
+++          additionLineInfo[additionLineIndex] = {
++             type: 'context',
++             number: additionLineNumber,
++           };
++-          deletionInfo[deletionLineIndex] = {
+++          deletionLineInfo[deletionLineIndex] = {
++             type: 'context',
++             number: deletionLineNumber,
++           };
++@@ -312,11 +314,11 @@ export class DiffRenderer {
++           unifiedLineIndex++;
++         } else {
++           deletionContent = (deletionContent ?? '') + line;
++-          deletionInfo[deletionLineIndex] = {
++-            type: 'change',
+++          deletionLineInfo[deletionLineIndex] = {
+++            type: 'change-deletion',
++             number: deletionLineNumber,
++           };
++-          deletionSize++;
+++          deletionGroupSize++;
++           deletionLineIndex++;
++         }
++         deletionLineNumber++;
++@@ -330,11 +332,11 @@ export class DiffRenderer {
++           unifiedLineIndex++;
++         } else {
++           additionContent = (additionContent ?? '') + line;
++-          additionInfo[additionLineIndex] = {
++-            type: 'change',
+++          additionLineInfo[additionLineIndex] = {
+++            type: 'change-addition',
++             number: additionLineNumber,
++           };
++-          additionSize++;
+++          additionGroupSize++;
++           additionLineIndex++;
++         }
++         additionLineNumber++;
++@@ -363,7 +365,7 @@ export class DiffRenderer {
++       // Remove trailing blank line
++       deletionContent = deletionContent.replace(/\n$/, '');
++       state.spans = deletionSpans;
++-      state.lineInfo = deletionInfo;
+++      state.lineInfo = deletionLineInfo;
++       const nodes = highlighter.codeToHast(
++         deletionContent,
++         this.createHastOptions(transformer, deletionDecorations)
++@@ -378,7 +380,7 @@ export class DiffRenderer {
++       // Remove trailing blank line
++       additionContent = additionContent.replace(/\n$/, '');
++       state.spans = additionSpans;
++-      state.lineInfo = additionInfo;
+++      state.lineInfo = additionLineInfo;
++       const nodes = highlighter.codeToHast(
++         additionContent,
++         this.createHastOptions(transformer, additionDecorations)
++diff --git a/src/pierre-js/style.css b/src/pierre-js/style.css
++index 60051c0..4006ed2 100644
++--- a/src/pierre-js/style.css
+++++ b/src/pierre-js/style.css
++@@ -69,18 +69,18 @@
++   }
++ }
++ 
++-[data-type='split'][data-overflow='wrap'] {
+++[data-pjs][data-type='split'][data-overflow='wrap'] {
++   display: grid;
++   grid-auto-flow: dense;
++   grid-template-columns: repeat(2, var(--pjs-code-grid));
++ }
++ 
++-[data-type='split'][data-overflow='scroll'] {
+++[data-pjs][data-type='split'][data-overflow='scroll'] {
++   display: grid;
++   grid-template-columns: 1fr 1fr;
++ }
++ 
++-[data-code] {
+++[data-pjs] [data-code] {
++   display: block;
++   display: grid;
++   grid-auto-flow: dense;
++@@ -90,24 +90,24 @@
++   overscroll-behavior-x: contain;
++ }
++ 
++-[data-type='split'][data-overflow='wrap'] [data-code] {
+++[data-pjs][data-type='split'][data-overflow='wrap'] [data-code] {
++   display: contents;
++ }
++ 
++-[data-line] {
+++[data-pjs] [data-line] {
++   display: grid;
++   grid-template-columns: subgrid;
++   grid-column: 1 / 3;
++ }
++ 
++-[data-buffer] {
+++[data-pjs] [data-buffer] {
++   grid-column: 1 / 3;
++   user-select: none;
++   background-color: var(--pjs-bg-buffer);
++   min-height: 1lh;
++ }
++ 
++-[data-separator] {
+++[data-pjs] [data-separator] {
++   grid-column: span 2;
++   height: 4px;
++   background-color: var(--pjs-bg-buffer);
++@@ -118,33 +118,32 @@
++   color: var(--pjs-fg);
++ }
++ 
++-[data-type='split'][data-overflow='wrap'] [data-deletions] [data-line],
++-[data-type='split'][data-overflow='wrap'] [data-deletions] [data-buffer],
++-[data-type='split'][data-overflow='wrap'] [data-deletions] [data-separator] {
++-  grid-column: 1 / 3;
++-}
++-
++-[data-type='split'][data-overflow='wrap'] [data-additions] [data-line],
++-[data-type='split'][data-overflow='wrap'] [data-additions] [data-buffer],
++-[data-type='split'][data-overflow='wrap'] [data-additions] [data-separator] {
++-  grid-column: 3 / 5;
+++[data-pjs][data-type='split'][data-overflow='wrap'] [data-deletions] {
+++  [data-line],
+++  [data-buffer],
+++  [data-separator] {
+++    grid-column: 1 / 3;
+++  }
++ }
++ 
++-[data-line]:hover [data-column-number],
++-[data-line]:hover [data-column-content] {
++-  background-color: var(--pjs-bg-hover);
+++[data-pjs][data-type='split'][data-overflow='wrap'] [data-additions] {
+++  [data-separator],
+++  [data-buffer],
+++  [data-line] {
+++    grid-column: 3 / 5;
+++  }
++ }
++ 
++-[data-overflow='wrap'] [data-column-content] {
+++[data-pjs][data-overflow='wrap'] [data-column-content] {
++   white-space: pre-wrap;
++ }
++ 
++-[data-overflow='scroll'] [data-column-content] {
+++[data-pjs][data-overflow='scroll'] [data-column-content] {
++   white-space: pre;
++   min-height: 1lh;
++ }
++ 
++-[data-column-number] {
+++[data-pjs] [data-column-number] {
++   text-align: right;
++   position: sticky;
++   left: 0;
++@@ -153,50 +152,49 @@
++   color: var(--pjs-fg-number);
++ }
++ 
++-[data-pjs]
++-  [data-unified]
++-  [data-line-type='change-addition']
++-  [data-column-number],
++-[data-pjs] [data-additions] [data-line-type='change'] [data-column-number] {
++-  background-color: var(--pjs-bg-additions-number);
++-}
+++[data-pjs] [data-line-type='change-addition'] {
+++  background-color: var(--pjs-bg-additions);
++ 
++-[data-pjs]
++-  [data-unified]
++-  [data-line-type='change-deletion']
++-  [data-column-number],
++-[data-pjs] [data-deletions] [data-line-type='change'] [data-column-number] {
++-  background-color: var(--pjs-bg-deletions-number);
+++  [data-column-number] {
+++    background-color: var(--pjs-bg-additions-number);
+++  }
++ }
++ 
++-[data-unified] [data-line-type='change-addition'],
++-[data-unified] [data-line-type='change-addition'] [data-column-number],
++-[data-additions] [data-line-type='change'],
++-[data-additions] [data-line-type='change'] [data-column-number] {
++-  background-color: var(--pjs-bg-additions);
+++[data-pjs] [data-line-type='change-deletion'] {
+++  background-color: var(--pjs-bg-deletions);
+++
+++  [data-column-number] {
+++    background-color: var(--pjs-bg-deletions-number);
+++  }
++ }
++ 
++-[data-unified] [data-line-type='change-deletion'],
++-[data-unified] [data-line-type='change-deletion'] [data-column-number],
++-[data-deletions] [data-line-type='change'],
++-[data-deletions] [data-line-type='change'] [data-column-number] {
++-  background-color: var(--pjs-bg-deletions);
+++[data-pjs] [data-line]:hover {
+++  [data-column-number],
+++  [data-column-content] {
+++    background-color: var(--pjs-bg-hover);
+++  }
+++
+++  &[data-line-type='change-addition'] [data-column-number] {
+++    background-color: var(--pjs-bg-additions-number);
+++  }
+++
+++  &[data-line-type='change-addition'] [data-column-content] {
+++    background-color: var(--pjs-bg-additions-number);
+++  }
+++
+++  &[data-line-type='change-deletion'] [data-column-number] {
+++    background-color: var(--pjs-bg-deletions-number);
+++  }
+++
+++  &[data-line-type='change-deletion'] [data-column-content] {
+++    background-color: var(--pjs-bg-deletions-number);
+++  }
++ }
++ 
++-[data-annotation] {
+++[data-pjs] [data-annotation] {
++   display: inline-block;
++   background-color: var(--pjs-bg-annotation);
++   white-space: pre-wrap;
++   word-break: break-all;
++   overflow-wrap: break-word;
++ }
++-
++-[data-unified] [data-line-type='change-addition']:hover [data-column-content],
++-[data-additions] [data-line-type='change']:hover [data-column-content] {
++-  background-color: var(--pjs-bg-additions-number);
++-}
++-
++-[data-unified] [data-line-type='change-deletion']:hover [data-column-content],
++-[data-deletions] [data-line-type='change']:hover [data-column-content] {
++-  background-color: var(--pjs-bg-deletions-number);
++-}
+diff --git a/src/test_files/index.ts b/src/test_files/index.ts
+index 7acc506..d10aacb 100644
+--- a/src/test_files/index.ts
++++ b/src/test_files/index.ts
+@@ -2,6 +2,7 @@ import { createScrollFixer } from '../utils/createScrollFixer';
+ import mdContent from './example_md.txt?raw';
+ import tsContent from './example_ts.txt?raw';
+ import diffContent from './diff.patch?raw';
++import diffContent2 from './diff2.patch?raw';
+ import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
+ import type { BundledLanguage } from 'shiki';
+ import type { DiffDecorationItem, FileMetadata } from 'pierrejs';
+@@ -45,6 +46,7 @@ export function toggleTheme() {
+ }
+ 
+ export const DIFF_CONTENT = diffContent;
++export const DIFF_CONTENT_2 = diffContent2;
+ 
+ export const DIFF_CONTENT_FORMATS: Record<string, BundledLanguage | undefined> =
+   {

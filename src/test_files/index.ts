@@ -2,6 +2,7 @@ import { createScrollFixer } from '../utils/createScrollFixer';
 import mdContent from './example_md.txt?raw';
 import tsContent from './example_ts.txt?raw';
 import diffContent from './diff.patch?raw';
+import diffContent2 from './diff2.patch?raw';
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import type { BundledLanguage } from 'shiki';
 import type { DiffDecorationItem, FileMetadata } from 'pierrejs';
@@ -45,6 +46,7 @@ export function toggleTheme() {
 }
 
 export const DIFF_CONTENT = diffContent;
+export const DIFF_CONTENT_2 = diffContent2;
 
 export const DIFF_CONTENT_FORMATS: Record<string, BundledLanguage | undefined> =
   {
@@ -55,6 +57,7 @@ export const DIFF_CONTENT_FORMATS: Record<string, BundledLanguage | undefined> =
     ts: 'typescript',
     tsx: 'tsx',
     css: 'css',
+    patch: 'diff',
   };
 
 export const DIFF_DECORATIONS: Record<string, DiffDecorationItem[]> = {
