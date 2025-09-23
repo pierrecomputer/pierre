@@ -15,6 +15,7 @@ import {
   preloadHighlighter,
   parsePatchContent,
   type ParsedPatch,
+  type FileMetadata,
 } from 'pierrejs';
 
 function startStreaming() {
@@ -52,6 +53,7 @@ function handlePreloadDiff() {
   });
 }
 
+const diffInstances: DiffRenderer[] = [];
 function renderDiff() {
   const container = document.getElementById('content');
   if (container == null) return;
@@ -61,13 +63,16 @@ function renderDiff() {
   if (streamCode != null) {
     streamCode.parentElement?.removeChild(streamCode);
   }
+  const checkbox = document.getElementById('unified') as
+    | HTMLInputElement
+    | undefined;
   container.dataset.diff = '';
   parsedPatch = parsedPatch ?? parsePatchContent(DIFF_CONTENT);
-  const unified =
-    (document.getElementById('unified') as HTMLInputElement | undefined)
-      ?.checked ?? false;
+  const unified = checkbox?.checked ?? false;
   for (const file of parsedPatch.files) {
     const decorations = DIFF_DECORATIONS[file.name];
+    const header = createFileHeader(file);
+    container.appendChild(header);
     const pre = document.createElement('pre');
     container.appendChild(pre);
     const instance = new DiffRenderer({
@@ -75,8 +80,20 @@ function renderDiff() {
       themes: { dark: 'tokyo-night', light: 'solarized-light' },
       unified,
     });
-    instance.setup(file, pre, decorations);
+    instance.render(file, pre, decorations);
+    diffInstances.push(instance);
   }
+}
+
+function createFileHeader(file: FileMetadata) {
+  const header = document.createElement('div');
+  header.dataset.fileInfo = '';
+  if (file.hunks.length === 0) {
+    header.textContent = `RENAME ONLY: ${file.prevName} -> ${file.name}`;
+  } else {
+    header.textContent = `${file.type.toUpperCase()}: ${file.prevName != null ? `${file.prevName} -> ` : ''}${file.name}`;
+  }
+  return header;
 }
 
 function handlePreload() {
@@ -128,6 +145,16 @@ if (wrapCheckbox != null) {
       } else {
         element.dataset.overflow = 'scroll';
       }
+    }
+  });
+}
+
+const unifiedCheckbox = document.getElementById('unified');
+if (unifiedCheckbox instanceof HTMLInputElement) {
+  unifiedCheckbox.addEventListener('change', () => {
+    const checked = unifiedCheckbox.checked;
+    for (const instance of diffInstances) {
+      instance.setOptions({ ...instance.options, unified: checked });
     }
   });
 }

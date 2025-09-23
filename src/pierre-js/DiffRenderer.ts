@@ -82,9 +82,18 @@ export class DiffRenderer {
   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme> | undefined;
   options: DiffRendererOptions;
   pre: HTMLPreElement | undefined;
+  diff: FileMetadata | undefined;
 
   constructor(options: DiffRendererOptions) {
     this.options = options;
+  }
+
+  setOptions(options: DiffRendererOptions) {
+    this.options = options;
+    if (this.pre == null || this.diff == null) {
+      return;
+    }
+    this.render(this.diff, this.pre);
   }
 
   private async initializeHighlighter() {
@@ -92,16 +101,17 @@ export class DiffRenderer {
     return this.highlighter;
   }
 
-  private queuedSetupArgs:
+  private queuedRenderArgs:
     | [FileMetadata, HTMLPreElement, DiffDecorationItem[] | undefined]
     | undefined;
-  async setup(
-    _source: FileMetadata,
+
+  async render(
+    _diff: FileMetadata,
     _wrapper: HTMLPreElement,
     _decorations?: DiffDecorationItem[]
   ) {
-    const isSettingUp = this.queuedSetupArgs != null;
-    this.queuedSetupArgs = [_source, _wrapper, _decorations];
+    const isSettingUp = this.queuedRenderArgs != null;
+    this.queuedRenderArgs = [_diff, _wrapper, _decorations];
     if (isSettingUp) {
       // TODO(amadeus): Make it so that this function can be properly
       // awaitable, maybe?
@@ -111,12 +121,12 @@ export class DiffRenderer {
       this.highlighter = await this.initializeHighlighter();
     }
 
-    const [source, wrapper, decorations] = this.queuedSetupArgs;
-    this.queuedSetupArgs = undefined;
-    this.setupDiff(wrapper, source, this.highlighter, decorations);
+    const [source, wrapper, decorations] = this.queuedRenderArgs;
+    this.queuedRenderArgs = undefined;
+    this.renderDiff(wrapper, source, this.highlighter, decorations);
   }
 
-  private setupDiff(
+  private renderDiff(
     wrapper: HTMLPreElement,
     diff: FileMetadata,
     highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>,
@@ -133,19 +143,12 @@ export class DiffRenderer {
         : { pre: wrapper, theme, highlighter, split }
     );
 
+    this.diff = diff;
     this.pre = pre;
     const codeAdditions = createCodeNode({ columnType: 'additions' });
     const codeDeletions = createCodeNode({ columnType: 'deletions' });
     const codeUnified = createCodeNode({ columnType: 'unified' });
     const { state, transformer } = createTransformerWithState();
-    const element = document.createElement('div');
-    element.dataset.fileInfo = '';
-    if (diff.hunks.length === 0) {
-      element.textContent = `RENAME ONLY: ${diff.prevName} -> ${diff.name}`;
-    } else {
-      element.textContent = `${diff.type.toUpperCase()}: ${diff.prevName != null ? `${diff.prevName} -> ` : ''}${diff.name}`;
-    }
-    this.pre.parentNode?.insertBefore(element, this.pre);
     let hunkIndex = 0;
     const decorationSet = new Set(decorations);
     for (const hunk of diff.hunks) {
@@ -183,6 +186,8 @@ export class DiffRenderer {
       });
       hunkIndex++;
     }
+
+    this.pre.innerHTML = '';
     if (codeDeletions.childNodes.length > 0) {
       this.pre.appendChild(codeDeletions);
     }
