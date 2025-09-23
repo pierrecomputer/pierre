@@ -3,14 +3,9 @@ import {
   FILE_CONTEXT_BLOB,
   HUNK_HEADER,
   PER_FILE_DIFF_BREAK_REGEX,
+  SPLIT_WITH_NEWLINES,
 } from '../constants';
-import type {
-  FileMetadata,
-  Hunk,
-  HunkTypes,
-  LinesHunk,
-  ParsedPatch,
-} from '../types';
+import type { FileMetadata, Hunk, ParsedPatch } from '../types';
 
 export function parsePatchContent(data: string): ParsedPatch {
   const rawFiles = data.split(PER_FILE_DIFF_BREAK_REGEX);
@@ -31,7 +26,7 @@ export function parsePatchContent(data: string): ParsedPatch {
     const hunks = file.split(FILE_CONTEXT_BLOB);
     currentFile = undefined;
     for (const hunk of hunks) {
-      const lines = hunk.split(/(?<=\n)/);
+      const lines = hunk.split(SPLIT_WITH_NEWLINES);
       const firstLine = lines.shift();
       if (firstLine == null) {
         console.error('parsePatchContent: invalid hunk', hunk);
@@ -80,11 +75,10 @@ export function parsePatchContent(data: string): ParsedPatch {
       }
       const hunkData: Hunk = {
         additionCount: parseInt(match[4]),
-        additionLines: [],
         additionStart: parseInt(match[3]),
         deletedCount: parseInt(match[2]),
-        deletedLines: [],
         deletedStart: parseInt(match[1]),
+        hunkContent: lines.length > 0 ? lines.join('') : undefined,
         hunkContext: match[5],
       };
       if (
@@ -96,33 +90,6 @@ export function parsePatchContent(data: string): ParsedPatch {
         console.error('parsePatchContent: invalid hunk metadata', hunkData);
         continue;
       }
-      const { deletedLines, additionLines } = hunkData;
-      for (const line of lines) {
-        const fixedLine = line.substring(1);
-        if (line.startsWith(' ')) {
-          if (currentFile.type !== 'new') {
-            const lastDeletedHunk = getLastOfType('context', deletedLines);
-            lastDeletedHunk.lines.push(fixedLine);
-          }
-
-          if (currentFile.type !== 'deleted') {
-            const lastAdditionHunk = getLastOfType('context', additionLines);
-            lastAdditionHunk.lines.push(fixedLine);
-          }
-        } else if (line.startsWith('-')) {
-          const lastDeletedHunk = getLastOfType('change', deletedLines);
-          if (currentFile.type !== 'deleted') {
-            getLastOfType('change', additionLines);
-          }
-          lastDeletedHunk.lines.push(fixedLine);
-        } else if (line.startsWith('+')) {
-          const lastAdditionHunk = getLastOfType('change', additionLines);
-          if (currentFile.type !== 'new') {
-            getLastOfType('change', deletedLines);
-          }
-          lastAdditionHunk.lines.push(fixedLine);
-        }
-      }
       currentFile.hunks.push(hunkData);
     }
     if (currentFile != null) {
@@ -130,17 +97,4 @@ export function parsePatchContent(data: string): ParsedPatch {
     }
   }
   return { patchMetadata, files };
-}
-
-function getLastOfType(type: HunkTypes, arr: LinesHunk[]): LinesHunk {
-  let lastLinesHunk = arr[arr.length - 1];
-  if (lastLinesHunk?.type === type) {
-    return lastLinesHunk;
-  }
-  lastLinesHunk = {
-    type,
-    lines: [],
-  };
-  arr.push(lastLinesHunk);
-  return lastLinesHunk;
 }
