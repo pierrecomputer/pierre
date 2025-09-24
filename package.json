@@ -22,6 +22,7 @@
     }
   },
   "scripts": {
+    "prod": "bun run --filter @pierre/js-demo-app prod",
     "clean": "rm -rf packages/*/dist && rm -rf packages/*/tsconfig.tsbuildinfo && rm -rf packages/demo-app/node_modules/.vite && rm -rf packages/demo-app/node_modules/.vite-temp",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
