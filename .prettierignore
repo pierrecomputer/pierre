@@ -3,3 +3,5 @@ dist
 build
 .vite
 bun.lock
+.next
+.source

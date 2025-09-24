@@ -20,6 +20,7 @@ export default tseslint.config(
       'packages/docs/out/**',
       'packages/docs/build/**',
       'packages/docs/next-env.d.ts',
+      'packages/docs/.source/**',
     ],
   },
   js.configs.recommended,
