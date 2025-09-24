@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
-    "start": "next start"
+    "start": "next start",
+    "tsc": "tsc --build"
   },
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
