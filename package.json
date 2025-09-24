@@ -22,9 +22,9 @@
     }
   },
   "scripts": {
-    "prod": "bun run --filter @pierre/js-demo-app prod",
-    "dev": "bun run --filter @pierre/js-demo-app dev",
-    "build": "bun run --filter @pierre/js-demo-app build",
+    "demo:prod": "bun run --filter @pierre/js-demo-app prod",
+    "demo:dev": "bun run --filter @pierre/js-demo-app dev",
+    "demo:build": "bun run --filter @pierre/js-demo-app build",
     "clean": "rm -rf packages/*/dist && rm -rf packages/*/tsconfig.tsbuildinfo && rm -rf packages/demo-app/node_modules/.vite && rm -rf packages/demo-app/node_modules/.vite-temp",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
