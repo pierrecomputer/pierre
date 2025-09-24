@@ -1,4 +1,5 @@
 import './style.css';
+
 export * from './CodeRenderer';
 export * from './DiffRenderer';
 export * from './SharedHighlighter';

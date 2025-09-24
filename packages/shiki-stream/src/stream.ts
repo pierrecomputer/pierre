@@ -1,6 +1,7 @@
 import type { ThemedToken } from '@shikijs/core';
-import type { CodeToTokenTransformStreamOptions, RecallToken } from './types';
+
 import { ShikiStreamTokenizer } from './tokenizer';
+import type { CodeToTokenTransformStreamOptions, RecallToken } from './types';
 
 /**
  * Create a transform stream that takes code chunks and emits themed tokens.

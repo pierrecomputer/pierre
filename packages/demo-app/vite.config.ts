@@ -1,9 +1,9 @@
-import { defineConfig } from 'vite';
-import type { ViteDevServer, PreviewServer, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import path, { resolve } from 'path';
 import fs from 'fs';
 import type { IncomingMessage, ServerResponse } from 'http';
+import path, { resolve } from 'path';
+import { defineConfig } from 'vite';
+import type { Plugin, PreviewServer, ViteDevServer } from 'vite';
 
 export default defineConfig(() => {
   const htmlPlugin = (): Plugin => ({

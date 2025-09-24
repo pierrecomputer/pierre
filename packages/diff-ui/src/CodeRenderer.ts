@@ -8,6 +8,7 @@ import type {
   ThemedToken,
 } from '@shikijs/core';
 import type { BundledLanguage, BundledTheme } from 'shiki';
+
 import { getSharedHighlighter } from './SharedHighlighter';
 import { queueRender } from './UnversialRenderer';
 import {

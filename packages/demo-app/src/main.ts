@@ -1,13 +1,14 @@
 import {
   CodeRenderer,
   DiffRenderer,
+  type FileMetadata,
+  type ParsedPatch,
   isHighlighterNull,
   parsePatchContent,
   preloadHighlighter,
-  type FileMetadata,
-  type ParsedPatch,
 } from '@pierre/diff-ui';
 import type { BundledLanguage, BundledTheme } from 'shiki';
+
 import {
   CodeConfigs,
   DIFF_CONTENT,

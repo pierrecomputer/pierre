@@ -2,6 +2,7 @@ import { isHighlighterNull, preloadHighlighter } from '@pierre/diff-ui';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 import type { BundledLanguage, BundledTheme } from 'shiki';
+
 import { CodeConfigs, toggleTheme } from '../mocks/';
 import '../style.css';
 import { createFakeContentStream } from '../utils/createFakeContentStream';

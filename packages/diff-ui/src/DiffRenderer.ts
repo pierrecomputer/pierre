@@ -8,9 +8,10 @@ import type {
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 import type { BundledLanguage, BundledTheme } from 'shiki';
-import { SPLIT_WITH_NEWLINES } from './constants';
+
 import { getSharedHighlighter } from './SharedHighlighter';
-import type { FileMetadata, Hunk, HUNK_LINE_TYPE } from './types';
+import { SPLIT_WITH_NEWLINES } from './constants';
+import type { FileMetadata, HUNK_LINE_TYPE, Hunk } from './types';
 import {
   createCodeNode,
   createHunkSeparator,

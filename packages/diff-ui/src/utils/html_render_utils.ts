@@ -1,12 +1,13 @@
-import type { ThemesType } from '../types';
 import {
-  getTokenStyleObject,
-  stringifyTokenStyle,
-  type ThemedToken,
   type BundledLanguage,
   type BundledTheme,
   type HighlighterGeneric,
+  type ThemedToken,
+  getTokenStyleObject,
+  stringifyTokenStyle,
 } from 'shiki';
+
+import type { ThemesType } from '../types';
 
 interface ThemeVariant {
   themes?: never;

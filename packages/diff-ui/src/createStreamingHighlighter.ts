@@ -1,11 +1,11 @@
+import type { BundledHighlighterOptions } from '@shikijs/core';
 import {
+  type BundledLanguage,
+  type BundledTheme,
   createHighlighter,
   createOnigurumaEngine,
   loadWasm,
-  type BundledLanguage,
-  type BundledTheme,
 } from 'shiki';
-import type { BundledHighlighterOptions } from '@shikijs/core';
 
 export async function createStreamingHighlighter(
   options: Omit<

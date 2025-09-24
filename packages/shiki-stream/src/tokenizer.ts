@@ -1,4 +1,5 @@
 import type { GrammarState, ThemedToken } from '@shikijs/core';
+
 import type {
   ShikiStreamTokenizerEnqueueResult,
   ShikiStreamTokenizerOptions,

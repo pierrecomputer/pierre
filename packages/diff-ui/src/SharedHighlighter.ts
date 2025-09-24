@@ -1,10 +1,10 @@
 import {
   type BundledLanguage,
   type BundledTheme,
-  createHighlighter,
-  createOnigurumaEngine,
-  createJavaScriptRegexEngine,
   type HighlighterGeneric,
+  createHighlighter,
+  createJavaScriptRegexEngine,
+  createOnigurumaEngine,
   loadWasm,
 } from 'shiki';
 

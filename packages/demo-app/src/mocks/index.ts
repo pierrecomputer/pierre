@@ -1,11 +1,12 @@
+import type { DiffDecorationItem, FileMetadata } from '@pierre/diff-ui';
+import type { BundledLanguage } from 'shiki';
+
+import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import { createScrollFixer } from '../utils/createScrollFixer';
+import diffContent2 from './diff2.patch?raw';
+import diffContent from './diff.patch?raw';
 import mdContent from './example_md.txt?raw';
 import tsContent from './example_ts.txt?raw';
-import diffContent from './diff.patch?raw';
-import diffContent2 from './diff2.patch?raw';
-import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
-import type { BundledLanguage } from 'shiki';
-import type { DiffDecorationItem, FileMetadata } from '@pierre/diff-ui';
 
 export { mdContent, tsContent };
 
