@@ -10,7 +10,9 @@
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
+    "fumadocs-core": "catalog:",
     "fumadocs-mdx": "catalog:",
+    "fumadocs-ui": "catalog:",
     "next": "catalog:",
     "postcss": "catalog:",
     "react": "catalog:",
