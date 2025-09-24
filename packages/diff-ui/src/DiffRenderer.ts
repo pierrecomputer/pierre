@@ -1,22 +1,22 @@
-import { toHtml } from 'hast-util-to-html';
-import type { Root, RootContent, Element, ElementContent } from 'hast';
 import type {
   CodeOptionsMultipleThemes,
+  CodeToHastOptions,
   DecorationItem,
   HighlighterGeneric,
   ShikiTransformer,
-  CodeToHastOptions,
 } from '@shikijs/core';
-import {
-  createHunkSeparator,
-  createCodeNode,
-  setupPreNode,
-  formatCSSVariablePrefix,
-} from './utils/html_render_utils';
+import type { Element, ElementContent, Root, RootContent } from 'hast';
+import { toHtml } from 'hast-util-to-html';
 import type { BundledLanguage, BundledTheme } from 'shiki';
+import { SPLIT_WITH_NEWLINES } from './constants';
 import { getSharedHighlighter } from './SharedHighlighter';
 import type { FileMetadata, Hunk, HUNK_LINE_TYPE } from './types';
-import { SPLIT_WITH_NEWLINES } from './constants';
+import {
+  createCodeNode,
+  createHunkSeparator,
+  formatCSSVariablePrefix,
+  setupPreNode,
+} from './utils/html_render_utils';
 import { parseLineType } from './utils/parseLineType';
 
 export interface DiffDecorationItem extends DecorationItem {

@@ -1,5 +1,13 @@
+import {
+  CodeRenderer,
+  DiffRenderer,
+  isHighlighterNull,
+  parsePatchContent,
+  preloadHighlighter,
+  type FileMetadata,
+  type ParsedPatch,
+} from '@pierre/diff-ui';
 import type { BundledLanguage, BundledTheme } from 'shiki';
-import './style.css';
 import {
   CodeConfigs,
   DIFF_CONTENT,
@@ -7,16 +15,8 @@ import {
   getFiletypeFromMetadata,
   toggleTheme,
 } from './mocks/';
+import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
-import {
-  CodeRenderer,
-  DiffRenderer,
-  isHighlighterNull,
-  preloadHighlighter,
-  parsePatchContent,
-  type ParsedPatch,
-  type FileMetadata,
-} from '@pierre/diff-ui';
 
 function startStreaming() {
   const container = document.getElementById('content');

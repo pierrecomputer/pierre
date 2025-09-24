@@ -1,6 +1,13 @@
 {
   "extends": "../../tsconfig.options.json",
-  "include": ["src/**/*.{ts,tsx,json}"],
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "baseUrl": ".",
+    "rootDir": "src",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
   "references": [
     {
       "path": "../diff-ui"
