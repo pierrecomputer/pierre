@@ -14,8 +14,9 @@
     }
   },
   "devDependencies": {
-    "typescript": "catalog:",
-    "@types/hast": "catalog:"
+    "@trivago/prettier-plugin-sort-imports": "catalog:",
+    "@types/hast": "catalog:",
+    "typescript": "catalog:"
   },
   "dependencies": {
     "@pierre/shiki-stream": "workspace:*",
