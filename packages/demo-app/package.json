@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "tsc": "tsc --build",
-    "prod": "bun run build && bun run preview",
     "build": "vite build",
-    "preview": "vite preview"
+    "build-types": "tsc --build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "prod": "bun run build && bun run preview",
+    "tsc": "tsc --noEmit --pretty"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "catalog:",

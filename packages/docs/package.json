@@ -3,8 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
     "build": "next build --turbopack",
+    "dev": "next dev --turbopack",
+    "prod": "next build --turbopack && next start",
     "start": "next start",
     "tsc": "tsc --build"
   },
