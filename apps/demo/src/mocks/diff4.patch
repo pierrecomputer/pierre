@@ -9,10 +9,10 @@ Subject: [PATCH] Header Component (#12)
 
 * First pass at the component...
 ---
- packages/demo-app/src/main.ts                 |   66 +-
- packages/demo-app/src/mocks/diff3.patch       | 3885 +++++++++++++++++
- packages/demo-app/src/mocks/index.ts          |    2 +
- packages/demo-app/src/style.css               |    5 +
+ apps/demo/src/main.ts                 |   66 +-
+ apps/demo/src/mocks/diff3.patch       | 3885 +++++++++++++++++
+ apps/demo/src/mocks/index.ts          |    2 +
+ apps/demo/src/style.css               |    5 +
  packages/diff-ui/src/DiffRenderer.ts          |    5 +-
  packages/diff-ui/src/constants.ts             |    1 +
  packages/diff-ui/src/style.css                |   66 +-
@@ -20,12 +20,12 @@ Subject: [PATCH] Header Component (#12)
  .../diff-ui/src/utils/html_render_utils.ts    |   81 +-
  .../diff-ui/src/utils/parsePatchContent.ts    |   33 +-
  10 files changed, 4103 insertions(+), 49 deletions(-)
- create mode 100644 packages/demo-app/src/mocks/diff3.patch
+ create mode 100644 apps/demo/src/mocks/diff3.patch
 
-diff --git a/packages/demo-app/src/main.ts b/packages/demo-app/src/main.ts
+diff --git a/apps/demo/src/main.ts b/apps/demo/src/main.ts
 index 347fe75..6827e00 100644
---- a/packages/demo-app/src/main.ts
-+++ b/packages/demo-app/src/main.ts
+--- a/apps/demo/src/main.ts
++++ b/apps/demo/src/main.ts
 @@ -1,11 +1,11 @@
  import {
    CodeRenderer,
@@ -123,11 +123,11 @@ index 347fe75..6827e00 100644
  }
  
  function handlePreload() {
-diff --git a/packages/demo-app/src/mocks/diff3.patch b/packages/demo-app/src/mocks/diff3.patch
+diff --git a/apps/demo/src/mocks/diff3.patch b/apps/demo/src/mocks/diff3.patch
 new file mode 100644
 index 0000000..b1abb80
 --- /dev/null
-+++ b/packages/demo-app/src/mocks/diff3.patch
++++ b/apps/demo/src/mocks/diff3.patch
 @@ -0,0 +1,3885 @@
 +From 0935498e173fedd0d5413bbbb98710ee7d0a3d36 Mon Sep 17 00:00:00 2001
 +From: Amadeus Demarzi <amadeusdemarzi@gmail.com>
@@ -4014,10 +4014,10 @@ index 0000000..b1abb80
 +   }
 +   // NOTE(amadeus): This should probably be based on a setting
 +   children.unshift({
-diff --git a/packages/demo-app/src/mocks/index.ts b/packages/demo-app/src/mocks/index.ts
+diff --git a/apps/demo/src/mocks/index.ts b/apps/demo/src/mocks/index.ts
 index e84fe8e..4a71dc3 100644
---- a/packages/demo-app/src/mocks/index.ts
-+++ b/packages/demo-app/src/mocks/index.ts
+--- a/apps/demo/src/mocks/index.ts
++++ b/apps/demo/src/mocks/index.ts
 @@ -4,6 +4,7 @@ import type { BundledLanguage } from 'shiki';
  import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
  import { createScrollFixer } from '../utils/createScrollFixer';
@@ -4034,10 +4034,10 @@ index e84fe8e..4a71dc3 100644
  
  export const DIFF_CONTENT_FORMATS: Record<string, BundledLanguage | undefined> =
    {
-diff --git a/packages/demo-app/src/style.css b/packages/demo-app/src/style.css
+diff --git a/apps/demo/src/style.css b/apps/demo/src/style.css
 index acb1daa..04d3dff 100644
---- a/packages/demo-app/src/style.css
-+++ b/packages/demo-app/src/style.css
+--- a/apps/demo/src/style.css
++++ b/apps/demo/src/style.css
 @@ -175,3 +175,8 @@ code {
    margin-left: -8px;
    padding-left: 8px;

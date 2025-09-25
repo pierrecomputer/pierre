@@ -10,7 +10,7 @@
   },
   "references": [
     {
-      "path": "../diff-ui"
+      "path": "../../packages/diff-ui"
     }
   ]
 }

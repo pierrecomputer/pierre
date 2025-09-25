@@ -3,13 +3,25 @@
   "files": [],
   "references": [
     {
-      "path": "packages/demo-app"
+      "path": "apps/demo"
     },
     {
       "path": "packages/diff-ui"
     },
     {
+      "path": "apps/docs"
+    },
+    {
       "path": "packages/shiki-stream"
+    },
+    {
+      "path": "packages/sync-ui-core"
+    },
+    {
+      "path": "packages/sync-ui-hooks"
+    },
+    {
+      "path": "packages/sync-ui-react"
     }
   ]
 }

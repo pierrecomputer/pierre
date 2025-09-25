@@ -15,12 +15,12 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
-      'packages/docs/node_modules/**',
-      'packages/docs/.next/**',
-      'packages/docs/out/**',
-      'packages/docs/build/**',
-      'packages/docs/next-env.d.ts',
-      'packages/docs/.source/**',
+      '{packages,apps}/*/node_modules/**',
+      '{packages,apps}/*/.next/**',
+      '{packages,apps}/*/out/**',
+      '{packages,apps}/*/build/**',
+      '{packages,apps}/*/next-env.d.ts',
+      '{packages,apps}/*/.source/**',
     ],
   },
   js.configs.recommended,
@@ -38,11 +38,11 @@ export default tseslint.config(
     .extends('next/core-web-vitals', 'next/typescript')
     .map((config) => ({
       ...config,
-      files: ['packages/docs/**/*.{js,jsx,ts,tsx}'],
+      files: ['apps/docs/**/*.{js,jsx,ts,tsx}'],
       settings: {
         ...config.settings,
         next: {
-          rootDir: 'packages/docs',
+          rootDir: 'apps/docs',
         },
       },
     }))

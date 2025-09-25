@@ -6,26 +6,36 @@
     "build": "next build --turbopack",
     "dev": "next dev --turbopack",
     "prod": "next build --turbopack && next start",
+    "registry:build": "shadcn build",
     "start": "next start",
     "tsc": "tsc --build"
   },
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
-    "@tailwindcss/postcss": "catalog:",
+    "@radix-ui/react-label": "catalog:",
+    "@radix-ui/react-slot": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
     "fumadocs-core": "catalog:",
     "fumadocs-mdx": "catalog:",
     "fumadocs-ui": "catalog:",
+    "lucide-react": "catalog:",
     "next": "catalog:",
     "postcss": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "tailwindcss": "catalog:"
+    "shadcn": "catalog:",
+    "tailwind-merge": "catalog:",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
     "@types/mdx": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "@types/react-dom": "catalog:"
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:"
   }
 }
