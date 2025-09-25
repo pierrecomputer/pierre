@@ -1,17 +1,17 @@
 import {
   CodeRenderer,
   DiffRenderer,
-  type FileMetadata,
   type ParsedPatch,
   isHighlighterNull,
   parsePatchContent,
   preloadHighlighter,
+  renderFileHeader,
 } from '@pierre/diff-ui';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
 import {
   CodeConfigs,
-  DIFF_CONTENT_3,
+  DIFF_CONTENT,
   DIFF_DECORATIONS,
   getFiletypeFromMetadata,
   toggleTheme,
@@ -39,7 +39,7 @@ function startStreaming() {
 let parsedPatches: ParsedPatch[] | undefined;
 function handlePreloadDiff() {
   if (parsedPatches != null || !isHighlighterNull()) return;
-  parsedPatches = parsePatchContent(DIFF_CONTENT_3);
+  parsedPatches = parsePatchContent(DIFF_CONTENT);
   console.log('Parsed File:', parsedPatches);
   const langs = new Set<BundledLanguage>();
   for (const parsedPatch of parsedPatches) {
@@ -70,7 +70,7 @@ function renderDiff() {
     | HTMLInputElement
     | undefined;
   container.dataset.diff = '';
-  parsedPatches = parsedPatches ?? parsePatchContent(DIFF_CONTENT_3);
+  parsedPatches = parsedPatches ?? parsePatchContent(DIFF_CONTENT);
   const unified = checkbox?.checked ?? false;
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
@@ -78,7 +78,7 @@ function renderDiff() {
     }
     for (const file of parsedPatch.files) {
       const decorations = DIFF_DECORATIONS[file.name];
-      container.appendChild(createFileHeader(file));
+      container.appendChild(renderFileHeader(file));
       const pre = document.createElement('pre');
       container.appendChild(pre);
       const instance = new DiffRenderer({
@@ -94,20 +94,9 @@ function renderDiff() {
 
 function createFileMetadata(patchMetadata: string) {
   const metadata = document.createElement('div');
-  metadata.dataset.metadata = '';
+  metadata.dataset.commitMetadata = '';
   metadata.innerText = patchMetadata.replace(/\n+$/, '');
   return metadata;
-}
-
-function createFileHeader(file: FileMetadata) {
-  const header = document.createElement('div');
-  header.dataset.fileInfo = '';
-  if (file.hunks.length === 0) {
-    header.textContent = `RENAME ONLY: ${file.prevName} -> ${file.name}`;
-  } else {
-    header.textContent = `${file.type.toUpperCase()}: ${file.prevName != null ? `${file.prevName} -> ` : ''}${file.name}`;
-  }
-  return header;
 }
 
 function handlePreload() {

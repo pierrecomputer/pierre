@@ -136,7 +136,7 @@ export class DiffRenderer {
     const split =
       unified === true
         ? false
-        : diff.type === 'changed' || diff.type === 'renamed-changed';
+        : diff.type === 'change' || diff.type === 'rename-changed';
     const pre = setupPreNode(
       themes != null
         ? { pre: wrapper, themes, highlighter, split }

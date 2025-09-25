@@ -6,9 +6,9 @@ export interface ThemesType {
 }
 
 export type FileTypes =
-  | 'changed'
-  | 'renamed-pure'
-  | 'renamed-changed'
+  | 'change'
+  | 'rename-pure'
+  | 'rename-changed'
   | 'new'
   | 'deleted';
 

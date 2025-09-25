@@ -1,6 +1,12 @@
 :root {
   --pjs-bg: #fff;
   --pjs-fg: #000;
+  --pjs-gap: 8px;
+  --pjs-additions-color: rgb(0, 255, 0);
+  --pjs-additions-color: #2ca94c;
+  --pjs-deletions-color: rgb(255, 0, 0);
+  --pjs-deletions-color: #ff3b30;
+  --pjs-annotations-color: rgb(255, 255, 0);
 }
 
 [data-pjs] {
@@ -20,14 +26,18 @@
   --pjs-bg-deletions-number: color-mix(
     in srgb,
     var(--pjs-bg) 85%,
-    rgb(255, 0, 0)
+    var(--pjs-deletions-color)
   );
   --pjs-bg-additions-number: color-mix(
     in srgb,
     var(--pjs-bg) 85%,
-    rgb(0, 255, 0)
+    var(--pjs-additions-color)
   );
-  --pjs-bg-annotation: color-mix(in srgb, var(--pjs-bg) 75%, rgb(255, 255, 0));
+  --pjs-bg-annotation: color-mix(
+    in srgb,
+    var(--pjs-bg) 75%,
+    var(--pjs-annotations-color)
+  );
   --pjs-code-grid: minmax(min-content, max-content) 1fr;
 
   background-color: var(--pjs-bg);
@@ -197,4 +207,54 @@
   white-space: pre-wrap;
   word-break: break-all;
   overflow-wrap: break-word;
+}
+
+[data-pjs-header] {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: var(--pjs-gap);
+  padding: var(--pjs-gap);
+}
+
+[data-pjs-header] [data-header-content] {
+  display: flex;
+  flex-direction: row;
+  gap: var(--pjs-gap);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+[data-pjs-header] [data-header-content] [data-prev-name],
+[data-pjs-header] [data-header-content] [data-title] {
+  direction: rtl;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+[data-pjs-header] [data-header-content] [data-prev-name] {
+  color: color-mix(in srgb, var(--pjs-fg) 60%, var(--pjs-bg));
+
+  /* LMAO this is kinda ass, but also we don't want to depend on berkeley ligs
+  * so we need to wait for mdo's icons */
+  &::before {
+    content: '<-- ';
+  }
+}
+
+[data-pjs-header] [data-metadata] {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--pjs-gap) / 2);
+  white-space: nowrap;
+}
+
+[data-pjs-header] [data-additions] {
+  color: var(--pjs-additions-color);
+}
+
+[data-pjs-header] [data-deletions] {
+  color: var(--pjs-deletions-color);
 }

@@ -52,17 +52,17 @@ function processPatch(data: string): ParsedPatch {
               }
               if (extraInfo.startsWith('similarity index')) {
                 if (extraInfo.startsWith('similarity index 100%')) {
-                  return 'renamed-pure';
+                  return 'rename-pure';
                 }
-                return 'renamed-changed';
+                return 'rename-changed';
               }
-              return 'changed';
+              return 'change';
             })();
             currentFile = {
               name: fileMetadataMatch[2],
               prevName:
                 // Only include prevName if there was a rename operation
-                type === 'renamed-pure' || type === 'renamed-changed'
+                type === 'rename-pure' || type === 'rename-changed'
                   ? fileMetadataMatch[1]
                   : undefined,
               type,
