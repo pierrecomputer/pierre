@@ -10,7 +10,6 @@ import { toHtml } from 'hast-util-to-html';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
 import { getSharedHighlighter } from './SharedHighlighter';
-import { SPLIT_WITH_NEWLINES } from './constants';
 import type { FileMetadata, HUNK_LINE_TYPE, Hunk } from './types';
 import {
   createCodeNode,
@@ -278,7 +277,7 @@ export class DiffRenderer {
     }
 
     let lastType: HUNK_LINE_TYPE | undefined;
-    for (const rawLine of hunk.hunkContent.split(SPLIT_WITH_NEWLINES)) {
+    for (const rawLine of hunk.hunkContent) {
       const { line, type } = parseLineType(rawLine);
       if (type === 'context') {
         createSpanIfNecessary();

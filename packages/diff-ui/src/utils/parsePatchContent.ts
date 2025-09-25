@@ -78,7 +78,7 @@ export function parsePatchContent(data: string): ParsedPatch {
         additionStart: parseInt(match[3]),
         deletedCount: parseInt(match[2]),
         deletedStart: parseInt(match[1]),
-        hunkContent: lines.length > 0 ? lines.join('') : undefined,
+        hunkContent: lines.length > 0 ? lines : undefined,
         hunkContext: match[5],
       };
       if (

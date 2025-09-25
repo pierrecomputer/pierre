@@ -22,7 +22,7 @@ export interface Hunk {
   additionStart: number;
   deletedCount: number;
   deletedStart: number;
-  hunkContent: string | undefined;
+  hunkContent: string[] | undefined;
   hunkContext: string | undefined;
 }
 
