@@ -11,7 +11,7 @@ import type { BundledLanguage, BundledTheme } from 'shiki';
 
 import {
   CodeConfigs,
-  DIFF_CONTENT,
+  DIFF_CONTENT_3,
   DIFF_DECORATIONS,
   getFiletypeFromMetadata,
   toggleTheme,
@@ -36,16 +36,18 @@ function startStreaming() {
   }
 }
 
-let parsedPatch: ParsedPatch | undefined;
+let parsedPatches: ParsedPatch[] | undefined;
 function handlePreloadDiff() {
-  if (parsedPatch != null || !isHighlighterNull()) return;
-  parsedPatch = parsePatchContent(DIFF_CONTENT);
-  console.log('Parsed File:', parsedPatch);
+  if (parsedPatches != null || !isHighlighterNull()) return;
+  parsedPatches = parsePatchContent(DIFF_CONTENT_3);
+  console.log('Parsed File:', parsedPatches);
   const langs = new Set<BundledLanguage>();
-  for (const file of parsedPatch.files) {
-    const lang = getFiletypeFromMetadata(file);
-    if (lang != null) {
-      langs.add(lang);
+  for (const parsedPatch of parsedPatches) {
+    for (const file of parsedPatch.files) {
+      const lang = getFiletypeFromMetadata(file);
+      if (lang != null) {
+        langs.add(lang);
+      }
     }
   }
   preloadHighlighter({
@@ -68,22 +70,33 @@ function renderDiff() {
     | HTMLInputElement
     | undefined;
   container.dataset.diff = '';
-  parsedPatch = parsedPatch ?? parsePatchContent(DIFF_CONTENT);
+  parsedPatches = parsedPatches ?? parsePatchContent(DIFF_CONTENT_3);
   const unified = checkbox?.checked ?? false;
-  for (const file of parsedPatch.files) {
-    const decorations = DIFF_DECORATIONS[file.name];
-    const header = createFileHeader(file);
-    container.appendChild(header);
-    const pre = document.createElement('pre');
-    container.appendChild(pre);
-    const instance = new DiffRenderer({
-      lang: getFiletypeFromMetadata(file),
-      themes: { dark: 'tokyo-night', light: 'solarized-light' },
-      unified,
-    });
-    instance.render(file, pre, decorations);
-    diffInstances.push(instance);
+  for (const parsedPatch of parsedPatches) {
+    if (parsedPatch.patchMetadata != null) {
+      container.appendChild(createFileMetadata(parsedPatch.patchMetadata));
+    }
+    for (const file of parsedPatch.files) {
+      const decorations = DIFF_DECORATIONS[file.name];
+      container.appendChild(createFileHeader(file));
+      const pre = document.createElement('pre');
+      container.appendChild(pre);
+      const instance = new DiffRenderer({
+        lang: getFiletypeFromMetadata(file),
+        themes: { dark: 'tokyo-night', light: 'solarized-light' },
+        unified,
+      });
+      instance.render(file, pre, decorations);
+      diffInstances.push(instance);
+    }
   }
+}
+
+function createFileMetadata(patchMetadata: string) {
+  const metadata = document.createElement('div');
+  metadata.dataset.metadata = '';
+  metadata.innerText = patchMetadata.replace(/\n+$/, '');
+  return metadata;
 }
 
 function createFileHeader(file: FileMetadata) {

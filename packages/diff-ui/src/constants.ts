@@ -1,3 +1,4 @@
+export const COMMIT_METADATA_SPLIT = /(?=^From [a-f0-9]+ .+$)/m;
 export const PER_FILE_DIFF_BREAK_REGEX = /(?=^diff --git)/gm;
 export const FILE_CONTEXT_BLOB = /(?=^@@ )/gm;
 export const HUNK_HEADER = /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@(?: (.*))?/m;
