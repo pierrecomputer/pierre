@@ -22,7 +22,7 @@
   "dependencies": {
     "@pierre/shiki-stream": "workspace:*",
     "@shikijs/core": "catalog:",
-    "fast-diff": "catalog:",
+    "diff": "catalog:",
     "hast-util-to-html": "catalog:",
     "shiki": "catalog:"
   }

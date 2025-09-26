@@ -5,7 +5,7 @@ import type {
   HighlighterGeneric,
   ShikiTransformer,
 } from '@shikijs/core';
-import diff, { type Diff } from 'fast-diff';
+import { type ChangeObject, diffWordsWithSpace } from 'diff';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 import type { BundledLanguage, BundledTheme } from 'shiki';
@@ -462,22 +462,27 @@ export class DiffRenderer {
         if (deletionLine == null || additionLine == null) {
           break;
         }
-        const lineDiff = diff(deletionLine, additionLine, undefined, true);
-        const deletionSpans: Diff[] = [];
-        const additionSpans: Diff[] = [];
+        // Lets skep running diffs on super long lines because it's probably
+        // expensive and hard to follow
+        if (deletionLine.length > 1000 || additionLine.length > 1000) {
+          continue;
+        }
+        const lineDiff = diffWordsWithSpace(deletionLine, additionLine);
+        const deletionSpans: [0 | 1, string][] = [];
+        const additionSpans: [0 | 1, string][] = [];
         for (const item of lineDiff) {
-          if (item[0] === 0) {
-            deletionSpans.push(item);
-            additionSpans.push(item);
-          } else if (item[0] === -1) {
-            deletionSpans.push(item);
+          if (!item.added && !item.removed) {
+            pushOrJoinSpan(item, deletionSpans, true);
+            pushOrJoinSpan(item, additionSpans, true);
+          } else if (item.removed) {
+            pushOrJoinSpan(item, deletionSpans);
           } else {
-            additionSpans.push(item);
+            pushOrJoinSpan(item, additionSpans);
           }
         }
         let spanIndex = 0;
         for (const span of additionSpans) {
-          if (span[0] !== 0) {
+          if (span[0] === 1) {
             (unified ? unifiedDecorations : additionDecorations).push(
               createDiffSpanDecoration({
                 line: group.additionStartIndex + i,
@@ -490,7 +495,7 @@ export class DiffRenderer {
         }
         spanIndex = 0;
         for (const span of deletionSpans) {
-          if (span[0] !== 0) {
+          if (span[0] === 1) {
             (unified ? unifiedDecorations : deletionDecorations).push(
               createDiffSpanDecoration({
                 line: group.deletionStartIndex + i,
@@ -672,4 +677,27 @@ function createTransformerWithState(): {
       },
     },
   };
+}
+
+function pushOrJoinSpan(
+  item: ChangeObject<string>,
+  arr: [0 | 1, string][],
+  isNeutral: boolean = false
+) {
+  const lastItem = arr[arr.length - 1];
+  if (lastItem == null || item.value === '\n') {
+    arr.push([isNeutral ? 0 : 1, item.value]);
+    return;
+  }
+  const isLastItemNeutral = lastItem[0] === 0;
+  if (
+    isNeutral === isLastItemNeutral ||
+    // If we have a single space neutral item, lets join it to a previously
+    // space non-neutral item to avoid single space gaps
+    (isNeutral && item.value.length === 1 && !isLastItemNeutral)
+  ) {
+    lastItem[1] += item.value;
+    return;
+  }
+  arr.push([isNeutral ? 0 : 1, item.value]);
 }
