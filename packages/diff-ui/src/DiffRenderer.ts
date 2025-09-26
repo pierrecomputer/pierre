@@ -301,6 +301,9 @@ export class DiffRenderer {
     function addToChangeGroup(type: 'addition' | 'deletion', line: string) {
       if (currentChangeGroup == null) {
         currentChangeGroup = {
+          // In unified layout, deletionLineIndex and additionLineIndex won't
+          // be usable, and we will have to compute start indexes as we are
+          // iterating
           deletionStartIndex: unified ? -1 : deletionLineIndex - 1,
           additionStartIndex: unified ? -1 : additionLineIndex - 1,
           deletionLines: [],
@@ -679,6 +682,11 @@ function createTransformerWithState(): {
   };
 }
 
+// For diff decoration spans, we want to be sure that if there is a single
+// white-space gap between diffs that we join them together into a longer diff span.
+// Spans are basically just a tuple - 1 means the content should be
+// highlighted, 0 means it should not, we still need to the span data to figure
+// out span positions
 function pushOrJoinSpan(
   item: ChangeObject<string>,
   arr: [0 | 1, string][],
