@@ -5,6 +5,7 @@ import type {
   HighlighterGeneric,
   ShikiTransformer,
 } from '@shikijs/core';
+import diff, { type Diff } from 'fast-diff';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 import type { BundledLanguage, BundledTheme } from 'shiki';
@@ -18,6 +19,13 @@ import {
   setupPreNode,
 } from './utils/html_render_utils';
 import { parseLineType } from './utils/parseLineType';
+
+interface ChangeHunk {
+  deletionStartIndex: number;
+  additionStartIndex: number;
+  deletionLines: string[];
+  additionLines: string[];
+}
 
 export interface DiffDecorationItem extends DecorationItem {
   type: 'additions' | 'deletions';
@@ -41,8 +49,6 @@ interface RenderHunkProps {
   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
   state: SharedRenderState;
   transformer: ShikiTransformer;
-  deletionDecorations: DiffDecorationItem[] | undefined;
-  additionDecorations: DiffDecorationItem[] | undefined;
 
   codeAdditions: HTMLElement;
   codeDeletions: HTMLElement;
@@ -101,17 +107,11 @@ export class DiffRenderer {
     return this.highlighter;
   }
 
-  private queuedRenderArgs:
-    | [FileMetadata, HTMLPreElement, DiffDecorationItem[] | undefined]
-    | undefined;
+  private queuedRenderArgs: [FileMetadata, HTMLPreElement] | undefined;
 
-  async render(
-    _diff: FileMetadata,
-    _wrapper: HTMLPreElement,
-    _decorations?: DiffDecorationItem[]
-  ) {
+  async render(_diff: FileMetadata, _wrapper: HTMLPreElement) {
     const isSettingUp = this.queuedRenderArgs != null;
-    this.queuedRenderArgs = [_diff, _wrapper, _decorations];
+    this.queuedRenderArgs = [_diff, _wrapper];
     if (isSettingUp) {
       // TODO(amadeus): Make it so that this function can be properly
       // awaitable, maybe?
@@ -121,16 +121,15 @@ export class DiffRenderer {
       this.highlighter = await this.initializeHighlighter();
     }
 
-    const [source, wrapper, decorations] = this.queuedRenderArgs;
+    const [source, wrapper] = this.queuedRenderArgs;
     this.queuedRenderArgs = undefined;
-    this.renderDiff(wrapper, source, this.highlighter, decorations);
+    this.renderDiff(wrapper, source, this.highlighter);
   }
 
   private renderDiff(
     wrapper: HTMLPreElement,
     diff: FileMetadata,
-    highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>,
-    decorations?: DiffDecorationItem[]
+    highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>
   ) {
     const { themes, theme, unified = false } = this.options;
     const split =
@@ -150,7 +149,6 @@ export class DiffRenderer {
     const codeUnified = createCodeNode({ columnType: 'unified' });
     const { state, transformer } = createTransformerWithState();
     let hunkIndex = 0;
-    const decorationSet = new Set(decorations);
     for (const hunk of diff.hunks) {
       if (hunkIndex > 0) {
         if (unified) {
@@ -160,26 +158,11 @@ export class DiffRenderer {
           codeDeletions.appendChild(createHunkSeparator());
         }
       }
-      const additionDecorations: DiffDecorationItem[] = [];
-      const deletionDecorations: DiffDecorationItem[] = [];
-      for (const decoration of decorationSet) {
-        if (decoration.hunkIndex !== hunkIndex) continue;
-        if (decoration.type === 'additions') {
-          additionDecorations.push(decoration);
-        } else {
-          deletionDecorations.push(decoration);
-        }
-        decorationSet.delete(decoration);
-      }
       this.renderHunks({
         hunk,
         highlighter,
         state,
         transformer,
-        additionDecorations:
-          additionDecorations.length > 0 ? additionDecorations : undefined,
-        deletionDecorations:
-          deletionDecorations.length > 0 ? deletionDecorations : undefined,
         codeAdditions,
         codeDeletions,
         codeUnified,
@@ -232,32 +215,119 @@ export class DiffRenderer {
     highlighter,
     state,
     transformer,
-    additionDecorations,
-    deletionDecorations,
     codeAdditions,
     codeDeletions,
     codeUnified,
   }: RenderHunkProps) {
     if (hunk.hunkContent == null) return;
+    const { additions, deletions, unified } = this.processLines(hunk);
+
+    if (unified.content.length > 0) {
+      // Remove trailing blank line
+      const content = unified.content.join('').replace(/\n$/, '');
+      state.spans = {};
+      state.lineInfo = unified.lineInfo;
+      const nodes = highlighter.codeToHast(
+        content,
+        this.createHastOptions(transformer, unified.decorations)
+      );
+      codeUnified.insertAdjacentHTML(
+        'beforeend',
+        toHtml(this.getNodesToRender(nodes))
+      );
+    }
+
+    if (deletions.content.length > 0) {
+      // Remove trailing blank line
+      const content = deletions.content.join('').replace(/\n$/, '');
+      state.spans = deletions.spans;
+      state.lineInfo = deletions.lineInfo;
+      const nodes = highlighter.codeToHast(
+        content,
+        this.createHastOptions(
+          transformer,
+          deletions.decorations.length > 0 ? deletions.decorations : undefined
+        )
+      );
+      codeDeletions.insertAdjacentHTML(
+        'beforeend',
+        toHtml(this.getNodesToRender(nodes))
+      );
+    }
+
+    if (additions.content.length > 0) {
+      // Remove trailing blank line
+      const content = additions.content.join('').replace(/\n$/, '');
+      state.spans = additions.spans;
+      state.lineInfo = additions.lineInfo;
+      const nodes = highlighter.codeToHast(
+        content,
+        this.createHastOptions(
+          transformer,
+          additions.decorations.length > 0 ? additions.decorations : undefined
+        )
+      );
+      codeAdditions.insertAdjacentHTML(
+        'beforeend',
+        toHtml(this.getNodesToRender(nodes))
+      );
+    }
+  }
+
+  private processLines(hunk: Hunk) {
     const { unified = false } = this.options;
 
+    const additionContent: string[] = [];
     const additionLineInfo: Record<number, LineInfo | undefined> = {};
     const additionSpans: Record<number, number> = {};
     let additionLineIndex = 1;
     let additionLineNumber = hunk.additionStart;
-    let additionContent: string | undefined;
     let additionGroupSize = 0;
 
+    const deletionContent: string[] = [];
     const deletionLineInfo: Record<number, LineInfo | undefined> = {};
     const deletionSpans: Record<number, number> = {};
     let deletionLineIndex = 1;
     let deletionLineNumber = hunk.deletedStart;
     let deletionGroupSize = 0;
-    let deletionContent: string | undefined;
 
+    const unifiedContent: string[] = [];
     const unifiedInfo: Record<number, LineInfo | undefined> = {};
-    let unifiedContent: string | undefined;
     let unifiedLineIndex = 1;
+
+    const diffGroups: ChangeHunk[] = [];
+    let currentChangeGroup: ChangeHunk | undefined;
+
+    function addToChangeGroup(type: 'addition' | 'deletion', line: string) {
+      if (currentChangeGroup == null) {
+        currentChangeGroup = {
+          deletionStartIndex: unified ? -1 : deletionLineIndex - 1,
+          additionStartIndex: unified ? -1 : additionLineIndex - 1,
+          deletionLines: [],
+          additionLines: [],
+        };
+        diffGroups.push(currentChangeGroup);
+      }
+      if (unified) {
+        if (
+          type === 'deletion' &&
+          currentChangeGroup.deletionStartIndex === -1
+        ) {
+          currentChangeGroup.deletionStartIndex = unifiedLineIndex - 1;
+        }
+        if (
+          type === 'addition' &&
+          currentChangeGroup.additionStartIndex === -1
+        ) {
+          currentChangeGroup.additionStartIndex = unifiedLineIndex - 1;
+        }
+      }
+      if (type === 'addition') {
+        currentChangeGroup.additionLines.push(line);
+      } else {
+        currentChangeGroup.deletionLines.push(line);
+      }
+    }
 
     function createSpanIfNecessary() {
       if (
@@ -277,24 +347,25 @@ export class DiffRenderer {
     }
 
     let lastType: HUNK_LINE_TYPE | undefined;
-    for (const rawLine of hunk.hunkContent) {
+    for (const rawLine of hunk.hunkContent ?? []) {
       const { line, type } = parseLineType(rawLine);
       if (type === 'context') {
         createSpanIfNecessary();
       }
       if (type === 'context') {
+        currentChangeGroup = undefined;
         additionGroupSize = 0;
         deletionGroupSize = 0;
         if (unified) {
-          unifiedContent = (unifiedContent ?? '') + line;
+          unifiedContent.push(line);
           unifiedInfo[unifiedLineIndex] = {
             type: 'context',
             number: additionLineNumber,
           };
           unifiedLineIndex++;
         } else {
-          additionContent = (additionContent ?? '') + line;
-          deletionContent = (deletionContent ?? '') + line;
+          additionContent.push(line);
+          deletionContent.push(line);
           additionLineInfo[additionLineIndex] = {
             type: 'context',
             number: additionLineNumber,
@@ -310,15 +381,16 @@ export class DiffRenderer {
         additionLineNumber++;
         deletionLineNumber++;
       } else if (type === 'deletion') {
+        addToChangeGroup('deletion', line);
         if (unified) {
-          unifiedContent = (unifiedContent ?? '') + line;
+          unifiedContent.push(line);
           unifiedInfo[unifiedLineIndex] = {
             type: 'change-deletion',
             number: deletionLineNumber,
           };
           unifiedLineIndex++;
         } else {
-          deletionContent = (deletionContent ?? '') + line;
+          deletionContent.push(line);
           deletionLineInfo[deletionLineIndex] = {
             type: 'change-deletion',
             number: deletionLineNumber,
@@ -328,15 +400,16 @@ export class DiffRenderer {
         }
         deletionLineNumber++;
       } else if (type === 'addition') {
+        addToChangeGroup('addition', line);
         if (unified) {
-          unifiedContent = (unifiedContent ?? '') + line;
+          unifiedContent.push(line);
           unifiedInfo[unifiedLineIndex] = {
             type: 'change-addition',
             number: additionLineNumber,
           };
           unifiedLineIndex++;
         } else {
-          additionContent = (additionContent ?? '') + line;
+          additionContent.push(line);
           additionLineInfo[additionLineIndex] = {
             type: 'change-addition',
             number: additionLineNumber,
@@ -350,51 +423,87 @@ export class DiffRenderer {
       lastType = type;
     }
     createSpanIfNecessary();
+    const { unifiedDecorations, deletionDecorations, additionDecorations } =
+      this.parseDecorations(diffGroups);
+    return {
+      additions: {
+        content: additionContent,
+        lineInfo: additionLineInfo,
+        spans: additionSpans,
+        decorations: additionDecorations,
+      },
+      deletions: {
+        content: deletionContent,
+        lineInfo: deletionLineInfo,
+        spans: deletionSpans,
+        decorations: deletionDecorations,
+      },
+      unified: {
+        content: unifiedContent,
+        lineInfo: unifiedInfo,
+        decorations: unifiedDecorations,
+      },
+    };
+  }
 
-    if (unifiedContent != null) {
-      // Remove trailing blank line
-      unifiedContent = unifiedContent.replace(/\n$/, '');
-      state.spans = {};
-      state.lineInfo = unifiedInfo;
-      const nodes = highlighter.codeToHast(
-        unifiedContent,
-        this.createHastOptions(transformer, deletionDecorations)
+  private parseDecorations(diffGroups: ChangeHunk[]) {
+    const { unified = false } = this.options;
+    const unifiedDecorations: DecorationItem[] = [];
+    const additionDecorations: DecorationItem[] = [];
+    const deletionDecorations: DecorationItem[] = [];
+    for (const group of diffGroups) {
+      const len = Math.min(
+        group.additionLines.length,
+        group.deletionLines.length
       );
-      codeUnified.insertAdjacentHTML(
-        'beforeend',
-        toHtml(this.getNodesToRender(nodes))
-      );
+      for (let i = 0; i < len; i++) {
+        const deletionLine = group.deletionLines[i];
+        const additionLine = group.additionLines[i];
+        if (deletionLine == null || additionLine == null) {
+          break;
+        }
+        const lineDiff = diff(deletionLine, additionLine, undefined, true);
+        const deletionSpans: Diff[] = [];
+        const additionSpans: Diff[] = [];
+        for (const item of lineDiff) {
+          if (item[0] === 0) {
+            deletionSpans.push(item);
+            additionSpans.push(item);
+          } else if (item[0] === -1) {
+            deletionSpans.push(item);
+          } else {
+            additionSpans.push(item);
+          }
+        }
+        let spanIndex = 0;
+        for (const span of additionSpans) {
+          if (span[0] !== 0) {
+            (unified ? unifiedDecorations : additionDecorations).push(
+              createDiffSpanDecoration({
+                line: group.additionStartIndex + i,
+                spanStart: spanIndex,
+                spanLength: span[1].length,
+              })
+            );
+          }
+          spanIndex += span[1].length;
+        }
+        spanIndex = 0;
+        for (const span of deletionSpans) {
+          if (span[0] !== 0) {
+            (unified ? unifiedDecorations : deletionDecorations).push(
+              createDiffSpanDecoration({
+                line: group.deletionStartIndex + i,
+                spanStart: spanIndex,
+                spanLength: span[1].length,
+              })
+            );
+          }
+          spanIndex += span[1].length;
+        }
+      }
     }
-
-    if (deletionContent != null) {
-      // Remove trailing blank line
-      deletionContent = deletionContent.replace(/\n$/, '');
-      state.spans = deletionSpans;
-      state.lineInfo = deletionLineInfo;
-      const nodes = highlighter.codeToHast(
-        deletionContent,
-        this.createHastOptions(transformer, deletionDecorations)
-      );
-      codeDeletions.insertAdjacentHTML(
-        'beforeend',
-        toHtml(this.getNodesToRender(nodes))
-      );
-    }
-
-    if (additionContent != null) {
-      // Remove trailing blank line
-      additionContent = additionContent.replace(/\n$/, '');
-      state.spans = additionSpans;
-      state.lineInfo = additionLineInfo;
-      const nodes = highlighter.codeToHast(
-        additionContent,
-        this.createHastOptions(transformer, additionDecorations)
-      );
-      codeAdditions.insertAdjacentHTML(
-        'beforeend',
-        toHtml(this.getNodesToRender(nodes))
-      );
-    }
+    return { unifiedDecorations, deletionDecorations, additionDecorations };
   }
 
   private getNodesToRender(nodes: Root) {
@@ -432,6 +541,25 @@ export class DiffRenderer {
     }
     return { langs, themes, preferWasmHighlighter };
   }
+}
+
+interface CreateDiffSpanDecorationProps {
+  line: number;
+  spanStart: number;
+  spanLength: number;
+}
+
+function createDiffSpanDecoration({
+  line,
+  spanStart,
+  spanLength,
+}: CreateDiffSpanDecorationProps): DecorationItem {
+  return {
+    start: { line, character: spanStart },
+    end: { line, character: spanStart + spanLength },
+    properties: { 'data-diff-span': '' },
+    alwaysWrap: true,
+  };
 }
 
 function convertLine(

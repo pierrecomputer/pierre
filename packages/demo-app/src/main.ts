@@ -12,7 +12,6 @@ import type { BundledLanguage, BundledTheme } from 'shiki';
 import {
   CodeConfigs,
   DIFF_CONTENT,
-  DIFF_DECORATIONS,
   getFiletypeFromMetadata,
   toggleTheme,
 } from './mocks/';
@@ -77,7 +76,6 @@ function renderDiff() {
       container.appendChild(createFileMetadata(parsedPatch.patchMetadata));
     }
     for (const file of parsedPatch.files) {
-      const decorations = DIFF_DECORATIONS[file.name];
       container.appendChild(renderFileHeader(file));
       const pre = document.createElement('pre');
       container.appendChild(pre);
@@ -86,7 +84,7 @@ function renderDiff() {
         themes: { dark: 'tokyo-night', light: 'solarized-light' },
         unified,
       });
-      instance.render(file, pre, decorations);
+      instance.render(file, pre);
       diffInstances.push(instance);
     }
   }

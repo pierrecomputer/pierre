@@ -23,6 +23,16 @@
 
   --pjs-bg-deletions: color-mix(in srgb, var(--pjs-bg) 90%, rgb(255, 0, 0));
   --pjs-bg-additions: color-mix(in srgb, var(--pjs-bg) 90%, rgb(0, 255, 0));
+  --pjs-bg-deletions-emphasis: color-mix(
+    in srgb,
+    var(--pjs-bg) 70%,
+    rgb(255, 0, 0)
+  );
+  --pjs-bg-additions-emphasis: color-mix(
+    in srgb,
+    var(--pjs-bg) 70%,
+    rgb(0, 255, 0)
+  );
   --pjs-bg-deletions-number: color-mix(
     in srgb,
     var(--pjs-bg) 85%,
@@ -160,6 +170,30 @@
   user-select: none;
   background-color: var(--pjs-bg);
   color: var(--pjs-fg-number);
+  z-index: 1;
+}
+
+[data-pjs] [data-diff-span] {
+  padding-top: 1.5px;
+  padding-bottom: 1.5px;
+  position: relative;
+}
+
+[data-pjs] [data-diff-span]:before,
+[data-pjs] [data-diff-span]:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 1px;
+  background-color: var(--pjs-bg);
+}
+
+[data-pjs] [data-diff-span]:before {
+  left: -1px;
+}
+[data-pjs] [data-diff-span]:after {
+  right: -1px;
 }
 
 [data-pjs] [data-line-type='change-addition'] {
@@ -168,6 +202,10 @@
   [data-column-number] {
     background-color: var(--pjs-bg-additions-number);
   }
+
+  [data-diff-span] {
+    background-color: var(--pjs-bg-additions-emphasis);
+  }
 }
 
 [data-pjs] [data-line-type='change-deletion'] {
@@ -175,6 +213,10 @@
 
   [data-column-number] {
     background-color: var(--pjs-bg-deletions-number);
+  }
+
+  [data-diff-span] {
+    background-color: var(--pjs-bg-deletions-emphasis);
   }
 }
 
