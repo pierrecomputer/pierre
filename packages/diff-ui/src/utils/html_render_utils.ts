@@ -7,7 +7,7 @@ import {
   stringifyTokenStyle,
 } from 'shiki';
 
-import type { ThemesType } from '../types';
+import type { FileMetadata, ThemesType } from '../types';
 
 interface ThemeVariant {
   themes?: never;
@@ -122,4 +122,83 @@ function setWrapperProps(
 
 export function formatCSSVariablePrefix(prefix: string = 'pjs') {
   return `--${prefix}-`;
+}
+
+type RenderCustomFileMetadata = (
+  file: FileMetadata
+) => Element | null | undefined | string | number;
+
+export function renderFileHeader(
+  file: FileMetadata,
+  renderCustomMetadata?: RenderCustomFileMetadata
+) {
+  const container = document.createElement('div');
+  container.dataset.pjsHeader = '';
+  container.dataset.changeType = file.type;
+
+  const content = document.createElement('div');
+  content.dataset.headerContent = '';
+
+  // FIXME(amadeus): Replace this with icon logic
+  const icon = document.createElement('div');
+  icon.innerText = file.type.toLocaleUpperCase();
+  icon.dataset.changeIcon = '';
+  content.appendChild(icon);
+
+  const title = document.createElement('div');
+  title.dataset.title = '';
+  if (file.prevName != null) {
+    const prevName = document.createElement('div');
+    prevName.dataset.prevName = '';
+    prevName.textContent = file.prevName;
+    content.appendChild(prevName);
+  }
+  title.innerText = file.name;
+  content.appendChild(title);
+
+  const metadata = document.createElement('div');
+  metadata.dataset.metadata = '';
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of file.hunks) {
+    for (const line of hunk.hunkContent ?? []) {
+      if (line.startsWith('+')) {
+        additions++;
+      } else if (line.startsWith('-')) {
+        deletions++;
+      }
+    }
+  }
+  if (additions > 0) {
+    const addition = document.createElement('span');
+    addition.dataset.additions = '';
+    addition.textContent = `+${additions}`;
+    metadata.appendChild(addition);
+  }
+  if (deletions > 0) {
+    const deletion = document.createElement('span');
+    deletion.dataset.deletions = '';
+    deletion.textContent = `-${deletions}`;
+    metadata.appendChild(deletion);
+  }
+  if (deletions === 0 && additions === 0) {
+    const nochange = document.createElement('span');
+    nochange.textContent = 'NC';
+    metadata.appendChild(nochange);
+  }
+
+  if (renderCustomMetadata != null) {
+    const input = renderCustomMetadata(file);
+    if (
+      input != null &&
+      (typeof input === 'string' || typeof input === 'number')
+    ) {
+      metadata.insertAdjacentText('beforeend', `${input}`);
+    } else if (input != null) {
+      metadata.appendChild(input);
+    }
+  }
+  container.appendChild(content);
+  container.appendChild(metadata);
+  return container;
 }

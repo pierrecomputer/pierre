@@ -1,4 +1,5 @@
 import {
+  COMMIT_METADATA_SPLIT,
   DIFF_GIT_HEADER,
   FILE_CONTEXT_BLOB,
   HUNK_HEADER,
@@ -7,7 +8,7 @@ import {
 } from '../constants';
 import type { FileMetadata, Hunk, ParsedPatch } from '../types';
 
-export function parsePatchContent(data: string): ParsedPatch {
+function processPatch(data: string): ParsedPatch {
   const rawFiles = data.split(PER_FILE_DIFF_BREAK_REGEX);
   let patchMetadata: string | undefined;
   const files: FileMetadata[] = [];
@@ -51,17 +52,17 @@ export function parsePatchContent(data: string): ParsedPatch {
               }
               if (extraInfo.startsWith('similarity index')) {
                 if (extraInfo.startsWith('similarity index 100%')) {
-                  return 'renamed-pure';
+                  return 'rename-pure';
                 }
-                return 'renamed-changed';
+                return 'rename-changed';
               }
-              return 'changed';
+              return 'change';
             })();
             currentFile = {
               name: fileMetadataMatch[2],
               prevName:
                 // Only include prevName if there was a rename operation
-                type === 'renamed-pure' || type === 'renamed-changed'
+                type === 'rename-pure' || type === 'rename-changed'
                   ? fileMetadataMatch[1]
                   : undefined,
               type,
@@ -78,7 +79,7 @@ export function parsePatchContent(data: string): ParsedPatch {
         additionStart: parseInt(match[3]),
         deletedCount: parseInt(match[2]),
         deletedStart: parseInt(match[1]),
-        hunkContent: lines.length > 0 ? lines.join('') : undefined,
+        hunkContent: lines.length > 0 ? lines : undefined,
         hunkContext: match[5],
       };
       if (
@@ -90,6 +91,12 @@ export function parsePatchContent(data: string): ParsedPatch {
         console.error('parsePatchContent: invalid hunk metadata', hunkData);
         continue;
       }
+      // If the final line is an empty newline, lets yeet it, that's usually a
+      // separator between multiple patches in a single file.  Unclear if
+      // safe... but probably
+      if (lines[lines.length - 1] === '\n') {
+        lines.pop();
+      }
       currentFile.hunks.push(hunkData);
     }
     if (currentFile != null) {
@@ -97,4 +104,18 @@ export function parsePatchContent(data: string): ParsedPatch {
     }
   }
   return { patchMetadata, files };
+}
+
+export function parsePatchContent(data: string): ParsedPatch[] {
+  // NOTE(amadeus): This function is pretty forgiving in that it can accept a
+  // patch file that includes commit metdata, multiple commits, or not
+  const patches: ParsedPatch[] = [];
+  for (const patch of data.split(COMMIT_METADATA_SPLIT)) {
+    try {
+      patches.push(processPatch(patch));
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  return patches;
 }

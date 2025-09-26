@@ -6,9 +6,9 @@ export interface ThemesType {
 }
 
 export type FileTypes =
-  | 'changed'
-  | 'renamed-pure'
-  | 'renamed-changed'
+  | 'change'
+  | 'rename-pure'
+  | 'rename-changed'
   | 'new'
   | 'deleted';
 
@@ -22,7 +22,7 @@ export interface Hunk {
   additionStart: number;
   deletedCount: number;
   deletedStart: number;
-  hunkContent: string | undefined;
+  hunkContent: string[] | undefined;
   hunkContext: string | undefined;
 }
 
