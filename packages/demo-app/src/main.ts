@@ -10,8 +10,8 @@ import {
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
 import {
+  DIFF_CONTENT as CONTENT,
   CodeConfigs,
-  DIFF_CONTENT,
   getFiletypeFromMetadata,
   toggleTheme,
 } from './mocks/';
@@ -38,7 +38,7 @@ function startStreaming() {
 let parsedPatches: ParsedPatch[] | undefined;
 function handlePreloadDiff() {
   if (parsedPatches != null || !isHighlighterNull()) return;
-  parsedPatches = parsePatchContent(DIFF_CONTENT);
+  parsedPatches = parsePatchContent(CONTENT);
   console.log('Parsed File:', parsedPatches);
   const langs = new Set<BundledLanguage>();
   for (const parsedPatch of parsedPatches) {
@@ -69,7 +69,7 @@ function renderDiff() {
     | HTMLInputElement
     | undefined;
   container.dataset.diff = '';
-  parsedPatches = parsedPatches ?? parsePatchContent(DIFF_CONTENT);
+  parsedPatches = parsedPatches ?? parsePatchContent(CONTENT);
   const unified = checkbox?.checked ?? false;
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
