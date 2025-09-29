@@ -1,20 +1,25 @@
 import {
   COMMIT_METADATA_SPLIT,
-  DIFF_GIT_HEADER,
+  FILENAME_HEADER_REGEX,
+  FILENAME_HEADER_REGEX_GIT,
   FILE_CONTEXT_BLOB,
+  GIT_DIFF_FILE_BREAK_REGEX,
   HUNK_HEADER,
-  PER_FILE_DIFF_BREAK_REGEX,
   SPLIT_WITH_NEWLINES,
+  UNIFIED_DIFF_FILE_BREAK_REGEX,
 } from '../constants';
 import type { FileMetadata, Hunk, ParsedPatch } from '../types';
 
 function processPatch(data: string): ParsedPatch {
-  const rawFiles = data.split(PER_FILE_DIFF_BREAK_REGEX);
+  const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
+  const rawFiles = data.split(
+    isGitDiff ? GIT_DIFF_FILE_BREAK_REGEX : UNIFIED_DIFF_FILE_BREAK_REGEX
+  );
   let patchMetadata: string | undefined;
   const files: FileMetadata[] = [];
   let currentFile: FileMetadata | undefined;
   for (const file of rawFiles) {
-    if (!PER_FILE_DIFF_BREAK_REGEX.test(file)) {
+    if (isGitDiff && !GIT_DIFF_FILE_BREAK_REGEX.test(file)) {
       if (patchMetadata == null) {
         patchMetadata = file;
       } else {
@@ -22,6 +27,13 @@ function processPatch(data: string): ParsedPatch {
       }
       // If we get in here, it's most likely the introductory metadata from the
       // patch, or something is fucked with the diff format
+      continue;
+    } else if (!isGitDiff && !UNIFIED_DIFF_FILE_BREAK_REGEX.test(file)) {
+      if (patchMetadata == null) {
+        patchMetadata = file;
+      } else {
+        console.error('parsePatchContent: unknown file blob:', file);
+      }
       continue;
     }
     const hunks = file.split(FILE_CONTEXT_BLOB);
@@ -35,42 +47,46 @@ function processPatch(data: string): ParsedPatch {
       }
       const match = firstLine.match(HUNK_HEADER);
       if (match == null || currentFile == null) {
-        if (currentFile == null) {
-          const fileMetadataMatch = firstLine.match(DIFF_GIT_HEADER);
-          if (fileMetadataMatch != null) {
-            const extraInfo = lines.shift();
-            if (extraInfo == null) {
-              console.error('parsePatchContent: Invalid hunk metadata', hunk);
-              continue;
-            }
-            const type = (() => {
-              if (extraInfo.startsWith('new file mode')) {
-                return 'new';
-              }
-              if (extraInfo.startsWith('deleted file mode')) {
-                return 'deleted';
-              }
-              if (extraInfo.startsWith('similarity index')) {
-                if (extraInfo.startsWith('similarity index 100%')) {
-                  return 'rename-pure';
-                }
-                return 'rename-changed';
-              }
-              return 'change';
-            })();
-            currentFile = {
-              name: fileMetadataMatch[2],
-              prevName:
-                // Only include prevName if there was a rename operation
-                type === 'rename-pure' || type === 'rename-changed'
-                  ? fileMetadataMatch[1]
-                  : undefined,
-              type,
-              hunks: [],
-            };
-          }
-        } else {
+        if (currentFile != null) {
           console.error('parsePatchContent: Invalid hunk', hunk);
+          continue;
+        }
+        currentFile = {
+          name: '',
+          prevName: undefined,
+          type: 'change',
+          hunks: [],
+        };
+        // Push that first line back into the group of lines so we can properly
+        // parse it out
+        lines.unshift(firstLine);
+        for (const line of lines) {
+          const filenameMatch = line.match(
+            isGitDiff ? FILENAME_HEADER_REGEX_GIT : FILENAME_HEADER_REGEX
+          );
+          if (filenameMatch != null) {
+            const [, type, fileName] = filenameMatch;
+            if (type === '---' && fileName !== '/dev/null') {
+              currentFile.prevName = fileName;
+              currentFile.name = fileName;
+            } else if (type === '+++' && fileName !== '/dev/null') {
+              currentFile.name = fileName;
+            }
+          } else if (isGitDiff) {
+            if (line.startsWith('new file mode')) {
+              currentFile.type = 'new';
+            }
+            if (line.startsWith('deleted file mode')) {
+              currentFile.type = 'deleted';
+            }
+            if (line.startsWith('similarity index')) {
+              if (line.startsWith('similarity index 100%')) {
+                currentFile.type = 'rename-pure';
+              } else {
+                currentFile.type = 'rename-changed';
+              }
+            }
+          }
         }
         continue;
       }
@@ -100,6 +116,23 @@ function processPatch(data: string): ParsedPatch {
       currentFile.hunks.push(hunkData);
     }
     if (currentFile != null) {
+      if (
+        !isGitDiff &&
+        currentFile.prevName != null &&
+        currentFile.name !== currentFile.prevName
+      ) {
+        if (currentFile.hunks.length > 0) {
+          currentFile.type = 'rename-changed';
+        } else {
+          currentFile.type = 'rename-pure';
+        }
+      }
+      if (
+        currentFile.type !== 'rename-pure' &&
+        currentFile.type !== 'rename-changed'
+      ) {
+        currentFile.prevName = undefined;
+      }
       files.push(currentFile);
     }
   }
