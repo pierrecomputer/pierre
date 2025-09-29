@@ -9,6 +9,8 @@ import diffContent4 from './diff4.patch?raw';
 import diffContent from './diff.patch?raw';
 import mdContent from './example_md.txt?raw';
 import tsContent from './example_ts.txt?raw';
+import fileNew from './fileNew.txt?raw';
+import fileOld from './fileOld.txt?raw';
 
 export { mdContent, tsContent };
 
@@ -47,6 +49,9 @@ export function toggleTheme() {
     pre.dataset.theme = currentTheme === 'dark' ? 'light' : 'dark';
   }
 }
+
+export const FILE_OLD = fileOld;
+export const FILE_NEW = fileNew;
 
 export const DIFF_CONTENT = diffContent;
 export const DIFF_CONTENT_2 = diffContent2;
