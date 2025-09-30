@@ -13,7 +13,7 @@
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
     "@radix-ui/react-label": "catalog:",
-    "@radix-ui/react-slot": "catalog:",
+    "@radix-ui/react-slot": "^1.2.3",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "fumadocs-core": "catalog:",
@@ -27,7 +27,6 @@
     "shadcn": "catalog:",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
-    "tw-animate-css": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -9,8 +9,8 @@
   ],
   "files": [
     {
-      "path": "registry/pierre/blocks/git-platform-sync/git-platform-sync.tsx",
-      "content": "import { Button } from '@/registry/pierre/ui/button';\n\nexport function GitPlatformSync() {\n  return <Button>GitHub sync</Button>;\n}\n",
+      "path": "registry/blocks/git-platform-sync/git-platform-sync.tsx",
+      "content": "import { Button } from '@/components/ui/button';\n\nexport function GitPlatformSync() {\n  return <Button>GitHub sync</Button>;\n}\n",
       "type": "registry:component"
     }
   ]

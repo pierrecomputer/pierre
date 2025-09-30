@@ -1,5 +1,5 @@
 import { OpenInV0Button } from '@/components/open-in-v0-button';
-import { GitPlatformSync } from '@/registry/pierre/blocks/git-platform-sync/git-platform-sync';
+import { GitPlatformSync } from '@/registry/blocks/git-platform-sync/git-platform-sync';
 
 export default function Home() {
   return (

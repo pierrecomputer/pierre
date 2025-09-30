@@ -1,5 +1,5 @@
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Button } from '@/registry/pierre/ui/button';
 
 export function OpenInV0Button({
   name,

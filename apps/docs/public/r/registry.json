@@ -11,7 +11,7 @@
       "registryDependencies": ["button"],
       "files": [
         {
-          "path": "registry/pierre/blocks/git-platform-sync/git-platform-sync.tsx",
+          "path": "registry/blocks/git-platform-sync/git-platform-sync.tsx",
           "type": "registry:component"
         }
       ]
