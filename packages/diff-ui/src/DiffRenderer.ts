@@ -58,6 +58,7 @@ interface RenderHunkProps {
 interface LineInfo {
   type: 'change-deletion' | 'change-addition' | 'context';
   number: number;
+  metadataContent?: string;
 }
 
 interface SharedRenderState {
@@ -92,6 +93,12 @@ export class DiffRenderer {
 
   constructor(options: DiffRendererOptions) {
     this.options = options;
+  }
+
+  cleanUp() {
+    this.highlighter = undefined;
+    this.pre = undefined;
+    this.diff = undefined;
   }
 
   setOptions(options: DiffRendererOptions) {
@@ -383,6 +390,35 @@ export class DiffRenderer {
 
         additionLineNumber++;
         deletionLineNumber++;
+      } else if (type === 'metadata') {
+        const lineInfo: LineInfo = {
+          type:
+            lastType === 'addition'
+              ? 'change-addition'
+              : lastType === 'deletion'
+                ? 'change-deletion'
+                : 'context',
+          // NOTE(amadeus): Metadata does not have line numbers associated with
+          // it
+          number: -1,
+          metadataContent: line.trim(),
+        };
+        if (unified) {
+          unifiedContent.push('\n');
+          unifiedInfo[unifiedLineIndex] = lineInfo;
+          unifiedLineIndex++;
+        } else {
+          if (lastType === 'context' || lastType === 'deletion') {
+            deletionContent.push('\n');
+            deletionLineInfo[deletionLineIndex] = lineInfo;
+            deletionGroupSize++;
+          }
+          if (lastType === 'context' || lastType === 'addition') {
+            additionContent.push('\n');
+            additionLineInfo[additionLineIndex] = lineInfo;
+            additionGroupSize++;
+          }
+        }
       } else if (type === 'deletion') {
         addToChangeGroup('deletion', line);
         if (unified) {
@@ -575,32 +611,44 @@ function convertLine(
   line: number,
   state: SharedRenderState
 ): ElementContent {
-  // We need to convert the current line to a div but keep all the decorations
-  // that may be applied
-  node.tagName = 'div';
-  node.properties['data-column-content'] = '';
-  // NOTE(amadeus): We need to push newline characters into empty rows or else
-  // copy/pasta will have issues
-  if (node.children.length === 0) {
-    node.children.push({ type: 'text', value: '\n' });
-  }
-  const children = [node];
   const lineInfo = state.lineInfo[line];
   if (lineInfo == null) {
     throw new Error(`convertLine: line ${line}, contains no state.lineInfo`);
   }
+  // We need to convert the current line to a div but keep all the decorations
+  // that may be applied
+  node.tagName = 'div';
+  node.properties['data-column-content'] = '';
+  if (lineInfo.metadataContent != null) {
+    node.children.push({
+      type: 'element',
+      tagName: 'span',
+      properties: { 'data-no-newline': '' },
+      children: [{ type: 'text', value: lineInfo.metadataContent }],
+    });
+  }
+  // NOTE(amadeus): We need to push newline characters into empty rows or else
+  // copy/pasta will have issues
+  else if (node.children.length === 0) {
+    node.children.push({ type: 'text', value: '\n' });
+  }
+  const children = [node];
   // NOTE(amadeus): This should probably be based on a setting
   children.unshift({
     tagName: 'div',
     type: 'element',
     properties: { 'data-column-number': '' },
-    children: [{ type: 'text', value: `${lineInfo.number}` }],
+    children:
+      lineInfo.metadataContent == null
+        ? [{ type: 'text', value: `${lineInfo.number}` }]
+        : [],
   });
   return {
     tagName: 'div',
     type: 'element',
     properties: {
-      ['data-line']: `${lineInfo.number}`,
+      ['data-line']:
+        lineInfo.metadataContent == null ? `${lineInfo.number}` : '',
       ['data-line-type']: lineInfo.type,
     },
     children,

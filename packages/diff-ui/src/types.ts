@@ -33,4 +33,4 @@ export interface FileMetadata {
   hunks: Hunk[];
 }
 
-export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion';
+export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion' | 'metadata';

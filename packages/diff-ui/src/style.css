@@ -300,3 +300,8 @@
 [data-pjs-header] [data-deletions] {
   color: var(--pjs-deletions-color);
 }
+
+[data-no-newline] {
+  user-select: none;
+  opacity: 0.6;
+}

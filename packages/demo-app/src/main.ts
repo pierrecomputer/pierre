@@ -3,6 +3,7 @@ import {
   DiffRenderer,
   type ParsedPatch,
   isHighlighterNull,
+  parseDiffFromFiles,
   parsePatchContent,
   preloadHighlighter,
   renderFileHeader,
@@ -12,6 +13,8 @@ import type { BundledLanguage, BundledTheme } from 'shiki';
 import {
   DIFF_CONTENT as CONTENT,
   CodeConfigs,
+  FILE_NEW,
+  FILE_OLD,
   getFiletypeFromMetadata,
   toggleTheme,
 } from './mocks/';
@@ -56,7 +59,7 @@ function handlePreloadDiff() {
 }
 
 const diffInstances: DiffRenderer[] = [];
-function renderDiff() {
+function renderDiff(parsedPatches: ParsedPatch[]) {
   const container = document.getElementById('content');
   if (container == null) return;
   if (loadDiff != null) {
@@ -65,11 +68,17 @@ function renderDiff() {
   if (streamCode != null) {
     streamCode.parentElement?.removeChild(streamCode);
   }
+  container.innerHTML = '';
+  window.scrollTo({ top: 0 });
+  for (const instance of diffInstances) {
+    instance.cleanUp();
+  }
+  diffInstances.length = 0;
+  container.dataset.diff = '';
+
   const checkbox = document.getElementById('unified') as
     | HTMLInputElement
     | undefined;
-  container.dataset.diff = '';
-  parsedPatches = parsedPatches ?? parsePatchContent(CONTENT);
   const unified = checkbox?.checked ?? false;
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
@@ -125,7 +134,9 @@ if (streamCode != null) {
 
 const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
-  loadDiff.addEventListener('click', renderDiff);
+  loadDiff.addEventListener('click', () =>
+    renderDiff(parsedPatches ?? parsePatchContent(CONTENT))
+  );
   loadDiff.addEventListener('mouseenter', handlePreloadDiff);
 }
 
@@ -157,5 +168,79 @@ if (unifiedCheckbox instanceof HTMLInputElement) {
     for (const instance of diffInstances) {
       instance.setOptions({ ...instance.options, unified: checked });
     }
+  });
+}
+
+let lastWrapper: HTMLElement | undefined;
+const diff2Files = document.getElementById('diff-files');
+if (diff2Files != null) {
+  diff2Files.addEventListener('click', () => {
+    if (lastWrapper != null) {
+      lastWrapper.parentElement?.removeChild(lastWrapper);
+    }
+    lastWrapper = document.createElement('div');
+
+    const file1Container = document.createElement('div');
+    file1Container.className = 'file';
+    lastWrapper.className = 'files-input';
+    const file1Name = document.createElement('input');
+    file1Name.type = 'text';
+    file1Name.value = 'file_old.ts';
+    file1Name.spellcheck = false;
+    const file1Contents = document.createElement('textarea');
+    file1Contents.value = FILE_OLD;
+    file1Contents.spellcheck = false;
+    file1Container.appendChild(file1Name);
+    file1Container.appendChild(file1Contents);
+    lastWrapper.appendChild(file1Container);
+
+    const file2Container = document.createElement('div');
+    file2Container.className = 'file';
+    lastWrapper.className = 'files-input';
+    const file2Name = document.createElement('input');
+    file2Name.type = 'text';
+    file2Name.value = 'file_new.ts';
+    file2Name.spellcheck = false;
+    const file2Contents = document.createElement('textarea');
+    file2Contents.value = FILE_NEW;
+    file2Contents.spellcheck = false;
+    file2Container.appendChild(file2Name);
+    file2Container.appendChild(file2Contents);
+    lastWrapper.appendChild(file2Container);
+
+    const bottomWrapper = document.createElement('div');
+    bottomWrapper.className = 'buttons';
+    const render = document.createElement('button');
+    render.innerText = 'Render Diff';
+    render.addEventListener('click', () => {
+      const oldFile = {
+        name: file1Name.value,
+        contents: file1Contents.value,
+      };
+      const newFile = {
+        name: file2Name.value,
+        contents: file2Contents.value,
+      };
+
+      lastWrapper?.parentNode?.removeChild(lastWrapper);
+      const parsed = parseDiffFromFiles(oldFile, newFile);
+      for (const patch of parsed) {
+        patch.patchMetadata = undefined;
+      }
+      renderDiff(parsed);
+    });
+    bottomWrapper.appendChild(render);
+
+    const cancel = document.createElement('button');
+    cancel.innerText = 'Cancel';
+    bottomWrapper.appendChild(cancel);
+
+    cancel.addEventListener('click', () => {
+      lastWrapper?.parentNode?.removeChild(lastWrapper);
+    });
+
+    lastWrapper.append(bottomWrapper);
+
+    document.body.appendChild(lastWrapper);
   });
 }

@@ -7,7 +7,12 @@ export interface ParseLineTypeReturn {
 
 export function parseLineType(line: string): ParseLineTypeReturn {
   const firstChar = line.substring(0, 1);
-  if (firstChar !== '+' && firstChar !== '-' && firstChar !== ' ') {
+  if (
+    firstChar !== '+' &&
+    firstChar !== '-' &&
+    firstChar !== ' ' &&
+    firstChar !== '\\'
+  ) {
     throw new Error(
       `parseLineType: Invalid firstChar: "${firstChar}", full line: "${line}"`
     );
@@ -17,8 +22,10 @@ export function parseLineType(line: string): ParseLineTypeReturn {
     type:
       firstChar === ' '
         ? 'context'
-        : firstChar === '+'
-          ? 'addition'
-          : 'deletion',
+        : firstChar === '\\'
+          ? 'metadata'
+          : firstChar === '+'
+            ? 'addition'
+            : 'deletion',
   };
 }
