@@ -5,3 +5,4 @@ build
 bun.lock
 .next
 .source
+apps/docs/public/r/*

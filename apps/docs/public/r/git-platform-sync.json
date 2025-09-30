@@ -1,0 +1,17 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "git-platform-sync",
+  "type": "registry:component",
+  "title": "Git Platform Sync",
+  "description": "A component that implements repo syncing between code.storage and git platforms like GitHub.",
+  "registryDependencies": [
+    "button"
+  ],
+  "files": [
+    {
+      "path": "registry/pierre/blocks/git-platform-sync/git-platform-sync.tsx",
+      "content": "import { Button } from '@/registry/pierre/ui/button';\n\nexport function GitPlatformSync() {\n  return <Button>GitHub sync</Button>;\n}\n",
+      "type": "registry:component"
+    }
+  ]
+}
