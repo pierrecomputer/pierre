@@ -8,10 +8,15 @@ import type {
 import { type ChangeObject, diffWordsWithSpace } from 'diff';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
-import type { BundledLanguage, BundledTheme } from 'shiki';
+import type { BundledTheme } from 'shiki';
 
 import { getSharedHighlighter } from './SharedHighlighter';
-import type { FileMetadata, HUNK_LINE_TYPE, Hunk } from './types';
+import type {
+  FileMetadata,
+  HUNK_LINE_TYPE,
+  Hunk,
+  SupportedLanguages,
+} from './types';
 import {
   createCodeNode,
   createHunkSeparator,
@@ -34,7 +39,7 @@ export interface DiffDecorationItem extends DecorationItem {
 }
 
 interface CodeTokenOptionsBase {
-  lang?: BundledLanguage;
+  lang?: SupportedLanguages;
   defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
   preferWasmHighlighter?: boolean;
   unified?: boolean;
@@ -46,7 +51,7 @@ interface CodeTokenOptionsBase {
 
 interface RenderHunkProps {
   hunk: Hunk;
-  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+  highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>;
   state: SharedRenderState;
   transformer: ShikiTransformer;
 
@@ -86,7 +91,7 @@ export type DiffRendererOptions =
 // and everything setup ASAP, and allow setup the ability to pass a
 // ReadableStream to it...
 export class DiffRenderer {
-  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme> | undefined;
+  highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme> | undefined;
   options: DiffRendererOptions;
   pre: HTMLPreElement | undefined;
   diff: FileMetadata | undefined;
@@ -136,7 +141,7 @@ export class DiffRenderer {
   private renderDiff(
     wrapper: HTMLPreElement,
     diff: FileMetadata,
-    highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>
+    highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
   ) {
     const { themes, theme, unified = false } = this.options;
     const split =
@@ -191,13 +196,14 @@ export class DiffRenderer {
 
   private createHastOptions(
     transformer: ShikiTransformer,
-    decorations?: DecorationItem[]
+    decorations?: DecorationItem[],
+    forceText: boolean = false
   ): CodeToHastOptions {
     if ('theme' in this.options && this.options.theme != null) {
       return {
         theme: this.options.theme,
         cssVariablePrefix: formatCSSVariablePrefix(),
-        lang: this.options.lang ?? ('text' as BundledLanguage),
+        lang: forceText ? 'text' : (this.options.lang ?? 'text'),
         defaultColor: this.options.defaultColor ?? false,
         transformers: [transformer],
         decorations,
@@ -208,7 +214,7 @@ export class DiffRenderer {
       return {
         themes: this.options.themes,
         cssVariablePrefix: formatCSSVariablePrefix(),
-        lang: this.options.lang ?? ('text' as BundledLanguage),
+        lang: forceText ? 'text' : (this.options.lang ?? 'text'),
         defaultColor: this.options.defaultColor ?? false,
         transformers: [transformer],
         decorations,
@@ -236,7 +242,11 @@ export class DiffRenderer {
       state.lineInfo = unified.lineInfo;
       const nodes = highlighter.codeToHast(
         content,
-        this.createHastOptions(transformer, unified.decorations)
+        this.createHastOptions(
+          transformer,
+          unified.decorations,
+          hunk.hasLongLines
+        )
       );
       codeUnified.insertAdjacentHTML(
         'beforeend',
@@ -253,7 +263,8 @@ export class DiffRenderer {
         content,
         this.createHastOptions(
           transformer,
-          deletions.decorations.length > 0 ? deletions.decorations : undefined
+          deletions.decorations.length > 0 ? deletions.decorations : undefined,
+          hunk.hasLongLines
         )
       );
       codeDeletions.insertAdjacentHTML(
@@ -271,7 +282,8 @@ export class DiffRenderer {
         content,
         this.createHastOptions(
           transformer,
-          additions.decorations.length > 0 ? additions.decorations : undefined
+          additions.decorations.length > 0 ? additions.decorations : undefined,
+          hunk.hasLongLines
         )
       );
       codeAdditions.insertAdjacentHTML(
@@ -485,11 +497,17 @@ export class DiffRenderer {
     };
   }
 
-  private parseDecorations(diffGroups: ChangeHunk[]) {
+  private parseDecorations(
+    diffGroups: ChangeHunk[],
+    disableDecorations = false
+  ) {
     const { unified = false } = this.options;
     const unifiedDecorations: DecorationItem[] = [];
     const additionDecorations: DecorationItem[] = [];
     const deletionDecorations: DecorationItem[] = [];
+    if (disableDecorations) {
+      return { unifiedDecorations, deletionDecorations, additionDecorations };
+    }
     for (const group of diffGroups) {
       const len = Math.min(
         group.additionLines.length,
@@ -572,7 +590,7 @@ export class DiffRenderer {
       theme,
       preferWasmHighlighter,
     } = this.options;
-    const langs: BundledLanguage[] = [];
+    const langs: SupportedLanguages[] = [];
     if (lang != null) {
       langs.push(lang);
     }

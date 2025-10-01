@@ -1,4 +1,4 @@
-import type { BundledTheme } from 'shiki';
+import type { BundledLanguage, BundledTheme } from 'shiki';
 
 export interface ThemesType {
   dark: BundledTheme;
@@ -24,6 +24,7 @@ export interface Hunk {
   deletedStart: number;
   hunkContent: string[] | undefined;
   hunkContext: string | undefined;
+  hasLongLines: boolean;
 }
 
 export interface FileMetadata {
@@ -31,6 +32,9 @@ export interface FileMetadata {
   prevName: string | undefined;
   type: FileTypes;
   hunks: Hunk[];
+  lines: number;
 }
+
+export type SupportedLanguages = BundledLanguage | 'text';
 
 export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion' | 'metadata';

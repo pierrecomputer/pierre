@@ -56,6 +56,7 @@ function processPatch(data: string): ParsedPatch {
           prevName: undefined,
           type: 'change',
           hunks: [],
+          lines: 0,
         };
         // Push that first line back into the group of lines so we can properly
         // parse it out
@@ -107,10 +108,11 @@ function processPatch(data: string): ParsedPatch {
         deletedStart: parseInt(match[1]),
         hunkContent: lines.length > 0 ? lines : undefined,
         hunkContext: match[5],
+        hasLongLines: false,
       };
       if (
         isNaN(hunkData.additionCount) ||
-        isNaN(hunkData.additionCount) ||
+        isNaN(hunkData.deletedCount) ||
         isNaN(hunkData.additionStart) ||
         isNaN(hunkData.deletedStart)
       ) {
@@ -123,7 +125,14 @@ function processPatch(data: string): ParsedPatch {
       if (lines[lines.length - 1] === '\n') {
         lines.pop();
       }
+      for (const line of lines) {
+        if (line.length >= 1000) {
+          hunkData.hasLongLines = true;
+          break;
+        }
+      }
       currentFile.hunks.push(hunkData);
+      currentFile.lines += hunkData.hunkContent?.length ?? 0;
     }
     if (currentFile != null) {
       if (

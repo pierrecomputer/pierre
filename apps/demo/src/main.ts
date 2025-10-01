@@ -2,6 +2,7 @@ import {
   CodeRenderer,
   DiffRenderer,
   type ParsedPatch,
+  type SupportedLanguages,
   isHighlighterNull,
   parseDiffFromFiles,
   parsePatchContent,
@@ -43,7 +44,7 @@ function handlePreloadDiff() {
   if (parsedPatches != null || !isHighlighterNull()) return;
   parsedPatches = parsePatchContent(CONTENT);
   console.log('Parsed File:', parsedPatches);
-  const langs = new Set<BundledLanguage>();
+  const langs = new Set<SupportedLanguages>();
   for (const parsedPatch of parsedPatches) {
     for (const file of parsedPatch.files) {
       const lang = getFiletypeFromMetadata(file);

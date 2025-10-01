@@ -225,3 +225,12 @@ code {
   display: flex;
   flex-direction: row-reverse;
 }
+
+[data-pjs],
+[data-pjs-header] {
+  content-visibility: auto;
+}
+
+[data-pjs-header] {
+  contain-intrinsic-size: auto 36px;
+}

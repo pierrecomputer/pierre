@@ -1,5 +1,4 @@
 import {
-  type BundledLanguage,
   type BundledTheme,
   type HighlighterGeneric,
   createHighlighter,
@@ -8,7 +7,9 @@ import {
   loadWasm,
 } from 'shiki';
 
-type PierreHighlighter = HighlighterGeneric<BundledLanguage, BundledTheme>;
+import type { SupportedLanguages } from './types';
+
+type PierreHighlighter = HighlighterGeneric<SupportedLanguages, BundledTheme>;
 
 type CachedOrLoadingHighlighterType =
   | Promise<PierreHighlighter>
@@ -18,11 +19,11 @@ type CachedOrLoadingHighlighterType =
 let highlighter: CachedOrLoadingHighlighterType;
 
 const loadedThemes = new Map<BundledTheme, true | Promise<void>>();
-const loadedLanguages = new Map<BundledLanguage, true | Promise<void>>();
+const loadedLanguages = new Map<SupportedLanguages, true | Promise<void>>();
 
 interface HighlighterOptions {
   themes: BundledTheme[];
-  langs: BundledLanguage[];
+  langs: SupportedLanguages[];
   preferWasmHighlighter?: boolean;
 }
 
@@ -50,13 +51,14 @@ export async function getSharedHighlighter({
           for (const language of langs) {
             loadedLanguages.set(language, true);
           }
+          loadedLanguages.set('text', true);
           return createHighlighter({
             themes,
-            langs,
+            langs: [...langs, 'text'],
             engine: preferWasmHighlighter
               ? createOnigurumaEngine()
               : createJavaScriptRegexEngine(),
-          });
+          }) as Promise<PierreHighlighter>;
         })
         .then((instance) => {
           highlighter = instance;

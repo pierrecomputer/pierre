@@ -60,17 +60,21 @@ export const DIFF_CONTENT_3 = diffContent3;
 export const DIFF_CONTENT_4 = diffContent4;
 export const DIFF_CONTENT_5 = diffContent5;
 
-export const DIFF_CONTENT_FORMATS: Record<string, BundledLanguage | undefined> =
-  {
-    js: 'javascript',
-    jsx: 'jsx',
-    html: 'html',
-    json: 'json',
-    ts: 'typescript',
-    tsx: 'tsx',
-    css: 'css',
-    patch: 'diff',
-  };
+export const DIFF_CONTENT_FORMATS: Record<
+  string,
+  BundledLanguage | 'text' | undefined
+> = {
+  css: 'css',
+  go: 'go',
+  html: 'html',
+  js: 'javascript',
+  json: 'json',
+  jsx: 'jsx',
+  patch: 'diff',
+  ts: 'typescript',
+  tsx: 'tsx',
+  txt: 'text',
+};
 
 export function getFiletypeFromMetadata(file: FileMetadata) {
   return DIFF_CONTENT_FORMATS[file.name.match(/\.([^.]+)$/)?.[1] || ''];
