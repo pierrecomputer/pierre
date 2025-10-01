@@ -6,6 +6,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
+      "@/registry/new-york/*": ["./*"],
       "@/*": ["./*"]
     }
   }
