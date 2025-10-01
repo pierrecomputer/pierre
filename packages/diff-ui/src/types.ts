@@ -24,7 +24,6 @@ export interface Hunk {
   deletedStart: number;
   hunkContent: string[] | undefined;
   hunkContext: string | undefined;
-  hasLongLines: boolean;
 }
 
 export interface FileMetadata {

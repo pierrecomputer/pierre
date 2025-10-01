@@ -3,9 +3,13 @@ import type { HUNK_LINE_TYPE } from '../types';
 export interface ParseLineTypeReturn {
   line: string;
   type: HUNK_LINE_TYPE;
+  longLine: boolean;
 }
 
-export function parseLineType(line: string): ParseLineTypeReturn {
+export function parseLineType(
+  line: string,
+  maxLineLength: number
+): ParseLineTypeReturn {
   const firstChar = line.substring(0, 1);
   if (
     firstChar !== '+' &&
@@ -27,5 +31,6 @@ export function parseLineType(line: string): ParseLineTypeReturn {
           : firstChar === '+'
             ? 'addition'
             : 'deletion',
+    longLine: line.length - 1 >= maxLineLength,
   };
 }

@@ -2,7 +2,7 @@ import './style.css';
 
 export * from '@pierre/shiki-stream';
 export * from './CodeRenderer';
-export * from './DiffRenderer';
+export * from './DiffHunksRenderer';
 export * from './SharedHighlighter';
 export * from './UnversialRenderer';
 export * from './createStreamingHighlighter';

@@ -1,6 +1,6 @@
 import {
   CodeRenderer,
-  DiffRenderer,
+  DiffHunksRenderer,
   type ParsedPatch,
   type SupportedLanguages,
   isHighlighterNull,
@@ -59,7 +59,7 @@ function handlePreloadDiff() {
   });
 }
 
-const diffInstances: DiffRenderer[] = [];
+const diffInstances: DiffHunksRenderer[] = [];
 function renderDiff(parsedPatches: ParsedPatch[]) {
   const container = document.getElementById('content');
   if (container == null) return;
@@ -89,10 +89,10 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
       container.appendChild(renderFileHeader(file));
       const pre = document.createElement('pre');
       container.appendChild(pre);
-      const instance = new DiffRenderer({
+      const instance = new DiffHunksRenderer({
         lang: getFiletypeFromMetadata(file),
         themes: { dark: 'tokyo-night', light: 'solarized-light' },
-        unified,
+        diffStyle: unified ? 'unified' : 'split',
       });
       instance.render(file, pre);
       diffInstances.push(instance);
@@ -167,7 +167,10 @@ if (unifiedCheckbox instanceof HTMLInputElement) {
   unifiedCheckbox.addEventListener('change', () => {
     const checked = unifiedCheckbox.checked;
     for (const instance of diffInstances) {
-      instance.setOptions({ ...instance.options, unified: checked });
+      instance.setOptions({
+        ...instance.getOptionsWithDefaults(),
+        diffStyle: checked ? 'unified' : 'split',
+      });
     }
   });
 }
