@@ -39,6 +39,7 @@ interface CodeTokenOptionsBase {
   lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
   maxLineLengthForHighlighting?: number; // 1000 is default
+  disableLineNumbers?: boolean;
 
   // Shiki config options
   lang?: SupportedLanguages;
@@ -67,6 +68,7 @@ interface SharedRenderState {
   lineInfo: Record<number, LineInfo | undefined>;
   spans: Record<number, number | undefined>;
   decorations: DecorationItem[];
+  disableLineNumbers: boolean;
 }
 
 interface CodeTokenOptionsSingleTheme extends CodeTokenOptionsBase {
@@ -115,6 +117,7 @@ export class DiffHunksRenderer {
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
       maxLineLengthForHighlighting = 1000,
+      disableLineNumbers = false,
     } = this.options;
     if (themes != null) {
       return {
@@ -123,6 +126,7 @@ export class DiffHunksRenderer {
         lineDiffType,
         maxLineDiffLength,
         maxLineLengthForHighlighting,
+        disableLineNumbers,
       };
     }
     return {
@@ -131,6 +135,7 @@ export class DiffHunksRenderer {
       lineDiffType,
       maxLineDiffLength,
       maxLineLengthForHighlighting,
+      disableLineNumbers,
     };
   }
 
@@ -163,7 +168,8 @@ export class DiffHunksRenderer {
     diff: FileMetadata,
     highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
   ) {
-    const { themes, theme, diffStyle } = this.getOptionsWithDefaults();
+    const { themes, theme, diffStyle, disableLineNumbers } =
+      this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
     const split = unified
       ? false
@@ -179,7 +185,8 @@ export class DiffHunksRenderer {
     const codeAdditions = createCodeNode({ columnType: 'additions' });
     const codeDeletions = createCodeNode({ columnType: 'deletions' });
     const codeUnified = createCodeNode({ columnType: 'unified' });
-    const { state, transformer } = createTransformerWithState();
+    const { state, transformer } =
+      createTransformerWithState(disableLineNumbers);
     let hunkIndex = 0;
     for (const hunk of diff.hunks) {
       if (hunkIndex > 0) {
@@ -695,16 +702,17 @@ function convertLine(
     node.children.push({ type: 'text', value: '\n' });
   }
   const children = [node];
-  // NOTE(amadeus): This should probably be based on a setting
-  children.unshift({
-    tagName: 'div',
-    type: 'element',
-    properties: { 'data-column-number': '' },
-    children:
-      lineInfo.metadataContent == null
-        ? [{ type: 'text', value: `${lineInfo.number}` }]
-        : [],
-  });
+  if (!state.disableLineNumbers) {
+    children.unshift({
+      tagName: 'div',
+      type: 'element',
+      properties: { 'data-column-number': '' },
+      children:
+        lineInfo.metadataContent == null
+          ? [{ type: 'text', value: `${lineInfo.number}` }]
+          : [],
+    });
+  }
   return {
     tagName: 'div',
     type: 'element',
@@ -744,7 +752,7 @@ function createEmptyRowBuffer(size: number): Element {
   };
 }
 
-function createTransformerWithState(): {
+function createTransformerWithState(disableLineNumbers: boolean): {
   state: SharedRenderState;
   transformer: ShikiTransformer;
 } {
@@ -752,6 +760,7 @@ function createTransformerWithState(): {
     spans: {},
     lineInfo: {},
     decorations: [],
+    disableLineNumbers,
   };
   return {
     state,
