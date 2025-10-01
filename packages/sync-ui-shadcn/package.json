@@ -1,0 +1,26 @@
+{
+  "name": "@pierre/sync-ui-shadcn",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "tsc": "tsc --build",
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@pierre/sync-ui-core": "workspace:*",
+    "@pierre/sync-ui-hooks": "workspace:*",
+    "@radix-ui/react-slot": "^1.2.3",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "lucide-react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tailwind-merge": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -38,8 +38,10 @@
       "version": "0.0.0",
       "dependencies": {
         "@pierre/diff-ui": "workspace:*",
+        "@pierre/sync-ui-core": "workspace:*",
+        "@pierre/sync-ui-hooks": "workspace:*",
         "@radix-ui/react-label": "catalog:",
-        "@radix-ui/react-slot": "^1.2.3",
+        "@radix-ui/react-slot": "catalog:",
         "class-variance-authority": "catalog:",
         "clsx": "catalog:",
         "fumadocs-core": "catalog:",
@@ -108,14 +110,23 @@
         "typescript": "catalog:",
       },
     },
-    "packages/sync-ui-react": {
-      "name": "@pierre/sync-ui-react",
+    "packages/sync-ui-shadcn": {
+      "name": "@pierre/sync-ui-shadcn",
       "version": "0.0.0",
       "dependencies": {
         "@pierre/sync-ui-core": "workspace:*",
         "@pierre/sync-ui-hooks": "workspace:*",
+        "@radix-ui/react-slot": "^1.2.3",
+        "class-variance-authority": "catalog:",
+        "clsx": "catalog:",
+        "lucide-react": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "tailwind-merge": "catalog:",
       },
       "devDependencies": {
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -469,7 +480,7 @@
 
     "@pierre/sync-ui-hooks": ["@pierre/sync-ui-hooks@workspace:packages/sync-ui-hooks"],
 
-    "@pierre/sync-ui-react": ["@pierre/sync-ui-react@workspace:packages/sync-ui-react"],
+    "@pierre/sync-ui-shadcn": ["@pierre/sync-ui-shadcn@workspace:packages/sync-ui-shadcn"],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.1", "", {}, "sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g=="],
 

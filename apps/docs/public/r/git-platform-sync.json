@@ -4,13 +4,17 @@
   "type": "registry:component",
   "title": "Git Platform Sync",
   "description": "A component that implements repo syncing between code.storage and git platforms like GitHub.",
+  "dependencies": [
+    "@pierre/sync-ui-core",
+    "@pierre/sync-ui-hooks"
+  ],
   "registryDependencies": [
     "button"
   ],
   "files": [
     {
-      "path": "registry/blocks/git-platform-sync/git-platform-sync.tsx",
-      "content": "import { Button } from '@/components/ui/button';\n\nexport function GitPlatformSync() {\n  return <Button>GitHub sync</Button>;\n}\n",
+      "path": "registry/new-york/blocks/git-platform-sync/git-platform-sync.tsx",
+      "content": "import { Button } from '@/components/ui/button';\nimport { version as versionCore } from '@pierre/sync-ui-core';\nimport { version as versionHooks } from '@pierre/sync-ui-hooks';\n\nexport function GitPlatformSync() {\n  console.log('versionCore', versionCore);\n  console.log('versionHooks', versionHooks);\n  return <Button variant=\"outline\">GitHub sync</Button>;\n}\n",
       "type": "registry:component"
     }
   ]

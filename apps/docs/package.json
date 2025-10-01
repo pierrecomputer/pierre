@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
+    "@pierre/sync-ui-core": "workspace:*",
+    "@pierre/sync-ui-hooks": "workspace:*",
     "@radix-ui/react-label": "catalog:",
-    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-slot": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "fumadocs-core": "catalog:",

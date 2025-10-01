@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["blocks/**/*", "components/**/*", "lib/**/*"],
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}

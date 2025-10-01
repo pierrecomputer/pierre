@@ -9,9 +9,10 @@
       "title": "Git Platform Sync",
       "description": "A component that implements repo syncing between code.storage and git platforms like GitHub.",
       "registryDependencies": ["button"],
+      "dependencies": ["@pierre/sync-ui-core", "@pierre/sync-ui-hooks"],
       "files": [
         {
-          "path": "registry/blocks/git-platform-sync/git-platform-sync.tsx",
+          "path": "registry/new-york/blocks/git-platform-sync/git-platform-sync.tsx",
           "type": "registry:component"
         }
       ]

@@ -21,7 +21,7 @@
       "path": "packages/sync-ui-hooks"
     },
     {
-      "path": "packages/sync-ui-react"
+      "path": "packages/sync-ui-shadcn"
     }
   ]
 }
