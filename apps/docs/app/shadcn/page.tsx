@@ -1,5 +1,5 @@
 import { OpenInV0Button } from '@/components/open-in-v0-button';
-import { GitPlatformSync } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
+import GitPlatformSyncExample from '@/registry/new-york/blocks/git-platform-sync/example';
 
 export default function Home() {
   return (
@@ -22,7 +22,7 @@ export default function Home() {
             <OpenInV0Button name="git-platform-sync" className="w-fit" />
           </div>
           <div className="flex items-center justify-center min-h-[400px] relative">
-            <GitPlatformSync />
+            <GitPlatformSyncExample />
           </div>
         </div>
       </main>

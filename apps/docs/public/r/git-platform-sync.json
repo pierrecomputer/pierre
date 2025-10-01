@@ -1,7 +1,7 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "git-platform-sync",
-  "type": "registry:component",
+  "type": "registry:block",
   "title": "Git Platform Sync",
   "description": "A component that implements repo syncing between code.storage and git platforms like GitHub.",
   "dependencies": [
@@ -12,6 +12,12 @@
     "button"
   ],
   "files": [
+    {
+      "path": "registry/new-york/blocks/git-platform-sync/example.tsx",
+      "content": "import { GitPlatformSync } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';\n\nexport default function Page() {\n  return (\n    <div className=\"flex min-h-screen items-center justify-center\">\n      <GitPlatformSync />\n    </div>\n  );\n}\n",
+      "type": "registry:page",
+      "target": "components/examples/git-platform-sync/page.tsx"
+    },
     {
       "path": "registry/new-york/blocks/git-platform-sync/git-platform-sync.tsx",
       "content": "import { Button } from '@/components/ui/button';\nimport { version as versionCore } from '@pierre/sync-ui-core';\nimport { version as versionHooks } from '@pierre/sync-ui-hooks';\n\nexport function GitPlatformSync() {\n  console.log('versionCore', versionCore);\n  console.log('versionHooks', versionHooks);\n  return <Button variant=\"outline\">GitHub sync</Button>;\n}\n",
