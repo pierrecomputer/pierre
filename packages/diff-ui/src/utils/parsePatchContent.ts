@@ -72,7 +72,9 @@ function processPatch(data: string): ParsedPatch {
             } else if (type === '+++' && fileName !== '/dev/null') {
               currentFile.name = fileName;
             }
-          } else if (isGitDiff) {
+          }
+          // Git diffs have a bunch of additional metadata we can pull from
+          else if (isGitDiff) {
             if (line.startsWith('new file mode')) {
               currentFile.type = 'new';
             }
@@ -86,14 +88,22 @@ function processPatch(data: string): ParsedPatch {
                 currentFile.type = 'rename-changed';
               }
             }
+            // We have to handle these for pure renames because there won't be
+            // --- and +++ lines
+            if (line.startsWith('rename from ')) {
+              currentFile.prevName = line.replace('rename from ', '');
+            }
+            if (line.startsWith('rename to ')) {
+              currentFile.name = line.replace('rename to ', '');
+            }
           }
         }
         continue;
       }
       const hunkData: Hunk = {
-        additionCount: parseInt(match[4]),
+        additionCount: parseInt(match[4] ?? '1'),
         additionStart: parseInt(match[3]),
-        deletedCount: parseInt(match[2]),
+        deletedCount: parseInt(match[2] ?? '1'),
         deletedStart: parseInt(match[1]),
         hunkContent: lines.length > 0 ? lines : undefined,
         hunkContext: match[5],
