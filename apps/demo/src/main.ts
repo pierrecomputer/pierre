@@ -180,33 +180,33 @@ if (diff2Files != null) {
     }
     lastWrapper = document.createElement('div');
 
-    const file1Container = document.createElement('div');
-    file1Container.className = 'file';
+    const fileOldContainer = document.createElement('div');
+    fileOldContainer.className = 'file';
     lastWrapper.className = 'files-input';
-    const file1Name = document.createElement('input');
-    file1Name.type = 'text';
-    file1Name.value = 'file_old.ts';
-    file1Name.spellcheck = false;
-    const file1Contents = document.createElement('textarea');
-    file1Contents.value = FILE_OLD;
-    file1Contents.spellcheck = false;
-    file1Container.appendChild(file1Name);
-    file1Container.appendChild(file1Contents);
-    lastWrapper.appendChild(file1Container);
+    const fileOldName = document.createElement('input');
+    fileOldName.type = 'text';
+    fileOldName.value = 'file_old.ts';
+    fileOldName.spellcheck = false;
+    const fileOldContents = document.createElement('textarea');
+    fileOldContents.value = FILE_OLD;
+    fileOldContents.spellcheck = false;
+    fileOldContainer.appendChild(fileOldName);
+    fileOldContainer.appendChild(fileOldContents);
+    lastWrapper.appendChild(fileOldContainer);
 
-    const file2Container = document.createElement('div');
-    file2Container.className = 'file';
+    const fileNewContainer = document.createElement('div');
+    fileNewContainer.className = 'file';
     lastWrapper.className = 'files-input';
-    const file2Name = document.createElement('input');
-    file2Name.type = 'text';
-    file2Name.value = 'file_new.ts';
-    file2Name.spellcheck = false;
-    const file2Contents = document.createElement('textarea');
-    file2Contents.value = FILE_NEW;
-    file2Contents.spellcheck = false;
-    file2Container.appendChild(file2Name);
-    file2Container.appendChild(file2Contents);
-    lastWrapper.appendChild(file2Container);
+    const fileNewName = document.createElement('input');
+    fileNewName.type = 'text';
+    fileNewName.value = 'file_new.ts';
+    fileNewName.spellcheck = false;
+    const fileNewContents = document.createElement('textarea');
+    fileNewContents.value = FILE_NEW;
+    fileNewContents.spellcheck = false;
+    fileNewContainer.appendChild(fileNewName);
+    fileNewContainer.appendChild(fileNewContents);
+    lastWrapper.appendChild(fileNewContainer);
 
     const bottomWrapper = document.createElement('div');
     bottomWrapper.className = 'buttons';
@@ -214,12 +214,12 @@ if (diff2Files != null) {
     render.innerText = 'Render Diff';
     render.addEventListener('click', () => {
       const oldFile = {
-        name: file1Name.value,
-        contents: file1Contents.value,
+        name: fileOldName.value,
+        contents: fileOldContents.value,
       };
       const newFile = {
-        name: file2Name.value,
-        contents: file2Contents.value,
+        name: fileNewName.value,
+        contents: fileNewContents.value,
       };
 
       lastWrapper?.parentNode?.removeChild(lastWrapper);
