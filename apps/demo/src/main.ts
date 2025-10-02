@@ -11,15 +11,14 @@ import {
 } from '@pierre/diff-ui';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
-import {
-  DIFF_CONTENT as CONTENT,
-  CodeConfigs,
-  FILE_NEW,
-  FILE_OLD,
-  toggleTheme,
-} from './mocks/';
+import { CodeConfigs, FILE_NEW, FILE_OLD, toggleTheme } from './mocks/';
 import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
+
+async function loadPatchContent() {
+  const { default: content } = await import('./mocks/diff.patch?raw');
+  return content;
+}
 
 function startStreaming() {
   const container = document.getElementById('wrapper');
@@ -39,9 +38,10 @@ function startStreaming() {
 }
 
 let parsedPatches: ParsedPatch[] | undefined;
-function handlePreloadDiff() {
+async function handlePreloadDiff() {
   if (parsedPatches != null || !isHighlighterNull()) return;
-  parsedPatches = parsePatchContent(CONTENT);
+  const content = await loadPatchContent();
+  parsedPatches = parsePatchContent(content);
   console.log('Parsed File:', parsedPatches);
   const langs = new Set<SupportedLanguages>();
   for (const parsedPatch of parsedPatches) {
@@ -131,9 +131,9 @@ if (streamCode != null) {
 
 const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
-  loadDiff.addEventListener('click', () =>
-    renderDiff(parsedPatches ?? parsePatchContent(CONTENT))
-  );
+  loadDiff.addEventListener('click', async () => {
+    renderDiff(parsedPatches ?? parsePatchContent(await loadPatchContent()));
+  });
   loadDiff.addEventListener('mouseenter', handlePreloadDiff);
 }
 
