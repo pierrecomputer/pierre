@@ -10,7 +10,8 @@
   "dependencies": {
     "@pierre/sync-ui-core": "workspace:*",
     "@pierre/sync-ui-hooks": "workspace:*",
-    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-popover": "catalog:",
+    "@radix-ui/react-slot": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "lucide-react": "catalog:",

@@ -8,8 +8,13 @@
       "type": "registry:block",
       "title": "Git Platform Sync",
       "description": "A component that implements repo syncing between code.storage and git platforms like GitHub.",
-      "registryDependencies": ["button"],
-      "dependencies": ["@pierre/sync-ui-core", "@pierre/sync-ui-hooks"],
+      "registryDependencies": ["button", "popover"],
+      "dependencies": [
+        "@pierre/sync-ui-core",
+        "@pierre/sync-ui-hooks",
+        "@radix-ui/react-popover",
+        "@radix-ui/react-slot"
+      ],
       "files": [
         {
           "path": "registry/new-york/blocks/git-platform-sync/git-platform-sync.tsx",
