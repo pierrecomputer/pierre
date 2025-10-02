@@ -15,9 +15,16 @@ import { CodeConfigs, FILE_NEW, FILE_OLD, toggleTheme } from './mocks/';
 import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
 
+let loadingPatch: Promise<string> | undefined;
 async function loadPatchContent() {
-  const { default: content } = await import('./mocks/diff.patch?raw');
-  return content;
+  loadingPatch =
+    loadingPatch ??
+    new Promise((resolve) => {
+      import('./mocks/diff.patch?raw').then(({ default: content }) =>
+        resolve(content)
+      );
+    });
+  return loadingPatch;
 }
 
 function startStreaming() {
