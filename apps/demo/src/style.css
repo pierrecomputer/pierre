@@ -134,7 +134,7 @@ code {
   align-items: center;
 }
 
-.content {
+.wrapper {
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -147,7 +147,7 @@ code {
   overflow: hidden;
 }
 
-.content[data-diff] {
+.wrapper[data-diff] {
   grid-template-columns: 1fr;
   grid-template-rows: min-content;
   min-height: auto;

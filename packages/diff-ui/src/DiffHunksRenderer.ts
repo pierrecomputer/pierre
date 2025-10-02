@@ -1,5 +1,4 @@
 import type {
-  CodeOptionsMultipleThemes,
   CodeToHastOptions,
   DecorationItem,
   HighlighterGeneric,
@@ -12,10 +11,13 @@ import type { BundledTheme } from 'shiki';
 
 import { getSharedHighlighter } from './SharedHighlighter';
 import type {
-  FileMetadata,
+  BaseRendererOptions,
+  FileDiffMetadata,
   HUNK_LINE_TYPE,
   Hunk,
   SupportedLanguages,
+  ThemeRendererOptions,
+  ThemesRendererOptions,
 } from './types';
 import {
   createCodeNode,
@@ -30,21 +32,6 @@ interface ChangeHunk {
   additionStartIndex: number;
   deletionLines: string[];
   additionLines: string[];
-}
-
-interface CodeTokenOptionsBase {
-  diffStyle: 'unified' | 'split'; // split is default
-  // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
-  // by a single character
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
-  maxLineDiffLength?: number; // 1000 is default
-  maxLineLengthForHighlighting?: number; // 1000 is default
-  disableLineNumbers?: boolean;
-
-  // Shiki config options
-  lang?: SupportedLanguages;
-  defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
-  preferWasmHighlighter?: boolean;
 }
 
 interface RenderHunkProps {
@@ -71,25 +58,23 @@ interface SharedRenderState {
   disableLineNumbers: boolean;
 }
 
-interface CodeTokenOptionsSingleTheme extends CodeTokenOptionsBase {
-  theme: BundledTheme;
-  themes?: never;
-}
+interface DiffHunkThemeRendererOptions
+  extends BaseRendererOptions,
+    ThemeRendererOptions {}
 
-interface CodeTokenOptionsMultiThemes extends CodeTokenOptionsBase {
-  theme?: never;
-  themes: { dark: BundledTheme; light: BundledTheme };
-}
+interface DiffHunkThemesRendererOptions
+  extends BaseRendererOptions,
+    ThemesRendererOptions {}
 
 export type DiffHunksRendererOptions =
-  | CodeTokenOptionsSingleTheme
-  | CodeTokenOptionsMultiThemes;
+  | DiffHunkThemeRendererOptions
+  | DiffHunkThemesRendererOptions;
 
 export class DiffHunksRenderer {
   highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme> | undefined;
   options: DiffHunksRendererOptions;
   pre: HTMLPreElement | undefined;
-  diff: FileMetadata | undefined;
+  diff: FileDiffMetadata | undefined;
 
   constructor(options: DiffHunksRendererOptions) {
     this.options = options;
@@ -101,12 +86,17 @@ export class DiffHunksRenderer {
     this.diff = undefined;
   }
 
-  setOptions(options: DiffHunksRendererOptions) {
+  setOptions(
+    options: DiffHunksRendererOptions,
+    disableRerender: boolean = false
+  ) {
     this.options = options;
     if (this.pre == null || this.diff == null) {
       return;
     }
-    this.render(this.diff, this.pre);
+    if (!disableRerender) {
+      this.render(this.diff, this.pre);
+    }
   }
 
   getOptionsWithDefaults() {
@@ -144,9 +134,9 @@ export class DiffHunksRenderer {
     return this.highlighter;
   }
 
-  private queuedRenderArgs: [FileMetadata, HTMLPreElement] | undefined;
+  private queuedRenderArgs: [FileDiffMetadata, HTMLPreElement] | undefined;
 
-  async render(_diff: FileMetadata, _wrapper: HTMLPreElement) {
+  async render(_diff: FileDiffMetadata, _wrapper: HTMLPreElement) {
     const isSettingUp = this.queuedRenderArgs != null;
     this.queuedRenderArgs = [_diff, _wrapper];
     if (isSettingUp) {
@@ -165,7 +155,7 @@ export class DiffHunksRenderer {
 
   private renderDiff(
     wrapper: HTMLPreElement,
-    diff: FileMetadata,
+    diff: FileDiffMetadata,
     highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
   ) {
     const { themes, theme, diffStyle, disableLineNumbers } =

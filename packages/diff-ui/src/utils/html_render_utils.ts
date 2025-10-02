@@ -7,7 +7,11 @@ import {
   stringifyTokenStyle,
 } from 'shiki';
 
-import type { FileMetadata, ThemesType } from '../types';
+import type {
+  FileDiffMetadata,
+  RenderCustomFileMetadata,
+  ThemesType,
+} from '../types';
 
 interface ThemeVariant {
   themes?: never;
@@ -124,14 +128,10 @@ export function formatCSSVariablePrefix(prefix: string = 'pjs') {
   return `--${prefix}-`;
 }
 
-type RenderCustomFileMetadata = (
-  file: FileMetadata
-) => Element | null | undefined | string | number;
-
 export function renderFileHeader(
-  file: FileMetadata,
+  file: FileDiffMetadata,
   renderCustomMetadata?: RenderCustomFileMetadata
-) {
+): HTMLDivElement {
   const container = document.createElement('div');
   container.dataset.pjsHeader = '';
   container.dataset.changeType = file.type;

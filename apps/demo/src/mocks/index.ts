@@ -1,6 +1,3 @@
-import type { FileMetadata } from '@pierre/diff-ui';
-import type { BundledLanguage } from 'shiki';
-
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import { createScrollFixer } from '../utils/createScrollFixer';
 import diffContent2 from './diff2.patch?raw';
@@ -59,23 +56,3 @@ export const DIFF_CONTENT_2 = diffContent2;
 export const DIFF_CONTENT_3 = diffContent3;
 export const DIFF_CONTENT_4 = diffContent4;
 export const DIFF_CONTENT_5 = diffContent5;
-
-export const DIFF_CONTENT_FORMATS: Record<
-  string,
-  BundledLanguage | 'text' | undefined
-> = {
-  css: 'css',
-  go: 'go',
-  html: 'html',
-  js: 'javascript',
-  json: 'json',
-  jsx: 'jsx',
-  patch: 'diff',
-  ts: 'typescript',
-  tsx: 'tsx',
-  txt: 'text',
-};
-
-export function getFiletypeFromMetadata(file: FileMetadata) {
-  return DIFF_CONTENT_FORMATS[file.name.match(/\.([^.]+)$/)?.[1] || ''];
-}

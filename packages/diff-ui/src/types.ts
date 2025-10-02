@@ -1,4 +1,8 @@
-import type { BundledLanguage, BundledTheme } from 'shiki';
+import type {
+  BundledLanguage,
+  BundledTheme,
+  CodeOptionsMultipleThemes,
+} from 'shiki';
 
 export interface ThemesType {
   dark: BundledTheme;
@@ -14,7 +18,7 @@ export type FileTypes =
 
 export interface ParsedPatch {
   patchMetadata: string | undefined;
-  files: FileMetadata[];
+  files: FileDiffMetadata[];
 }
 
 export interface Hunk {
@@ -26,7 +30,7 @@ export interface Hunk {
   hunkContext: string | undefined;
 }
 
-export interface FileMetadata {
+export interface FileDiffMetadata {
   name: string;
   prevName: string | undefined;
   type: FileTypes;
@@ -37,3 +41,34 @@ export interface FileMetadata {
 export type SupportedLanguages = BundledLanguage | 'text';
 
 export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion' | 'metadata';
+
+export interface BaseRendererOptions {
+  diffStyle: 'unified' | 'split'; // split is default
+  // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
+  // by a single character
+  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
+  maxLineDiffLength?: number; // 1000 is default
+  maxLineLengthForHighlighting?: number; // 1000 is default
+  disableLineNumbers?: boolean;
+
+  // Shiki config options
+  lang?: SupportedLanguages;
+  defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
+  preferWasmHighlighter?: boolean;
+}
+
+export interface ThemeRendererOptions {
+  theme: BundledTheme;
+  themes?: never;
+}
+
+export interface ThemesRendererOptions {
+  theme?: never;
+  themes: { dark: BundledTheme; light: BundledTheme };
+}
+
+export type RenderCustomFileMetadata = (
+  file: FileDiffMetadata
+) => Element | null | undefined | string | number;
+
+export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;

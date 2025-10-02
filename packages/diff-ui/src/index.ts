@@ -2,10 +2,12 @@ import './style.css';
 
 export * from '@pierre/shiki-stream';
 export * from './CodeRenderer';
+export * from './DiffFileRenderer';
 export * from './DiffHunksRenderer';
 export * from './SharedHighlighter';
 export * from './UnversialRenderer';
 export * from './createStreamingHighlighter';
+export * from './utils/getFiletypeFromFileName';
 export * from './utils/html_render_utils';
 export * from './utils/parseDiffFromFiles';
 export * from './utils/parseLineType';

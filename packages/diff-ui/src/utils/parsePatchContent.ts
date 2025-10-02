@@ -8,7 +8,7 @@ import {
   SPLIT_WITH_NEWLINES,
   UNIFIED_DIFF_FILE_BREAK_REGEX,
 } from '../constants';
-import type { FileMetadata, Hunk, ParsedPatch } from '../types';
+import type { FileDiffMetadata, Hunk, ParsedPatch } from '../types';
 
 function processPatch(data: string): ParsedPatch {
   const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
@@ -16,8 +16,8 @@ function processPatch(data: string): ParsedPatch {
     isGitDiff ? GIT_DIFF_FILE_BREAK_REGEX : UNIFIED_DIFF_FILE_BREAK_REGEX
   );
   let patchMetadata: string | undefined;
-  const files: FileMetadata[] = [];
-  let currentFile: FileMetadata | undefined;
+  const files: FileDiffMetadata[] = [];
+  let currentFile: FileDiffMetadata | undefined;
   for (const file of rawFiles) {
     if (isGitDiff && !GIT_DIFF_FILE_BREAK_REGEX.test(file)) {
       if (patchMetadata == null) {

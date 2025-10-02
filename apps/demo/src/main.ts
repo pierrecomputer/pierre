@@ -1,13 +1,13 @@
 import {
   CodeRenderer,
-  DiffHunksRenderer,
+  DiffFileRenderer,
   type ParsedPatch,
   type SupportedLanguages,
+  getFiletypeFromFileName,
   isHighlighterNull,
   parseDiffFromFiles,
   parsePatchContent,
   preloadHighlighter,
-  renderFileHeader,
 } from '@pierre/diff-ui';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
@@ -16,14 +16,13 @@ import {
   CodeConfigs,
   FILE_NEW,
   FILE_OLD,
-  getFiletypeFromMetadata,
   toggleTheme,
 } from './mocks/';
 import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
 
 function startStreaming() {
-  const container = document.getElementById('content');
+  const container = document.getElementById('wrapper');
   if (container == null) return;
   if (loadDiff != null) {
     loadDiff.parentElement?.removeChild(loadDiff);
@@ -47,7 +46,7 @@ function handlePreloadDiff() {
   const langs = new Set<SupportedLanguages>();
   for (const parsedPatch of parsedPatches) {
     for (const file of parsedPatch.files) {
-      const lang = getFiletypeFromMetadata(file);
+      const lang = getFiletypeFromFileName(file.name);
       if (lang != null) {
         langs.add(lang);
       }
@@ -59,23 +58,23 @@ function handlePreloadDiff() {
   });
 }
 
-const diffInstances: DiffHunksRenderer[] = [];
+const diffInstances: DiffFileRenderer[] = [];
 function renderDiff(parsedPatches: ParsedPatch[]) {
-  const container = document.getElementById('content');
-  if (container == null) return;
+  const wrapper = document.getElementById('wrapper');
+  if (wrapper == null) return;
   if (loadDiff != null) {
     loadDiff.parentElement?.removeChild(loadDiff);
   }
   if (streamCode != null) {
     streamCode.parentElement?.removeChild(streamCode);
   }
-  container.innerHTML = '';
+  wrapper.innerHTML = '';
   window.scrollTo({ top: 0 });
   for (const instance of diffInstances) {
     instance.cleanUp();
   }
   diffInstances.length = 0;
-  container.dataset.diff = '';
+  wrapper.dataset.diff = '';
 
   const checkbox = document.getElementById('unified') as
     | HTMLInputElement
@@ -83,18 +82,15 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
   const unified = checkbox?.checked ?? false;
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
-      container.appendChild(createFileMetadata(parsedPatch.patchMetadata));
+      wrapper.appendChild(createFileMetadata(parsedPatch.patchMetadata));
     }
-    for (const file of parsedPatch.files) {
-      container.appendChild(renderFileHeader(file));
-      const pre = document.createElement('pre');
-      container.appendChild(pre);
-      const instance = new DiffHunksRenderer({
-        lang: getFiletypeFromMetadata(file),
+    for (const fileDiff of parsedPatch.files) {
+      const instance = new DiffFileRenderer({
         themes: { dark: 'tokyo-night', light: 'solarized-light' },
         diffStyle: unified ? 'unified' : 'split',
+        detectLanguage: true,
       });
-      instance.render(file, pre);
+      instance.render({ fileDiff, wrapper });
       diffInstances.push(instance);
     }
   }
@@ -168,7 +164,7 @@ if (unifiedCheckbox instanceof HTMLInputElement) {
     const checked = unifiedCheckbox.checked;
     for (const instance of diffInstances) {
       instance.setOptions({
-        ...instance.getOptionsWithDefaults(),
+        ...instance.options,
         diffStyle: checked ? 'unified' : 'split',
       });
     }
