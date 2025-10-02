@@ -6,9 +6,7 @@
   "description": "A component that implements repo syncing between code.storage and git platforms like GitHub.",
   "dependencies": [
     "@pierre/sync-ui-core",
-    "@pierre/sync-ui-hooks",
-    "@radix-ui/react-popover",
-    "@radix-ui/react-slot"
+    "@pierre/sync-ui-hooks"
   ],
   "registryDependencies": [
     "button",
@@ -17,7 +15,7 @@
   "files": [
     {
       "path": "registry/new-york/blocks/git-platform-sync/git-platform-sync.tsx",
-      "content": "import { Button } from '@/components/ui/button';\nimport {\n  Popover,\n  PopoverContent,\n  PopoverTrigger,\n} from '@/components/ui/popover';\nimport { version as versionCore } from '@pierre/sync-ui-core';\nimport { version as versionHooks } from '@pierre/sync-ui-hooks';\n\nexport function GitPlatformSync() {\n  console.log('versionCore', versionCore);\n  console.log('versionHooks', versionHooks);\n  return (\n    <Popover>\n      <PopoverTrigger asChild>\n        <Button variant=\"outline\">GitHub sync</Button>\n      </PopoverTrigger>\n      <PopoverContent className=\"w-80\">\n        <div className=\"space-y-4\">\n          <div className=\"space-y-2\">\n            <h4 className=\"font-medium leading-none\">Connect to GitHub</h4>\n            <p className=\"text-sm text-muted-foreground\">\n              Sync your changes to GitHub to backup your code at every snapshot\n              by installing our app on your personal account or organization.\n            </p>\n          </div>\n          <div className=\"space-y-2\">\n            <Button className=\"w-full\">Install GitHub App</Button>\n            <Button variant=\"secondary\" className=\"w-full\">\n              Help me get started\n            </Button>\n          </div>\n        </div>\n      </PopoverContent>\n    </Popover>\n  );\n}\n",
+      "content": "import { Button } from '@/components/ui/button';\nimport {\n  Popover,\n  PopoverContent,\n  PopoverTrigger,\n} from '@/components/ui/popover';\nimport { version as versionCore } from '@pierre/sync-ui-core';\nimport { version as versionHooks } from '@pierre/sync-ui-hooks';\n\nexport function GitPlatformSync() {\n  console.log('versionCore', versionCore);\n  console.log('versionHooks', versionHooks);\n  return (\n    <Popover>\n      <PopoverTrigger asChild>\n        <Button variant=\"outline\">Sync to GitHub</Button>\n      </PopoverTrigger>\n      <PopoverContent className=\"w-80\">\n        <div className=\"space-y-4\">\n          <div className=\"space-y-2\">\n            <h4 className=\"font-medium leading-none\">Connect to GitHub</h4>\n            <p className=\"text-sm text-muted-foreground\">\n              Sync your changes to GitHub to backup your code at every snapshot\n              by installing our app on your personal account or organization.\n            </p>\n          </div>\n          <div className=\"space-y-2\">\n            <Button className=\"w-full\">Install GitHub App</Button>\n            <Button variant=\"secondary\" className=\"w-full\">\n              Help me get started\n            </Button>\n          </div>\n        </div>\n      </PopoverContent>\n    </Popover>\n  );\n}\n",
       "type": "registry:component"
     }
   ]

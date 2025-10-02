@@ -25,6 +25,9 @@
   "files.watcherExclude": {
     "**/.vercel/**": true
   },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
   "[yaml]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },

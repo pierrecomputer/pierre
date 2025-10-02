@@ -48,11 +48,6 @@ function Button({
   return (
     <Comp
       data-slot="button"
-      style={{
-        // This is an override to show that the user's button styles are
-        // used instead of styles that are baked into the sync-ui components
-        fontWeight: '500 !important',
-      }}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

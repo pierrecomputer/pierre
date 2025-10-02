@@ -13,7 +13,7 @@ export function GitPlatformSync() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline">GitHub sync</Button>
+        <Button variant="outline">Sync to GitHub</Button>
       </PopoverTrigger>
       <PopoverContent className="w-80">
         <div className="space-y-4">

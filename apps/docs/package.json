@@ -15,7 +15,7 @@
     "@pierre/sync-ui-core": "workspace:*",
     "@pierre/sync-ui-hooks": "workspace:*",
     "@radix-ui/react-label": "catalog:",
-    "@radix-ui/react-popover": "^1.1.15",
+    "@radix-ui/react-popover": "catalog:",
     "@radix-ui/react-slot": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
@@ -30,6 +30,7 @@
     "shadcn": "catalog:",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

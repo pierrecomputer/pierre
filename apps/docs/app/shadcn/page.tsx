@@ -1,4 +1,3 @@
-import { OpenInV0Button } from '@/components/open-in-v0-button';
 import { GitPlatformSync } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
 
 export default function Home() {
@@ -14,14 +13,14 @@ export default function Home() {
         </p>
       </header>
       <main className="flex flex-col flex-1 gap-8">
-        <div className="flex flex-col gap-4 border rounded-lg p-4 min-h-[450px] relative">
+        <div className="flex flex-col gap-4 border rounded-lg p-4 min-h-[300px] relative bg-background">
           <div className="flex items-center justify-between">
             <h2 className="text-sm text-muted-foreground sm:pl-3">
               Git Platform Sync
             </h2>
-            <OpenInV0Button name="git-platform-sync" className="w-fit" />
+            {/* <OpenInV0Button name="git-platform-sync" className="w-fit" /> */}
           </div>
-          <div className="flex items-center justify-center min-h-[400px] relative">
+          <div className="flex flex-col items-center justify-center min-h-[280px] relative gap-4">
             <GitPlatformSync />
           </div>
         </div>
