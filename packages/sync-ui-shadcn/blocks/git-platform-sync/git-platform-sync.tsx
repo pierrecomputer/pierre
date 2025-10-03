@@ -91,7 +91,7 @@ export function GitPlatformSync({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="group flex justify-between items-center gap-2"
+          className="group flex justify-between items-center gap-2 text-foreground"
         >
           {variant === 'icon-only' ? (
             <GitHubIcon />
