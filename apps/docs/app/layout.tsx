@@ -34,7 +34,19 @@ export default function RootLayout({
         }}
         className={`${geistSans.variable} ${geistMono.variable}`}
       >
-        <RootProvider>{children}</RootProvider>
+        <RootProvider>
+          {children}
+          <div
+            id="dark-mode-portal-container"
+            className="dark"
+            data-theme="dark"
+          ></div>
+          <div
+            id="light-mode-portal-container"
+            className="light"
+            data-theme="light"
+          ></div>
+        </RootProvider>
       </body>
     </html>
   );

@@ -3,6 +3,7 @@
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
 
+@custom-variant light (&:is(.light *));
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -43,7 +44,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-:root {
+:root,
+.light {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -110,6 +112,16 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+:root {
+  color-scheme: light;
+}
+.light {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
 }
 
 @layer base {
