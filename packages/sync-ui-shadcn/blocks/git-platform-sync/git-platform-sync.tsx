@@ -106,7 +106,7 @@ export function GitPlatformSync({
       <PopoverContent className="w-96" align={align} {...containerProp}>
         <div className="space-y-4">
           <div className="space-y-2">
-            <h4 className="font-medium leading-none">Connect to GitHub</h4>
+            <h4 className="font-normal leading-none">Connect to GitHub</h4>
             <p className="text-sm text-muted-foreground">
               Sync your changes to GitHub to backup your code at every snapshot
               by installing our app on your personal account or organization.
