@@ -9,6 +9,9 @@ import {
 import { cn } from '@/lib/utils';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { ChevronDown } from 'lucide-react';
+import { useState } from 'react';
+
+type Step = 'welcome' | 'sync';
 
 const GitHubIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -68,6 +71,8 @@ export function GitPlatformSync({
   __container,
   ...props
 }: GitPlatformSyncProps) {
+  const [step, setStep] = useState<Step>('welcome');
+
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { container: __container } : {};
@@ -104,24 +109,76 @@ export function GitPlatformSync({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96" align={align} {...containerProp}>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <h4 className="font-normal leading-none">Connect to GitHub</h4>
-            <p className="text-sm text-muted-foreground">
-              Sync your changes to GitHub to backup your code at every snapshot
-              by installing our app on your personal account or organization.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3">
-            <Button size="lg" className="w-full">
-              Install GitHub App
-            </Button>
-            <Button size="lg" variant="secondary" className="w-full">
-              Help me get started
-            </Button>
-          </div>
-        </div>
+        {step === 'welcome' ? (
+          <StepWelcome onInstallApp={() => setStep('sync')} />
+        ) : null}
+        {step === 'sync' ? <StepSync /> : null}
       </PopoverContent>
     </Popover>
+  );
+}
+
+export type StepWelcomeProps = {
+  onInstallApp?: () => void;
+  onHelp?: () => void;
+};
+
+export function StepWelcome({ onInstallApp, onHelp }: StepWelcomeProps) {
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <h4 className="font-normal leading-none">Connect to GitHub</h4>
+          <p className="text-sm text-muted-foreground">
+            Sync your changes to GitHub to backup your code at every snapshot by
+            installing our app on your personal account or organization.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <Button onClick={onInstallApp} size="lg" className="w-full">
+            Install GitHub App
+          </Button>
+          <Button
+            onClick={onHelp}
+            size="lg"
+            variant="secondary"
+            className="w-full"
+          >
+            Help me get started
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export type StepSyncProps = {
+  onOwnerChange?: (owner: string) => void;
+  onRepoChange?: (repo: string) => void;
+  onBranchChange?: (branch: string) => void;
+};
+
+export function StepSync({
+  onOwnerChange,
+  onRepoChange,
+  onBranchChange,
+}: StepSyncProps) {
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <h4 className="font-normal leading-none">Sync to GitHub</h4>
+          <p className="text-sm text-muted-foreground">
+            Create a new repository or choose an existing one to sync your
+            changes. We'll push changes with each new prompt you send.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <input onChange={(e) => onOwnerChange?.(e.target.value)} />
+          <input onChange={(e) => onRepoChange?.(e.target.value)} />
+          <input onChange={(e) => onBranchChange?.(e.target.value)} />
+        </div>
+      </div>
+    </>
   );
 }
