@@ -11,7 +11,35 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
+import { ComboBox } from './combobox';
+
+// TODO: determine if this is the canonical way to import other components inside of a block
+
 type Step = 'welcome' | 'sync';
+
+type RepositoryData = {
+  /**
+   * @description The owner of the repository, also referred to as the 'scope' - usually
+   * the username of the user or an organization they belong to.
+   */
+  owner?: string;
+  /**
+   * @description The name of the repository, this is a 'slug' style name.
+   */
+  name?: string;
+  /**
+   * @description The branch of the repository, this is the branch that will be used to sync
+   */
+  branch?: string;
+};
+
+type RepositoryDataStatus = 'valid' | 'invalid' | 'incomplete';
+type RespositoryInvalidReason = 'repo-name-collision';
+
+type RepositoryChangeStatus = {
+  status: RepositoryDataStatus;
+  reason?: RespositoryInvalidReason;
+};
 
 const GitHubIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -53,6 +81,48 @@ export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
    * @description The alignment of the popover content
    */
   align?: React.ComponentProps<typeof PopoverContent>['align'];
+
+  /**
+   * @description Options for what features to offer the user in the resository selection
+   */
+  repositoryOptions?: {
+    /**
+     * @default false
+     * @description Whether to allow the user to select an existing repository. In most
+     * cases with coding platforms, you'll want to keep this false unless your platform
+     * is able to easily ingest existing repositories.
+     */
+    allowExisting?: boolean;
+    /**
+     * @default undefined
+     * @description The repoository slug that will be used. If it collides with an existing
+     * repository, the user will be able to select a different name.
+     */
+    name?: string;
+    /**
+     * @default false
+     * @description In general it's a good idea to allow users to name the repo whatever they
+     * want, but in some cases you might want to disallow it.
+     */
+    disallowCustomName?: boolean;
+    /**
+     * @default 'main'
+     * @description The branch that will be used to sync within the repository.
+     */
+    branch?: string;
+  };
+
+  /**
+   * @description Callback when the user changes any of the respository configuration. The first
+   * argument to the callback is the repository data. This data can be partial, for instance if the
+   * user hasn't yet selected a repo name.
+   */
+  onRepoChange?: (
+    repoData: RepositoryData,
+    status: RepositoryChangeStatus
+  ) => void;
+
+  onSyncStart?: () => void;
   /**
    * @deprecated Internal use only, not guaranteed to be supported in the future
    * @description The container to render the popover portal in, only used for docs. This requires
@@ -112,18 +182,18 @@ export function GitPlatformSync({
         {step === 'welcome' ? (
           <StepWelcome onInstallApp={() => setStep('sync')} />
         ) : null}
-        {step === 'sync' ? <StepSync /> : null}
+        {step === 'sync' ? <StepSync __container={__container} /> : null}
       </PopoverContent>
     </Popover>
   );
 }
 
-export type StepWelcomeProps = {
+type StepWelcomeProps = {
   onInstallApp?: () => void;
   onHelp?: () => void;
 };
 
-export function StepWelcome({ onInstallApp, onHelp }: StepWelcomeProps) {
+function StepWelcome({ onInstallApp, onHelp }: StepWelcomeProps) {
   return (
     <>
       <div className="space-y-4">
@@ -152,17 +222,30 @@ export function StepWelcome({ onInstallApp, onHelp }: StepWelcomeProps) {
   );
 }
 
-export type StepSyncProps = {
+type StepSyncProps = {
   onOwnerChange?: (owner: string) => void;
   onRepoChange?: (repo: string) => void;
   onBranchChange?: (branch: string) => void;
+  /**
+   * @deprecated Internal use only, not guaranteed to be supported in the future
+   * @description The container to render the popover portal in, only used for docs. This requires
+   * modifying the shadcn Popover component to accept a container prop for the portal
+   */
+  __container?: React.ComponentProps<
+    typeof PopoverPrimitive.Portal
+  >['container'];
 };
 
-export function StepSync({
-  onOwnerChange,
-  onRepoChange,
-  onBranchChange,
+function StepSync({
+  // onOwnerChange,
+  // onRepoChange,
+  // onBranchChange,
+  __container,
 }: StepSyncProps) {
+  // We want to make sure the container internal stuff doesn't blow up anyone's types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const containerProp: any = __container ? { __container: __container } : {};
+
   return (
     <>
       <div className="space-y-4">
@@ -170,13 +253,19 @@ export function StepSync({
           <h4 className="font-normal leading-none">Sync to GitHub</h4>
           <p className="text-sm text-muted-foreground">
             Create a new repository or choose an existing one to sync your
-            changes. We'll push changes with each new prompt you send.
+            changes. We&apos;ll push changes with each new prompt you send.
           </p>
         </div>
         <div className="flex flex-col gap-3">
-          <input onChange={(e) => onOwnerChange?.(e.target.value)} />
-          <input onChange={(e) => onRepoChange?.(e.target.value)} />
-          <input onChange={(e) => onBranchChange?.(e.target.value)} />
+          <ComboBox
+            {...containerProp}
+            initialValue={'slexaxton'}
+            options={[
+              { value: 'slexaxton', label: 'SlexAxton' },
+              { value: 'pierredotco', label: 'pierredotco' },
+              { value: 'jquery', label: 'jQuery' },
+            ]}
+          />
         </div>
       </div>
     </>
