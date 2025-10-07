@@ -395,9 +395,12 @@ export class DiffHunksRenderer {
           currentChangeGroup.deletionStartIndex + unresolvedSpan.hunkIndex;
         const additionIndex =
           currentChangeGroup.additionStartIndex + unresolvedSpan.hunkIndex;
-        const rowId = `${currentChangeGroup.deletionStartLine + unresolvedSpan.hunkIndex}-${
-          currentChangeGroup.additionStartLine + unresolvedSpan.hunkIndex
-        }`;
+        const rowId = makeAnnotionId({
+          deletedLineNumber:
+            currentChangeGroup.deletionStartLine + unresolvedSpan.hunkIndex,
+          additionLineNumber:
+            currentChangeGroup.additionStartLine + unresolvedSpan.hunkIndex,
+        });
         unresolvedSpan.span.rowId = rowId;
         const resolvedSpan: AnnotationSpan = {
           type: 'annotation',
@@ -1048,7 +1051,10 @@ function createAnnotationSpan(
       annotations: dAnnotations,
     };
   }
-  const rowId = `${dLineNumber}-${aLineNumber}`;
+  const rowId = makeAnnotionId({
+    deletedLineNumber: dLineNumber,
+    additionLineNumber: aLineNumber,
+  });
   return [
     {
       type: 'annotation',
@@ -1163,4 +1169,23 @@ function pushOrJoinSpan({
     return;
   }
   arr.push([isNeutral ? 0 : 1, item.value]);
+}
+
+interface MakeAnnotionIdProps {
+  deletedLineNumber?: number;
+  additionLineNumber?: number;
+}
+
+function makeAnnotionId({
+  deletedLineNumber,
+  additionLineNumber,
+}: MakeAnnotionIdProps): string {
+  const values: number[] = [];
+  if (deletedLineNumber != null) {
+    values.push(deletedLineNumber);
+  }
+  if (additionLineNumber != null) {
+    values.push(additionLineNumber);
+  }
+  return values.join(',');
 }
