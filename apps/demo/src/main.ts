@@ -73,7 +73,7 @@ const fakeLineAnnotations: LineAnnotation<unknown>[][][] = [
       { lineNumber: 5, side: 'deletions' },
       { lineNumber: 4, side: 'additions' },
       { lineNumber: 9, side: 'additions' },
-      { lineNumber: 15, side: 'additions' },
+      { lineNumber: 11, side: 'deletions' },
       { lineNumber: 15, side: 'additions' },
       { lineNumber: 13, side: 'deletions' },
     ],

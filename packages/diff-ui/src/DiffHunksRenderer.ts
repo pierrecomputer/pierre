@@ -33,14 +33,13 @@ type AnnotationLineMap = Record<number, LineAnnotation<unknown>[] | undefined>;
 interface ChangeHunk {
   deletionStartIndex: number;
   additionStartIndex: number;
-  deletionStartLine: number;
-  additionStartLine: number;
   deletionLines: string[];
   additionLines: string[];
 }
 
 interface RenderHunkProps {
   hunk: Hunk;
+  hunkIndex: number;
   highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>;
   state: SharedRenderState;
   transformer: ShikiTransformer;
@@ -69,12 +68,22 @@ interface GapSpan {
 
 interface AnnotationSpan {
   type: 'annotation';
+  hunkIndex: number;
   lineIndex: number;
-  rowId: string | undefined;
-  annotations: string[] | undefined;
+  annotations: string[];
 }
 
 type Span = GapSpan | AnnotationSpan;
+
+interface ObservedNodes {
+  container1: HTMLElement;
+  child1: HTMLElement;
+  child1Height: number;
+  container2: HTMLElement;
+  child2: HTMLElement;
+  child2Height: number;
+  currentHeight: number;
+}
 
 interface SharedRenderState {
   lineInfo: Record<number, LineInfo | undefined>;
@@ -223,6 +232,8 @@ export class DiffHunksRenderer {
 
     this.diff = diff;
     this.pre = pre;
+    this.resizeObserver?.disconnect();
+    this.observedNodes.clear();
     const codeAdditions = createCodeNode({ columnType: 'additions' });
     const codeDeletions = createCodeNode({ columnType: 'deletions' });
     const codeUnified = createCodeNode({ columnType: 'unified' });
@@ -240,6 +251,7 @@ export class DiffHunksRenderer {
       }
       this.renderHunks({
         hunk,
+        hunkIndex,
         highlighter,
         state,
         transformer,
@@ -260,7 +272,119 @@ export class DiffHunksRenderer {
     if (codeUnified.childNodes.length > 0) {
       this.pre.appendChild(codeUnified);
     }
+    this.ayyLmao(pre);
   }
+
+  observedNodes = new Map<HTMLElement, ObservedNodes>();
+  resizeObserver: ResizeObserver | undefined;
+  private ayyLmao(pre: HTMLPreElement) {
+    const { diffStyle, overflow } = this.getOptionsWithDefaults();
+    if (diffStyle === 'unified' || overflow === 'wrap') {
+      return;
+    }
+    const elements = pre.querySelectorAll('[data-line-annotation*=","]');
+    if (elements.length === 0) {
+      return;
+    }
+    const elementMap = new Map<string, HTMLElement[]>();
+    for (const element of elements) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+      const { lineAnnotation = '' } = element.dataset;
+      if (!/^\d+,\d+$/.test(lineAnnotation)) {
+        console.error(
+          'DiffHunksRenderer.ayyLmao: Invalid element or annotation',
+          { lineAnnotation, element }
+        );
+        continue;
+      }
+      let pairs = elementMap.get(lineAnnotation);
+      if (pairs == null) {
+        pairs = [];
+        elementMap.set(lineAnnotation, pairs);
+      }
+      pairs.push(element);
+    }
+    for (const [, pair] of elementMap) {
+      if (pair.length !== 2) {
+        continue;
+      }
+      const [container1, container2] = pair;
+      const child1 = container1.firstElementChild;
+      const child2 = container2.firstElementChild;
+      if (
+        !(container1 instanceof HTMLElement) ||
+        !(container2 instanceof HTMLElement) ||
+        !(child1 instanceof HTMLElement) ||
+        !(child2 instanceof HTMLElement)
+      ) {
+        continue;
+      }
+      if (this.resizeObserver == null) {
+        this.resizeObserver = new ResizeObserver(this.handleResizeObserver);
+      }
+      const item: ObservedNodes = {
+        container1,
+        child1,
+        child1Height: 0,
+        container2,
+        child2,
+        child2Height: 0,
+        currentHeight: 0,
+      };
+      this.observedNodes.set(child1, item);
+      this.observedNodes.set(child2, item);
+      this.resizeObserver.observe(child1);
+      this.resizeObserver.observe(child2);
+    }
+  }
+
+  handleResizeObserver = (entries: ResizeObserverEntry[]) => {
+    for (const entry of entries) {
+      if (!(entry.target instanceof HTMLElement)) {
+        console.error(
+          'DiffHunksRenderer.handleResizeObserver: Invalid element for ResizeObserver',
+          entry
+        );
+        continue;
+      }
+      const item = this.observedNodes.get(entry.target);
+      if (item == null) {
+        console.error(
+          'DiffHunksRenderer.handleResizeObserver: Not a valid observed node',
+          entry
+        );
+        continue;
+      }
+      const specs = entry.borderBoxSize[0];
+      if (
+        entry.target === item.child1 &&
+        specs.blockSize !== item.child1Height
+      ) {
+        item.child1Height = specs.blockSize;
+      } else if (
+        entry.target === item.child2 &&
+        specs.blockSize !== item.child2Height
+      ) {
+        item.child2Height = specs.blockSize;
+      } else {
+        continue;
+      }
+      const newHeight = Math.max(item.child2Height, item.child1Height);
+      if (newHeight !== item.currentHeight) {
+        item.currentHeight = Math.max(newHeight, 0);
+        item.container1.style.setProperty(
+          '--row-min-height',
+          `${item.currentHeight}px`
+        );
+        item.container2.style.setProperty(
+          '--row-min-height',
+          `${item.currentHeight}px`
+        );
+      }
+    }
+  };
 
   private createHastOptions(
     transformer: ShikiTransformer,
@@ -293,6 +417,7 @@ export class DiffHunksRenderer {
 
   private renderHunks({
     hunk,
+    hunkIndex,
     highlighter,
     state,
     transformer,
@@ -301,8 +426,10 @@ export class DiffHunksRenderer {
     codeUnified,
   }: RenderHunkProps) {
     if (hunk.hunkContent == null) return;
-    const { additions, deletions, unified, hasLongLines } =
-      this.processLines(hunk);
+    const { additions, deletions, unified, hasLongLines } = this.processLines(
+      hunk,
+      hunkIndex
+    );
 
     if (unified.content.length > 0) {
       // Remove trailing blank line
@@ -358,7 +485,7 @@ export class DiffHunksRenderer {
     }
   }
 
-  private processLines(hunk: Hunk) {
+  private processLines(hunk: Hunk, hunkIndex: number) {
     const { maxLineLengthForHighlighting, diffStyle } =
       this.getOptionsWithDefaults();
     // NOTE(amadeus): We will probably need to rectify this
@@ -401,18 +528,11 @@ export class DiffHunksRenderer {
           currentChangeGroup.deletionStartIndex + unresolvedSpan.hunkIndex;
         const additionIndex =
           currentChangeGroup.additionStartIndex + unresolvedSpan.hunkIndex;
-        const rowId = makeAnnotionId({
-          deletedLineNumber:
-            currentChangeGroup.deletionStartLine + unresolvedSpan.hunkIndex,
-          additionLineNumber:
-            currentChangeGroup.additionStartLine + unresolvedSpan.hunkIndex,
-        });
-        unresolvedSpan.span.rowId = rowId;
         const resolvedSpan: AnnotationSpan = {
           type: 'annotation',
-          lineIndex: -1,
-          rowId,
-          annotations: undefined,
+          hunkIndex,
+          lineIndex: unresolvedSpan.span.lineIndex,
+          annotations: [],
         };
         if (unresolvedSpan.type === 'addition') {
           resolvedSpan.lineIndex = deletionIndex;
@@ -453,8 +573,6 @@ export class DiffHunksRenderer {
           // iterating
           deletionStartIndex: unified ? -1 : deletionContent.length,
           additionStartIndex: unified ? -1 : additionContent.length,
-          additionStartLine: additionLineNumber - 1,
-          deletionStartLine: deletionLineNumber - 1,
           deletionLines: [],
           additionLines: [],
         };
@@ -540,6 +658,8 @@ export class DiffHunksRenderer {
           const span = createAnnotationSpan(
             deletionLineNumber,
             additionLineNumber,
+            unifiedContent.length,
+            hunkIndex,
             this.deletionAnnotations,
             this.additionAnnotations,
             true
@@ -559,6 +679,8 @@ export class DiffHunksRenderer {
           const [deletionSpan, additionSpan] = createAnnotationSpan(
             deletionLineNumber,
             additionLineNumber,
+            Math.max(deletionContent.length, additionContent.length),
+            hunkIndex,
             this.deletionAnnotations,
             this.additionAnnotations,
             false
@@ -598,10 +720,15 @@ export class DiffHunksRenderer {
           }
         }
       } else if (type === 'deletion') {
-        const span = createSingleAnnotationSpan(
-          deletionLineNumber,
-          this.deletionAnnotations
-        );
+        const span = createSingleAnnotationSpan({
+          rowNumber: deletionLineNumber,
+          hunkIndex,
+          lineIndex:
+            // We add 1 here because there's a bit of an order of operations
+            // problem -- we haven't added to the content arrays yet
+            (unified ? unifiedContent.length : deletionContent.length) + 1,
+          annotationMap: this.deletionAnnotations,
+        });
         addToChangeGroup('deletion', line, span);
         if (unified) {
           unifiedContent.push(line);
@@ -621,10 +748,15 @@ export class DiffHunksRenderer {
         }
         deletionLineNumber++;
       } else if (type === 'addition') {
-        const span = createSingleAnnotationSpan(
-          additionLineNumber,
-          this.additionAnnotations
-        );
+        const span = createSingleAnnotationSpan({
+          rowNumber: additionLineNumber,
+          hunkIndex,
+          lineIndex:
+            // We add 1 here because there's a bit of an order of operations
+            // problem -- we haven't added to the content arrays yet
+            (unified ? unifiedContent.length : additionContent.length) + 1,
+          annotationMap: this.additionAnnotations,
+        });
         addToChangeGroup('addition', line, span);
         if (unified) {
           unifiedContent.push(line);
@@ -861,9 +993,8 @@ function convertLine(
     tagName: 'div',
     type: 'element',
     properties: {
-      ['data-line']:
-        lineInfo.metadataContent == null ? `${lineInfo.number}` : '',
-      ['data-line-type']: lineInfo.type,
+      'data-line': lineInfo.metadataContent == null ? `${lineInfo.number}` : '',
+      'data-line-type': lineInfo.type,
     },
     children,
   };
@@ -901,7 +1032,7 @@ function createAnnotationElement(span: AnnotationSpan): Element {
     tagName: 'div',
     type: 'element',
     properties: {
-      'data-line-annotation': span.rowId ?? '',
+      'data-line-annotation': `${span.hunkIndex},${span.lineIndex}`,
     },
     children: [
       {
@@ -980,19 +1111,26 @@ function createTransformerWithState(disableLineNumbers: boolean): {
   };
 }
 
-function createSingleAnnotationSpan(
-  lineIndex: number,
-  annotationMap: AnnotationLineMap,
-  span?: AnnotationSpan
-): AnnotationSpan | undefined {
-  span = span ?? {
+interface CreateSingleAnnotationProps {
+  lineIndex: number;
+  hunkIndex: number;
+  rowNumber: number;
+  annotationMap: AnnotationLineMap;
+}
+
+function createSingleAnnotationSpan({
+  rowNumber,
+  hunkIndex,
+  lineIndex,
+  annotationMap,
+}: CreateSingleAnnotationProps): AnnotationSpan | undefined {
+  const span: AnnotationSpan = {
     type: 'annotation',
+    hunkIndex,
     lineIndex,
-    rowId: undefined,
     annotations: [],
   };
-  span.annotations = span.annotations ?? [];
-  for (const anno of annotationMap[lineIndex] ?? []) {
+  for (const anno of annotationMap[rowNumber] ?? []) {
     span.annotations.push(`${anno.side}-${anno.lineNumber}`);
   }
   return span.annotations.length > 0 ? span : undefined;
@@ -1003,6 +1141,8 @@ function createSingleAnnotationSpan(
 function createAnnotationSpan(
   dLineNumber: number,
   aLineNumber: number,
+  lineIndex: number,
+  hunkIndex: number,
   dMap: AnnotationLineMap,
   aMap: AnnotationLineMap,
   unified: true
@@ -1010,6 +1150,8 @@ function createAnnotationSpan(
 function createAnnotationSpan(
   dLineNumber: number,
   aLineNumber: number,
+  lineIndex: number,
+  hunkIndex: number,
   dMap: AnnotationLineMap,
   aMap: AnnotationLineMap,
   unified: false
@@ -1017,6 +1159,8 @@ function createAnnotationSpan(
 function createAnnotationSpan(
   dLineNumber: number,
   aLineNumber: number,
+  lineIndex: number,
+  hunkIndex: number,
   dMap: AnnotationLineMap,
   aMap: AnnotationLineMap,
   unified: boolean
@@ -1044,28 +1188,24 @@ function createAnnotationSpan(
   if (unified) {
     return {
       type: 'annotation',
-      lineIndex: aLineNumber,
+      hunkIndex,
+      lineIndex,
       // `rowId` is not needed on unified diffs as there is no row sizes to
       // track together
-      rowId: undefined,
       annotations: dAnnotations,
     };
   }
-  const rowId = makeAnnotionId({
-    deletedLineNumber: dLineNumber,
-    additionLineNumber: aLineNumber,
-  });
   return [
     {
       type: 'annotation',
-      lineIndex: dLineNumber,
-      rowId,
+      hunkIndex,
+      lineIndex,
       annotations: dAnnotations,
     },
     {
       type: 'annotation',
-      lineIndex: aLineNumber,
-      rowId,
+      hunkIndex,
+      lineIndex,
       annotations: aAnnotations,
     },
   ];
@@ -1088,15 +1228,23 @@ function pushOrMergeSpan(
   else {
     let gapSize = span.type === 'gap' ? span.rows : 0;
     const annotations: AnnotationSpan[] = [];
-    if (span.type === 'annotation') {
-      annotations.push(span);
-    }
+    let merged = false;
     for (const item of spans) {
       if (item.type === 'annotation') {
+        if (span.type === 'annotation' && span.lineIndex === item.lineIndex) {
+          merged = true;
+          item.annotations = mergeAnnotations(
+            item.annotations,
+            span.annotations
+          );
+        }
         annotations.push(item);
       } else {
         gapSize += item.rows;
       }
+    }
+    if (span.type === 'annotation' && !merged) {
+      annotations.push(span);
     }
     const spanMarkers: (AnnotationSpan | 0)[] = new Array(gapSize).fill(0);
     for (const annotation of annotations) {
@@ -1107,11 +1255,9 @@ function pushOrMergeSpan(
       } else {
         // NOTE(amadeus): Hopefully we never get in here, but theoretically
         // it's possible... so we'll merge the annotations together
-        currentItem.annotations = Array.from(
-          new Set([
-            ...(currentItem.annotations ?? []),
-            ...(annotation.annotations ?? []),
-          ])
+        currentItem.annotations = mergeAnnotations(
+          currentItem.annotations,
+          annotation.annotations
         );
       }
     }
@@ -1133,6 +1279,17 @@ function pushOrMergeSpan(
     }
     spanMap[index] = newSpans;
   }
+}
+
+function mergeAnnotations(base: string[], newAnnotations: string[]): string[] {
+  if (newAnnotations.length === 0) {
+    return base;
+  }
+  const baseSet = new Set(base);
+  for (const item of newAnnotations) {
+    baseSet.add(item);
+  }
+  return Array.from(baseSet);
 }
 
 interface PushOrJoinSpanProps {
@@ -1169,23 +1326,4 @@ function pushOrJoinSpan({
     return;
   }
   arr.push([isNeutral ? 0 : 1, item.value]);
-}
-
-interface MakeAnnotionIdProps {
-  deletedLineNumber?: number;
-  additionLineNumber?: number;
-}
-
-function makeAnnotionId({
-  deletedLineNumber,
-  additionLineNumber,
-}: MakeAnnotionIdProps): string {
-  const values: number[] = [];
-  if (deletedLineNumber != null) {
-    values.push(deletedLineNumber);
-  }
-  if (additionLineNumber != null) {
-    values.push(additionLineNumber);
-  }
-  return values.join(',');
 }
