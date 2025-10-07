@@ -24,8 +24,14 @@ export type ComboBoxProps = {
     value: string;
     label: string;
   }[];
+  className?: string;
   placeholder?: string;
   initialValue?: string;
+  /**
+   * @default 'fit'
+   * @description Whether to combobox expands to its container, or fits to the width of the content
+   */
+  width?: 'fit' | 'full';
   /**
    * @deprecated Internal use only, not guaranteed to be supported in the future
    * @description The container to render the popover portal in, only used for docs. This requires
@@ -39,6 +45,8 @@ export type ComboBoxProps = {
 export function ComboBox({
   options,
   placeholder,
+  className,
+  width = 'fit',
   __container,
   initialValue,
   ...props
@@ -56,7 +64,12 @@ export function ComboBox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[200px] justify-between"
+          className={cn(
+            'justify-between',
+            width === 'fit' && '[&[role=combobox]]:w-fit',
+            width === 'full' && '[&[role=combobox]]:w-full',
+            className
+          )}
         >
           {value
             ? options.find((option) => {

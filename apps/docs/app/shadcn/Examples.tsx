@@ -21,18 +21,18 @@ const ExampleContainer = ({
       <h4 className="text-lg font-bold tracking-tight mb-2">{title}</h4>
       <div
         className={cn(
-          'flex flex-col md:flex-row justify-evenly border rounded-lg relative min-h-[180px] bg-background overflow-hidden',
+          'flex flex-col sm:flex-row justify-evenly border rounded-lg relative min-h-[180px] bg-background overflow-hidden',
           className
         )}
         {...props}
       >
-        <div className="w-full md:w-1/2 light">
-          <div className="bg-background flex justify-center items-center p-4 h-full">
+        <div className="w-full sm:w-1/2 light">
+          <div className="bg-background flex justify-center items-center p-4 h-full min-h-[120px]">
             {lightExample}
           </div>
         </div>
-        <div className="w-full md:w-1/2 dark">
-          <div className="bg-background flex justify-center items-center p-4 h-full">
+        <div className="w-full sm:w-1/2 dark">
+          <div className="bg-background flex justify-center items-center p-4 h-full min-h-[120px]">
             {darkExample}
           </div>
         </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Field, FieldLabel } from '@/components/ui/field';
 import {
   Popover,
   PopoverContent,
@@ -257,15 +258,36 @@ function StepSync({
           </p>
         </div>
         <div className="flex flex-col gap-3">
-          <ComboBox
-            {...containerProp}
-            initialValue={'slexaxton'}
-            options={[
-              { value: 'slexaxton', label: 'SlexAxton' },
-              { value: 'pierredotco', label: 'pierredotco' },
-              { value: 'jquery', label: 'jQuery' },
-            ]}
-          />
+          <div className="flex flex-row gap-1">
+            <Field className="w-fit flex-shrink-0">
+              <FieldLabel htmlFor="github-owner">Owner</FieldLabel>
+              <ComboBox
+                id="github-owner"
+                {...containerProp}
+                initialValue={'pierredotco'}
+                options={[
+                  { value: 'slexaxton', label: 'SlexAxton' },
+                  { value: 'pierredotco', label: 'pierredotco' },
+                  { value: 'jquery', label: 'jQuery' },
+                ]}
+              />
+            </Field>
+            <Field className="flex-1">
+              <FieldLabel htmlFor="github-repo">Repository</FieldLabel>
+              <ComboBox
+                id="github-repo"
+                width="full"
+                {...containerProp}
+                initialValue={'gh-monorepo'}
+                options={[
+                  { value: 'yepnope', label: 'SlexAxton' },
+                  { value: 'jquery', label: 'jQuery' },
+                  { value: 'modernizr', label: 'modernizr' },
+                  { value: 'gh-monorepo', label: 'monorepo' },
+                ]}
+              />
+            </Field>
+          </div>
         </div>
       </div>
     </>
