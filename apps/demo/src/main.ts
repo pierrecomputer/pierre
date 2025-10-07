@@ -69,7 +69,8 @@ async function handlePreloadDiff() {
 const fakeLineAnnotations: LineAnnotation<unknown>[][][] = [
   [
     [
-      { lineNumber: 5, side: 'additions' },
+      { lineNumber: 3, side: 'additions' },
+      { lineNumber: 6, side: 'additions' },
       { lineNumber: 5, side: 'deletions' },
       { lineNumber: 4, side: 'additions' },
       { lineNumber: 9, side: 'additions' },

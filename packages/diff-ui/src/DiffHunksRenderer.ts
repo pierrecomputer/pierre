@@ -53,6 +53,7 @@ interface LineInfo {
   type: 'change-deletion' | 'change-addition' | 'context';
   number: number;
   metadataContent?: string;
+  spans?: Span[];
 }
 
 interface UnresolvedSpan {
@@ -87,7 +88,6 @@ interface ObservedNodes {
 
 interface SharedRenderState {
   lineInfo: Record<number, LineInfo | undefined>;
-  spans: Record<number, Span[] | undefined>;
   decorations: DecorationItem[];
   disableLineNumbers: boolean;
 }
@@ -434,7 +434,6 @@ export class DiffHunksRenderer {
     if (unified.content.length > 0) {
       // Remove trailing blank line
       const content = unified.content.join('').replace(/\n$/, '');
-      state.spans = unified.spans;
       state.lineInfo = unified.lineInfo;
       const nodes = highlighter.codeToHast(
         content,
@@ -449,7 +448,6 @@ export class DiffHunksRenderer {
     if (deletions.content.length > 0) {
       // Remove trailing blank line
       const content = deletions.content.join('').replace(/\n$/, '');
-      state.spans = deletions.spans;
       state.lineInfo = deletions.lineInfo;
       const nodes = highlighter.codeToHast(
         content,
@@ -468,7 +466,6 @@ export class DiffHunksRenderer {
     if (additions.content.length > 0) {
       // Remove trailing blank line
       const content = additions.content.join('').replace(/\n$/, '');
-      state.spans = additions.spans;
       state.lineInfo = additions.lineInfo;
       const nodes = highlighter.codeToHast(
         content,
@@ -495,19 +492,16 @@ export class DiffHunksRenderer {
 
     const additionContent: string[] = [];
     const additionLineInfo: Record<number, LineInfo | undefined> = {};
-    const additionSpans: Record<number, Span[] | undefined> = {};
     let additionLineNumber = hunk.additionStart;
     let additionGroupSize = 0;
 
     const deletionContent: string[] = [];
     const deletionLineInfo: Record<number, LineInfo | undefined> = {};
-    const deletionSpans: Record<number, Span[] | undefined> = {};
     let deletionLineNumber = hunk.deletedStart;
     let deletionGroupSize = 0;
 
     const unifiedContent: string[] = [];
-    const unifiedSpans: Record<number, Span[] | undefined> = {};
-    const unifiedInfo: Record<number, LineInfo | undefined> = {};
+    const unifiedLineInfo: Record<number, LineInfo | undefined> = {};
 
     const diffGroups: ChangeHunk[] = [];
     const unresolvedSpans: UnresolvedSpan[] = [];
@@ -543,7 +537,7 @@ export class DiffHunksRenderer {
               currentChangeGroup.deletionStartIndex +
                 currentChangeGroup.deletionLines.length
             ),
-            deletionSpans
+            deletionLineInfo
           );
         } else {
           resolvedSpan.lineIndex = additionIndex;
@@ -554,7 +548,7 @@ export class DiffHunksRenderer {
               currentChangeGroup.additionStartIndex +
                 currentChangeGroup.additionLines.length
             ),
-            additionSpans
+            additionLineInfo
           );
         }
       }
@@ -622,13 +616,13 @@ export class DiffHunksRenderer {
           pushOrMergeSpan(
             { type: 'gap', rows: additionGroupSize - deletionGroupSize },
             deletionContent.length,
-            deletionSpans
+            deletionLineInfo
           );
         } else if (deletionGroupSize > additionGroupSize) {
           pushOrMergeSpan(
             { type: 'gap', rows: deletionGroupSize - additionGroupSize },
             additionContent.length,
-            additionSpans
+            additionLineInfo
           );
         }
       }
@@ -651,7 +645,7 @@ export class DiffHunksRenderer {
         deletionGroupSize = 0;
         if (unified) {
           unifiedContent.push(line);
-          unifiedInfo[unifiedContent.length] = {
+          unifiedLineInfo[unifiedContent.length] = {
             type: 'context',
             number: additionLineNumber,
           };
@@ -664,7 +658,7 @@ export class DiffHunksRenderer {
             this.additionAnnotations,
             true
           );
-          pushOrMergeSpan(span, unifiedContent.length, unifiedSpans);
+          pushOrMergeSpan(span, unifiedContent.length, unifiedLineInfo);
         } else {
           deletionContent.push(line);
           deletionLineInfo[deletionContent.length] = {
@@ -685,8 +679,16 @@ export class DiffHunksRenderer {
             this.additionAnnotations,
             false
           );
-          pushOrMergeSpan(deletionSpan, deletionContent.length, deletionSpans);
-          pushOrMergeSpan(additionSpan, additionContent.length, additionSpans);
+          pushOrMergeSpan(
+            deletionSpan,
+            deletionContent.length,
+            deletionLineInfo
+          );
+          pushOrMergeSpan(
+            additionSpan,
+            additionContent.length,
+            additionLineInfo
+          );
         }
 
         additionLineNumber++;
@@ -706,7 +708,7 @@ export class DiffHunksRenderer {
         };
         if (unified) {
           unifiedContent.push('\n');
-          unifiedInfo[unifiedContent.length] = lineInfo;
+          unifiedLineInfo[unifiedContent.length] = lineInfo;
         } else {
           if (lastType === 'context' || lastType === 'deletion') {
             deletionContent.push('\n');
@@ -732,18 +734,18 @@ export class DiffHunksRenderer {
         addToChangeGroup('deletion', line, span);
         if (unified) {
           unifiedContent.push(line);
-          unifiedInfo[unifiedContent.length] = {
+          unifiedLineInfo[unifiedContent.length] = {
             type: 'change-deletion',
             number: deletionLineNumber,
           };
-          pushOrMergeSpan(span, unifiedContent.length, unifiedSpans);
+          pushOrMergeSpan(span, unifiedContent.length, unifiedLineInfo);
         } else {
           deletionContent.push(line);
           deletionLineInfo[deletionContent.length] = {
             type: 'change-deletion',
             number: deletionLineNumber,
           };
-          pushOrMergeSpan(span, deletionContent.length, deletionSpans);
+          pushOrMergeSpan(span, deletionContent.length, deletionLineInfo);
           deletionGroupSize++;
         }
         deletionLineNumber++;
@@ -760,18 +762,18 @@ export class DiffHunksRenderer {
         addToChangeGroup('addition', line, span);
         if (unified) {
           unifiedContent.push(line);
-          unifiedInfo[unifiedContent.length] = {
+          unifiedLineInfo[unifiedContent.length] = {
             type: 'change-addition',
             number: additionLineNumber,
           };
-          pushOrMergeSpan(span, unifiedContent.length, unifiedSpans);
+          pushOrMergeSpan(span, unifiedContent.length, unifiedLineInfo);
         } else {
           additionContent.push(line);
           additionLineInfo[additionContent.length] = {
             type: 'change-addition',
             number: additionLineNumber,
           };
-          pushOrMergeSpan(span, additionContent.length, additionSpans);
+          pushOrMergeSpan(span, additionContent.length, additionLineInfo);
           additionGroupSize++;
         }
         additionLineNumber++;
@@ -787,19 +789,16 @@ export class DiffHunksRenderer {
       additions: {
         content: additionContent,
         lineInfo: additionLineInfo,
-        spans: additionSpans,
         decorations: additionDecorations,
       },
       deletions: {
         content: deletionContent,
         lineInfo: deletionLineInfo,
-        spans: deletionSpans,
         decorations: deletionDecorations,
       },
       unified: {
         content: unifiedContent,
-        lineInfo: unifiedInfo,
-        spans: unifiedSpans,
+        lineInfo: unifiedLineInfo,
         decorations: unifiedDecorations,
       },
     };
@@ -1056,7 +1055,6 @@ function createTransformerWithState(disableLineNumbers: boolean): {
   transformer: ShikiTransformer;
 } {
   const state: SharedRenderState = {
-    spans: {},
     lineInfo: {},
     decorations: [],
     disableLineNumbers,
@@ -1081,8 +1079,8 @@ function createTransformerWithState(disableLineNumbers: boolean): {
               continue;
             }
             // Do we need to inject an empty span above the first line line?
-            if (index === 1 && state.spans[0] != null) {
-              for (const span of state.spans[0]) {
+            if (index === 1 && state.lineInfo[0]?.spans != null) {
+              for (const span of state.lineInfo[0]?.spans ?? []) {
                 if (span.type === 'gap') {
                   children.push(createEmptyRowBuffer(span.rows));
                 } else {
@@ -1091,7 +1089,7 @@ function createTransformerWithState(disableLineNumbers: boolean): {
               }
             }
             children.push(convertLine(node, index, state));
-            const spans = state.spans[index];
+            const spans = state.lineInfo[index]?.spans;
             if (spans != null) {
               for (const span of spans) {
                 if (span.type === 'gap') {
@@ -1214,15 +1212,33 @@ function createAnnotationSpan(
 function pushOrMergeSpan(
   span: Span | undefined,
   index: number,
-  spanMap: Record<number, Span[] | undefined>
+  spanMap: Record<number, LineInfo | undefined>
 ) {
   if (span == null) {
     return;
   }
-  const spans = spanMap[index] ?? [];
+  let lineInfo = spanMap[index];
+  // If we need to inject a gap at the top of a column, then we'll make a
+  // `fake` lineInfo for it.
+  if (lineInfo == null && index === 0 && span.type === 'gap') {
+    lineInfo = {
+      type: 'context',
+      number: -1,
+      spans: [],
+    };
+    spanMap[0] = lineInfo;
+  } else if (lineInfo == null) {
+    console.error('pushOrMergeSpan: Attempting to apply an invalid span', {
+      span,
+      index,
+      spanMap,
+    });
+    return;
+  }
+  const spans = lineInfo.spans ?? [];
+  lineInfo.spans = spans;
   if (spans.length === 0) {
     spans.push(span);
-    spanMap[index] = spans;
   }
   // If we get in here, we may need to split up some gaps to split up some gaps
   else {
@@ -1277,7 +1293,7 @@ function pushOrMergeSpan(
     if (spanSize > 0) {
       newSpans.push({ type: 'gap', rows: spanSize });
     }
-    spanMap[index] = newSpans;
+    lineInfo.spans = newSpans;
   }
 }
 
