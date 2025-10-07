@@ -3,66 +3,95 @@
 import { cn } from '@/lib/utils';
 import { GitPlatformSync } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
-import { useEffect, useRef, useState } from 'react';
 
-const ExampleContainer = ({
+let cachedPortalContainers: { light: HTMLElement; dark: HTMLElement } | null =
+  null;
+function getPortalContainers() {
+  if (typeof document === 'undefined' || cachedPortalContainers) {
+    return cachedPortalContainers;
+  }
+  const lightContainer = document.getElementById('light-mode-portal-container');
+  const darkContainer = document.getElementById('dark-mode-portal-container');
+  if (!lightContainer || !darkContainer) {
+    throw new Error('Light and dark mode portal containers not found');
+  }
+  cachedPortalContainers = { light: lightContainer, dark: darkContainer };
+  return cachedPortalContainers;
+}
+
+const Example = ({
   className,
   title,
   id,
-  lightExample,
-  darkExample,
+  exampleProps,
+  code,
   ...props
 }: Omit<React.ComponentProps<'div'>, 'children'> & {
-  lightExample: React.ReactNode;
-  darkExample: React.ReactNode;
+  exampleProps: React.ComponentProps<typeof GitPlatformSync>;
+  code?: string;
 }) => {
+  const containers = getPortalContainers();
+
   return (
     <div id={id}>
       <h4 className="text-lg font-bold tracking-tight mb-2">{title}</h4>
       <div
         className={cn(
-          'flex flex-col sm:flex-row justify-evenly border rounded-lg relative min-h-[180px] bg-background overflow-hidden',
+          'flex flex-col sm:flex-row justify-evenly border rounded-t-lg relative min-h-[180px] bg-background overflow-hidden',
           className
         )}
         {...props}
       >
         <div className="w-full sm:w-1/2 light">
           <div className="bg-background flex justify-center items-center p-4 h-full min-h-[120px]">
-            {lightExample}
+            <GitPlatformSync
+              {...exampleProps}
+              __container={containers?.light}
+            />
           </div>
         </div>
         <div className="w-full sm:w-1/2 dark">
           <div className="bg-background flex justify-center items-center p-4 h-full min-h-[120px]">
-            {darkExample}
+            <GitPlatformSync {...exampleProps} __container={containers?.dark} />
           </div>
         </div>
       </div>
+      {code ? (
+        <CodeExampleContainer>
+          <DynamicCodeBlock
+            lang="tsx"
+            code={code}
+            codeblock={{
+              style: {
+                borderTopLeftRadius: '0 !important',
+                borderTopRightRadius: '0 !important',
+                borderTopWidth: '0 !important',
+                paddingTop: '18px !important',
+              },
+            }}
+          />
+        </CodeExampleContainer>
+      ) : null}
     </div>
   );
 };
 
+function CodeExampleContainer({
+  className,
+  ...props
+}: React.ComponentProps<'div'>) {
+  return (
+    <div
+      className={cn(
+        //'flex flex-col gap-4 border rounded-lg p-4 min-h-[180px] relative bg-background',
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
 export function Examples() {
-  const lightModePortalContainerRef = useRef<HTMLElement>(null);
-  const darkModePortalContainerRef = useRef<HTMLElement>(null);
-  const [, setContainersReady] = useState(false);
-
-  // This ref stuff is stupid because Radix Popover takes an element
-  // instead of a react element ref, so refs won't cause a re-render
-  // as-per their correct behavior. There's probably a reason that radix
-  // wants an element since this is often outside of the react tree, but
-  // in our case this is just for examples so im gonna throw this here.
-  useEffect(() => {
-    lightModePortalContainerRef.current = document.getElementById(
-      'light-mode-portal-container'
-    );
-    darkModePortalContainerRef.current = document.getElementById(
-      'dark-mode-portal-container'
-    );
-
-    // Trigger re-render when containers are ready
-    setContainersReady(true);
-  }, []);
-
   return (
     <>
       <h2
@@ -81,22 +110,11 @@ export function Examples() {
         code={`npx shadcn@latest add @pierre/git-platform-sync`}
       />
 
-      <ExampleContainer
+      <Example
         title="Default usage"
         id="git-platform-sync--default-usage"
-        lightExample={
-          <GitPlatformSync __container={lightModePortalContainerRef.current} />
-        }
-        darkExample={
-          <GitPlatformSync __container={darkModePortalContainerRef.current} />
-        }
-      />
-
-      <div className="flex flex-col gap-4 border rounded-lg p-4 min-h-[300px] relative bg-background">
-        Import the component from your components alias
-        <DynamicCodeBlock
-          lang="tsx"
-          code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+        exampleProps={{}}
+        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
 
 function TopBar() {
   return (
@@ -104,63 +122,13 @@ function TopBar() {
   );
 }
 `}
-        />
-      </div>
-
-      <ExampleContainer
-        title="Icon only button"
-        id="git-platform-sync--icon-only"
-        lightExample={
-          <GitPlatformSync
-            variant="icon-only"
-            __container={lightModePortalContainerRef.current}
-          />
-        }
-        darkExample={
-          <GitPlatformSync
-            variant="icon-only"
-            __container={darkModePortalContainerRef.current}
-          />
-        }
       />
 
-      <div className="flex flex-col gap-4 border rounded-lg p-4 min-h-[300px] relative bg-background">
-        Import the component from your components alias
-        <DynamicCodeBlock
-          lang="tsx"
-          code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-
-function TopBar() {
-  return (
-    <GitPlatformSync variant="icon-only" />
-  );
-}
-`}
-        />
-      </div>
-
-      <ExampleContainer
+      <Example
         title="Icon button that grows"
         id="git-platform-sync--icon-grow"
-        lightExample={
-          <GitPlatformSync
-            variant="icon-grow"
-            __container={lightModePortalContainerRef.current}
-          />
-        }
-        darkExample={
-          <GitPlatformSync
-            variant="icon-grow"
-            __container={darkModePortalContainerRef.current}
-          />
-        }
-      />
-
-      <div className="flex flex-col gap-4 border rounded-lg p-4 min-h-[300px] relative bg-background">
-        Import the component from your components alias
-        <DynamicCodeBlock
-          lang="tsx"
-          code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+        exampleProps={{ variant: 'icon-grow' }}
+        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
 
 function TopBar() {
   return (
@@ -168,8 +136,61 @@ function TopBar() {
   );
 }
 `}
-        />
-      </div>
+      />
+
+      <Example
+        title="Full button"
+        id="git-platform-sync--full"
+        exampleProps={{ variant: 'full' }}
+        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  return (
+    <GitPlatformSync variant="full" />
+  );
+}
+`}
+      />
+
+      <Example
+        title="Override status"
+        id="git-platform-sync--full"
+        exampleProps={{ status: 'connected-syncing' }}
+        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  // By default we will use 'auto' which will show either
+  // nothing when disconnected or a green dot when connected
+  return (
+    <GitPlatformSync status="connected-syncing" />
+  );
+}
+`}
+      />
+
+      <Example
+        title="Events"
+        id="git-platform-sync--help-action"
+        exampleProps={{
+          onHelpAction: () => {
+            console.log('help needed!');
+          },
+        }}
+        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  return (
+    <GitPlatformSync
+      // Adds a 'Help me get started' button that you can
+      // handle to describe the process to your users
+      onHelpAction={() => {
+        console.log('help needed!');
+      }}
+    />
+  );
+}
+`}
+      />
     </>
   );
 }
