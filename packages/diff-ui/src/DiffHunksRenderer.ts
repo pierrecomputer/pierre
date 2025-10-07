@@ -56,6 +56,12 @@ interface LineInfo {
   metadataContent?: string;
 }
 
+interface UnresolvedSpan {
+  type: 'addition' | 'deletion';
+  hunkIndex: number;
+  span: AnnotationSpan;
+}
+
 interface GapSpan {
   type: 'gap';
   rows: number;
@@ -990,12 +996,6 @@ function createSingleAnnotationSpan(
     span.annotations.push(`${anno.side}-${anno.lineNumber}`);
   }
   return span.annotations.length > 0 ? span : undefined;
-}
-
-interface UnresolvedSpan {
-  type: 'addition' | 'deletion';
-  hunkIndex: number;
-  span: AnnotationSpan;
 }
 
 // FIXME(amadeus): Convert this into an object argument for less typing
