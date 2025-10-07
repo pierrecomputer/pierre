@@ -10,7 +10,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -150,9 +149,8 @@ export function GitPlatformSync({
   __container,
   ...props
 }: GitPlatformSyncProps) {
-  const [step, setStep] = useState<Step>('welcome');
-  const [isOpen, setIsOpen] = useState(false);
-
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { container: __container } : {};
@@ -182,44 +180,83 @@ export function GitPlatformSync({
         }
       : {};
 
+  // TODO: fix full button, and disable tooltip on open popover
   return (
     <>
       {variant === 'icon-only' ? (
-        <TooltipProvider delayDuration={150}>
-          <Popover open={isOpen} onOpenChange={setIsOpen} {...props}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    {...buttonAriaLabelProp}
-                    className="group flex justify-between items-center gap-2 text-foreground"
-                  >
-                    <GitHubIcon />
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent {...containerProp}>{labelText}</TooltipContent>
-            </Tooltip>
-            <PopoverContent className="w-96" align={align} {...containerProp}>
-              {step === 'welcome' ? (
-                <StepWelcome onInstallApp={() => setStep('sync')} />
-              ) : null}
-              {step === 'sync' ? <StepSync __container={__container} /> : null}
-            </PopoverContent>
-          </Popover>
-        </TooltipProvider>
-      ) : (
-        <Button
-          variant="outline"
-          {...buttonAriaLabelProp}
-          className="group flex justify-between items-center gap-2 text-foreground"
+        <Popover
+          open={isPopoverOpen}
+          onOpenChange={setIsPopoverOpen}
+          {...props}
         >
-          <GitHubIcon /> {labelText}
-          <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-        </Button>
+          <Tooltip
+            open={isPopoverOpen ? false : isTooltipOpen}
+            onOpenChange={setIsTooltipOpen}
+            delayDuration={400}
+          >
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <BaseSyncButton {...buttonAriaLabelProp}>
+                  <GitHubIcon />
+                </BaseSyncButton>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent {...containerProp}>{labelText}</TooltipContent>
+          </Tooltip>
+          <PopoverConductor align={align} __container={__container} />
+        </Popover>
+      ) : (
+        <Popover
+          open={isPopoverOpen}
+          onOpenChange={setIsPopoverOpen}
+          {...props}
+        >
+          <PopoverTrigger asChild>
+            <BaseSyncButton {...buttonAriaLabelProp}>
+              <GitHubIcon /> {labelText}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+            </BaseSyncButton>
+          </PopoverTrigger>
+          <PopoverConductor align={align} __container={__container} />
+        </Popover>
       )}
     </>
+  );
+}
+
+function BaseSyncButton({
+  className,
+  ...props
+}: React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      variant="outline"
+      className={cn(
+        'group flex justify-between items-center gap-2 text-foreground',
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+function PopoverConductor({
+  align,
+  __container,
+}: Pick<GitPlatformSyncProps, 'align' | '__container'>) {
+  const [step, setStep] = useState<Step>('welcome');
+
+  // We want to make sure the container internal stuff doesn't blow up anyone's types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const containerProp: any = __container ? { container: __container } : {};
+
+  return (
+    <PopoverContent className="w-96" align={align} {...containerProp}>
+      {step === 'welcome' ? (
+        <StepWelcome onInstallApp={() => setStep('sync')} />
+      ) : null}
+      {step === 'sync' ? <StepSync __container={__container} /> : null}
+    </PopoverContent>
   );
 }
 
