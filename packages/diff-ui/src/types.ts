@@ -50,6 +50,7 @@ export interface BaseRendererOptions {
   maxLineDiffLength?: number; // 1000 is default
   maxLineLengthForHighlighting?: number; // 1000 is default
   disableLineNumbers?: boolean;
+  overflow?: 'scroll' | 'wrap'; // 'scroll' is default
 
   // Shiki config options
   lang?: SupportedLanguages;
@@ -72,3 +73,9 @@ export type RenderCustomFileMetadata = (
 ) => Element | null | undefined | string | number;
 
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
+
+export interface LineAnnotation<T> {
+  side: 'deletions' | 'additions';
+  lineNumber: number;
+  metadata?: T;
+}

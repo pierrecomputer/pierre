@@ -1,7 +1,9 @@
 import { DiffHunksRenderer } from './DiffHunksRenderer';
+import './custom-components/Container';
 import type {
   BaseRendererOptions,
   FileDiffMetadata,
+  LineAnnotation,
   RenderCustomFileMetadata,
   ThemeRendererOptions,
   ThemesRendererOptions,
@@ -58,6 +60,11 @@ export class DiffFileRenderer {
     this.render({ fileDiff: this.fileDiff });
   }
 
+  private lineAnnotations: LineAnnotation<unknown>[] = [];
+  setLineAnnotations(lineAnnotations: LineAnnotation<unknown>[]) {
+    this.lineAnnotations = lineAnnotations;
+  }
+
   cleanUp() {
     this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     this.fileContainer = undefined;
@@ -66,6 +73,7 @@ export class DiffFileRenderer {
     this.fileDiff = undefined;
   }
 
+  private annotationElements: HTMLElement[] = [];
   private fileDiff: FileDiffMetadata | undefined;
   async render({
     fileDiff,
@@ -87,7 +95,23 @@ export class DiffFileRenderer {
       this.hunksRenderer.setOptions({ ...this.options, lang }, true);
     }
     this.fileDiff = fileDiff;
+    // This is kinda jank, lol
+    this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
     await this.hunksRenderer.render(this.fileDiff, pre);
+
+    for (const element of this.annotationElements) {
+      element.parentNode?.removeChild(element);
+    }
+    this.annotationElements.length = 0;
+
+    // FIXME(amadeus): Temp code
+    for (const annotation of this.lineAnnotations) {
+      const el = document.createElement('div');
+      el.slot = `${annotation.side}-${annotation.lineNumber}`;
+      el.innerHTML = `<span class="annotation-content">Annotations: ${JSON.stringify(annotation)}<span>`;
+      this.annotationElements.push(el);
+      fileContainer.appendChild(el);
+    }
   }
 
   getOrCreateFileContainer(fileContainer?: HTMLElement) {
@@ -97,8 +121,12 @@ export class DiffFileRenderer {
     ) {
       return this.fileContainer;
     }
-    this.fileContainer = fileContainer ?? document.createElement('div');
-    this.fileContainer.dataset.pjsContainer = '';
+    this.fileContainer =
+      fileContainer ?? document.createElement('pjs-container');
+    this.fileContainer.addEventListener('click', (event) => {
+      const path = event.composedPath();
+      console.log('How to parse out the tree on click...', path);
+    });
     return this.fileContainer;
   }
 
@@ -106,12 +134,12 @@ export class DiffFileRenderer {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
-      container.appendChild(this.pre);
+      container.shadowRoot?.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
     else if (this.pre.parentNode !== container) {
-      container.appendChild(this.pre);
+      container.shadowRoot?.appendChild(this.pre);
     }
     return this.pre;
   }
@@ -127,9 +155,9 @@ export class DiffFileRenderer {
     }
     const newHeader = renderFileHeader(file, renderCustomMetadata);
     if (this.header != null) {
-      container.replaceChild(newHeader, this.header);
+      container.shadowRoot?.replaceChild(newHeader, this.header);
     } else {
-      container.prepend(newHeader);
+      container.shadowRoot?.prepend(newHeader);
     }
     this.header = newHeader;
   }

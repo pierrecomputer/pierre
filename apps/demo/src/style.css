@@ -1,13 +1,18 @@
 :root {
   color-scheme: light dark;
 
-  --fg: light-dark(#213547, #ffffff);
-  --bg: light-dark(#ffffff, #213547);
-
-  font-family:
+  --pjs-font-family:
     'Berkeley Mono', 'JetBrains Mono', 'Fira Code', 'Source Code Pro',
     'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
     'Courier New', monospace;
+
+  --pjs-font-size: 14px;
+  --pjs-line-height: 20px;
+
+  --fg: light-dark(#213547, #ffffff);
+  --bg: light-dark(#ffffff, #213547);
+
+  font-family: var(--pjs-font-family);
   font-size: 14px;
   line-height: 20px;
 
@@ -157,42 +162,6 @@ code {
   padding-top: 50px;
 }
 
-[data-pjs] {
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: none;
-  overscroll-behavior-y: contain;
-}
-
-[data-file-info] {
-  padding: 10px;
-  font-weight: 700;
-  color: var(--fg);
-  background-color: color-mix(in srgb, var(--bg) 98%, var(--fg));
-  border-block: 1px solid color-mix(in srgb, var(--bg) 95%, var(--fg));
-}
-
-[data-code] {
-  tab-size: 2;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-[data-column-number] {
-  min-width: 32px;
-}
-
-[data-column-content],
-[data-column-number] {
-  padding-inline: 8px;
-}
-
-/* Fix for inline padding on content */
-[data-column-content] > span:first-of-type[data-annotation] {
-  margin-left: -8px;
-  padding-left: 8px;
-}
-
 [data-commit-metadata] {
   margin-top: 10px;
   padding: 10px;
@@ -226,11 +195,17 @@ code {
   flex-direction: row-reverse;
 }
 
-[data-pjs],
-[data-pjs-header] {
+pjs-container {
   content-visibility: auto;
 }
 
-[data-pjs-header] {
-  contain-intrinsic-size: auto 36px;
+.annotation-content {
+  display: block;
+  padding: 10px;
+  border: 2px solid var(--fg);
+  margin: 10px;
+  max-width: 100px;
+  overflow: hidden;
+  word-break: break-all;
+  white-space: normal;
 }

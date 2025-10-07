@@ -1,6 +1,7 @@
 import {
   CodeRenderer,
   DiffFileRenderer,
+  type LineAnnotation,
   type ParsedPatch,
   type SupportedLanguages,
   getFiletypeFromFileName,
@@ -65,6 +66,20 @@ async function handlePreloadDiff() {
   });
 }
 
+const fakeLineAnnotations: LineAnnotation<unknown>[][][] = [
+  [
+    [
+      { lineNumber: 5, side: 'additions' },
+      { lineNumber: 5, side: 'deletions' },
+      { lineNumber: 4, side: 'additions' },
+      { lineNumber: 9, side: 'additions' },
+      { lineNumber: 15, side: 'additions' },
+      { lineNumber: 15, side: 'additions' },
+      { lineNumber: 13, side: 'deletions' },
+    ],
+    [{ lineNumber: 5, side: 'additions' }],
+  ],
+];
 const diffInstances: DiffFileRenderer[] = [];
 function renderDiff(parsedPatches: ParsedPatch[]) {
   const wrapper = document.getElementById('wrapper');
@@ -87,19 +102,31 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
     | HTMLInputElement
     | undefined;
   const unified = checkbox?.checked ?? false;
+  const wrap =
+    wrapCheckbox instanceof HTMLInputElement ? wrapCheckbox.checked : false;
+  let patchIndex = 0;
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
       wrapper.appendChild(createFileMetadata(parsedPatch.patchMetadata));
     }
+    const patchAnnotations = fakeLineAnnotations[patchIndex] ?? [];
+    let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
+      const fileAnnotations = patchAnnotations[hunkIndex];
       const instance = new DiffFileRenderer({
         themes: { dark: 'tokyo-night', light: 'solarized-light' },
         diffStyle: unified ? 'unified' : 'split',
         detectLanguage: true,
+        overflow: wrap ? 'wrap' : 'scroll',
       });
+      if (fileAnnotations != null) {
+        instance.setLineAnnotations(fileAnnotations);
+      }
       instance.render({ fileDiff, wrapper });
       diffInstances.push(instance);
+      hunkIndex++;
     }
+    patchIndex++;
   }
 }
 
@@ -151,16 +178,11 @@ if (wrapCheckbox != null) {
       return;
     }
     const { checked } = currentTarget;
-    const elements = document.querySelectorAll('[data-overflow]');
-    for (const element of elements) {
-      if (!(element instanceof HTMLElement)) {
-        continue;
-      }
-      if (checked) {
-        element.dataset.overflow = 'wrap';
-      } else {
-        element.dataset.overflow = 'scroll';
-      }
+    for (const instance of diffInstances) {
+      instance.setOptions({
+        ...instance.options,
+        overflow: checked ? 'wrap' : 'scroll',
+      });
     }
   });
 }

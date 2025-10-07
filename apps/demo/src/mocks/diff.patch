@@ -13,7 +13,9 @@ index c52c9ca..f3b592b 100644
  import tseslint from 'typescript-eslint';
  
  export default tseslint.config(
+-  { ignores: ['wow/**'] },
 +  { ignores: ['dist/**'] },
++  { ignores2: ['dist/**'] },
    js.configs.recommended,
    ...tseslint.configs.recommended,
    {
