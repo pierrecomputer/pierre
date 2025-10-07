@@ -230,7 +230,7 @@ export function GitPlatformSync({
           <Tooltip
             open={isPopoverOpen ? false : isTooltipOpen}
             onOpenChange={setIsTooltipOpen}
-            delayDuration={500}
+            delayDuration={800}
           >
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>
@@ -305,12 +305,15 @@ function BaseSyncButton({
     <Button
       variant="outline"
       className={cn(
-        'group flex justify-between items-center gap-2 text-foreground',
+        'group flex justify-between items-center gap-2 text-foreground px-3',
         className
       )}
       {...props}
     >
-      <div className="relative" aria-hidden>
+      <div
+        className="relative flex justify-center items-center h-lh"
+        aria-hidden
+      >
         <GitHubIcon />
         <LilDotGuy status={status} />
       </div>
