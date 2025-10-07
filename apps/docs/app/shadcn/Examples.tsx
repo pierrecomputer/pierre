@@ -109,7 +109,7 @@ function TopBar() {
 
       <ExampleContainer
         title="Icon only button"
-        id="git-platform-sync--button-variants"
+        id="git-platform-sync--icon-only"
         lightExample={
           <GitPlatformSync
             variant="icon-only"
@@ -119,6 +119,38 @@ function TopBar() {
         darkExample={
           <GitPlatformSync
             variant="icon-only"
+            __container={darkModePortalContainerRef.current}
+          />
+        }
+      />
+
+      <div className="flex flex-col gap-4 border rounded-lg p-4 min-h-[300px] relative bg-background">
+        Import the component from your components alias
+        <DynamicCodeBlock
+          lang="tsx"
+          code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  return (
+    <GitPlatformSync variant="icon-only" />
+  );
+}
+`}
+        />
+      </div>
+
+      <ExampleContainer
+        title="Icon button that grows"
+        id="git-platform-sync--icon-grow"
+        lightExample={
+          <GitPlatformSync
+            variant="icon-grow"
+            __container={lightModePortalContainerRef.current}
+          />
+        }
+        darkExample={
+          <GitPlatformSync
+            variant="icon-grow"
             __container={darkModePortalContainerRef.current}
           />
         }

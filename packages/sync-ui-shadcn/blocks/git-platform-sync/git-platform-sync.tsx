@@ -192,7 +192,7 @@ export function GitPlatformSync({
           <Tooltip
             open={isPopoverOpen ? false : isTooltipOpen}
             onOpenChange={setIsTooltipOpen}
-            delayDuration={400}
+            delayDuration={300}
           >
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>
@@ -212,9 +212,19 @@ export function GitPlatformSync({
           {...props}
         >
           <PopoverTrigger asChild>
-            <BaseSyncButton {...buttonAriaLabelProp}>
-              <GitHubIcon /> {labelText}
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+            <BaseSyncButton {...buttonAriaLabelProp} className="gap-0">
+              <GitHubIcon />
+              <span
+                className={cn(
+                  'justify-between items-center gap-2 text-foreground transition-width delay-200 group-focus:delay-0 duration-150 ease-in-out overflow-hidden inline-flex select-none',
+                  variant === 'icon-grow' && !isPopoverOpen
+                    ? 'max-w-0 opacity-0 group-hover:opacity-100 group-hover:max-w-48 group-focus:opacity-100 group-focus:max-w-48 group-focus:pl-2 group-focus:-mr-1 group-hover:pl-2 group-hover:-mr-1'
+                    : 'max-w-48 pl-2 -mr-1 opacity-100'
+                )}
+              >
+                {labelText}
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+              </span>
             </BaseSyncButton>
           </PopoverTrigger>
           <PopoverConductor align={align} __container={__container} />
