@@ -164,7 +164,7 @@ function TopBar() {
 
 function TopBar() {
   return (
-    <GitPlatformSync variant="icon-only" />
+    <GitPlatformSync variant="icon-grow" />
   );
 }
 `}
