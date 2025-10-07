@@ -485,6 +485,7 @@ export class DiffHunksRenderer {
   private processLines(hunk: Hunk, hunkIndex: number) {
     const { maxLineLengthForHighlighting, diffStyle } =
       this.getOptionsWithDefaults();
+    const { deletionAnnotations, additionAnnotations } = this;
     // NOTE(amadeus): We will probably need to rectify this
     // for full additions/deletions
     const unified = diffStyle === 'unified';
@@ -649,36 +650,36 @@ export class DiffHunksRenderer {
             type: 'context',
             number: additionLineNumber,
           };
-          const span = createAnnotationSpan(
+          const span = createMirroredAnnotationSpan({
             deletionLineNumber,
             additionLineNumber,
-            unifiedContent.length,
+            lineIndex: unifiedContent.length,
             hunkIndex,
-            this.deletionAnnotations,
-            this.additionAnnotations,
-            true
-          );
+            deletionAnnotations,
+            additionAnnotations,
+            unified: true,
+          });
           pushOrMergeSpan(span, unifiedContent.length, unifiedLineInfo);
         } else {
           deletionContent.push(line);
+          additionContent.push(line);
           deletionLineInfo[deletionContent.length] = {
             type: 'context',
             number: deletionLineNumber,
           };
-          additionContent.push(line);
           additionLineInfo[additionContent.length] = {
             type: 'context',
             number: additionLineNumber,
           };
-          const [deletionSpan, additionSpan] = createAnnotationSpan(
+          const [deletionSpan, additionSpan] = createMirroredAnnotationSpan({
             deletionLineNumber,
             additionLineNumber,
-            Math.max(deletionContent.length, additionContent.length),
+            lineIndex: Math.max(deletionContent.length, additionContent.length),
             hunkIndex,
-            this.deletionAnnotations,
-            this.additionAnnotations,
-            false
-          );
+            deletionAnnotations,
+            additionAnnotations,
+            unified: false,
+          });
           pushOrMergeSpan(
             deletionSpan,
             deletionContent.length,
@@ -690,7 +691,6 @@ export class DiffHunksRenderer {
             additionLineInfo
           );
         }
-
         additionLineNumber++;
         deletionLineNumber++;
       } else if (type === 'metadata') {
@@ -701,11 +701,12 @@ export class DiffHunksRenderer {
               : lastType === 'deletion'
                 ? 'change-deletion'
                 : 'context',
-          // NOTE(amadeus): Metadata does not have line numbers associated with
-          // it
+          // NOTE(amadeus): Metadata lines do not have line numbers associated
+          // with them
           number: -1,
           metadataContent: line.trim(),
         };
+        // Push a filler blank line so we have something to render
         if (unified) {
           unifiedContent.push('\n');
           unifiedLineInfo[unifiedContent.length] = lineInfo;
@@ -1134,45 +1135,40 @@ function createSingleAnnotationSpan({
   return span.annotations.length > 0 ? span : undefined;
 }
 
-// FIXME(amadeus): Convert this into an object argument for less typing
-// verbosity and safer function usage
-function createAnnotationSpan(
-  dLineNumber: number,
-  aLineNumber: number,
-  lineIndex: number,
-  hunkIndex: number,
-  dMap: AnnotationLineMap,
-  aMap: AnnotationLineMap,
-  unified: true
+interface CreateMirroredAnnotationSpanProps {
+  deletionLineNumber: number;
+  additionLineNumber: number;
+  lineIndex: number;
+  hunkIndex: number;
+  deletionAnnotations: AnnotationLineMap;
+  additionAnnotations: AnnotationLineMap;
+}
+
+function createMirroredAnnotationSpan(
+  props: CreateMirroredAnnotationSpanProps & { unified: true }
 ): AnnotationSpan | undefined;
-function createAnnotationSpan(
-  dLineNumber: number,
-  aLineNumber: number,
-  lineIndex: number,
-  hunkIndex: number,
-  dMap: AnnotationLineMap,
-  aMap: AnnotationLineMap,
-  unified: false
+function createMirroredAnnotationSpan(
+  props: CreateMirroredAnnotationSpanProps & { unified: false }
 ): [AnnotationSpan, AnnotationSpan] | [undefined, undefined];
-function createAnnotationSpan(
-  dLineNumber: number,
-  aLineNumber: number,
-  lineIndex: number,
-  hunkIndex: number,
-  dMap: AnnotationLineMap,
-  aMap: AnnotationLineMap,
-  unified: boolean
-):
+function createMirroredAnnotationSpan({
+  deletionLineNumber,
+  additionLineNumber,
+  lineIndex,
+  hunkIndex,
+  deletionAnnotations,
+  additionAnnotations,
+  unified,
+}: CreateMirroredAnnotationSpanProps & { unified: boolean }):
   | [AnnotationSpan, AnnotationSpan]
   | [undefined, undefined]
   | AnnotationSpan
   | undefined {
   const dAnnotations: string[] = [];
-  for (const anno of dMap[dLineNumber] ?? []) {
+  for (const anno of deletionAnnotations[deletionLineNumber] ?? []) {
     dAnnotations.push(`${anno.side}-${anno.lineNumber}`);
   }
   const aAnnotations: string[] = [];
-  for (const anno of aMap[aLineNumber] ?? []) {
+  for (const anno of additionAnnotations[additionLineNumber] ?? []) {
     (unified ? dAnnotations : aAnnotations).push(
       `${anno.side}-${anno.lineNumber}`
     );
