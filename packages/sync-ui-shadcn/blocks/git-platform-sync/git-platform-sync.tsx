@@ -7,6 +7,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { ChevronDown } from 'lucide-react';
@@ -69,9 +75,11 @@ export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
   platforms?: SupportedGitPlatform[];
   /**
    * @default 'default'
-   * @description Variant display of the button that opens the sync popover
+   * @description Variant display of the button that opens the sync popover. The
+   * `icon-grow` variant will appear as the `icon` variant until hovered or focused,
+   * and then grow to appear as the `default` variant.
    */
-  variant?: 'default' | 'icon-only';
+  variant?: 'default' | 'icon-only' | 'icon-grow';
   /**
    * @default true
    * @description Whether to show the sync indicator in the button, e.g. the little colored dot
@@ -143,6 +151,7 @@ export function GitPlatformSync({
   ...props
 }: GitPlatformSyncProps) {
   const [step, setStep] = useState<Step>('welcome');
+  const [isOpen, setIsOpen] = useState(false);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,30 +171,55 @@ export function GitPlatformSync({
     return null;
   }
 
+  const labelText = `Sync to ${platformName}`;
+
+  // If we don't have any label inside the button we should set an aria-label
+  // that describes what that button does.
+  const buttonAriaLabelProp =
+    variant === 'icon-only'
+      ? {
+          'aria-label': labelText,
+        }
+      : {};
+
   return (
-    <Popover {...props}>
-      <PopoverTrigger asChild>
+    <>
+      {variant === 'icon-only' ? (
+        <TooltipProvider delayDuration={150}>
+          <Popover open={isOpen} onOpenChange={setIsOpen} {...props}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    {...buttonAriaLabelProp}
+                    className="group flex justify-between items-center gap-2 text-foreground"
+                  >
+                    <GitHubIcon />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent {...containerProp}>{labelText}</TooltipContent>
+            </Tooltip>
+            <PopoverContent className="w-96" align={align} {...containerProp}>
+              {step === 'welcome' ? (
+                <StepWelcome onInstallApp={() => setStep('sync')} />
+              ) : null}
+              {step === 'sync' ? <StepSync __container={__container} /> : null}
+            </PopoverContent>
+          </Popover>
+        </TooltipProvider>
+      ) : (
         <Button
           variant="outline"
+          {...buttonAriaLabelProp}
           className="group flex justify-between items-center gap-2 text-foreground"
         >
-          {variant === 'icon-only' ? (
-            <GitHubIcon />
-          ) : (
-            <>
-              <GitHubIcon /> Sync to {platformName}
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-            </>
-          )}
+          <GitHubIcon /> {labelText}
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-96" align={align} {...containerProp}>
-        {step === 'welcome' ? (
-          <StepWelcome onInstallApp={() => setStep('sync')} />
-        ) : null}
-        {step === 'sync' ? <StepSync __container={__container} /> : null}
-      </PopoverContent>
-    </Popover>
+      )}
+    </>
   );
 }
 
