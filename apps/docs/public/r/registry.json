@@ -14,7 +14,8 @@
         "field",
         "input",
         "popover",
-        "select"
+        "select",
+        "tooltip"
       ],
       "dependencies": ["@pierre/sync-ui-core", "@pierre/sync-ui-hooks"],
       "files": [
