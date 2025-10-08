@@ -287,8 +287,8 @@ function TopBar() {
           open: isControlledExampleOpen,
           onOpenChange: setIsControlledExampleOpen,
         }}
-        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-import { useState } from 'react';
+        code={`import { useState } from 'react';
+import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
 
 function TopBar() {
   const [isOpen, setIsOpen] = useState(false);
