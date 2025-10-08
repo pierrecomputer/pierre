@@ -204,7 +204,7 @@ pjs-container {
   padding: 10px;
   border: 2px solid var(--fg);
   margin: 10px;
-  max-width: 100px;
+  max-width: 300px;
   overflow: hidden;
   word-break: break-all;
   white-space: normal;
