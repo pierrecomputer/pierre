@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -332,7 +333,7 @@ function PopoverConductor({
   const containerProp: any = __container ? { container: __container } : {};
 
   return (
-    <PopoverContent className="w-96" align={align} {...containerProp}>
+    <PopoverContent className="w-[400px]" align={align} {...containerProp}>
       {step === 'welcome' ? (
         <StepWelcome
           onInstallApp={() => setStep('sync')}
@@ -416,32 +417,60 @@ function StepSync({
         </div>
         <div className="flex flex-col gap-3">
           <div className="flex flex-row gap-1">
-            <Field className="w-fit flex-shrink-0">
-              <FieldLabel htmlFor="github-owner">Owner</FieldLabel>
+            <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+              <FieldLabel
+                htmlFor="storage-elements-github-owner"
+                className="font-normal"
+              >
+                Owner
+              </FieldLabel>
               <ComboBox
-                id="github-owner"
+                id="storage-elements-github-owner"
                 {...containerProp}
-                initialValue={'pierredotco'}
+                className="max-w-full"
+                // initialValue={'pierredotco'}
+                onAddItem={() => {
+                  console.log('Add GitHub account!');
+                }}
+                addItemLabel="Add GitHub account…"
                 options={[
-                  { value: 'slexaxton', label: 'SlexAxton' },
-                  { value: 'pierredotco', label: 'pierredotco' },
-                  { value: 'jquery', label: 'jQuery' },
+                  {
+                    value: 'slexaxton',
+                    label: 'SlexAxton',
+                    image:
+                      'https://avatars.githubusercontent.com/u/96554?v=4&size=64',
+                  },
+                  {
+                    value: 'pierredotco',
+                    label: 'pierredotco',
+                    image:
+                      'https://avatars.githubusercontent.com/u/154267919?s=48&v=4',
+                  },
+                  {
+                    value: 'jquery',
+                    label: 'jQuery with a really long label',
+                    image:
+                      'https://avatars.githubusercontent.com/u/70142?s=48&v=4',
+                  },
                 ]}
               />
             </Field>
-            <Field className="flex-1">
-              <FieldLabel htmlFor="github-repo">Repository</FieldLabel>
-              <ComboBox
-                id="github-repo"
-                width="full"
-                {...containerProp}
-                initialValue={'gh-monorepo'}
-                options={[
-                  { value: 'yepnope', label: 'SlexAxton' },
-                  { value: 'jquery', label: 'jQuery' },
-                  { value: 'modernizr', label: 'modernizr' },
-                  { value: 'gh-monorepo', label: 'monorepo' },
-                ]}
+            <div
+              aria-hidden
+              className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+            >
+              /
+            </div>
+            <Field className="flex-1 gap-1">
+              <FieldLabel
+                htmlFor="storage-elements-github-repo"
+                className="font-normal"
+              >
+                Repository
+              </FieldLabel>
+              <Input
+                id="storage-elements-github-repo"
+                defaultValue={'gh-monorepo'}
               />
             </Field>
           </div>
