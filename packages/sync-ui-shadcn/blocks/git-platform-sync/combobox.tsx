@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from 'lucide-react';
 import * as React from 'react';
+import { useState } from 'react';
 
 export type ComboBoxProps = {
   options: {
@@ -61,15 +62,14 @@ export function ComboBox({
   initialValue,
   onAddItem,
   addItemLabel,
+  onValueChange,
   ...props
 }: ComboBoxProps) {
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { container: __container } : {};
-  const [open, setOpen] = React.useState(false);
-  const [value, setValue] = React.useState(
-    initialValue ?? options[0]?.value ?? null
-  );
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(initialValue ?? options[0]?.value ?? null);
 
   const selectedOption = value
     ? options.find((option) => {
@@ -123,8 +123,11 @@ export function ComboBox({
                 <CommandItem
                   key={option.value}
                   value={option.value}
-                  onSelect={(currentValue) => {
-                    setValue(currentValue);
+                  onSelect={(nextValue) => {
+                    if (nextValue !== value) {
+                      onValueChange?.(nextValue);
+                    }
+                    setValue(nextValue);
                     setOpen(false);
                   }}
                 >

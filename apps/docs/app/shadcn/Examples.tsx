@@ -165,9 +165,207 @@ function CodeExampleContainer({
   );
 }
 
-export function Examples() {
+function ExampleDefaultUsage() {
+  return (
+    <Example
+      title="Default usage"
+      id="git-platform-sync--default-usage"
+      exampleProps={{}}
+      code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  return (
+    <GitPlatformSync />
+  );
+}
+`}
+    />
+  );
+}
+
+function ExampleButtonVariants() {
+  return (
+    <Example
+      title="Button variants"
+      id="git-platform-sync--button-variants"
+      exampleProps={[{}, { variant: 'icon-grow' }, { variant: 'full' }]}
+      code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  return (
+    <>
+      <GitPlatformSync />
+      <GitPlatformSync variant="icon-grow" />
+      <GitPlatformSync variant="full" />
+    </>
+  );
+}
+`}
+    />
+  );
+}
+
+function ExampleOverrideStatus() {
+  return (
+    <Example
+      title="Override status"
+      id="git-platform-sync--status"
+      exampleProps={[
+        { status: 'disconnected' },
+        { status: 'connected' },
+        { status: 'connected-syncing' },
+        { status: 'connected-warning' },
+      ]}
+      code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  // By default we will use 'auto' which will show either
+  // nothing when disconnected or a green dot when connected
+  return (
+    <>
+      <GitPlatformSync status="disconnected" />
+      <GitPlatformSync status="connected" />
+      <GitPlatformSync status="connected-syncing" />
+      <GitPlatformSync status="connected-warning" />
+    </>
+  );
+}
+`}
+    />
+  );
+}
+
+function ExampleEvents() {
+  return (
+    <Example
+      title="Events"
+      id="git-platform-sync--events"
+      exampleProps={{
+        onRepoCreated: (repoData) => {
+          console.log('repo created:', repoData);
+        },
+        onHelpAction: () => {
+          console.log('help needed!');
+        },
+        onOpenChange: (isOpen) => {
+          console.log('isOpen?', isOpen);
+        },
+        onRepoNameChange: (repoName) => {
+          console.log('repo name changed:', repoName);
+        },
+        onOwnerChange: (owner) => {
+          console.log('owner changed:', owner);
+        },
+      }}
+      code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  return (
+    <GitPlatformSync
+      onRepoCreated={(repoData) => {
+        console.log('repo created:', repoData);
+      }}
+      // Adds a 'Help me get started' button that you can
+      // handle to describe the process to your users
+      onHelpAction={() => {
+        console.log('help needed!');
+      }}
+      onOpenChange={() => {
+        console.log('isOpen?', isOpen);
+      }}
+      onRepoNameChange={(repoName) => {
+        console.log('repo name changed:', repoName);
+      }}
+      onOwnerChange={(owner) => {
+        console.log('owner changed:', owner);
+      }}
+    />
+  );
+}
+`}
+    />
+  );
+}
+
+function ExampleControlledOpenState() {
   const [isControlledExampleOpen, setIsControlledExampleOpen] = useState(false);
 
+  return (
+    <Example
+      title="Controlled open state"
+      id="git-platform-sync--controlled-open-state"
+      exampleProps={{
+        open: isControlledExampleOpen,
+        onOpenChange: setIsControlledExampleOpen,
+      }}
+      code={`import { useState } from 'react';
+import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <GitPlatformSync
+      open={isOpen}
+      onOpenChange={setIsOpen}
+    />
+  );
+}
+`}
+    />
+  );
+}
+
+function ExampleRepositoryOptions() {
+  const [controlledRepoName, setControlledRepoName] = useState(
+    'controlled-repo-name'
+  );
+
+  console.log('controlledRepoName', controlledRepoName);
+
+  return (
+    <Example
+      title="Repository options"
+      id="git-platform-sync--repository-options"
+      exampleProps={[
+        {
+          repoNamePlaceholder: 'new-repo-placeholder…',
+        },
+        {
+          repoDefaultName: 'uncontrolled-repo-name',
+        },
+        {
+          repoName: controlledRepoName,
+          onRepoNameChange: setControlledRepoName,
+        },
+      ]}
+      code={`import { useState } from 'react';
+import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  const [controlledRepoName, setControlledRepoName] = useState('controlled-repo-name');
+
+  // Log to show the state value in the console
+  console.log('controlledRepoName', controlledRepoName);
+
+  return (
+    <>
+      <GitPlatformSync repoNamePlaceholder="new-repo-placeholder…" />
+      <GitPlatformSync repoDefaultName="uncontrolled-repo-name" />
+      <GitPlatformSync
+        // Use these two together to make repo name
+        // a controlled input
+        repoName={controlledRepoName}
+        onRepoNameChange={setControlledRepoName}
+      />
+    </>
+  );
+}
+`}
+    />
+  );
+}
+
+export function Examples() {
   return (
     <>
       <h2
@@ -186,121 +384,12 @@ export function Examples() {
         code={`npx shadcn@latest add @pierre/git-platform-sync`}
       />
 
-      <Example
-        title="Default usage"
-        id="git-platform-sync--default-usage"
-        exampleProps={{}}
-        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-
-function TopBar() {
-  return (
-    <GitPlatformSync />
-  );
-}
-`}
-      />
-
-      <Example
-        title="Button variants"
-        id="git-platform-sync--button-variants"
-        exampleProps={[{}, { variant: 'icon-grow' }, { variant: 'full' }]}
-        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-
-function TopBar() {
-  return (
-    <>
-      <GitPlatformSync />
-      <GitPlatformSync variant="icon-grow" />
-      <GitPlatformSync variant="full" />
-    </>
-  );
-}
-`}
-      />
-
-      <Example
-        title="Override status"
-        id="git-platform-sync--status"
-        exampleProps={[
-          { status: 'disconnected' },
-          { status: 'connected' },
-          { status: 'connected-syncing' },
-          { status: 'connected-warning' },
-        ]}
-        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-
-function TopBar() {
-  // By default we will use 'auto' which will show either
-  // nothing when disconnected or a green dot when connected
-  return (
-    <>
-      <GitPlatformSync status="disconnected" />
-      <GitPlatformSync status="connected" />
-      <GitPlatformSync status="connected-syncing" />
-      <GitPlatformSync status="connected-warning" />
-    </>
-  );
-}
-`}
-      />
-
-      <Example
-        title="Events"
-        id="git-platform-sync--events"
-        exampleProps={{
-          onRepoCreated: (repoData) => {
-            console.log('repo created:', repoData);
-          },
-          onHelpAction: () => {
-            console.log('help needed!');
-          },
-          onOpenChange: (isOpen) => {
-            console.log('isOpen?', isOpen);
-          },
-        }}
-        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-
-function TopBar() {
-  return (
-    <GitPlatformSync
-      onRepoCreated={(repoData) => {
-        console.log('repo created:', repoData);
-      }}
-      // Adds a 'Help me get started' button that you can
-      // handle to describe the process to your users
-      onHelpAction={() => {
-        console.log('help needed!');
-      }}
-      onOpenChange={() => {
-        console.log('isOpen?', isOpen);
-      }}
-    />
-  );
-}
-`}
-      />
-
-      <Example
-        title="Controlled usage"
-        id="git-platform-sync--controlled-usage"
-        exampleProps={{
-          open: isControlledExampleOpen,
-          onOpenChange: setIsControlledExampleOpen,
-        }}
-        code={`import { useState } from 'react';
-import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-
-function TopBar() {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <GitPlatformSync
-      open={isOpen}
-      onOpenChange={setIsOpen}
-    />
-  );
-}
-`}
-      />
+      <ExampleDefaultUsage />
+      <ExampleButtonVariants />
+      <ExampleOverrideStatus />
+      <ExampleEvents />
+      <ExampleControlledOpenState />
+      <ExampleRepositoryOptions />
     </>
   );
 }

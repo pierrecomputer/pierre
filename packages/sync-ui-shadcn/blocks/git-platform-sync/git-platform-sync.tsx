@@ -106,30 +106,46 @@ export type GitPlatformSyncProps = {
   open?: boolean;
 
   /**
-   * @description Options for what features to offer the user in the resository selection
+   * @default undefined
+   * @description This directly sets the name of the repository that will be created. Setting this
+   * will take precedence over the `defaultName` option. Users will not be able to change from this
+   * name.
    */
-  repositoryOptions?: {
-    /**
-     * @default undefined
-     * @description This directly sets the name of the repository that will be created. Setting this
-     * will take precedence over the `initialName` option. Users will not be able to change from this
-     * name.
-     */
-    name?: string;
-    /**
-     * @default undefined
-     * @description If you'd like to suggest a name for the repository, but allow the user to customize it,
-     * this is the initial value of the repository name field. This will be ignored if the `name` option is
-     * set.
-     */
-    initialName?: string;
-    /**
-     * @default 'main'
-     * @description The branch that will be used to sync within the repository. `main` is used if this is not
-     * provided.
-     */
-    defaultBranch?: string;
-  };
+  repoName?: string;
+
+  /**
+   * @default undefined
+   * @description If you'd like to suggest a name for the repository, but allow the user to customize it,
+   * this is the initial value of the repository name field. This will be ignored if the `name` option is
+   * set.
+   */
+  repoDefaultName?: string;
+
+  /**
+   * @default 'unique-repo-name…'
+   * @description The placeholder text for the repository name field. This will be invisible if the `name`
+   * or `defaultName` option is set, but if the user erases the defaultName it will be shown.
+   */
+  repoNamePlaceholder?: string;
+
+  /**
+   * @default 'main'
+   * @description The branch that will be used to sync within the repository. `main` is used if this is not
+   * provided.
+   */
+  repoDefaultBranch?: string;
+
+  /**
+   * @description Callback for controlled usage of the the repository name input. Fires
+   * the same as the 'onChange' event of the input.
+   */
+  onRepoNameChange?: (repoName: string) => void;
+
+  /**
+   * @description callback for the change event of the repo owner combobox. Since this
+   * input cannot be controlled, this callback is just for being informed of changes.
+   */
+  onOwnerChange?: (owner: string) => void;
 
   /**
    * @description Callback when a user successfully creates a sync repository.
@@ -164,8 +180,14 @@ export function GitPlatformSync({
   variant = 'icon-only',
   align = 'end',
   status: statusProp = 'auto',
+  repoName,
+  repoDefaultName,
+  repoNamePlaceholder,
+  repoDefaultBranch,
   onHelpAction,
   onOpenChange,
+  onRepoNameChange,
+  onOwnerChange,
   open,
   __container,
 }: GitPlatformSyncProps) {
@@ -221,6 +243,18 @@ export function GitPlatformSync({
         }
       : {};
 
+  const PopoverConductorProps = {
+    align,
+    __container,
+    onHelpAction,
+    repoName,
+    repoDefaultName,
+    repoNamePlaceholder,
+    repoDefaultBranch,
+    onRepoNameChange,
+    onOwnerChange,
+  };
+
   // TODO: fix full button, and disable tooltip on open popover
   return (
     <Popover open={isPopoverOpen} onOpenChange={handleOpenChange}>
@@ -238,11 +272,7 @@ export function GitPlatformSync({
             </TooltipTrigger>
             <TooltipContent {...containerProp}>{labelText}</TooltipContent>
           </Tooltip>
-          <PopoverConductor
-            align={align}
-            __container={__container}
-            onHelpAction={onHelpAction}
-          />
+          <PopoverConductor {...PopoverConductorProps} />
         </>
       ) : (
         <>
@@ -265,11 +295,7 @@ export function GitPlatformSync({
               </span>
             </BaseSyncButton>
           </PopoverTrigger>
-          <PopoverConductor
-            align={align}
-            __container={__container}
-            onHelpAction={onHelpAction}
-          />
+          <PopoverConductor {...PopoverConductorProps} />
         </>
       )}
     </Popover>
@@ -321,11 +347,30 @@ function BaseSyncButton({
   );
 }
 
+type PopoverConductorProps = Pick<
+  GitPlatformSyncProps,
+  | 'align'
+  | '__container'
+  | 'onHelpAction'
+  | 'repoName'
+  | 'repoDefaultName'
+  | 'repoNamePlaceholder'
+  | 'repoDefaultBranch'
+  | 'onRepoNameChange'
+  | 'onOwnerChange'
+>;
+
 function PopoverConductor({
   align,
   __container,
   onHelpAction,
-}: Pick<GitPlatformSyncProps, 'align' | '__container' | 'onHelpAction'>) {
+  onRepoNameChange,
+  onOwnerChange,
+  repoName,
+  repoDefaultName,
+  repoNamePlaceholder,
+  repoDefaultBranch,
+}: PopoverConductorProps) {
   const [step, setStep] = useState<Step>('welcome');
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
@@ -340,7 +385,17 @@ function PopoverConductor({
           onHelpAction={onHelpAction}
         />
       ) : null}
-      {step === 'sync' ? <StepSync __container={__container} /> : null}
+      {step === 'sync' ? (
+        <StepSync
+          __container={__container}
+          repoName={repoName}
+          repoDefaultName={repoDefaultName}
+          repoNamePlaceholder={repoNamePlaceholder}
+          repoDefaultBranch={repoDefaultBranch}
+          onRepoNameChange={onRepoNameChange}
+          onOwnerChange={onOwnerChange}
+        />
+      ) : null}
     </PopoverContent>
   );
 }
@@ -383,8 +438,12 @@ function StepWelcome({ onInstallApp, onHelpAction }: StepWelcomeProps) {
 
 type StepSyncProps = {
   onOwnerChange?: (owner: string) => void;
-  onRepoChange?: (repo: string) => void;
-  onBranchChange?: (branch: string) => void;
+  onRepoNameChange?: (repoName: string) => void;
+  // onBranchChange?: (branch: string) => void;
+  repoName?: string;
+  repoDefaultName?: string;
+  repoNamePlaceholder?: string;
+  repoDefaultBranch?: string;
   /**
    * @deprecated Internal use only, not guaranteed to be supported in the future
    * @description The container to render the popover portal in, only used for docs. This requires
@@ -396,14 +455,34 @@ type StepSyncProps = {
 };
 
 function StepSync({
-  // onOwnerChange,
-  // onRepoChange,
-  // onBranchChange,
+  onOwnerChange,
+  onRepoNameChange,
+  repoName,
+  repoDefaultName,
+  repoNamePlaceholder,
+  // repoDefaultBranch,
   __container,
 }: StepSyncProps) {
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { __container: __container } : {};
+
+  const repoInputProps: React.ComponentProps<typeof Input> = useMemo(() => {
+    const rip: React.ComponentProps<typeof Input> = {};
+    if (repoName) {
+      rip.defaultValue = repoName;
+    } else if (repoDefaultName) {
+      rip.defaultValue = repoDefaultName;
+    }
+
+    const defaultPlaceholder = 'unique-repo-name…';
+    if (repoNamePlaceholder) {
+      rip.placeholder = repoNamePlaceholder ?? defaultPlaceholder;
+    } else {
+      rip.placeholder = defaultPlaceholder;
+    }
+    return rip;
+  }, [repoName, repoDefaultName, repoNamePlaceholder]);
 
   return (
     <>
@@ -415,7 +494,7 @@ function StepSync({
             changes. We&apos;ll push changes with each new prompt you send.
           </p>
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <div className="flex flex-row gap-1">
             <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
               <FieldLabel
@@ -428,6 +507,7 @@ function StepSync({
                 id="storage-elements-github-owner"
                 {...containerProp}
                 className="max-w-full"
+                onValueChange={onOwnerChange}
                 // initialValue={'pierredotco'}
                 onAddItem={() => {
                   console.log('Add GitHub account!');
@@ -469,11 +549,16 @@ function StepSync({
                 Repository
               </FieldLabel>
               <Input
+                autoFocus
                 id="storage-elements-github-repo"
-                defaultValue={'gh-monorepo'}
+                {...repoInputProps}
+                onChange={(e) => onRepoNameChange?.(e.target.value)}
               />
             </Field>
           </div>
+          <Button size="lg" className="w-full">
+            Create Repository
+          </Button>
         </div>
       </div>
     </>
