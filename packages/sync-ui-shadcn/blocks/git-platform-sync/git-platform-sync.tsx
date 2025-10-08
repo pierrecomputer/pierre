@@ -550,6 +550,7 @@ function StepSync({
               </FieldLabel>
               <Input
                 autoFocus
+                spellCheck={false}
                 id="storage-elements-github-repo"
                 {...repoInputProps}
                 onChange={(e) => onRepoNameChange?.(e.target.value)}
