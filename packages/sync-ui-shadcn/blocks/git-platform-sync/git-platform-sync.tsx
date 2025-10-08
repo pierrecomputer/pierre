@@ -1,5 +1,3 @@
-'use client';
-
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import {
@@ -21,9 +19,9 @@ import { ComboBox } from './combobox';
 
 // TODO: determine if this is the canonical way to import other components inside of a block
 
-type Step = 'welcome' | 'sync';
+export type Step = 'welcome' | 'sync';
 
-type RepositoryData = {
+export type RepositoryData = {
   /**
    * @description The owner of the repository, also referred to as the 'scope' - usually
    * the username of the user or an organization they belong to.
@@ -64,7 +62,7 @@ export type GitPlatformSyncStatus =
  * @description Platforms that code.storage supports
  */
 export type SupportedGitPlatform = 'github';
-export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
+export type GitPlatformSyncProps = {
   /**
    * @default ['github']
    * @description List of supported platforms that you want to offer to the user. We recommend
@@ -100,6 +98,11 @@ export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
    * will not verify that the status is valid, it will faithfully render the status you provide.
    */
   status?: 'auto' | GitPlatformSyncStatus;
+
+  /**
+   * @description Control the open state of the popover
+   */
+  open?: boolean;
 
   /**
    * @description Options for what features to offer the user in the resository selection
@@ -142,11 +145,7 @@ export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
   /**
    * @description Callback when the popover is opened.
    */
-  onOpen?: () => void;
-  /**
-   * @description Callback when the popover is closed.
-   */
-  onClose?: () => void;
+  onOpenChange?: (isOpen: boolean) => void;
 
   /**
    * @deprecated Internal use only, not guaranteed to be supported in the future
@@ -165,12 +164,11 @@ export function GitPlatformSync({
   align = 'end',
   status: statusProp = 'auto',
   onHelpAction,
-  onOpen,
-  onClose,
+  onOpenChange,
+  open,
   __container,
-  ...props
 }: GitPlatformSyncProps) {
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(open ?? false);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
 
   const status = useMemo(() => {
@@ -188,15 +186,15 @@ export function GitPlatformSync({
   let platformName: string | undefined;
 
   const handleOpenChange = useCallback(
-    (open: boolean) => {
-      setIsPopoverOpen(open);
-      if (open) {
-        onOpen?.();
+    (isOpen: boolean) => {
+      setIsPopoverOpen(isOpen);
+      if (isOpen) {
+        onOpenChange?.(true);
       } else {
-        onClose?.();
+        onOpenChange?.(false);
       }
     },
-    [onOpen, onClose]
+    [onOpenChange]
   );
 
   if (platforms.length === 0) {
@@ -224,7 +222,7 @@ export function GitPlatformSync({
 
   // TODO: fix full button, and disable tooltip on open popover
   return (
-    <Popover open={isPopoverOpen} onOpenChange={handleOpenChange} {...props}>
+    <Popover open={isPopoverOpen} onOpenChange={handleOpenChange}>
       {variant === 'icon-only' ? (
         <>
           <Tooltip
