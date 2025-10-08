@@ -16,5 +16,9 @@
   "devDependencies": {
     "typescript": "catalog:"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@octokit/app": "catalog:",
+    "@octokit/auth-app": "catalog:",
+    "@octokit/rest": "catalog:"
+  }
 }
