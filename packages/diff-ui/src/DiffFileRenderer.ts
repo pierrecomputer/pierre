@@ -24,35 +24,41 @@ interface DiffFileBaseOptions {
   detectLanguage?: boolean;
 }
 
-type FileBaseRendererOptions = Omit<BaseRendererOptions, 'lang'>;
+interface FileBaseRendererOptions<LAnnotation>
+  extends Omit<BaseRendererOptions, 'lang'> {
+  renderAnnotation?(
+    annotation: LineAnnotation<LAnnotation>,
+    diff: FileDiffMetadata
+  ): HTMLElement | undefined;
+}
 
-interface DiffFileThemeRendererOptions
-  extends FileBaseRendererOptions,
+interface DiffFileThemeRendererOptions<LAnnotation>
+  extends FileBaseRendererOptions<LAnnotation>,
     ThemeRendererOptions,
     DiffFileBaseOptions {}
 
-interface DiffFileThemesRendererOptions
-  extends FileBaseRendererOptions,
+interface DiffFileThemesRendererOptions<LAnnotation>
+  extends FileBaseRendererOptions<LAnnotation>,
     ThemesRendererOptions,
     DiffFileBaseOptions {}
 
-export type DiffFileRendererOptions =
-  | DiffFileThemeRendererOptions
-  | DiffFileThemesRendererOptions;
+export type DiffFileRendererOptions<LAnnotation> =
+  | DiffFileThemeRendererOptions<LAnnotation>
+  | DiffFileThemesRendererOptions<LAnnotation>;
 
-export class DiffFileRenderer {
-  options: DiffFileRendererOptions;
+export class DiffFileRenderer<LAnnotation = undefined> {
+  options: DiffFileRendererOptions<LAnnotation>;
   private fileContainer: HTMLElement | undefined;
   private header: HTMLDivElement | undefined;
   private pre: HTMLPreElement | undefined;
 
-  hunksRenderer: DiffHunksRenderer | undefined;
+  hunksRenderer: DiffHunksRenderer<LAnnotation> | undefined;
 
-  constructor(options: DiffFileRendererOptions) {
+  constructor(options: DiffFileRendererOptions<LAnnotation>) {
     this.options = options;
   }
 
-  setOptions(options: DiffFileRendererOptions) {
+  setOptions(options: DiffFileRendererOptions<LAnnotation>) {
     this.options = options;
     if (this.fileDiff == null) {
       return;
@@ -60,8 +66,8 @@ export class DiffFileRenderer {
     this.render({ fileDiff: this.fileDiff });
   }
 
-  private lineAnnotations: LineAnnotation<unknown>[] = [];
-  setLineAnnotations(lineAnnotations: LineAnnotation<unknown>[]) {
+  private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
+  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]) {
     this.lineAnnotations = lineAnnotations;
   }
 
@@ -104,14 +110,18 @@ export class DiffFileRenderer {
     }
     this.annotationElements.length = 0;
 
-    // FIXME(amadeus): Temp code
-    for (const annotation of this.lineAnnotations) {
-      const el = document.createElement('div');
-      el.slot = `${annotation.side}-${annotation.lineNumber}`;
-      el.className = 'annotation-slot-wrapper';
-      el.innerHTML = `<span class="annotation-content">Annotations: ${JSON.stringify(annotation)}</span>`;
-      this.annotationElements.push(el);
-      fileContainer.appendChild(el);
+    const { renderAnnotation } = this.options;
+    if (renderAnnotation != null && this.lineAnnotations.length > 0) {
+      for (const annotation of this.lineAnnotations) {
+        const content = renderAnnotation(annotation, fileDiff);
+        if (content == null) continue;
+        const el = document.createElement('div');
+        el.dataset.annotationSlot = '';
+        el.slot = `${annotation.side}-${annotation.lineNumber}`;
+        el.appendChild(content);
+        this.annotationElements.push(el);
+        fileContainer.appendChild(el);
+      }
     }
   }
 

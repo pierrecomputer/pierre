@@ -28,7 +28,10 @@ import {
 } from './utils/html_render_utils';
 import { parseLineType } from './utils/parseLineType';
 
-type AnnotationLineMap = Record<number, LineAnnotation<unknown>[] | undefined>;
+type AnnotationLineMap<LAnnotation> = Record<
+  number,
+  LineAnnotation<LAnnotation>[] | undefined
+>;
 
 interface ChangeHunk {
   diffGroupStartIndex: number;
@@ -119,7 +122,7 @@ export type DiffHunksRendererOptions =
   | DiffHunkThemeRendererOptions
   | DiffHunkThemesRendererOptions;
 
-export class DiffHunksRenderer {
+export class DiffHunksRenderer<LAnnotation = undefined> {
   highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme> | undefined;
   options: DiffHunksRendererOptions;
   pre: HTMLPreElement | undefined;
@@ -152,9 +155,9 @@ export class DiffHunksRenderer {
     }
   }
 
-  private deletionAnnotations: AnnotationLineMap = {};
-  private additionAnnotations: AnnotationLineMap = {};
-  setLineAnnotations(lineAnnotations: LineAnnotation<unknown>[]) {
+  private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]) {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     for (const annotation of lineAnnotations) {
@@ -1206,19 +1209,19 @@ function createTransformerWithState(disableLineNumbers: boolean): {
   };
 }
 
-interface CreateSingleAnnotationProps {
+interface CreateSingleAnnotationProps<LAnnotation> {
   hunkIndex: number;
   diffLineIndex: number;
   rowNumber: number;
-  annotationMap: AnnotationLineMap;
+  annotationMap: AnnotationLineMap<LAnnotation>;
 }
 
-function createSingleAnnotationSpan({
+function createSingleAnnotationSpan<LAnnotation>({
   rowNumber,
   hunkIndex,
   diffLineIndex,
   annotationMap,
-}: CreateSingleAnnotationProps): AnnotationSpan | undefined {
+}: CreateSingleAnnotationProps<LAnnotation>): AnnotationSpan | undefined {
   const span: AnnotationSpan = {
     type: 'annotation',
     hunkIndex,
@@ -1231,22 +1234,22 @@ function createSingleAnnotationSpan({
   return span.annotations.length > 0 ? span : undefined;
 }
 
-interface CreateMirroredAnnotationSpanProps {
+interface CreateMirroredAnnotationSpanProps<LAnnotation> {
   deletionLineNumber: number;
   additionLineNumber: number;
   hunkIndex: number;
   diffLineIndex: number;
-  deletionAnnotations: AnnotationLineMap;
-  additionAnnotations: AnnotationLineMap;
+  deletionAnnotations: AnnotationLineMap<LAnnotation>;
+  additionAnnotations: AnnotationLineMap<LAnnotation>;
 }
 
-function createMirroredAnnotationSpan(
-  props: CreateMirroredAnnotationSpanProps & { unified: true }
+function createMirroredAnnotationSpan<LAnnotation>(
+  props: CreateMirroredAnnotationSpanProps<LAnnotation> & { unified: true }
 ): AnnotationSpan | undefined;
-function createMirroredAnnotationSpan(
-  props: CreateMirroredAnnotationSpanProps & { unified: false }
+function createMirroredAnnotationSpan<LAnnotation>(
+  props: CreateMirroredAnnotationSpanProps<LAnnotation> & { unified: false }
 ): [AnnotationSpan, AnnotationSpan] | [undefined, undefined];
-function createMirroredAnnotationSpan({
+function createMirroredAnnotationSpan<LAnnotation>({
   deletionLineNumber,
   additionLineNumber,
   hunkIndex,
@@ -1254,7 +1257,7 @@ function createMirroredAnnotationSpan({
   deletionAnnotations,
   additionAnnotations,
   unified,
-}: CreateMirroredAnnotationSpanProps & { unified: boolean }):
+}: CreateMirroredAnnotationSpanProps<LAnnotation> & { unified: boolean }):
   | [AnnotationSpan, AnnotationSpan]
   | [undefined, undefined]
   | AnnotationSpan

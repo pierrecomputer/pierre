@@ -353,3 +353,10 @@ code {
   align-self: flex-start;
   overflow: hidden;
 }
+
+/* Undo some of the stuff that the `pre` tag does */
+[data-annotation-slot] {
+  text-wrap-mode: wrap;
+  word-break: normal;
+  white-space-collapse: collapse;
+}

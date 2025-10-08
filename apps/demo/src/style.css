@@ -211,3 +211,18 @@ pjs-container {
   word-break: break-all;
   white-space: normal;
 }
+
+.comment {
+  margin: 8px;
+  padding: 8px;
+  border: 1px solid var(--pjs-fg);
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: 600px;
+}
+
+.comment h6,
+.comment p {
+  margin: 0;
+  padding: 0;
+}

@@ -1,7 +1,6 @@
 import {
   CodeRenderer,
   DiffFileRenderer,
-  type LineAnnotation,
   type ParsedPatch,
   type SupportedLanguages,
   getFiletypeFromFileName,
@@ -12,9 +11,17 @@ import {
 } from '@pierre/diff-ui';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
-import { CodeConfigs, FILE_NEW, FILE_OLD, toggleTheme } from './mocks/';
+import {
+  CodeConfigs,
+  FAKE_LINE_ANNOTATIONS,
+  FILE_NEW,
+  FILE_OLD,
+  type LineCommentMetadata,
+  toggleTheme,
+} from './mocks/';
 import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
+import { renderAnnotation } from './utils/renderAnnotation';
 
 let loadingPatch: Promise<string> | undefined;
 async function loadPatchContent() {
@@ -66,24 +73,7 @@ async function handlePreloadDiff() {
   });
 }
 
-const fakeLineAnnotations: LineAnnotation<unknown>[][][] = [
-  [
-    [
-      { lineNumber: 2, side: 'additions' },
-      { lineNumber: 2, side: 'deletions' },
-      { lineNumber: 4, side: 'deletions' },
-      { lineNumber: 9, side: 'additions' },
-      { lineNumber: 6, side: 'additions' },
-      { lineNumber: 5, side: 'deletions' },
-      { lineNumber: 4, side: 'additions' },
-      { lineNumber: 15, side: 'additions' },
-      { lineNumber: 13, side: 'deletions' },
-      { lineNumber: 11, side: 'deletions' },
-    ],
-    [{ lineNumber: 5, side: 'additions' }],
-  ],
-];
-const diffInstances: DiffFileRenderer[] = [];
+const diffInstances: DiffFileRenderer<LineCommentMetadata>[] = [];
 function renderDiff(parsedPatches: ParsedPatch[]) {
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;
@@ -112,15 +102,16 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
     if (parsedPatch.patchMetadata != null) {
       wrapper.appendChild(createFileMetadata(parsedPatch.patchMetadata));
     }
-    const patchAnnotations = fakeLineAnnotations[patchIndex] ?? [];
+    const patchAnnotations = FAKE_LINE_ANNOTATIONS[patchIndex] ?? [];
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
-      const instance = new DiffFileRenderer({
+      const instance = new DiffFileRenderer<LineCommentMetadata>({
         themes: { dark: 'tokyo-night', light: 'solarized-light' },
         diffStyle: unified ? 'unified' : 'split',
         detectLanguage: true,
         overflow: wrap ? 'wrap' : 'scroll',
+        renderAnnotation,
       });
       if (fileAnnotations != null) {
         instance.setLineAnnotations(fileAnnotations);
