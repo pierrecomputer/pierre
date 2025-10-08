@@ -8,6 +8,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from '@/components/ui/command';
 import {
   Popover,
@@ -16,22 +17,32 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from 'lucide-react';
 import * as React from 'react';
 
 export type ComboBoxProps = {
   options: {
     value: string;
     label: string;
+    image?: string;
   }[];
   className?: string;
-  placeholder?: string;
   initialValue?: string;
   /**
    * @default 'fit'
    * @description Whether to combobox expands to its container, or fits to the width of the content
    */
   width?: 'fit' | 'full';
+  /**
+   * @default 'Add item…'
+   * @description The label to display for the "Add item" action
+   */
+  addItemLabel?: string;
+  /**
+   * Callback function to run when "Add item" is selected. If this is not defined,
+   * then the "Add item" action will not be shown.
+   */
+  onAddItem?: () => void;
   /**
    * @deprecated Internal use only, not guaranteed to be supported in the future
    * @description The container to render the popover portal in, only used for docs. This requires
@@ -44,18 +55,27 @@ export type ComboBoxProps = {
 
 export function ComboBox({
   options,
-  placeholder,
   className,
   width = 'fit',
   __container,
   initialValue,
+  onAddItem,
+  addItemLabel,
   ...props
 }: ComboBoxProps) {
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { container: __container } : {};
   const [open, setOpen] = React.useState(false);
-  const [value, setValue] = React.useState(initialValue);
+  const [value, setValue] = React.useState(
+    initialValue ?? options[0]?.value ?? null
+  );
+
+  const selectedOption = value
+    ? options.find((option) => {
+        return option.value === value;
+      })
+    : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -65,23 +85,37 @@ export function ComboBox({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'justify-between',
+            'justify-between select-none gap-1.5',
             width === 'fit' && '[&[role=combobox]]:w-fit',
             width === 'full' && '[&[role=combobox]]:w-full',
             className
           )}
         >
-          {value
-            ? options.find((option) => {
-                return option.value === value;
-              })?.label
-            : placeholder}
-          <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          {selectedOption ? (
+            <span className="flex items-center gap-1.5 overflow-hidden">
+              {selectedOption.image ? (
+                // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+                <img
+                  src={selectedOption.image}
+                  aria-hidden
+                  className="h-4 w-4 shrink-0 rounded-full"
+                />
+              ) : null}
+              <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+                {selectedOption.label}
+              </span>
+            </span>
+          ) : null}
+          <ChevronsUpDownIcon className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent {...containerProp} className="w-[200px] p-0">
+      <PopoverContent
+        {...containerProp}
+        align="start"
+        className="w-[220px] p-0"
+      >
         <Command {...props}>
-          <CommandInput placeholder={placeholder} />
+          <CommandInput placeholder="Search…" />
           <CommandList>
             <CommandEmpty>No results</CommandEmpty>
             <CommandGroup>
@@ -90,20 +124,49 @@ export function ComboBox({
                   key={option.value}
                   value={option.value}
                   onSelect={(currentValue) => {
-                    setValue(currentValue === value ? '' : currentValue);
+                    setValue(currentValue);
                     setOpen(false);
                   }}
                 >
+                  {option.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+                    <img
+                      src={option.image}
+                      aria-hidden
+                      className="h-4 w-4 flex-shrink-0 rounded-full"
+                    />
+                  ) : null}
+                  <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {option.label}
+                  </span>
                   <CheckIcon
                     className={cn(
-                      'mr-2 h-4 w-4',
+                      'mr-2 h-4 w-4 flex-shrink-0',
                       value === option.value ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {option.label}
                 </CommandItem>
               ))}
             </CommandGroup>
+            {onAddItem ? (
+              <>
+                <CommandSeparator />
+                <CommandGroup aria-label="Additional actions">
+                  <CommandItem
+                    onSelect={() => {
+                      setOpen(false);
+                      onAddItem?.();
+                      return false;
+                    }}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <PlusIcon className="h-4 w-4 flex-shrink-0" />
+                      {addItemLabel ?? 'Add item…'}
+                    </span>
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            ) : null}
           </CommandList>
         </Command>
       </PopoverContent>

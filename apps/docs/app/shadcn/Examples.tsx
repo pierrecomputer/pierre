@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { GitPlatformSync } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
 import { Lollipop, Menu } from 'lucide-react';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 
 let cachedPortalContainers: { light: HTMLElement; dark: HTMLElement } | null =
   null;
@@ -166,6 +166,8 @@ function CodeExampleContainer({
 }
 
 export function Examples() {
+  const [isControlledExampleOpen, setIsControlledExampleOpen] = useState(false);
+
   return (
     <>
       <h2
@@ -246,8 +248,14 @@ function TopBar() {
         title="Events"
         id="git-platform-sync--events"
         exampleProps={{
+          onRepoCreated: (repoData) => {
+            console.log('repo created:', repoData);
+          },
           onHelpAction: () => {
             console.log('help needed!');
+          },
+          onOpenChange: (isOpen) => {
+            console.log('isOpen?', isOpen);
           },
         }}
         code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
@@ -255,11 +263,39 @@ function TopBar() {
 function TopBar() {
   return (
     <GitPlatformSync
+      onRepoCreated={(repoData) => {
+        console.log('repo created:', repoData);
+      }}
       // Adds a 'Help me get started' button that you can
       // handle to describe the process to your users
       onHelpAction={() => {
         console.log('help needed!');
       }}
+      onOpenChange={() => {
+        console.log('isOpen?', isOpen);
+      }}
+    />
+  );
+}
+`}
+      />
+
+      <Example
+        title="Controlled usage"
+        id="git-platform-sync--controlled-usage"
+        exampleProps={{
+          open: isControlledExampleOpen,
+          onOpenChange: setIsControlledExampleOpen,
+        }}
+        code={`import { useState } from 'react';
+import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
+
+function TopBar() {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <GitPlatformSync
+      open={isOpen}
+      onOpenChange={setIsOpen}
     />
   );
 }

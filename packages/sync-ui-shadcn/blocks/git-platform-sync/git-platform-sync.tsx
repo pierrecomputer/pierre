@@ -1,7 +1,6 @@
-'use client';
-
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -21,9 +20,9 @@ import { ComboBox } from './combobox';
 
 // TODO: determine if this is the canonical way to import other components inside of a block
 
-type Step = 'welcome' | 'sync';
+export type Step = 'welcome' | 'sync';
 
-type RepositoryData = {
+export type RepositoryData = {
   /**
    * @description The owner of the repository, also referred to as the 'scope' - usually
    * the username of the user or an organization they belong to.
@@ -64,7 +63,7 @@ export type GitPlatformSyncStatus =
  * @description Platforms that code.storage supports
  */
 export type SupportedGitPlatform = 'github';
-export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
+export type GitPlatformSyncProps = {
   /**
    * @default ['github']
    * @description List of supported platforms that you want to offer to the user. We recommend
@@ -100,6 +99,11 @@ export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
    * will not verify that the status is valid, it will faithfully render the status you provide.
    */
   status?: 'auto' | GitPlatformSyncStatus;
+
+  /**
+   * @description Control the open state of the popover
+   */
+  open?: boolean;
 
   /**
    * @description Options for what features to offer the user in the resository selection
@@ -142,11 +146,7 @@ export type GitPlatformSyncProps = React.ComponentProps<typeof Popover> & {
   /**
    * @description Callback when the popover is opened.
    */
-  onOpen?: () => void;
-  /**
-   * @description Callback when the popover is closed.
-   */
-  onClose?: () => void;
+  onOpenChange?: (isOpen: boolean) => void;
 
   /**
    * @deprecated Internal use only, not guaranteed to be supported in the future
@@ -165,12 +165,11 @@ export function GitPlatformSync({
   align = 'end',
   status: statusProp = 'auto',
   onHelpAction,
-  onOpen,
-  onClose,
+  onOpenChange,
+  open,
   __container,
-  ...props
 }: GitPlatformSyncProps) {
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(open ?? false);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
 
   const status = useMemo(() => {
@@ -188,15 +187,15 @@ export function GitPlatformSync({
   let platformName: string | undefined;
 
   const handleOpenChange = useCallback(
-    (open: boolean) => {
-      setIsPopoverOpen(open);
-      if (open) {
-        onOpen?.();
+    (isOpen: boolean) => {
+      setIsPopoverOpen(isOpen);
+      if (isOpen) {
+        onOpenChange?.(true);
       } else {
-        onClose?.();
+        onOpenChange?.(false);
       }
     },
-    [onOpen, onClose]
+    [onOpenChange]
   );
 
   if (platforms.length === 0) {
@@ -224,7 +223,7 @@ export function GitPlatformSync({
 
   // TODO: fix full button, and disable tooltip on open popover
   return (
-    <Popover open={isPopoverOpen} onOpenChange={handleOpenChange} {...props}>
+    <Popover open={isPopoverOpen} onOpenChange={handleOpenChange}>
       {variant === 'icon-only' ? (
         <>
           <Tooltip
@@ -334,7 +333,7 @@ function PopoverConductor({
   const containerProp: any = __container ? { container: __container } : {};
 
   return (
-    <PopoverContent className="w-96" align={align} {...containerProp}>
+    <PopoverContent className="w-[400px]" align={align} {...containerProp}>
       {step === 'welcome' ? (
         <StepWelcome
           onInstallApp={() => setStep('sync')}
@@ -418,32 +417,60 @@ function StepSync({
         </div>
         <div className="flex flex-col gap-3">
           <div className="flex flex-row gap-1">
-            <Field className="w-fit flex-shrink-0">
-              <FieldLabel htmlFor="github-owner">Owner</FieldLabel>
+            <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+              <FieldLabel
+                htmlFor="storage-elements-github-owner"
+                className="font-normal"
+              >
+                Owner
+              </FieldLabel>
               <ComboBox
-                id="github-owner"
+                id="storage-elements-github-owner"
                 {...containerProp}
-                initialValue={'pierredotco'}
+                className="max-w-full"
+                // initialValue={'pierredotco'}
+                onAddItem={() => {
+                  console.log('Add GitHub account!');
+                }}
+                addItemLabel="Add GitHub account…"
                 options={[
-                  { value: 'slexaxton', label: 'SlexAxton' },
-                  { value: 'pierredotco', label: 'pierredotco' },
-                  { value: 'jquery', label: 'jQuery' },
+                  {
+                    value: 'slexaxton',
+                    label: 'SlexAxton',
+                    image:
+                      'https://avatars.githubusercontent.com/u/96554?v=4&size=64',
+                  },
+                  {
+                    value: 'pierredotco',
+                    label: 'pierredotco',
+                    image:
+                      'https://avatars.githubusercontent.com/u/154267919?s=48&v=4',
+                  },
+                  {
+                    value: 'jquery',
+                    label: 'jQuery with a really long label',
+                    image:
+                      'https://avatars.githubusercontent.com/u/70142?s=48&v=4',
+                  },
                 ]}
               />
             </Field>
-            <Field className="flex-1">
-              <FieldLabel htmlFor="github-repo">Repository</FieldLabel>
-              <ComboBox
-                id="github-repo"
-                width="full"
-                {...containerProp}
-                initialValue={'gh-monorepo'}
-                options={[
-                  { value: 'yepnope', label: 'SlexAxton' },
-                  { value: 'jquery', label: 'jQuery' },
-                  { value: 'modernizr', label: 'modernizr' },
-                  { value: 'gh-monorepo', label: 'monorepo' },
-                ]}
+            <div
+              aria-hidden
+              className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+            >
+              /
+            </div>
+            <Field className="flex-1 gap-1">
+              <FieldLabel
+                htmlFor="storage-elements-github-repo"
+                className="font-normal"
+              >
+                Repository
+              </FieldLabel>
+              <Input
+                id="storage-elements-github-repo"
+                defaultValue={'gh-monorepo'}
               />
             </Field>
           </div>
