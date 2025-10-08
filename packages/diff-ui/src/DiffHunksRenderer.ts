@@ -693,7 +693,11 @@ export class DiffHunksRenderer {
         }
         additionLineNumber++;
         deletionLineNumber++;
-      } else if (type === 'metadata') {
+      }
+      // TODO(amadeus): Metadata shouldn't render it's own line, as that could
+      // theoretically mess with code output... we should stuff it into the
+      // appropriate line info
+      else if (type === 'metadata') {
         const lineInfo: LineInfo = {
           type:
             lastType === 'addition'
