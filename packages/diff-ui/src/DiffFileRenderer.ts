@@ -108,7 +108,8 @@ export class DiffFileRenderer {
     for (const annotation of this.lineAnnotations) {
       const el = document.createElement('div');
       el.slot = `${annotation.side}-${annotation.lineNumber}`;
-      el.innerHTML = `<span class="annotation-content">Annotations: ${JSON.stringify(annotation)}<span>`;
+      el.className = 'annotation-slot-wrapper';
+      el.innerHTML = `<span class="annotation-content">Annotations: ${JSON.stringify(annotation)}</span>`;
       this.annotationElements.push(el);
       fileContainer.appendChild(el);
     }

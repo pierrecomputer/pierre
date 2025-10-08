@@ -78,14 +78,27 @@ interface AnnotationSpan {
 
 type Span = GapSpan | AnnotationSpan;
 
-interface ObservedNodes {
-  container1: HTMLElement;
-  child1: HTMLElement;
-  child1Height: number;
-  container2: HTMLElement;
-  child2: HTMLElement;
-  child2Height: number;
-  currentHeight: number;
+interface ObservedAnnotationNodes {
+  type: 'annotations';
+  column1: {
+    container: HTMLElement;
+    child: HTMLElement;
+    childHeight: number;
+  };
+  column2: {
+    container: HTMLElement;
+    child: HTMLElement;
+    childHeight: number;
+  };
+  currentHeight: number | 'auto';
+}
+
+interface ObservedGridNodes {
+  type: 'code';
+  codeElement: HTMLElement;
+  numberElement: HTMLElement | null;
+  codeWidth: number | 'auto';
+  numberWidth: number;
 }
 
 interface SharedRenderState {
@@ -117,6 +130,8 @@ export class DiffHunksRenderer {
   }
 
   cleanUp() {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = undefined;
     this.highlighter = undefined;
     this.pre = undefined;
     this.diff = undefined;
@@ -274,25 +289,57 @@ export class DiffHunksRenderer {
     if (codeUnified.childNodes.length > 0) {
       this.pre.appendChild(codeUnified);
     }
-    if (split && !wrap) {
-      this.ayyLmao(pre);
-    }
+    this.postRender(pre);
   }
 
-  observedNodes = new Map<HTMLElement, ObservedNodes>();
+  observedNodes = new Map<
+    HTMLElement,
+    ObservedAnnotationNodes | ObservedGridNodes
+  >();
   resizeObserver: ResizeObserver | undefined;
-  // TODO(amadeus): Actually name this shit
-  private ayyLmao(pre: HTMLPreElement) {
-    const { diffStyle, overflow } = this.getOptionsWithDefaults();
-    if (diffStyle === 'unified' || overflow === 'wrap') {
+  private postRender(pre: HTMLPreElement) {
+    // NOTE(amadeus): The resize logic is only necessary when the view is
+    // scrollable to prevent annotations from scrolling around and use the
+    // non-scrollable code width as our target width
+    if (this.getOptionsWithDefaults().overflow === 'wrap') {
       return;
     }
-    const elements = pre.querySelectorAll('[data-line-annotation*=","]');
-    if (elements.length === 0) {
+    const annotationElements = pre.querySelectorAll(
+      '[data-line-annotation*=","]'
+    );
+    // If there are no annotation nodes, then we shouldn't setup anything with
+    // our resize observations
+    if (annotationElements.length === 0) {
+      return;
+    }
+    if (this.resizeObserver == null) {
+      this.resizeObserver = new ResizeObserver(this.handleResizeObserver);
+    }
+    const codeElements = pre.querySelectorAll('code');
+    for (const codeElement of codeElements) {
+      let numberElement = codeElement.querySelector('[data-column-number]');
+      if (!(numberElement instanceof HTMLElement)) {
+        numberElement = null;
+      }
+      const item: ObservedGridNodes = {
+        type: 'code',
+        codeElement,
+        numberElement,
+        codeWidth: 'auto',
+        numberWidth: 0,
+      };
+      this.observedNodes.set(codeElement, item);
+      this.resizeObserver.observe(codeElement);
+      if (numberElement != null) {
+        this.observedNodes.set(numberElement, item);
+        this.resizeObserver.observe(numberElement);
+      }
+    }
+    if (codeElements.length <= 1) {
       return;
     }
     const elementMap = new Map<string, HTMLElement[]>();
-    for (const element of elements) {
+    for (const element of annotationElements) {
       if (!(element instanceof HTMLElement)) {
         continue;
       }
@@ -327,17 +374,19 @@ export class DiffHunksRenderer {
       ) {
         continue;
       }
-      if (this.resizeObserver == null) {
-        this.resizeObserver = new ResizeObserver(this.handleResizeObserver);
-      }
-      const item: ObservedNodes = {
-        container1,
-        child1,
-        child1Height: 0,
-        container2,
-        child2,
-        child2Height: 0,
-        currentHeight: 0,
+      const item: ObservedAnnotationNodes = {
+        type: 'annotations',
+        column1: {
+          container: container1,
+          child: child1,
+          childHeight: 0,
+        },
+        column2: {
+          container: container2,
+          child: child2,
+          childHeight: 0,
+        },
+        currentHeight: 'auto',
       };
       this.observedNodes.set(child1, item);
       this.observedNodes.set(child2, item);
@@ -348,14 +397,15 @@ export class DiffHunksRenderer {
 
   handleResizeObserver = (entries: ResizeObserverEntry[]) => {
     for (const entry of entries) {
-      if (!(entry.target instanceof HTMLElement)) {
+      const { target, borderBoxSize } = entry;
+      if (!(target instanceof HTMLElement)) {
         console.error(
           'DiffHunksRenderer.handleResizeObserver: Invalid element for ResizeObserver',
           entry
         );
         continue;
       }
-      const item = this.observedNodes.get(entry.target);
+      const item = this.observedNodes.get(target);
       if (item == null) {
         console.error(
           'DiffHunksRenderer.handleResizeObserver: Not a valid observed node',
@@ -363,31 +413,68 @@ export class DiffHunksRenderer {
         );
         continue;
       }
-      const specs = entry.borderBoxSize[0];
-      if (
-        entry.target === item.child1 &&
-        specs.blockSize !== item.child1Height
-      ) {
-        item.child1Height = specs.blockSize;
-      } else if (
-        entry.target === item.child2 &&
-        specs.blockSize !== item.child2Height
-      ) {
-        item.child2Height = specs.blockSize;
-      } else {
-        continue;
-      }
-      const newHeight = Math.max(item.child2Height, item.child1Height);
-      if (newHeight !== item.currentHeight) {
-        item.currentHeight = Math.max(newHeight, 0);
-        item.container1.style.setProperty(
-          '--row-min-height',
-          `${item.currentHeight}px`
+      const specs = borderBoxSize[0];
+      if (item.type === 'annotations') {
+        const column = (() => {
+          if (target === item.column1.child) {
+            return item.column1;
+          }
+          if (target === item.column2.child) {
+            return item.column2;
+          }
+          return undefined;
+        })();
+
+        if (column == null) {
+          console.error(
+            `DiffHunksRenderer.handleResizeObserver: Couldn't find a column for`,
+            { item, target }
+          );
+          continue;
+        }
+
+        column.childHeight = specs.blockSize;
+        const newHeight = Math.max(
+          item.column1.childHeight,
+          item.column2.childHeight
         );
-        item.container2.style.setProperty(
-          '--row-min-height',
-          `${item.currentHeight}px`
-        );
+        if (newHeight !== item.currentHeight) {
+          item.currentHeight = Math.max(newHeight, 0);
+          item.column1.container.style.setProperty(
+            '--pjs-annotation-min-height',
+            `${item.currentHeight}px`
+          );
+          item.column2.container.style.setProperty(
+            '--pjs-annotation-min-height',
+            `${item.currentHeight}px`
+          );
+        }
+      } else if (item.type === 'code') {
+        if (target === item.codeElement) {
+          if (specs.inlineSize !== item.codeWidth) {
+            item.codeWidth = specs.inlineSize;
+            item.codeElement.style.setProperty(
+              '--pjs-annotation-content-width',
+              `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
+            );
+          }
+        } else if (target === item.numberElement) {
+          if (specs.inlineSize !== item.numberWidth) {
+            item.numberWidth = specs.inlineSize;
+            item.codeElement.style.setProperty(
+              '--pjs-number-column-width',
+              `${item.numberWidth}px`
+            );
+            // We probably need to update code width variable if
+            // `numberWidth` changed
+            if (item.codeWidth !== 'auto') {
+              item.codeElement.style.setProperty(
+                '--pjs-annotation-content-width',
+                `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
+              );
+            }
+          }
+        }
       }
     }
   };

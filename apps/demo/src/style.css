@@ -199,12 +199,14 @@ pjs-container {
   content-visibility: auto;
 }
 
+.annotation-slot-wrapper {
+  background-color: rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
 .annotation-content {
   display: block;
   padding: 10px;
-  border: 2px solid var(--fg);
-  margin: 10px;
-  max-width: 300px;
   overflow: hidden;
   word-break: break-all;
   white-space: normal;

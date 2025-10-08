@@ -175,7 +175,7 @@ code {
 }
 
 [data-line-annotation] {
-  min-height: var(--row-min-height);
+  min-height: var(--pjs-annotation-min-height);
 }
 
 [data-type='split'][data-overflow='wrap'] [data-additions] {
@@ -349,6 +349,7 @@ code {
   position: sticky;
   left: var(--pjs-number-column-width, 0);
   grid-column: 2 / -1;
+  width: var(--pjs-annotation-content-width, auto);
   align-self: flex-start;
-  justify-self: flex-start;
+  overflow: hidden;
 }
