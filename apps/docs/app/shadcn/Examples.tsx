@@ -1,8 +1,11 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { GitPlatformSync } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
+import { Lollipop, Menu } from 'lucide-react';
+import { Fragment } from 'react';
 
 let cachedPortalContainers: { light: HTMLElement; dark: HTMLElement } | null =
   null;
@@ -19,6 +22,34 @@ function getPortalContainers() {
   return cachedPortalContainers;
 }
 
+function FakeTopBar({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<'div'>) {
+  return (
+    <div
+      className={cn(
+        'flex w-full gap-2 justify-end p-2 border-2 rounded-lg',
+        className
+      )}
+      {...props}
+    >
+      <div className="flex-1 flex justify-start items-center text-foreground">
+        <Lollipop />
+      </div>
+      {children}
+      <Button variant="outline" size="icon">
+        <Menu className="text-muted-foreground" />
+      </Button>
+    </div>
+  );
+}
+
+type ExamplePropsSingle = React.ComponentProps<typeof GitPlatformSync> & {
+  __label?: React.ReactNode;
+};
+
 const Example = ({
   className,
   title,
@@ -27,7 +58,7 @@ const Example = ({
   code,
   ...props
 }: Omit<React.ComponentProps<'div'>, 'children'> & {
-  exampleProps: React.ComponentProps<typeof GitPlatformSync>;
+  exampleProps: ExamplePropsSingle | Array<ExamplePropsSingle>;
   code?: string;
 }) => {
   const containers = getPortalContainers();
@@ -37,22 +68,65 @@ const Example = ({
       <h4 className="text-lg font-bold tracking-tight mb-2">{title}</h4>
       <div
         className={cn(
-          'flex flex-col sm:flex-row justify-evenly border rounded-t-lg relative min-h-[180px] bg-background overflow-hidden',
+          'flex flex-col md:flex-row justify-evenly border rounded-t-lg relative min-h-[180px] bg-background overflow-hidden',
           className
         )}
         {...props}
       >
-        <div className="w-full sm:w-1/2 light">
-          <div className="bg-background flex justify-center items-center p-4 h-full min-h-[120px]">
-            <GitPlatformSync
-              {...exampleProps}
-              __container={containers?.light}
-            />
+        <div className="w-full md:w-1/2 light">
+          <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
+            {Array.isArray(exampleProps) ? (
+              exampleProps.map(({ __label, ...props }, index) => (
+                <Fragment key={index}>
+                  {__label ? (
+                    <div className="text-sm text-muted-foreground">
+                      {__label}
+                    </div>
+                  ) : null}
+                  <FakeTopBar>
+                    <GitPlatformSync
+                      {...props}
+                      __container={containers?.light}
+                    />
+                  </FakeTopBar>
+                </Fragment>
+              ))
+            ) : (
+              <FakeTopBar>
+                <GitPlatformSync
+                  {...exampleProps}
+                  __container={containers?.light}
+                />
+              </FakeTopBar>
+            )}
           </div>
         </div>
-        <div className="w-full sm:w-1/2 dark">
-          <div className="bg-background flex justify-center items-center p-4 h-full min-h-[120px]">
-            <GitPlatformSync {...exampleProps} __container={containers?.dark} />
+        <div className="w-full md:w-1/2 dark">
+          <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
+            {Array.isArray(exampleProps) ? (
+              exampleProps.map(({ __label, ...props }, index) => (
+                <Fragment key={index}>
+                  {__label ? (
+                    <div className="text-sm text-muted-foreground">
+                      {__label}
+                    </div>
+                  ) : null}
+                  <FakeTopBar>
+                    <GitPlatformSync
+                      {...props}
+                      __container={containers?.dark}
+                    />
+                  </FakeTopBar>
+                </Fragment>
+              ))
+            ) : (
+              <FakeTopBar>
+                <GitPlatformSync
+                  {...exampleProps}
+                  __container={containers?.dark}
+                />
+              </FakeTopBar>
+            )}
           </div>
         </div>
       </div>
@@ -125,28 +199,18 @@ function TopBar() {
       />
 
       <Example
-        title="Icon button that grows"
-        id="git-platform-sync--icon-grow"
-        exampleProps={{ variant: 'icon-grow' }}
+        title="Button variants"
+        id="git-platform-sync--button-variants"
+        exampleProps={[{}, { variant: 'icon-grow' }, { variant: 'full' }]}
         code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
 
 function TopBar() {
   return (
-    <GitPlatformSync variant="icon-grow" />
-  );
-}
-`}
-      />
-
-      <Example
-        title="Full button"
-        id="git-platform-sync--full"
-        exampleProps={{ variant: 'full' }}
-        code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
-
-function TopBar() {
-  return (
-    <GitPlatformSync variant="full" />
+    <>
+      <GitPlatformSync />
+      <GitPlatformSync variant="icon-grow" />
+      <GitPlatformSync variant="full" />
+    </>
   );
 }
 `}
@@ -154,15 +218,25 @@ function TopBar() {
 
       <Example
         title="Override status"
-        id="git-platform-sync--full"
-        exampleProps={{ status: 'connected-syncing' }}
+        id="git-platform-sync--status"
+        exampleProps={[
+          { status: 'disconnected' },
+          { status: 'connected' },
+          { status: 'connected-syncing' },
+          { status: 'connected-warning' },
+        ]}
         code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
 
 function TopBar() {
   // By default we will use 'auto' which will show either
   // nothing when disconnected or a green dot when connected
   return (
-    <GitPlatformSync status="connected-syncing" />
+    <>
+      <GitPlatformSync status="disconnected" />
+      <GitPlatformSync status="connected" />
+      <GitPlatformSync status="connected-syncing" />
+      <GitPlatformSync status="connected-warning" />
+    </>
   );
 }
 `}
@@ -170,7 +244,7 @@ function TopBar() {
 
       <Example
         title="Events"
-        id="git-platform-sync--help-action"
+        id="git-platform-sync--events"
         exampleProps={{
           onHelpAction: () => {
             console.log('help needed!');

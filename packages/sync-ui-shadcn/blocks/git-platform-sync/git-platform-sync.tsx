@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { ChevronDown } from 'lucide-react';
+import { BookOpen, ChevronDown } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { ComboBox } from './combobox';
@@ -44,7 +44,7 @@ const GitHubIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
     viewBox="0 0 16 16"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={cn('h-full w-auto text-foreground', className)}
+    className={cn('h-full w-auto', className)}
     {...props}
   >
     <path
@@ -364,7 +364,7 @@ function StepWelcome({ onInstallApp, onHelpAction }: StepWelcomeProps) {
         </div>
         <div className="flex flex-col gap-3">
           <Button onClick={onInstallApp} size="lg" className="w-full">
-            Install GitHub App
+            <GitHubIcon /> Install GitHub App
           </Button>
           {onHelpAction ? (
             <Button
@@ -373,7 +373,7 @@ function StepWelcome({ onInstallApp, onHelpAction }: StepWelcomeProps) {
               variant="secondary"
               className="w-full"
             >
-              Help me get started
+              <BookOpen /> Help me get started
             </Button>
           ) : null}
         </div>
