@@ -9,14 +9,11 @@ diff --git a/eslint.config.js b/eslint.config.js
 index c52c9ca..f3b592b 100644
 --- a/eslint.config.js
 +++ b/eslint.config.js
-@@ -2,6 +2,9 @@ import js from '@eslint/js';
-+lol
+@@ -2,6 +2,7 @@ import js from '@eslint/js';
  import tseslint from 'typescript-eslint';
  
  export default tseslint.config(
--  { ignores: ['wow/**'] },
 +  { ignores: ['dist/**'] },
-+  { ignores2: ['dist/**'] },
    js.configs.recommended,
    ...tseslint.configs.recommended,
    {
