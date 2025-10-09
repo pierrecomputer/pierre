@@ -51,8 +51,11 @@ async function fetchInstallations(
         signal,
       });
 
+      // TODO: handle error cases better, especially if we can begin to pass more
+      // info about the error from the server
       if (response.ok) {
-        const data = await response.json();
+        const jsonResult = await response.json();
+        const data = jsonResult?.data;
 
         if (data && 'installations' in data) {
           return {
