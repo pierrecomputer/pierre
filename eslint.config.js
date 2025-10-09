@@ -1,5 +1,6 @@
 import { FlatCompat } from '@eslint/eslintrc';
 import js from '@eslint/js';
+import reactHooks from 'eslint-plugin-react-hooks';
 import { dirname } from 'path';
 import tseslint from 'typescript-eslint';
 import { fileURLToPath } from 'url';
@@ -33,6 +34,17 @@ export default tseslint.config(
       ],
     },
   },
+  // React hooks rules for all React packages
+  {
+    files: ['packages/**/*.{js,jsx,ts,tsx}', 'apps/demo/**/*.{js,jsx,ts,tsx}'],
+    plugins: {
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
   // Next.js specific config for docs package
   ...compat
     .extends('next/core-web-vitals', 'next/typescript')
@@ -44,6 +56,11 @@ export default tseslint.config(
         next: {
           rootDir: 'apps/docs',
         },
+      },
+      rules: {
+        ...config.rules,
+        'jsx-a11y/alt-text': 'off',
+        '@next/next/no-img-element': 'off',
       },
     }))
 );

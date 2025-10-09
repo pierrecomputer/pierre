@@ -94,7 +94,6 @@ export function ComboBox({
           {selectedOption ? (
             <span className="flex items-center gap-1.5 overflow-hidden">
               {selectedOption.image ? (
-                // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
                 <img
                   src={selectedOption.image}
                   aria-hidden
@@ -132,7 +131,6 @@ export function ComboBox({
                   }}
                 >
                   {option.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
                     <img
                       src={option.image}
                       aria-hidden

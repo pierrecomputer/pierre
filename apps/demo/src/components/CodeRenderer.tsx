@@ -2,7 +2,6 @@ import {
   CodeRenderer as CodeRendererClass,
   type CodeRendererOptions,
 } from '@pierre/diff-ui';
-import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 export type { CodeRendererOptions };
@@ -19,6 +18,7 @@ export function CodeRenderer({ stream, options }: CodeRendererProps) {
     if (ref.current != null) {
       codeRenderer.setup(stream, ref.current);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return <pre ref={ref} />;
 }
