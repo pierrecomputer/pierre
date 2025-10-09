@@ -24,17 +24,50 @@ export interface GitHubAppConnectProps {
   installationsUrl?: string;
 }
 
+export type Owner = {
+  id: string;
+  login: string;
+  type: string | null;
+  avatar_url: string | null;
+};
+
 type InstallationsResponse = {
   installations: Array<unknown>;
+  owners: Owner[];
 };
+
+// Cache configuration
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let cachedInstallationsData: {
+  data: InstallationsResponse;
+  timestamp: number;
+} | null = null;
 
 // Track in-flight requests to prevent duplicate simultaneous requests
 let pendingFetchInstallations: Promise<InstallationsResponse> | null = null;
 
-async function fetchInstallations(
+function isCacheValid(): boolean {
+  if (!cachedInstallationsData) return false;
+  return Date.now() - cachedInstallationsData.timestamp < CACHE_TTL_MS;
+}
+
+/**
+ * Manually clear the cached installations data.
+ * Useful when you know the data has changed.
+ */
+export function clearInstallationsCache(): void {
+  cachedInstallationsData = null;
+}
+
+export async function fetchInstallations(
   url = '/api/github/installations',
   signal?: AbortSignal
 ): Promise<InstallationsResponse> {
+  // Return cached data if still valid
+  if (isCacheValid() && cachedInstallationsData) {
+    return cachedInstallationsData.data;
+  }
+
   // If there's already a pending request, wait for it and return its result
   if (pendingFetchInstallations) {
     return pendingFetchInstallations;
@@ -58,16 +91,25 @@ async function fetchInstallations(
         const data = jsonResult?.data;
 
         if (data && 'installations' in data) {
-          return {
+          const result: InstallationsResponse = {
             installations: Array.isArray(data.installations)
               ? data.installations
               : [],
+            owners: Array.isArray(data.owners) ? data.owners : [],
           };
+
+          // Cache the successful response
+          cachedInstallationsData = {
+            data: result,
+            timestamp: Date.now(),
+          };
+
+          return result;
         } else {
           console.warn(
             'Warning: fetching installations - response has unexpected shape, falling back to empty array.'
           );
-          return { installations: [] };
+          return { installations: [], owners: [] };
         }
       } else {
         throw new Error('installations endpoint not ok');

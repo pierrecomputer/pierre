@@ -548,7 +548,7 @@ function StepCreate({
   // to an uncontrolled combobox and compute the value in the single pass, but idk.
   useEffect(() => {
     if (owners.length > 0) {
-      setSelectedOwnerId(owners[0]?.id?.toString() ?? null);
+      setSelectedOwnerId(owners[0]?.id ?? null);
     }
   }, [owners]);
 
