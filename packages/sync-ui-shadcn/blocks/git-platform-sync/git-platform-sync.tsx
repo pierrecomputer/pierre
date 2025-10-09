@@ -14,9 +14,14 @@ import {
 import { cn } from '@/lib/utils';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { BookOpen, ChevronDown } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ComboBox } from './combobox';
+import {
+  type GitHubConnectionStatus,
+  useGitHubAppConnection,
+} from './github/github-app-connect';
+import { GitHubIcon } from './github/icon';
 
 // TODO: determine if this is the canonical way to import other components inside of a block
 
@@ -38,21 +43,6 @@ export type RepositoryData = {
   branch?: string;
 };
 
-const GitHubIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={cn('h-full w-auto', className)}
-    {...props}
-  >
-    <path
-      d="M8 0C12.42 0 16 3.58 16 8C15.9996 9.6762 15.4735 11.3101 14.4958 12.6716C13.5182 14.0332 12.1381 15.0539 10.55 15.59C10.15 15.67 10 15.42 10 15.21C10 14.94 10.01 14.08 10.01 13.01C10.01 12.26 9.76 11.78 9.47 11.53C11.25 11.33 13.12 10.65 13.12 7.58C13.12 6.7 12.81 5.99 12.3 5.43C12.38 5.23 12.66 4.41 12.22 3.31C12.22 3.31 11.55 3.09 10.02 4.13C9.38 3.95 8.7 3.86 8.02 3.86C7.34 3.86 6.66 3.95 6.02 4.13C4.49 3.1 3.82 3.31 3.82 3.31C3.38 4.41 3.66 5.23 3.74 5.43C3.23 5.99 2.92 6.71 2.92 7.58C2.92 10.64 4.78 11.33 6.56 11.53C6.33 11.73 6.12 12.08 6.05 12.6C5.59 12.81 4.44 13.15 3.72 11.94C3.57 11.7 3.12 11.11 2.49 11.12C1.82 11.13 2.22 11.5 2.5 11.65C2.84 11.84 3.23 12.55 3.32 12.78C3.48 13.23 4 14.09 6.01 13.72C6.01 14.39 6.02 15.02 6.02 15.21C6.02 15.42 5.87 15.66 5.47 15.59C3.87664 15.0596 2.49073 14.041 1.50889 12.6786C0.527047 11.3163 -0.000880479 9.67931 1.10231e-06 8C1.10231e-06 3.58 3.58 0 8 0Z"
-      fill="currentColor"
-    />
-  </svg>
-);
-
 export type GitPlatformSyncStatus =
   | 'disconnected'
   | 'connected'
@@ -63,13 +53,21 @@ export type GitPlatformSyncStatus =
  * @description Platforms that code.storage supports
  */
 export type SupportedGitPlatform = 'github';
+export type PlatformConfig_GitHub = {
+  platform: 'github';
+  slug: string;
+  redirectUrl?: string;
+};
+// Currently only github configs are allowed, but in the future more
+// may be supported
+export type PlatformConfigObject = PlatformConfig_GitHub;
+
 export type GitPlatformSyncProps = {
   /**
-   * @default ['github']
    * @description List of supported platforms that you want to offer to the user. We recommend
    * not setting this until we support more platforms.
    */
-  platforms?: SupportedGitPlatform[];
+  platforms: PlatformConfigObject[];
 
   /**
    * @default 'icon-only'
@@ -106,7 +104,6 @@ export type GitPlatformSyncProps = {
   open?: boolean;
 
   /**
-   * @default undefined
    * @description This directly sets the name of the repository that will be created. Setting this
    * will take precedence over the `defaultName` option. Users will not be able to change from this
    * name.
@@ -114,7 +111,6 @@ export type GitPlatformSyncProps = {
   repoName?: string;
 
   /**
-   * @default undefined
    * @description If you'd like to suggest a name for the repository, but allow the user to customize it,
    * this is the initial value of the repository name field. This will be ignored if the `name` option is
    * set.
@@ -175,8 +171,7 @@ export type GitPlatformSyncProps = {
 };
 
 export function GitPlatformSync({
-  // currently this is unused since we only support GitHub, but we'll keep it for future use
-  platforms = ['github'],
+  platforms,
   variant = 'icon-only',
   align = 'end',
   status: statusProp = 'auto',
@@ -207,6 +202,7 @@ export function GitPlatformSync({
   const containerProp: any = __container ? { container: __container } : {};
 
   let platformName: string | undefined;
+  let platformConfig: PlatformConfigObject | undefined;
 
   const handleOpenChange = useCallback(
     (isOpen: boolean) => {
@@ -221,16 +217,41 @@ export function GitPlatformSync({
   );
 
   if (platforms.length === 0) {
-    console.error('No platforms provided to GitPlatformSync');
-    return null;
+    throw new Error('No platforms provided to GitPlatformSync');
   }
 
-  if (platforms.length === 1 && platforms[0] === 'github') {
+  if (platforms.length === 1 && platforms[0].platform === 'github') {
     platformName = 'GitHub';
+    platformConfig = platforms[0];
   } else {
-    console.error('Currently GitPlatformSync only supports GitHub');
-    return null;
+    throw new Error(
+      'Currently GitPlatformSync only supports a single GitHub platform'
+    );
   }
+
+  const {
+    handleConnect,
+    status: connectionStatus,
+    fetchInstallationStatus,
+    destroy: destroyGitHubAppConnection,
+  } = useGitHubAppConnection({
+    slug: platformConfig.slug,
+    redirectUrl: platformConfig.redirectUrl,
+  });
+
+  useEffect(() => {
+    console.log('fetching installation status in useEffect of GitPlatformSync');
+    fetchInstallationStatus();
+  }, [fetchInstallationStatus]);
+
+  useEffect(() => {
+    return () => {
+      destroyGitHubAppConnection();
+    };
+    // destroyGitHubAppConnection is stable (uses ref pattern internally)
+    // and we only want cleanup on unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const labelText = `Sync to ${platformName}`;
 
@@ -243,7 +264,7 @@ export function GitPlatformSync({
         }
       : {};
 
-  const PopoverConductorProps = {
+  const PopoverConductorProps: PopoverConductorProps = {
     align,
     __container,
     onHelpAction,
@@ -253,6 +274,8 @@ export function GitPlatformSync({
     repoDefaultBranch,
     onRepoNameChange,
     onOwnerChange,
+    handleConnect,
+    connectionStatus,
   };
 
   // TODO: fix full button, and disable tooltip on open popover
@@ -358,7 +381,10 @@ type PopoverConductorProps = Pick<
   | 'repoDefaultBranch'
   | 'onRepoNameChange'
   | 'onOwnerChange'
->;
+> & {
+  handleConnect: ({ onSuccess }: { onSuccess?: () => void }) => void;
+  connectionStatus: GitHubConnectionStatus;
+};
 
 function PopoverConductor({
   align,
@@ -370,6 +396,8 @@ function PopoverConductor({
   repoDefaultName,
   repoNamePlaceholder,
   repoDefaultBranch,
+  handleConnect,
+  connectionStatus,
 }: PopoverConductorProps) {
   const [step, setStep] = useState<Step>('welcome');
 
@@ -381,8 +409,10 @@ function PopoverConductor({
     <PopoverContent className="w-[400px]" align={align} {...containerProp}>
       {step === 'welcome' ? (
         <StepWelcome
-          onInstallApp={() => setStep('sync')}
+          onAppInstalled={() => setStep('sync')}
           onHelpAction={onHelpAction}
+          handleConnect={handleConnect}
+          connectionStatus={connectionStatus}
         />
       ) : null}
       {step === 'sync' ? (
@@ -401,11 +431,28 @@ function PopoverConductor({
 }
 
 type StepWelcomeProps = {
-  onInstallApp?: () => void;
+  onAppInstalled?: () => void;
   onHelpAction?: () => void;
+  handleConnect: ({ onSuccess }: { onSuccess?: () => void }) => void;
+  connectionStatus: GitHubConnectionStatus;
 };
 
-function StepWelcome({ onInstallApp, onHelpAction }: StepWelcomeProps) {
+function StepWelcome({
+  // onAppInstalled,
+  onHelpAction,
+  connectionStatus,
+  handleConnect,
+}: StepWelcomeProps) {
+  const isPendingConnection = connectionStatus === 'pending';
+  const hasError = connectionStatus === 'error';
+
+  // TODO: remove this
+  if (connectionStatus === 'installed') {
+    console.error(
+      'welcome step rendered with installed status, which shouldnt happen'
+    );
+  }
+
   return (
     <>
       <div className="space-y-4">
@@ -415,10 +462,33 @@ function StepWelcome({ onInstallApp, onHelpAction }: StepWelcomeProps) {
             Sync your changes to GitHub to backup your code at every snapshot by
             installing our app on your personal account or organization.
           </p>
+          {hasError ? (
+            <p className="text-sm text-red-500">
+              There was an error connecting to GitHub. Please try again.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col gap-3">
-          <Button onClick={onInstallApp} size="lg" className="w-full">
-            <GitHubIcon /> Install GitHub App
+          <Button
+            onClick={
+              isPendingConnection
+                ? undefined
+                : () => {
+                    handleConnect({
+                      // onSuccess: onAppInstalled
+                    });
+                  }
+            }
+            size="lg"
+            className={cn(
+              'w-full',
+              isPendingConnection && 'opacity-80 pointer-events-none'
+            )}
+          >
+            <GitHubIcon />{' '}
+            {isPendingConnection
+              ? 'Connecting to GitHub…'
+              : 'Install GitHub App'}
           </Button>
           {onHelpAction ? (
             <Button

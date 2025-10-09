@@ -11,6 +11,10 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./github": {
+      "import": "./src/github.ts",
+      "types": "./src/github.ts"
     }
   },
   "devDependencies": {

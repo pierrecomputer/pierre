@@ -2,13 +2,22 @@
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { GitPlatformSync } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
+import {
+  GitPlatformSync,
+  type PlatformConfigObject,
+} from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
 import { Lollipop, Menu } from 'lucide-react';
 import { Fragment, useState } from 'react';
 
+const EXAMPLE_APP_SLUG = process.env.GITHUB_APP_SLUG || 'git-stoage-repo-test';
+const DEFAULT_PLATFORM_CONFIG = [
+  { platform: 'github', slug: EXAMPLE_APP_SLUG },
+] as PlatformConfigObject[];
+
 let cachedPortalContainers: { light: HTMLElement; dark: HTMLElement } | null =
   null;
+
 function getPortalContainers() {
   if (typeof document === 'undefined' || cachedPortalContainers) {
     return cachedPortalContainers;
@@ -46,8 +55,12 @@ function FakeTopBar({
   );
 }
 
-type ExamplePropsSingle = React.ComponentProps<typeof GitPlatformSync> & {
+type ExamplePropsSingle = Omit<
+  React.ComponentProps<typeof GitPlatformSync>,
+  'platforms'
+> & {
   __label?: React.ReactNode;
+  platforms?: PlatformConfigObject[];
 };
 
 const Example = ({
@@ -76,7 +89,7 @@ const Example = ({
         <div className="w-full md:w-1/2 light">
           <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
             {Array.isArray(exampleProps) ? (
-              exampleProps.map(({ __label, ...props }, index) => (
+              exampleProps.map(({ __label, platforms, ...props }, index) => (
                 <Fragment key={index}>
                   {__label ? (
                     <div className="text-sm text-muted-foreground">
@@ -85,6 +98,7 @@ const Example = ({
                   ) : null}
                   <FakeTopBar>
                     <GitPlatformSync
+                      platforms={platforms ?? DEFAULT_PLATFORM_CONFIG}
                       {...props}
                       __container={containers?.light}
                     />
@@ -95,6 +109,7 @@ const Example = ({
               <FakeTopBar>
                 <GitPlatformSync
                   {...exampleProps}
+                  platforms={exampleProps.platforms ?? DEFAULT_PLATFORM_CONFIG}
                   __container={containers?.light}
                 />
               </FakeTopBar>
@@ -104,7 +119,7 @@ const Example = ({
         <div className="w-full md:w-1/2 dark">
           <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
             {Array.isArray(exampleProps) ? (
-              exampleProps.map(({ __label, ...props }, index) => (
+              exampleProps.map(({ __label, platforms, ...props }, index) => (
                 <Fragment key={index}>
                   {__label ? (
                     <div className="text-sm text-muted-foreground">
@@ -113,6 +128,7 @@ const Example = ({
                   ) : null}
                   <FakeTopBar>
                     <GitPlatformSync
+                      platforms={platforms ?? DEFAULT_PLATFORM_CONFIG}
                       {...props}
                       __container={containers?.dark}
                     />
@@ -123,6 +139,7 @@ const Example = ({
               <FakeTopBar>
                 <GitPlatformSync
                   {...exampleProps}
+                  platforms={exampleProps.platforms ?? DEFAULT_PLATFORM_CONFIG}
                   __container={containers?.dark}
                 />
               </FakeTopBar>

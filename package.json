@@ -33,6 +33,7 @@
       "@octokit/app": "16.1.1",
       "@octokit/auth-app": "8.1.1",
       "@octokit/rest": "22.0.0",
+      "@pierre/storage": "0.0.10",
       "@radix-ui/react-dialog": "1.1.15",
       "@radix-ui/react-label": "2.1.7",
       "@radix-ui/react-popover": "1.1.15",
