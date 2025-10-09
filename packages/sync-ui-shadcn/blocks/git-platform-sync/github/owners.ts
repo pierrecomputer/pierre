@@ -1,5 +1,5 @@
 import type { components } from '@octokit/openapi-types';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export type Owner = components['schemas']['repository']['owner'];
 
@@ -118,9 +118,20 @@ export function useOwners() {
     };
   }, [bustVersion]);
 
+  const ownerMap = useMemo(() => {
+    const map = new Map<string, Owner>();
+    for (const owner of owners) {
+      map.set(owner.id.toString(), owner);
+    }
+    return map;
+  }, [owners]);
+
   return {
     owners,
     status,
+    getOwnerById: (id: string) => {
+      return ownerMap.get(id);
+    },
     refresh: () => {
       clearOwnersCache();
       setBustVersion(bustVersion + 1);

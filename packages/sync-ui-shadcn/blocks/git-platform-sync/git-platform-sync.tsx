@@ -241,7 +241,6 @@ export function GitPlatformSync({
   });
 
   useEffect(() => {
-    console.log('fetching installation status in useEffect of GitPlatformSync');
     fetchInstallationStatus();
   }, [fetchInstallationStatus]);
 
@@ -542,13 +541,14 @@ function StepCreate({
   // repoDefaultBranch,
   __container,
 }: StepCreateProps) {
-  const { owners, status, refresh } = useOwners();
-  const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
+  const { owners, status, getOwnerById, refresh } = useOwners();
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
 
+  // TODO: This is inelegant. Since it'll necessarily need an extra render pass. We could move
+  // to an uncontrolled combobox and compute the value in the single pass, but idk.
   useEffect(() => {
-    if (owners.length > 1) {
-      console.log('setting selected owner to', owners[1]?.id?.toString());
-      setSelectedOwner(owners[1]?.id?.toString() ?? null);
+    if (owners.length > 0) {
+      setSelectedOwnerId(owners[0]?.id?.toString() ?? null);
     }
   }, [owners]);
 
@@ -576,15 +576,28 @@ function StepCreate({
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      console.log('submit', selectedOwner);
+      const formData = new FormData(e.currentTarget);
+      const repoName = formData.get('repo-name') as string;
+
+      console.log('submit', {
+        owner: selectedOwnerId ? getOwnerById(selectedOwnerId) : null,
+        repo: repoName,
+      });
     },
-    [selectedOwner]
+    [selectedOwnerId, getOwnerById]
   );
 
   const ownerOptions = useMemo(() => {
     return generateOwnerOptions(owners);
   }, [owners]);
 
+  // TODO: the `min-h-[115.25px]` is a hack to make the height of the content consistent
+  // when we're in different states other than the success state. however that won't
+  // be sustainable. Good for now for intent of behavior, but we should get better
+  // halfway states done.
+  // As an idea for the future, if we don't want to render the form without knowing
+  // the underlying data yet, then we could render it transparently in the background just
+  // for sizing and keep it transparent until the data is loaded.
   return (
     <>
       <div className="space-y-4">
@@ -596,21 +609,21 @@ function StepCreate({
           </p>
         </div>
         {status === 'loading' ? (
-          <div className="flex justify-center items-center">
+          <div className="flex justify-center items-center min-h-[115.25px]">
             <Loader2 className="h-4 w-4 animate-spin" />
           </div>
         ) : null}
         {status === 'error' ? (
           <div className="flex justify-center items-center">
             <AlertCircle className="h-4 w-4" />
-            <p className="text-sm text-red-500">
+            <p className="text-sm text-red-500 min-h-[115.25px]">
               Error loading GitHub accounts. Please try again.
             </p>
           </div>
         ) : null}
         {status === 'success' && owners.length === 0 ? (
           <div className="flex justify-center items-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground min-h-[115.25px]">
               No GitHub accounts found. Please check the app permissions in your
               GitHub settings.
             </p>
@@ -618,7 +631,7 @@ function StepCreate({
         ) : null}
         {status === 'success' && owners.length > 0 ? (
           <form onSubmit={handleSubmit}>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 min-h-[115.25px]">
               <div className="flex flex-row gap-1">
                 <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
                   <FieldLabel
@@ -631,10 +644,10 @@ function StepCreate({
                     id="storage-elements-github-owner"
                     {...containerProp}
                     className="max-w-full"
-                    value={selectedOwner}
+                    value={selectedOwnerId}
                     onValueChange={(value) => {
                       console.log('owner value changed', value);
-                      setSelectedOwner(value);
+                      setSelectedOwnerId(value);
                       onOwnerChange?.(value);
                     }}
                     onAddItem={() => {
@@ -665,6 +678,7 @@ function StepCreate({
                     autoFocus
                     spellCheck={false}
                     id="storage-elements-github-repo"
+                    name="repo-name"
                     {...repoInputProps}
                     onChange={(e) => onRepoNameChange?.(e.target.value)}
                   />
