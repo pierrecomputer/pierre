@@ -13,8 +13,6 @@
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
     "@pierre/storage": "catalog:",
-    "@pierre/sync-ui-core": "workspace:*",
-    "@pierre/sync-ui-hooks": "workspace:*",
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-label": "catalog:",
     "@radix-ui/react-popover": "catalog:",

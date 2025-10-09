@@ -44,6 +44,15 @@ export type RepositoryData = {
   branch?: string;
 };
 
+export type SyncedRepo = {
+  url: string;
+  repository: {
+    owner: string;
+    name: string;
+    defaultBranch: string;
+  };
+};
+
 export type GitPlatformSyncStatus =
   | 'disconnected'
   | 'connected'
@@ -163,6 +172,14 @@ export type GitPlatformSyncProps = {
   onOpenChange?: (isOpen: boolean) => void;
 
   /**
+   * @description The repository that has been synced to code.storage. This is used to
+   * display the repository information in the popover. If this is provided, the user will
+   * immediately see the syncing page, rather than the welcome or connection page.
+   * Set this as a result of the `onRepoCreateAction` callback.
+   */
+  codeStorageRepo?: SyncedRepo;
+
+  /**
    * @deprecated Internal use only, not guaranteed to be supported in the future
    * @description The container to render the popover portal in, only used for docs. This requires
    * modifying the shadcn Popover component to accept a container prop for the portal
@@ -186,6 +203,7 @@ export function GitPlatformSync({
   onOpenChange,
   onRepoNameChange,
   onOwnerChange,
+  codeStorageRepo,
   open,
   __container,
 }: GitPlatformSyncProps) {
@@ -276,6 +294,7 @@ export function GitPlatformSync({
     onOwnerChange,
     handleConnect,
     connectionStatus,
+    codeStorageRepo,
   };
 
   // TODO: fix full button, and disable tooltip on open popover
@@ -382,6 +401,7 @@ type PopoverConductorProps = Pick<
   | 'repoDefaultBranch'
   | 'onRepoNameChange'
   | 'onOwnerChange'
+  | 'codeStorageRepo'
 > & {
   handleConnect: ({ onSuccess }: { onSuccess?: () => void }) => void;
   connectionStatus: GitHubConnectionStatus;
@@ -399,15 +419,15 @@ function PopoverConductor({
   repoNamePlaceholder,
   repoDefaultBranch,
   handleConnect,
+  codeStorageRepo,
   connectionStatus,
 }: PopoverConductorProps) {
-  const [step, setStep] = useState<Step>('welcome');
-
-  useEffect(() => {
-    if (connectionStatus === 'installed') {
-      setStep('create');
-    }
-  }, [connectionStatus]);
+  let step: Step = 'welcome';
+  if (codeStorageRepo) {
+    step = 'manage';
+  } else if (connectionStatus === 'installed') {
+    step = 'create';
+  }
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -437,84 +457,19 @@ function PopoverConductor({
           connectionStatus={connectionStatus}
         />
       ) : null}
+      {step === 'manage' ? (
+        <StepManage codeStorageRepo={codeStorageRepo as SyncedRepo} />
+      ) : null}
     </PopoverContent>
   );
 }
 
-type StepWelcomeProps = {
-  onAppInstalled?: () => void;
-  onHelpAction?: () => void;
-  handleConnect: ({ onSuccess }: { onSuccess?: () => void }) => void;
-  connectionStatus: GitHubConnectionStatus;
+type StepManageProps = {
+  codeStorageRepo: SyncedRepo;
 };
 
-function StepWelcome({
-  onAppInstalled,
-  onHelpAction,
-  connectionStatus,
-  handleConnect,
-}: StepWelcomeProps) {
-  const isPendingConnection = connectionStatus === 'pending';
-  const hasError = connectionStatus === 'error';
-
-  // TODO: remove this
-  if (connectionStatus === 'installed') {
-    console.error(
-      'welcome step rendered with installed status, which shouldnt happen'
-    );
-  }
-
-  return (
-    <>
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <h4 className="font-normal leading-none">Connect to GitHub</h4>
-          <p className="text-sm text-muted-foreground">
-            Sync your changes to GitHub to backup your code at every snapshot by
-            installing our app on your personal account or organization.
-          </p>
-          {hasError ? (
-            <p className="text-sm text-red-500">
-              There was an error connecting to GitHub. Please try again.
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-col gap-3">
-          <Button
-            onClick={
-              isPendingConnection
-                ? undefined
-                : () => {
-                    handleConnect({
-                      onSuccess: onAppInstalled,
-                    });
-                  }
-            }
-            size="lg"
-            className={cn(
-              'w-full',
-              isPendingConnection && 'opacity-80 pointer-events-none'
-            )}
-          >
-            <GitHubIcon />{' '}
-            {isPendingConnection
-              ? 'Connecting to GitHub…'
-              : 'Install GitHub App'}
-          </Button>
-          {onHelpAction ? (
-            <Button
-              onClick={onHelpAction}
-              size="lg"
-              variant="secondary"
-              className="w-full"
-            >
-              <BookOpen /> Help me get started
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </>
-  );
+function StepManage({ codeStorageRepo }: StepManageProps) {
+  return <div>Manage {codeStorageRepo.repository.name}</div>;
 }
 
 type StepCreateProps = {
@@ -727,6 +682,82 @@ function StepCreate({
             </div>
           </form>
         ) : null}
+      </div>
+    </>
+  );
+}
+
+type StepWelcomeProps = {
+  onAppInstalled?: () => void;
+  onHelpAction?: () => void;
+  handleConnect: ({ onSuccess }: { onSuccess?: () => void }) => void;
+  connectionStatus: GitHubConnectionStatus;
+};
+
+function StepWelcome({
+  onAppInstalled,
+  onHelpAction,
+  connectionStatus,
+  handleConnect,
+}: StepWelcomeProps) {
+  const isPendingConnection = connectionStatus === 'pending';
+  const hasError = connectionStatus === 'error';
+
+  // TODO: remove this
+  if (connectionStatus === 'installed') {
+    console.error(
+      'welcome step rendered with installed status, which shouldnt happen'
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <h4 className="font-normal leading-none">Connect to GitHub</h4>
+          <p className="text-sm text-muted-foreground">
+            Sync your changes to GitHub to backup your code at every snapshot by
+            installing our app on your personal account or organization.
+          </p>
+          {hasError ? (
+            <p className="text-sm text-red-500">
+              There was an error connecting to GitHub. Please try again.
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-3">
+          <Button
+            onClick={
+              isPendingConnection
+                ? undefined
+                : () => {
+                    handleConnect({
+                      onSuccess: onAppInstalled,
+                    });
+                  }
+            }
+            size="lg"
+            className={cn(
+              'w-full',
+              isPendingConnection && 'opacity-80 pointer-events-none'
+            )}
+          >
+            <GitHubIcon />{' '}
+            {isPendingConnection
+              ? 'Connecting to GitHub…'
+              : 'Install GitHub App'}
+          </Button>
+          {onHelpAction ? (
+            <Button
+              onClick={onHelpAction}
+              size="lg"
+              variant="secondary"
+              className="w-full"
+            >
+              <BookOpen /> Help me get started
+            </Button>
+          ) : null}
+        </div>
       </div>
     </>
   );

@@ -15,12 +15,6 @@
       "path": "packages/shiki-stream"
     },
     {
-      "path": "packages/sync-ui-core"
-    },
-    {
-      "path": "packages/sync-ui-hooks"
-    },
-    {
       "path": "packages/sync-ui-shadcn"
     }
   ]

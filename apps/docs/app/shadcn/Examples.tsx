@@ -7,6 +7,7 @@ import {
   type GitPlatformSyncProps,
   type PlatformConfigObject,
   type RepositoryData,
+  type SyncedRepo,
 } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
 import { Lollipop, Menu } from 'lucide-react';
@@ -16,9 +17,22 @@ const EXAMPLE_APP_SLUG = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
 const DEFAULT_PLATFORM_CONFIG = [
   { platform: 'github', slug: EXAMPLE_APP_SLUG },
 ] as PlatformConfigObject[];
-const DEFAULT_ON_REPO_CREATE_ACTION = (repoData: RepositoryData) => {
-  console.log('repo created:', repoData);
-};
+
+function mockFetchCreateRepo(repoData: RepositoryData) {
+  return new Promise<SyncedRepo>((resolve) => {
+    setTimeout(() => {
+      resolve({
+        url: 'https://123.code.storage.com/xyz',
+        repository: {
+          // bad but mocks
+          owner: repoData.owner ?? '',
+          name: repoData.name ?? '',
+          defaultBranch: repoData.branch ?? '',
+        },
+      });
+    }, 250);
+  });
+}
 
 let cachedPortalContainers: { light: HTMLElement; dark: HTMLElement } | null =
   null;
@@ -79,6 +93,14 @@ const Example = ({
   details?: React.ReactNode;
 }) => {
   const containers = getPortalContainers();
+  const [syncedRepo, setSyncedRepo] = useState<SyncedRepo | undefined>(
+    undefined
+  );
+  const DEFAULT_ON_REPO_CREATE_ACTION = async (repoData: RepositoryData) => {
+    console.log('repo create action:', repoData);
+    const result = await mockFetchCreateRepo(repoData);
+    setSyncedRepo(result);
+  };
 
   return (
     <div id={id}>
@@ -98,7 +120,13 @@ const Example = ({
             {Array.isArray(exampleProps) ? (
               exampleProps.map(
                 (
-                  { __label, platforms, onRepoCreateAction, ...props },
+                  {
+                    __label,
+                    platforms,
+                    onRepoCreateAction,
+                    codeStorageRepo,
+                    ...props
+                  },
                   index
                 ) => (
                   <Fragment key={index}>
@@ -113,6 +141,7 @@ const Example = ({
                         onRepoCreateAction={
                           onRepoCreateAction ?? DEFAULT_ON_REPO_CREATE_ACTION
                         }
+                        codeStorageRepo={codeStorageRepo ?? syncedRepo}
                         {...props}
                         __container={containers?.light}
                       />
@@ -129,6 +158,7 @@ const Example = ({
                     exampleProps.onRepoCreateAction ??
                     DEFAULT_ON_REPO_CREATE_ACTION
                   }
+                  codeStorageRepo={exampleProps.codeStorageRepo ?? syncedRepo}
                   __container={containers?.light}
                 />
               </FakeTopBar>
@@ -140,7 +170,13 @@ const Example = ({
             {Array.isArray(exampleProps) ? (
               exampleProps.map(
                 (
-                  { __label, platforms, onRepoCreateAction, ...props },
+                  {
+                    __label,
+                    platforms,
+                    onRepoCreateAction,
+                    codeStorageRepo,
+                    ...props
+                  },
                   index
                 ) => (
                   <Fragment key={index}>
@@ -155,6 +191,7 @@ const Example = ({
                         onRepoCreateAction={
                           onRepoCreateAction ?? DEFAULT_ON_REPO_CREATE_ACTION
                         }
+                        codeStorageRepo={codeStorageRepo ?? syncedRepo}
                         {...props}
                         __container={containers?.dark}
                       />
@@ -171,6 +208,7 @@ const Example = ({
                     exampleProps.onRepoCreateAction ??
                     DEFAULT_ON_REPO_CREATE_ACTION
                   }
+                  codeStorageRepo={exampleProps.codeStorageRepo ?? syncedRepo}
                   __container={containers?.dark}
                 />
               </FakeTopBar>
