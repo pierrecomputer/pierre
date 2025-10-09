@@ -46,6 +46,10 @@ export async function GET(request: NextRequest) {
     }
     const response = NextResponse.redirect(successUrl);
 
+    // TODO: Consider adding a cookie that helps us determine which app
+    // this is for, so that if the application is swapped, we don't have an
+    // old token for a previous app that's sending us data from the wrong app.
+
     // Store only the user's OAuth token - it works across all installations
     response.cookies.set('github_token', tokenData.access_token, {
       httpOnly: true,

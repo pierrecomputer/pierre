@@ -16,24 +16,28 @@ export interface GitHubAppConnectProps {
    */
   redirectUrl?: string;
   /**
-   * @default '/api/github/check-installation'
-   * @description The URL to check for installation.
-   * If not provided, we will use `/api/github/check-installation` as the path
+   * @default '/api/github/installations'
+   * @description The URL to fetch GitHub app installations.
+   * If not provided, we will use `/api/github/installations` as the path
    * on the same origin that the current window is in.
    */
-  checkInstallationUrl?: string;
+  installationsUrl?: string;
 }
 
-// Track in-flight requests to prevent duplicate simultaneous requests
-let pendingCheckInstallation: Promise<boolean> | null = null;
+type InstallationsResponse = {
+  installations: Array<unknown>;
+};
 
-async function checkInstallation(
-  url = '/api/github/check-installation',
+// Track in-flight requests to prevent duplicate simultaneous requests
+let pendingFetchInstallations: Promise<InstallationsResponse> | null = null;
+
+async function fetchInstallations(
+  url = '/api/github/installations',
   signal?: AbortSignal
-) {
+): Promise<InstallationsResponse> {
   // If there's already a pending request, wait for it and return its result
-  if (pendingCheckInstallation) {
-    return pendingCheckInstallation;
+  if (pendingFetchInstallations) {
+    return pendingFetchInstallations;
   }
 
   // Create the request promise
@@ -50,29 +54,33 @@ async function checkInstallation(
       if (response.ok) {
         const data = await response.json();
 
-        if (data && 'installed' in data) {
-          if (data.installed) {
-            return true;
-          } else {
-            return false;
-          }
+        if (data && 'installations' in data) {
+          return {
+            installations: Array.isArray(data.installations)
+              ? data.installations
+              : [],
+          };
         } else {
           console.warn(
-            'Warning: checking installation - response has unexpected shape, falling back to not installed.'
+            'Warning: fetching installations - response has unexpected shape, falling back to empty array.'
           );
-          return false;
+          return { installations: [] };
         }
       } else {
-        throw new Error('check-installation endpoint not ok');
+        throw new Error('installations endpoint not ok');
       }
     } finally {
       // Clear the pending request when done (success or error)
-      pendingCheckInstallation = null;
+      pendingFetchInstallations = null;
     }
   })();
 
-  pendingCheckInstallation = requestPromise;
+  pendingFetchInstallations = requestPromise;
   return requestPromise;
+}
+
+function hasInstallation(data: InstallationsResponse): boolean {
+  return data.installations.length > 0;
 }
 
 export type GitHubConnectionStatus =
@@ -102,7 +110,7 @@ class GitHubAppConnector {
       slug: string;
       origin: string;
       redirectUrl: string;
-      checkInstallationUrl: string;
+      installationsUrl: string;
     },
     private onStatusChange: (status: GitHubConnectionStatus) => void
   ) {}
@@ -124,12 +132,12 @@ class GitHubAppConnector {
       event.data.state === this.stableId
     ) {
       try {
-        const installed = await checkInstallation(
-          this.config.checkInstallationUrl,
+        const data = await fetchInstallations(
+          this.config.installationsUrl,
           this.abortController.signal
         );
 
-        if (installed) {
+        if (hasInstallation(data)) {
           this.setStatus('installed');
         } else {
           this.setStatus('uninitialized');
@@ -173,12 +181,12 @@ class GitHubAppConnector {
         if (this.connectionStatus === 'pending') {
           try {
             // We need to determine if the app was installed or not.
-            const installed = await checkInstallation(
-              this.config.checkInstallationUrl,
+            const data = await fetchInstallations(
+              this.config.installationsUrl,
               this.abortController.signal
             );
 
-            if (installed) {
+            if (hasInstallation(data)) {
               this.setStatus('installed');
               onSuccess?.();
             } else {
@@ -201,11 +209,11 @@ class GitHubAppConnector {
     this.setStatus('pending');
 
     try {
-      const installed = await checkInstallation(
-        this.config.checkInstallationUrl,
+      const data = await fetchInstallations(
+        this.config.installationsUrl,
         this.abortController.signal
       );
-      if (installed) {
+      if (hasInstallation(data)) {
         this.setStatus('installed');
       } else {
         this.setStatus('uninitialized');
@@ -234,13 +242,14 @@ class GitHubAppConnector {
 export function useGitHubAppConnection({
   slug,
   redirectUrl: redirectUrlProp,
-  checkInstallationUrl,
+  installationsUrl,
 }: GitHubAppConnectProps) {
   const [status, setStatus] = useState<GitHubConnectionStatus>('uninitialized');
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const redirectUrl = redirectUrlProp ?? `${origin}/api/github/callback`;
-  const checkUrl = checkInstallationUrl ?? '/api/github/check-installation';
+  const installationsUrlResolved =
+    installationsUrl ?? '/api/github/installations';
 
   // Create the connector once - all config is captured at creation time.
   // We intentionally create this only once to avoid recreating listeners and intervals.
@@ -251,7 +260,7 @@ export function useGitHubAppConnection({
         slug,
         origin,
         redirectUrl,
-        checkInstallationUrl: checkUrl,
+        installationsUrl: installationsUrlResolved,
       },
       setStatus
     );
