@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export interface GitHubAppConnectProps {
   /**
@@ -24,12 +24,16 @@ export interface GitHubAppConnectProps {
   checkInstallationUrl?: string;
 }
 
-async function checkInstallation(url = '/api/github/check-installation') {
+async function checkInstallation(
+  url = '/api/github/check-installation',
+  signal?: AbortSignal
+) {
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
     },
+    signal,
   });
 
   if (response.ok) {
@@ -62,8 +66,150 @@ export type GitHubAppConnectionHandlerProps = {
   onSuccess?: () => void;
 };
 
-function useStableId() {
-  return useMemo(() => crypto.randomUUID(), []);
+/**
+ * Encapsulates all imperative logic for managing GitHub App installation flow.
+ * This class handles popup windows, message listeners, and polling in a way that
+ * avoids React closure/stale reference issues.
+ */
+class GitHubAppConnector {
+  private popup: Window | null = null;
+  private checkInterval: ReturnType<typeof setInterval> | null = null;
+  private abortController = new AbortController();
+  private connectionStatus: GitHubConnectionStatus = 'uninitialized';
+  private stableId = crypto.randomUUID();
+
+  constructor(
+    private config: {
+      slug: string;
+      origin: string;
+      redirectUrl: string;
+      checkInstallationUrl: string;
+    },
+    private onStatusChange: (status: GitHubConnectionStatus) => void
+  ) {}
+
+  private setStatus(status: GitHubConnectionStatus) {
+    this.connectionStatus = status;
+    this.onStatusChange(status);
+  }
+
+  private handleMessage = async (event: MessageEvent) => {
+    if (event.origin !== this.config.origin) {
+      return;
+    }
+
+    // If we're getting the right event type, and the unique
+    // state id matches this instance, we can proceed
+    if (
+      event.data.type === 'git-platform-sync-app-installed--github' &&
+      event.data.state === this.stableId
+    ) {
+      try {
+        const installed = await checkInstallation(
+          this.config.checkInstallationUrl,
+          this.abortController.signal
+        );
+
+        if (installed) {
+          this.setStatus('installed');
+        } else {
+          this.setStatus('uninitialized');
+        }
+      } catch {
+        this.setStatus('error');
+      }
+    }
+  };
+
+  async connect(props?: GitHubAppConnectionHandlerProps) {
+    const onSuccess = props?.onSuccess;
+    const width = 600;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+
+    // Build the installation URL with redirect
+    const baseUrl = `https://github.com/apps/${this.config.slug}/installations/new`;
+    const url = `${baseUrl}?redirect_uri=${encodeURIComponent(this.config.redirectUrl)}&state=${encodeURIComponent(this.stableId)}`;
+
+    this.setStatus('pending');
+
+    this.popup = window.open(
+      url,
+      'code-storage-github-app-install',
+      `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no,status=no`
+    );
+
+    this.checkInterval = setInterval(async () => {
+      if (this.connectionStatus === 'installed') {
+        this.clearInterval();
+        onSuccess?.();
+      } else if (!this.popup || this.popup.closed) {
+        // Nothing new can happen if the pop-up is gone, so lets clear the interval
+        this.clearInterval();
+
+        // If the connection was closed while still in the 'pending' state,
+        // the user likely closed the pop-up before the handleMessage listener
+        // was able to receive a message (regardless of whether one was sent).
+        if (this.connectionStatus === 'pending') {
+          try {
+            // We need to determine if the app was installed or not.
+            const installed = await checkInstallation(
+              this.config.checkInstallationUrl,
+              this.abortController.signal
+            );
+
+            if (installed) {
+              this.setStatus('installed');
+              onSuccess?.();
+            } else {
+              this.setStatus('uninitialized');
+            }
+          } catch {
+            this.setStatus('error');
+          }
+        }
+      }
+    }, 1000);
+
+    // Use AbortController for automatic cleanup
+    window.addEventListener('message', this.handleMessage, {
+      signal: this.abortController.signal,
+    });
+  }
+
+  async fetchInstallationStatus() {
+    this.setStatus('pending');
+
+    try {
+      const installed = await checkInstallation(
+        this.config.checkInstallationUrl,
+        this.abortController.signal
+      );
+      if (installed) {
+        this.setStatus('installed');
+      } else {
+        this.setStatus('uninitialized');
+      }
+    } catch {
+      this.setStatus('error');
+    }
+  }
+
+  private clearInterval() {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+      this.checkInterval = null;
+    }
+  }
+
+  destroy() {
+    // AbortController automatically removes all listeners and aborts any in-flight fetches
+    this.abortController.abort();
+    this.clearInterval();
+    this.popup?.close();
+    this.popup = null;
+  }
 }
 
 export function useGitHubAppConnection({
@@ -71,167 +217,51 @@ export function useGitHubAppConnection({
   redirectUrl: redirectUrlProp,
   checkInstallationUrl,
 }: GitHubAppConnectProps) {
-  const stableId = useStableId();
-
-  const [connectionStatus, setConnectionStatus] =
-    useState<GitHubConnectionStatus>('uninitialized');
-
-  const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Use a ref to avoid stale closures in the interval callback, really gross
-  // but it works for now. any time we update the state we also need to update the ref
-  const connectionStatusRef = useRef<GitHubConnectionStatus>('uninitialized');
+  const [status, setStatus] = useState<GitHubConnectionStatus>('uninitialized');
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const redirectUrl = redirectUrlProp ?? `${origin}/api/github/callback`;
+  const checkUrl = checkInstallationUrl ?? '/api/github/check-installation';
 
-  // TODO: consider one global handleMessage listener that is attached once forever
-  // instead of trying to attach multiple listeners and keep track of them
-  const handleMessage = useCallback(
-    async (event: MessageEvent) => {
-      if (event.origin !== origin) {
-        return;
-      }
-      // If we're getting the right event type, and the unique
-      // state id matches this instance of the hook, we can proceed
-      if (
-        event.data.type === 'github-app-installed' &&
-        event.data.state === stableId
-      ) {
-        try {
-          const installed = await checkInstallation(checkInstallationUrl);
-
-          if (installed) {
-            connectionStatusRef.current = 'installed';
-            setConnectionStatus('installed');
-          } else {
-            connectionStatusRef.current = 'uninitialized';
-            setConnectionStatus('uninitialized');
-          }
-        } catch {
-          connectionStatusRef.current = 'error';
-          setConnectionStatus('error');
-        }
-
-        window.removeEventListener('message', handleMessage);
-      }
-    },
-    [checkInstallationUrl, origin, stableId]
-  );
-
-  // TODO: we'll need a way to add cleanup inside of a useEffect so that
-  // we dont leak memory or duplicate listeners
-  const handleConnect = useCallback(
-    (props?: GitHubAppConnectionHandlerProps) => {
-      const onSuccess = props?.onSuccess;
-      const width = 600;
-      const height = 700;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-
-      // Build the installation URL with redirect
-      const redirectUrl = redirectUrlProp ?? `${origin}/api/github/callback`;
-      const baseUrl = `https://github.com/apps/${slug}/installations/new`;
-
-      // Add redirect_uri as a query parameter
-      const url = `${baseUrl}?redirect_uri=${encodeURIComponent(redirectUrl)}&state=${encodeURIComponent(stableId)}`;
-
-      connectionStatusRef.current = 'pending';
-      setConnectionStatus('pending');
-
-      const popup = window.open(
-        url,
-        'code-storage-github-app-install',
-        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no,status=no`
-      );
-
-      checkIntervalRef.current = setInterval(async () => {
-        if (connectionStatusRef.current === 'installed') {
-          clearInterval(checkIntervalRef.current ?? undefined);
-          onSuccess?.();
-        } else if (!popup || popup.closed) {
-          // Nothing new can happen if the pop-up is gone, so lets clear the interval
-          clearInterval(checkIntervalRef.current ?? undefined);
-          // Stop listening for messages if the popup is closed, since there's nothing
-          // to send the message from
-          window.removeEventListener('message', handleMessage);
-
-          // If the connection was closed while still in the 'pending' state,
-          // the user likely closed the pop-up before the handleMessage listener
-          // was able to receive a message (regardless of whether one was sent).
-          if (connectionStatusRef.current === 'pending') {
-            try {
-              // We need to determine if the app was installed or not.
-              const installed = await checkInstallation(checkInstallationUrl);
-
-              if (installed) {
-                connectionStatusRef.current = 'installed';
-                setConnectionStatus('installed');
-                onSuccess?.();
-              } else {
-                connectionStatusRef.current = 'uninitialized';
-                setConnectionStatus('uninitialized');
-              }
-            } catch {
-              // TODO: decide if it'd be better to just use 'uninitialized' here
-              // since the error is not that interesting if they didn't install the app
-              connectionStatusRef.current = 'error';
-              setConnectionStatus('error');
-            }
-          } else {
-            // TODO: do we need to do anything in any other case?
-            // in the normal success case, the connectionStatus will be set by the handleMessage
-            // listener.
-          }
-        }
-      }, 1000);
-
-      window.addEventListener('message', handleMessage);
-    },
-    [
-      redirectUrlProp,
-      slug,
-      handleMessage,
-      origin,
-      checkInstallationUrl,
-      stableId,
-    ]
-  );
-
-  // TODO: we should add a way for the application to provide this information directly
-  // and trust that it's accurate, so that it isn't a waterfall request every load
-  const fetchInstallationStatus = useCallback(async () => {
-    // TODO: handle multiple calls to this function during the pending state
-    setConnectionStatus('pending');
-
-    try {
-      const installed = await checkInstallation(checkInstallationUrl);
-      if (installed) {
-        setConnectionStatus('installed');
-      } else {
-        setConnectionStatus('uninitialized');
-      }
-    } catch {
-      setConnectionStatus('error');
-    }
-  }, [checkInstallationUrl]);
-
-  const destroyImpl = useCallback(() => {
-    // TODO: lets also abort any calls to checkInstallation
-    window.removeEventListener('message', handleMessage);
-    clearInterval(checkIntervalRef.current ?? undefined);
-  }, [handleMessage]);
-
-  // Keep a ref to the latest destroy implementation
-  const destroyRef = useRef(destroyImpl);
-  destroyRef.current = destroyImpl;
-
-  // Return a stable wrapper that always calls the latest destroy
-  const destroy = useCallback(() => {
-    destroyRef.current();
+  // Create the connector once - all config is captured at creation time.
+  // We intentionally create this only once to avoid recreating listeners and intervals.
+  // Config changes during the component lifecycle are not supported by design.
+  const connector = useMemo(() => {
+    return new GitHubAppConnector(
+      {
+        slug,
+        origin,
+        redirectUrl,
+        checkInstallationUrl: checkUrl,
+      },
+      setStatus
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    return () => connector.destroy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Return stable callbacks that delegate to the connector
+  const handleConnect = useCallback(
+    (props?: GitHubAppConnectionHandlerProps) => {
+      connector.connect(props);
+    },
+    [connector]
+  );
+
+  const fetchInstallationStatus = useCallback(async () => {
+    await connector.fetchInstallationStatus();
+  }, [connector]);
+
+  const destroy = useCallback(() => {
+    connector.destroy();
+  }, [connector]);
+
   return {
-    status: connectionStatus,
+    status,
     handleConnect,
     fetchInstallationStatus,
     destroy,

@@ -248,10 +248,7 @@ export function GitPlatformSync({
     return () => {
       destroyGitHubAppConnection();
     };
-    // destroyGitHubAppConnection is stable (uses ref pattern internally)
-    // and we only want cleanup on unmount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [destroyGitHubAppConnection]);
 
   const labelText = `Sync to ${platformName}`;
 

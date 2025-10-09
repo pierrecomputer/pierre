@@ -5,6 +5,8 @@ import { CheckCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 
+const appInstallType = 'git-platform-sync-app-installed--github';
+
 export default function SuccessPage() {
   const searchParams = useSearchParams();
   const installationId = searchParams.get('installation_id');
@@ -15,7 +17,7 @@ export default function SuccessPage() {
     if (window.opener) {
       window.opener.postMessage(
         {
-          type: 'github-app-installed',
+          type: appInstallType,
           installationId,
           setupAction,
           state,
@@ -55,7 +57,7 @@ export default function SuccessPage() {
                 if (window.opener) {
                   window.opener.postMessage(
                     {
-                      type: 'github-app-installed',
+                      type: appInstallType,
                       installationId,
                       setupAction,
                       state,
