@@ -74,7 +74,9 @@ export type RenderCustomFileMetadata = (
 
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 
+export type AnnotationSide = 'deletions' | 'additions';
+
 export type LineAnnotation<T = undefined> = {
-  side: 'deletions' | 'additions';
+  side: AnnotationSide;
   lineNumber: number;
 } & (T extends undefined ? { metadata?: undefined } : { metadata: T });

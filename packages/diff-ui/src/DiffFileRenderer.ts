@@ -1,6 +1,7 @@
 import { DiffHunksRenderer } from './DiffHunksRenderer';
 import './custom-components/Container';
 import type {
+  AnnotationSide,
   BaseRendererOptions,
   FileDiffMetadata,
   LineAnnotation,
@@ -18,29 +19,53 @@ interface FileDiffRenderProps {
   wrapper?: HTMLElement;
 }
 
-interface DiffFileBaseOptions {
+type FileBaseRendererOptions = Omit<BaseRendererOptions, 'lang'>;
+
+export interface LineEventBaseProps {
+  annotationSide: AnnotationSide;
+  type: 'context' | 'change-deletion' | 'change-addition';
+  lineNumber: number;
+  lineElement: HTMLElement;
+}
+
+export interface OnLineClickProps extends LineEventBaseProps {
+  event: PointerEvent;
+}
+
+export interface OnLineEnterProps extends LineEventBaseProps {
+  event: MouseEvent;
+}
+
+export interface OnLineLeaveProps extends LineEventBaseProps {
+  event: MouseEvent;
+}
+
+type HandleMouseEventProps =
+  | { eventType: 'click'; event: PointerEvent }
+  | { eventType: 'move'; event: MouseEvent };
+
+interface DiffFileBaseOptions<LAnnotation> {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderCustomFileMetadata;
   detectLanguage?: boolean;
-}
-
-interface FileBaseRendererOptions<LAnnotation>
-  extends Omit<BaseRendererOptions, 'lang'> {
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>,
     diff: FileDiffMetadata
   ): HTMLElement | undefined;
+  onLineClick?(props: OnLineClickProps, fileDiff: FileDiffMetadata): unknown;
+  onLineEnter?(props: LineEventBaseProps, fileDiff: FileDiffMetadata): unknown;
+  onLineLeave?(props: LineEventBaseProps, fileDiff: FileDiffMetadata): unknown;
 }
 
 interface DiffFileThemeRendererOptions<LAnnotation>
-  extends FileBaseRendererOptions<LAnnotation>,
+  extends FileBaseRendererOptions,
     ThemeRendererOptions,
-    DiffFileBaseOptions {}
+    DiffFileBaseOptions<LAnnotation> {}
 
 interface DiffFileThemesRendererOptions<LAnnotation>
-  extends FileBaseRendererOptions<LAnnotation>,
+  extends FileBaseRendererOptions,
     ThemesRendererOptions,
-    DiffFileBaseOptions {}
+    DiffFileBaseOptions<LAnnotation> {}
 
 export type DiffFileRendererOptions<LAnnotation> =
   | DiffFileThemeRendererOptions<LAnnotation>
@@ -134,11 +159,95 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
     this.fileContainer =
       fileContainer ?? document.createElement('pjs-container');
-    this.fileContainer.addEventListener('click', (event) => {
-      const path = event.composedPath();
-      console.log('How to parse out the tree on click...', path);
-    });
+    const { onLineClick, onLineEnter, onLineLeave } = this.options;
+    if (onLineClick != null) {
+      this.fileContainer.addEventListener('click', this.handleMouseClick);
+    }
+    if (onLineEnter != null || onLineLeave != null) {
+      this.fileContainer.addEventListener('mousemove', this.handleMouseMove);
+      if (onLineLeave) {
+        this.fileContainer.addEventListener(
+          'mouseleave',
+          this.handleMouseLeave
+        );
+      }
+    }
     return this.fileContainer;
+  }
+
+  handleMouseClick = (event: PointerEvent) => {
+    this.handleMouseEvent({ eventType: 'click', event });
+  };
+
+  hoveredRow: LineEventBaseProps | undefined;
+  handleMouseMove = (event: MouseEvent) => {
+    this.handleMouseEvent({ eventType: 'move', event });
+  };
+  handleMouseLeave = () => {
+    if (this.hoveredRow == null || this.fileDiff == null) return;
+    this.options.onLineLeave?.(this.hoveredRow, this.fileDiff);
+    this.hoveredRow = undefined;
+  };
+
+  private getLineData(path: EventTarget[]): LineEventBaseProps | undefined {
+    const lineElement = path.find(
+      (element) => element instanceof HTMLElement && 'line' in element.dataset
+    );
+    if (!(lineElement instanceof HTMLElement)) return undefined;
+    const lineNumber = parseInt(lineElement.dataset.line ?? '');
+    if (isNaN(lineNumber)) return;
+    const type = lineElement.dataset.lineType;
+    if (
+      type !== 'context' &&
+      type !== 'change-deletion' &&
+      type !== 'change-addition'
+    ) {
+      return undefined;
+    }
+    const annotationSide: AnnotationSide = (() => {
+      if (type === 'change-deletion') {
+        return 'deletions';
+      }
+      if (type === 'change-addition') {
+        return 'additions';
+      }
+      const parent = lineElement.closest('[data-code]');
+      if (!(parent instanceof HTMLElement)) {
+        return 'additions';
+      }
+      return 'deletions' in parent.dataset ? 'deletions' : 'additions';
+    })();
+    return {
+      annotationSide,
+      type,
+      lineElement,
+      lineNumber,
+    };
+  }
+
+  private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
+    if (this.fileDiff == null) return;
+    const data = this.getLineData(event.composedPath());
+    switch (eventType) {
+      case 'move': {
+        if (this.hoveredRow?.lineElement === data?.lineElement) {
+          break;
+        }
+        if (this.hoveredRow != null) {
+          this.options.onLineLeave?.(this.hoveredRow, this.fileDiff);
+          this.hoveredRow = undefined;
+        }
+        if (data != null) {
+          this.hoveredRow = data;
+          this.options.onLineEnter?.(this.hoveredRow, this.fileDiff);
+        }
+        break;
+      }
+      case 'click':
+        if (data == null) break;
+        this.options.onLineClick?.({ ...data, event }, this.fileDiff);
+        break;
+    }
   }
 
   getOrCreatePre(container: HTMLElement) {

@@ -112,6 +112,26 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         detectLanguage: true,
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation,
+        onLineClick(props, diff) {
+          console.log(diff.name, 'onLineClick', props);
+        },
+        // Super noisy, but for debuggin
+        // onLineEnter(props, diff) {
+        //   console.log(
+        //     diff.name,
+        //     'onLineEnter',
+        //     props.annotationSide,
+        //     props.lineNumber
+        //   );
+        // },
+        // onLineLeave(props, diff) {
+        //   console.log(
+        //     diff.name,
+        //     'onLineLeave',
+        //     props.annotationSide,
+        //     props.lineNumber
+        //   );
+        // },
       });
       if (fileAnnotations != null) {
         instance.setLineAnnotations(fileAnnotations);
