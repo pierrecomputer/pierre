@@ -145,9 +145,10 @@ export type GitPlatformSyncProps = {
   onOwnerChange?: (owner: string) => void;
 
   /**
-   * @description Callback when a user successfully creates a sync repository.
+   * @description Callback when a user clicks the 'Create Repository' button with valid
+   * data selected. This is where you will hook into the the code storage endpoints in your app.
    */
-  onRepoCreated?: (repoData: RepositoryData) => void;
+  onRepoCreateAction?: (repoData: RepositoryData) => void;
 
   /**
    *
@@ -179,8 +180,9 @@ export function GitPlatformSync({
   repoName,
   repoDefaultName,
   repoNamePlaceholder,
-  repoDefaultBranch,
+  repoDefaultBranch = 'main',
   onHelpAction,
+  onRepoCreateAction,
   onOpenChange,
   onRepoNameChange,
   onOwnerChange,
@@ -265,6 +267,7 @@ export function GitPlatformSync({
     align,
     __container,
     onHelpAction,
+    onRepoCreateAction,
     repoName,
     repoDefaultName,
     repoNamePlaceholder,
@@ -372,6 +375,7 @@ type PopoverConductorProps = Pick<
   | 'align'
   | '__container'
   | 'onHelpAction'
+  | 'onRepoCreateAction'
   | 'repoName'
   | 'repoDefaultName'
   | 'repoNamePlaceholder'
@@ -387,6 +391,7 @@ function PopoverConductor({
   align,
   __container,
   onHelpAction,
+  onRepoCreateAction,
   onRepoNameChange,
   onOwnerChange,
   repoName,
@@ -426,6 +431,7 @@ function PopoverConductor({
           repoNamePlaceholder={repoNamePlaceholder}
           repoDefaultBranch={repoDefaultBranch}
           onRepoNameChange={onRepoNameChange}
+          onRepoCreateAction={onRepoCreateAction}
           onOwnerChange={onOwnerChange}
           handleConnect={handleConnect}
           connectionStatus={connectionStatus}
@@ -516,6 +522,7 @@ type StepCreateProps = {
   onRepoNameChange?: (repoName: string) => void;
   // onBranchChange?: (branch: string) => void;
   connectionStatus: GitHubConnectionStatus;
+  onRepoCreateAction?: (repoData: RepositoryData) => void;
   handleConnect: ({ onSuccess }: { onSuccess?: () => void }) => void;
   repoName?: string;
   repoDefaultName?: string;
@@ -534,11 +541,12 @@ type StepCreateProps = {
 function StepCreate({
   onOwnerChange,
   onRepoNameChange,
+  onRepoCreateAction,
   handleConnect,
   repoName,
   repoDefaultName,
   repoNamePlaceholder,
-  // repoDefaultBranch,
+  repoDefaultBranch,
   __container,
 }: StepCreateProps) {
   const { owners, status, getOwnerById, refresh } = useOwners();
@@ -578,13 +586,42 @@ function StepCreate({
       e.preventDefault();
       const formData = new FormData(e.currentTarget);
       const repoName = formData.get('repo-name') as string;
+      // TODO: show errors in UI
+      if (!selectedOwnerId) {
+        console.warn('no selectedOwnerId');
+        return;
+      }
 
-      console.log('submit', {
-        owner: selectedOwnerId ? getOwnerById(selectedOwnerId) : null,
-        repo: repoName,
+      const owner = getOwnerById(selectedOwnerId);
+
+      if (!owner) {
+        console.warn('no owner found for selectedOwnerId', selectedOwnerId);
+        return;
+      }
+
+      const ownerLogin = owner.login;
+
+      if (!ownerLogin) {
+        console.warn(
+          'no ownerLogin found for selectedOwnerId',
+          selectedOwnerId,
+          owner
+        );
+        return;
+      }
+
+      if (!onRepoCreateAction) {
+        console.warn('no onRepoCreateAction provided');
+        return;
+      }
+
+      onRepoCreateAction({
+        owner: ownerLogin,
+        name: repoName,
+        branch: repoDefaultBranch,
       });
     },
-    [selectedOwnerId, getOwnerById]
+    [selectedOwnerId, getOwnerById, onRepoCreateAction, repoDefaultBranch]
   );
 
   const ownerOptions = useMemo(() => {

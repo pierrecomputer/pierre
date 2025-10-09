@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   GitPlatformSync,
+  type GitPlatformSyncProps,
   type PlatformConfigObject,
+  type RepositoryData,
 } from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
 import { Lollipop, Menu } from 'lucide-react';
@@ -14,6 +16,9 @@ const EXAMPLE_APP_SLUG = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
 const DEFAULT_PLATFORM_CONFIG = [
   { platform: 'github', slug: EXAMPLE_APP_SLUG },
 ] as PlatformConfigObject[];
+const DEFAULT_ON_REPO_CREATE_ACTION = (repoData: RepositoryData) => {
+  console.log('repo created:', repoData);
+};
 
 let cachedPortalContainers: { light: HTMLElement; dark: HTMLElement } | null =
   null;
@@ -55,10 +60,7 @@ function FakeTopBar({
   );
 }
 
-type ExamplePropsSingle = Omit<
-  React.ComponentProps<typeof GitPlatformSync>,
-  'platforms'
-> & {
+type ExamplePropsSingle = Omit<GitPlatformSyncProps, 'platforms'> & {
   __label?: React.ReactNode;
   platforms?: PlatformConfigObject[];
 };
@@ -94,27 +96,39 @@ const Example = ({
         <div className="w-full md:w-1/2 light">
           <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
             {Array.isArray(exampleProps) ? (
-              exampleProps.map(({ __label, platforms, ...props }, index) => (
-                <Fragment key={index}>
-                  {__label ? (
-                    <div className="text-sm text-muted-foreground">
-                      {__label}
-                    </div>
-                  ) : null}
-                  <FakeTopBar>
-                    <GitPlatformSync
-                      platforms={platforms ?? DEFAULT_PLATFORM_CONFIG}
-                      {...props}
-                      __container={containers?.light}
-                    />
-                  </FakeTopBar>
-                </Fragment>
-              ))
+              exampleProps.map(
+                (
+                  { __label, platforms, onRepoCreateAction, ...props },
+                  index
+                ) => (
+                  <Fragment key={index}>
+                    {__label ? (
+                      <div className="text-sm text-muted-foreground">
+                        {__label}
+                      </div>
+                    ) : null}
+                    <FakeTopBar>
+                      <GitPlatformSync
+                        platforms={platforms ?? DEFAULT_PLATFORM_CONFIG}
+                        onRepoCreateAction={
+                          onRepoCreateAction ?? DEFAULT_ON_REPO_CREATE_ACTION
+                        }
+                        {...props}
+                        __container={containers?.light}
+                      />
+                    </FakeTopBar>
+                  </Fragment>
+                )
+              )
             ) : (
               <FakeTopBar>
                 <GitPlatformSync
                   {...exampleProps}
                   platforms={exampleProps.platforms ?? DEFAULT_PLATFORM_CONFIG}
+                  onRepoCreateAction={
+                    exampleProps.onRepoCreateAction ??
+                    DEFAULT_ON_REPO_CREATE_ACTION
+                  }
                   __container={containers?.light}
                 />
               </FakeTopBar>
@@ -124,27 +138,39 @@ const Example = ({
         <div className="w-full md:w-1/2 dark">
           <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
             {Array.isArray(exampleProps) ? (
-              exampleProps.map(({ __label, platforms, ...props }, index) => (
-                <Fragment key={index}>
-                  {__label ? (
-                    <div className="text-sm text-muted-foreground">
-                      {__label}
-                    </div>
-                  ) : null}
-                  <FakeTopBar>
-                    <GitPlatformSync
-                      platforms={platforms ?? DEFAULT_PLATFORM_CONFIG}
-                      {...props}
-                      __container={containers?.dark}
-                    />
-                  </FakeTopBar>
-                </Fragment>
-              ))
+              exampleProps.map(
+                (
+                  { __label, platforms, onRepoCreateAction, ...props },
+                  index
+                ) => (
+                  <Fragment key={index}>
+                    {__label ? (
+                      <div className="text-sm text-muted-foreground">
+                        {__label}
+                      </div>
+                    ) : null}
+                    <FakeTopBar>
+                      <GitPlatformSync
+                        platforms={platforms ?? DEFAULT_PLATFORM_CONFIG}
+                        onRepoCreateAction={
+                          onRepoCreateAction ?? DEFAULT_ON_REPO_CREATE_ACTION
+                        }
+                        {...props}
+                        __container={containers?.dark}
+                      />
+                    </FakeTopBar>
+                  </Fragment>
+                )
+              )
             ) : (
               <FakeTopBar>
                 <GitPlatformSync
                   {...exampleProps}
                   platforms={exampleProps.platforms ?? DEFAULT_PLATFORM_CONFIG}
+                  onRepoCreateAction={
+                    exampleProps.onRepoCreateAction ??
+                    DEFAULT_ON_REPO_CREATE_ACTION
+                  }
                   __container={containers?.dark}
                 />
               </FakeTopBar>
@@ -281,8 +307,8 @@ function ExampleEvents() {
       title="Events"
       id="git-platform-sync--events"
       exampleProps={{
-        onRepoCreated: (repoData) => {
-          console.log('repo created:', repoData);
+        onRepoCreateAction: (repoData) => {
+          console.log('repo create button pressed:', repoData);
         },
         onHelpAction: () => {
           console.log('help needed!');
@@ -302,8 +328,8 @@ function ExampleEvents() {
 function TopBar() {
   return (
     <GitPlatformSync
-      onRepoCreated={(repoData) => {
-        console.log('repo created:', repoData);
+      onRepoCreateAction={(repoData) => {
+        console.log('repo create button pressed:', repoData);
       }}
       // Adds a 'Help me get started' button that you can
       // handle to describe the process to your users
