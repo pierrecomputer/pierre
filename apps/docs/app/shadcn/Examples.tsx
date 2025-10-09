@@ -279,6 +279,7 @@ function TopBar() {
           slug: '<my-app-slug>',
         },
       ]}
+      
     />
   );
 }

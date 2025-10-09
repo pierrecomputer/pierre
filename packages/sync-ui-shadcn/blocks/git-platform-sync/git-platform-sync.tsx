@@ -422,12 +422,22 @@ function PopoverConductor({
   codeStorageRepo,
   connectionStatus,
 }: PopoverConductorProps) {
-  let step: Step = 'welcome';
+  let initialStep: Step = 'welcome';
   if (codeStorageRepo) {
-    step = 'manage';
+    initialStep = 'manage';
   } else if (connectionStatus === 'installed') {
-    step = 'create';
+    initialStep = 'create';
   }
+
+  const [step, setStep] = useState<Step>(initialStep);
+
+  useEffect(() => {
+    if (codeStorageRepo) {
+      setStep('manage');
+    } else if (connectionStatus === 'installed') {
+      setStep('create');
+    }
+  }, [codeStorageRepo, connectionStatus]);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
