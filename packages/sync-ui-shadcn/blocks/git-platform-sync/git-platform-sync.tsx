@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { BookOpen, ChevronDown } from 'lucide-react';
+import { AlertCircle, BookOpen, ChevronDown, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ComboBox } from './combobox';
@@ -22,10 +22,11 @@ import {
   useGitHubAppConnection,
 } from './github/github-app-connect';
 import { GitHubIcon } from './github/icon';
+import { generateOwnerOptions, useOwners } from './github/owners';
 
 // TODO: determine if this is the canonical way to import other components inside of a block
 
-export type Step = 'welcome' | 'sync';
+export type Step = 'welcome' | 'create' | 'manage';
 
 export type RepositoryData = {
   /**
@@ -398,6 +399,12 @@ function PopoverConductor({
 }: PopoverConductorProps) {
   const [step, setStep] = useState<Step>('welcome');
 
+  useEffect(() => {
+    if (connectionStatus === 'installed') {
+      setStep('create');
+    }
+  }, [connectionStatus]);
+
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { container: __container } : {};
@@ -406,14 +413,14 @@ function PopoverConductor({
     <PopoverContent className="w-[400px]" align={align} {...containerProp}>
       {step === 'welcome' ? (
         <StepWelcome
-          onAppInstalled={() => setStep('sync')}
+          // onAppInstalled={() => setStep('create')}
           onHelpAction={onHelpAction}
           handleConnect={handleConnect}
           connectionStatus={connectionStatus}
         />
       ) : null}
-      {step === 'sync' ? (
-        <StepSync
+      {step === 'create' ? (
+        <StepCreate
           __container={__container}
           repoName={repoName}
           repoDefaultName={repoDefaultName}
@@ -421,6 +428,8 @@ function PopoverConductor({
           repoDefaultBranch={repoDefaultBranch}
           onRepoNameChange={onRepoNameChange}
           onOwnerChange={onOwnerChange}
+          handleConnect={handleConnect}
+          connectionStatus={connectionStatus}
         />
       ) : null}
     </PopoverContent>
@@ -435,7 +444,7 @@ type StepWelcomeProps = {
 };
 
 function StepWelcome({
-  // onAppInstalled,
+  onAppInstalled,
   onHelpAction,
   connectionStatus,
   handleConnect,
@@ -472,7 +481,7 @@ function StepWelcome({
                 ? undefined
                 : () => {
                     handleConnect({
-                      // onSuccess: onAppInstalled
+                      onSuccess: onAppInstalled,
                     });
                   }
             }
@@ -503,10 +512,12 @@ function StepWelcome({
   );
 }
 
-type StepSyncProps = {
+type StepCreateProps = {
   onOwnerChange?: (owner: string) => void;
   onRepoNameChange?: (repoName: string) => void;
   // onBranchChange?: (branch: string) => void;
+  connectionStatus: GitHubConnectionStatus;
+  handleConnect: ({ onSuccess }: { onSuccess?: () => void }) => void;
   repoName?: string;
   repoDefaultName?: string;
   repoNamePlaceholder?: string;
@@ -521,15 +532,18 @@ type StepSyncProps = {
   >['container'];
 };
 
-function StepSync({
+function StepCreate({
   onOwnerChange,
   onRepoNameChange,
+  handleConnect,
   repoName,
   repoDefaultName,
   repoNamePlaceholder,
   // repoDefaultBranch,
   __container,
-}: StepSyncProps) {
+}: StepCreateProps) {
+  const { owners, status } = useOwners();
+
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { __container: __container } : {};
@@ -561,73 +575,80 @@ function StepSync({
             changes. We&apos;ll push changes with each new prompt you send.
           </p>
         </div>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-row gap-1">
-            <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
-              <FieldLabel
-                htmlFor="storage-elements-github-owner"
-                className="font-normal"
-              >
-                Owner
-              </FieldLabel>
-              <ComboBox
-                id="storage-elements-github-owner"
-                {...containerProp}
-                className="max-w-full"
-                onValueChange={onOwnerChange}
-                // initialValue={'pierredotco'}
-                onAddItem={() => {
-                  console.log('Add GitHub account!');
-                }}
-                addItemLabel="Add GitHub account…"
-                options={[
-                  {
-                    value: 'slexaxton',
-                    label: 'SlexAxton',
-                    image:
-                      'https://avatars.githubusercontent.com/u/96554?v=4&size=64',
-                  },
-                  {
-                    value: 'pierredotco',
-                    label: 'pierredotco',
-                    image:
-                      'https://avatars.githubusercontent.com/u/154267919?s=48&v=4',
-                  },
-                  {
-                    value: 'jquery',
-                    label: 'jQuery with a really long label',
-                    image:
-                      'https://avatars.githubusercontent.com/u/70142?s=48&v=4',
-                  },
-                ]}
-              />
-            </Field>
-            <div
-              aria-hidden
-              className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
-            >
-              /
-            </div>
-            <Field className="flex-1 gap-1">
-              <FieldLabel
-                htmlFor="storage-elements-github-repo"
-                className="font-normal"
-              >
-                Repository
-              </FieldLabel>
-              <Input
-                autoFocus
-                spellCheck={false}
-                id="storage-elements-github-repo"
-                {...repoInputProps}
-                onChange={(e) => onRepoNameChange?.(e.target.value)}
-              />
-            </Field>
+        {status === 'loading' ? (
+          <div className="flex justify-center items-center">
+            <Loader2 className="h-4 w-4 animate-spin" />
           </div>
-          <Button size="lg" className="w-full">
-            Create Repository
-          </Button>
-        </div>
+        ) : null}
+        {status === 'error' ? (
+          <div className="flex justify-center items-center">
+            <AlertCircle className="h-4 w-4" />
+            <p className="text-sm text-red-500">
+              Error loading GitHub accounts. Please try again.
+            </p>
+          </div>
+        ) : null}
+        {status === 'success' && owners.length === 0 ? (
+          <div className="flex justify-center items-center">
+            <p className="text-sm text-muted-foreground">
+              No GitHub accounts found. Please check the app permissions in your
+              GitHub settings.
+            </p>
+          </div>
+        ) : null}
+        {status === 'success' && owners.length > 0 ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-row gap-1">
+              <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+                <FieldLabel
+                  htmlFor="storage-elements-github-owner"
+                  className="font-normal"
+                >
+                  Owner
+                </FieldLabel>
+                <ComboBox
+                  id="storage-elements-github-owner"
+                  {...containerProp}
+                  className="max-w-full"
+                  onValueChange={onOwnerChange}
+                  onAddItem={() => {
+                    handleConnect({
+                      onSuccess: () => {
+                        console.log('GitHub account added!');
+                      },
+                    });
+                  }}
+                  addItemLabel="Add GitHub account…"
+                  options={generateOwnerOptions(owners)}
+                />
+              </Field>
+              <div
+                aria-hidden
+                className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+              >
+                /
+              </div>
+              <Field className="flex-1 gap-1">
+                <FieldLabel
+                  htmlFor="storage-elements-github-repo"
+                  className="font-normal"
+                >
+                  Repository
+                </FieldLabel>
+                <Input
+                  autoFocus
+                  spellCheck={false}
+                  id="storage-elements-github-repo"
+                  {...repoInputProps}
+                  onChange={(e) => onRepoNameChange?.(e.target.value)}
+                />
+              </Field>
+            </div>
+            <Button size="lg" className="w-full">
+              Create Repository
+            </Button>
+          </div>
+        ) : null}
       </div>
     </>
   );

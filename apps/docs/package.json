@@ -40,6 +40,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@octokit/openapi-types": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@types/mdx": "catalog:",
     "@types/node": "catalog:",

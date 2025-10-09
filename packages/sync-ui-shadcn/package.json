@@ -26,6 +26,7 @@
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
+    "@octokit/openapi-types": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "typescript": "catalog:"

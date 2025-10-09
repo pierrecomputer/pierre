@@ -114,6 +114,7 @@ export function ComboBox({
         className="w-[220px] p-0"
       >
         <Command {...props}>
+          {/* TODO: search is silly when there are only 1-5 options */}
           <CommandInput placeholder="Search…" />
           <CommandList>
             <CommandEmpty>No results</CommandEmpty>
@@ -122,11 +123,11 @@ export function ComboBox({
                 <CommandItem
                   key={option.value}
                   value={option.value}
-                  onSelect={(nextValue) => {
-                    if (nextValue !== value) {
-                      onValueChange?.(nextValue);
+                  onSelect={() => {
+                    if (option.value !== value) {
+                      onValueChange?.(option.value);
                     }
-                    setValue(nextValue);
+                    setValue(option.value);
                     setOpen(false);
                   }}
                 >

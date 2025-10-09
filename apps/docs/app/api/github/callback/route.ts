@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     }
     const response = NextResponse.redirect(successUrl);
 
+    // Store only the user's OAuth token - it works across all installations
     response.cookies.set('github_token', tokenData.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -53,14 +54,7 @@ export async function GET(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 30,
     });
 
-    if (installationId) {
-      response.cookies.set('github_installation_id', installationId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30,
-      });
-    }
+    // Don't store installation_id - we'll fetch all installations dynamically
 
     return response;
   } catch (error) {
