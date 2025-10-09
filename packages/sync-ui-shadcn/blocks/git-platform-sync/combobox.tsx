@@ -138,8 +138,9 @@ export function ComboBox({
                 <CommandItem
                   key={option.value}
                   value={option.value}
-                  onSelect={() => {
-                    const newValue = option.value;
+                  keywords={[option.label]}
+                  onSelect={(currentValue) => {
+                    const newValue = currentValue;
 
                     // Update internal state if uncontrolled
                     if (!isControlled) {
