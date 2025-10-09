@@ -69,16 +69,21 @@ const Example = ({
   id,
   exampleProps,
   code,
+  details,
   ...props
 }: Omit<React.ComponentProps<'div'>, 'children'> & {
   exampleProps: ExamplePropsSingle | Array<ExamplePropsSingle>;
   code?: string;
+  details?: React.ReactNode;
 }) => {
   const containers = getPortalContainers();
 
   return (
     <div id={id}>
       <h4 className="text-lg font-bold tracking-tight mb-2">{title}</h4>
+      {details ? (
+        <p className="text-sm text-muted-foreground mb-2">{details}</p>
+      ) : null}
       <div
         className={cn(
           'flex flex-col md:flex-row justify-evenly border rounded-t-lg relative min-h-[180px] bg-background overflow-hidden',
@@ -187,18 +192,27 @@ function ExampleDefaultUsage() {
     <Example
       title="Default usage"
       id="git-platform-sync--default-usage"
+      details={
+        <>
+          Currently <span className="font-bold font-mono">github</span> is the
+          only supported platform.
+          <br />
+          <em>
+            This configuration is left out of subsequent examples, but is always
+            required.
+          </em>
+        </>
+      }
       exampleProps={{}}
       code={`import { GitPlatformSync } from '@/components/blocks/git-platform-sync';
 
 function TopBar() {
   return (
     <GitPlatformSync
-      // Add your GitHub app configuration here, this property is required
-      // but not shown in the rest of the examples for brevity
       platforms={[
         {
           platform: 'github',
-          slug: 'git-stoage-repo-test',
+          slug: '<my-app-slug>',
         },
       ]}
     />
