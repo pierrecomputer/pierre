@@ -138,6 +138,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.pre = undefined;
     this.diff = undefined;
+    this.queuedRenderArgs = undefined;
+    this.queuedRender = undefined;
   }
 
   setOptions(
@@ -214,27 +216,32 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private queuedRenderArgs: [FileDiffMetadata, HTMLPreElement] | undefined;
-
-  async render(_diff: FileDiffMetadata, _wrapper: HTMLPreElement) {
-    const isSettingUp = this.queuedRenderArgs != null;
-    this.queuedRenderArgs = [_diff, _wrapper];
-    if (isSettingUp) {
-      // TODO(amadeus): Make it so that this function can be properly
-      // awaitable, maybe?
-      return;
+  private queuedRender: Promise<void> | undefined;
+  async render(diff: FileDiffMetadata, wrapper: HTMLPreElement) {
+    this.queuedRenderArgs = [diff, wrapper];
+    if (this.queuedRender != null) {
+      return this.queuedRender;
     }
-    if (this.highlighter == null) {
-      this.highlighter = await this.initializeHighlighter();
-    }
-
-    const [source, wrapper] = this.queuedRenderArgs;
-    this.queuedRenderArgs = undefined;
-    this.renderDiff(wrapper, source, this.highlighter);
+    this.queuedRender = (async () => {
+      if (this.highlighter == null) {
+        this.highlighter = await this.initializeHighlighter();
+      }
+      if (this.queuedRenderArgs == null) {
+        // If we get in here, it's likely we called cleanup and therefore we
+        // should just return early
+        return;
+      }
+      const [diff, wrapper] = this.queuedRenderArgs;
+      this.queuedRenderArgs = undefined;
+      this.renderDiff(diff, wrapper, this.highlighter);
+    })();
+    await this.queuedRender;
+    this.queuedRender = undefined;
   }
 
   private renderDiff(
-    pre: HTMLPreElement,
     diff: FileDiffMetadata,
+    pre: HTMLPreElement,
     highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
   ) {
     const { themes, overflow, theme, diffStyle, disableLineNumbers } =
