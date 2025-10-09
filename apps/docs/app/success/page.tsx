@@ -3,11 +3,11 @@
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 
 const appInstallType = 'git-platform-sync-app-installed--github';
 
-export default function SuccessPage() {
+function SuccessPageContent() {
   const searchParams = useSearchParams();
   const installationId = searchParams.get('installation_id');
   const setupAction = searchParams.get('setup_action');
@@ -80,5 +80,13 @@ export default function SuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={null}>
+      <SuccessPageContent />
+    </Suspense>
   );
 }
