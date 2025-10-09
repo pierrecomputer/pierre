@@ -8,6 +8,9 @@
   --pjs-deletions-color: #ff3b30;
   --pjs-annotations-color: rgb(255, 255, 0);
   --pjs-tab-size: 2;
+  --pjs-font-fallback:
+    'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
+    'Courier New', monospace;
 }
 
 pre,
@@ -20,7 +23,7 @@ code {
 *,
 *:before,
 *:after {
-  font-family: var(--pjs-font-family);
+  font-family: var(--pjs-font-family, var(--pjs-font-fallback));
   font-size: var(--pjs-font-size, 14px);
   line-height: var(--pjs-line-height, 20px);
 }
