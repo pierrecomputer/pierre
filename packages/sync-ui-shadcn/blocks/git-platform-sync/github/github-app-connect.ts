@@ -24,36 +24,55 @@ export interface GitHubAppConnectProps {
   checkInstallationUrl?: string;
 }
 
+// Track in-flight requests to prevent duplicate simultaneous requests
+let pendingCheckInstallation: Promise<boolean> | null = null;
+
 async function checkInstallation(
   url = '/api/github/check-installation',
   signal?: AbortSignal
 ) {
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    signal,
-  });
-
-  if (response.ok) {
-    const data = await response.json();
-
-    if (data && 'installed' in data) {
-      if (data.installed) {
-        return true;
-      } else {
-        return false;
-      }
-    } else {
-      console.warn(
-        'Warning: checking installation - response has unexpected shape, falling back to not installed.'
-      );
-      return false;
-    }
-  } else {
-    throw new Error('check-installation endpoint not ok');
+  // If there's already a pending request, wait for it and return its result
+  if (pendingCheckInstallation) {
+    return pendingCheckInstallation;
   }
+
+  // Create the request promise
+  const requestPromise = (async () => {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data && 'installed' in data) {
+          if (data.installed) {
+            return true;
+          } else {
+            return false;
+          }
+        } else {
+          console.warn(
+            'Warning: checking installation - response has unexpected shape, falling back to not installed.'
+          );
+          return false;
+        }
+      } else {
+        throw new Error('check-installation endpoint not ok');
+      }
+    } finally {
+      // Clear the pending request when done (success or error)
+      pendingCheckInstallation = null;
+    }
+  })();
+
+  pendingCheckInstallation = requestPromise;
+  return requestPromise;
 }
 
 export type GitHubConnectionStatus =
