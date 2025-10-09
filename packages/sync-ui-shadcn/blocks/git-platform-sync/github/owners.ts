@@ -130,7 +130,7 @@ export function useOwners() {
 
 export function generateOwnerOptions(owners: Owner[]) {
   return owners.map((owner) => ({
-    value: owner.id,
+    value: owner.id.toString(),
     label: owner.login,
     image: owner.avatar_url,
   }));

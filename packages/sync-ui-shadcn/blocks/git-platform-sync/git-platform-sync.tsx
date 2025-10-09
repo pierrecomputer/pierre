@@ -543,6 +543,14 @@ function StepCreate({
   __container,
 }: StepCreateProps) {
   const { owners, status, refresh } = useOwners();
+  const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (owners.length > 1) {
+      console.log('setting selected owner to', owners[1]?.id?.toString());
+      setSelectedOwner(owners[1]?.id?.toString() ?? null);
+    }
+  }, [owners]);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -564,6 +572,18 @@ function StepCreate({
     }
     return rip;
   }, [repoName, repoDefaultName, repoNamePlaceholder]);
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      console.log('submit', selectedOwner);
+    },
+    [selectedOwner]
+  );
+
+  const ownerOptions = useMemo(() => {
+    return generateOwnerOptions(owners);
+  }, [owners]);
 
   return (
     <>
@@ -597,57 +617,64 @@ function StepCreate({
           </div>
         ) : null}
         {status === 'success' && owners.length > 0 ? (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-row gap-1">
-              <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
-                <FieldLabel
-                  htmlFor="storage-elements-github-owner"
-                  className="font-normal"
+          <form onSubmit={handleSubmit}>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-row gap-1">
+                <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+                  <FieldLabel
+                    htmlFor="storage-elements-github-owner"
+                    className="font-normal"
+                  >
+                    Owner
+                  </FieldLabel>
+                  <ComboBox
+                    id="storage-elements-github-owner"
+                    {...containerProp}
+                    className="max-w-full"
+                    value={selectedOwner}
+                    onValueChange={(value) => {
+                      console.log('owner value changed', value);
+                      setSelectedOwner(value);
+                      onOwnerChange?.(value);
+                    }}
+                    onAddItem={() => {
+                      handleConnect({
+                        onSuccess: () => {
+                          refresh();
+                        },
+                      });
+                    }}
+                    addItemLabel="Add GitHub account…"
+                    options={ownerOptions}
+                  />
+                </Field>
+                <div
+                  aria-hidden
+                  className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
                 >
-                  Owner
-                </FieldLabel>
-                <ComboBox
-                  id="storage-elements-github-owner"
-                  {...containerProp}
-                  className="max-w-full"
-                  onValueChange={onOwnerChange}
-                  onAddItem={() => {
-                    handleConnect({
-                      onSuccess: () => {
-                        refresh();
-                      },
-                    });
-                  }}
-                  addItemLabel="Add GitHub account…"
-                  options={generateOwnerOptions(owners)}
-                />
-              </Field>
-              <div
-                aria-hidden
-                className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
-              >
-                /
+                  /
+                </div>
+                <Field className="flex-1 gap-1">
+                  <FieldLabel
+                    htmlFor="storage-elements-github-repo"
+                    className="font-normal"
+                  >
+                    Repository
+                  </FieldLabel>
+                  <Input
+                    autoFocus
+                    spellCheck={false}
+                    id="storage-elements-github-repo"
+                    {...repoInputProps}
+                    onChange={(e) => onRepoNameChange?.(e.target.value)}
+                  />
+                </Field>
               </div>
-              <Field className="flex-1 gap-1">
-                <FieldLabel
-                  htmlFor="storage-elements-github-repo"
-                  className="font-normal"
-                >
-                  Repository
-                </FieldLabel>
-                <Input
-                  autoFocus
-                  spellCheck={false}
-                  id="storage-elements-github-repo"
-                  {...repoInputProps}
-                  onChange={(e) => onRepoNameChange?.(e.target.value)}
-                />
-              </Field>
+              <Button size="lg" className="w-full" type="submit">
+                Create Repository
+              </Button>
             </div>
-            <Button size="lg" className="w-full">
-              Create Repository
-            </Button>
-          </div>
+          </form>
         ) : null}
       </div>
     </>

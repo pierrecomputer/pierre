@@ -30,6 +30,14 @@ export type ComboBoxProps = {
   className?: string;
   initialValue?: string;
   /**
+   * Controlled value. When provided, the component operates in controlled mode.
+   */
+  value?: string;
+  /**
+   * Callback fired when the value changes. Receives the option's value (not label).
+   */
+  onValueChange?: (value: string) => void;
+  /**
    * @default 'fit'
    * @description Whether to combobox expands to its container, or fits to the width of the content
    */
@@ -52,7 +60,7 @@ export type ComboBoxProps = {
   __container?: React.ComponentProps<
     typeof PopoverPrimitive.Portal
   >['container'];
-} & React.ComponentProps<typeof Command>;
+} & Omit<React.ComponentProps<typeof Command>, 'value' | 'onValueChange'>;
 
 export function ComboBox({
   options,
@@ -60,6 +68,7 @@ export function ComboBox({
   width = 'fit',
   __container,
   initialValue,
+  value: controlledValue,
   onAddItem,
   addItemLabel,
   onValueChange,
@@ -69,7 +78,13 @@ export function ComboBox({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerProp: any = __container ? { container: __container } : {};
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(initialValue ?? options[0]?.value ?? null);
+  const [internalValue, setInternalValue] = useState(
+    initialValue ?? options[0]?.value ?? null
+  );
+
+  // Use controlled value if provided, otherwise use internal state
+  const isControlled = controlledValue !== undefined;
+  const value = isControlled ? controlledValue : internalValue;
 
   const selectedOption = value
     ? options.find((option) => {
@@ -124,10 +139,18 @@ export function ComboBox({
                   key={option.value}
                   value={option.value}
                   onSelect={() => {
-                    if (option.value !== value) {
-                      onValueChange?.(option.value);
+                    const newValue = option.value;
+
+                    // Update internal state if uncontrolled
+                    if (!isControlled) {
+                      setInternalValue(newValue);
                     }
-                    setValue(option.value);
+
+                    // Always call onValueChange if provided
+                    if (newValue !== value) {
+                      onValueChange?.(newValue);
+                    }
+
                     setOpen(false);
                   }}
                 >
