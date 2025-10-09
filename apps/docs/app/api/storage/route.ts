@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const store = new GitStorage({
   name: 'pierre',
-  key: process.env.GIT_STORAGE_SYNC || '',
+  key: process.env.CODE_STORAGE_SYNC_PRIVATE_KEY || '',
 });
 
 export async function POST(request: NextRequest) {

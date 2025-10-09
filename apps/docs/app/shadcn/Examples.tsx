@@ -10,7 +10,7 @@ import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
 import { Lollipop, Menu } from 'lucide-react';
 import { Fragment, useState } from 'react';
 
-const EXAMPLE_APP_SLUG = process.env.GITHUB_APP_SLUG || 'git-stoage-repo-test';
+const EXAMPLE_APP_SLUG = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
 const DEFAULT_PLATFORM_CONFIG = [
   { platform: 'github', slug: EXAMPLE_APP_SLUG },
 ] as PlatformConfigObject[];
