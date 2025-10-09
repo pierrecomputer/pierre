@@ -95,6 +95,9 @@ export function useOwners() {
     getOwnerById: (id: string) => {
       return ownerMap.get(id);
     },
+    getOwnerByName: (name: string) => {
+      return owners.find((owner) => owner.login === name);
+    },
     refresh: () => {
       clearOwnersCache();
       setBustVersion(bustVersion + 1);

@@ -209,14 +209,18 @@ export function GitPlatformSync({
 }: GitPlatformSyncProps) {
   const [isPopoverOpen, setIsPopoverOpen] = useState(open ?? false);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const codeStorageRepoExists = !!codeStorageRepo;
 
   const status = useMemo(() => {
     if (statusProp === 'auto') {
-      // TODO: when we can determine connected vs disconnected, we should update it here
-      return 'disconnected';
+      if (codeStorageRepoExists) {
+        return 'connected';
+      } else {
+        return 'disconnected';
+      }
     }
     return statusProp;
-  }, [statusProp]);
+  }, [statusProp, codeStorageRepoExists]);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -468,7 +472,10 @@ function PopoverConductor({
         />
       ) : null}
       {step === 'manage' ? (
-        <StepManage codeStorageRepo={codeStorageRepo as SyncedRepo} />
+        <StepManage
+          __container={__container}
+          codeStorageRepo={codeStorageRepo as SyncedRepo}
+        />
       ) : null}
     </PopoverContent>
   );
@@ -476,10 +483,125 @@ function PopoverConductor({
 
 type StepManageProps = {
   codeStorageRepo: SyncedRepo;
+  /**
+   * @deprecated Internal use only, not guaranteed to be supported in the future
+   * @description The container to render the popover portal in, only used for docs. This requires
+   * modifying the shadcn Popover component to accept a container prop for the portal
+   */
+  __container?: React.ComponentProps<
+    typeof PopoverPrimitive.Portal
+  >['container'];
 };
 
-function StepManage({ codeStorageRepo }: StepManageProps) {
-  return <div>Manage {codeStorageRepo.repository.name}</div>;
+function StatusDot({ status }: { status: GitPlatformSyncStatus }) {
+  return (
+    <div
+      className={cn(
+        'h-1.5 w-1.5 rounded-full ring-2',
+        status === 'connected' && 'bg-green-500 ring-green-500/30',
+        status === 'connected-syncing' && 'bg-yellow-500 ring-yellow-500/30',
+        status === 'connected-warning' && 'bg-red-500 ring-red-500/30'
+      )}
+    />
+  );
+}
+
+function StepManage({ codeStorageRepo, __container }: StepManageProps) {
+  const { owners, getOwnerByName } = useOwners();
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
+
+  // TODO: This is inelegant. Since it'll necessarily need an extra render pass. We could move
+  // to an uncontrolled combobox and compute the value in the single pass, but idk.
+  useEffect(() => {
+    if (owners.length > 0) {
+      const owner = getOwnerByName(codeStorageRepo.repository.owner);
+      console.log(
+        'found owner by name',
+        codeStorageRepo.repository.owner,
+        owner
+      );
+      setSelectedOwnerId(owner?.id ?? null);
+    }
+  }, [owners, codeStorageRepo.repository.owner, getOwnerByName]);
+
+  const ownerOptions = useMemo(() => {
+    return generateOwnerOptions(owners);
+  }, [owners]);
+
+  // We want to make sure the container internal stuff doesn't blow up anyone's types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const containerProp: any = __container ? { __container: __container } : {};
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <StatusDot status="connected" />
+        Connected to GitHub
+      </div>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-row gap-1">
+          <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+            <FieldLabel
+              htmlFor="storage-elements-github-owner"
+              className="font-normal"
+            >
+              Owner
+            </FieldLabel>
+            <ComboBox
+              id="storage-elements-github-owner"
+              {...containerProp}
+              className="max-w-full"
+              value={selectedOwnerId}
+              addItemLabel="Add GitHub account…"
+              options={ownerOptions}
+            />
+          </Field>
+          <div
+            aria-hidden
+            className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+          >
+            /
+          </div>
+          <Field className="flex-1 gap-1">
+            <FieldLabel
+              htmlFor="storage-elements-github-repo"
+              className="font-normal"
+            >
+              Repository
+            </FieldLabel>
+            <Input
+              autoFocus
+              spellCheck={false}
+              id="storage-elements-github-repo"
+              name="repo-name"
+              value={codeStorageRepo.repository.name}
+              readOnly
+            />
+          </Field>
+        </div>
+        <div>
+          <Field className="flex-1 gap-1.5">
+            <FieldLabel
+              htmlFor="storage-elements-active-branch"
+              className="font-normal"
+            >
+              Active Branch
+            </FieldLabel>
+            <Input
+              autoFocus
+              spellCheck={false}
+              id="storage-elements-github-repo"
+              name="repo-name"
+              value={`${codeStorageRepo.repository.defaultBranch} (default)`}
+              readOnly
+            />
+          </Field>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Changes are being automatically synced to this branch.
+        </div>
+      </div>
+    </div>
+  );
 }
 
 type StepCreateProps = {
@@ -593,107 +715,98 @@ function StepCreate({
     return generateOwnerOptions(owners);
   }, [owners]);
 
-  // TODO: the `min-h-[115.25px]` is a hack to make the height of the content consistent
-  // when we're in different states other than the success state. however that won't
-  // be sustainable. Good for now for intent of behavior, but we should get better
-  // halfway states done.
-  // As an idea for the future, if we don't want to render the form without knowing
-  // the underlying data yet, then we could render it transparently in the background just
-  // for sizing and keep it transparent until the data is loaded.
   return (
-    <>
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <h4 className="font-normal leading-none">Sync to GitHub</h4>
-          <p className="text-sm text-muted-foreground">
-            Create a new repository or choose an existing one to sync your
-            changes. We&apos;ll push changes with each new prompt you send.
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <h4 className="font-normal leading-none">Sync to GitHub</h4>
+        <p className="text-sm text-muted-foreground">
+          Create a new repository or choose an existing one to sync your
+          changes. We&apos;ll push changes with each new prompt you send.
+        </p>
+      </div>
+      {status === 'loading' ? (
+        <div className="flex justify-center items-center">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      ) : null}
+      {status === 'error' ? (
+        <div className="flex justify-center items-center">
+          <AlertCircle className="h-4 w-4" />
+          <p className="text-sm text-red-500">
+            Error loading GitHub accounts. Please try again.
           </p>
         </div>
-        {status === 'loading' ? (
-          <div className="flex justify-center items-center min-h-[115.25px]">
-            <Loader2 className="h-4 w-4 animate-spin" />
-          </div>
-        ) : null}
-        {status === 'error' ? (
-          <div className="flex justify-center items-center">
-            <AlertCircle className="h-4 w-4" />
-            <p className="text-sm text-red-500 min-h-[115.25px]">
-              Error loading GitHub accounts. Please try again.
-            </p>
-          </div>
-        ) : null}
-        {status === 'success' && owners.length === 0 ? (
-          <div className="flex justify-center items-center">
-            <p className="text-sm text-muted-foreground min-h-[115.25px]">
-              No GitHub accounts found. Please check the app permissions in your
-              GitHub settings.
-            </p>
-          </div>
-        ) : null}
-        {status === 'success' && owners.length > 0 ? (
-          <form onSubmit={handleSubmit}>
-            <div className="flex flex-col gap-4 min-h-[115.25px]">
-              <div className="flex flex-row gap-1">
-                <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
-                  <FieldLabel
-                    htmlFor="storage-elements-github-owner"
-                    className="font-normal"
-                  >
-                    Owner
-                  </FieldLabel>
-                  <ComboBox
-                    id="storage-elements-github-owner"
-                    {...containerProp}
-                    className="max-w-full"
-                    value={selectedOwnerId}
-                    onValueChange={(value) => {
-                      console.log('owner value changed', value);
-                      setSelectedOwnerId(value);
-                      onOwnerChange?.(value);
-                    }}
-                    onAddItem={() => {
-                      handleConnect({
-                        onSuccess: () => {
-                          refresh();
-                        },
-                      });
-                    }}
-                    addItemLabel="Add GitHub account…"
-                    options={ownerOptions}
-                  />
-                </Field>
-                <div
-                  aria-hidden
-                  className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+      ) : null}
+      {status === 'success' && owners.length === 0 ? (
+        <div className="flex justify-center items-center">
+          <p className="text-sm text-muted-foreground">
+            No GitHub accounts found. Please check the app permissions in your
+            GitHub settings.
+          </p>
+        </div>
+      ) : null}
+      {status === 'success' && owners.length > 0 ? (
+        <form onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-row gap-1">
+              <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+                <FieldLabel
+                  htmlFor="storage-elements-github-owner"
+                  className="font-normal"
                 >
-                  /
-                </div>
-                <Field className="flex-1 gap-1">
-                  <FieldLabel
-                    htmlFor="storage-elements-github-repo"
-                    className="font-normal"
-                  >
-                    Repository
-                  </FieldLabel>
-                  <Input
-                    autoFocus
-                    spellCheck={false}
-                    id="storage-elements-github-repo"
-                    name="repo-name"
-                    {...repoInputProps}
-                    onChange={(e) => onRepoNameChange?.(e.target.value)}
-                  />
-                </Field>
+                  Owner
+                </FieldLabel>
+                <ComboBox
+                  id="storage-elements-github-owner"
+                  {...containerProp}
+                  className="max-w-full"
+                  value={selectedOwnerId}
+                  onValueChange={(value) => {
+                    console.log('owner value changed', value);
+                    setSelectedOwnerId(value);
+                    onOwnerChange?.(value);
+                  }}
+                  onAddItem={() => {
+                    handleConnect({
+                      onSuccess: () => {
+                        refresh();
+                      },
+                    });
+                  }}
+                  addItemLabel="Add GitHub account…"
+                  options={ownerOptions}
+                />
+              </Field>
+              <div
+                aria-hidden
+                className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+              >
+                /
               </div>
-              <Button size="lg" className="w-full" type="submit">
-                Create Repository
-              </Button>
+              <Field className="flex-1 gap-1">
+                <FieldLabel
+                  htmlFor="storage-elements-github-repo"
+                  className="font-normal"
+                >
+                  Repository
+                </FieldLabel>
+                <Input
+                  autoFocus
+                  spellCheck={false}
+                  id="storage-elements-github-repo"
+                  name="repo-name"
+                  {...repoInputProps}
+                  onChange={(e) => onRepoNameChange?.(e.target.value)}
+                />
+              </Field>
             </div>
-          </form>
-        ) : null}
-      </div>
-    </>
+            <Button size="lg" className="w-full" type="submit">
+              Create Repository
+            </Button>
+          </div>
+        </form>
+      ) : null}
+    </div>
   );
 }
 
