@@ -21,8 +21,6 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    console.log('Found installations:', installationsResponse.total_count);
-
     // Extract owners directly from installations - each installation has exactly one account/owner
     const owners = installationsResponse.installations
       .map((installation) => installation.account)
