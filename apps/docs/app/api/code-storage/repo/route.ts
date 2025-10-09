@@ -1,13 +1,15 @@
 import { GitStorage } from '@pierre/storage';
 import { NextRequest, NextResponse } from 'next/server';
 
-const store = new GitStorage({
-  name: 'pierre',
-  key: process.env.CODE_STORAGE_SYNC_PRIVATE_KEY || '',
-});
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const store = new GitStorage({
+      name: 'pierre',
+      key: process.env.CODE_STORAGE_SYNC_PRIVATE_KEY || '',
+    });
+
     const body = await request.json();
     const { owner, name, defaultBranch } = body;
 
