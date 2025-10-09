@@ -18,6 +18,7 @@ import type {
   LineAnnotation,
   SupportedLanguages,
   ThemeRendererOptions,
+  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import {
@@ -157,6 +158,30 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
+  private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
+    // @ts-expect-error FIXME
+    this.options = { ...this.options, ...options };
+  }
+
+  setThemeType(themeType: ThemeTypes) {
+    if (this.getOptionsWithDefaults().themeType === themeType) {
+      return;
+    }
+    this.mergeOptions({ themeType });
+    if (this.pre == null) {
+      return;
+    }
+    switch (themeType) {
+      case 'system':
+        delete this.pre.dataset.theme;
+        break;
+      case 'light':
+      case 'dark':
+        this.pre.dataset.theme = themeType;
+        break;
+    }
+  }
+
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
   setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]) {
@@ -186,6 +211,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineLengthForHighlighting = 1000,
       overflow = 'scroll',
       theme,
+      themeType = 'system',
       themes,
     } = this.options;
     if (themes != null) {
@@ -196,6 +222,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         maxLineDiffLength,
         maxLineLengthForHighlighting,
         overflow,
+        themeType,
         themes,
       };
     }
@@ -207,6 +234,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineLengthForHighlighting,
       overflow,
       theme,
+      themeType,
     };
   }
 
@@ -244,8 +272,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     pre: HTMLPreElement,
     highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
   ) {
-    const { themes, overflow, theme, diffStyle, disableLineNumbers } =
-      this.getOptionsWithDefaults();
+    const {
+      themes,
+      overflow,
+      theme,
+      diffStyle,
+      disableLineNumbers,
+      themeType,
+    } = this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
     const split = unified
       ? false
@@ -253,8 +287,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const wrap = overflow === 'wrap';
     pre = setupPreNode(
       themes != null
-        ? { pre, highlighter, split, wrap, themes }
-        : { pre, highlighter, split, wrap, theme }
+        ? { highlighter, pre, split, themeType, themes, wrap }
+        : { highlighter, pre, split, theme, themeType, wrap }
     );
 
     this.diff = diff;

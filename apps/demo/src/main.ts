@@ -17,7 +17,6 @@ import {
   FILE_NEW,
   FILE_OLD,
   type LineCommentMetadata,
-  toggleTheme,
 } from './mocks/';
 import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
@@ -286,4 +285,23 @@ if (diff2Files != null) {
 
     document.body.appendChild(lastWrapper);
   });
+}
+
+function toggleTheme() {
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+  const pageTheme =
+    (document.documentElement.dataset.theme ?? systemTheme === 'dark')
+      ? 'dark'
+      : 'light';
+
+  document.documentElement.dataset.theme =
+    pageTheme === 'dark' ? 'light' : 'dark';
+
+  for (const instance of diffInstances) {
+    const themeSetting = instance.options.themeType ?? 'system';
+    const currentTheme = themeSetting === 'system' ? pageTheme : themeSetting;
+    instance.setThemeType(currentTheme === 'light' ? 'dark' : 'light');
+  }
 }

@@ -10,6 +10,7 @@ import {
 import type {
   FileDiffMetadata,
   RenderCustomFileMetadata,
+  ThemeTypes,
   ThemesType,
 } from '../types';
 
@@ -52,6 +53,7 @@ interface SetupWrapperBase {
   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
   split?: boolean;
   wrap?: boolean;
+  themeType?: ThemeTypes;
 }
 
 interface SetupWrapperTheme extends ThemeVariant, SetupWrapperBase {}
@@ -99,10 +101,14 @@ function setWrapperProps(
     themes,
     split = false,
     wrap = false,
+    themeType = 'system',
   }: SetupWrapperNodesProps,
   prefix?: string
 ) {
   let styles = '';
+  if (themeType !== 'system') {
+    pre.dataset.theme = themeType;
+  }
   if (theme != null) {
     const themeData = highlighter.getTheme(theme);
     styles += `color:${themeData.fg};`;

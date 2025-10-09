@@ -34,17 +34,6 @@ export const CodeConfigs = [
   },
 ] as const;
 
-export function toggleTheme() {
-  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
-  for (const pre of document.querySelectorAll('[data-pjs],html')) {
-    if (!(pre instanceof HTMLElement)) return;
-    const currentTheme = pre.dataset.theme ?? systemTheme;
-    pre.dataset.theme = currentTheme === 'dark' ? 'light' : 'dark';
-  }
-}
-
 export const FILE_OLD = fileOld;
 export const FILE_NEW = fileNew;
 

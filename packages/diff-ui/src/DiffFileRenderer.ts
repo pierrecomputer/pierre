@@ -7,6 +7,7 @@ import type {
   LineAnnotation,
   RenderCustomFileMetadata,
   ThemeRendererOptions,
+  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
@@ -83,12 +84,33 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     this.options = options;
   }
 
+  // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
+  // * Do we publicly allow merging of options or do we have individualized setters?
+  // * When setting new options, we need to figure out what settings require a
+  //   re-render and which can just be applied more elegantly
+  // * There's also an issue of options that live here on the File class and
+  //   those that live on the Hunk class, and it's a bit of an issue with passing
+  //   settings down and mirroring them (not great...)
   setOptions(options: DiffFileRendererOptions<LAnnotation>) {
     this.options = options;
     if (this.fileDiff == null) {
       return;
     }
+    this.hunksRenderer?.setOptions(this.options, true);
     this.render({ fileDiff: this.fileDiff });
+  }
+
+  private mergeOptions(options: Partial<DiffFileRendererOptions<LAnnotation>>) {
+    // @ts-expect-error FIXME
+    this.options = { ...this.options, ...options };
+  }
+
+  setThemeType(themeType: ThemeTypes) {
+    if (this.options.themeType === themeType) {
+      return;
+    }
+    this.mergeOptions({ themeType });
+    this.hunksRenderer?.setThemeType(themeType);
   }
 
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
@@ -250,7 +272,7 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
   }
 
-  getOrCreatePre(container: HTMLElement) {
+  private getOrCreatePre(container: HTMLElement) {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
@@ -265,7 +287,8 @@ export class DiffFileRenderer<LAnnotation = undefined> {
   }
 
   // NOTE(amadeus): We just always do a full re-render with the header...
-  renderHeader(file: FileDiffMetadata, container: HTMLElement) {
+  // FIXME(amadeus): This should mb be a custom component?
+  private renderHeader(file: FileDiffMetadata, container: HTMLElement) {
     const { renderCustomMetadata, disableFileHeader = false } = this.options;
     if (disableFileHeader) {
       if (this.header != null) {

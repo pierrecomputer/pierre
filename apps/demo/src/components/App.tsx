@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useCallback, useState } from 'react';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
-import { CodeConfigs, toggleTheme } from '../mocks/';
+import { CodeConfigs } from '../mocks/';
 import '../style.css';
 import { createFakeContentStream } from '../utils/createFakeContentStream';
 import { CodeRenderer, type CodeRendererProps } from './CodeRenderer';
@@ -42,7 +42,6 @@ export function App() {
   return (
     <>
       <div className="tools">
-        <button onClick={toggleTheme}>Toggle Theme</button>
         <button onClick={handleStartStreaming} onMouseEnter={handlePreload}>
           Stream Code
         </button>
