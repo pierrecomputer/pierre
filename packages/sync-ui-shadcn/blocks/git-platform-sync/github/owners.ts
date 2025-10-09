@@ -22,7 +22,7 @@ type FetchOwnersResult = {
 async function fetchOwners(signal?: AbortSignal): Promise<FetchOwnersResult> {
   try {
     const response = await fetchInstallations(
-      '/api/github/installations',
+      '/api/code-storage/github/installations',
       signal
     );
     return {

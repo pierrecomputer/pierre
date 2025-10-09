@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       throw new Error(tokenData.error_description || tokenData.error);
     }
 
-    const successUrl = new URL('/success', request.url);
+    const successUrl = new URL('/code-storage/success', request.url);
     if (setupAction) {
       successUrl.searchParams.set('setup_action', setupAction);
     }

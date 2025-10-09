@@ -9,16 +9,16 @@ export interface GitHubAppConnectProps {
    */
   slug: string;
   /**
-   * @default '${window.location.origin}/api/github/callback'
+   * @default '${window.location.origin}/api/code-storage/github/callback'
    * @description The URL to redirect to after the GitHub app is installed.
    * If not provided, we wil use `window.location.origin` as the base url and
-   *  '/api/github/callback' as the path.
+   *  '/api/code-storage/github/callback' as the path.
    */
   redirectUrl?: string;
   /**
-   * @default '/api/github/installations'
+   * @default '/api/code-storage/github/installations'
    * @description The URL to fetch GitHub app installations.
-   * If not provided, we will use `/api/github/installations` as the path
+   * If not provided, we will use `/api/code-storage/github/installations` as the path
    * on the same origin that the current window is in.
    */
   installationsUrl?: string;
@@ -60,7 +60,7 @@ export function clearInstallationsCache(): void {
 }
 
 export async function fetchInstallations(
-  url = '/api/github/installations',
+  url = '/api/code-storage/github/installations',
   signal?: AbortSignal
 ): Promise<InstallationsResponse> {
   // Return cached data if still valid
@@ -292,9 +292,10 @@ export function useGitHubAppConnection({
   const [status, setStatus] = useState<GitHubConnectionStatus>('uninitialized');
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const redirectUrl = redirectUrlProp ?? `${origin}/api/github/callback`;
+  const redirectUrl =
+    redirectUrlProp ?? `${origin}/api/code-storage/github/callback`;
   const installationsUrlResolved =
-    installationsUrl ?? '/api/github/installations';
+    installationsUrl ?? '/api/code-storage/github/installations';
 
   // Create the connector once - all config is captured at creation time.
   // We intentionally create this only once to avoid recreating listeners and intervals.
