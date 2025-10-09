@@ -192,7 +192,16 @@ function ExampleDefaultUsage() {
 
 function TopBar() {
   return (
-    <GitPlatformSync />
+    <GitPlatformSync
+      // Add your GitHub app configuration here, this property is required
+      // but not shown in the rest of the examples for brevity
+      platforms={[
+        {
+          platform: 'github',
+          slug: 'git-stoage-repo-test',
+        },
+      ]}
+    />
   );
 }
 `}
