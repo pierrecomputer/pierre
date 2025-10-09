@@ -89,6 +89,7 @@ export function clearOwnersCache(): void {
 export function useOwners() {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [status, setStatus] = useState<OwnersFetchStatus>('loading');
+  const [bustVersion, setBustVersion] = useState(0);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -115,11 +116,15 @@ export function useOwners() {
     return () => {
       abortController.abort();
     };
-  }, []);
+  }, [bustVersion]);
 
   return {
     owners,
     status,
+    refresh: () => {
+      clearOwnersCache();
+      setBustVersion(bustVersion + 1);
+    },
   };
 }
 

@@ -542,7 +542,7 @@ function StepCreate({
   // repoDefaultBranch,
   __container,
 }: StepCreateProps) {
-  const { owners, status } = useOwners();
+  const { owners, status, refresh } = useOwners();
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -614,7 +614,7 @@ function StepCreate({
                   onAddItem={() => {
                     handleConnect({
                       onSuccess: () => {
-                        console.log('GitHub account added!');
+                        refresh();
                       },
                     });
                   }}
