@@ -106,7 +106,8 @@ export async function GET(request: NextRequest) {
         installations: filteredInstallations,
         owners: filteredOwners,
       },
-      _raw: data.installations,
+      // for debugging this can be nice
+      // _raw: data.installations,
     });
   } catch (error) {
     console.error('Error fetching installations:', error);
