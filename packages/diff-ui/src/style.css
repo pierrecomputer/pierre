@@ -223,25 +223,6 @@ code {
   position: relative;
 }
 
-/* FIXME: this doesn't work great with linewrapping really... */
-[data-diff-span]:before,
-[data-diff-span]:after {
-  content: '';
-  position: absolute;
-  height: 1lh;
-  width: 1px;
-  background-color: var(--pjs-bg);
-}
-
-[data-diff-span]:before {
-  margin-left: -1px;
-}
-
-[data-diff-span]:after {
-  bottom: 0;
-  margin-right: -1px;
-}
-
 [data-line-type='change-addition'] {
   background-color: var(--pjs-bg-additions);
 

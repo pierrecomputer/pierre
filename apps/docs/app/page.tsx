@@ -1,8 +1,8 @@
-import Button from '../components/Button';
-import ButtonGroup from '../components/ButtonGroup';
-import Header from '../components/Header';
-import Hero from '../components/Hero';
-import styles from '../components/Layout.module.css';
+import Button from '@/components/Button';
+import ButtonGroup from '@/components/ButtonGroup';
+import Header from '@/components/Header';
+import Hero from '@/components/Hero';
+import styles from '@/components/Layout.module.css';
 import {
   IconChevronSm,
   IconColorAuto,
@@ -10,18 +10,18 @@ import {
   IconColorLight,
   IconComment,
   IconCopyFill,
-  IconDiffBlended,
-  IconDiffSplit,
   IconParagraph,
   IconSquircleSpeechText,
   IconSymbolDiffstat,
   IconType,
   IconWordWrap,
-} from '../components/icons';
-import '../styles/tokens.css';
+} from '@/components/icons';
+import '@/styles/tokens.css';
+
 import IconSprite from './IconSprite';
 // import './home.css';
 import './css/index.css';
+import { SplitUnified } from './diff-examples/SplitUnified';
 
 export default function Home() {
   return (
@@ -49,21 +49,7 @@ export default function Home() {
           multiple diff visual styles, and much more.
         </p>
 
-        <h3>Diff styles</h3>
-        <p className={styles.fsSm}>
-          Choose from stacked (unified) or split (side-by-side). Both use CSS
-          Grid under the hood, meaning fewer DOM nodes and fast rendering.
-        </p>
-        <ButtonGroup>
-          <Button variant="active">
-            <IconDiffSplit />
-            Split
-          </Button>
-          <Button>
-            <IconDiffBlended />
-            Stacked
-          </Button>
-        </ButtonGroup>
+        <SplitUnified />
 
         <h3>Adapts to any Shiki theme</h3>
         <p className={styles.fsSm}>
