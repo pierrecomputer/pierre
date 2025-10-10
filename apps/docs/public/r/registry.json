@@ -5,7 +5,7 @@
   "items": [
     {
       "name": "git-platform-sync",
-      "type": "registry:block",
+      "type": "registry:component",
       "title": "Git Platform Sync",
       "description": "A component that implements repo syncing between code.storage and git platforms like GitHub.",
       "registryDependencies": [
@@ -17,6 +17,7 @@
         "select",
         "tooltip"
       ],
+      "dependencies": ["@octokit/openapi-types", "@pierre/storage"],
       "files": [
         {
           "path": "registry/new-york/blocks/git-platform-sync/git-platform-sync.tsx",
@@ -32,11 +33,31 @@
         },
         {
           "path": "registry/new-york/blocks/git-platform-sync/github/github-app-connect.ts",
-          "type": "registry:component"
+          "type": "registry:lib"
         },
         {
           "path": "registry/new-york/blocks/git-platform-sync/github/owners.ts",
-          "type": "registry:component"
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/new-york/blocks/git-platform-sync/pages/code-storage/success/page.tsx",
+          "type": "registry:page",
+          "target": "app/code-storage/success/page.tsx"
+        },
+        {
+          "path": "registry/new-york/blocks/git-platform-sync/api/code-storage/github/callback/route.ts",
+          "type": "registry:page",
+          "target": "app/api/code-storage/github/callback/route.ts"
+        },
+        {
+          "path": "registry/new-york/blocks/git-platform-sync/api/code-storage/github/installations/route.ts",
+          "type": "registry:page",
+          "target": "app/api/code-storage/github/installations/route.ts"
+        },
+        {
+          "path": "registry/new-york/blocks/git-platform-sync/api/code-storage/repo/route.ts",
+          "type": "registry:page",
+          "target": "app/api/code-storage/repo/route.ts"
         }
       ]
     }
