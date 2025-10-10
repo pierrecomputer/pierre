@@ -10,56 +10,68 @@ import {
   IconTerminal,
 } from './icons';
 
-const DocsSidebar = () => {
+interface DocsSidebarProps {
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+const DocsSidebar = ({ isMobileOpen, onMobileClose }: DocsSidebarProps) => {
   return (
-    <aside className="docs-sidebar">
-      <nav className="docs-nav">
-        <NavLink href="/docs#install" icon={<IconBoxTape />} active={true}>
-          Install
-        </NavLink>
-        <NavLink href="/docs#usage" icon={<IconCodeBlock />}>
-          Usage
-        </NavLink>
-        <NavLink href="/docs#configuration" icon={<IconGear />}>
-          Configuration
-        </NavLink>
-        <NavLink href="/docs#components" icon={<IconGrid2x1 />}>
-          Components
-        </NavLink>
+    <>
+      {/* Mobile overlay */}
+      {isMobileOpen && (
+        <div className="mobile-overlay" onClick={onMobileClose} />
+      )}
 
-        <div className="nav-subsection">
-          <NavLink href="/docs#file">File</NavLink>
-          <NavLink href="/docs#file-header">FileHeader</NavLink>
-          <NavLink href="/docs#hunk">Hunk</NavLink>
-          <NavLink href="/docs#hunk-divider">HunkDivider</NavLink>
-          <NavLink href="/docs#extending">Extending components</NavLink>
-        </div>
+      <aside className={`docs-sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
+        <nav className="docs-nav" onClick={onMobileClose}>
+          <NavLink href="/docs#install" icon={<IconBoxTape />} active={true}>
+            Install
+          </NavLink>
+          <NavLink href="/docs#usage" icon={<IconCodeBlock />}>
+            Usage
+          </NavLink>
+          <NavLink href="/docs#configuration" icon={<IconGear />}>
+            Configuration
+          </NavLink>
+          <NavLink href="/docs#components" icon={<IconGrid2x1 />}>
+            Components
+          </NavLink>
 
-        <NavLink href="/docs#cli" icon={<IconTerminal />}>
-          CLI
-        </NavLink>
-        <NavLink href="/docs#api" icon={<IconBook />}>
-          API Reference
-        </NavLink>
+          <div className="nav-subsection">
+            <NavLink href="/docs#file">File</NavLink>
+            <NavLink href="/docs#file-header">FileHeader</NavLink>
+            <NavLink href="/docs#hunk">Hunk</NavLink>
+            <NavLink href="/docs#hunk-divider">HunkDivider</NavLink>
+            <NavLink href="/docs#extending">Extending components</NavLink>
+          </div>
 
-        <div className="nav-divider" />
+          <NavLink href="/docs#cli" icon={<IconTerminal />}>
+            CLI
+          </NavLink>
+          <NavLink href="/docs#api" icon={<IconBook />}>
+            API Reference
+          </NavLink>
 
-        <NavLink
-          href="https://code-storage.example.com"
-          icon={<IconServer />}
-          external
-        >
-          Code Storage
-        </NavLink>
-        <NavLink
-          href="https://support.example.com"
-          icon={<IconLifeRaft />}
-          external
-        >
-          Support
-        </NavLink>
-      </nav>
-    </aside>
+          <div className="nav-divider" />
+
+          <NavLink
+            href="https://code-storage.example.com"
+            icon={<IconServer />}
+            external
+          >
+            Code Storage
+          </NavLink>
+          <NavLink
+            href="https://support.example.com"
+            icon={<IconLifeRaft />}
+            external
+          >
+            Support
+          </NavLink>
+        </nav>
+      </aside>
+    </>
   );
 };
 

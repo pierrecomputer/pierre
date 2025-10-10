@@ -133,30 +133,6 @@
 
 /* Responsive design */
 @media (max-width: 768px) {
-  .container {
-    padding: 0 1rem;
-  }
-
-  .header {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    text-align: center;
-  }
-
-  .nav {
-    place-self: center;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .main-title {
-    font-size: 2.5rem;
-  }
-
-  .description {
-    font-size: 1rem;
-  }
-
   .major-hues {
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 0.75rem;
@@ -178,15 +154,6 @@
 }
 
 @media (max-width: 480px) {
-  .main-title {
-    font-size: 2rem;
-  }
-
-  .nav {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
   .major-hues {
     grid-template-columns: repeat(3, 1fr);
   }
