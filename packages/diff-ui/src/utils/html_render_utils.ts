@@ -93,6 +93,38 @@ export function createHunkSeparator() {
   return separator;
 }
 
+interface GetHighlighterThemeStylesProps {
+  theme?: BundledTheme;
+  themes?: { dark: BundledTheme; light: BundledTheme };
+  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+  prefix?: string;
+}
+
+function getHighlighterThemeStyles({
+  theme,
+  themes,
+  highlighter,
+  prefix,
+}: GetHighlighterThemeStylesProps) {
+  let styles = '';
+  if (theme != null) {
+    const themeData = highlighter.getTheme(theme);
+    styles += `color:${themeData.fg};`;
+    styles += `background-color:${themeData.bg};`;
+    styles += `${formatCSSVariablePrefix(prefix)}fg:${themeData.fg};`;
+    styles += `${formatCSSVariablePrefix(prefix)}bg:${themeData.bg};`;
+  } else if (themes != null) {
+    let themeData = highlighter.getTheme(themes.dark);
+    styles += `${formatCSSVariablePrefix(prefix)}dark:${themeData.fg};`;
+    styles += `${formatCSSVariablePrefix(prefix)}dark-bg:${themeData.bg};`;
+
+    themeData = highlighter.getTheme(themes.light);
+    styles += `${formatCSSVariablePrefix(prefix)}light:${themeData.fg};`;
+    styles += `${formatCSSVariablePrefix(prefix)}light-bg:${themeData.bg};`;
+  }
+  return styles;
+}
+
 function setWrapperProps(
   {
     pre,
@@ -105,25 +137,18 @@ function setWrapperProps(
   }: SetupWrapperNodesProps,
   prefix?: string
 ) {
-  let styles = '';
+  const styles = getHighlighterThemeStyles({
+    theme,
+    themes,
+    highlighter,
+    prefix,
+  });
   if (themeType !== 'system') {
     pre.dataset.theme = themeType;
   }
   if (theme != null) {
     const themeData = highlighter.getTheme(theme);
-    styles += `color:${themeData.fg};`;
-    styles += `background-color:${themeData.bg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}fg:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}bg:${themeData.bg};`;
     pre.dataset.theme = themeData.type;
-  } else {
-    let themeData = highlighter.getTheme(themes.dark);
-    styles += `${formatCSSVariablePrefix(prefix)}dark:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}dark-bg:${themeData.bg};`;
-
-    themeData = highlighter.getTheme(themes.light);
-    styles += `${formatCSSVariablePrefix(prefix)}light:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}light-bg:${themeData.bg};`;
   }
   pre.dataset.type = split ? 'split' : 'file';
   pre.dataset.overflow = wrap ? 'wrap' : 'scroll';
@@ -134,13 +159,33 @@ export function formatCSSVariablePrefix(prefix: string = 'pjs') {
   return `--${prefix}-`;
 }
 
-export function renderFileHeader(
-  file: FileDiffMetadata,
-  renderCustomMetadata?: RenderCustomFileMetadata
-): HTMLDivElement {
+interface RenderFileHeaderProps {
+  file: FileDiffMetadata;
+  renderCustomMetadata?: RenderCustomFileMetadata;
+  theme?: BundledTheme;
+  themes?: { dark: BundledTheme; light: BundledTheme };
+  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+  prefix?: string;
+}
+
+export function renderFileHeader({
+  file,
+  theme,
+  themes,
+  highlighter,
+  prefix,
+  renderCustomMetadata,
+}: RenderFileHeaderProps): HTMLDivElement {
+  const style = getHighlighterThemeStyles({
+    theme,
+    themes,
+    highlighter,
+    prefix,
+  });
   const container = document.createElement('div');
   container.dataset.pjsHeader = '';
   container.dataset.changeType = file.type;
+  container.style = style;
 
   const content = document.createElement('div');
   content.dataset.headerContent = '';

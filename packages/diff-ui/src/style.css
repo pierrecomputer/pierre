@@ -11,6 +11,9 @@
   --pjs-font-fallback:
     'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
     'Courier New', monospace;
+  --pjs-header-font-fallback:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+    Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 }
 
 pre,
@@ -28,6 +31,12 @@ code {
   line-height: var(--pjs-line-height, 20px);
 }
 
+[data-pjs-header] *,
+[data-pjs-header] *:before,
+[data-pjs-header] *:after {
+  font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
+}
+
 [data-file-info] {
   padding: 10px;
   font-weight: 700;
@@ -36,6 +45,7 @@ code {
   border-block: 1px solid color-mix(in srgb, var(--bg) 95%, var(--fg));
 }
 
+[data-pjs-header],
 [data-pjs] {
   color-scheme: light dark;
 
@@ -75,10 +85,13 @@ code {
     var(--pjs-bg) 75%,
     var(--pjs-annotations-color)
   );
-  --pjs-code-grid: minmax(min-content, max-content) 1fr;
 
   background-color: var(--pjs-bg);
   color: var(--pjs-fg);
+}
+
+[data-pjs] {
+  --pjs-code-grid: minmax(min-content, max-content) 1fr;
 
   [data-column-content] span {
     color: light-dark(var(--pjs-light), var(--pjs-dark));
@@ -88,32 +101,35 @@ code {
 }
 
 @media (prefers-color-scheme: dark) {
+  [data-pjs-header],
   [data-pjs] {
     color-scheme: dark;
-
-    [data-column-content] span {
-      font-weight: var(--pjs-dark-font-weight);
-      font-style: var(--pjs-dark-font-style);
-    }
   }
-}
 
-[data-pjs][data-theme='light'] {
-  color-scheme: light;
-
-  [data-column-content] span {
-    font-weight: var(--pjs-light-font-weight);
-    font-style: var(--pjs-light-font-style);
-  }
-}
-
-[data-pjs][data-theme='dark'] {
-  color-scheme: dark;
-
-  [data-column-content] span {
+  [data-pjs] [data-column-content] span {
     font-weight: var(--pjs-dark-font-weight);
     font-style: var(--pjs-dark-font-style);
   }
+}
+
+[data-pjs-header][data-theme='light'],
+[data-pjs][data-theme='light'] {
+  color-scheme: light;
+}
+
+[data-pjs][data-theme='light'] [data-column-content] span {
+  font-weight: var(--pjs-light-font-weight);
+  font-style: var(--pjs-light-font-style);
+}
+
+[data-pjs-header][data-theme='dark'],
+[data-pjs][data-theme='dark'] {
+  color-scheme: dark;
+}
+
+[data-pjs][data-theme='dark'] [data-column-content] span {
+  font-weight: var(--pjs-dark-font-weight);
+  font-style: var(--pjs-dark-font-style);
 }
 
 [data-type='split'][data-overflow='wrap'] {
@@ -313,10 +329,12 @@ code {
 }
 
 [data-pjs-header] [data-additions] {
+  font-family: var(--pjs-font-family, var(--pjs-font-fallback));
   color: var(--pjs-additions-color);
 }
 
 [data-pjs-header] [data-deletions] {
+  font-family: var(--pjs-font-family, var(--pjs-font-fallback));
   color: var(--pjs-deletions-color);
 }
 

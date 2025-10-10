@@ -3,6 +3,7 @@ import './style.css';
 export * from '@pierre/shiki-stream';
 export * from './CodeRenderer';
 export * from './DiffFileRenderer';
+export * from './DiffHeaderRenderer';
 export * from './DiffHunksRenderer';
 export * from './SharedHighlighter';
 export * from './UnversialRenderer';

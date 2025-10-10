@@ -1,3 +1,4 @@
+import { DiffHeaderRenderer } from './DiffHeaderRenderer';
 import { DiffHunksRenderer } from './DiffHunksRenderer';
 import './custom-components/Container';
 import type {
@@ -11,7 +12,6 @@ import type {
   ThemesRendererOptions,
 } from './types';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
-import { renderFileHeader } from './utils/html_render_utils';
 
 interface FileDiffRenderProps {
   lang?: BaseRendererOptions['lang'];
@@ -75,10 +75,10 @@ export type DiffFileRendererOptions<LAnnotation> =
 export class DiffFileRenderer<LAnnotation = undefined> {
   options: DiffFileRendererOptions<LAnnotation>;
   private fileContainer: HTMLElement | undefined;
-  private header: HTMLDivElement | undefined;
   private pre: HTMLPreElement | undefined;
 
-  hunksRenderer: DiffHunksRenderer<LAnnotation> | undefined;
+  private hunksRenderer: DiffHunksRenderer<LAnnotation> | undefined;
+  private headerRenderer: DiffHeaderRenderer | undefined;
 
   constructor(options: DiffFileRendererOptions<LAnnotation>) {
     this.options = options;
@@ -116,6 +116,7 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
     this.mergeOptions({ themeType });
     this.hunksRenderer?.setThemeType(themeType);
+    this.headerRenderer?.setThemeType(themeType);
   }
 
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
@@ -125,9 +126,12 @@ export class DiffFileRenderer<LAnnotation = undefined> {
 
   cleanUp() {
     this.fileContainer?.parentNode?.removeChild(this.fileContainer);
+    this.hunksRenderer?.cleanUp();
+    this.headerRenderer?.cleanUp();
     this.fileContainer = undefined;
+    this.hunksRenderer = undefined;
     this.pre = undefined;
-    this.header = undefined;
+    this.headerRenderer = undefined;
     this.fileDiff = undefined;
   }
 
@@ -146,7 +150,6 @@ export class DiffFileRenderer<LAnnotation = undefined> {
       wrapper.appendChild(fileContainer);
     }
     const pre = this.getOrCreatePre(fileContainer);
-    this.renderHeader(fileDiff, fileContainer);
     if (this.hunksRenderer == null) {
       this.hunksRenderer = new DiffHunksRenderer({ ...this.options, lang });
     } else {
@@ -155,7 +158,11 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     this.fileDiff = fileDiff;
     // This is kinda jank, lol
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
-    await this.hunksRenderer.render(this.fileDiff, pre);
+
+    await Promise.all([
+      this.renderHeader(fileDiff, fileContainer),
+      this.hunksRenderer.render(this.fileDiff, pre),
+    ]);
 
     for (const element of this.annotationElements) {
       element.parentNode?.removeChild(element);
@@ -293,20 +300,21 @@ export class DiffFileRenderer<LAnnotation = undefined> {
 
   // NOTE(amadeus): We just always do a full re-render with the header...
   // FIXME(amadeus): This should mb be a custom component?
-  private renderHeader(file: FileDiffMetadata, container: HTMLElement) {
+  private async renderHeader(file: FileDiffMetadata, container: HTMLElement) {
     const { renderCustomMetadata, disableFileHeader = false } = this.options;
     if (disableFileHeader) {
-      if (this.header != null) {
-        this.header.parentNode?.removeChild(this.header);
-      }
+      this.headerRenderer?.cleanUp();
+      this.headerRenderer = undefined;
       return;
     }
-    const newHeader = renderFileHeader(file, renderCustomMetadata);
-    if (this.header != null) {
-      container.shadowRoot?.replaceChild(newHeader, this.header);
-    } else {
-      container.shadowRoot?.prepend(newHeader);
-    }
-    this.header = newHeader;
+
+    const { theme, themes, themeType } = this.options;
+    this.headerRenderer ??= new DiffHeaderRenderer(
+      theme != null
+        ? { theme, renderCustomMetadata, themeType }
+        : { themes, renderCustomMetadata, themeType }
+    );
+
+    await this.headerRenderer.render(file, container);
   }
 }
