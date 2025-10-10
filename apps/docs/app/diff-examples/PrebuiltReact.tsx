@@ -1,7 +1,7 @@
 'use client';
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
-import { IconCopyFill } from '@/components/icons';
+import { IconCheck, IconCopyFill } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -58,7 +58,7 @@ function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 5000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
     }
@@ -79,7 +79,7 @@ function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
                 className="h-6 w-6 p-0"
                 onClick={copyToClipboard}
               >
-                <IconCopyFill />
+                {copied ? <IconCheck /> : <IconCopyFill />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>

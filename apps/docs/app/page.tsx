@@ -5,6 +5,7 @@ import {
   IconBook,
   IconBrandDiscord,
   IconBrandGithub,
+  IconCheck,
   IconCopyFill,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import Link from 'next/link';
+import { useState } from 'react';
 
 import { Annotations } from './diff-examples/Annotations';
 import { ArbitraryFiles } from './diff-examples/ArbitraryFiles';
@@ -125,13 +127,49 @@ export default function Home() {
           </Button>
         </div>
       </section>
+
+      <footer className="border-t bg-muted/50">
+        <div className="max-w-4xl mx-auto px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">Precision Diffs</div>
+            <nav className="flex items-center gap-4">
+              <Link
+                href="/"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Home
+              </Link>
+              <Link
+                href="/playground"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Playground
+              </Link>
+              <Link
+                href="/docs"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Docs
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
 const Hero = () => {
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText('npm i @pierre/precision-diffs');
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText('npm i @pierre/precision-diffs');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 5000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard');
+    }
   };
 
   return (
@@ -160,7 +198,7 @@ const Hero = () => {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 transition-colors font-mono text-sm"
             >
               <span>npm i @pierre/precision-diffs</span>
-              <IconCopyFill />
+              {copied ? <IconCheck /> : <IconCopyFill />}
             </button>
           </TooltipTrigger>
           <TooltipContent>
