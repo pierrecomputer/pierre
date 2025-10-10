@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
-    "@shikijs/core": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shiki": "catalog:"

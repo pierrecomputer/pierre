@@ -20,7 +20,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@pierre/diff-ui": "workspace:*",
-        "@shikijs/core": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
         "shiki": "catalog:",
@@ -86,7 +85,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@pierre/shiki-stream": "workspace:*",
-        "@shikijs/core": "catalog:",
         "diff": "catalog:",
         "hast-util-to-html": "catalog:",
         "shiki": "catalog:",

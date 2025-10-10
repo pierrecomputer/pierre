@@ -1,13 +1,13 @@
+import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
+import type { Element, ElementContent, Root, RootContent } from 'hast';
+import { toHtml } from 'hast-util-to-html';
 import type {
+  BundledTheme,
   CodeToHastOptions,
   DecorationItem,
   HighlighterGeneric,
   ShikiTransformer,
-} from '@shikijs/core';
-import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
-import type { Element, ElementContent, Root, RootContent } from 'hast';
-import { toHtml } from 'hast-util-to-html';
-import type { BundledTheme } from 'shiki';
+} from 'shiki';
 
 import { getSharedHighlighter } from './SharedHighlighter';
 import type {

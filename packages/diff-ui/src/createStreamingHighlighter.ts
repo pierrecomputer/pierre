@@ -1,5 +1,5 @@
-import type { BundledHighlighterOptions } from '@shikijs/core';
 import {
+  type BundledHighlighterOptions,
   type BundledLanguage,
   type BundledTheme,
   createHighlighter,

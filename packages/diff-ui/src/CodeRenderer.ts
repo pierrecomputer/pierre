@@ -3,11 +3,12 @@ import {
   type RecallToken,
 } from '@pierre/shiki-stream';
 import type {
+  BundledLanguage,
+  BundledTheme,
   CodeOptionsMultipleThemes,
   HighlighterGeneric,
   ThemedToken,
-} from '@shikijs/core';
-import type { BundledLanguage, BundledTheme } from 'shiki';
+} from 'shiki';
 
 import { getSharedHighlighter } from './SharedHighlighter';
 import { queueRender } from './UnversialRenderer';
