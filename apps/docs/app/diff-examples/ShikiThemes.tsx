@@ -14,9 +14,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { FileContents } from '@pierre/diff-ui';
+import {
+  type FileContents,
+  type ThemesType,
+  preloadHighlighter,
+} from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const OLD_FILE: FileContents = {
   name: 'file.tsx',
@@ -54,9 +58,26 @@ export default function Home() {
 };
 
 export function ShikiThemes() {
-  const [selectedDarkTheme, setSelectedDarkTheme] = useState('GitHub Dark');
-  const [selectedLightTheme, setSelectedLightTheme] = useState('GitHub Light');
-  const [selectedColorMode, setSelectedColorMode] = useState('Auto');
+  useEffect(() => {
+    void preloadHighlighter({
+      themes: [
+        'ayu-dark',
+        'catppuccin-mocha',
+        'dark-plus',
+        'github-dark',
+        'vitesse-dark',
+      ],
+      langs: [],
+    });
+  }, []);
+
+  const [selectedLightTheme, setSelectedLightTheme] =
+    useState<ThemesType['light']>('github-light');
+  const [selectedDarkTheme, setSelectedDarkTheme] =
+    useState<ThemesType['dark']>('github-dark');
+  const [selectedColorMode, setSelectedColorMode] = useState<
+    'system' | 'light' | 'dark'
+  >('system');
 
   return (
     <div className="space-y-4">
@@ -73,28 +94,28 @@ export function ShikiThemes() {
               variant="outline"
               className="justify-start w-full md:w-auto"
             >
-              <IconColorDark />
-              {selectedDarkTheme}
+              <IconColorLight />
+              {selectedLightTheme}
               <ChevronDown className="ml-auto h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem
-              onClick={() => setSelectedDarkTheme('GitHub Dark')}
-            >
-              GitHub Dark
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setSelectedDarkTheme('One Dark Pro')}
-            >
-              One Dark Pro
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setSelectedDarkTheme('Dracula')}>
-              Dracula
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setSelectedDarkTheme('Nord')}>
-              Nord
-            </DropdownMenuItem>
+            {[
+              'solarized-light',
+              'catppuccin-latte',
+              'github-light',
+              'gruvbox-light-hard',
+              'vitesse-light',
+            ].map((theme) => (
+              <DropdownMenuItem
+                key={theme}
+                onClick={() =>
+                  setSelectedLightTheme(theme as ThemesType['light'])
+                }
+              >
+                {theme}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -104,60 +125,63 @@ export function ShikiThemes() {
               variant="outline"
               className="justify-start w-full md:w-auto"
             >
-              <IconColorLight />
-              {selectedLightTheme}
+              <IconColorDark />
+              {selectedDarkTheme}
               <ChevronDown className="ml-auto h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem
-              onClick={() => setSelectedLightTheme('GitHub Light')}
-            >
-              GitHub Light
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setSelectedLightTheme('Min Light')}
-            >
-              Min Light
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setSelectedLightTheme('Catppuccin Latte')}
-            >
-              Catppuccin Latte
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setSelectedLightTheme('Solarized Light')}
-            >
-              Solarized Light
-            </DropdownMenuItem>
+            {[
+              'ayu-dark',
+              'catppuccin-mocha',
+              'dark-plus',
+              'github-dark',
+              'vitesse-dark',
+            ].map((theme) => (
+              <DropdownMenuItem
+                key={theme}
+                onClick={() =>
+                  setSelectedDarkTheme(theme as ThemesType['dark'])
+                }
+              >
+                {theme}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
         <ButtonGroup
           value={selectedColorMode}
-          onValueChange={(value) => setSelectedColorMode(value as 'Auto' | 'Light' | 'Dark')}
+          onValueChange={(value) =>
+            setSelectedColorMode(value as 'system' | 'light' | 'dark')
+          }
         >
-          <ButtonGroupItem value="Auto">
+          <ButtonGroupItem value="system">
             <IconColorAuto />
             Auto
           </ButtonGroupItem>
-          <ButtonGroupItem value="Light">
+          <ButtonGroupItem value="light">
             <IconColorLight />
             Light
           </ButtonGroupItem>
-          <ButtonGroupItem value="Dark">
+          <ButtonGroupItem value="dark">
             <IconColorDark />
             Dark
           </ButtonGroupItem>
         </ButtonGroup>
       </div>
       <FileDiff
+        key={`${selectedDarkTheme}-${selectedLightTheme}-${selectedColorMode}`}
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
         options={{
           detectLanguage: true,
-          theme: 'catppuccin-frappe',
           diffStyle: 'unified',
+          themeType: selectedColorMode,
+          themes: {
+            dark: selectedDarkTheme,
+            light: selectedLightTheme,
+          },
         }}
       />
     </div>
