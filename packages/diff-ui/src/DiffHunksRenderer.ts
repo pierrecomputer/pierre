@@ -1102,7 +1102,7 @@ function convertLine(
   }
   // We need to convert the current line to a div but keep all the decorations
   // that may be applied
-  node.tagName = 'div';
+  node.tagName = 'span';
   node.properties['data-column-content'] = '';
   if (lineInfo.metadataContent != null) {
     node.children.push({
@@ -1120,12 +1120,12 @@ function convertLine(
   const children = [node];
   if (!state.disableLineNumbers) {
     children.unshift({
-      tagName: 'div',
+      tagName: 'span',
       type: 'element',
       properties: { 'data-column-number': '' },
       children:
         lineInfo.metadataContent == null
-          ? [{ type: 'text', value: `${lineInfo.number}` }]
+          ? [{ type: 'text', value: `${lineInfo.number} ` }]
           : [],
     });
   }
