@@ -1,12 +1,11 @@
 {
   "extends": "../../tsconfig.options.json",
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "vite.config.ts"],
   "compilerOptions": {
     "composite": false,
     "noEmit": true,
     "emitDeclarationOnly": false,
     "baseUrl": ".",
-    "rootDir": "src",
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
   }
 }

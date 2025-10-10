@@ -45,6 +45,7 @@ export default defineConfig(() => {
         next();
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       server.middlewares.use('/', handleRoutes);
     },
     configurePreviewServer(server: PreviewServer) {
@@ -52,6 +53,7 @@ export default defineConfig(() => {
         req: IncomingMessage,
         res: ServerResponse,
         next: () => void
+        // eslint-disable-next-line @typescript-eslint/require-await
       ) => {
         // Handle root path - serve vanilla version
         if (req.url === '/' || req.url === '/index.html') {
@@ -82,6 +84,7 @@ export default defineConfig(() => {
         next();
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       server.middlewares.use('/', handleRoutes);
     },
   });
