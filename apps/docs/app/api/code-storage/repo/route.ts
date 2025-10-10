@@ -1,8 +1,6 @@
 import { GitStorage } from '@pierre/storage';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-
 export async function POST(request: NextRequest) {
   try {
     const store = new GitStorage({
