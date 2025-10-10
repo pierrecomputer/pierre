@@ -72,20 +72,6 @@
   font-size: 3rem;
 }
 
-.hstack {
-  display: flex;
-  gap: var(--gap, 0.5rem);
-  justify-content: var(--justify, flex-start);
-  align-items: center;
-}
-
-.vstack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap, 0.5rem);
-  align-items: var(--align, flex-start);
-}
-
 .gridstack {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));

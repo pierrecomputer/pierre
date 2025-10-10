@@ -1,6 +1,6 @@
 .hero {
   max-width: 760px;
-  padding-block: 4rem;
+  padding-top: 3rem;
 }
 
 .mainTitle {
@@ -34,8 +34,14 @@
 
 .actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
-  align-items: center;
+
+  @media (width > 768px) {
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
 .codeBtn {

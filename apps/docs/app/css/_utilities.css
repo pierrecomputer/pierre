@@ -68,17 +68,49 @@
   font-size: 3rem;
 }
 
-.hstack {
+[class*='hstack'],
+[class*='vstack'] {
   display: flex;
   gap: var(--gap, 0.5rem);
-  justify-content: var(--justify, flex-start);
+  flex-direction: var(--dir);
+  align-items: var(--align);
+  justify-content: var(--justify);
 }
 
-.vstack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap, 0.5rem);
-  align-items: var(--align, flex-start);
+.hstack {
+  --dir: row;
+  --align: center;
+  --justify: flex-start;
+}
+
+.vstack,
+[class*='vstack'] {
+  --dir: column;
+  --align: flex-start;
+}
+
+@media (width > 768px) {
+  .md\:hstack {
+    --dir: row;
+    --align: center;
+    --justify: flex-start;
+  }
+  .md\:vstack {
+    --dir: column;
+    --align: flex-start;
+  }
+}
+
+@media (width > 1024px) {
+  .lg\:hstack {
+    --dir: row;
+    --align: center;
+    --justify: flex-start;
+  }
+  .lg\:vstack {
+    --dir: column;
+    --align: flex-start;
+  }
 }
 
 .gridstack {
@@ -98,4 +130,10 @@
 }
 .cols-2 {
   --columns: 2;
+}
+
+@media (width > 768px) {
+  .md\:cols-2 {
+    --columns: 2;
+  }
 }
