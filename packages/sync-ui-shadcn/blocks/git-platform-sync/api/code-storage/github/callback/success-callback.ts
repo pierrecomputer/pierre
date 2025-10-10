@@ -1,0 +1,150 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+export type GitHubOAuthTokenResponse =
+  | {
+      access_token: string;
+      token_type: 'bearer';
+      scope: string;
+    }
+  | {
+      error: string;
+      error_description: string;
+      error_uri: string;
+    };
+
+export type AvailablePlatform = 'github';
+export type CodeStorageSuccessCallbackOptions = {
+  clientId: string;
+  clientSecret: string;
+  platform: AvailablePlatform;
+  redirectUrl?: string;
+  env: 'production' | (string & {});
+};
+
+export class CodeStorageSuccessCallback {
+  private clientId: string;
+  private clientSecret: string;
+  private redirectUrl?: string;
+  private env: 'production' | (string & {}) = 'production';
+
+  constructor(options: CodeStorageSuccessCallbackOptions) {
+    if (options.platform !== 'github') {
+      throw new Error(
+        `CodeStorageSuccessCallback Error: Invalid platform: ${options.platform}`
+      );
+    }
+    this.clientId = options.clientId;
+    this.clientSecret = options.clientSecret;
+    this.redirectUrl = options.redirectUrl;
+    this.env = options.env;
+  }
+
+  private getParams(request: NextRequest) {
+    const searchParams = request.nextUrl.searchParams;
+
+    const code = searchParams.get('code');
+    const installationId = searchParams.get('installation_id');
+    const setupAction = searchParams.get('setup_action');
+    const state = searchParams.get('state');
+
+    if (!code) {
+      throw new Error('CodeStorageSuccessCallback Error: No code provided');
+    } else if (!installationId) {
+      throw new Error(
+        'CodeStorageSuccessCallback Error: No installation ID provided'
+      );
+    } else if (!setupAction) {
+      throw new Error(
+        'CodeStorageSuccessCallback Error: No setup action provided'
+      );
+    } else if (!state) {
+      throw new Error('CodeStorageSuccessCallback Error: No state provided');
+    }
+
+    return { code, installationId, setupAction, state };
+  }
+
+  private generateRedirectUrl(
+    request: NextRequest,
+    {
+      installationId,
+      setupAction,
+      state,
+    }: { installationId: string; setupAction?: string; state: string }
+  ) {
+    if (this.redirectUrl) {
+      return this.redirectUrl;
+    }
+
+    const successUrl = new URL('/code-storage/success', request.url);
+
+    if (setupAction) {
+      successUrl.searchParams.set('setup_action', setupAction);
+    }
+    if (installationId) {
+      successUrl.searchParams.set('installation_id', installationId);
+    }
+    if (state) {
+      successUrl.searchParams.set('state', state);
+    }
+    return successUrl;
+  }
+
+  async handleRequest(request: NextRequest) {
+    try {
+      const { code, installationId, setupAction, state } =
+        this.getParams(request);
+
+      const tokenResponse = await fetch(
+        'https://github.com/login/oauth/access_token',
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            client_id: this.clientId,
+            client_secret: this.clientSecret,
+            code,
+          }),
+        }
+      );
+
+      const tokenData =
+        (await tokenResponse.json()) as unknown as GitHubOAuthTokenResponse;
+
+      if ('error' in tokenData) {
+        throw new Error(tokenData.error_description || tokenData.error);
+      }
+
+      const successUrl = this.generateRedirectUrl(request, {
+        installationId,
+        setupAction,
+        state,
+      });
+
+      const response = NextResponse.redirect(successUrl);
+
+      response.cookies.set('github_token', tokenData.access_token, {
+        httpOnly: true,
+        secure: this.env === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30,
+      });
+
+      return response;
+    } catch (error) {
+      console.error('CodeStorageSuccessCallback Error:', error);
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'CodeStorageSuccessCallback Error',
+        },
+        { status: 400 }
+      );
+    }
+  }
+}
