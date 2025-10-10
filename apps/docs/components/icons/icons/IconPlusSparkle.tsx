@@ -1,0 +1,27 @@
+// Generated from svgs/IconPlusSparkle.svg
+import { type Color, Colors } from '../Color';
+
+interface IconProps {
+  size?: 10 | 12 | 16 | 20 | 32 | 48 | '1em';
+  color?: keyof Color | 'currentcolor';
+  style?: React.CSSProperties;
+  className?: string;
+}
+
+// prettier-ignore
+export const IconPlusSparkle = ({
+	size = 16,
+	color = "currentcolor",
+	style,
+	className,
+	...props
+}: IconProps) => {
+	const height = size;
+	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
+
+	return (
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path fillRule="evenodd" d="M5 6a.75.75 0 0 1 .75.75v3.5h3.5a.75.75 0 0 1 0 1.5h-3.5v3.5a.75.75 0 0 1-1.5 0v-3.5H.75a.75.75 0 0 1 0-1.5h3.5v-3.5A.75.75 0 0 1 5 6" clipRule="evenodd" /><path d="M13.204 3.148a.217.217 0 0 0-.412 0l-.387 1.162a1.74 1.74 0 0 1-1.097 1.097l-1.162.387a.217.217 0 0 0 0 .412l1.162.387a1.73 1.73 0 0 1 1.097 1.097l.387 1.162a.217.217 0 0 0 .412 0l.387-1.162a1.73 1.73 0 0 1 1.097-1.097l1.162-.387a.217.217 0 0 0 0-.412l-1.162-.387A1.73 1.73 0 0 1 13.59 4.31zM10.134.099a.145.145 0 0 0-.273 0l-.258.774a1.16 1.16 0 0 1-.732.732l-.774.258a.145.145 0 0 0 0 .274l.774.258a1.16 1.16 0 0 1 .732.732l.258.774a.145.145 0 0 0 .274 0l.258-.774a1.16 1.16 0 0 1 .732-.732l.774-.258a.145.145 0 0 0 0-.274l-.774-.258a1.16 1.16 0 0 1-.732-.732z" /></svg>
+	);
+};
+
+export { IconPlusSparkle as ReactComponent };
