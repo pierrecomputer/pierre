@@ -3,7 +3,7 @@ import { RootProvider } from 'fumadocs-ui/provider';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import '../styles/tokens.css';
+// import '../styles/tokens.css';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',

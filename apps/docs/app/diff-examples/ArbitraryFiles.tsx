@@ -1,9 +1,17 @@
 'use client';
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
-import { IconDiffBlended, IconDiffSplit } from '@/components/icons';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { IconFunction, IconType } from '@/components/icons';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { InputWithIcon } from '@/components/ui/input-group';
 import type { FileContents } from '@pierre/diff-ui';
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 const OLD_FILE: FileContents = {
@@ -41,35 +49,25 @@ export default function Home() {
 `,
 };
 
-export function SplitUnified() {
-  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
+export function ArbitraryFiles() {
   return (
     <div className="space-y-4">
-      <h3 className="text-2xl font-semibold">Diff styles</h3>
-      <p className="text-muted-foreground">
-        Choose from stacked (unified) or split (side-by-side). Both use CSS Grid
-        under the hood, meaning fewer DOM nodes and fast rendering.
-      </p>
-      <ButtonGroup
-        value={diffStyle}
-        onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
-      >
-        <ButtonGroupItem value="split">
-          <IconDiffSplit />
-          Split
-        </ButtonGroupItem>
-        <ButtonGroupItem value="unified">
-          <IconDiffBlended />
-          Stacked
-        </ButtonGroupItem>
-      </ButtonGroup>
+      <div className="space-y-4">
+        <h3 className="text-2xl font-semibold">Diff arbitrary files</h3>
+        <p className="text-sm text-muted-foreground">
+          In addition to rendering standard Git diffs and patches, you can pass
+          any two files in Precision Diffs and get a diff between them. This is
+          especially useful when comparing across generative snapshots where
+          linear history isn’t always available.
+        </p>
+      </div>
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
         options={{
           detectLanguage: true,
           theme: 'catppuccin-frappe',
-          diffStyle,
+          diffStyle: 'unified',
         }}
       />
     </div>
