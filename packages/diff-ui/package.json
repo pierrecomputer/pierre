@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc --build --force",
+    "build": "tsc --build",
     "dev": "tsc --build --watch",
     "tsc": "tsc"
   },

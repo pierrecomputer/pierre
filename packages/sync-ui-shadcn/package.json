@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "tsc": "tsc --build",
-    "build": "tsc --build --force"
+    "build": "tsc --build"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",
