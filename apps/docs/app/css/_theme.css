@@ -1,0 +1,80 @@
+:root {
+  --global-font-body: var(--font-ui, var(--font-body));
+  --global-font-mono: var(--font-code, var(--font-mono));
+  --global-font-size: var(--font-size-ui, 14px);
+  --global-code-font-size: var(--font-size-code, 12px);
+  --global-color-placeholder: var(--color-fg3);
+  --global-color-border: var(--color-border);
+  --font-body:
+    var(--font-ui, var(--font-berkeley-mono)), system-ui, -apple-system,
+    'Segoe UI', Roboto, 'Helvetica Neue', sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-mono: var(--font-code, ui-monospace), 'SFMono-Regular', monospace;
+  --color-bg: #fff;
+  --color-bg0: var(--color-gray020);
+  --color-bg1: var(--color-gray040);
+  --color-bg2: var(--color-gray060);
+  --color-bg3: var(--color-gray080);
+  --color-fg: var(--color-gray980);
+  --color-fg1: var(--color-gray800);
+  --color-fg2: var(--color-gray700);
+  --color-fg3: var(--color-gray500);
+  --color-fg4: var(--color-gray400);
+  --color-border: var(--color-gray100);
+  --color-border5: color-mix(in srgb, var(--color-fg) 5%, transparent);
+  --color-border8: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  --color-border10: color-mix(in srgb, var(--color-fg) 10%, transparent);
+  --color-border15: color-mix(in srgb, var(--color-fg) 15%, transparent);
+  --radius-1: 4px;
+  --radius-2: 6px;
+  --radius-3: 9px;
+  --radius-4: 12px;
+  --radius-5: 16px;
+  --shadow-xxs: 0 1px 2px 0 #0000000a;
+  --shadow-xs: 0 2px 4px #00000013;
+  --shadow-sm: 0 1px 2px #0000000d;
+  --shadow-md: 0 2px 2px #0000000d, 0 8px 16px -4px #00000013;
+  --shadow-lg: 0 4px 8px -4px #0000000d, 0 16px 24px -8px #0000001a;
+  --shadow-xl: 0 8px 16px -4px #0000000d, 0 24px 32px -8px #00000013;
+  --focus-ring: 2px solid var(--color-blue400);
+  --focus-ring-danger: 2px solid var(--color-red400);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: var(--color-gray980);
+    --color-bg0: var(--color-gray960);
+    --color-bg1: var(--color-gray940);
+    --color-bg2: var(--color-gray920);
+    --color-bg3: var(--color-gray900);
+    --color-fg: var(--color-gray100);
+    --color-fg1: var(--color-gray200);
+    --color-fg2: var(--color-gray300);
+    --color-fg3: var(--color-gray500);
+    --color-fg4: var(--color-gray600);
+    --color-border: var(--color-gray900);
+    --color-border5: #ffffff0d;
+    --color-border8: #ffffff14;
+    --color-border10: #ffffff1a;
+    --color-border15: #ffffff26;
+  }
+}
+
+/* copied here */
+[data-theme='dark'] {
+  --color-bg: var(--color-gray980);
+  --color-bg0: var(--color-gray960);
+  --color-bg1: var(--color-gray940);
+  --color-bg2: var(--color-gray920);
+  --color-bg3: var(--color-gray900);
+  --color-fg: var(--color-gray100);
+  --color-fg1: var(--color-gray200);
+  --color-fg2: var(--color-gray300);
+  --color-fg3: var(--color-gray500);
+  --color-fg4: var(--color-gray600);
+  --color-border: var(--color-gray900);
+  --color-border5: #ffffff0d;
+  --color-border8: #ffffff14;
+  --color-border10: #ffffff1a;
+  --color-border15: #ffffff26;
+}

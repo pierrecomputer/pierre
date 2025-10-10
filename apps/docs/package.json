@@ -29,6 +29,7 @@
     "lucide-react": "catalog:",
     "next": "catalog:",
     "postcss": "catalog:",
+    "postcss-import": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shadcn": "catalog:",

@@ -1,0 +1,60 @@
+.hero {
+  max-width: 760px;
+  padding-block: 4rem;
+}
+
+.mainTitle {
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-fg);
+  margin: 0;
+}
+
+.description {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  color: var(--color-fg2);
+  line-height: 1.5;
+}
+
+.description a {
+  color: var(--color-fg);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 0.5px;
+  text-decoration-color: var(--color-fg4);
+
+  &:hover {
+    text-decoration-color: var(--color-fg);
+    text-decoration-thickness: 1px;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.codeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-bg2);
+  background-color: var(--color-fg1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: var(--color-bg);
+    background-color: var(--color-fg);
+  }
+}

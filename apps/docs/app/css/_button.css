@@ -1,0 +1,31 @@
+.btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--btn-fg, var(--color-fg2));
+  background-clip: padding-box;
+  background-color: var(--btn-bg, var(--color-bg3));
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+
+  &.active {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    border-color: var(--color-border15);
+  }
+}
+
+.btn:hover {
+  color: var(--color-fg);
+}
+
+.btn-group {
+  display: inline-flex;
+  padding: 0.125rem;
+  background-color: var(--color-bg3);
+  border-radius: var(--radius-2);
+}

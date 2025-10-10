@@ -1,0 +1,17 @@
+@layer colors, reset, theme, type, layout, components, custom, utilities;
+
+@import './_colors.css' layer(colors);
+@import './_reset.css' layer(reset);
+@import './_theme.css' layer(theme);
+@import './_type.css' layer(type);
+@import './_code.css' layer(type);
+@import './_layout.css' layer(layout);
+@import './_docs.css' layer(layout);
+@import './_button.css' layer(components);
+@import './_utilities.css' layer(utilities);
+@import '../home.css' layer(custom);
+
+:root {
+  --font-ui: Geist;
+  --font-code: Geist Mono;
+}

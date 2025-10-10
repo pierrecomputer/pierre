@@ -1,0 +1,168 @@
+.container {
+  width: 960px;
+  max-width: 100%;
+  padding: 20px;
+  margin: 0 auto;
+}
+
+.features {
+  padding-block: 3rem;
+}
+
+.features > p {
+  max-width: 760px;
+}
+
+.features > h3,
+.features > p.fsSm {
+  max-width: 560px;
+}
+
+.features:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.features h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-fg);
+  margin: 0 0 1rem 0;
+}
+
+.features h3 {
+  margin-top: 2rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-fg);
+}
+
+.features p {
+  margin-bottom: 1rem;
+  color: var(--color-fg2);
+  line-height: 1.5;
+}
+
+.fsSm {
+  font-size: 0.875rem;
+}
+
+.fsMd {
+  font-size: 1rem;
+}
+
+.fsLg {
+  font-size: 1.25rem;
+}
+
+.fsXl {
+  font-size: 1.5rem;
+}
+
+.fs2xl {
+  font-size: 2rem;
+}
+
+.fs3xl {
+  font-size: 2.5rem;
+}
+
+.fs4xl {
+  font-size: 3rem;
+}
+
+.hstack {
+  display: flex;
+  gap: var(--gap, 0.5rem);
+  justify-content: var(--justify, flex-start);
+  align-items: center;
+}
+
+.vstack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap, 0.5rem);
+  align-items: var(--align, flex-start);
+}
+
+.gridstack {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.gridstack > * {
+  grid-column-start: 1;
+  grid-row-start: 1;
+}
+
+.dGrid {
+  display: grid;
+  grid-template-columns: repeat(var(--columns, 1), minmax(0, 1fr));
+  gap: var(--gap, 1rem);
+}
+
+.cols2 {
+  --columns: 2;
+}
+
+/* Color utilities */
+.fg {
+  color: var(--color-fg);
+}
+
+.fg1 {
+  color: var(--color-fg1);
+}
+
+.fg2 {
+  color: var(--color-fg2);
+}
+
+.fg3 {
+  color: var(--color-fg3);
+}
+
+.fg4 {
+  color: var(--color-fg4);
+}
+
+.border {
+  border: 1px solid var(--color-border);
+}
+
+.border5 {
+  border: 1px solid var(--color-border5);
+}
+
+.border8 {
+  border: 1px solid var(--color-border8);
+}
+
+.border10 {
+  border: 1px solid var(--color-border10);
+}
+
+.border15 {
+  border: 1px solid var(--color-border15);
+}
+
+.bg {
+  background-color: var(--color-bg);
+}
+
+.bg0 {
+  background-color: var(--color-bg0);
+}
+
+.bg1 {
+  background-color: var(--color-bg1);
+}
+
+.bg2 {
+  background-color: var(--color-bg2);
+}
+
+.bg3 {
+  background-color: var(--color-bg3);
+}

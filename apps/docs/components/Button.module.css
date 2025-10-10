@@ -1,0 +1,37 @@
+.button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--btn-fg, var(--color-fg2));
+  background-clip: padding-box;
+  background-color: var(--btn-bg, var(--color-bg3));
+  border: 1px solid var(--btn-border-color, transparent);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--color-fg);
+  }
+
+  &.active {
+    --btn-fg: var(--color-fg);
+    --btn-bg: var(--color-bg);
+    --btn-border-color: var(--color-border15);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-blue400);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

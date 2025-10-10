@@ -1,0 +1,101 @@
+.fg {
+  color: var(--color-fg);
+}
+.fg1 {
+  color: var(--color-fg1);
+}
+.fg2 {
+  color: var(--color-fg2);
+}
+.fg3 {
+  color: var(--color-fg3);
+}
+.fg4 {
+  color: var(--color-fg4);
+}
+
+.border {
+  border: 1px solid var(--color-border);
+}
+.border5 {
+  border: 1px solid var(--color-border5);
+}
+.border8 {
+  border: 1px solid var(--color-border8);
+}
+.border10 {
+  border: 1px solid var(--color-border10);
+}
+.border15 {
+  border: 1px solid var(--color-border15);
+}
+
+.bg {
+  color: var(--color-bg);
+}
+.bg0 {
+  color: var(--color-bg0);
+}
+.bg1 {
+  color: var(--color-bg1);
+}
+.bg2 {
+  color: var(--color-bg2);
+}
+.bg3 {
+  color: var(--color-bg3);
+}
+
+.fs-sm {
+  font-size: 0.875rem;
+}
+.fs-md {
+  font-size: 1rem;
+}
+.fs-lg {
+  font-size: 1.25rem;
+}
+.fs-xl {
+  font-size: 1.5rem;
+}
+.fs-2xl {
+  font-size: 2rem;
+}
+.fs-3xl {
+  font-size: 2.5rem;
+}
+.fs-4xl {
+  font-size: 3rem;
+}
+
+.hstack {
+  display: flex;
+  gap: var(--gap, 0.5rem);
+  justify-content: var(--justify, flex-start);
+}
+
+.vstack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap, 0.5rem);
+  align-items: var(--align, flex-start);
+}
+
+.gridstack {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+
+  > * {
+    grid-column-start: 1;
+    grid-row-start: 1;
+  }
+}
+
+.d-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--columns, 1), minmax(0, 1fr));
+  gap: var(--gap, 1rem);
+}
+.cols-2 {
+  --columns: 2;
+}
