@@ -2,6 +2,7 @@
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { IconAnnotate, IconComment } from '@/components/icons';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import type { FileContents } from '@pierre/diff-ui';
 import { CornerDownRight } from 'lucide-react';
@@ -51,7 +52,35 @@ export function Annotations() {
         comments, annotations from CI jobs, and other third party content.
       </p>
 
-      <div></div>
+      <div>
+        <CommentThread
+          mainComment={{
+            author: 'You',
+            timestamp: '3h',
+            content:
+              "What do we think about adding Inter as our primary UI font? It'd definitely help solve some of these layout inconsistencies.",
+            avatarUrl: '/user-avatar.jpg',
+            isYou: true,
+          }}
+          replies={[
+            {
+              author: 'Ian',
+              timestamp: '2h',
+              content: 'Oh yeah, love that.',
+              avatarUrl: '/ian-avatar.jpg',
+            },
+            {
+              author: 'Mark',
+              timestamp: '2h',
+              content:
+                'Oh damn, if we can make it work without a perf hit, yeah totally.',
+              avatarUrl: '/mark-avatar.jpg',
+            },
+          ]}
+          onAddReply={() => console.log('Add reply clicked')}
+          onResolve={() => console.log('Resolve clicked')}
+        />
+      </div>
 
       {/* <FileDiff
         oldFile={OLD_FILE}
@@ -70,7 +99,6 @@ interface CommentProps {
   timestamp: string;
   content: string;
   avatarUrl?: string;
-  avatarBadge?: string;
   isYou?: boolean;
 }
 
@@ -79,22 +107,15 @@ export function Comment({
   timestamp,
   content,
   avatarUrl,
-  avatarBadge,
   isYou = false,
 }: CommentProps) {
   return (
     <div className="flex gap-3">
       <div className="relative flex-shrink-0">
-        <Avatar className="h-10 w-10">
+        <Avatar className="h-6 w-6">
           <AvatarImage src={avatarUrl || '/placeholder.svg'} alt={author} />
           <AvatarFallback>{author[0]}</AvatarFallback>
         </Avatar>
-        {avatarBadge && (
-          <Avatar className="absolute -bottom-1 -right-1 h-5 w-5 border-2 border-white">
-            <AvatarImage src={avatarBadge || '/placeholder.svg'} alt="" />
-            <AvatarFallback className="text-[8px]">+</AvatarFallback>
-          </Avatar>
-        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
