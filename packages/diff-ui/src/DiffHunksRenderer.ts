@@ -154,7 +154,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // TODO(amadeus): Probably figure out what requires a re-render and what just
     // requires some prop changes
     if (!disableRerender) {
-      this.render(this.diff, this.pre);
+      void this.render(this.diff, this.pre);
     }
   }
 
@@ -251,9 +251,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return this.queuedRender;
     }
     this.queuedRender = (async () => {
-      if (this.highlighter == null) {
-        this.highlighter = await this.initializeHighlighter();
-      }
+      this.highlighter ??= await this.initializeHighlighter();
       if (this.queuedRenderArgs == null) {
         // If we get in here, it's likely we called cleanup and therefore we
         // should just return early
@@ -356,9 +354,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (annotationElements.length === 0) {
       return;
     }
-    if (this.resizeObserver == null) {
-      this.resizeObserver = new ResizeObserver(this.handleResizeObserver);
-    }
+    this.resizeObserver ??= new ResizeObserver(this.handleResizeObserver);
     const codeElements = pre.querySelectorAll('code');
     for (const codeElement of codeElements) {
       let numberElement = codeElement.querySelector('[data-column-number]');
@@ -1064,7 +1060,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const themes: BundledTheme[] = [];
     if (theme != null) {
       themes.push(theme);
-    } else if (themes) {
+    } else if (themes != null) {
       themes.push(_themes.dark);
       themes.push(_themes.light);
     }

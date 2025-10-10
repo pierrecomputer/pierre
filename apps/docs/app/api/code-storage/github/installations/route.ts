@@ -1,5 +1,5 @@
 import type { components } from '@octokit/openapi-types';
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 type Installation = components['schemas']['installation'];
 
@@ -34,13 +34,15 @@ function filterInstallations(installations: Installation[]) {
       app_id: `${installation.app_id}`,
       app_slug: installation.app_slug,
       owner_id:
-        installation.account &&
-        ('id' in installation.account ? `${installation.account.id}` : null),
+        installation.account != null && 'id' in installation.account
+          ? `${installation.account.id}`
+          : null,
       permissions: installation.permissions,
       events: installation.events,
       type:
-        installation.account &&
-        ('type' in installation.account ? installation.account.type : null),
+        installation.account != null && 'type' in installation.account
+          ? installation.account.type
+          : null,
     } satisfies FilteredInstallation;
   });
 }
@@ -65,7 +67,7 @@ function getOwnersFromInstallations(installations: Installation[]) {
 export async function GET(request: NextRequest) {
   const token = request.cookies.get('github_token')?.value;
 
-  if (!token) {
+  if (token == null || token.trim() === '') {
     return NextResponse.json({ data: { installations: [], owners: [] } });
   }
 
@@ -86,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     const data = (await response.json()) as InstallationResponse;
 
-    if (!data?.installations?.length) {
+    if ((data?.installations?.length ?? 0) > 0) {
       return NextResponse.json({
         data: {
           installations: [],

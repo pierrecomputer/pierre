@@ -15,7 +15,10 @@ interface DocsSidebarProps {
   onMobileClose?: () => void;
 }
 
-const DocsSidebar = ({ isMobileOpen, onMobileClose }: DocsSidebarProps) => {
+const DocsSidebar = ({
+  isMobileOpen = false,
+  onMobileClose,
+}: DocsSidebarProps) => {
   return (
     <>
       {/* Mobile overlay */}

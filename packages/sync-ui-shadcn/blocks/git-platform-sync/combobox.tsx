@@ -16,7 +16,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import type * as PopoverPrimitive from '@radix-ui/react-popover';
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from 'lucide-react';
 import * as React from 'react';
 import { useState } from 'react';
@@ -76,7 +76,8 @@ export function ComboBox({
 }: ComboBoxProps) {
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const containerProp: any = __container ? { container: __container } : {};
+  const containerProp: any =
+    __container != null ? { container: __container } : {};
   const [open, setOpen] = useState(false);
   const [internalValue, setInternalValue] = useState(
     initialValue ?? options[0]?.value ?? null
@@ -86,11 +87,12 @@ export function ComboBox({
   const isControlled = controlledValue !== undefined;
   const value = isControlled ? controlledValue : internalValue;
 
-  const selectedOption = value
-    ? options.find((option) => {
-        return option.value === value;
-      })
-    : null;
+  const selectedOption =
+    value.trim() !== ''
+      ? options.find((option) => {
+          return option.value === value;
+        })
+      : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -106,9 +108,9 @@ export function ComboBox({
             className
           )}
         >
-          {selectedOption ? (
+          {selectedOption != null ? (
             <span className="flex items-center gap-1.5 overflow-hidden">
-              {selectedOption.image ? (
+              {(selectedOption.image ?? '').trim() !== '' ? (
                 <img
                   src={selectedOption.image}
                   aria-hidden
@@ -155,7 +157,7 @@ export function ComboBox({
                     setOpen(false);
                   }}
                 >
-                  {option.image ? (
+                  {(option.image ?? '').trim() !== '' ? (
                     <img
                       src={option.image}
                       aria-hidden
@@ -174,7 +176,7 @@ export function ComboBox({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {onAddItem ? (
+            {onAddItem != null ? (
               <>
                 <CommandSeparator />
                 <CommandGroup aria-label="Additional actions">

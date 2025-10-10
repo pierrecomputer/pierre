@@ -36,9 +36,10 @@ export async function getSharedHighlighter({
     // NOTE(amadeus): We should probably build in some logic for rejection
     // handling...
     highlighter = new Promise((resolve) => {
-      (preferWasmHighlighter
-        ? loadWasm(import('shiki/wasm'))
-        : Promise.resolve()
+      void (
+        preferWasmHighlighter
+          ? loadWasm(import('shiki/wasm'))
+          : Promise.resolve()
       )
         .then(() => {
           // Since we are loading the languages and themes along with the

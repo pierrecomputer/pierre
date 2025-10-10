@@ -9,7 +9,7 @@ export function createHighlighterCleanup() {
     onStreamClose() {
       completed++;
       if (completed >= totalInstances) {
-        disposeHighlighter();
+        void disposeHighlighter();
       }
     },
   };

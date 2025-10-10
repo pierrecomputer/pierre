@@ -47,7 +47,7 @@ let cachedInstallationsData: {
 let pendingFetchInstallations: Promise<InstallationsResponse> | null = null;
 
 function isCacheValid(): boolean {
-  if (!cachedInstallationsData) return false;
+  if (cachedInstallationsData == null) return false;
   return Date.now() - cachedInstallationsData.timestamp < CACHE_TTL_MS;
 }
 
@@ -64,12 +64,12 @@ export async function fetchInstallations(
   signal?: AbortSignal
 ): Promise<InstallationsResponse> {
   // Return cached data if still valid
-  if (isCacheValid() && cachedInstallationsData) {
+  if (isCacheValid() && cachedInstallationsData != null) {
     return cachedInstallationsData.data;
   }
 
   // If there's already a pending request, wait for it and return its result
-  if (pendingFetchInstallations) {
+  if (pendingFetchInstallations != null) {
     return pendingFetchInstallations;
   }
 
@@ -90,7 +90,7 @@ export async function fetchInstallations(
         const jsonResult = await response.json();
         const data = jsonResult?.data;
 
-        if (data && 'installations' in data) {
+        if (data != null && 'installations' in data) {
           const result: InstallationsResponse = {
             installations: Array.isArray(data.installations)
               ? data.installations
@@ -193,6 +193,7 @@ class GitHubAppConnector {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async connect(props?: GitHubAppConnectionHandlerProps) {
     const onSuccess = props?.onSuccess;
     const width = 600;
@@ -212,11 +213,12 @@ class GitHubAppConnector {
       `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no,status=no`
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.checkInterval = setInterval(async () => {
       if (this.connectionStatus === 'installed') {
         this.clearInterval();
         onSuccess?.();
-      } else if (!this.popup || this.popup.closed) {
+      } else if (this.popup == null || this.popup.closed) {
         // Nothing new can happen if the pop-up is gone, so lets clear the interval
         this.clearInterval();
 
@@ -245,6 +247,7 @@ class GitHubAppConnector {
     }, 1000);
 
     // Use AbortController for automatic cleanup
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     window.addEventListener('message', this.handleMessage, {
       signal: this.abortController.signal,
     });
@@ -269,7 +272,7 @@ class GitHubAppConnector {
   }
 
   private clearInterval() {
-    if (this.checkInterval) {
+    if (this.checkInterval != null) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
@@ -321,7 +324,7 @@ export function useGitHubAppConnection({
   // Return stable callbacks that delegate to the connector
   const handleConnect = useCallback(
     (props?: GitHubAppConnectionHandlerProps) => {
-      connector.connect(props);
+      void connector.connect(props);
     },
     [connector]
   );

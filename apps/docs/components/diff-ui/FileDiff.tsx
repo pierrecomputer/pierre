@@ -40,7 +40,7 @@ export function FileDiff({ oldFile, newFile, options }: FileDiffProps) {
     if (hasFileChange) {
       filesRef.current = [oldFile, newFile];
       const [fileDiff] = parseDiffFromFiles(oldFile, newFile);
-      diffRenderer.render({
+      void diffRenderer.render({
         fileDiff: fileDiff.files[0],
         fileContainer: ref.current ?? undefined,
       });

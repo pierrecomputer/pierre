@@ -20,7 +20,7 @@ export const IconIndent = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M13.25 2a.75.75 0 0 0-.75.75v10.5a.75.75 0 0 0 1.5 0V2.75a.75.75 0 0 0-.75-.75M6.47 4.22a.75.75 0 0 0 0 1.06l1.97 1.97H2.75a.75.75 0 0 0 0 1.5h5.69l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06L7.53 4.22a.75.75 0 0 0-1.06 0" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] ?? color} style={style} className={`pi ${className ?? ''}`} {...props}><path d="M13.25 2a.75.75 0 0 0-.75.75v10.5a.75.75 0 0 0 1.5 0V2.75a.75.75 0 0 0-.75-.75M6.47 4.22a.75.75 0 0 0 0 1.06l1.97 1.97H2.75a.75.75 0 0 0 0 1.5h5.69l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06L7.53 4.22a.75.75 0 0 0-1.06 0" /></svg>
 	);
 };
 

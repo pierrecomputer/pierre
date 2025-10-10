@@ -12,7 +12,7 @@ import { notFound } from 'next/navigation';
 export default async function Page(props: PageProps<'/fumadocs/[[...slug]]'>) {
   const params = await props.params;
   const page = source.getPage(params.slug);
-  if (!page) notFound();
+  if (page == null) notFound();
 
   const MDX = page.data.body;
 
@@ -27,6 +27,7 @@ export default async function Page(props: PageProps<'/fumadocs/[[...slug]]'>) {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function generateStaticParams() {
   return source.generateParams();
 }
@@ -36,7 +37,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const params = await props.params;
   const page = source.getPage(params.slug);
-  if (!page) notFound();
+  if (page == null) notFound();
 
   return {
     title: page.data.title,

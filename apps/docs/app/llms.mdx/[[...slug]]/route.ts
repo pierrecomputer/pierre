@@ -10,7 +10,7 @@ export async function GET(
 ) {
   const { slug } = await params;
   const page = source.getPage(slug);
-  if (!page) notFound();
+  if (page == null) notFound();
   return new NextResponse(await getLLMText(page));
 }
 export function generateStaticParams() {

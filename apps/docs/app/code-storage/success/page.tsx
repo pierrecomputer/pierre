@@ -14,7 +14,8 @@ function SuccessPageContent() {
   const state = searchParams.get('state');
 
   useEffect(() => {
-    if (window.opener) {
+    if (window.opener != null) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       window.opener.postMessage(
         {
           type: appInstallType,
@@ -43,7 +44,7 @@ function SuccessPageContent() {
             Your GitHub App has been successfully{' '}
             {setupAction === 'install' ? 'installed' : 'updated'}.
           </p>
-          {installationId && (
+          {installationId != null && (
             <p className="text-sm text-gray-500 mb-6">
               Installation ID: {installationId}
             </p>
@@ -54,7 +55,8 @@ function SuccessPageContent() {
             </p>
             <Button
               onClick={() => {
-                if (window.opener) {
+                if (window.opener != null) {
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
                   window.opener.postMessage(
                     {
                       type: appInstallType,

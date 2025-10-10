@@ -15,7 +15,7 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
 };
 
 export function getFiletypeFromFileName(fileName: string) {
-  return EXTENSION_TO_FILE_FORMAT[fileName.match(/\.([^.]+)$/)?.[1] || ''];
+  return EXTENSION_TO_FILE_FORMAT[fileName.match(/\.([^.]+)$/)?.[1] ?? ''];
 }
 
 export function extendFileFormatMap(map: ExtensionFormatMap) {

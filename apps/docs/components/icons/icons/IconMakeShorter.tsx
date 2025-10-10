@@ -20,7 +20,7 @@ export const IconMakeShorter = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path fillRule="evenodd" d="M9 4.75A.75.75 0 0 1 9.75 4h5.5a.75.75 0 0 1 0 1.5h-5.5A.75.75 0 0 1 9 4.75m-9 3A.75.75 0 0 1 .75 7h14.5a.75.75 0 0 1 0 1.5H.75A.75.75 0 0 1 0 7.75m0 3A.75.75 0 0 1 .75 10h14.5a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75m0 3A.75.75 0 0 1 .75 13h7.5a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75" clipRule="evenodd" opacity=".3" /><path fillRule="evenodd" d="M0 1.75A.75.75 0 0 1 .75 1h14.5a.75.75 0 0 1 0 1.5H.75A.75.75 0 0 1 0 1.75m0 3A.75.75 0 0 1 .75 4h6.5a.75.75 0 0 1 0 1.5H.75A.75.75 0 0 1 0 4.75" clipRule="evenodd" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] ?? color} style={style} className={`pi ${className ?? ''}`} {...props}><path fillRule="evenodd" d="M9 4.75A.75.75 0 0 1 9.75 4h5.5a.75.75 0 0 1 0 1.5h-5.5A.75.75 0 0 1 9 4.75m-9 3A.75.75 0 0 1 .75 7h14.5a.75.75 0 0 1 0 1.5H.75A.75.75 0 0 1 0 7.75m0 3A.75.75 0 0 1 .75 10h14.5a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75m0 3A.75.75 0 0 1 .75 13h7.5a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75" clipRule="evenodd" opacity=".3" /><path fillRule="evenodd" d="M0 1.75A.75.75 0 0 1 .75 1h14.5a.75.75 0 0 1 0 1.5H.75A.75.75 0 0 1 0 1.75m0 3A.75.75 0 0 1 .75 4h6.5a.75.75 0 0 1 0 1.5H.75A.75.75 0 0 1 0 4.75" clipRule="evenodd" /></svg>
 	);
 };
 

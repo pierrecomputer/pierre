@@ -16,7 +16,7 @@ export function CodeRenderer({ stream, options }: CodeRendererProps) {
   const ref = useRef<HTMLPreElement>(null);
   useEffect(() => {
     if (ref.current != null) {
-      codeRenderer.setup(stream, ref.current);
+      void codeRenderer.setup(stream, ref.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -20,7 +20,7 @@ export const IconArrowDownRight = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path fillRule="evenodd" d="M2.75 2.75A.75.75 0 0 0 2 3.5V6a3.75 3.75 0 0 0 3.75 3.75h5.69l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06l-3.25-3.25a.75.75 0 1 0-1.06 1.06l1.97 1.97H5.75A2.25 2.25 0 0 1 3.5 6V3.5a.75.75 0 0 0-.75-.75" clipRule="evenodd" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] ?? color} style={style} className={`pi ${className ?? ''}`} {...props}><path fillRule="evenodd" d="M2.75 2.75A.75.75 0 0 0 2 3.5V6a3.75 3.75 0 0 0 3.75 3.75h5.69l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06l-3.25-3.25a.75.75 0 1 0-1.06 1.06l1.97 1.97H5.75A2.25 2.25 0 0 1 3.5 6V3.5a.75.75 0 0 0-.75-.75" clipRule="evenodd" /></svg>
 	);
 };
 

@@ -27,9 +27,8 @@ const NavLink = ({
 }: NavLinkProps) => {
   const pathname = usePathname();
   const isActive =
-    active !== undefined
-      ? active
-      : pathname === href || (href !== '/' && pathname.startsWith(href));
+    active ??
+    (pathname === href || (href !== '/' && pathname.startsWith(href)));
 
   const linkClasses = cn(styles.navLink, isActive && styles.active, className);
 
@@ -41,7 +40,7 @@ const NavLink = ({
         rel="noopener noreferrer"
         className={linkClasses}
       >
-        {icon && <span className={styles.navLinkIcon}>{icon}</span>}
+        {icon != null && <span className={styles.navLinkIcon}>{icon}</span>}
         <span className={styles.navLinkText}>{children}</span>
         <IconArrowUpRight color="fg4" />
       </a>
@@ -50,7 +49,7 @@ const NavLink = ({
 
   return (
     <Link href={href} className={linkClasses}>
-      {icon && <span className={styles.navLinkIcon}>{icon}</span>}
+      {icon != null && <span className={styles.navLinkIcon}>{icon}</span>}
       {children}
     </Link>
   );

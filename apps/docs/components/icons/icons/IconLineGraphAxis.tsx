@@ -20,7 +20,7 @@ export const IconLineGraphAxis = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M.75 0a.75.75 0 0 1 .75.75V14.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V.75A.75.75 0 0 1 .75 0" /><path d="M15.25 3a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-3.97 3.97a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.75.75 0 1 1-1.06-1.06l3.25-3.25.056-.052a.75.75 0 0 1 1.004.052L10 7.94l3.44-3.44h-2.69a.75.75 0 0 1 0-1.5z" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] ?? color} style={style} className={`pi ${className ?? ''}`} {...props}><path d="M.75 0a.75.75 0 0 1 .75.75V14.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V.75A.75.75 0 0 1 .75 0" /><path d="M15.25 3a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-3.97 3.97a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.75.75 0 1 1-1.06-1.06l3.25-3.25.056-.052a.75.75 0 0 1 1.004.052L10 7.94l3.44-3.44h-2.69a.75.75 0 0 1 0-1.5z" /></svg>
 	);
 };
 

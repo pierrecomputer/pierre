@@ -35,7 +35,7 @@ export function App() {
           themes.push(item.options.theme);
         }
       }
-      preloadHighlighter({ langs, themes });
+      void preloadHighlighter({ langs, themes });
     }
   }, []);
 

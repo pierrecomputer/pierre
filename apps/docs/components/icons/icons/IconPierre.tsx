@@ -20,7 +20,7 @@ export const IconPierre = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 0.75);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M0 2.5A2.5 2.5 0 0 1 2.5 0h7A2.5 2.5 0 0 1 12 2.5v11A2.5 2.5 0 0 1 9.5 16h-7A2.5 2.5 0 0 1 0 13.5z" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 16" width={width} height={height} fill={Colors[color as 'black'] ?? color} style={style} className={`pi ${className ?? ''}`} {...props}><path d="M0 2.5A2.5 2.5 0 0 1 2.5 0h7A2.5 2.5 0 0 1 12 2.5v11A2.5 2.5 0 0 1 9.5 16h-7A2.5 2.5 0 0 1 0 13.5z" /></svg>
 	);
 };
 

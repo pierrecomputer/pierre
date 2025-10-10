@@ -27,7 +27,7 @@ async function loadPatchContent() {
   loadingPatch =
     loadingPatch ??
     new Promise((resolve) => {
-      import('./mocks/diff.patch?raw').then(({ default: content }) =>
+      void import('./mocks/diff.patch?raw').then(({ default: content }) =>
         resolve(content)
       );
     });
@@ -47,7 +47,7 @@ function startStreaming() {
     const pre = document.createElement('pre');
     container.appendChild(pre);
     const instance = new CodeRenderer(options);
-    instance.setup(createFakeContentStream(content, letterByLetter), pre);
+    void instance.setup(createFakeContentStream(content, letterByLetter), pre);
   }
 }
 
@@ -66,7 +66,7 @@ async function handlePreloadDiff() {
       }
     }
   }
-  preloadHighlighter({
+  void preloadHighlighter({
     langs: Array.from(langs),
     themes: ['tokyo-night', 'solarized-light'],
   });
@@ -135,7 +135,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
       if (fileAnnotations != null) {
         instance.setLineAnnotations(fileAnnotations);
       }
-      instance.render({ fileDiff, wrapper });
+      void instance.render({ fileDiff, wrapper });
       diffInstances.push(instance);
       hunkIndex++;
     }
@@ -165,7 +165,7 @@ function handlePreload() {
       themes.push(item.options.theme);
     }
   }
-  preloadHighlighter({ langs, themes });
+  void preloadHighlighter({ langs, themes });
 }
 
 document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);
@@ -178,10 +178,12 @@ if (streamCode != null) {
 
 const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
-  loadDiff.addEventListener('click', async () => {
-    renderDiff(parsedPatches ?? parsePatchContent(await loadPatchContent()));
+  loadDiff.addEventListener('click', () => {
+    void (async () => {
+      renderDiff(parsedPatches ?? parsePatchContent(await loadPatchContent()));
+    })();
   });
-  loadDiff.addEventListener('mouseenter', handlePreloadDiff);
+  loadDiff.addEventListener('mouseenter', () => void handlePreloadDiff);
 }
 
 const wrapCheckbox = document.getElementById('wrap-lines');
@@ -292,7 +294,7 @@ function toggleTheme() {
     ? 'dark'
     : 'light';
   const pageTheme =
-    (document.documentElement.dataset.theme ?? systemTheme === 'dark')
+    (document.documentElement.dataset.theme ?? systemTheme) === 'dark'
       ? 'dark'
       : 'light';
 

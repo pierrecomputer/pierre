@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import type * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AlertCircle, BookOpen, ChevronDown, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -209,7 +209,7 @@ export function GitPlatformSync({
 }: GitPlatformSyncProps) {
   const [isPopoverOpen, setIsPopoverOpen] = useState(open ?? false);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
-  const codeStorageRepoExists = !!codeStorageRepo;
+  const codeStorageRepoExists = codeStorageRepo != null;
 
   const status = useMemo(() => {
     if (statusProp === 'auto') {
@@ -224,7 +224,8 @@ export function GitPlatformSync({
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const containerProp: any = __container ? { container: __container } : {};
+  const containerProp: any =
+    __container != null ? { container: __container } : {};
 
   let platformName: string | undefined;
   let platformConfig: PlatformConfigObject | undefined;
@@ -265,7 +266,7 @@ export function GitPlatformSync({
   });
 
   useEffect(() => {
-    fetchInstallationStatus();
+    void fetchInstallationStatus();
   }, [fetchInstallationStatus]);
 
   useEffect(() => {
@@ -349,7 +350,7 @@ export function GitPlatformSync({
 }
 
 function LilDotGuy({ status }: { status?: GitPlatformSyncStatus }) {
-  if (!status || status === 'disconnected') {
+  if (status == null || status === 'disconnected') {
     return null;
   }
   return (
@@ -427,7 +428,7 @@ function PopoverConductor({
   connectionStatus,
 }: PopoverConductorProps) {
   let initialStep: Step = 'welcome';
-  if (codeStorageRepo) {
+  if (codeStorageRepo != null) {
     initialStep = 'manage';
   } else if (connectionStatus === 'installed') {
     initialStep = 'create';
@@ -436,7 +437,7 @@ function PopoverConductor({
   const [step, setStep] = useState<Step>(initialStep);
 
   useEffect(() => {
-    if (codeStorageRepo) {
+    if (codeStorageRepo != null) {
       setStep('manage');
     } else if (connectionStatus === 'installed') {
       setStep('create');
@@ -445,7 +446,8 @@ function PopoverConductor({
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const containerProp: any = __container ? { container: __container } : {};
+  const containerProp: any =
+    __container != null ? { container: __container } : {};
 
   return (
     <PopoverContent className="w-[400px]" align={align} {...containerProp}>
@@ -530,7 +532,8 @@ function StepManage({ codeStorageRepo, __container }: StepManageProps) {
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const containerProp: any = __container ? { __container: __container } : {};
+  const containerProp: any =
+    __container != null ? { __container: __container } : {};
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -649,18 +652,19 @@ function StepCreate({
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const containerProp: any = __container ? { __container: __container } : {};
+  const containerProp: any =
+    __container != null ? { __container: __container } : {};
 
   const repoInputProps: React.ComponentProps<typeof Input> = useMemo(() => {
     const rip: React.ComponentProps<typeof Input> = {};
-    if (repoName) {
+    if ((repoName ?? '').trim() !== '') {
       rip.defaultValue = repoName;
-    } else if (repoDefaultName) {
+    } else if ((repoDefaultName ?? '').trim() !== '') {
       rip.defaultValue = repoDefaultName;
     }
 
     const defaultPlaceholder = 'unique-repo-name…';
-    if (repoNamePlaceholder) {
+    if ((repoNamePlaceholder ?? '').trim() !== '') {
       rip.placeholder = repoNamePlaceholder ?? defaultPlaceholder;
     } else {
       rip.placeholder = defaultPlaceholder;
@@ -674,21 +678,21 @@ function StepCreate({
       const formData = new FormData(e.currentTarget);
       const repoName = formData.get('repo-name') as string;
       // TODO: show errors in UI
-      if (!selectedOwnerId) {
+      if (selectedOwnerId == null || selectedOwnerId.trim() === '') {
         console.warn('no selectedOwnerId');
         return;
       }
 
       const owner = getOwnerById(selectedOwnerId);
 
-      if (!owner) {
+      if (owner == null) {
         console.warn('no owner found for selectedOwnerId', selectedOwnerId);
         return;
       }
 
       const ownerLogin = owner.login;
 
-      if (!ownerLogin) {
+      if (ownerLogin == null || ownerLogin.trim() === '') {
         console.warn(
           'no ownerLogin found for selectedOwnerId',
           selectedOwnerId,
@@ -697,7 +701,7 @@ function StepCreate({
         return;
       }
 
-      if (!onRepoCreateAction) {
+      if (onRepoCreateAction == null) {
         console.warn('no onRepoCreateAction provided');
         return;
       }
@@ -870,7 +874,7 @@ function StepWelcome({
               ? 'Connecting to GitHub…'
               : 'Install GitHub App'}
           </Button>
-          {onHelpAction ? (
+          {onHelpAction != null ? (
             <Button
               onClick={onHelpAction}
               size="lg"

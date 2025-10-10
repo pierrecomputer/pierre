@@ -101,7 +101,7 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
     this.hunksRenderer?.setOptions(this.options, true);
     if (!disableRerender) {
-      this.render({ fileDiff: this.fileDiff });
+      void this.render({ fileDiff: this.fileDiff });
     }
   }
 
@@ -192,7 +192,7 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
     if (onLineEnter != null || onLineLeave != null) {
       this.fileContainer.addEventListener('mousemove', this.handleMouseMove);
-      if (onLineLeave) {
+      if (onLineLeave != null) {
         this.fileContainer.addEventListener(
           'mouseleave',
           this.handleMouseLeave

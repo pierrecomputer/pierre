@@ -12,7 +12,7 @@ interface NavSectionProps {
 const NavSection = ({ title, children, className }: NavSectionProps) => {
   return (
     <div className={cn(styles.navSection, className)}>
-      {title && <h3 className={styles.navSectionTitle}>{title}</h3>}
+      {title != null && <h3 className={styles.navSectionTitle}>{title}</h3>}
       <ul className={styles.navSectionList}>{children}</ul>
     </div>
   );

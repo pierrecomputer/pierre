@@ -20,7 +20,7 @@ export const IconLifeRaft = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path fillRule="evenodd" d="M8 14.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16" clipRule="evenodd" /><path fillRule="evenodd" d="M8 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8" clipRule="evenodd" /><path d="m6 1 .5 4h3l.5-4zM9.5 11h-3L6 15h4zM1 10l4-.5v-3L1 6zM11 6.5v3l4 .5V6z" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] ?? color} style={style} className={`pi ${className ?? ''}`} {...props}><path fillRule="evenodd" d="M8 14.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16" clipRule="evenodd" /><path fillRule="evenodd" d="M8 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8" clipRule="evenodd" /><path d="m6 1 .5 4h3l.5-4zM9.5 11h-3L6 15h4zM1 10l4-.5v-3L1 6zM11 6.5v3l4 .5V6z" /></svg>
 	);
 };
 

@@ -66,15 +66,15 @@ export function useOwners() {
         return;
       }
 
-      if (error || data === null) {
+      if (error != null || data === null) {
         setStatus('error');
-      } else if (data) {
+      } else if (data != null) {
         setOwners(data.owners);
         setStatus('success');
       }
     };
 
-    fetchEffect();
+    void fetchEffect();
 
     return () => {
       abortController.abort();

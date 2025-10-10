@@ -74,9 +74,7 @@ export class CodeRenderer {
       // awaitable, maybe?
       return;
     }
-    if (this.highlighter == null) {
-      this.highlighter = await this.initializeHighlighter();
-    }
+    this.highlighter ??= await this.initializeHighlighter();
 
     const [source, wrapper] = this.queuedSetupArgs;
     this.queuedSetupArgs = undefined;
@@ -99,11 +97,11 @@ export class CodeRenderer {
     this.code = createCodeNode({ pre });
     if (this.stream != null) {
       // Should we be doing this?
-      this.stream.cancel();
+      void this.stream.cancel();
     }
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
     this.stream = stream;
-    this.stream
+    void this.stream
       .pipeThrough(
         new CodeToTokenTransformStream({
           ...this.options,
@@ -129,7 +127,7 @@ export class CodeRenderer {
   }
 
   private queuedTokens: (ThemedToken | RecallToken)[] = [];
-  private handleWrite = async (token: ThemedToken | RecallToken) => {
+  private handleWrite = (token: ThemedToken | RecallToken) => {
     // If we've recalled tokens we haven't rendered yet, we can just yeet them
     // and never apply them
     if ('recall' in token && this.queuedTokens.length >= token.recall) {
@@ -200,7 +198,7 @@ export class CodeRenderer {
     const themes: BundledTheme[] = [];
     if (theme != null) {
       themes.push(theme);
-    } else if (themes) {
+    } else if (themes != null) {
       themes.push(_themes.dark);
       themes.push(_themes.light);
     }

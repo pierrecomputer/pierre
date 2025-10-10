@@ -38,12 +38,12 @@ let cachedPortalContainers: { light: HTMLElement; dark: HTMLElement } | null =
   null;
 
 function getPortalContainers() {
-  if (typeof document === 'undefined' || cachedPortalContainers) {
+  if (typeof document === 'undefined' || cachedPortalContainers != null) {
     return cachedPortalContainers;
   }
   const lightContainer = document.getElementById('light-mode-portal-container');
   const darkContainer = document.getElementById('dark-mode-portal-container');
-  if (!lightContainer || !darkContainer) {
+  if (lightContainer == null || darkContainer == null) {
     throw new Error('Light and dark mode portal containers not found');
   }
   cachedPortalContainers = { light: lightContainer, dark: darkContainer };
@@ -105,7 +105,7 @@ const Example = ({
   return (
     <div id={id}>
       <h4 className="text-lg font-bold tracking-tight mb-2">{title}</h4>
-      {details ? (
+      {details != null ? (
         <p className="text-sm text-muted-foreground mb-2">{details}</p>
       ) : null}
       <div
@@ -130,7 +130,7 @@ const Example = ({
                   index
                 ) => (
                   <Fragment key={index}>
-                    {__label ? (
+                    {__label != null ? (
                       <div className="text-sm text-muted-foreground">
                         {__label}
                       </div>
@@ -180,7 +180,7 @@ const Example = ({
                   index
                 ) => (
                   <Fragment key={index}>
-                    {__label ? (
+                    {__label != null ? (
                       <div className="text-sm text-muted-foreground">
                         {__label}
                       </div>
@@ -216,7 +216,7 @@ const Example = ({
           </div>
         </div>
       </div>
-      {code ? (
+      {code != null ? (
         <CodeExampleContainer>
           <DynamicCodeBlock
             lang="tsx"

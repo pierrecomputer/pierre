@@ -8,15 +8,11 @@ interface MobileMenuButtonProps {
   className?: string;
 }
 
-const MobileMenuButton = ({
-  onClick,
-  isOpen = false,
-  className,
-}: MobileMenuButtonProps) => {
+const MobileMenuButton = ({ onClick, className }: MobileMenuButtonProps) => {
   return (
     <Button
       onClick={onClick}
-      className={`${styles.mobileMenuButton} ${className || ''}`}
+      className={`${styles.mobileMenuButton} ${className ?? ''}`}
       aria-label="Toggle navigation menu"
     >
       <IconParagraph />

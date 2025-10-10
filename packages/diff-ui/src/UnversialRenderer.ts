@@ -12,9 +12,7 @@ export function queueRender(callback: Callback) {
     return;
   }
   callbacks.add(callback);
-  if (frameId == null) {
-    frameId = requestAnimationFrame(render);
-  }
+  frameId ??= requestAnimationFrame(render);
 }
 
 function render(time: number) {

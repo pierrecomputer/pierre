@@ -162,7 +162,7 @@ function FieldSeparator({
   return (
     <div
       data-slot="field-separator"
-      data-content={!!children}
+      data-content={children != null}
       className={cn(
         'relative -my-2 h-5 text-sm group-data-[variant=outline]/field-group:-mb-2',
         className
@@ -170,7 +170,7 @@ function FieldSeparator({
       {...props}
     >
       <Separator className="absolute inset-0 top-1/2" />
-      {children && (
+      {children != null && (
         <span
           className="bg-background text-muted-foreground relative mx-auto block w-fit px-2"
           data-slot="field-separator-content"
@@ -191,15 +191,15 @@ function FieldError({
   errors?: Array<{ message?: string } | undefined>;
 }) {
   const content = useMemo(() => {
-    if (children) {
+    if (children != null) {
       return children;
     }
 
-    if (!errors) {
+    if (errors == null || errors.length === 0) {
       return null;
     }
 
-    if (errors?.length === 1 && errors[0]?.message) {
+    if (errors.length === 1 && errors[0]?.message != null) {
       return errors[0].message;
     }
 
@@ -207,13 +207,13 @@ function FieldError({
       <ul className="ml-4 flex list-disc flex-col gap-1">
         {errors.map(
           (error, index) =>
-            error?.message && <li key={index}>{error.message}</li>
+            error?.message != null && <li key={index}>{error.message}</li>
         )}
       </ul>
     );
   }, [children, errors]);
 
-  if (!content) {
+  if (content == null) {
     return null;
   }
 

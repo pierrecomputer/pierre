@@ -37,6 +37,7 @@ export class CodeToTokenTransformStream extends TransformStream<
           }
         }
       },
+      // eslint-disable-next-line @typescript-eslint/require-await
       async flush(controller) {
         const { stable } = tokenizer.close();
         // if allow recalls, the tokens should already be sent

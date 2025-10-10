@@ -21,6 +21,7 @@ export class ShikiStreamTokenizer {
   /**
    * Enqueue a chunk of code to the buffer.
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async enqueue(chunk: string): Promise<ShikiStreamTokenizerEnqueueResult> {
     const chunkLines = (this.lastUnstableCodeChunk + chunk).split('\n');
 
