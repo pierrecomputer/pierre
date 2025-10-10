@@ -1,24 +1,28 @@
 import styles from '../style.css?raw';
 
-let sheet: CSSStyleSheet | undefined;
+// If HTMLElement is undefined it usually means we are in a server environment
+// so best to just not do anything
+if (typeof HTMLElement !== 'undefined') {
+  let sheet: CSSStyleSheet | undefined;
 
-class PJSContainer extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-    if (sheet == null) {
-      sheet = new CSSStyleSheet();
-      sheet.replaceSync(styles);
+  class PJSContainer extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: 'open' });
+      if (sheet == null) {
+        sheet = new CSSStyleSheet();
+        sheet.replaceSync(styles);
+      }
+      // TODO(amadeus): Figure out how to adapt user generated styles into here?
+      if (this.shadowRoot?.adoptedStyleSheets != null) {
+        this.shadowRoot.adoptedStyleSheets = [sheet];
+      }
     }
-    // TODO(amadeus): Figure out how to adapt user generated styles into here?
-    if (this.shadowRoot?.adoptedStyleSheets != null) {
-      this.shadowRoot.adoptedStyleSheets = [sheet];
-    }
+    // Not sure if we need to do anything here yet...
+    // connectedCallback() {
+    //   this.dataset.pjsContainer = '';
+    // }
   }
-  connectedCallback() {
-    // Not sure what I need to do here... yet...
-    // this.dataset.pjsContainer = '';
-  }
+
+  customElements.define('pjs-container', PJSContainer);
 }
-
-customElements.define('pjs-container', PJSContainer);

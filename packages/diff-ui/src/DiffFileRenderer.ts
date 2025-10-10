@@ -91,13 +91,18 @@ export class DiffFileRenderer<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(options: DiffFileRendererOptions<LAnnotation>) {
+  setOptions(
+    options: DiffFileRendererOptions<LAnnotation>,
+    disableRerender = false
+  ) {
     this.options = options;
     if (this.fileDiff == null) {
       return;
     }
     this.hunksRenderer?.setOptions(this.options, true);
-    this.render({ fileDiff: this.fileDiff });
+    if (!disableRerender) {
+      this.render({ fileDiff: this.fileDiff });
+    }
   }
 
   private mergeOptions(options: Partial<DiffFileRendererOptions<LAnnotation>>) {
