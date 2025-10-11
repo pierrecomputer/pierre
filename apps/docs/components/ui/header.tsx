@@ -75,7 +75,7 @@ function HeaderLogo({
 
 function HeaderNav({ className, children, ...props }: HeaderNavProps) {
   return (
-    /* @ts-expect-error i hate this */
+    /* @ts-expect-error Todo: Alex type check this */
     <NavigationMenu className={className} {...props}>
       <NavigationMenuList>{children}</NavigationMenuList>
     </NavigationMenu>
@@ -102,7 +102,7 @@ function HeaderNavLink({
 
   return (
     <NavigationMenuItem>
-      {/* @ts-expect-error i hate this */}
+      {/* @ts-expect-error todo: Alex type check this */}
       <NavigationMenuLink
         href={hrefString}
         className={cn(
