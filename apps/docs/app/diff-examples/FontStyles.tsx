@@ -51,7 +51,7 @@ export default function Home() {
 
 export function FontStyles() {
   const [selectedFont, setSelectedFont] = useState('Geist Mono');
-  const [selectedFontSize, setSelectedFontSize] = useState('12px');
+  const [selectedFontSize, setSelectedFontSize] = useState('14px');
   const [selectedLineHeight, setSelectedLineHeight] = useState('20px');
 
   return (
@@ -67,7 +67,10 @@ export function FontStyles() {
           <div className="flex gap-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="justify-start min-w-[140px]">
+                <Button
+                  variant="outline"
+                  className="justify-start min-w-[140px]"
+                >
                   <IconType className="h-4 w-4" />
                   {selectedFont}
                   <ChevronDown className="h-4 w-4 ml-auto" />
@@ -80,17 +83,14 @@ export function FontStyles() {
                 <DropdownMenuItem onClick={() => setSelectedFont('SF Mono')}>
                   SF Mono
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('JetBrains Mono')}>
-                  JetBrains Mono
+                <DropdownMenuItem onClick={() => setSelectedFont('cursive')}>
+                  Cursive
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('Fira Code')}>
-                  Fira Code
+                <DropdownMenuItem onClick={() => setSelectedFont('fantasy')}>
+                  Fantasy
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('Source Code Pro')}>
-                  Source Code Pro
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('Cascadia Code')}>
-                  Cascadia Code
+                <DropdownMenuItem onClick={() => setSelectedFont('monospace')}>
+                  Monospace
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -106,20 +106,11 @@ export function FontStyles() {
                 <DropdownMenuItem onClick={() => setSelectedFontSize('10px')}>
                   10px
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFontSize('11px')}>
-                  11px
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFontSize('12px')}>
                   12px
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFontSize('13px')}>
-                  13px
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFontSize('14px')}>
                   14px
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFontSize('16px')}>
-                  16px
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFontSize('18px')}>
                   18px
@@ -138,20 +129,11 @@ export function FontStyles() {
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('16px')}>
                   16px
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedLineHeight('18px')}>
-                  18px
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('20px')}>
                   20px
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedLineHeight('22px')}>
-                  22px
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('24px')}>
                   24px
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedLineHeight('26px')}>
-                  26px
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('28px')}>
                   28px
@@ -166,15 +148,23 @@ export function FontStyles() {
           />
         </div>
       </div>
-      <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
-        options={{
-          detectLanguage: true,
-          theme: 'catppuccin-frappe',
-          diffStyle: 'unified',
+      <div
+        style={{
+          '--pjs-font-family': selectedFont,
+          '--pjs-font-size': selectedFontSize,
+          '--pjs-line-height': selectedLineHeight,
         }}
-      />
+      >
+        <FileDiff
+          oldFile={OLD_FILE}
+          newFile={NEW_FILE}
+          options={{
+            detectLanguage: true,
+            theme: 'catppuccin-frappe',
+            diffStyle: 'unified',
+          }}
+        />
+      </div>
     </div>
   );
 }

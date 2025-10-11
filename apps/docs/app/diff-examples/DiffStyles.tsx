@@ -1,11 +1,7 @@
 'use client';
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
-import {
-  IconParagraph,
-  IconSymbolDiffstat,
-  IconWordWrap,
-} from '@/components/icons';
+import { IconParagraph, IconWordWrap } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { FileContents } from '@pierre/diff-ui';
 import { useState } from 'react';
