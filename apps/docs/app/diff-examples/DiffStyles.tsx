@@ -49,10 +49,10 @@ export function DiffStyles() {
   const [backgroundStyle, setBackgroundStyle] = useState<
     'classic' | 'background' | 'bar'
   >('classic');
-  const [highlightStyle, setHighlightStyle] = useState<'inline' | 'wholeline'>(
-    'inline'
-  );
-  const [wrapMode, setWrapMode] = useState<'wrap' | 'nowrap'>('wrap');
+  const [lineDiffStyle, setLineDiffStyle] = useState<
+    'word-alt' | 'word' | 'char' | 'none'
+  >('word');
+  const [wrapMode, setWrapMode] = useState<'wrap' | 'scroll'>('wrap');
 
   return (
     <div className="space-y-4">
@@ -67,51 +67,36 @@ export function DiffStyles() {
           line wrapping, hide numbers, and more.
         </p>
         <div className="flex flex-col md:flex-row gap-3">
-          <ButtonGroup
-            value={backgroundStyle}
-            onValueChange={(value) =>
-              setBackgroundStyle(value as 'classic' | 'background' | 'bar')
-            }
-          >
-            <ButtonGroupItem value="classic">
-              <IconSymbolDiffstat />
-              Classic
-            </ButtonGroupItem>
-            <ButtonGroupItem value="background">
-              <IconSymbolDiffstat />
-              Background
-            </ButtonGroupItem>
-            <ButtonGroupItem value="bar">
-              <IconSymbolDiffstat />
-              Bar
-            </ButtonGroupItem>
+          <ButtonGroup value={'classic'}>
+            {['background', 'classic', 'bar', 'none'].map((value) => (
+              <ButtonGroupItem key={value} value={value}>
+                {value}
+              </ButtonGroupItem>
+            ))}
           </ButtonGroup>
 
           <ButtonGroup
-            value={highlightStyle}
+            value={lineDiffStyle}
             onValueChange={(value) =>
-              setHighlightStyle(value as 'inline' | 'wholeline')
+              setLineDiffStyle(value as 'word-alt' | 'word' | 'char' | 'none')
             }
           >
-            <ButtonGroupItem value="inline">
-              <IconSymbolDiffstat />
-              Inline
-            </ButtonGroupItem>
-            <ButtonGroupItem value="wholeline">
-              <IconSymbolDiffstat />
-              Whole line
-            </ButtonGroupItem>
+            {['word', 'word-alt', 'char', 'none'].map((value) => (
+              <ButtonGroupItem key={value} value={value}>
+                {value}
+              </ButtonGroupItem>
+            ))}
           </ButtonGroup>
 
           <ButtonGroup
             value={wrapMode}
-            onValueChange={(value) => setWrapMode(value as 'wrap' | 'nowrap')}
+            onValueChange={(value) => setWrapMode(value as 'wrap' | 'scroll')}
           >
             <ButtonGroupItem value="wrap">
               <IconWordWrap />
               Wrap
             </ButtonGroupItem>
-            <ButtonGroupItem value="nowrap">
+            <ButtonGroupItem value="scroll">
               <IconParagraph />
               No wrap
             </ButtonGroupItem>
@@ -125,6 +110,8 @@ export function DiffStyles() {
           detectLanguage: true,
           theme: 'catppuccin-frappe',
           diffStyle: 'unified',
+          overflow: wrapMode,
+          lineDiffType: lineDiffStyle,
         }}
       />
     </div>
