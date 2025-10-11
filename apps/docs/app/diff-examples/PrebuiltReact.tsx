@@ -1,6 +1,5 @@
 'use client';
 
-import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { IconCheck, IconCopyFill } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,43 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { FileContents } from '@pierre/diff-ui';
 import { useState } from 'react';
-
-const OLD_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
-
-export default function Home() {
-  return (
-    <div>
-      <Header />
-      <IconSprite />
-    </div>
-  );
-}
-`,
-};
-
-const NEW_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import IconSprite from './IconSprite';
-import HeaderSimple from '../components/HeaderSimple';
-import Hero from '../components/Hero';
-
-export default function Home() {
-  return (
-    <div>
-      <HeaderSimple />
-      <IconSprite />
-      <h1>Hello!</h1>
-    </div>
-  );
-}
-`,
-};
 
 interface CodeBlockProps {
   code: string;
@@ -77,7 +40,7 @@ function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
-                onClick={copyToClipboard}
+                onClick={() => void copyToClipboard()}
               >
                 {copied ? <IconCheck /> : <IconCopyFill />}
               </Button>

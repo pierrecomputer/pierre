@@ -97,9 +97,9 @@ export default function Home() {
           </h2>
           <p className="text-muted-foreground">
             Our team has decades of cumulative experience in open source,
-            developer tools, and more. We've worked on projects like Coinbase,
+            developer tools, and more. We’ve worked on projects like Coinbase,
             GitHub, Bootstrap, Twitter, Medium, and more. This stuff is our
-            bread and butter, and we'd love to share it with you.
+            bread and butter, and we’d love to share it with you.
           </p>
         </div>
         <div className="flex gap-3">
@@ -168,7 +168,7 @@ const Hero = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 5000);
     } catch (err) {
-      console.error('Failed to copy to clipboard');
+      console.error('Failed to copy to clipboard', err);
     }
   };
 
@@ -194,7 +194,7 @@ const Hero = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => copyToClipboard()}
+              onClick={() => void copyToClipboard()}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 transition-colors font-mono text-sm"
             >
               <span>npm i @pierre/precision-diffs</span>
@@ -215,105 +215,3 @@ const Hero = () => {
     </section>
   );
 };
-
-const ChevronIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 16 16"
-    stroke="currentColor"
-  >
-    <path
-      d="M6 10L10 6L6 2"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const DarkIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 16 16">
-    <path d="M8 12a4 4 0 100-8v8z" />
-  </svg>
-);
-
-const LightIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 16 16">
-    <circle cx="8" cy="8" r="4" />
-  </svg>
-);
-
-const AutoIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 16 16">
-    <path d="M8 4a4 4 0 100 8 4 4 0 000-8zM4 8a4 4 0 118 0 4 4 0 01-8 0z" />
-  </svg>
-);
-
-const DiffstatIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 16 16">
-    <rect x="2" y="3" width="12" height="2" />
-    <rect x="2" y="7" width="8" height="2" />
-    <rect x="2" y="11" width="10" height="2" />
-  </svg>
-);
-
-const WrapIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 16 16"
-    stroke="currentColor"
-  >
-    <path
-      d="M2 4H12M2 8H14V10L11 13M2 12H8"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const ParagraphIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 16 16">
-    <path d="M6 2v12M10 2v12M6 2h4M6 8h4" />
-  </svg>
-);
-
-const TypeIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 16 16"
-    stroke="currentColor"
-  >
-    <path
-      d="M3 3H13M8 3V13M5 13H11"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const CommentIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 16 16"
-    stroke="currentColor"
-  >
-    <path
-      d="M14 10C14 10.5523 13.5523 11 13 11H4L2 13V3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V10Z"
-      strokeWidth="1.5"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const SpeechIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 16 16">
-    <rect x="2" y="3" width="12" height="8" rx="2" />
-    <path d="M5 13L7 11H11L9 13" />
-  </svg>
-);

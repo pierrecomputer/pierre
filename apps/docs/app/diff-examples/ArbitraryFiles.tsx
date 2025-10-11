@@ -1,18 +1,7 @@
 'use client';
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
-import { IconFunction, IconType } from '@/components/icons';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { InputWithIcon } from '@/components/ui/input-group';
 import type { FileContents } from '@pierre/diff-ui';
-import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
 
 const OLD_FILE: FileContents = {
   name: 'file.tsx',

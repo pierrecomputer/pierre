@@ -34,13 +34,7 @@ interface HeaderLogoProps extends React.ComponentProps<typeof Link> {
   children?: React.ReactNode;
 }
 
-function Header({
-  className,
-  logo,
-  logoHref = '/',
-  children,
-  ...props
-}: HeaderProps) {
+function Header({ className, logo, children, ...props }: HeaderProps) {
   return (
     <header
       data-slot="header"
@@ -72,7 +66,7 @@ function HeaderLogo({
       {...props}
     >
       <span className="text-lg font-semibold">{children}</span>
-      {subtitle && (
+      {subtitle != null && (
         <small className="text-xs text-muted-foreground">{subtitle}</small>
       )}
     </Link>
@@ -81,6 +75,7 @@ function HeaderLogo({
 
 function HeaderNav({ className, children, ...props }: HeaderNavProps) {
   return (
+    /* @ts-expect-error i hate this */
     <NavigationMenu className={className} {...props}>
       <NavigationMenuList>{children}</NavigationMenuList>
     </NavigationMenu>
@@ -90,23 +85,24 @@ function HeaderNav({ className, children, ...props }: HeaderNavProps) {
 function HeaderNavLink({
   className,
   active,
-  external,
+  external = false,
   children,
   href,
   ...props
 }: HeaderNavLinkProps) {
   const pathname = usePathname();
-  const hrefString = href?.toString() || '';
+  const hrefString = href?.toString() ?? '';
 
   // Auto-detect active state if not explicitly provided
   const isActive =
-    active !== undefined
+    active != null
       ? active
       : hrefString === pathname ||
-        (hrefString !== '/' && pathname.startsWith(hrefString));
+        (hrefString !== '/' ? pathname.startsWith(hrefString) : false);
 
   return (
     <NavigationMenuItem>
+      {/* @ts-expect-error i hate this */}
       <NavigationMenuLink
         href={hrefString}
         className={cn(

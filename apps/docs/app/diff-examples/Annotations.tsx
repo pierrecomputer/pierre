@@ -1,9 +1,7 @@
 'use client';
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
-import { IconAnnotate, IconComment } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import type { FileContents } from '@pierre/diff-ui';
 import { CornerDownRight } from 'lucide-react';
 import { useState } from 'react';
@@ -138,7 +136,7 @@ export function Comment({
     <div className="flex gap-3">
       <div className="relative flex-shrink-0">
         <Avatar className="h-6 w-6">
-          <AvatarImage src={avatarUrl || '/placeholder.svg'} alt={author} />
+          <AvatarImage src={avatarUrl ?? '/placeholder.svg'} alt={author} />
           <AvatarFallback>{author[0]}</AvatarFallback>
         </Avatar>
       </div>

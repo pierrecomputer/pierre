@@ -16,10 +16,7 @@ interface InputGroupIconProps extends React.HTMLAttributes<HTMLDivElement> {
 
 function InputGroup({ className, children, ...props }: InputGroupProps) {
   return (
-    <div
-      className={cn('relative flex items-center', className)}
-      {...props}
-    >
+    <div className={cn('relative flex items-center', className)} {...props}>
       {children}
     </div>
   );
@@ -76,15 +73,13 @@ function InputWithIcon({
 }: InputWithIconProps) {
   return (
     <InputGroup>
-      {icon && (
-        <InputGroupIcon position={iconPosition}>
-          {icon}
-        </InputGroupIcon>
+      {icon != null && (
+        <InputGroupIcon position={iconPosition}>{icon}</InputGroupIcon>
       )}
       <InputGroupInput
         className={cn(
-          icon && iconPosition === 'left' && 'pl-10',
-          icon && iconPosition === 'right' && 'pr-10',
+          icon != null && iconPosition === 'left' && 'pl-10',
+          icon != null && iconPosition === 'right' && 'pr-10',
           className
         )}
         {...props}
@@ -93,9 +88,4 @@ function InputWithIcon({
   );
 }
 
-export {
-  InputGroup,
-  InputGroupInput,
-  InputGroupIcon,
-  InputWithIcon
-};
+export { InputGroup, InputGroupInput, InputGroupIcon, InputWithIcon };
