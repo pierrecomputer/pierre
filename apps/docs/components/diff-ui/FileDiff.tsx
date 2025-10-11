@@ -4,6 +4,7 @@ import {
   DiffFileRenderer,
   type DiffFileRendererOptions,
   type FileContents,
+  type LineAnnotation,
   parseDiffFromFiles,
 } from '@pierre/diff-ui';
 import deepEqual from 'fast-deep-equal';
@@ -15,9 +16,15 @@ interface FileDiffProps<LAnnotation = undefined> {
   oldFile: FileContents;
   newFile: FileContents;
   options: DiffFileRendererOptions<LAnnotation>;
+  annotations?: LineAnnotation[];
 }
 
-export function FileDiff({ oldFile, newFile, options }: FileDiffProps) {
+export function FileDiff({
+  oldFile,
+  newFile,
+  options,
+  annotations,
+}: FileDiffProps) {
   const [diffRenderer] = useState(() => new DiffFileRenderer(options));
   const ref = useRef<HTMLElement>(null);
   const optionsRef = useRef(options);
@@ -40,6 +47,7 @@ export function FileDiff({ oldFile, newFile, options }: FileDiffProps) {
     if (hasFileChange) {
       filesRef.current = [oldFile, newFile];
       const [fileDiff] = parseDiffFromFiles(oldFile, newFile);
+      if (annotations != null) diffRenderer.setLineAnnotations(annotations);
       void diffRenderer.render({
         fileDiff: fileDiff.files[0],
         fileContainer: ref.current ?? undefined,

@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import type { FileContents } from '@pierre/diff-ui';
 import { CornerDownRight } from 'lucide-react';
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 const OLD_FILE: FileContents = {
   name: 'file.tsx',
@@ -43,6 +45,8 @@ export default function Home() {
 };
 
 export function Annotations() {
+  const [element] = useState(() => document.createElement('div'));
+
   return (
     <div className="space-y-4">
       <h3 className="text-2xl font-semibold">Comments & Annotations</h3>
@@ -52,47 +56,68 @@ export function Annotations() {
         comments, annotations from CI jobs, and other third party content.
       </p>
 
-      <div>
-        <CommentThread
-          mainComment={{
-            author: 'You',
-            timestamp: '3h',
-            content:
-              "What do we think about adding Inter as our primary UI font? It'd definitely help solve some of these layout inconsistencies.",
-            avatarUrl: '/user-avatar.jpg',
-            isYou: true,
-          }}
-          replies={[
-            {
-              author: 'Ian',
-              timestamp: '2h',
-              content: 'Oh yeah, love that.',
-              avatarUrl: '/ian-avatar.jpg',
-            },
-            {
-              author: 'Mark',
-              timestamp: '2h',
-              content:
-                'Oh damn, if we can make it work without a perf hit, yeah totally.',
-              avatarUrl: '/mark-avatar.jpg',
-            },
-          ]}
-          onAddReply={() => console.log('Add reply clicked')}
-          onResolve={() => console.log('Resolve clicked')}
-        />
-      </div>
-
-      {/* <FileDiff
+      <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
         options={{
           detectLanguage: true,
-          theme: 'catppuccin-frappe',
+          theme: 'github-dark',
+          diffStyle: 'unified',
+          renderAnnotation: () => {
+            return element;
+          },
         }}
-      /> */}
+        annotations={[
+          {
+            side: 'additions',
+            lineNumber: 8,
+          },
+        ]}
+      />
+
+      {createPortal(<Thread />, element)}
     </div>
   );
 }
+
+const Thread = () => (
+  <div
+    style={{
+      maxWidth: '80%',
+      whiteSpace: 'normal',
+      margin: 20,
+      fontFamily: 'var(--font-body)',
+    }}
+  >
+    <CommentThread
+      mainComment={{
+        author: 'You',
+        timestamp: '3h',
+        content:
+          "What do we think about adding Inter as our primary UI font? It'd definitely help solve some of these layout inconsistencies.",
+        avatarUrl: '/user-avatar.jpg',
+        isYou: true,
+      }}
+      replies={[
+        {
+          author: 'Ian',
+          timestamp: '2h',
+          content: 'Oh yeah, love that.',
+          avatarUrl: '/ian-avatar.jpg',
+        },
+        {
+          author: 'Mark',
+          timestamp: '2h',
+          content:
+            'Oh damn, if we can make it work without a perf hit, yeah totally.',
+          avatarUrl: '/mark-avatar.jpg',
+        },
+      ]}
+      onAddReply={() => console.log('Add reply clicked')}
+      onResolve={() => console.log('Resolve clicked')}
+    />
+  </div>
+);
 
 interface CommentProps {
   author: string;

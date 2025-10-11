@@ -129,7 +129,6 @@ export function PrebuiltReact() {
           <CodeBlock code={jsCode} language="JavaScript" />
         </div>
       </div>
-      [ exmamples here ]
     </div>
   );
 }
