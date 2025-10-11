@@ -68,7 +68,7 @@ export function SplitUnified() {
         newFile={NEW_FILE}
         options={{
           detectLanguage: true,
-          theme: 'catppuccin-frappe',
+          theme: 'github-dark',
           diffStyle,
         }}
       />

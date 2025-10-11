@@ -104,7 +104,7 @@ export function DiffStyles() {
         newFile={NEW_FILE}
         options={{
           detectLanguage: true,
-          theme: 'catppuccin-frappe',
+          theme: 'github-dark',
           diffStyle: 'unified',
           overflow: wrapMode,
           lineDiffType: lineDiffStyle,

@@ -66,7 +66,7 @@ export function ArbitraryFiles() {
         newFile={NEW_FILE}
         options={{
           detectLanguage: true,
-          theme: 'catppuccin-frappe',
+          theme: 'github-dark',
           diffStyle: 'unified',
         }}
       />
