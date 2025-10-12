@@ -122,14 +122,13 @@ function ButtonGroupProvider({ children }: { children: React.ReactNode }) {
 }
 
 // Enhance ButtonGroup to automatically provide position context
-const EnhancedButtonGroup = React.forwardRef<
-  HTMLDivElement,
-  ButtonGroupProps
->(({ children, ...props }, ref) => (
-  <ButtonGroup ref={ref} {...props}>
-    <ButtonGroupProvider>{children}</ButtonGroupProvider>
-  </ButtonGroup>
-));
+const EnhancedButtonGroup = React.forwardRef<HTMLDivElement, ButtonGroupProps>(
+  ({ children, ...props }, ref) => (
+    <ButtonGroup ref={ref} {...props}>
+      <ButtonGroupProvider>{children}</ButtonGroupProvider>
+    </ButtonGroup>
+  )
+);
 
 EnhancedButtonGroup.displayName = 'ButtonGroup';
 
