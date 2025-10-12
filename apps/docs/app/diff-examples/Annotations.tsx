@@ -4,7 +4,7 @@ import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { FileContents } from '@pierre/diff-ui';
 import { CornerDownRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 const OLD_FILE: FileContents = {
@@ -43,7 +43,11 @@ export default function Home() {
 };
 
 export function Annotations() {
-  const [element] = useState(() => document.createElement('div'));
+  const [element, setElement] = useState<HTMLElement | undefined>(undefined);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setElement(document.createElement('div'));
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -53,27 +57,24 @@ export function Annotations() {
         additional content and context into your diffs. Use it to render line
         comments, annotations from CI jobs, and other third party content.
       </p>
-
-      <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
-        options={{
-          detectLanguage: true,
-          theme: 'github-dark',
-          diffStyle: 'unified',
-          renderAnnotation: () => {
-            return element;
-          },
-        }}
-        annotations={[
-          {
-            side: 'additions',
-            lineNumber: 8,
-          },
-        ]}
-      />
-
-      {createPortal(<Thread />, element)}
+      {element != null && (
+        <>
+          <FileDiff
+            oldFile={OLD_FILE}
+            newFile={NEW_FILE}
+            options={{
+              detectLanguage: true,
+              theme: 'github-dark',
+              diffStyle: 'unified',
+              renderAnnotation() {
+                return element;
+              },
+            }}
+            annotations={[{ side: 'additions', lineNumber: 8 }]}
+          />
+          {createPortal(<Thread />, element)}
+        </>
+      )}
     </div>
   );
 }

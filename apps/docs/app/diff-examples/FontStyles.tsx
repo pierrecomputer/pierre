@@ -149,11 +149,13 @@ export function FontStyles() {
         </div>
       </div>
       <div
-        style={{
-          '--pjs-font-family': selectedFont,
-          '--pjs-font-size': selectedFontSize,
-          '--pjs-line-height': selectedLineHeight,
-        }}
+        style={
+          {
+            '--pjs-font-family': selectedFont,
+            '--pjs-font-size': selectedFontSize,
+            '--pjs-line-height': selectedLineHeight,
+          } as React.CSSProperties
+        }
       >
         <FileDiff
           oldFile={OLD_FILE}
