@@ -42,7 +42,7 @@ export default function Home() {
 };
 
 export function DiffStyles() {
-  const [backgroundStyle, setBackgroundStyle] = useState<
+  const [_backgroundStyle, _setBackgroundStyle] = useState<
     'classic' | 'background' | 'bar'
   >('classic');
   const [lineDiffStyle, setLineDiffStyle] = useState<
