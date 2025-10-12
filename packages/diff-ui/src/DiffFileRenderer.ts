@@ -8,8 +8,8 @@ import type {
   FileDiffMetadata,
   LineAnnotation,
   RenderCustomFileMetadata,
+  ThemeModes,
   ThemeRendererOptions,
-  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
@@ -112,13 +112,13 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes) {
-    if (this.options.themeType === themeType) {
+  setThemeMode(themeMode: ThemeModes) {
+    if (this.options.themeMode === themeMode) {
       return;
     }
-    this.mergeOptions({ themeType });
-    this.hunksRenderer?.setThemeType(themeType);
-    this.headerRenderer?.setThemeType(themeType);
+    this.mergeOptions({ themeMode });
+    this.hunksRenderer?.setThemeMode(themeMode);
+    this.headerRenderer?.setThemeMode(themeMode);
   }
 
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
@@ -318,11 +318,11 @@ export class DiffFileRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const { theme, themes, themeType } = this.options;
+    const { theme, themes, themeMode } = this.options;
     this.headerRenderer ??= new DiffHeaderRenderer(
       theme != null
-        ? { theme, renderCustomMetadata, themeType }
-        : { themes, renderCustomMetadata, themeType }
+        ? { theme, renderCustomMetadata, themeMode }
+        : { themes, renderCustomMetadata, themeMode }
     );
 
     await this.headerRenderer.render(file, container);

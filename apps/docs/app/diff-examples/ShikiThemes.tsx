@@ -177,7 +177,7 @@ export function ShikiThemes() {
         options={{
           detectLanguage: true,
           diffStyle: 'unified',
-          themeType: selectedColorMode,
+          themeMode: selectedColorMode,
           themes: {
             dark: selectedDarkTheme,
             light: selectedLightTheme,

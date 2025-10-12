@@ -17,8 +17,8 @@ import type {
   Hunk,
   LineAnnotation,
   SupportedLanguages,
+  ThemeModes,
   ThemeRendererOptions,
-  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import {
@@ -163,21 +163,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes) {
-    if (this.getOptionsWithDefaults().themeType === themeType) {
+  setThemeMode(themeMode: ThemeModes) {
+    if (this.getOptionsWithDefaults().themeMode === themeMode) {
       return;
     }
-    this.mergeOptions({ themeType });
+    this.mergeOptions({ themeMode });
     if (this.pre == null) {
       return;
     }
-    switch (themeType) {
+    switch (themeMode) {
       case 'system':
-        delete this.pre.dataset.theme;
+        delete this.pre.dataset.themeMode;
         break;
       case 'light':
       case 'dark':
-        this.pre.dataset.theme = themeType;
+        this.pre.dataset.themeMode = themeMode;
         break;
     }
   }
@@ -211,7 +211,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineLengthForHighlighting = 1000,
       overflow = 'scroll',
       theme,
-      themeType = 'system',
+      themeMode = 'system',
       themes,
     } = this.options;
     if (themes != null) {
@@ -222,7 +222,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         maxLineDiffLength,
         maxLineLengthForHighlighting,
         overflow,
-        themeType,
+        themeMode,
         themes,
       };
     }
@@ -233,8 +233,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength,
       maxLineLengthForHighlighting,
       overflow,
+      themeMode,
       theme,
-      themeType,
     };
   }
 
@@ -276,7 +276,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       theme,
       diffStyle,
       disableLineNumbers,
-      themeType,
+      themeMode,
     } = this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
     const split = unified
@@ -285,8 +285,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const wrap = overflow === 'wrap';
     pre = setupPreNode(
       themes != null
-        ? { highlighter, pre, split, themeType, themes, wrap }
-        : { highlighter, pre, split, theme, themeType, wrap }
+        ? { highlighter, pre, split, themeMode, themes, wrap }
+        : { highlighter, pre, split, theme, themeMode, wrap }
     );
 
     this.diff = diff;

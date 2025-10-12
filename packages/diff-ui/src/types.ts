@@ -42,7 +42,7 @@ export type SupportedLanguages = BundledLanguage | 'text';
 
 export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion' | 'metadata';
 
-export type ThemeTypes = 'system' | 'light' | 'dark';
+export type ThemeModes = 'system' | 'light' | 'dark';
 
 export interface BaseRendererOptions {
   diffStyle?: 'unified' | 'split'; // split is default
@@ -53,7 +53,7 @@ export interface BaseRendererOptions {
   maxLineLengthForHighlighting?: number; // 1000 is default
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
-  themeType?: ThemeTypes; // 'system' is default
+  themeMode?: ThemeModes; // 'system' is default
 
   // Shiki config options
   lang?: SupportedLanguages;

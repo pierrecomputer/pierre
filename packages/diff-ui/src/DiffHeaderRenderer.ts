@@ -5,14 +5,14 @@ import type {
   FileDiffMetadata,
   RenderCustomFileMetadata,
   SupportedLanguages,
+  ThemeModes,
   ThemeRendererOptions,
-  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { renderFileHeader } from './utils/html_render_utils';
 
 interface BaseProps {
-  themeType?: ThemeTypes;
+  themeMode?: ThemeModes;
   renderCustomMetadata?: RenderCustomFileMetadata;
 }
 
@@ -47,22 +47,21 @@ export class DiffHeaderRenderer {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes) {
-    const currentThemeType = this.options.themeType ?? 'system';
-    if (currentThemeType === themeType) {
+  setThemeMode(themeMode: ThemeModes) {
+    if ((this.options.themeMode ?? 'system') === themeMode) {
       return;
     }
-    this.mergeOptions({ themeType });
+    this.mergeOptions({ themeMode });
     if (this.headerInstance == null) {
       return;
     }
-    switch (themeType) {
+    switch (themeMode) {
       case 'system':
-        delete this.headerInstance.dataset.theme;
+        delete this.headerInstance.dataset.themeMode;
         break;
       case 'light':
       case 'dark':
-        this.headerInstance.dataset.theme = themeType;
+        this.headerInstance.dataset.themeMode = themeMode;
         break;
     }
   }

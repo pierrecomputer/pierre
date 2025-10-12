@@ -11,7 +11,7 @@ import type {
   FileDiffMetadata,
   FileTypes,
   RenderCustomFileMetadata,
-  ThemeTypes,
+  ThemeModes,
   ThemesType,
 } from '../types';
 
@@ -54,7 +54,7 @@ interface SetupWrapperBase {
   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
   split?: boolean;
   wrap?: boolean;
-  themeType?: ThemeTypes;
+  themeMode?: ThemeModes;
 }
 
 interface SetupWrapperTheme extends ThemeVariant, SetupWrapperBase {}
@@ -134,7 +134,7 @@ function setWrapperProps(
     themes,
     split = false,
     wrap = false,
-    themeType = 'system',
+    themeMode = 'system',
   }: SetupWrapperNodesProps,
   prefix?: string
 ) {
@@ -144,12 +144,12 @@ function setWrapperProps(
     highlighter,
     prefix,
   });
-  if (themeType !== 'system') {
-    pre.dataset.theme = themeType;
+  if (themeMode !== 'system') {
+    pre.dataset.themeMode = themeMode;
   }
   if (theme != null) {
     const themeData = highlighter.getTheme(theme);
-    pre.dataset.theme = themeData.type;
+    pre.dataset.themeMode = themeData.type;
   }
   pre.dataset.type = split ? 'split' : 'file';
   pre.dataset.overflow = wrap ? 'wrap' : 'scroll';
@@ -187,12 +187,14 @@ interface RenderFileHeaderProps {
   themes?: { dark: BundledTheme; light: BundledTheme };
   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
   prefix?: string;
+  themeMode?: ThemeModes;
 }
 
 export function renderFileHeader({
   file,
   theme,
   themes,
+  themeMode,
   highlighter,
   prefix,
   renderCustomMetadata,
@@ -207,6 +209,9 @@ export function renderFileHeader({
   container.dataset.pjsHeader = '';
   container.dataset.changeType = file.type;
   container.style = style;
+  if (themeMode != null && themeMode !== 'system') {
+    container.dataset.themeMode = themeMode;
+  }
 
   const content = document.createElement('div');
   content.dataset.headerContent = '';

@@ -97,6 +97,14 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
   const wrap =
     wrapCheckbox instanceof HTMLInputElement ? wrapCheckbox.checked : false;
   let patchIndex = 0;
+  const parentThemeSetting = document.documentElement.dataset.themeMode;
+  const themeMode =
+    parentThemeSetting === 'dark'
+      ? 'dark'
+      : parentThemeSetting === 'light'
+        ? 'light'
+        : 'system';
+
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
       wrapper.appendChild(createFileMetadata(parsedPatch.patchMetadata));
@@ -111,6 +119,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         detectLanguage: true,
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation,
+        themeMode,
         onLineClick(props, diff) {
           console.log(diff.name, 'onLineClick', props);
         },
@@ -294,16 +303,16 @@ function toggleTheme() {
     ? 'dark'
     : 'light';
   const pageTheme =
-    (document.documentElement.dataset.theme ?? systemTheme) === 'dark'
+    (document.documentElement.dataset.themeMode ?? systemTheme) === 'dark'
       ? 'dark'
       : 'light';
 
-  document.documentElement.dataset.theme =
+  document.documentElement.dataset.themeMode =
     pageTheme === 'dark' ? 'light' : 'dark';
 
   for (const instance of diffInstances) {
-    const themeSetting = instance.options.themeType ?? 'system';
-    const currentTheme = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeType(currentTheme === 'light' ? 'dark' : 'light');
+    const themeSetting = instance.options.themeMode ?? 'system';
+    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
+    instance.setThemeMode(currentMode === 'light' ? 'dark' : 'light');
   }
 }
