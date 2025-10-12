@@ -110,6 +110,20 @@ export async function getSharedHighlighter({
   return instance;
 }
 
+export function hasLoadedThemes(themes: BundledTheme[]) {
+  for (const theme of themes) {
+    if (loadedThemes.get(theme) === true) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+export function hasLoadedLanguage(lang: SupportedLanguages) {
+  return loadedLanguages.get(lang) === true;
+}
+
 export function isHighlighterLoaded(
   h: CachedOrLoadingHighlighterType = highlighter
 ): h is PierreHighlighter {

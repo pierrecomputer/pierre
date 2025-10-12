@@ -1,4 +1,7 @@
-import { DiffHeaderRenderer } from './DiffHeaderRenderer';
+import {
+  DiffHeaderRenderer,
+  type DiffHeaderRendererOptions,
+} from './DiffHeaderRenderer';
 import { DiffHunksRenderer } from './DiffHunksRenderer';
 import './custom-components/Container';
 import svgSprite from './sprite.txt?raw';
@@ -319,11 +322,15 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
 
     const { theme, themes, themeMode } = this.options;
-    this.headerRenderer ??= new DiffHeaderRenderer(
+    const options: DiffHeaderRendererOptions =
       theme != null
         ? { theme, renderCustomMetadata, themeMode }
-        : { themes, renderCustomMetadata, themeMode }
-    );
+        : { themes, renderCustomMetadata, themeMode };
+    if (this.headerRenderer == null) {
+      this.headerRenderer ??= new DiffHeaderRenderer(options);
+    } else {
+      this.headerRenderer.setOptions(options);
+    }
 
     await this.headerRenderer.render(file, container);
   }

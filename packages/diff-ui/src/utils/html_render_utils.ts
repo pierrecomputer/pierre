@@ -144,7 +144,9 @@ function setWrapperProps(
     highlighter,
     prefix,
   });
-  if (themeMode !== 'system') {
+  if (themeMode === 'system') {
+    delete pre.dataset.themeMode;
+  } else {
     pre.dataset.themeMode = themeMode;
   }
   if (theme != null) {

@@ -171,7 +171,6 @@ export function ShikiThemes() {
         </ButtonGroup>
       </div>
       <FileDiff
-        key={`${selectedDarkTheme}-${selectedLightTheme}-${selectedColorMode}`}
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
         options={{

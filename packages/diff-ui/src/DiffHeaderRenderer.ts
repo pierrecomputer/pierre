@@ -1,6 +1,6 @@
 import type { BundledTheme, HighlighterGeneric } from 'shiki';
 
-import { getSharedHighlighter } from './SharedHighlighter';
+import { getSharedHighlighter, hasLoadedThemes } from './SharedHighlighter';
 import type {
   FileDiffMetadata,
   RenderCustomFileMetadata,
@@ -24,7 +24,7 @@ interface DiffHeaderThemesRendererOptions
   extends ThemesRendererOptions,
     BaseProps {}
 
-type DiffHeaderRendererOptions =
+export type DiffHeaderRendererOptions =
   | DiffHeaderThemeRendererOptions
   | DiffHeaderThemesRendererOptions;
 
@@ -45,6 +45,10 @@ export class DiffHeaderRenderer {
   private mergeOptions(options: Partial<DiffHeaderRendererOptions>) {
     // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
+  }
+
+  setOptions(options: DiffHeaderRendererOptions) {
+    this.options = options;
   }
 
   setThemeMode(themeMode: ThemeModes) {
@@ -92,6 +96,9 @@ export class DiffHeaderRenderer {
       return this.queuedRender;
     }
     this.queuedRender = (async () => {
+      if (!hasLoadedThemes(this.getThemes())) {
+        this.highlighter = undefined;
+      }
       this.highlighter ??= await this.initializeHighlighter();
       if (this.queuedRenderArgs == null) {
         // If we get in here, it's likely we called cleanup and therefore we
@@ -124,5 +131,18 @@ export class DiffHeaderRenderer {
       wrapper.shadowRoot?.prepend(newHeader);
     }
     this.headerInstance = newHeader;
+  }
+
+  private getThemes(): BundledTheme[] {
+    const themes: BundledTheme[] = [];
+    const { theme, themes: _themes } = this.options;
+    if (theme != null) {
+      themes.push(theme);
+    }
+    if (_themes != null) {
+      themes.push(_themes.dark);
+      themes.push(_themes.light);
+    }
+    return themes;
   }
 }

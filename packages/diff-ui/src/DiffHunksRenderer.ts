@@ -9,7 +9,11 @@ import type {
   ShikiTransformer,
 } from 'shiki';
 
-import { getSharedHighlighter } from './SharedHighlighter';
+import {
+  getSharedHighlighter,
+  hasLoadedLanguage,
+  hasLoadedThemes,
+} from './SharedHighlighter';
 import type {
   BaseRendererOptions,
   FileDiffMetadata,
@@ -251,6 +255,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return this.queuedRender;
     }
     this.queuedRender = (async () => {
+      // If we have changed theme or language on our diff instance, we need to
+      // double check the highlighter has loaded the appropriate languages and
+      // themes
+      if (
+        !hasLoadedLanguage(this.options.lang ?? 'text') ||
+        !hasLoadedThemes(this.getThemes())
+      ) {
+        this.highlighter = undefined;
+      }
+
       this.highlighter ??= await this.initializeHighlighter();
       if (this.queuedRenderArgs == null) {
         // If we get in here, it's likely we called cleanup and therefore we
@@ -1065,6 +1079,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themes.push(_themes.light);
     }
     return { langs, themes, preferWasmHighlighter };
+  }
+
+  private getThemes(): BundledTheme[] {
+    const themes: BundledTheme[] = [];
+    const { theme, themes: _themes } = this.options;
+    if (theme != null) {
+      themes.push(theme);
+    }
+    if (_themes != null) {
+      themes.push(_themes.dark);
+      themes.push(_themes.light);
+    }
+    return themes;
   }
 }
 
