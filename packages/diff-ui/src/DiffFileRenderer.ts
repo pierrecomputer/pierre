@@ -1,6 +1,7 @@
 import { DiffHeaderRenderer } from './DiffHeaderRenderer';
 import { DiffHunksRenderer } from './DiffHunksRenderer';
 import './custom-components/Container';
+import svgSprite from './sprite.txt?raw';
 import type {
   AnnotationSide,
   BaseRendererOptions,
@@ -12,6 +13,7 @@ import type {
   ThemesRendererOptions,
 } from './types';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
+import { createSVGElement } from './utils/html_render_utils';
 
 interface FileDiffRenderProps {
   lang?: BaseRendererOptions['lang'];
@@ -184,6 +186,7 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
   }
 
+  spriteSVG: SVGElement | undefined;
   getOrCreateFileContainer(fileContainer?: HTMLElement) {
     if (
       (fileContainer != null && fileContainer === this.fileContainer) ||
@@ -193,6 +196,13 @@ export class DiffFileRenderer<LAnnotation = undefined> {
     }
     this.fileContainer =
       fileContainer ?? document.createElement('pjs-container');
+    if (this.spriteSVG == null) {
+      this.spriteSVG = createSVGElement('svg');
+      this.spriteSVG.innerHTML = svgSprite;
+      this.spriteSVG.style.display = 'none';
+      this.spriteSVG.setAttribute('aria-hidden', 'true');
+      this.fileContainer.shadowRoot?.appendChild(this.spriteSVG);
+    }
     const { onLineClick, onLineEnter, onLineLeave } = this.options;
     if (onLineClick != null) {
       this.fileContainer.addEventListener('click', this.handleMouseClick);

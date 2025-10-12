@@ -197,6 +197,7 @@ code {
 
 pjs-container {
   content-visibility: auto;
+  margin-top: 2px;
 }
 
 .annotation-slot-wrapper {

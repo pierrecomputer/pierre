@@ -2,6 +2,7 @@
   --pjs-bg: #fff;
   --pjs-fg: #000;
   --pjs-gap: 8px;
+  --pjs-gap-inline: 12px;
   --pjs-additions-color: rgb(0, 255, 0);
   --pjs-additions-color: #2ca94c;
   --pjs-deletions-color: rgb(255, 0, 0);
@@ -14,6 +15,8 @@
   --pjs-header-font-fallback:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
     Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+
+  display: block;
 }
 
 pre,
@@ -291,12 +294,13 @@ code {
   flex-direction: row;
   justify-content: space-between;
   gap: var(--pjs-gap);
-  padding: var(--pjs-gap);
+  padding: var(--pjs-gap) var(--pjs-gap-inline);
 }
 
 [data-header-content] {
   display: flex;
   flex-direction: row;
+  align-items: center;
   gap: var(--pjs-gap);
   min-width: 0;
   white-space: nowrap;

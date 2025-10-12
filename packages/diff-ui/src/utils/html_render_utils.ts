@@ -9,6 +9,7 @@ import {
 
 import type {
   FileDiffMetadata,
+  FileTypes,
   RenderCustomFileMetadata,
   ThemeTypes,
   ThemesType,
@@ -159,6 +160,26 @@ export function formatCSSVariablePrefix(prefix: string = 'pjs') {
   return `--${prefix}-`;
 }
 
+export function createSVGElement<K extends keyof SVGElementTagNameMap>(
+  tagName: K
+): SVGElementTagNameMap[K] {
+  return document.createElementNS('http://www.w3.org/2000/svg', tagName);
+}
+
+function getIconForType(type: FileTypes) {
+  switch (type) {
+    case 'change':
+      return '#pjs-icon-git-modified';
+    case 'new':
+      return '#pjs-icon-git-added';
+    case 'deleted':
+      return '#pjs-icon-git-deleted';
+    case 'rename-pure':
+    case 'rename-changed':
+      return '#pjs-icon-git-moved';
+  }
+}
+
 interface RenderFileHeaderProps {
   file: FileDiffMetadata;
   renderCustomMetadata?: RenderCustomFileMetadata;
@@ -190,9 +211,12 @@ export function renderFileHeader({
   const content = document.createElement('div');
   content.dataset.headerContent = '';
 
-  // FIXME(amadeus): Replace this with icon logic
-  const icon = document.createElement('div');
-  icon.innerText = file.type.toLocaleUpperCase();
+  const icon = createSVGElement('svg');
+  icon.setAttribute('width', '16');
+  icon.setAttribute('height', '16');
+  const useEl = createSVGElement('use');
+  useEl.setAttribute('href', getIconForType(file.type));
+  icon.appendChild(useEl);
   icon.dataset.changeIcon = '';
   content.appendChild(icon);
 
