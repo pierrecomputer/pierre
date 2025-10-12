@@ -7,8 +7,6 @@ interface InputGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-interface InputGroupInputProps extends React.ComponentProps<'input'> {}
-
 interface InputGroupIconProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   position?: 'left' | 'right';
@@ -22,7 +20,10 @@ function InputGroup({ className, children, ...props }: InputGroupProps) {
   );
 }
 
-function InputGroupInput({ className, ...props }: InputGroupInputProps) {
+function InputGroupInput({
+  className,
+  ...props
+}: React.ComponentProps<'input'>) {
   return (
     <input
       data-slot="input-group-input"

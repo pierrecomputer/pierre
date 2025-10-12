@@ -95,10 +95,9 @@ function HeaderNavLink({
 
   // Auto-detect active state if not explicitly provided
   const isActive =
-    active != null
-      ? active
-      : hrefString === pathname ||
-        (hrefString !== '/' ? pathname.startsWith(hrefString) : false);
+    active ??
+    (hrefString === pathname ||
+      (hrefString !== '/' ? pathname.startsWith(hrefString) : false));
 
   return (
     <NavigationMenuItem>
