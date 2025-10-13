@@ -1,7 +1,6 @@
 {
   "name": "@pierre/storage-elements",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "tsc": "tsc --build",
@@ -12,6 +11,9 @@
       "import": "./next/index.ts"
     }
   },
+  "files": [
+    "next"
+  ],
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-label": "catalog:",
