@@ -40,11 +40,13 @@ export function FileDiff({
     const hasFileChange =
       !deepEqual(prevOldFile, oldFile) || !deepEqual(prevNewFile, newFile);
 
+    let hasOptionsChange = false;
     if (!deepEqual(optionsRef.current, options)) {
       optionsRef.current = options;
-      diffRenderer.setOptions(options, hasFileChange);
+      hasOptionsChange = true;
+      diffRenderer.setOptions(options);
     }
-    if (hasFileChange) {
+    if (hasFileChange || hasOptionsChange) {
       filesRef.current = [oldFile, newFile];
       const [fileDiff] = parseDiffFromFiles(oldFile, newFile);
       if (annotations != null) diffRenderer.setLineAnnotations(annotations);

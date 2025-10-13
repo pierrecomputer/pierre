@@ -218,12 +218,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         // should just return early with empty result
         return undefined;
       }
-      const diff = this.queuedDiff;
-      this.queuedDiff = undefined;
-      this.queuedRender = undefined;
-      return this.renderDiff(diff, this.highlighter);
+      return this.renderDiff(this.queuedDiff, this.highlighter);
     })();
-    return await this.queuedRender;
+    const result = await this.queuedRender;
+    this.queuedDiff = undefined;
+    this.queuedRender = undefined;
+    return result;
   }
 
   private renderDiff(

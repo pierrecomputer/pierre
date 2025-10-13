@@ -4,7 +4,7 @@ import {
   DiffHeaderRenderer,
   type DiffHeaderRendererOptions,
 } from './DiffHeaderRenderer';
-import { DiffHunksRenderer } from './DiffHunksRenderer';
+import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
 import { type PJSHighlighter, getSharedHighlighter } from './SharedHighlighter';
 import './custom-components/Container';
 import svgSprite from './sprite.txt?raw';
@@ -132,17 +132,14 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(
-    options: DiffFileRendererOptions<LAnnotation>,
-    disableRerender = false
-  ) {
+  setOptions(options: DiffFileRendererOptions<LAnnotation>) {
     this.options = options;
-    if (this.fileDiff == null) {
-      return;
-    }
     this.hunksRenderer?.setOptions(this.options);
-    if (!disableRerender) {
-      void this.render({ fileDiff: this.fileDiff });
+  }
+
+  async rerender() {
+    if (this.fileDiff != null) {
+      await this.render({ fileDiff: this.fileDiff });
     }
   }
 
@@ -483,11 +480,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private applyHunksToDOM(
-    result: {
-      additionsHTML: string;
-      deletionsHTML: string;
-      unifiedHTML: string;
-    },
+    result: HunksRenderResult,
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ) {

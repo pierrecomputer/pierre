@@ -74,7 +74,7 @@ export class DiffHeaderRenderer {
     return { themes, langs: [] };
   }
 
-  private diff: FileDiffMetadata | undefined;
+  diff: FileDiffMetadata | undefined;
   private queuedRenderDiff: FileDiffMetadata | undefined;
   private queuedRender: Promise<string | undefined> | undefined;
   async render(diff: FileDiffMetadata): Promise<string | undefined> {
@@ -92,19 +92,19 @@ export class DiffHeaderRenderer {
         // should just return early with empty result
         return undefined;
       }
-      const diff = this.queuedRenderDiff;
-      this.queuedRenderDiff = undefined;
-      this.queuedRender = undefined;
-      this.diff = diff;
-      return this.renderHeader(this.diff, this.highlighter);
+      return this.renderHeader(this.queuedRenderDiff, this.highlighter);
     })();
-    return await this.queuedRender;
+    const result = await this.queuedRender;
+    this.queuedRenderDiff = undefined;
+    this.queuedRender = undefined;
+    return result;
   }
 
   private renderHeader(
     diff: FileDiffMetadata,
     highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
   ): string {
+    this.diff = diff;
     const header = renderFileHeader({
       ...this.options,
       file: diff,
