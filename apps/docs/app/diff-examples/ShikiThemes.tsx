@@ -18,6 +18,8 @@ import { type FileContents, preloadHighlighter } from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { FeatureHeader } from './FeatureHeader';
+
 const OLD_FILE: FileContents = {
   name: 'file.tsx',
   contents: `import * as 'react';
@@ -145,12 +147,10 @@ export function ShikiThemes() {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-2xl font-semibold">Adapts to any Shiki theme</h3>
-      <p className="text-sm text-muted-foreground">
-        Precision Diffs are built with Shiki for syntax highlighting and general
-        theming. Our components automatically adapt to blend in with your theme
-        selection, including across color modes.
-      </p>
+      <FeatureHeader
+        title="Adapts to any Shiki theme"
+        description="Precision Diffs are built with Shiki for syntax highlighting and general theming. Our components automatically adapt to blend in with your theme selection, including across color modes."
+      />
       <div className="flex flex-col md:flex-row gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

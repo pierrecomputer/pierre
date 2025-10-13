@@ -7,6 +7,8 @@ import { CornerDownRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { FeatureHeader } from './FeatureHeader';
+
 const OLD_FILE: FileContents = {
   name: 'file.tsx',
   contents: `import * as 'react';
@@ -51,12 +53,10 @@ export function Annotations() {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-2xl font-semibold">Comments & Annotations</h3>
-      <p className="text-sm text-muted-foreground">
-        Precision Diffs provides a flexible annotation framework for injecting
-        additional content and context into your diffs. Use it to render line
-        comments, annotations from CI jobs, and other third party content.
-      </p>
+      <FeatureHeader
+        title="Comments & Annotations"
+        description="Precision Diffs provides a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
+      />
       {element != null && (
         <>
           <FileDiff

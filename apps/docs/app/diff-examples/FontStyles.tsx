@@ -14,6 +14,8 @@ import type { FileContents } from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
+import { FeatureHeader } from './FeatureHeader';
+
 const OLD_FILE: FileContents = {
   name: 'file.tsx',
   contents: `import * as 'react';
@@ -57,12 +59,10 @@ export function FontStyles() {
   return (
     <div className="space-y-4">
       <div className="space-y-4">
-        <h3 className="text-2xl font-semibold">Bring your own fonts</h3>
-        <p className="text-sm text-muted-foreground">
-          Precision Diffs is adaptable to any font, font-size, line-height, and
-          even font-feature-settings you may have set. Configure font options
-          with your preferred CSS method globally or on a per-component basis.
-        </p>
+        <FeatureHeader
+          title="Bring your own fonts"
+          description="Precision Diffs is adaptable to any font, font-size, line-height, and even font-feature-settings you may have set. Configure font options with your preferred CSS method globally or on a per-component basis."
+        />
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex gap-3">
             <DropdownMenu>

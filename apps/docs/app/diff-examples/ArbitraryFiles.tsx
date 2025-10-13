@@ -3,6 +3,8 @@
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import type { FileContents } from '@pierre/diff-ui';
 
+import { FeatureHeader } from './FeatureHeader';
+
 const OLD_FILE: FileContents = {
   name: 'file.tsx',
   contents: `import * as 'react';
@@ -41,15 +43,10 @@ export default function Home() {
 export function ArbitraryFiles() {
   return (
     <div className="space-y-4">
-      <div className="space-y-4">
-        <h3 className="text-2xl font-semibold">Diff arbitrary files</h3>
-        <p className="text-sm text-muted-foreground">
-          In addition to rendering standard Git diffs and patches, you can pass
-          any two files in Precision Diffs and get a diff between them. This is
-          especially useful when comparing across generative snapshots where
-          linear history isn’t always available.
-        </p>
-      </div>
+      <FeatureHeader
+        title="Diff arbitrary files"
+        description="In addition to rendering standard Git diffs and patches, you can pass any two files in Precision Diffs and get a diff between them. This is especially useful when comparing across generative snapshots where linear history isn't always available."
+      />
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}

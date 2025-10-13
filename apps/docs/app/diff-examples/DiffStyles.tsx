@@ -6,6 +6,8 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { FileContents } from '@pierre/diff-ui';
 import { useState } from 'react';
 
+import { FeatureHeader } from './FeatureHeader';
+
 const OLD_FILE: FileContents = {
   name: 'file.tsx',
   contents: `import * as 'react';
@@ -54,15 +56,10 @@ export function DiffStyles() {
   return (
     <div className="space-y-4">
       <div className="space-y-4">
-        <h3 className="text-2xl font-semibold">
-          Choose how changes are styled
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Your diffs, your choice. Render changed lines with classic diff
-          indicators (+/–), full-width background colors, or vertical bars. You
-          can even highlight inline changes—character or word based—and toggle
-          line wrapping, hide numbers, and more.
-        </p>
+        <FeatureHeader
+          title="Choose how changes are styled"
+          description="Your diffs, your choice. Render changed lines with classic diff indicators (+/–), full-width background colors, or vertical bars. You can even highlight inline changes—character or word based—and toggle line wrapping, hide numbers, and more."
+        />
         <div className="flex flex-col md:flex-row gap-3">
           <ButtonGroup
             value={diffIndicators}
