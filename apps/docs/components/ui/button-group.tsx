@@ -41,7 +41,7 @@ function ButtonGroup({
       }}
     >
       <div
-        className={cn('inline-flex rounded-md shadow-sm', className)}
+        className={cn('inline-flex p-[2px] rounded-lg bg-secondary', className)}
         role="group"
         {...props}
       >
@@ -65,9 +65,9 @@ function ButtonGroupItem({
 }: ButtonGroupItemProps) {
   const context = React.useContext(ButtonGroupContext);
   const isSelected = context.selectedValue === value;
-  const isFirst = React.useContext(ButtonGroupPositionContext) === 'first';
-  const isLast = React.useContext(ButtonGroupPositionContext) === 'last';
-  const isMiddle = React.useContext(ButtonGroupPositionContext) === 'middle';
+  // const isFirst = React.useContext(ButtonGroupPositionContext) === 'first';
+  // const isLast = React.useContext(ButtonGroupPositionContext) === 'last';
+  // const isMiddle = React.useContext(ButtonGroupPositionContext) === 'middle';
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     context.onValueChange?.(value);
@@ -77,12 +77,15 @@ function ButtonGroupItem({
   return (
     <Button
       className={cn(
-        isFirst && 'rounded-r-none',
-        isLast && 'rounded-l-none',
-        isMiddle && 'rounded-none border-x-0',
+        'bg-transparent border-transparent text-muted-foreground hover:cursor-pointer',
+        isSelected &&
+          'bg-background border-border text-accent-foreground hover:bg-background hover:border-border',
+        // isFirst && 'rounded-r-none',
+        // isLast && 'rounded-l-none',
+        // isMiddle && 'rounded-none',
         className
       )}
-      variant={isSelected ? 'default' : context.variant}
+      variant={isSelected ? 'outline' : context.variant}
       size={context.size}
       onClick={handleClick}
       {...props}

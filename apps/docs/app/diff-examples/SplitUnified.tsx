@@ -44,15 +44,18 @@ export default function Home() {
 export function SplitUnified() {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   return (
-    <div className="space-y-4">
-      <h3 className="text-2xl font-semibold">Diff styles</h3>
-      <p className="text-muted-foreground">
-        Choose from stacked (unified) or split (side-by-side). Both use CSS Grid
-        under the hood, meaning fewer DOM nodes and fast rendering.
-      </p>
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-xl font-medium">Diff layout styles</h3>
+        <p className="text-sm text-muted-foreground">
+          Choose from stacked (unified) or split (side-by-side). Both use CSS
+          Grid under the hood, meaning fewer DOM nodes and faster rendering.
+        </p>
+      </div>
       <ButtonGroup
         value={diffStyle}
         onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
+        size="lg"
       >
         <ButtonGroupItem value="split">
           <IconDiffSplit />
