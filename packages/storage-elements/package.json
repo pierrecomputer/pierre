@@ -14,6 +14,9 @@
   "files": [
     "next"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-label": "catalog:",
