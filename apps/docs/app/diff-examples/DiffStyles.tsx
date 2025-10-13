@@ -42,13 +42,14 @@ export default function Home() {
 };
 
 export function DiffStyles() {
-  const [_backgroundStyle, _setBackgroundStyle] = useState<
-    'classic' | 'background' | 'bar'
-  >('classic');
+  const [diffIndicators, setDiffStyle] = useState<'classic' | 'bars' | 'none'>(
+    'bars'
+  );
   const [lineDiffStyle, setLineDiffStyle] = useState<
     'word-alt' | 'word' | 'char' | 'none'
-  >('word');
-  const [wrapMode, setWrapMode] = useState<'wrap' | 'scroll'>('wrap');
+  >('word-alt');
+  const [disableBackground, setDisableBackground] = useState(false);
+  const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('wrap');
 
   return (
     <div className="space-y-4">
@@ -63,14 +64,34 @@ export function DiffStyles() {
           line wrapping, hide numbers, and more.
         </p>
         <div className="flex flex-col md:flex-row gap-3">
-          <ButtonGroup value={'classic'}>
-            {['background', 'classic', 'bar', 'none'].map((value) => (
+          <ButtonGroup
+            value={diffIndicators}
+            onValueChange={(value) =>
+              setDiffStyle(value as 'bars' | 'classic' | 'none')
+            }
+          >
+            {['bars', 'classic', 'none'].map((value) => (
               <ButtonGroupItem key={value} value={value}>
                 {value}
               </ButtonGroupItem>
             ))}
           </ButtonGroup>
-
+          <ButtonGroup
+            value={disableBackground ? 'disable' : 'enable'}
+            onValueChange={(value) => {
+              if (value === 'disable') {
+                setDisableBackground(true);
+              } else {
+                setDisableBackground(false);
+              }
+            }}
+          >
+            {['disable', 'enable'].map((value) => (
+              <ButtonGroupItem key={value} value={value}>
+                {value === 'disable' ? 'Disable BG' : 'Enable BG'}
+              </ButtonGroupItem>
+            ))}
+          </ButtonGroup>
           <ButtonGroup
             value={lineDiffStyle}
             onValueChange={(value) =>
@@ -85,8 +106,8 @@ export function DiffStyles() {
           </ButtonGroup>
 
           <ButtonGroup
-            value={wrapMode}
-            onValueChange={(value) => setWrapMode(value as 'wrap' | 'scroll')}
+            value={overflow}
+            onValueChange={(value) => setOverflow(value as 'wrap' | 'scroll')}
           >
             <ButtonGroupItem value="wrap">
               <IconWordWrap />
@@ -106,7 +127,9 @@ export function DiffStyles() {
           detectLanguage: true,
           theme: 'github-dark',
           diffStyle: 'unified',
-          overflow: wrapMode,
+          diffIndicators,
+          disableBackground,
+          overflow: overflow,
           lineDiffType: lineDiffStyle,
         }}
       />

@@ -22,7 +22,7 @@ import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import {
   createCodeNode,
   createSVGElement,
-  formatCSSVariablePrefix,
+  setWrapperProps,
 } from './utils/html_render_utils';
 
 interface ObservedAnnotationNodes {
@@ -433,6 +433,8 @@ export class FileDiff<LAnnotation = undefined> {
       theme,
       themes,
       themeMode = 'system',
+      diffIndicators = 'bars',
+      disableBackground = false,
     } = this.options;
     const unified = diffStyle === 'unified';
     const split = unified
@@ -440,43 +442,17 @@ export class FileDiff<LAnnotation = undefined> {
       : this.fileDiff?.type === 'change' ||
         this.fileDiff?.type === 'rename-changed';
     const wrap = overflow === 'wrap';
-
-    // Get theme styles
-    let styles = '';
-    if (theme != null) {
-      const themeData = highlighter.getTheme(theme);
-      styles += `color:${themeData.fg};`;
-      styles += `background-color:${themeData.bg};`;
-      styles += `${formatCSSVariablePrefix()}fg:${themeData.fg};`;
-      styles += `${formatCSSVariablePrefix()}bg:${themeData.bg};`;
-    } else if (themes != null) {
-      let themeData = highlighter.getTheme(themes.dark);
-      styles += `${formatCSSVariablePrefix()}dark:${themeData.fg};`;
-      styles += `${formatCSSVariablePrefix()}dark-bg:${themeData.bg};`;
-
-      themeData = highlighter.getTheme(themes.light);
-      styles += `${formatCSSVariablePrefix()}light:${themeData.fg};`;
-      styles += `${formatCSSVariablePrefix()}light-bg:${themeData.bg};`;
-    }
-
-    pre.style.cssText = styles;
-
-    // Set theme mode
-    if (themeMode === 'system') {
-      delete pre.dataset.themeMode;
-    } else {
-      pre.dataset.themeMode = themeMode;
-    }
-
-    if (theme != null) {
-      const themeData = highlighter.getTheme(theme);
-      pre.dataset.themeMode = themeData.type;
-    }
-
-    pre.dataset.type = split ? 'split' : 'file';
-    pre.dataset.overflow = wrap ? 'wrap' : 'scroll';
-    pre.dataset.pjs = '';
-    pre.tabIndex = 0;
+    setWrapperProps({
+      pre,
+      theme,
+      themes,
+      highlighter,
+      split,
+      wrap,
+      themeMode,
+      diffIndicators,
+      disableBackground,
+    });
   }
 
   private applyHunksToDOM(

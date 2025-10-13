@@ -5,25 +5,22 @@ import {
 import type {
   BundledLanguage,
   BundledTheme,
-  CodeOptionsMultipleThemes,
   HighlighterGeneric,
   ThemedToken,
 } from 'shiki';
 
 import { getSharedHighlighter } from './SharedHighlighter';
 import { queueRender } from './UnversialRenderer';
+import type { BaseCodeProps, SupportedLanguages } from './types';
 import {
   createCodeNode,
   createRow,
   createSpanFromToken,
   formatCSSVariablePrefix,
-  setupPreNode,
+  setWrapperProps,
 } from './utils/html_render_utils';
 
-interface CodeTokenOptionsBase {
-  lang?: BundledLanguage;
-  defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
-  preferWasmHighlighter?: boolean;
+interface CodeTokenOptionsBase extends BaseCodeProps {
   startingLineIndex?: number;
 
   onPreRender?(instance: CodeRenderer): unknown;
@@ -87,12 +84,24 @@ export class CodeRenderer {
     wrapper: HTMLPreElement,
     highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>
   ) {
-    const { themes, theme } = this.options;
-    const pre = setupPreNode(
-      themes != null
-        ? { pre: wrapper, themes, highlighter }
-        : { pre: wrapper, theme, highlighter }
-    );
+    const {
+      themes,
+      theme,
+      overflow = 'scroll',
+      themeMode = 'system',
+    } = this.options;
+    const pre = setWrapperProps({
+      pre: wrapper,
+      split: false,
+      theme,
+      themes,
+      highlighter,
+      wrap: overflow === 'wrap',
+      themeMode,
+      diffIndicators: 'none',
+      disableBackground: true,
+    });
+    pre.innerHTML = '';
 
     this.pre = pre;
     this.code = createCodeNode({ pre });
@@ -192,7 +201,7 @@ export class CodeRenderer {
       theme,
       preferWasmHighlighter,
     } = this.options;
-    const langs: BundledLanguage[] = [];
+    const langs: SupportedLanguages[] = [];
     if (lang != null) {
       langs.push(lang);
     }

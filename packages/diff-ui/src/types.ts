@@ -44,13 +44,7 @@ export type HUNK_LINE_TYPE = 'context' | 'addition' | 'deletion' | 'metadata';
 
 export type ThemeModes = 'system' | 'light' | 'dark';
 
-export interface BaseRendererOptions {
-  diffStyle?: 'unified' | 'split'; // split is default
-  // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
-  // by a single character
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
-  maxLineDiffLength?: number; // 1000 is default
-  maxLineLengthForHighlighting?: number; // 1000 is default
+export interface BaseCodeProps {
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeMode?: ThemeModes; // 'system' is default
@@ -59,6 +53,17 @@ export interface BaseRendererOptions {
   lang?: SupportedLanguages;
   defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
   preferWasmHighlighter?: boolean;
+}
+
+export interface BaseRendererOptions extends BaseCodeProps {
+  diffStyle?: 'unified' | 'split'; // split is default
+  diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
+  disableBackground?: boolean;
+  // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
+  // by a single character
+  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
+  maxLineDiffLength?: number; // 1000 is default
+  maxLineLengthForHighlighting?: number; // 1000 is default
 }
 
 export interface ThemeRendererOptions {

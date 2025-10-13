@@ -879,7 +879,7 @@ function convertLine(
       properties: { 'data-column-number': '' },
       children:
         lineInfo.metadataContent == null
-          ? [{ type: 'text', value: `${lineInfo.number} ` }]
+          ? [{ type: 'text', value: `${lineInfo.number}` }]
           : [],
     });
   }

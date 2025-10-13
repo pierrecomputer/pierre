@@ -15,16 +15,6 @@ import type {
   ThemesType,
 } from '../types';
 
-interface ThemeVariant {
-  themes?: never;
-  theme: BundledTheme;
-}
-
-interface ThemesVariant {
-  themes: ThemesType;
-  theme?: never;
-}
-
 export function createSpanFromToken(token: ThemedToken) {
   const element = document.createElement('span');
   const style = token.htmlStyle ?? getTokenStyleObject(token);
@@ -49,28 +39,16 @@ export function createRow(line: number) {
   return { row, content };
 }
 
-interface SetupWrapperBase {
+interface SetupWrapperNodesProps {
+  theme?: BundledTheme;
+  themes?: ThemesType;
   pre: HTMLPreElement;
   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
-  split?: boolean;
-  wrap?: boolean;
-  themeMode?: ThemeModes;
-}
-
-interface SetupWrapperTheme extends ThemeVariant, SetupWrapperBase {}
-
-interface SetupWrapperThemes extends ThemesVariant, SetupWrapperBase {}
-
-type SetupWrapperNodesProps = SetupWrapperTheme | SetupWrapperThemes;
-
-export function setupPreNode(props: SetupWrapperNodesProps) {
-  const { pre } = props;
-  // Clean out container
-  pre.innerHTML = '';
-  pre.tabIndex = 0;
-  pre.dataset.pjs = '';
-  setWrapperProps(props);
-  return pre;
+  split: boolean;
+  wrap: boolean;
+  themeMode: ThemeModes;
+  diffIndicators: 'bars' | 'classic' | 'none';
+  disableBackground: boolean;
 }
 
 interface CreateCodeNodeProps {
@@ -101,7 +79,7 @@ interface GetHighlighterThemeStylesProps {
   prefix?: string;
 }
 
-function getHighlighterThemeStyles({
+export function getHighlighterThemeStyles({
   theme,
   themes,
   highlighter,
@@ -126,24 +104,18 @@ function getHighlighterThemeStyles({
   return styles;
 }
 
-function setWrapperProps(
-  {
-    pre,
-    highlighter,
-    theme,
-    themes,
-    split = false,
-    wrap = false,
-    themeMode = 'system',
-  }: SetupWrapperNodesProps,
-  prefix?: string
-) {
-  const styles = getHighlighterThemeStyles({
-    theme,
-    themes,
-    highlighter,
-    prefix,
-  });
+export function setWrapperProps({
+  pre,
+  highlighter,
+  theme,
+  themes,
+  split,
+  wrap,
+  themeMode,
+  diffIndicators,
+  disableBackground,
+}: SetupWrapperNodesProps) {
+  const styles = getHighlighterThemeStyles({ theme, themes, highlighter });
   if (themeMode === 'system') {
     delete pre.dataset.themeMode;
   } else {
@@ -153,9 +125,26 @@ function setWrapperProps(
     const themeData = highlighter.getTheme(theme);
     pre.dataset.themeMode = themeData.type;
   }
+  switch (diffIndicators) {
+    case 'bars':
+    case 'classic':
+      pre.dataset.indicators = diffIndicators;
+      break;
+    case 'none':
+      delete pre.dataset.indicators;
+      break;
+  }
+  if (disableBackground) {
+    delete pre.dataset.background;
+  } else {
+    pre.dataset.background = '';
+  }
   pre.dataset.type = split ? 'split' : 'file';
   pre.dataset.overflow = wrap ? 'wrap' : 'scroll';
+  pre.dataset.pjs = '';
+  pre.tabIndex = 0;
   pre.style = styles;
+  return pre;
 }
 
 export function formatCSSVariablePrefix(prefix: string = 'pjs') {
