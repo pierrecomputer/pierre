@@ -28,7 +28,7 @@ import { SplitUnified } from './diff-examples/SplitUnified';
 
 export default function Home() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen w-5xl px-5 mx-auto">
       <Header
         logo={
           <Header.Logo
@@ -36,7 +36,9 @@ export default function Home() {
             subtitle={
               <>
                 by{' '}
-                <span className="font-medium">The Pierre Computer Company</span>
+                <span className="font-normal uppercase">
+                  The Pierre Computer Company
+                </span>
               </>
             }
           >
@@ -58,7 +60,7 @@ export default function Home() {
 
       <Hero />
 
-      <section className="max-w-4xl mx-auto px-8 py-12 space-y-8">
+      <section className="py-12 space-y-8">
         <div className="space-y-4">
           <h2 className="text-3xl font-bold">
             Everything but the kitchen sink
@@ -81,7 +83,7 @@ export default function Home() {
       </section>
 
       {/* TODO: add this back once we add the migration APIs
-      
+
       <section className="max-w-4xl mx-auto px-8 py-12 space-y-4">
         <h2 className="text-3xl font-bold">Migrate to Precision Diffs</h2>
         <p className="text-muted-foreground">
@@ -90,7 +92,7 @@ export default function Home() {
         </p>
       </section> */}
 
-      <section className="max-w-4xl mx-auto px-8 py-12 space-y-6">
+      <section className="py-12 space-y-6">
         <div className="space-y-4">
           <h2 className="text-3xl font-bold">
             With love from The Pierre Computer Company
@@ -128,31 +130,29 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="border-t bg-muted/50">
-        <div className="max-w-4xl mx-auto px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">Precision Diffs</div>
-            <nav className="flex items-center gap-4">
-              <Link
-                href="/"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Home
-              </Link>
-              <Link
-                href="/playground"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Playground
-              </Link>
-              <Link
-                href="/docs"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Docs
-              </Link>
-            </nav>
-          </div>
+      <footer className="pt-8 pb-12">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">Precision Diffs</div>
+          <nav className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Home
+            </Link>
+            <Link
+              href="/playground"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Playground
+            </Link>
+            <Link
+              href="/docs"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Docs
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>
@@ -173,7 +173,7 @@ const Hero = () => {
   };
 
   return (
-    <section className="max-w-4xl mx-auto px-8 py-16">
+    <section className="py-16">
       <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6">
         Precision Diffs
       </h1>

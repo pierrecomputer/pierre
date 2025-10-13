@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
+import { IconArrowUpRight } from '../icons';
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -39,7 +40,7 @@ function Header({ className, logo, children, ...props }: HeaderProps) {
     <header
       data-slot="header"
       className={cn(
-        'flex items-center justify-between px-8 py-6 border-b ',
+        'flex items-center justify-between py-6 border-b ',
         className
       )}
       {...props}
@@ -106,8 +107,8 @@ function HeaderNavLink({
         href={hrefString}
         className={cn(
           navigationMenuTriggerStyle(),
-          'h-auto py-1.5 px-3',
-          isActive && 'bg-accent/50 text-accent-foreground',
+          'h-auto py-1.5 px-2 text-muted-foreground font-normal bg-transparent',
+          isActive && 'text-accent-foreground font-medium',
           external && 'inline-flex items-center gap-1',
           className
         )}
@@ -116,21 +117,7 @@ function HeaderNavLink({
         {...props}
       >
         {children}
-        {external && (
-          <svg
-            className="h-3.5 w-3.5"
-            fill="none"
-            viewBox="0 0 16 16"
-            stroke="currentColor"
-          >
-            <path
-              d="M5.75 3.25H12.25V9.75M12.25 3.25L3.25 12.25"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )}
+        {external && <IconArrowUpRight />}
       </NavigationMenuLink>
     </NavigationMenuItem>
   );
