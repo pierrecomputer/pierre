@@ -1,6 +1,11 @@
 {
   "extends": "../../tsconfig.options.json",
-  "include": ["shadcn/blocks/**/*", "shadcn/components/**/*", "shadcn/lib/**/*"],
+  "include": [
+    "shadcn/blocks/**/*",
+    "shadcn/components/**/*",
+    "shadcn/lib/**/*",
+    "next/**/*"
+  ],
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
