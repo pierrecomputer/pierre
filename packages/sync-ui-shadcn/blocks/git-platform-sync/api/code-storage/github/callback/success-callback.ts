@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 export type GitHubOAuthTokenResponse =
   | {
@@ -30,6 +30,8 @@ export class CodeStorageSuccessCallback {
   constructor(options: CodeStorageSuccessCallbackOptions) {
     if (options.platform !== 'github') {
       throw new Error(
+        // The error is intentionally outputting an unexpected value
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         `CodeStorageSuccessCallback Error: Invalid platform: ${options.platform}`
       );
     }
@@ -42,22 +44,22 @@ export class CodeStorageSuccessCallback {
   private getParams(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
 
-    const code = searchParams.get('code');
-    const installationId = searchParams.get('installation_id');
-    const setupAction = searchParams.get('setup_action');
-    const state = searchParams.get('state');
+    const code = searchParams.get('code') ?? null;
+    const installationId = searchParams.get('installation_id') ?? null;
+    const setupAction = searchParams.get('setup_action') ?? null;
+    const state = searchParams.get('state') ?? null;
 
-    if (!code) {
+    if (code == null || code === '') {
       throw new Error('CodeStorageSuccessCallback Error: No code provided');
-    } else if (!installationId) {
+    } else if (installationId == null || installationId === '') {
       throw new Error(
         'CodeStorageSuccessCallback Error: No installation ID provided'
       );
-    } else if (!setupAction) {
+    } else if (setupAction == null || setupAction === '') {
       throw new Error(
         'CodeStorageSuccessCallback Error: No setup action provided'
       );
-    } else if (!state) {
+    } else if (state == null || state === '') {
       throw new Error('CodeStorageSuccessCallback Error: No state provided');
     }
 
@@ -72,19 +74,19 @@ export class CodeStorageSuccessCallback {
       state,
     }: { installationId: string; setupAction?: string; state: string }
   ) {
-    if (this.redirectUrl) {
+    if (this.redirectUrl != null && this.redirectUrl !== '') {
       return this.redirectUrl;
     }
 
     const successUrl = new URL('/code-storage/success', request.url);
 
-    if (setupAction) {
+    if (setupAction != null && setupAction !== '') {
       successUrl.searchParams.set('setup_action', setupAction);
     }
-    if (installationId) {
+    if (installationId != null && installationId !== '') {
       successUrl.searchParams.set('installation_id', installationId);
     }
-    if (state) {
+    if (state != null && state !== '') {
       successUrl.searchParams.set('state', state);
     }
     return successUrl;
@@ -115,7 +117,11 @@ export class CodeStorageSuccessCallback {
         (await tokenResponse.json()) as unknown as GitHubOAuthTokenResponse;
 
       if ('error' in tokenData) {
-        throw new Error(tokenData.error_description || tokenData.error);
+        throw new Error(
+          tokenData.error_description ??
+            tokenData.error ??
+            'error fetching github token'
+        );
       }
 
       const successUrl = this.generateRedirectUrl(request, {
