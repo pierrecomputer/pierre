@@ -1,13 +1,13 @@
 {
   "extends": "../../tsconfig.options.json",
-  "include": ["blocks/**/*", "components/**/*", "lib/**/*"],
+  "include": ["shadcn/blocks/**/*", "shadcn/components/**/*", "shadcn/lib/**/*"],
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
-      "@/registry/new-york/*": ["./*"],
-      "@/*": ["./*"]
+      "@/registry/new-york/*": ["./shadcn/*"],
+      "@/*": ["./shadcn/*"]
     }
   }
 }

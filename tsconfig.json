@@ -15,7 +15,7 @@
       "path": "packages/shiki-stream"
     },
     {
-      "path": "packages/sync-ui-shadcn"
+      "path": "packages/storage-elements"
     }
   ]
 }

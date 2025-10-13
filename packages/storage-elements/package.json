@@ -1,11 +1,16 @@
 {
-  "name": "@pierre/sync-ui-shadcn",
+  "name": "@pierre/storage-elements",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "tsc": "tsc --build",
     "build": "tsc --build"
+  },
+  "exports": {
+    "./next": {
+      "import": "./next/index.ts"
+    }
   },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",

@@ -43,6 +43,7 @@
         "@radix-ui/react-dialog": "catalog:",
         "@radix-ui/react-dropdown-menu": "catalog:",
         "@radix-ui/react-label": "catalog:",
+        "@radix-ui/react-navigation-menu": "catalog:",
         "@radix-ui/react-popover": "catalog:",
         "@radix-ui/react-select": "catalog:",
         "@radix-ui/react-separator": "catalog:",
@@ -64,6 +65,7 @@
         "react": "catalog:",
         "react-dom": "catalog:",
         "shadcn": "catalog:",
+        "shiki": "catalog:",
         "sonner": "catalog:",
         "tailwind-merge": "catalog:",
         "tailwindcss": "catalog:",
@@ -107,8 +109,8 @@
         "typescript": "catalog:",
       },
     },
-    "packages/sync-ui-shadcn": {
-      "name": "@pierre/sync-ui-shadcn",
+    "packages/storage-elements": {
+      "name": "@pierre/storage-elements",
       "version": "0.0.0",
       "dependencies": {
         "@radix-ui/react-dialog": "catalog:",
@@ -151,6 +153,7 @@
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-dropdown-menu": "2.1.16",
     "@radix-ui/react-label": "2.1.7",
+    "@radix-ui/react-navigation-menu": "1.2.14",
     "@radix-ui/react-popover": "1.1.15",
     "@radix-ui/react-select": "2.2.6",
     "@radix-ui/react-separator": "1.1.7",
@@ -506,7 +509,7 @@
 
     "@pierre/storage": ["@pierre/storage@0.0.10", "", { "dependencies": { "jose": "^5.10.0", "snakecase-keys": "^9.0.2" } }, "sha512-fDFrsnRiNTq7lpY56MGE4vRjYAHfTFLsxN18wbnxBlOk1XB1pxzgMfx5DwiqRcXs8+Gt2lmeXvlYAa1gGR4c7w=="],
 
-    "@pierre/sync-ui-shadcn": ["@pierre/sync-ui-shadcn@workspace:packages/sync-ui-shadcn"],
+    "@pierre/storage-elements": ["@pierre/storage-elements@workspace:packages/storage-elements"],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.1", "", {}, "sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g=="],
 
