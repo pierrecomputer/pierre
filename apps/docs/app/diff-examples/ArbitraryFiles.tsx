@@ -42,7 +42,7 @@ export default function Home() {
 
 export function ArbitraryFiles() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <FeatureHeader
         title="Diff arbitrary files"
         description="In addition to rendering standard Git diffs and patches, you can pass any two files in Precision Diffs and get a diff between them. This is especially useful when comparing across generative snapshots where linear history isn't always available."

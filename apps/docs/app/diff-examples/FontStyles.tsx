@@ -57,7 +57,7 @@ export function FontStyles() {
   const [selectedLineHeight, setSelectedLineHeight] = useState('20px');
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="space-y-4">
         <FeatureHeader
           title="Bring your own fonts"

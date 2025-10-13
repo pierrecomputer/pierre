@@ -146,7 +146,7 @@ export function ShikiThemes() {
   >('system');
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <FeatureHeader
         title="Adapts to any Shiki theme"
         description="Precision Diffs are built with Shiki for syntax highlighting and general theming. Our components automatically adapt to blend in with your theme selection, including across color modes."

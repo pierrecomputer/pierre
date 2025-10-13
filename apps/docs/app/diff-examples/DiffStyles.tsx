@@ -54,7 +54,7 @@ export function DiffStyles() {
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('wrap');
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="space-y-4">
         <FeatureHeader
           title="Choose how changes are styled"

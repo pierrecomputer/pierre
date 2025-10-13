@@ -78,7 +78,7 @@ export function PrebuiltReact() {
 } from './@pierrejs/precision-diffs/index.js';`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="space-y-4">
         <FeatureHeader
           title="Pre-built React and JavaScript components"
