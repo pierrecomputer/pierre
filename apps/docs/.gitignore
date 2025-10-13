@@ -39,6 +39,10 @@ yarn-error.log*
 # fumadocs
 .source
 
+# shadcn registry
+# we want to just build this on the build commmand
+public/r/**/*.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

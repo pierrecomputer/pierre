@@ -7,6 +7,11 @@
     "tsc": "tsc --build",
     "build": "tsc --build"
   },
+  "exports": {
+    "./next": {
+      "import": "./next/index.ts"
+    }
+  },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-label": "catalog:",
