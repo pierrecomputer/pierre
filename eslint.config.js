@@ -58,7 +58,8 @@ export default [
           allowNumber: false,
           allowNullableObject: false,
           allowNullableBoolean: false,
-          allowNullableString: false,
+          // Enabled because it's convenient and pretty safe
+          allowNullableString: true,
           allowNullableNumber: false,
           allowAny: false,
         },

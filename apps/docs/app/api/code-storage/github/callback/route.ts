@@ -7,7 +7,6 @@ export async function GET(request: NextRequest) {
   const setupAction = searchParams.get('setup_action');
   const state = searchParams.get('state');
 
-  // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
   if (!code) {
     return NextResponse.json({ error: 'No code provided' }, { status: 400 });
   }
@@ -38,15 +37,12 @@ export async function GET(request: NextRequest) {
     }
 
     const successUrl = new URL('/code-storage/success', request.url);
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (setupAction) {
       successUrl.searchParams.set('setup_action', setupAction);
     }
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (installationId) {
       successUrl.searchParams.set('installation_id', installationId);
     }
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (state) {
       successUrl.searchParams.set('state', state);
     }

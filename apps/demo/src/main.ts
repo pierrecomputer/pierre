@@ -207,7 +207,7 @@ if (wrapCheckbox != null) {
         ...instance.options,
         overflow: checked ? 'wrap' : 'scroll',
       });
-      instance.rerender();
+      void instance.rerender();
     }
   });
 }
@@ -221,7 +221,7 @@ if (unifiedCheckbox instanceof HTMLInputElement) {
         ...instance.options,
         diffStyle: checked ? 'unified' : 'split',
       });
-      instance.rerender();
+      void instance.rerender();
     }
   });
 }
