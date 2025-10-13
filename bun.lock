@@ -107,8 +107,8 @@
         "typescript": "catalog:",
       },
     },
-    "packages/sync-ui-shadcn": {
-      "name": "@pierre/sync-ui-shadcn",
+    "packages/storage-elements": {
+      "name": "@pierre/storage-elements",
       "version": "0.0.0",
       "dependencies": {
         "@radix-ui/react-dialog": "catalog:",
@@ -506,7 +506,7 @@
 
     "@pierre/storage": ["@pierre/storage@0.0.10", "", { "dependencies": { "jose": "^5.10.0", "snakecase-keys": "^9.0.2" } }, "sha512-fDFrsnRiNTq7lpY56MGE4vRjYAHfTFLsxN18wbnxBlOk1XB1pxzgMfx5DwiqRcXs8+Gt2lmeXvlYAa1gGR4c7w=="],
 
-    "@pierre/sync-ui-shadcn": ["@pierre/sync-ui-shadcn@workspace:packages/sync-ui-shadcn"],
+    "@pierre/storage-elements": ["@pierre/storage-elements@workspace:packages/storage-elements"],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.1", "", {}, "sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g=="],
 
