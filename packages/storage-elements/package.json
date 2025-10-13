@@ -28,6 +28,9 @@
     "react-dom": "catalog:",
     "tailwind-merge": "catalog:"
   },
+  "peerDependencies": {
+    "next": ">=15"
+  },
   "devDependencies": {
     "@octokit/openapi-types": "catalog:",
     "@types/react": "catalog:",

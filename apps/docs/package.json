@@ -13,6 +13,7 @@
   "dependencies": {
     "@pierre/diff-ui": "workspace:*",
     "@pierre/storage": "catalog:",
+    "@pierre/storage-elements": "workspace:*",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-dropdown-menu": "catalog:",
