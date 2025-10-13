@@ -9,11 +9,14 @@ import {
 
 import type { SupportedLanguages } from './types';
 
-type PierreHighlighter = HighlighterGeneric<SupportedLanguages, BundledTheme>;
+export type PJSHighlighter = HighlighterGeneric<
+  SupportedLanguages,
+  BundledTheme
+>;
 
 type CachedOrLoadingHighlighterType =
-  | Promise<PierreHighlighter>
-  | PierreHighlighter
+  | Promise<PJSHighlighter>
+  | PJSHighlighter
   | undefined;
 
 let highlighter: CachedOrLoadingHighlighterType;
@@ -59,7 +62,7 @@ export async function getSharedHighlighter({
             engine: preferWasmHighlighter
               ? createOnigurumaEngine()
               : createJavaScriptRegexEngine(),
-          }) as Promise<PierreHighlighter>;
+          }) as Promise<PJSHighlighter>;
         })
         .then((instance) => {
           highlighter = instance;
@@ -126,13 +129,13 @@ export function hasLoadedLanguage(lang: SupportedLanguages) {
 
 export function isHighlighterLoaded(
   h: CachedOrLoadingHighlighterType = highlighter
-): h is PierreHighlighter {
+): h is PJSHighlighter {
   return h != null && !('then' in h);
 }
 
 export function isHighlighterLoading(
   h: CachedOrLoadingHighlighterType = highlighter
-): h is Promise<PierreHighlighter> {
+): h is Promise<PJSHighlighter> {
   return h != null && 'then' in h;
 }
 

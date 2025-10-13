@@ -25,12 +25,7 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
-import {
-  createCodeNode,
-  createHunkSeparator,
-  formatCSSVariablePrefix,
-  setupPreNode,
-} from './utils/html_render_utils';
+import { formatCSSVariablePrefix } from './utils/html_render_utils';
 import { parseLineType } from './utils/parseLineType';
 
 type AnnotationLineMap<LAnnotation> = Record<
@@ -52,10 +47,6 @@ interface RenderHunkProps {
   highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>;
   state: SharedRenderState;
   transformer: ShikiTransformer;
-
-  codeAdditions: HTMLElement;
-  codeDeletions: HTMLElement;
-  codeUnified: HTMLElement;
 }
 
 interface LineInfo {
@@ -86,29 +77,6 @@ interface AnnotationSpan {
 
 type Span = GapSpan | AnnotationSpan;
 
-interface ObservedAnnotationNodes {
-  type: 'annotations';
-  column1: {
-    container: HTMLElement;
-    child: HTMLElement;
-    childHeight: number;
-  };
-  column2: {
-    container: HTMLElement;
-    child: HTMLElement;
-    childHeight: number;
-  };
-  currentHeight: number | 'auto';
-}
-
-interface ObservedGridNodes {
-  type: 'code';
-  codeElement: HTMLElement;
-  numberElement: HTMLElement | null;
-  codeWidth: number | 'auto';
-  numberWidth: number;
-}
-
 interface SharedRenderState {
   lineInfo: Record<number, LineInfo | undefined>;
   decorations: DecorationItem[];
@@ -127,10 +95,15 @@ export type DiffHunksRendererOptions =
   | DiffHunkThemeRendererOptions
   | DiffHunkThemesRendererOptions;
 
+export interface HunksRenderResult {
+  additionsHTML: string;
+  deletionsHTML: string;
+  unifiedHTML: string;
+}
+
 export class DiffHunksRenderer<LAnnotation = undefined> {
   highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme> | undefined;
   options: DiffHunksRendererOptions;
-  pre: HTMLPreElement | undefined;
   diff: FileDiffMetadata | undefined;
 
   constructor(options: DiffHunksRendererOptions) {
@@ -138,28 +111,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   cleanUp() {
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = undefined;
     this.highlighter = undefined;
-    this.pre = undefined;
     this.diff = undefined;
-    this.queuedRenderArgs = undefined;
+    this.queuedDiff = undefined;
     this.queuedRender = undefined;
   }
 
-  setOptions(
-    options: DiffHunksRendererOptions,
-    disableRerender: boolean = false
-  ) {
+  setOptions(options: DiffHunksRendererOptions) {
     this.options = options;
-    if (this.pre == null || this.diff == null) {
-      return;
-    }
-    // TODO(amadeus): Probably figure out what requires a re-render and what just
-    // requires some prop changes
-    if (!disableRerender) {
-      void this.render(this.diff, this.pre);
-    }
   }
 
   private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
@@ -172,18 +131,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeMode });
-    if (this.pre == null) {
-      return;
-    }
-    switch (themeMode) {
-      case 'system':
-        delete this.pre.dataset.themeMode;
-        break;
-      case 'light':
-      case 'dark':
-        this.pre.dataset.themeMode = themeMode;
-        break;
-    }
   }
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
@@ -247,10 +194,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  private queuedRenderArgs: [FileDiffMetadata, HTMLPreElement] | undefined;
-  private queuedRender: Promise<void> | undefined;
-  async render(diff: FileDiffMetadata, wrapper: HTMLPreElement) {
-    this.queuedRenderArgs = [diff, wrapper];
+  private queuedDiff: FileDiffMetadata | undefined;
+  private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
+  async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
+    this.queuedDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
     }
@@ -266,272 +213,59 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
 
       this.highlighter ??= await this.initializeHighlighter();
-      if (this.queuedRenderArgs == null) {
+      if (this.queuedDiff == null) {
         // If we get in here, it's likely we called cleanup and therefore we
-        // should just return early
-        return;
+        // should just return early with empty result
+        return undefined;
       }
-      const [diff, wrapper] = this.queuedRenderArgs;
-      this.queuedRenderArgs = undefined;
-      this.renderDiff(diff, wrapper, this.highlighter);
+      const diff = this.queuedDiff;
+      this.queuedDiff = undefined;
+      this.queuedRender = undefined;
+      return this.renderDiff(diff, this.highlighter);
     })();
-    await this.queuedRender;
-    this.queuedRender = undefined;
+    return await this.queuedRender;
   }
 
   private renderDiff(
     diff: FileDiffMetadata,
-    pre: HTMLPreElement,
     highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
-  ) {
-    const {
-      themes,
-      overflow,
-      theme,
-      diffStyle,
-      disableLineNumbers,
-      themeMode,
-    } = this.getOptionsWithDefaults();
+  ): HunksRenderResult {
+    const { diffStyle, disableLineNumbers } = this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
-    const split = unified
-      ? false
-      : diff.type === 'change' || diff.type === 'rename-changed';
-    const wrap = overflow === 'wrap';
-    pre = setupPreNode(
-      themes != null
-        ? { highlighter, pre, split, themeMode, themes, wrap }
-        : { highlighter, pre, split, theme, themeMode, wrap }
-    );
 
     this.diff = diff;
-    this.pre = pre;
-    this.resizeObserver?.disconnect();
-    this.observedNodes.clear();
-    const codeAdditions = createCodeNode({ columnType: 'additions' });
-    const codeDeletions = createCodeNode({ columnType: 'deletions' });
-    const codeUnified = createCodeNode({ columnType: 'unified' });
+    let additionsHTML = '';
+    let deletionsHTML = '';
+    let unifiedHTML = '';
     const { state, transformer } =
       createTransformerWithState(disableLineNumbers);
     let hunkIndex = 0;
+    const hunkSeparatorHTML = '<div data-separator=""></div>';
+
     for (const hunk of diff.hunks) {
       if (hunkIndex > 0) {
         if (unified) {
-          codeUnified.appendChild(createHunkSeparator());
+          unifiedHTML += hunkSeparatorHTML;
         } else {
-          codeAdditions.appendChild(createHunkSeparator());
-          codeDeletions.appendChild(createHunkSeparator());
+          additionsHTML += hunkSeparatorHTML;
+          deletionsHTML += hunkSeparatorHTML;
         }
       }
-      this.renderHunks({
+      const hunkResult = this.renderHunks({
         hunk,
         hunkIndex,
         highlighter,
         state,
         transformer,
-        codeAdditions,
-        codeDeletions,
-        codeUnified,
       });
+      additionsHTML += hunkResult.additionsHTML;
+      deletionsHTML += hunkResult.deletionsHTML;
+      unifiedHTML += hunkResult.unifiedHTML;
       hunkIndex++;
     }
 
-    this.pre.innerHTML = '';
-    if (codeDeletions.childNodes.length > 0) {
-      this.pre.appendChild(codeDeletions);
-    }
-    if (codeAdditions.childNodes.length > 0) {
-      this.pre.appendChild(codeAdditions);
-    }
-    if (codeUnified.childNodes.length > 0) {
-      this.pre.appendChild(codeUnified);
-    }
-    this.postRender(pre);
+    return { additionsHTML, deletionsHTML, unifiedHTML };
   }
-
-  observedNodes = new Map<
-    HTMLElement,
-    ObservedAnnotationNodes | ObservedGridNodes
-  >();
-  resizeObserver: ResizeObserver | undefined;
-  private postRender(pre: HTMLPreElement) {
-    // NOTE(amadeus): The resize logic is only necessary when the view is
-    // scrollable to prevent annotations from scrolling around and use the
-    // non-scrollable code width as our target width
-    if (this.getOptionsWithDefaults().overflow === 'wrap') {
-      return;
-    }
-    const annotationElements = pre.querySelectorAll(
-      '[data-line-annotation*=","]'
-    );
-    // If there are no annotation nodes, then we shouldn't setup anything with
-    // our resize observations
-    if (annotationElements.length === 0) {
-      return;
-    }
-    this.resizeObserver ??= new ResizeObserver(this.handleResizeObserver);
-    const codeElements = pre.querySelectorAll('code');
-    for (const codeElement of codeElements) {
-      let numberElement = codeElement.querySelector('[data-column-number]');
-      if (!(numberElement instanceof HTMLElement)) {
-        numberElement = null;
-      }
-      const item: ObservedGridNodes = {
-        type: 'code',
-        codeElement,
-        numberElement,
-        codeWidth: 'auto',
-        numberWidth: 0,
-      };
-      this.observedNodes.set(codeElement, item);
-      this.resizeObserver.observe(codeElement);
-      if (numberElement != null) {
-        this.observedNodes.set(numberElement, item);
-        this.resizeObserver.observe(numberElement);
-      }
-    }
-    if (codeElements.length <= 1) {
-      return;
-    }
-    const elementMap = new Map<string, HTMLElement[]>();
-    for (const element of annotationElements) {
-      if (!(element instanceof HTMLElement)) {
-        continue;
-      }
-      const { lineAnnotation = '' } = element.dataset;
-      if (!/^\d+,\d+$/.test(lineAnnotation)) {
-        console.error(
-          'DiffHunksRenderer.ayyLmao: Invalid element or annotation',
-          { lineAnnotation, element }
-        );
-        continue;
-      }
-      let pairs = elementMap.get(lineAnnotation);
-      if (pairs == null) {
-        pairs = [];
-        elementMap.set(lineAnnotation, pairs);
-      }
-      pairs.push(element);
-    }
-    for (const [key, pair] of elementMap) {
-      if (pair.length !== 2) {
-        console.error('DiffHunksRenderer.ayyLmao: Bad Pair', key, pair);
-        continue;
-      }
-      const [container1, container2] = pair;
-      const child1 = container1.firstElementChild;
-      const child2 = container2.firstElementChild;
-      if (
-        !(container1 instanceof HTMLElement) ||
-        !(container2 instanceof HTMLElement) ||
-        !(child1 instanceof HTMLElement) ||
-        !(child2 instanceof HTMLElement)
-      ) {
-        continue;
-      }
-      const item: ObservedAnnotationNodes = {
-        type: 'annotations',
-        column1: {
-          container: container1,
-          child: child1,
-          childHeight: 0,
-        },
-        column2: {
-          container: container2,
-          child: child2,
-          childHeight: 0,
-        },
-        currentHeight: 'auto',
-      };
-      this.observedNodes.set(child1, item);
-      this.observedNodes.set(child2, item);
-      this.resizeObserver.observe(child1);
-      this.resizeObserver.observe(child2);
-    }
-  }
-
-  handleResizeObserver = (entries: ResizeObserverEntry[]) => {
-    for (const entry of entries) {
-      const { target, borderBoxSize } = entry;
-      if (!(target instanceof HTMLElement)) {
-        console.error(
-          'DiffHunksRenderer.handleResizeObserver: Invalid element for ResizeObserver',
-          entry
-        );
-        continue;
-      }
-      const item = this.observedNodes.get(target);
-      if (item == null) {
-        console.error(
-          'DiffHunksRenderer.handleResizeObserver: Not a valid observed node',
-          entry
-        );
-        continue;
-      }
-      const specs = borderBoxSize[0];
-      if (item.type === 'annotations') {
-        const column = (() => {
-          if (target === item.column1.child) {
-            return item.column1;
-          }
-          if (target === item.column2.child) {
-            return item.column2;
-          }
-          return undefined;
-        })();
-
-        if (column == null) {
-          console.error(
-            `DiffHunksRenderer.handleResizeObserver: Couldn't find a column for`,
-            { item, target }
-          );
-          continue;
-        }
-
-        column.childHeight = specs.blockSize;
-        const newHeight = Math.max(
-          item.column1.childHeight,
-          item.column2.childHeight
-        );
-        if (newHeight !== item.currentHeight) {
-          item.currentHeight = Math.max(newHeight, 0);
-          item.column1.container.style.setProperty(
-            '--pjs-annotation-min-height',
-            `${item.currentHeight}px`
-          );
-          item.column2.container.style.setProperty(
-            '--pjs-annotation-min-height',
-            `${item.currentHeight}px`
-          );
-        }
-      } else if (item.type === 'code') {
-        if (target === item.codeElement) {
-          if (specs.inlineSize !== item.codeWidth) {
-            item.codeWidth = specs.inlineSize;
-            item.codeElement.style.setProperty(
-              '--pjs-annotation-content-width',
-              `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
-            );
-          }
-        } else if (target === item.numberElement) {
-          if (specs.inlineSize !== item.numberWidth) {
-            item.numberWidth = specs.inlineSize;
-            item.codeElement.style.setProperty(
-              '--pjs-number-column-width',
-              `${item.numberWidth}px`
-            );
-            // We probably need to update code width variable if
-            // `numberWidth` changed
-            if (item.codeWidth !== 'auto') {
-              item.codeElement.style.setProperty(
-                '--pjs-annotation-content-width',
-                `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
-              );
-            }
-          }
-        }
-      }
-    }
-  };
 
   private createHastOptions(
     transformer: ShikiTransformer,
@@ -568,11 +302,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     highlighter,
     state,
     transformer,
-    codeAdditions,
-    codeDeletions,
-    codeUnified,
-  }: RenderHunkProps) {
-    if (hunk.hunkContent == null) return;
+  }: RenderHunkProps): HunksRenderResult {
+    let additionsHTML = '';
+    let deletionsHTML = '';
+    let unifiedHTML = '';
+
+    if (hunk.hunkContent == null) {
+      return { additionsHTML, deletionsHTML, unifiedHTML };
+    }
+
     const { additions, deletions, unified, hasLongLines } = this.processLines(
       hunk,
       hunkIndex
@@ -586,10 +324,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content,
         this.createHastOptions(transformer, unified.decorations, hasLongLines)
       );
-      codeUnified.insertAdjacentHTML(
-        'beforeend',
-        toHtml(this.getNodesToRender(nodes))
-      );
+      unifiedHTML = toHtml(this.getNodesToRender(nodes));
     }
 
     if (deletions.content.length > 0) {
@@ -604,10 +339,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           hasLongLines
         )
       );
-      codeDeletions.insertAdjacentHTML(
-        'beforeend',
-        toHtml(this.getNodesToRender(nodes))
-      );
+      deletionsHTML = toHtml(this.getNodesToRender(nodes));
     }
 
     if (additions.content.length > 0) {
@@ -622,11 +354,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           hasLongLines
         )
       );
-      codeAdditions.insertAdjacentHTML(
-        'beforeend',
-        toHtml(this.getNodesToRender(nodes))
-      );
+      additionsHTML = toHtml(this.getNodesToRender(nodes));
     }
+
+    return { additionsHTML, deletionsHTML, unifiedHTML };
   }
 
   private processLines(hunk: Hunk, hunkIndex: number) {
