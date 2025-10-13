@@ -107,7 +107,7 @@ export type DiffFileRendererOptions<LAnnotation> =
   | DiffFileThemeRendererOptions<LAnnotation>
   | DiffFileThemesRendererOptions<LAnnotation>;
 
-export class DiffFileRenderer<LAnnotation = undefined> {
+export class FileDiff<LAnnotation = undefined> {
   options: DiffFileRendererOptions<LAnnotation>;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;

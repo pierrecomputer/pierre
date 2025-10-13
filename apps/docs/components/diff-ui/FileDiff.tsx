@@ -1,9 +1,9 @@
 'use client';
 
 import {
-  DiffFileRenderer,
   type DiffFileRendererOptions,
   type FileContents,
+  FileDiff as FileDiffUI,
   type LineAnnotation,
   parseDiffFromFiles,
 } from '@pierre/diff-ui';
@@ -25,7 +25,7 @@ export function FileDiff({
   options,
   annotations,
 }: FileDiffProps) {
-  const [diffRenderer] = useState(() => new DiffFileRenderer(options));
+  const [diffRenderer] = useState(() => new FileDiffUI(options));
   const ref = useRef<HTMLElement>(null);
   const optionsRef = useRef(options);
   const filesRef = useRef<[FileContents, FileContents]>([
