@@ -50,6 +50,11 @@
           "target": "app/api/code-storage/github/callback/route.ts"
         },
         {
+          "path": "registry/new-york/blocks/git-platform-sync/api/code-storage/github/callback/success-callback.ts",
+          "type": "registry:page",
+          "target": "app/api/code-storage/github/callback/success-callback.ts"
+        },
+        {
           "path": "registry/new-york/blocks/git-platform-sync/api/code-storage/github/installations/route.ts",
           "type": "registry:page",
           "target": "app/api/code-storage/github/installations/route.ts"
