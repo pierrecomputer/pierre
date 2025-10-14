@@ -126,7 +126,7 @@ export function DiffStyles() {
         className="rounded-lg overflow-hidden border"
         options={{
           detectLanguage: true,
-          theme: 'github-dark',
+          theme: 'pierre-dark',
           diffStyle: 'unified',
           diffIndicators,
           disableBackground,

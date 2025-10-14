@@ -14,11 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  type FileContents,
-  type ThemesType,
-  preloadHighlighter,
-} from '@pierre/diff-ui';
+import { type FileContents, preloadHighlighter } from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -57,6 +53,74 @@ export default function Home() {
 `,
 };
 
+const LIGHT_THEMES = [
+  'pierre-light',
+  'catppuccin-latte',
+  'everforest-light',
+  'github-light',
+  'github-light-default',
+  'github-light-high-contrast',
+  'gruvbox-light-hard',
+  'gruvbox-light-medium',
+  'gruvbox-light-soft',
+  'kanagawa-lotus',
+  'light-plus',
+  'material-theme-lighter',
+  'min-light',
+  'one-light',
+  'rose-pine-dawn',
+  'slack-ochin',
+  'snazzy-light',
+  'solarized-light',
+  'vitesse-light',
+] as const;
+
+const DARK_THEMES = [
+  'pierre-dark',
+  'andromeeda',
+  'aurora-x',
+  'ayu-dark',
+  'catppuccin-frappe',
+  'catppuccin-macchiato',
+  'catppuccin-mocha',
+  'dark-plus',
+  'dracula',
+  'dracula-soft',
+  'everforest-dark',
+  'github-dark',
+  'github-dark-default',
+  'github-dark-dimmed',
+  'github-dark-high-contrast',
+  'gruvbox-dark-hard',
+  'gruvbox-dark-medium',
+  'gruvbox-dark-soft',
+  'houston',
+  'kanagawa-dragon',
+  'kanagawa-wave',
+  'laserwave',
+  'material-theme',
+  'material-theme-darker',
+  'material-theme-ocean',
+  'material-theme-palenight',
+  'min-dark',
+  'monokai',
+  'night-owl',
+  'nord',
+  'one-dark-pro',
+  'plastic',
+  'poimandres',
+  'red',
+  'rose-pine',
+  'rose-pine-moon',
+  'slack-dark',
+  'solarized-dark',
+  'synthwave-84',
+  'tokyo-night',
+  'vesper',
+  'vitesse-black',
+  'vitesse-dark',
+] as const;
+
 export function ShikiThemes() {
   useEffect(() => {
     void preloadHighlighter({
@@ -72,9 +136,9 @@ export function ShikiThemes() {
   }, []);
 
   const [selectedLightTheme, setSelectedLightTheme] =
-    useState<ThemesType['light']>('github-light');
+    useState<(typeof LIGHT_THEMES)[number]>('pierre-light');
   const [selectedDarkTheme, setSelectedDarkTheme] =
-    useState<ThemesType['dark']>('github-dark');
+    useState<(typeof DARK_THEMES)[number]>('pierre-dark');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');
@@ -100,17 +164,12 @@ export function ShikiThemes() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {[
-              'solarized-light',
-              'catppuccin-latte',
-              'github-light',
-              'gruvbox-light-hard',
-              'vitesse-light',
-            ].map((theme) => (
+            {LIGHT_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
-                onClick={() =>
-                  setSelectedLightTheme(theme as ThemesType['light'])
+                onClick={() => setSelectedLightTheme(theme)}
+                className={
+                  selectedLightTheme === theme ? 'bg-accent' : undefined
                 }
               >
                 {theme}
@@ -130,18 +189,16 @@ export function ShikiThemes() {
               <ChevronDown className="ml-auto h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {[
-              'ayu-dark',
-              'catppuccin-mocha',
-              'dark-plus',
-              'github-dark',
-              'vitesse-dark',
-            ].map((theme) => (
+          <DropdownMenuContent
+            align="start"
+            className="overflow-auto max-h-[550px]"
+          >
+            {DARK_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
-                onClick={() =>
-                  setSelectedDarkTheme(theme as ThemesType['dark'])
+                onClick={() => setSelectedDarkTheme(theme)}
+                className={
+                  selectedDarkTheme === theme ? 'bg-accent' : undefined
                 }
               >
                 {theme}

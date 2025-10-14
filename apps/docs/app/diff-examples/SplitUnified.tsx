@@ -69,7 +69,7 @@ export function SplitUnified() {
         className="rounded-lg overflow-hidden border"
         options={{
           detectLanguage: true,
-          theme: 'github-dark',
+          theme: 'pierre-dark',
           diffStyle,
         }}
       />

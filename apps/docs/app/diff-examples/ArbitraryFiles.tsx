@@ -56,7 +56,7 @@ export function ArbitraryFiles() {
         className="rounded-lg overflow-hidden border"
         options={{
           detectLanguage: true,
-          theme: 'github-dark',
+          theme: 'pierre-dark',
           diffStyle: 'unified',
         }}
       />
