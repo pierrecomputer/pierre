@@ -123,6 +123,7 @@ export function DiffStyles() {
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
+        className="rounded-lg overflow-hidden border"
         options={{
           detectLanguage: true,
           theme: 'github-dark',

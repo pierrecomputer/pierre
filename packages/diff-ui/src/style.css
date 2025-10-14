@@ -395,7 +395,8 @@ code {
   flex-direction: row;
   justify-content: space-between;
   gap: var(--pjs-gap);
-  padding: var(--pjs-gap) var(--pjs-gap-inline);
+  /* HACK VALUES FOR NOW... */
+  padding: 14px 20px;
 }
 
 [data-header-content] {
