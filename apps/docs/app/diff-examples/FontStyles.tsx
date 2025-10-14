@@ -1,7 +1,7 @@
 'use client';
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
-import { IconFunction, IconType } from '@/components/icons';
+import { IconCheck, IconFunction, IconType } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -79,18 +79,33 @@ export function FontStyles() {
               <DropdownMenuContent align="start">
                 <DropdownMenuItem onClick={() => setSelectedFont('Geist Mono')}>
                   Geist Mono
+                  {selectedFont === 'Geist Mono' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFont('SF Mono')}>
                   SF Mono
+                  {selectedFont === 'SF Mono' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFont('cursive')}>
                   Cursive
+                  {selectedFont === 'cursive' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFont('fantasy')}>
                   Fantasy
+                  {selectedFont === 'fantasy' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFont('monospace')}>
                   Monospace
+                  {selectedFont === 'monospace' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -105,15 +120,27 @@ export function FontStyles() {
               <DropdownMenuContent align="start">
                 <DropdownMenuItem onClick={() => setSelectedFontSize('10px')}>
                   10px
+                  {selectedFontSize === '10px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFontSize('12px')}>
                   12px
+                  {selectedFontSize === '12px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFontSize('14px')}>
                   14px
+                  {selectedFontSize === '14px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedFontSize('18px')}>
                   18px
+                  {selectedFontSize === '18px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -128,15 +155,27 @@ export function FontStyles() {
               <DropdownMenuContent align="start">
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('16px')}>
                   16px
+                  {selectedLineHeight === '16px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('20px')}>
                   20px
+                  {selectedLineHeight === '20px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('24px')}>
                   24px
+                  {selectedLineHeight === '24px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedLineHeight('28px')}>
                   28px
+                  {selectedLineHeight === '28px' && (
+                    <IconCheck className="ml-auto" />
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

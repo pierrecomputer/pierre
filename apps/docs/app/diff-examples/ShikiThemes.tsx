@@ -2,6 +2,7 @@
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import {
+  IconCheck,
   IconColorAuto,
   IconColorDark,
   IconColorLight,
@@ -173,6 +174,9 @@ export function ShikiThemes() {
                 }
               >
                 {theme}
+                {selectedLightTheme === theme && (
+                  <IconCheck className="ml-auto" />
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -202,6 +206,9 @@ export function ShikiThemes() {
                 }
               >
                 {theme}
+                {selectedDarkTheme === theme && (
+                  <IconCheck className="ml-auto" />
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

@@ -93,25 +93,25 @@ const Thread = () => (
       mainComment={{
         author: 'You',
         timestamp: '3h',
-        content: 'Good lord I hate building diffs.',
+        content: 'Good lord, I refuse to look at diffs ever again after this.',
         avatarUrl:
-          'https://pbs.twimg.com/profile_images/1976050101333393408/i8UHRtQf_400x400.jpg',
+          'https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg',
         isYou: true,
       }}
       replies={[
         {
           author: 'Amadeus',
           timestamp: '2h',
-          content: 'This is my favorite part of the job.',
+          content: 'Wait, how long have we been working on this?',
           avatarUrl:
-            'https://pbs.twimg.com/profile_images/709894027336769536/Evzotboe_400x400.jpg',
+            'https://db.heypierre.app/storage/v1/object/public/avatars/Evzotboe_400x400.jpg',
         },
         {
           author: 'Mark',
           timestamp: '2h',
-          content: 'We need to get this done by Friday.',
+          content: "*checks notes* …… it's not been a short amount of time.",
           avatarUrl:
-            'https://pbs.twimg.com/profile_images/1196263867178872832/BET9cPgr_400x400.jpg',
+            'https://db.heypierre.app/storage/v1/object/public/avatars/BET9cPgr_400x400.jpg',
         },
       ]}
       onAddReply={() => console.log('Add reply clicked')}

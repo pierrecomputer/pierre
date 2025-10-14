@@ -5,6 +5,8 @@ import {
   IconAnnotate,
   IconBarChart,
   IconBarChart2,
+  IconCheck,
+  IconCheckLg,
   IconCodeBlock,
   IconCommentSuggest,
   IconEye,
@@ -159,6 +161,7 @@ export function DiffStyles() {
                   }
                 >
                   {value}
+                  {lineDiffStyle === value && <IconCheck className="ml-auto" />}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
