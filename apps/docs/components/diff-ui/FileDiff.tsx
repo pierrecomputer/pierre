@@ -17,6 +17,7 @@ interface FileDiffProps<LAnnotation = undefined> {
   newFile: FileContents;
   options: DiffFileRendererOptions<LAnnotation>;
   annotations?: LineAnnotation[];
+  className?: string;
 }
 
 export function FileDiff({
@@ -24,6 +25,7 @@ export function FileDiff({
   newFile,
   options,
   annotations,
+  className,
 }: FileDiffProps) {
   const [diffRenderer] = useState(() => new FileDiffUI(options));
   const ref = useRef<HTMLElement>(null);
@@ -56,5 +58,5 @@ export function FileDiff({
       });
     }
   });
-  return <pjs-container ref={ref} />;
+  return <pjs-container ref={ref} className={className} />;
 }

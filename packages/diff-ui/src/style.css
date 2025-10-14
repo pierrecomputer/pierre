@@ -188,6 +188,8 @@ code {
   overscroll-behavior-x: contain;
   tab-size: var(--pjs-tab-size);
   align-self: flex-start;
+  /* TEMP HACK */
+  padding-bottom: var(--pjs-gap);
 }
 
 [data-type='split'][data-overflow='wrap'] [data-code] {
@@ -395,7 +397,8 @@ code {
   flex-direction: row;
   justify-content: space-between;
   gap: var(--pjs-gap);
-  padding: var(--pjs-gap) var(--pjs-gap-inline);
+  /* HACK VALUES FOR NOW... */
+  padding: 14px 20px;
 }
 
 [data-header-content] {
