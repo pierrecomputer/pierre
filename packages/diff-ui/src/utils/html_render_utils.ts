@@ -2,6 +2,7 @@ import {
   type BundledLanguage,
   type BundledTheme,
   type HighlighterGeneric,
+  type ThemeRegistrationResolved,
   type ThemedToken,
   getTokenStyleObject,
   stringifyTokenStyle,
@@ -79,6 +80,25 @@ interface GetHighlighterThemeStylesProps {
   prefix?: string;
 }
 
+function getThemeVariables(
+  themeData: ThemeRegistrationResolved,
+  prefix?: string,
+  modePrefix?: string
+) {
+  modePrefix = modePrefix != null ? `${modePrefix}-` : '';
+  let styles = '';
+  if (themeData.colors?.['gitDecoration.addedResourceForeground'] != null) {
+    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}addition-color:${themeData.colors['gitDecoration.addedResourceForeground']};`;
+  }
+  if (themeData.colors?.['gitDecoration.deletedResourceForeground'] != null) {
+    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}deletion-color:${themeData.colors['gitDecoration.deletedResourceForeground']};`;
+  }
+  if (themeData.colors?.['gitDecoration.modifiedResourceForeground'] != null) {
+    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}modified-color:${themeData.colors['gitDecoration.modifiedResourceForeground']};`;
+  }
+  return styles;
+}
+
 export function getHighlighterThemeStyles({
   theme,
   themes,
@@ -92,14 +112,17 @@ export function getHighlighterThemeStyles({
     styles += `background-color:${themeData.bg};`;
     styles += `${formatCSSVariablePrefix(prefix)}fg:${themeData.fg};`;
     styles += `${formatCSSVariablePrefix(prefix)}bg:${themeData.bg};`;
+    styles += getThemeVariables(themeData, prefix);
   } else if (themes != null) {
     let themeData = highlighter.getTheme(themes.dark);
     styles += `${formatCSSVariablePrefix(prefix)}dark:${themeData.fg};`;
     styles += `${formatCSSVariablePrefix(prefix)}dark-bg:${themeData.bg};`;
+    styles += getThemeVariables(themeData, prefix, 'dark');
 
     themeData = highlighter.getTheme(themes.light);
     styles += `${formatCSSVariablePrefix(prefix)}light:${themeData.fg};`;
     styles += `${formatCSSVariablePrefix(prefix)}light-bg:${themeData.bg};`;
+    styles += getThemeVariables(themeData, prefix, 'light');
   }
   return styles;
 }

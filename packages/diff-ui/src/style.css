@@ -3,11 +3,6 @@
   --pjs-fg: #000;
   --pjs-gap: 8px;
   --pjs-gap-inline: 12px;
-  --pjs-additions-color: rgb(0, 255, 0);
-  --pjs-additions-color: #2ca94c;
-  --pjs-deletions-color: rgb(255, 0, 0);
-  --pjs-deletions-color: #ff3b30;
-  --pjs-annotations-color: rgb(255, 255, 0);
   --pjs-tab-size: 2;
   --pjs-font-fallback:
     'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
@@ -61,32 +56,71 @@ code {
   --pjs-fg: light-dark(var(--pjs-light), var(--pjs-dark));
   --pjs-fg-number: color-mix(in srgb, currentColor 65%, transparent);
 
-  --pjs-bg-deletions: color-mix(in srgb, var(--pjs-bg) 90%, rgb(255, 0, 0));
-  --pjs-bg-additions: color-mix(in srgb, var(--pjs-bg) 90%, rgb(0, 255, 0));
+  --pjs-deletion-base: light-dark(
+    var(
+      --pjs-deletion-color-override,
+      var(--pjs-light-deletion-color, var(--pjs-deletion-color, rgb(255, 0, 0)))
+    ),
+    var(
+      --pjs-deletion-color-override,
+      var(--pjs-dark-deletion-color, var(--pjs-deletion-color, rgb(255, 0, 0)))
+    )
+  );
+  --pjs-addition-base: light-dark(
+    var(
+      --pjs-addition-color-override,
+      var(--pjs-light-addition-color, var(--pjs-addition-color, rgb(0, 255, 0)))
+    ),
+    var(
+      --pjs-addition-color-override,
+      var(--pjs-dark-addition-color, var(--pjs-addition-color, rgb(0, 255, 0)))
+    )
+  );
+  --pjs-modified-base: light-dark(
+    var(
+      --pjs-modified-color-override,
+      var(
+        --pjs-light-modified-color,
+        var(--pjs-modified-color, rgb(0, 0, 255))
+      ),
+    ),
+    var(
+      --pjs-modified-color-override,
+      var(--pjs-dark-modified-color, var(--pjs-modified-color, rgb(0, 0, 255)))
+    )
+  );
+
+  --pjs-bg-deletions: color-mix(
+    in oklch,
+    var(--pjs-bg) 90%,
+    var(--pjs-deletion-base)
+  );
+
+  --pjs-bg-additions: color-mix(
+    in oklch,
+    var(--pjs-bg) 90%,
+    var(--pjs-addition-base)
+  );
+
   --pjs-bg-deletions-emphasis: color-mix(
-    in srgb,
+    in oklch,
     var(--pjs-bg) 70%,
-    rgb(255, 0, 0)
+    var(--pjs-deletion-base)
   );
   --pjs-bg-additions-emphasis: color-mix(
-    in srgb,
+    in oklch,
     var(--pjs-bg) 70%,
-    rgb(0, 255, 0)
+    var(--pjs-addition-base)
   );
   --pjs-bg-deletions-number: color-mix(
-    in srgb,
+    in oklch,
     var(--pjs-bg) 85%,
-    var(--pjs-deletions-color)
+    var(--pjs-deletion-base)
   );
   --pjs-bg-additions-number: color-mix(
-    in srgb,
+    in oklch,
     var(--pjs-bg) 85%,
-    var(--pjs-additions-color)
-  );
-  --pjs-bg-annotation: color-mix(
-    in srgb,
-    var(--pjs-bg) 75%,
-    var(--pjs-annotations-color)
+    var(--pjs-addition-base)
   );
 
   background-color: var(--pjs-bg);
@@ -239,13 +273,13 @@ code {
   [data-line-type='change-addition']
   [data-column-content]:before {
   content: '+';
-  color: var(--pjs-additions-color);
+  color: var(--pjs-addition-base);
 }
 [data-indicators='classic']
   [data-line-type='change-deletion']
   [data-column-content]:before {
   content: '-';
-  color: var(--pjs-deletions-color);
+  color: var(--pjs-deletion-base);
 }
 
 [data-indicators='bars'] [data-line-type='change-deletion']:before,
@@ -262,11 +296,11 @@ code {
 }
 
 [data-indicators='bars'] [data-line-type='change-deletion']:before {
-  background-color: var(--pjs-deletions-color);
+  background-color: var(--pjs-deletion-base);
 }
 
 [data-indicators='bars'] [data-line-type='change-addition']:before {
-  background-color: var(--pjs-additions-color);
+  background-color: var(--pjs-addition-base);
 }
 
 [data-overflow='wrap'] [data-column-content],
@@ -299,7 +333,7 @@ code {
 
 [data-line-type='change-addition'] {
   [data-column-number] {
-    color: var(--pjs-additions-color);
+    color: var(--pjs-addition-base);
   }
 
   [data-diff-span] {
@@ -309,7 +343,7 @@ code {
 
 [data-line-type='change-deletion'] {
   [data-column-number] {
-    color: var(--pjs-deletions-color);
+    color: var(--pjs-deletion-base);
   }
 
   [data-diff-span] {
@@ -403,12 +437,12 @@ code {
 
 [data-pjs-header] [data-additions] {
   font-family: var(--pjs-font-family, var(--pjs-font-fallback));
-  color: var(--pjs-additions-color);
+  color: var(--pjs-addition-base);
 }
 
 [data-pjs-header] [data-deletions] {
   font-family: var(--pjs-font-family, var(--pjs-font-fallback));
-  color: var(--pjs-deletions-color);
+  color: var(--pjs-deletion-base);
 }
 
 [data-no-newline] {
