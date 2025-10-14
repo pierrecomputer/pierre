@@ -81,6 +81,29 @@ export default function Home() {
 `,
 };
 
+const diffStyleOptions = [
+  {
+    value: 'word-alt',
+    label: 'Word-Alt',
+    description: 'Highlights entire words, uses enhanced algorithm',
+  },
+  {
+    value: 'word',
+    label: 'Word',
+    description: 'Highlights changed words within lines',
+  },
+  {
+    value: 'char',
+    label: 'Character',
+    description: 'Highlights individual character changes',
+  },
+  {
+    value: 'none',
+    label: 'None',
+    description: 'Shows line-level changes only',
+  },
+] as const;
+
 export function DiffStyles() {
   const [diffIndicators, setDiffStyle] = useState<'classic' | 'bars' | 'none'>(
     'bars'
@@ -146,22 +169,27 @@ export function DiffStyles() {
                 className="justify-start w-full md:w-auto"
               >
                 <IconMakeShorter />
-                {lineDiffStyle}
+                {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
+                  ?.label || lineDiffStyle}
                 <ChevronDown className="ml-auto h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {['word', 'word-alt', 'char', 'none'].map((value) => (
+            <DropdownMenuContent align="start" className="w-64">
+              {diffStyleOptions.map((option) => (
                 <DropdownMenuItem
-                  key={value}
-                  onClick={() =>
-                    setLineDiffStyle(
-                      value as 'word-alt' | 'word' | 'char' | 'none'
-                    )
-                  }
+                  key={option.value}
+                  onClick={() => setLineDiffStyle(option.value)}
+                  className="flex-col items-start py-2"
                 >
-                  {value}
-                  {lineDiffStyle === value && <IconCheck className="ml-auto" />}
+                  <div className="flex w-full items-center">
+                    <span className="font-medium">{option.label}</span>
+                    {lineDiffStyle === option.value && (
+                      <IconCheck className="ml-auto" />
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {option.description}
+                  </span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
