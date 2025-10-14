@@ -42,22 +42,22 @@
         {
           "path": "registry/new-york/blocks/git-platform-sync/pages/success/page.tsx",
           "type": "registry:page",
-          "target": "code-storage/success/page.tsx"
+          "target": "app/code-storage/success/page.tsx"
         },
         {
           "path": "registry/new-york/blocks/git-platform-sync/api/github/callback/route.ts",
           "type": "registry:page",
-          "target": "api/code-storage/github/callback/route.ts"
+          "target": "app/api/code-storage/github/callback/route.ts"
         },
         {
           "path": "registry/new-york/blocks/git-platform-sync/api/github/installations/route.ts",
           "type": "registry:page",
-          "target": "api/code-storage/github/installations/route.ts"
+          "target": "app/api/code-storage/github/installations/route.ts"
         },
         {
           "path": "registry/new-york/blocks/git-platform-sync/api/repo/route.ts",
           "type": "registry:page",
-          "target": "api/code-storage/repo/route.ts"
+          "target": "app/api/code-storage/repo/route.ts"
         }
       ]
     }
