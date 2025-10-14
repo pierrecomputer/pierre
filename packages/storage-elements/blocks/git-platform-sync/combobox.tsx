@@ -88,7 +88,7 @@ export function ComboBox({
   const value = isControlled ? controlledValue : internalValue;
 
   const selectedOption =
-    value.trim() !== ''
+    value != null && value.trim() !== ''
       ? options.find((option) => {
           return option.value === value;
         })

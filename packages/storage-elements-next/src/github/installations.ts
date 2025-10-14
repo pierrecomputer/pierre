@@ -79,7 +79,10 @@ export class CodeStorageGitHubInstallations {
     const token = request.cookies.get(this.cookieName)?.value;
 
     if (token == null || token.trim() === '') {
-      return NextResponse.json({ data: { installations: [], owners: [] } });
+      return NextResponse.json({
+        data: { installations: [], owners: [] },
+        auth: 'none',
+      });
     }
 
     try {
@@ -94,20 +97,37 @@ export class CodeStorageGitHubInstallations {
       );
 
       if (!response.ok) {
+        // If unauthorized, clear the cookie, and return an empty data set
+        if (response.status === 401) {
+          const unauthedResponse = NextResponse.json({
+            data: {
+              installations: [],
+              owners: [],
+            },
+            auth: 'expired',
+          });
+          unauthedResponse.cookies.delete(this.cookieName);
+          return unauthedResponse;
+        }
+
         return NextResponse.json(
-          { error: 'Failed to fetch installations' },
+          {
+            error: 'Failed to fetch installations',
+            errorMessage: response.statusText,
+          },
           { status: 400 }
         );
       }
 
       const data = (await response.json()) as InstallationResponse;
 
-      if ((data?.installations?.length ?? 0) > 0) {
+      if ((data?.installations?.length ?? 0) === 0) {
         return NextResponse.json({
           data: {
             installations: [],
             owners: [],
           },
+          auth: 'valid',
         });
       }
 
@@ -124,6 +144,7 @@ export class CodeStorageGitHubInstallations {
           installations: filteredInstallations,
           owners: filteredOwners,
         },
+        auth: 'valid',
         // for debugging this can be nice
         // _raw: data.installations,
       });
