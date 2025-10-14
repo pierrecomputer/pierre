@@ -22,8 +22,8 @@ code {
 }
 
 *,
-*:before,
-*:after {
+*::before,
+*::after {
   font-family: var(--pjs-font-family, var(--pjs-font-fallback));
   font-size: var(--pjs-font-size, 14px);
   line-height: var(--pjs-line-height, 20px);
@@ -31,8 +31,8 @@ code {
 }
 
 [data-pjs-header] *,
-[data-pjs-header] *:before,
-[data-pjs-header] *:after {
+[data-pjs-header] *::before,
+[data-pjs-header] *::after {
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
 }
 
@@ -254,10 +254,10 @@ code {
 
 [data-indicators='classic']
   [data-line-type='change-addition']
-  [data-column-content]:before,
+  [data-column-content]::before,
 [data-indicators='classic']
   [data-line-type='change-deletion']
-  [data-column-content]:before {
+  [data-column-content]::before {
   display: inline-block;
   width: 1ch;
   height: 1lh;
@@ -269,19 +269,19 @@ code {
 
 [data-indicators='classic']
   [data-line-type='change-addition']
-  [data-column-content]:before {
+  [data-column-content]::before {
   content: '+';
   color: var(--pjs-addition-base);
 }
 [data-indicators='classic']
   [data-line-type='change-deletion']
-  [data-column-content]:before {
+  [data-column-content]::before {
   content: '-';
   color: var(--pjs-deletion-base);
 }
 
-[data-indicators='bars'] [data-line-type='change-deletion']:before,
-[data-indicators='bars'] [data-line-type='change-addition']:before {
+[data-indicators='bars'] [data-line-type='change-deletion']::before,
+[data-indicators='bars'] [data-line-type='change-addition']::before {
   content: '';
   display: block;
   width: 0.5ch;
@@ -293,11 +293,11 @@ code {
   z-index: 2;
 }
 
-[data-indicators='bars'] [data-line-type='change-deletion']:before {
+[data-indicators='bars'] [data-line-type='change-deletion']::before {
   background-color: var(--pjs-deletion-base);
 }
 
-[data-indicators='bars'] [data-line-type='change-addition']:before {
+[data-indicators='bars'] [data-line-type='change-addition']::before {
   background-color: var(--pjs-addition-base);
 }
 
@@ -416,14 +416,10 @@ code {
   white-space: nowrap;
 }
 
-[data-prev-name] {
-  color: color-mix(in srgb, var(--pjs-fg) 60%, var(--pjs-bg));
-
-  /* LMAO this is kinda ass, but also we don't want to depend on berkeley ligs
-  * so we need to wait for mdo's icons */
-  &::before {
-    content: '<-- ';
-  }
+[data-prev-name]::before {
+  display: inline-block;
+  content: '➤';
+  margin-inline-end: 1ch;
 }
 
 [data-pjs-header] [data-metadata] {
@@ -466,6 +462,10 @@ code {
   text-wrap-mode: wrap;
   word-break: normal;
   white-space-collapse: collapse;
+}
+
+[data-change-icon] {
+  flex-shrink: 0;
 }
 
 [data-change-icon='change'],
