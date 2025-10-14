@@ -2,12 +2,45 @@ import type {
   BundledLanguage,
   BundledTheme,
   CodeOptionsMultipleThemes,
+  CodeToHastOptions,
+  DecorationItem,
+  HighlighterGeneric,
+  ShikiTransformer,
+  ThemeRegistrationResolved,
+  ThemedToken,
 } from 'shiki';
 
-export interface ThemesType {
-  dark: BundledTheme;
-  light: BundledTheme;
+export type {
+  BundledLanguage,
+  CodeToHastOptions,
+  DecorationItem,
+  ShikiTransformer,
+  ThemeRegistrationResolved,
+  ThemedToken,
+};
+
+export type PJSThemeNames =
+  | BundledTheme
+  | 'pierre-dark'
+  | 'pierre-light'
+  | (string & {});
+
+export type ThemesType = Record<'dark' | 'light', PJSThemeNames>;
+
+export interface ThemeRendererOptions {
+  theme: PJSThemeNames;
+  themes?: never;
 }
+
+export interface ThemesRendererOptions {
+  theme?: never;
+  themes: ThemesType;
+}
+
+export type PJSHighlighter = HighlighterGeneric<
+  SupportedLanguages,
+  PJSThemeNames
+>;
 
 export type FileTypes =
   | 'change'
@@ -64,16 +97,6 @@ export interface BaseRendererOptions extends BaseCodeProps {
   lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
   maxLineLengthForHighlighting?: number; // 1000 is default
-}
-
-export interface ThemeRendererOptions {
-  theme: BundledTheme;
-  themes?: never;
-}
-
-export interface ThemesRendererOptions {
-  theme?: never;
-  themes: { dark: BundledTheme; light: BundledTheme };
 }
 
 export type RenderCustomFileMetadata = (

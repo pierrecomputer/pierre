@@ -1,10 +1,9 @@
-import type { BundledTheme, HighlighterGeneric } from 'shiki';
-
 import { getSharedHighlighter, hasLoadedThemes } from './SharedHighlighter';
 import type {
   FileDiffMetadata,
+  PJSHighlighter,
+  PJSThemeNames,
   RenderCustomFileMetadata,
-  SupportedLanguages,
   ThemeModes,
   ThemeRendererOptions,
   ThemesRendererOptions,
@@ -29,9 +28,7 @@ export type DiffHeaderRendererOptions =
   | DiffHeaderThemesRendererOptions;
 
 export class DiffHeaderRenderer {
-  private highlighter:
-    | HighlighterGeneric<SupportedLanguages, BundledTheme>
-    | undefined;
+  private highlighter: PJSHighlighter | undefined;
 
   constructor(public options: DiffHeaderRendererOptions) {}
 
@@ -63,7 +60,7 @@ export class DiffHeaderRenderer {
   }
 
   private getHighlighterOptions() {
-    const themes: BundledTheme[] = [];
+    const themes: PJSThemeNames[] = [];
     if (this.options.theme != null) {
       themes.push(this.options.theme);
     }
@@ -102,7 +99,7 @@ export class DiffHeaderRenderer {
 
   private renderHeader(
     diff: FileDiffMetadata,
-    highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
+    highlighter: PJSHighlighter
   ): string {
     this.diff = diff;
     const header = renderFileHeader({
@@ -115,8 +112,8 @@ export class DiffHeaderRenderer {
     return header.outerHTML;
   }
 
-  private getThemes(): BundledTheme[] {
-    const themes: BundledTheme[] = [];
+  private getThemes(): PJSThemeNames[] {
+    const themes: PJSThemeNames[] = [];
     const { theme, themes: _themes } = this.options;
     if (theme != null) {
       themes.push(theme);

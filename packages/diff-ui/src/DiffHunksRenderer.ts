@@ -1,13 +1,6 @@
 import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
-import type {
-  BundledTheme,
-  CodeToHastOptions,
-  DecorationItem,
-  HighlighterGeneric,
-  ShikiTransformer,
-} from 'shiki';
 
 import {
   getSharedHighlighter,
@@ -16,10 +9,15 @@ import {
 } from './SharedHighlighter';
 import type {
   BaseRendererOptions,
+  CodeToHastOptions,
+  DecorationItem,
   FileDiffMetadata,
   HUNK_LINE_TYPE,
   Hunk,
   LineAnnotation,
+  PJSHighlighter,
+  PJSThemeNames,
+  ShikiTransformer,
   SupportedLanguages,
   ThemeModes,
   ThemeRendererOptions,
@@ -44,7 +42,7 @@ interface ChangeHunk {
 interface RenderHunkProps {
   hunk: Hunk;
   hunkIndex: number;
-  highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>;
+  highlighter: PJSHighlighter;
   state: SharedRenderState;
   transformer: ShikiTransformer;
 }
@@ -102,7 +100,7 @@ export interface HunksRenderResult {
 }
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
-  highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme> | undefined;
+  highlighter: PJSHighlighter | undefined;
   options: DiffHunksRendererOptions;
   diff: FileDiffMetadata | undefined;
 
@@ -228,7 +226,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private renderDiff(
     diff: FileDiffMetadata,
-    highlighter: HighlighterGeneric<SupportedLanguages, BundledTheme>
+    highlighter: PJSHighlighter
   ): HunksRenderResult {
     const { diffStyle, disableLineNumbers } = this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
@@ -271,7 +269,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     transformer: ShikiTransformer,
     decorations?: DecorationItem[],
     forceTextLang: boolean = false
-  ): CodeToHastOptions {
+  ): CodeToHastOptions<PJSThemeNames> {
     if ('theme' in this.options && this.options.theme != null) {
       return {
         theme: this.options.theme,
@@ -802,7 +800,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (lang != null) {
       langs.push(lang);
     }
-    const themes: BundledTheme[] = [];
+    const themes: PJSThemeNames[] = [];
     if (theme != null) {
       themes.push(theme);
     } else if (themes != null) {
@@ -812,8 +810,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { langs, themes, preferWasmHighlighter };
   }
 
-  private getThemes(): BundledTheme[] {
-    const themes: BundledTheme[] = [];
+  private getThemes(): PJSThemeNames[] {
+    const themes: PJSThemeNames[] = [];
     const { theme, themes: _themes } = this.options;
     if (theme != null) {
       themes.push(theme);

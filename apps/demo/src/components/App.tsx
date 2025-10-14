@@ -1,7 +1,11 @@
-import { isHighlighterNull, preloadHighlighter } from '@pierre/diff-ui';
+import {
+  type BundledLanguage,
+  type PJSThemeNames,
+  isHighlighterNull,
+  preloadHighlighter,
+} from '@pierre/diff-ui';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
-import type { BundledLanguage, BundledTheme } from 'shiki';
 
 import { CodeConfigs } from '../mocks/';
 import '../style.css';
@@ -23,7 +27,7 @@ export function App() {
   const handlePreload = useCallback(() => {
     if (isHighlighterNull()) {
       const langs: BundledLanguage[] = [];
-      const themes: BundledTheme[] = [];
+      const themes: PJSThemeNames[] = [];
       for (const item of CodeConfigs) {
         if ('lang' in item.options) {
           langs.push(item.options.lang);

@@ -1,18 +1,16 @@
 import {
-  type BundledTheme,
-  type HighlighterGeneric,
   createHighlighter,
   createJavaScriptRegexEngine,
   createOnigurumaEngine,
   loadWasm,
 } from 'shiki';
 
-import type { SupportedLanguages } from './types';
-
-export type PJSHighlighter = HighlighterGeneric<
+import type {
+  PJSHighlighter,
+  PJSThemeNames,
   SupportedLanguages,
-  BundledTheme
->;
+  ThemeRegistrationResolved,
+} from './types';
 
 type CachedOrLoadingHighlighterType =
   | Promise<PJSHighlighter>
@@ -21,11 +19,11 @@ type CachedOrLoadingHighlighterType =
 
 let highlighter: CachedOrLoadingHighlighterType;
 
-const loadedThemes = new Map<BundledTheme, true | Promise<void>>();
+const loadedThemes = new Map<string, true | Promise<void>>();
 const loadedLanguages = new Map<SupportedLanguages, true | Promise<void>>();
 
 interface HighlighterOptions {
-  themes: BundledTheme[];
+  themes: PJSThemeNames[];
   langs: SupportedLanguages[];
   preferWasmHighlighter?: boolean;
 }
@@ -49,15 +47,25 @@ export async function getSharedHighlighter({
           // highlighter, we can just go ahead and mark them as loaded since
           // they'll be ready when the highlighter is ready which any calls to
           // getSharedHighlighter will resolve automatically for us
+          const themesToLoad: (
+            | PJSThemeNames
+            | Promise<ThemeRegistrationResolved>
+          )[] = [];
           for (const theme of themes) {
             loadedThemes.set(theme, true);
+            const customTheme = CustomThemes.get(theme);
+            if (customTheme != null) {
+              themesToLoad.push(customTheme());
+            } else {
+              themesToLoad.push(theme);
+            }
           }
           for (const language of langs) {
             loadedLanguages.set(language, true);
           }
           loadedLanguages.set('text', true);
           return createHighlighter({
-            themes,
+            themes: themesToLoad,
             langs: [...langs, 'text'],
             engine: preferWasmHighlighter
               ? createOnigurumaEngine()
@@ -91,14 +99,15 @@ export async function getSharedHighlighter({
       loaders.push(loadedOrLoading);
     }
   }
-  for (const theme of themes) {
-    const loadedOrLoading = loadedThemes.get(theme);
+  for (const themeName of themes) {
+    const loadedOrLoading = loadedThemes.get(themeName);
     // We haven't loaded this theme yet, so lets queue it up
     if (loadedOrLoading == null) {
+      const customTheme = CustomThemes.get(themeName);
       const promise = instance
-        .loadTheme(theme)
-        .then(() => void loadedThemes.set(theme, true));
-      loadedThemes.set(theme, promise);
+        .loadTheme(customTheme != null ? customTheme() : themeName)
+        .then(() => void loadedThemes.set(themeName, true));
+      loadedThemes.set(themeName, promise);
       loaders.push(promise);
     }
     // We are currently loading the theme,
@@ -113,7 +122,7 @@ export async function getSharedHighlighter({
   return instance;
 }
 
-export function hasLoadedThemes(themes: BundledTheme[]) {
+export function hasLoadedThemes(themes: PJSThemeNames[]) {
   for (const theme of themes) {
     if (loadedThemes.get(theme) === true) {
       continue;
@@ -156,3 +165,38 @@ export async function disposeHighlighter() {
   loadedLanguages.clear();
   highlighter = undefined;
 }
+
+const CustomThemes = new Map<
+  string,
+  () => Promise<ThemeRegistrationResolved>
+>();
+
+export function registerCustomTheme(
+  themeName: string,
+  loader: () => Promise<ThemeRegistrationResolved>
+) {
+  if (CustomThemes.has(themeName)) {
+    console.error(
+      'SharedHighlight.registerCustomTheme: theme name already registered',
+      themeName
+    );
+    return;
+  }
+  CustomThemes.set(themeName, loader);
+}
+
+registerCustomTheme(
+  'pierre-dark',
+  () =>
+    import(
+      './themes/pierre-dark.json'
+    ) as unknown as Promise<ThemeRegistrationResolved>
+);
+
+registerCustomTheme(
+  'pierre-light',
+  () =>
+    import(
+      './themes/pierre-light.json'
+    ) as unknown as Promise<ThemeRegistrationResolved>
+);

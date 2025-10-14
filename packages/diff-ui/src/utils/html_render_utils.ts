@@ -1,18 +1,14 @@
-import {
-  type BundledLanguage,
-  type BundledTheme,
-  type HighlighterGeneric,
-  type ThemeRegistrationResolved,
-  type ThemedToken,
-  getTokenStyleObject,
-  stringifyTokenStyle,
-} from 'shiki';
+import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
 
 import type {
   FileDiffMetadata,
   FileTypes,
+  PJSHighlighter,
+  PJSThemeNames,
   RenderCustomFileMetadata,
   ThemeModes,
+  ThemeRegistrationResolved,
+  ThemedToken,
   ThemesType,
 } from '../types';
 
@@ -41,10 +37,10 @@ export function createRow(line: number) {
 }
 
 interface SetupWrapperNodesProps {
-  theme?: BundledTheme;
+  theme?: PJSThemeNames;
   themes?: ThemesType;
   pre: HTMLPreElement;
-  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+  highlighter: PJSHighlighter;
   split: boolean;
   wrap: boolean;
   themeMode: ThemeModes;
@@ -74,9 +70,9 @@ export function createHunkSeparator() {
 }
 
 interface GetHighlighterThemeStylesProps {
-  theme?: BundledTheme;
-  themes?: { dark: BundledTheme; light: BundledTheme };
-  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+  theme?: PJSThemeNames;
+  themes?: ThemesType;
+  highlighter: PJSHighlighter;
   prefix?: string;
 }
 
@@ -206,9 +202,9 @@ function getIconForType(type: FileTypes) {
 interface RenderFileHeaderProps {
   file: FileDiffMetadata;
   renderCustomMetadata?: RenderCustomFileMetadata;
-  theme?: BundledTheme;
-  themes?: { dark: BundledTheme; light: BundledTheme };
-  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
+  theme?: PJSThemeNames;
+  themes?: ThemesType;
+  highlighter: PJSHighlighter;
   prefix?: string;
   themeMode?: ThemeModes;
 }

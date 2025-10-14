@@ -2,16 +2,17 @@ import {
   CodeToTokenTransformStream,
   type RecallToken,
 } from '@pierre/shiki-stream';
-import type {
-  BundledLanguage,
-  BundledTheme,
-  HighlighterGeneric,
-  ThemedToken,
-} from 'shiki';
 
 import { getSharedHighlighter } from './SharedHighlighter';
-import { queueRender } from './UnversialRenderer';
-import type { BaseCodeProps, SupportedLanguages } from './types';
+import { queueRender } from './UniversalRenderer';
+import type {
+  BaseCodeProps,
+  PJSHighlighter,
+  PJSThemeNames,
+  SupportedLanguages,
+  ThemedToken,
+  ThemesType,
+} from './types';
 import {
   createCodeNode,
   createRow,
@@ -33,13 +34,13 @@ interface CodeTokenOptionsBase extends BaseCodeProps {
 }
 
 interface CodeTokenOptionsSingleTheme extends CodeTokenOptionsBase {
-  theme: BundledTheme;
+  theme: PJSThemeNames;
   themes?: never;
 }
 
 interface CodeTokenOptionsMultiThemes extends CodeTokenOptionsBase {
   theme?: never;
-  themes: { dark: BundledTheme; light: BundledTheme };
+  themes: ThemesType;
 }
 
 export type CodeRendererOptions =
@@ -47,7 +48,7 @@ export type CodeRendererOptions =
   | CodeTokenOptionsMultiThemes;
 
 export class CodeRenderer {
-  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme> | undefined;
+  highlighter: PJSHighlighter | undefined;
   options: CodeRendererOptions;
   stream: ReadableStream<string> | undefined;
   pre: HTMLPreElement | undefined;
@@ -82,7 +83,7 @@ export class CodeRenderer {
   private setupStream(
     stream: ReadableStream<string>,
     wrapper: HTMLPreElement,
-    highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>
+    highlighter: PJSHighlighter
   ) {
     const {
       themes,
@@ -205,10 +206,10 @@ export class CodeRenderer {
     if (lang != null) {
       langs.push(lang);
     }
-    const themes: BundledTheme[] = [];
+    const themes: PJSThemeNames[] = [];
     if (theme != null) {
       themes.push(theme);
-    } else if (themes != null) {
+    } else if (_themes != null) {
       themes.push(_themes.dark);
       themes.push(_themes.light);
     }

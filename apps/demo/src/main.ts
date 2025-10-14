@@ -1,6 +1,8 @@
 import {
+  type BundledLanguage,
   CodeRenderer,
   FileDiff,
+  type PJSThemeNames,
   type ParsedPatch,
   type SupportedLanguages,
   getFiletypeFromFileName,
@@ -9,7 +11,6 @@ import {
   parsePatchContent,
   preloadHighlighter,
 } from '@pierre/diff-ui';
-import type { BundledLanguage, BundledTheme } from 'shiki';
 
 import {
   CodeConfigs,
@@ -162,7 +163,7 @@ function createFileMetadata(patchMetadata: string) {
 function handlePreload() {
   if (!isHighlighterNull()) return;
   const langs: BundledLanguage[] = [];
-  const themes: BundledTheme[] = [];
+  const themes: PJSThemeNames[] = [];
   for (const item of CodeConfigs) {
     if ('lang' in item.options) {
       langs.push(item.options.lang);

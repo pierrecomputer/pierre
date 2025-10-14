@@ -1,11 +1,9 @@
-import type { BundledTheme } from 'shiki';
-
 import {
   DiffHeaderRenderer,
   type DiffHeaderRendererOptions,
 } from './DiffHeaderRenderer';
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
-import { type PJSHighlighter, getSharedHighlighter } from './SharedHighlighter';
+import { getSharedHighlighter } from './SharedHighlighter';
 import './custom-components/Container';
 import svgSprite from './sprite.txt?raw';
 import type {
@@ -13,6 +11,8 @@ import type {
   BaseRendererOptions,
   FileDiffMetadata,
   LineAnnotation,
+  PJSHighlighter,
+  PJSThemeNames,
   RenderCustomFileMetadata,
   ThemeModes,
   ThemeRendererOptions,
@@ -676,8 +676,8 @@ export class FileDiff<LAnnotation = undefined> {
     }
   };
 
-  private getThemes(): BundledTheme[] {
-    const themes: BundledTheme[] = [];
+  private getThemes(): PJSThemeNames[] {
+    const themes: PJSThemeNames[] = [];
     const { theme, themes: _themes } = this.options;
     if (theme != null) {
       themes.push(theme);
