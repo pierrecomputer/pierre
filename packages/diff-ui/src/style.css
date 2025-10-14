@@ -188,6 +188,8 @@ code {
   overscroll-behavior-x: contain;
   tab-size: var(--pjs-tab-size);
   align-self: flex-start;
+  /* TEMP HACK */
+  padding-bottom: var(--pjs-gap);
 }
 
 [data-type='split'][data-overflow='wrap'] [data-code] {
