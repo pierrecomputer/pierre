@@ -87,14 +87,23 @@ function getThemeVariables(
 ) {
   modePrefix = modePrefix != null ? `${modePrefix}-` : '';
   let styles = '';
-  if (themeData.colors?.['gitDecoration.addedResourceForeground'] != null) {
-    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}addition-color:${themeData.colors['gitDecoration.addedResourceForeground']};`;
+  const additionGreen =
+    themeData.colors?.['gitDecoration.addedResourceForeground'] ??
+    themeData.colors?.['terminal.ansiGreen'];
+  if (additionGreen != null) {
+    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}addition-color:${additionGreen};`;
   }
-  if (themeData.colors?.['gitDecoration.deletedResourceForeground'] != null) {
-    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}deletion-color:${themeData.colors['gitDecoration.deletedResourceForeground']};`;
+  const deletionRed =
+    themeData.colors?.['gitDecoration.deletedResourceForeground'] ??
+    themeData.colors?.['terminal.ansiRed'];
+  if (deletionRed != null) {
+    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}deletion-color:${deletionRed};`;
   }
-  if (themeData.colors?.['gitDecoration.modifiedResourceForeground'] != null) {
-    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}modified-color:${themeData.colors['gitDecoration.modifiedResourceForeground']};`;
+  const modifiedBlue =
+    themeData.colors?.['gitDecoration.modifiedResourceForeground'] ??
+    themeData.colors?.['terminal.ansiBlue'];
+  if (modifiedBlue != null) {
+    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}modified-color:${modifiedBlue};`;
   }
   return styles;
 }
