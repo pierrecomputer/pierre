@@ -41,7 +41,7 @@
       "dependencies": {
         "@pierre/diff-ui": "workspace:*",
         "@pierre/storage": "catalog:",
-        "@pierre/storage-elements": "workspace:*",
+        "@pierre/storage-elements-next": "workspace:*",
         "@radix-ui/react-avatar": "catalog:",
         "@radix-ui/react-dialog": "catalog:",
         "@radix-ui/react-dropdown-menu": "catalog:",
@@ -114,7 +114,7 @@
     },
     "packages/storage-elements": {
       "name": "@pierre/storage-elements",
-      "version": "0.0.0",
+      "version": "0.0.2",
       "dependencies": {
         "@radix-ui/react-dialog": "catalog:",
         "@radix-ui/react-label": "catalog:",
@@ -132,10 +132,17 @@
         "tailwind-merge": "catalog:",
       },
       "devDependencies": {
-        "@octokit/openapi-types": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "typescript": "catalog:",
+      },
+    },
+    "packages/storage-elements-next": {
+      "name": "@pierre/storage-elements-next",
+      "version": "0.0.2",
+      "devDependencies": {
+        "@octokit/openapi-types": "catalog:",
+        "typescript": ">=5",
       },
       "peerDependencies": {
         "next": ">=15",
@@ -153,7 +160,7 @@
     "@next/eslint-plugin-next": "15.5.5",
     "@octokit/app": "16.1.1",
     "@octokit/auth-app": "8.1.1",
-    "@octokit/openapi-types": "26.0.0",
+    "@octokit/openapi-types": "^26.0.0",
     "@octokit/rest": "22.0.0",
     "@pierre/storage": "0.0.10",
     "@radix-ui/react-avatar": "1.1.10",
@@ -517,6 +524,8 @@
     "@pierre/storage": ["@pierre/storage@0.0.10", "", { "dependencies": { "jose": "^5.10.0", "snakecase-keys": "^9.0.2" } }, "sha512-fDFrsnRiNTq7lpY56MGE4vRjYAHfTFLsxN18wbnxBlOk1XB1pxzgMfx5DwiqRcXs8+Gt2lmeXvlYAa1gGR4c7w=="],
 
     "@pierre/storage-elements": ["@pierre/storage-elements@workspace:packages/storage-elements"],
+
+    "@pierre/storage-elements-next": ["@pierre/storage-elements-next@workspace:packages/storage-elements-next"],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.1", "", {}, "sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g=="],
 

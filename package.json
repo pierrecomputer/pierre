@@ -33,7 +33,7 @@
       "@next/eslint-plugin-next": "15.5.5",
       "@octokit/app": "16.1.1",
       "@octokit/auth-app": "8.1.1",
-      "@octokit/openapi-types": "26.0.0",
+      "@octokit/openapi-types": "^26.0.0",
       "@octokit/rest": "22.0.0",
       "@pierre/storage": "0.0.10",
       "@radix-ui/react-avatar": "1.1.10",

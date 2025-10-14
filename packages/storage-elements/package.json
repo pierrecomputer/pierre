@@ -1,21 +1,10 @@
 {
   "name": "@pierre/storage-elements",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "scripts": {
     "tsc": "tsc --build",
     "build": "tsc --build"
-  },
-  "exports": {
-    "./next": {
-      "import": "./next/index.ts"
-    }
-  },
-  "files": [
-    "next"
-  ],
-  "publishConfig": {
-    "access": "public"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",
@@ -33,11 +22,7 @@
     "react-dom": "catalog:",
     "tailwind-merge": "catalog:"
   },
-  "peerDependencies": {
-    "next": ">=15"
-  },
   "devDependencies": {
-    "@octokit/openapi-types": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "typescript": "catalog:"

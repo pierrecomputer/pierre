@@ -1,4 +1,4 @@
-import { CodeStorageSuccessCallback } from '@pierre/storage-elements/next';
+import { CodeStorageSuccessCallback } from '@pierre/storage-elements-next';
 import { type NextRequest } from 'next/server';
 
 const successCallback = new CodeStorageSuccessCallback({

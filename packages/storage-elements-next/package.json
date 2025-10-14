@@ -1,0 +1,28 @@
+{
+  "name": "@pierre/storage-elements-next",
+  "version": "0.0.2",
+  "type": "module",
+  "scripts": {
+    "tsc": "tsc --build",
+    "build": "tsc --build"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "next": ">=15"
+  },
+  "devDependencies": {
+    "@octokit/openapi-types": "catalog:",
+    "typescript": ">=5"
+  }
+}
