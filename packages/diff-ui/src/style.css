@@ -27,6 +27,7 @@ code {
   font-family: var(--pjs-font-family, var(--pjs-font-fallback));
   font-size: var(--pjs-font-size, 14px);
   line-height: var(--pjs-line-height, 20px);
+  font-feature-settings: var(--pjs-font-features);
 }
 
 [data-pjs-header] *,
