@@ -111,3 +111,31 @@ export type LineAnnotation<T = undefined> = {
   side: AnnotationSide;
   lineNumber: number;
 } & (T extends undefined ? { metadata?: undefined } : { metadata: T });
+
+export interface GapSpan {
+  type: 'gap';
+  rows: number;
+}
+
+export type LineSpans = GapSpan | AnnotationSpan;
+
+export interface LineInfo {
+  type: 'change-deletion' | 'change-addition' | 'context';
+  number: number;
+  diffLineIndex: number;
+  metadataContent?: string;
+  spans?: LineSpans[];
+}
+
+export interface SharedRenderState {
+  lineInfo: Record<number, LineInfo | undefined>;
+  decorations: DecorationItem[];
+  disableLineNumbers: boolean;
+}
+
+export interface AnnotationSpan {
+  type: 'annotation';
+  hunkIndex: number;
+  diffLineIndex: number;
+  annotations: string[];
+}
