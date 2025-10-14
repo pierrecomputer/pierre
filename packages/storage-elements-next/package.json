@@ -1,6 +1,6 @@
 {
   "name": "@pierre/storage-elements-next",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "scripts": {
     "tsc": "tsc --build",
@@ -17,7 +17,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@pierre/storage": "catalog:"
+  },
   "peerDependencies": {
     "next": ">=15"
   },

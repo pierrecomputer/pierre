@@ -140,6 +140,9 @@
     "packages/storage-elements-next": {
       "name": "@pierre/storage-elements-next",
       "version": "0.0.2",
+      "dependencies": {
+        "@pierre/storage": "catalog:",
+      },
       "devDependencies": {
         "@octokit/openapi-types": "catalog:",
         "typescript": ">=5",

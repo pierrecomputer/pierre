@@ -1,6 +1,10 @@
 {
   "extends": "../../tsconfig.options.json",
   "include": ["blocks/**/*", "components/**/*", "lib/**/*"],
+  "exclude": [
+    "blocks/git-platform-sync/api/**/*",
+    "blocks/git-platform-sync/pages/**/*"
+  ],
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
