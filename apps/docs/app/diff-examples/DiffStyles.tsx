@@ -1,9 +1,45 @@
 'use client';
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
-import { IconParagraph, IconWordWrap } from '@/components/icons';
+import {
+  IconAnnotate,
+  IconBarChart,
+  IconBarChart2,
+  IconCodeBlock,
+  IconCommentSuggest,
+  IconEye,
+  IconEyeSlash,
+  IconMakeShorter,
+  IconPaperclip,
+  IconParagraph,
+  IconParagraphPlus,
+  IconPencil,
+  IconPencilSquircle,
+  IconSquircleLg,
+  IconSquircleLgFill,
+  IconSquircleSpeechText,
+  IconSymbolAdded,
+  IconSymbolDeleted,
+  IconSymbolDiffstat,
+  IconSymbolIgnored,
+  IconSymbolMap,
+  IconSymbolModified,
+  IconSymbolMoved,
+  IconSymbolPlaceholder,
+  IconSymbolRef,
+  IconSymbolResolved,
+  IconWordWrap,
+} from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { FileContents } from '@pierre/diff-ui';
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
@@ -69,6 +105,13 @@ export function DiffStyles() {
           >
             {['bars', 'classic', 'none'].map((value) => (
               <ButtonGroupItem key={value} value={value}>
+                {value === 'bars' ? (
+                  <IconSymbolRef />
+                ) : value === 'classic' ? (
+                  <IconSymbolDiffstat />
+                ) : (
+                  <IconSymbolPlaceholder />
+                )}
                 {value}
               </ButtonGroupItem>
             ))}
@@ -83,24 +126,43 @@ export function DiffStyles() {
               }
             }}
           >
-            {['disable', 'enable'].map((value) => (
+            {['enable', 'disable'].map((value) => (
               <ButtonGroupItem key={value} value={value}>
+                {value === 'enable' ? (
+                  <IconSquircleLgFill />
+                ) : (
+                  <IconSymbolPlaceholder />
+                )}
                 {value === 'disable' ? 'Disable BG' : 'Enable BG'}
               </ButtonGroupItem>
             ))}
           </ButtonGroup>
-          <ButtonGroup
-            value={lineDiffStyle}
-            onValueChange={(value) =>
-              setLineDiffStyle(value as 'word-alt' | 'word' | 'char' | 'none')
-            }
-          >
-            {['word', 'word-alt', 'char', 'none'].map((value) => (
-              <ButtonGroupItem key={value} value={value}>
-                {value}
-              </ButtonGroupItem>
-            ))}
-          </ButtonGroup>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="justify-start w-full md:w-auto"
+              >
+                <IconMakeShorter />
+                {lineDiffStyle}
+                <ChevronDown className="ml-auto h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {['word', 'word-alt', 'char', 'none'].map((value) => (
+                <DropdownMenuItem
+                  key={value}
+                  onClick={() =>
+                    setLineDiffStyle(
+                      value as 'word-alt' | 'word' | 'char' | 'none'
+                    )
+                  }
+                >
+                  {value}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <ButtonGroup
             value={overflow}

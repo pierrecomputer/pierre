@@ -83,34 +83,35 @@ export function Annotations() {
 const Thread = () => (
   <div
     style={{
-      maxWidth: '80%',
+      maxWidth: '70%',
       whiteSpace: 'normal',
       margin: 20,
-      fontFamily: 'var(--font-body)',
+      fontFamily: 'Geist',
     }}
   >
     <CommentThread
       mainComment={{
         author: 'You',
         timestamp: '3h',
-        content:
-          "What do we think about adding Inter as our primary UI font? It'd definitely help solve some of these layout inconsistencies.",
-        avatarUrl: '/user-avatar.jpg',
+        content: 'Good lord I hate building diffs.',
+        avatarUrl:
+          'https://pbs.twimg.com/profile_images/1976050101333393408/i8UHRtQf_400x400.jpg',
         isYou: true,
       }}
       replies={[
         {
-          author: 'Ian',
+          author: 'Amadeus',
           timestamp: '2h',
-          content: 'Oh yeah, love that.',
-          avatarUrl: '/ian-avatar.jpg',
+          content: 'This is my favorite part of the job.',
+          avatarUrl:
+            'https://pbs.twimg.com/profile_images/709894027336769536/Evzotboe_400x400.jpg',
         },
         {
           author: 'Mark',
           timestamp: '2h',
-          content:
-            'Oh damn, if we can make it work without a perf hit, yeah totally.',
-          avatarUrl: '/mark-avatar.jpg',
+          content: 'We need to get this done by Friday.',
+          avatarUrl:
+            'https://pbs.twimg.com/profile_images/1196263867178872832/BET9cPgr_400x400.jpg',
         },
       ]}
       onAddReply={() => console.log('Add reply clicked')}
@@ -135,8 +136,8 @@ export function Comment({
   isYou = false,
 }: CommentProps) {
   return (
-    <div className="flex gap-3">
-      <div className="relative flex-shrink-0">
+    <div className="flex gap-2">
+      <div className="relative flex-shrink-0 -mt-0.5">
         <Avatar className="h-6 w-6">
           <AvatarImage src={avatarUrl ?? '/placeholder.svg'} alt={author} />
           <AvatarFallback>{author[0]}</AvatarFallback>
@@ -169,7 +170,7 @@ export function CommentThread({
   onResolve,
 }: CommentThreadProps) {
   return (
-    <div className="rounded-lg border bg-card p-6 shadow-sm">
+    <div className="rounded-lg border bg-card p-5 shadow-sm">
       <Comment {...mainComment} />
 
       {replies.length > 0 && (
