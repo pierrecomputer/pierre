@@ -236,7 +236,7 @@ export function renderFileHeader({
   const useEl = createSVGElement('use');
   useEl.setAttribute('href', getIconForType(file.type));
   icon.appendChild(useEl);
-  icon.dataset.changeIcon = '';
+  icon.dataset.changeIcon = file.type;
   content.appendChild(icon);
 
   const title = document.createElement('div');

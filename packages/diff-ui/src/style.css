@@ -80,10 +80,7 @@ code {
   --pjs-modified-base: light-dark(
     var(
       --pjs-modified-color-override,
-      var(
-        --pjs-light-modified-color,
-        var(--pjs-modified-color, rgb(0, 0, 255))
-      ),
+      var(--pjs-light-modified-color, var(--pjs-modified-color, rgb(0, 0, 255)))
     ),
     var(
       --pjs-modified-color-override,
@@ -469,4 +466,18 @@ code {
   text-wrap-mode: wrap;
   word-break: normal;
   white-space-collapse: collapse;
+}
+
+[data-change-icon='change'],
+[data-change-icon='rename-pure'],
+[data-change-icon='rename-changed'] {
+  color: var(--pjs-modified-base);
+}
+
+[data-change-icon='new'] {
+  color: var(--pjs-addition-base);
+}
+
+[data-change-icon='deleted'] {
+  color: var(--pjs-deletion-base);
 }
