@@ -314,13 +314,6 @@ code {
 
 [data-line-annotation] {
   min-height: var(--pjs-annotation-min-height);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    var(--pjs-bg-buffer) 0,
-    var(--pjs-bg-buffer) 1px,
-    transparent 1px,
-    transparent 5px
-  );
 }
 
 [data-type='split'][data-overflow='wrap'] [data-additions] {
