@@ -82,17 +82,23 @@ export default function DocsPage() {
         <section className="space-y-4">
           <h2>Overview</h2>
           <p>
-            Precision Diffs provides both React components and vanilla JavaScript renderers.
-            The React components are lightweight wrappers around the core vanilla JS library.
-            All diffs are rendered using Shadow DOM, CSS Grids, and modern web technologies for
-            optimal performance and styling isolation.
+            Precision Diffs provides both React components and vanilla
+            JavaScript renderers. The React components are lightweight wrappers
+            around the core vanilla JS library. All diffs are rendered using
+            Shadow DOM, CSS Grids, and modern web technologies for optimal
+            performance and styling isolation.
           </p>
-          <p>
-            Choose the API that best fits your project:
-          </p>
+          <p>Choose the API that best fits your project:</p>
           <ul>
-            <li><strong>React API</strong>: Use the <code>FileDiff</code> component from <code>@pierre/precision-diffs</code> for React projects</li>
-            <li><strong>Vanilla JS API</strong>: Use the renderer classes from <code>@pierre/diff-ui</code> for framework-agnostic usage</li>
+            <li>
+              <strong>React API</strong>: Use the <code>FileDiff</code>{' '}
+              component from <code>@pierre/precision-diffs</code> for React
+              projects
+            </li>
+            <li>
+              <strong>Vanilla JS API</strong>: Use the renderer classes from{' '}
+              <code>@pierre/precision-diffs</code> for framework-agnostic usage
+            </li>
           </ul>
         </section>
 
@@ -138,19 +144,19 @@ export default function MyComponent() {
         <section className="space-y-4">
           <h2>Vanilla JS API</h2>
           <p>
-            The <code>@pierre/diff-ui</code> package exports several renderer classes
-            for framework-agnostic usage. These are the same renderers used internally
-            by the React components.
+            The <code>@pierre/precision-diffs</code> package exports several
+            renderer classes for framework-agnostic usage. These are the same
+            renderers used internally by the React components.
           </p>
 
           <h3>FileDiff Renderer</h3>
           <p>
-            The main renderer class for displaying complete file diffs with headers, hunks,
-            and annotations.
+            The main renderer class for displaying complete file diffs with
+            headers, hunks, and annotations.
           </p>
           <SimpleCodeBlock
-            code={`import { FileDiff } from '@pierre/diff-ui';
-import type { DiffFileRendererOptions } from '@pierre/diff-ui';
+            code={`import { FileDiff } from '@pierre/precision-diffs';
+import type { DiffFileRendererOptions } from '@pierre/precision-diffs';
 
 // Create a container element
 const container = document.getElementById('diff-container');
@@ -204,10 +210,11 @@ diffRenderer.cleanUp();`}
 
           <h3>CodeRenderer</h3>
           <p>
-            A standalone renderer for syntax-highlighted code blocks with streaming support.
+            A standalone renderer for syntax-highlighted code blocks with
+            streaming support.
           </p>
           <SimpleCodeBlock
-            code={`import { CodeRenderer } from '@pierre/diff-ui';
+            code={`import { CodeRenderer } from '@pierre/precision-diffs';
 
 const container = document.getElementById('code-container');
 const renderer = new CodeRenderer();
@@ -242,11 +249,11 @@ await renderer.setup({
 
           <h3>DiffHunksRenderer</h3>
           <p>
-            Low-level renderer for individual diff hunks. Useful when you need fine-grained
-            control over diff rendering.
+            Low-level renderer for individual diff hunks. Useful when you need
+            fine-grained control over diff rendering.
           </p>
           <SimpleCodeBlock
-            code={`import { DiffHunksRenderer, parseDiffFromFiles } from '@pierre/diff-ui';
+            code={`import { DiffHunksRenderer, parseDiffFromFiles } from '@pierre/precision-diffs';
 
 const container = document.getElementById('hunks-container');
 const renderer = new DiffHunksRenderer();
@@ -272,10 +279,11 @@ await renderer.render({
 
           <h3>DiffHeaderRenderer</h3>
           <p>
-            Renders the file header section of a diff, showing file names and metadata.
+            Renders the file header section of a diff, showing file names and
+            metadata.
           </p>
           <SimpleCodeBlock
-            code={`import { DiffHeaderRenderer } from '@pierre/diff-ui';
+            code={`import { DiffHeaderRenderer } from '@pierre/precision-diffs';
 
 const container = document.getElementById('header-container');
 const renderer = new DiffHeaderRenderer();
@@ -297,7 +305,8 @@ await renderer.render({
 
           <h3>Shared Highlighter Utilities</h3>
           <p>
-            Manage Shiki highlighter instances for optimal performance across multiple renders.
+            Manage Shiki highlighter instances for optimal performance across
+            multiple renders.
           </p>
           <SimpleCodeBlock
             code={`import {
@@ -305,7 +314,7 @@ await renderer.render({
   preloadHighlighter,
   registerCustomTheme,
   disposeHighlighter
-} from '@pierre/diff-ui';
+} from '@pierre/precision-diffs';
 
 // Preload themes and languages
 await preloadHighlighter({
