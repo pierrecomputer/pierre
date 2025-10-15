@@ -80,7 +80,7 @@ export default function Home() {
         <ShikiThemes />
         <DiffStyles />
         <FontStyles />
-        <PrebuiltReact />
+        {/* <PrebuiltReact /> */}
         <Annotations />
         <ArbitraryFiles />
       </section>

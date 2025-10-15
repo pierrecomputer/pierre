@@ -51,6 +51,14 @@ export default function Home() {
 `,
 };
 
+const fontMap: Record<string, string> = {
+  'Geist Mono': '--font-geist-mono',
+  'Fira Code': '--font-fira-mono',
+  'IBM Plex Mono': '--font-ibm-plex-mono',
+  'JetBrains Mono': '--font-jetbrains-mono',
+  'Cascadia Code': '--font-cascadia-code',
+};
+
 export function FontStyles() {
   const [selectedFont, setSelectedFont] = useState('Geist Mono');
   const [selectedFontSize, setSelectedFontSize] = useState('14px');
@@ -77,33 +85,43 @@ export function FontStyles() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setSelectedFont('Geist Mono')}>
+                <DropdownMenuItem
+                  onClick={() => setSelectedFont('Geist Mono')}
+                >
                   Geist Mono
                   {selectedFont === 'Geist Mono' && (
                     <IconCheck className="ml-auto" />
                   )}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('SF Mono')}>
-                  SF Mono
-                  {selectedFont === 'SF Mono' && (
+                <DropdownMenuItem
+                  onClick={() => setSelectedFont('Fira Code')}
+                >
+                  Fira Code
+                  {selectedFont === 'Fira Code' && (
                     <IconCheck className="ml-auto" />
                   )}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('cursive')}>
-                  Cursive
-                  {selectedFont === 'cursive' && (
+                <DropdownMenuItem
+                  onClick={() => setSelectedFont('IBM Plex Mono')}
+                >
+                  IBM Plex Mono
+                  {selectedFont === 'IBM Plex Mono' && (
                     <IconCheck className="ml-auto" />
                   )}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('fantasy')}>
-                  Fantasy
-                  {selectedFont === 'fantasy' && (
+                <DropdownMenuItem
+                  onClick={() => setSelectedFont('JetBrains Mono')}
+                >
+                  JetBrains Mono
+                  {selectedFont === 'JetBrains Mono' && (
                     <IconCheck className="ml-auto" />
                   )}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedFont('monospace')}>
-                  Monospace
-                  {selectedFont === 'monospace' && (
+                <DropdownMenuItem
+                  onClick={() => setSelectedFont('Cascadia Code')}
+                >
+                  Cascadia Code
+                  {selectedFont === 'Cascadia Code' && (
                     <IconCheck className="ml-auto" />
                   )}
                 </DropdownMenuItem>
@@ -190,7 +208,7 @@ export function FontStyles() {
       <div
         style={
           {
-            '--pjs-font-family': selectedFont,
+            '--pjs-font-family': `var(${fontMap[selectedFont]})`,
             '--pjs-font-size': selectedFontSize,
             '--pjs-line-height': selectedLineHeight,
           } as React.CSSProperties
