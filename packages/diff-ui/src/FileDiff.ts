@@ -120,7 +120,7 @@ export class FileDiff<LAnnotation = undefined> {
   private resizeObserver: ResizeObserver | undefined;
 
   constructor(
-    options: DiffFileRendererOptions<LAnnotation>,
+    options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
     private isReact = false // NOTE(amadeus): Temp hack while we use this component in a react context
   ) {
     this.options = options;
@@ -133,7 +133,9 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(options: DiffFileRendererOptions<LAnnotation>) {
+  setOptions(
+    options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' }
+  ) {
     this.options = options;
     this.hunksRenderer?.setOptions(this.options);
   }
