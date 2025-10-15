@@ -65,24 +65,16 @@ export function SplitUnified() {
         </ButtonGroupItem>
       </ButtonGroup>
 
-      <div
-        style={
-          {
-            '--pjs-font-family': `var(--font-berkeley-mono)`,
-          } as React.CSSProperties
-        }
-      >
-        <FileDiff
-          oldFile={OLD_FILE}
-          newFile={NEW_FILE}
-          className="rounded-lg overflow-hidden border"
-          options={{
-            detectLanguage: true,
-            theme: 'pierre-dark',
-            diffStyle,
-          }}
-        />
-      </div>
+      <FileDiff
+        oldFile={OLD_FILE}
+        newFile={NEW_FILE}
+        className="rounded-lg overflow-hidden border"
+        options={{
+          detectLanguage: true,
+          theme: 'pierre-dark',
+          diffStyle,
+        }}
+      />
     </div>
   );
 }

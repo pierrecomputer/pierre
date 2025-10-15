@@ -57,13 +57,7 @@ export function Annotations() {
         description="Precision Diffs provides a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
       />
       {element != null && (
-        <div
-          style={
-            {
-              '--pjs-font-family': `var(--font-berkeley-mono)`,
-            } as React.CSSProperties
-          }
-        >
+        <>
           <FileDiff
             oldFile={OLD_FILE}
             newFile={NEW_FILE}
@@ -79,7 +73,7 @@ export function Annotations() {
             annotations={[{ side: 'additions', lineNumber: 8 }]}
           />
           {createPortal(<Thread />, element)}
-        </div>
+        </>
       )}
     </div>
   );

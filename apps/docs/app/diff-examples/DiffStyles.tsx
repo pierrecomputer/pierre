@@ -193,28 +193,20 @@ export function DiffStyles() {
           </div>
         </div>
       </div>
-      <div
-        style={
-          {
-            '--pjs-font-family': `var(--font-berkeley-mono)`,
-          } as React.CSSProperties
-        }
-      >
-        <FileDiff
-          oldFile={OLD_FILE}
-          newFile={NEW_FILE}
-          className="rounded-lg overflow-hidden border"
-          options={{
-            detectLanguage: true,
-            theme: 'pierre-dark',
-            diffStyle: 'unified',
-            diffIndicators,
-            disableBackground,
-            overflow: overflow,
-            lineDiffType: lineDiffStyle,
-          }}
-        />
-      </div>
+      <FileDiff
+        oldFile={OLD_FILE}
+        newFile={NEW_FILE}
+        className="rounded-lg overflow-hidden border"
+        options={{
+          detectLanguage: true,
+          theme: 'pierre-dark',
+          diffStyle: 'unified',
+          diffIndicators,
+          disableBackground,
+          overflow: overflow,
+          lineDiffType: lineDiffStyle,
+        }}
+      />
     </div>
   );
 }
