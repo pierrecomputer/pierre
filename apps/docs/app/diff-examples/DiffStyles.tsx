@@ -3,12 +3,13 @@
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import {
   IconCheckLg,
-  IconCheckboxFill,
   IconCodeStyleBars,
+  IconCodeStyleBg,
   IconCodeStyleInline,
   IconParagraph,
+  IconSquircleLgFill,
   IconSymbolDiffstat,
-  IconSymbolPlaceholder,
+  IconWordWrap,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -18,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import type { FileContents } from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
@@ -158,50 +160,47 @@ export function DiffStyles() {
             </DropdownMenu>
           </div>
 
-          <ButtonGroup
-            value={disableBackground ? 'disable' : 'enable'}
-            onValueChange={(value) => {
-              if (value === 'disable') {
-                setDisableBackground(true);
-              } else {
-                setDisableBackground(false);
-              }
-            }}
-          >
-            {['enable', 'disable'].map((value) => (
-              <ButtonGroupItem key={value} value={value}>
-                {(value === 'enable' && !disableBackground) ||
-                (value === 'disable' && disableBackground) ? (
-                  <IconCheckboxFill />
-                ) : (
-                  <IconSymbolPlaceholder />
-                )}
-                {value === 'disable' ? 'Off' : 'Background colors'}
-              </ButtonGroupItem>
-            ))}
-          </ButtonGroup>
+          <div className="p-[2px] rounded-lg bg-secondary">
+            <Button
+              variant="outline"
+              className="justify-between w-full md:w-auto gap-3 px-3"
+              onClick={() => setDisableBackground(!disableBackground)}
+            >
+              <div className="flex items-center gap-2">
+                <IconCodeStyleBg />
+                Backgrounds
+              </div>
+              <Switch
+                checked={!disableBackground}
+                onCheckedChange={(checked: boolean) =>
+                  setDisableBackground(!checked)
+                }
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Button>
+          </div>
 
-          <ButtonGroup
-            value={overflow}
-            onValueChange={(value) => setOverflow(value as 'wrap' | 'scroll')}
-          >
-            <ButtonGroupItem value="wrap">
-              {overflow === 'wrap' ? (
-                <IconCheckboxFill />
-              ) : (
-                <IconSymbolPlaceholder />
-              )}
-              Word wrap
-            </ButtonGroupItem>
-            <ButtonGroupItem value="scroll">
-              {overflow === 'scroll' ? (
-                <IconCheckboxFill />
-              ) : (
-                <IconSymbolPlaceholder />
-              )}
-              Off
-            </ButtonGroupItem>
-          </ButtonGroup>
+          <div className="p-[2px] rounded-lg bg-secondary">
+            <Button
+              variant="outline"
+              className="justify-between w-full md:w-auto gap-3 px-3"
+              onClick={() =>
+                setOverflow(overflow === 'wrap' ? 'scroll' : 'wrap')
+              }
+            >
+              <div className="flex items-center gap-2">
+                <IconWordWrap />
+                Wrapping
+              </div>
+              <Switch
+                checked={overflow === 'wrap'}
+                onCheckedChange={(checked: boolean) =>
+                  setOverflow(checked ? 'wrap' : 'scroll')
+                }
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Button>
+          </div>
         </div>
       </div>
       <FileDiff
