@@ -82,8 +82,8 @@ export function Annotations() {
 
 const Thread = () => (
   <div
+    className="max-w-[95%] sm:max-w-[70%]"
     style={{
-      maxWidth: '70%',
       whiteSpace: 'normal',
       margin: 20,
       fontFamily: 'Geist',
@@ -174,14 +174,14 @@ export function CommentThread({
       <Comment {...mainComment} />
 
       {replies.length > 0 && (
-        <div className="mt-4 ml-[52px] space-y-4">
+        <div className="mt-4 ml-8 sm:ml-[52px] space-y-4">
           {replies.map((reply, index) => (
             <Comment key={index} {...reply} />
           ))}
         </div>
       )}
 
-      <div className="mt-4 ml-[52px] flex items-center gap-4">
+      <div className="mt-4 ml-8 sm:ml-[52px] flex items-center gap-4">
         <button
           onClick={onAddReply}
           className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"

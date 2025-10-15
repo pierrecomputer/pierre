@@ -71,8 +71,8 @@ export function FontStyles() {
           title="Bring your own fonts"
           description="Precision Diffs is adaptable to any font, font-size, line-height, and even font-feature-settings you may have set. Configure font options with your preferred CSS method globally or on a per-component basis."
         />
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="flex gap-3">
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div className="flex flex-wrap gap-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

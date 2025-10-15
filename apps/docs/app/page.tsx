@@ -29,7 +29,7 @@ import { SplitUnified } from './diff-examples/SplitUnified';
 
 export default function Home() {
   return (
-    <div className="min-h-screen w-5xl px-5 mx-auto">
+    <div className="min-h-screen max-w-5xl px-5 mx-auto">
       <Header
         logo={
           <Header.Logo
@@ -107,7 +107,7 @@ export default function Home() {
             bread and butter, and we’d love to share it with you.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button asChild>
             <Link
               href="https://discord.gg/pierre"
@@ -169,7 +169,7 @@ const Hero = () => {
         .
       </p>
 
-      <div className="flex flex-col sm:flex-row items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
