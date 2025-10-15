@@ -1,11 +1,12 @@
 // Generated from svgs/IconGrid2x1.svg
-import { type Color, Colors } from '../Color';
+
+import { type Color, Colors } from "../Color";
 
 interface IconProps {
-  size?: 10 | 12 | 16 | 20 | 32 | 48 | '1em';
-  color?: keyof Color | 'currentcolor';
-  style?: React.CSSProperties;
-  className?: string;
+	size?: 10 | 12 | 16 | 20 | 32 | 48 | "1em";
+	color?: keyof Color | "currentcolor";
+	style?: React.CSSProperties;
+	className?: string;
 }
 
 // prettier-ignore
@@ -20,7 +21,7 @@ export const IconGrid2x1 = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] ?? color} style={style} className={`pi ${className ?? ''}`} {...props}><path fillRule="evenodd" d="M0 1.75C0 .784.784 0 1.75 0h4C6.716 0 7.5.784 7.5 1.75v4A1.75 1.75 0 0 1 5.75 7.5h-4A1.75 1.75 0 0 1 0 5.75zm1.75-.25a.25.25 0 0 0-.25.25v4c0 .138.112.25.25.25h4A.25.25 0 0 0 6 5.75v-4a.25.25 0 0 0-.25-.25zM0 10.25C0 9.284.784 8.5 1.75 8.5h4c.966 0 1.75.784 1.75 1.75v4A1.75 1.75 0 0 1 5.75 16h-4A1.75 1.75 0 0 1 0 14.25zM1.75 10a.25.25 0 0 0-.25.25v4c0 .138.112.25.25.25h4a.25.25 0 0 0 .25-.25v-4a.25.25 0 0 0-.25-.25zM10.25 0A1.75 1.75 0 0 0 8.5 1.75v12.5c0 .966.784 1.75 1.75 1.75h4A1.75 1.75 0 0 0 16 14.25V1.75A1.75 1.75 0 0 0 14.25 0zM10 1.75a.25.25 0 0 1 .25-.25h4a.25.25 0 0 1 .25.25v12.5a.25.25 0 0 1-.25.25h-4a.25.25 0 0 1-.25-.25z" clipRule="evenodd" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path fillRule="evenodd" d="M0 1.75C0 .784.784 0 1.75 0h4C6.716 0 7.5.784 7.5 1.75v4A1.75 1.75 0 0 1 5.75 7.5h-4A1.75 1.75 0 0 1 0 5.75zm1.75-.25a.25.25 0 0 0-.25.25v4c0 .138.112.25.25.25h4A.25.25 0 0 0 6 5.75v-4a.25.25 0 0 0-.25-.25zM0 10.25C0 9.284.784 8.5 1.75 8.5h4c.966 0 1.75.784 1.75 1.75v4A1.75 1.75 0 0 1 5.75 16h-4A1.75 1.75 0 0 1 0 14.25zM1.75 10a.25.25 0 0 0-.25.25v4c0 .138.112.25.25.25h4a.25.25 0 0 0 .25-.25v-4a.25.25 0 0 0-.25-.25zM10.25 0A1.75 1.75 0 0 0 8.5 1.75v12.5c0 .966.784 1.75 1.75 1.75h4A1.75 1.75 0 0 0 16 14.25V1.75A1.75 1.75 0 0 0 14.25 0zM10 1.75a.25.25 0 0 1 .25-.25h4a.25.25 0 0 1 .25.25v12.5a.25.25 0 0 1-.25.25h-4a.25.25 0 0 1-.25-.25z" clipRule="evenodd" /></svg>
 	);
 };
 
