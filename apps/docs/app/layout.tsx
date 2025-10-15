@@ -5,7 +5,6 @@ import {
   Fira_Code,
   Geist,
   Geist_Mono,
-  Google_Sans_Code,
   IBM_Plex_Mono,
   JetBrains_Mono,
 } from 'next/font/google';
