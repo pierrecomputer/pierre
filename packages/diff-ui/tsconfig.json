@@ -4,11 +4,14 @@
   "compilerOptions": {
     "outDir": "dist",
     "emitDeclarationOnly": false,
+    "jsx": "react",
     "jsxFactory": "createElement",
     "baseUrl": ".",
     "rootDir": "src",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "resolveJsonModule": true
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
   },
   "references": [
     {

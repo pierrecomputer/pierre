@@ -12,11 +12,17 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./lit": {
+      "import": "./src/lit-component/wrapper.tsx",
+      "types": "./src/lit-component/wrapper.tsx"
     }
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "catalog:",
     "@types/hast": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "typescript": "catalog:"
   },
   "dependencies": {
@@ -24,6 +30,9 @@
     "@pierre/shiki-stream": "workspace:*",
     "diff": "catalog:",
     "hast-util-to-html": "catalog:",
+    "lit": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "shiki": "catalog:"
   }
 }

@@ -25,6 +25,7 @@ import { DiffStyles } from './diff-examples/DiffStyles';
 import { FontStyles } from './diff-examples/FontStyles';
 import { ShikiThemes } from './diff-examples/ShikiThemes';
 import { SplitUnified } from './diff-examples/SplitUnified';
+import { Ssr } from './diff-examples/Ssr';
 
 export default function Home() {
   return (
@@ -66,6 +67,16 @@ export default function Home() {
       </Header>
 
       <Hero />
+      <section className="py-8 space-y-8">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-medium">Server-Side Rendering</h2>
+          <p className="text-muted-foreground">
+            Precision Diffs can be rendered on the server-side using the
+            TestElement component.
+          </p>
+        </div>
+        <Ssr />
+      </section>
 
       <hr className="mt-2 mb-8 w-[120px]" />
 
