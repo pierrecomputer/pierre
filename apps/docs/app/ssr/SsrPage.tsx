@@ -2,10 +2,8 @@
 
 import Footer from '@/components/Footer';
 import { Header } from '@/components/ui/header';
-import {
-  FileDiff as FileDiffSSR,
-  type PreloadedFileDiffResult,
-} from '@pierre/diff-ui/ssr';
+import '@pierre/precision-diffs/ssr';
+import { type PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 
 export function SsrPage({
   preloadedFileDiff,
@@ -54,8 +52,8 @@ export function SsrPage({
         SSR Demo
       </h1>
 
-      <FileDiffSSR
-        preloaded={preloadedFileDiff}
+      <file-diff
+        {...preloadedFileDiff}
         className="rounded-lg overflow-hidden border"
       />
 

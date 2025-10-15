@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 type GitHubOAuthTokenResponse =
   | {
@@ -22,6 +22,11 @@ type CodeStorageSuccessCallbackOptions = {
   env: 'production' | (string & {});
 };
 
+type NextRequestLike = {
+  nextUrl: { searchParams: URLSearchParams };
+  url: string;
+};
+
 export class CodeStorageSuccessCallback {
   private clientId: string;
   private clientSecret: string;
@@ -42,7 +47,7 @@ export class CodeStorageSuccessCallback {
     this.env = options.env;
   }
 
-  private getParams(request: NextRequest) {
+  private getParams(request: NextRequestLike) {
     const searchParams = request.nextUrl.searchParams;
 
     const code = searchParams.get('code') ?? null;
@@ -68,7 +73,7 @@ export class CodeStorageSuccessCallback {
   }
 
   private generateRedirectUrl(
-    request: NextRequest,
+    request: NextRequestLike,
     {
       installationId,
       setupAction,
@@ -93,7 +98,7 @@ export class CodeStorageSuccessCallback {
     return successUrl;
   }
 
-  async handleRequest(request: NextRequest) {
+  async handleRequest(request: NextRequestLike) {
     try {
       const { code, installationId, setupAction, state } =
         this.getParams(request);
@@ -115,7 +120,7 @@ export class CodeStorageSuccessCallback {
       );
 
       const tokenData =
-        (await tokenResponse.json()) as unknown as GitHubOAuthTokenResponse;
+        (await tokenResponse.json()) as GitHubOAuthTokenResponse;
 
       if ('error' in tokenData) {
         throw new Error(

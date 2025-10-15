@@ -1,5 +1,5 @@
-import { type FileContents } from '@pierre/diff-ui';
-import { preloadFileDiff } from '@pierre/diff-ui/ssr';
+import { type FileContents } from '@pierre/precision-diffs';
+import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
 
 import { SsrPage } from './SsrPage';
 

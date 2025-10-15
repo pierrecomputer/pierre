@@ -6,6 +6,6 @@ const repo = new CodeStorageRepo({
   privateKey: process.env.CODE_STORAGE_SYNC_PRIVATE_KEY!,
 });
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   return repo.handlePostRequest(request);
 }

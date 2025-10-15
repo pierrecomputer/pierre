@@ -61,16 +61,10 @@ interface RenderHunkProps {
   hunkIndex: number;
   highlighter: PJSHighlighter;
   state: SharedRenderState;
-<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
-  transformer: ShikiTransformer;
+  transformer: ShikiTransformer | ShikiTransformer[];
   additionsAST: ElementContent[];
   deletionsAST: ElementContent[];
   unifiedAST: ElementContent[];
-||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
-  transformer: ShikiTransformer;
-=======
-  transformer: ShikiTransformer | ShikiTransformer[];
->>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
 }
 
 interface UnresolvedAnnotationSpan {
@@ -105,21 +99,11 @@ export type DiffHunksRendererOptions =
   | DiffHunkThemesRendererOptions;
 
 export interface HunksRenderResult {
-<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
   additionsAST: ElementContent[] | undefined;
   deletionsAST: ElementContent[] | undefined;
   unifiedAST: ElementContent[] | undefined;
+  css: string;
   preNode: Element;
-||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
-  additionsHTML: string;
-  deletionsHTML: string;
-  unifiedHTML: string;
-=======
-  additionsHTML: string;
-  deletionsHTML: string;
-  unifiedHTML: string;
-  css?: string;
->>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
 }
 
 // Create a transformer that converts token color/fontStyle to htmlStyle
@@ -162,7 +146,6 @@ const tokenStyleNormalizer: ShikiTransformer = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-call
 const toClass = transformerStyleToClass({
   classPrefix: 'hl-',
 });
@@ -277,7 +260,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private queuedDiff: FileDiffMetadata | undefined;
   private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
   private computedLang: SupportedLanguages = 'text';
-  async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
+  async render(
+    diff: FileDiffMetadata,
+    shouldUseClasses: boolean = false
+  ): Promise<HunksRenderResult | undefined> {
     this.queuedDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -301,7 +287,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         // should just return early with empty result
         return undefined;
       }
-      return this.renderDiff(this.queuedDiff, this.highlighter);
+      return this.renderDiff(
+        this.queuedDiff,
+        this.highlighter,
+        shouldUseClasses
+      );
     })();
     const result = await this.queuedRender;
     this.queuedDiff = undefined;
@@ -311,7 +301,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private renderDiff(
     fileDiff: FileDiffMetadata,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    shouldUseClasses: boolean = false
   ): HunksRenderResult {
     const {
       disableLineNumbers,
@@ -325,22 +316,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
-<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
     const additionsAST: ElementContent[] = [];
     const deletionsAST: ElementContent[] = [];
     const unifiedAST: ElementContent[] = [];
-    const { state, transformer } =
-||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
-    let additionsHTML = '';
-    let deletionsHTML = '';
-    let unifiedHTML = '';
-    const { state, transformer } =
-=======
-    let additionsHTML = '';
-    let deletionsHTML = '';
-    let unifiedHTML = '';
     const { state, transformer: lineNumberTransformer } =
->>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
       createTransformerWithState(disableLineNumbers);
     let hunkIndex = 0;
 
@@ -352,7 +331,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hunkIndex,
         highlighter,
         state,
-        transformer: [lineNumberTransformer, tokenStyleNormalizer, toClass],
+        transformer: shouldUseClasses
+          ? [lineNumberTransformer, tokenStyleNormalizer, toClass]
+          : [lineNumberTransformer],
         isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
         additionsAST,
         deletionsAST,
@@ -362,11 +343,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       prevHunk = hunk;
     }
 
-<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
     return {
       additionsAST: additionsAST.length > 0 ? additionsAST : undefined,
       deletionsAST: deletionsAST.length > 0 ? deletionsAST : undefined,
       unifiedAST: unifiedAST.length > 0 ? unifiedAST : undefined,
+      css: toClass.getCSS(),
       preNode: createHastElement({
         tagName: 'pre',
         properties: createPreWrapperProperties({
@@ -443,12 +424,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         },
       })
     );
-||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
-    return { additionsHTML, deletionsHTML, unifiedHTML };
-=======
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    return { additionsHTML, deletionsHTML, unifiedHTML, css: toClass.getCSS() };
->>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
   }
 
   private createHastOptions(

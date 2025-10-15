@@ -1,5 +1,9 @@
 import { GitStorage } from '@pierre/storage';
-import { type NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+
+type NextRequestLike = {
+  json(): Promise<unknown>;
+};
 
 type CodeStorageRepoOptions = {
   storageName: string;
@@ -21,7 +25,7 @@ export class CodeStorageRepo {
     this.privateKey = options.privateKey;
   }
 
-  async handlePostRequest(request: NextRequest) {
+  async handlePostRequest(request: NextRequestLike) {
     try {
       const store = new GitStorage({
         name: this.storageName,

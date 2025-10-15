@@ -60,22 +60,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (!HTMLTemplateElement.prototype.hasOwnProperty('shadowRootMode')) {
-                (function() {
-                  const script = document.createElement('script');
-                  script.src = 'https://unpkg.com/@webcomponents/template-shadowroot@latest/template-shadowroot.js';
-                  script.type = 'module';
-                  document.head.appendChild(script);
-                })();
-              }
-            `,
-          }}
-        />
-      </head>
       <body
         style={
           {

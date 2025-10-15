@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@octokit/openapi-types": "catalog:",
+    "next": "catalog:",
     "typescript": ">=5"
   }
 }
