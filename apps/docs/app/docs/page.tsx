@@ -80,10 +80,29 @@ export default function DocsPage() {
         </section>
 
         <section className="space-y-4">
-          <h2>Basic Usage</h2>
+          <h2>Overview</h2>
           <p>
-            The FileDiff component accepts two file objects (old and new) and
-            renders a visual diff between them. Here's a basic example:
+            Precision Diffs provides both React components and vanilla JavaScript renderers.
+            The React components are lightweight wrappers around the core vanilla JS library.
+            All diffs are rendered using Shadow DOM, CSS Grids, and modern web technologies for
+            optimal performance and styling isolation.
+          </p>
+          <p>
+            Choose the API that best fits your project:
+          </p>
+          <ul>
+            <li><strong>React API</strong>: Use the <code>FileDiff</code> component from <code>@pierre/precision-diffs</code> for React projects</li>
+            <li><strong>Vanilla JS API</strong>: Use the renderer classes from <code>@pierre/diff-ui</code> for framework-agnostic usage</li>
+          </ul>
+        </section>
+
+        <section className="space-y-4">
+          <h2>React API</h2>
+
+          <h3>Basic Usage</h3>
+          <p>
+            Here's a basic example of using the React FileDiff component to
+            render a diff between two files:
           </p>
           <SimpleCodeBlock
             code={`import { FileDiff } from '@pierre/precision-diffs';
@@ -104,14 +123,215 @@ export default function MyComponent() {
     <FileDiff
       oldFile={oldFile}
       newFile={newFile}
-      options={{
-        theme: 'pierre-dark',
-        diffStyle: 'split'
-      }}
     />
   );
 }`}
             language="tsx"
+          />
+
+          <p>
+            Alternatively, you can also pass a unified diff directly to the
+            FileDiff component.
+          </p>
+        </section>
+
+        <section className="space-y-4">
+          <h2>Vanilla JS API</h2>
+          <p>
+            The <code>@pierre/diff-ui</code> package exports several renderer classes
+            for framework-agnostic usage. These are the same renderers used internally
+            by the React components.
+          </p>
+
+          <h3>FileDiff Renderer</h3>
+          <p>
+            The main renderer class for displaying complete file diffs with headers, hunks,
+            and annotations.
+          </p>
+          <SimpleCodeBlock
+            code={`import { FileDiff } from '@pierre/diff-ui';
+import type { DiffFileRendererOptions } from '@pierre/diff-ui';
+
+// Create a container element
+const container = document.getElementById('diff-container');
+
+// Initialize the renderer
+const diffRenderer = new FileDiff<{ message: string }>();
+
+// Configure options
+const options: DiffFileRendererOptions = {
+  theme: 'pierre-dark',
+  diffStyle: 'split',
+  detectLanguage: true,
+  diffIndicators: 'bars',
+  overflow: 'scroll',
+  onLineClick: (props, fileDiff) => {
+    console.log('Clicked line:', props.lineNumber, props.annotationSide);
+  }
+};
+
+// Render the diff
+await diffRenderer.render({
+  container,
+  oldFile: {
+    name: 'example.tsx',
+    contents: 'const greeting = "Hello";'
+  },
+  newFile: {
+    name: 'example.tsx',
+    contents: 'const greeting = "Hello, World!";'
+  },
+  options,
+  lineAnnotations: [
+    {
+      side: 'additions',
+      lineNumber: 1,
+      data: { message: 'Updated greeting' }
+    }
+  ]
+});
+
+// Update theme mode dynamically
+diffRenderer.setThemeMode('dark');
+
+// Update options
+diffRenderer.setOptions({ diffStyle: 'unified' });
+
+// Cleanup when done
+diffRenderer.cleanUp();`}
+            language="typescript"
+          />
+
+          <h3>CodeRenderer</h3>
+          <p>
+            A standalone renderer for syntax-highlighted code blocks with streaming support.
+          </p>
+          <SimpleCodeBlock
+            code={`import { CodeRenderer } from '@pierre/diff-ui';
+
+const container = document.getElementById('code-container');
+const renderer = new CodeRenderer();
+
+// Setup the renderer
+await renderer.setup({
+  container,
+  source: 'const message = "Hello, World!";',
+  language: 'typescript',
+  theme: 'pierre-dark',
+  lineNumbers: true
+});
+
+// Or use streaming
+const stream = new ReadableStream({
+  start(controller) {
+    controller.enqueue('const ');
+    controller.enqueue('message = ');
+    controller.enqueue('"Hello, World!";');
+    controller.close();
+  }
+});
+
+await renderer.setup({
+  container,
+  source: stream,
+  language: 'typescript',
+  theme: 'pierre-dark'
+});`}
+            language="typescript"
+          />
+
+          <h3>DiffHunksRenderer</h3>
+          <p>
+            Low-level renderer for individual diff hunks. Useful when you need fine-grained
+            control over diff rendering.
+          </p>
+          <SimpleCodeBlock
+            code={`import { DiffHunksRenderer, parseDiffFromFiles } from '@pierre/diff-ui';
+
+const container = document.getElementById('hunks-container');
+const renderer = new DiffHunksRenderer();
+
+// Parse diff content
+const diffResult = parseDiffFromFiles(
+  'const greeting = "Hello";',
+  'const greeting = "Hello, World!";'
+);
+
+// Render hunks
+await renderer.render({
+  container,
+  hunks: diffResult.hunks,
+  options: {
+    theme: 'github-dark',
+    diffStyle: 'split',
+    lang: 'typescript'
+  }
+});`}
+            language="typescript"
+          />
+
+          <h3>DiffHeaderRenderer</h3>
+          <p>
+            Renders the file header section of a diff, showing file names and metadata.
+          </p>
+          <SimpleCodeBlock
+            code={`import { DiffHeaderRenderer } from '@pierre/diff-ui';
+
+const container = document.getElementById('header-container');
+const renderer = new DiffHeaderRenderer();
+
+await renderer.render({
+  container,
+  fileDiff: {
+    oldFileName: 'src/utils/format.ts',
+    newFileName: 'src/utils/format.ts',
+    additions: 12,
+    deletions: 5
+  },
+  options: {
+    theme: 'pierre-dark'
+  }
+});`}
+            language="typescript"
+          />
+
+          <h3>Shared Highlighter Utilities</h3>
+          <p>
+            Manage Shiki highlighter instances for optimal performance across multiple renders.
+          </p>
+          <SimpleCodeBlock
+            code={`import {
+  getSharedHighlighter,
+  preloadHighlighter,
+  registerCustomTheme,
+  disposeHighlighter
+} from '@pierre/diff-ui';
+
+// Preload themes and languages
+await preloadHighlighter({
+  themes: ['pierre-dark', 'github-light'],
+  langs: ['typescript', 'python', 'rust']
+});
+
+// Register custom themes
+await registerCustomTheme({
+  name: 'my-custom-theme',
+  type: 'dark',
+  colors: {
+    'editor.background': '#1a1b26',
+    'editor.foreground': '#a9b1d6'
+  },
+  tokenColors: [
+    // ... token color definitions
+  ]
+});
+
+// Get the shared highlighter instance
+const highlighter = await getSharedHighlighter();
+
+// Cleanup when shutting down
+disposeHighlighter();`}
+            language="typescript"
           />
         </section>
 
