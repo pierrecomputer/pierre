@@ -4,8 +4,6 @@ import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { FileContents } from '@pierre/diff-ui';
 import { CornerDownRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 
 import { FeatureHeader } from './FeatureHeader';
 
@@ -45,79 +43,70 @@ export default function Home() {
 };
 
 export function Annotations() {
-  const [element, setElement] = useState<HTMLElement | undefined>(undefined);
-  useEffect(() => {
-    setElement(document.createElement('div'));
-  }, []);
-
   return (
     <div className="space-y-5">
       <FeatureHeader
         title="Comments & Annotations"
         description="Precision Diffs provides a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
       />
-      {element != null && (
-        <>
-          <FileDiff
-            oldFile={OLD_FILE}
-            newFile={NEW_FILE}
-            className="rounded-lg overflow-hidden border"
-            options={{
-              detectLanguage: true,
-              theme: 'pierre-dark',
-              diffStyle: 'unified',
-              renderAnnotation() {
-                return element;
-              },
-            }}
-            annotations={[{ side: 'additions', lineNumber: 8 }]}
-          />
-          {createPortal(<Thread />, element)}
-        </>
-      )}
+      <FileDiff
+        oldFile={OLD_FILE}
+        newFile={NEW_FILE}
+        className="rounded-lg overflow-hidden border"
+        options={{
+          detectLanguage: true,
+          theme: 'pierre-dark',
+          diffStyle: 'unified',
+        }}
+        annotations={[{ side: 'additions', lineNumber: 8 }]}
+        renderAnnotation={() => <Thread />}
+      />
     </div>
   );
 }
 
-const Thread = () => (
-  <div
-    className="max-w-[95%] sm:max-w-[70%]"
-    style={{
-      whiteSpace: 'normal',
-      margin: 20,
-      fontFamily: 'Geist',
-    }}
-  >
-    <CommentThread
-      mainComment={{
-        author: 'You',
-        timestamp: '3h',
-        content: 'Good lord, I refuse to look at diffs ever again after this.',
-        avatarUrl:
-          'https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg',
-        isYou: true,
+function Thread() {
+  return (
+    <div
+      className="max-w-[95%] sm:max-w-[70%]"
+      style={{
+        whiteSpace: 'normal',
+        margin: 20,
+        fontFamily: 'Geist',
       }}
-      replies={[
-        {
-          author: 'Amadeus',
-          timestamp: '2h',
-          content: 'Wait, how long have we been working on this?',
+    >
+      <CommentThread
+        mainComment={{
+          author: 'You',
+          timestamp: '3h',
+          content:
+            'Good lord, I refuse to look at diffs ever again after this.',
           avatarUrl:
-            'https://db.heypierre.app/storage/v1/object/public/avatars/Evzotboe_400x400.jpg',
-        },
-        {
-          author: 'Mark',
-          timestamp: '2h',
-          content: '*checks notes*… it’s not been a short amount of time.',
-          avatarUrl:
-            'https://db.heypierre.app/storage/v1/object/public/avatars/BET9cPgr_400x400.jpg',
-        },
-      ]}
-      onAddReply={() => console.log('Add reply clicked')}
-      onResolve={() => console.log('Resolve clicked')}
-    />
-  </div>
-);
+            'https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg',
+          isYou: true,
+        }}
+        replies={[
+          {
+            author: 'Amadeus',
+            timestamp: '2h',
+            content: 'Wait, how long have we been working on this?',
+            avatarUrl:
+              'https://db.heypierre.app/storage/v1/object/public/avatars/Evzotboe_400x400.jpg',
+          },
+          {
+            author: 'Mark',
+            timestamp: '2h',
+            content: '*checks notes*… it’s not been a short amount of time.',
+            avatarUrl:
+              'https://db.heypierre.app/storage/v1/object/public/avatars/BET9cPgr_400x400.jpg',
+          },
+        ]}
+        onAddReply={() => console.log('Add reply clicked')}
+        onResolve={() => console.log('Resolve clicked')}
+      />
+    </div>
+  );
+}
 
 interface CommentProps {
   author: string;

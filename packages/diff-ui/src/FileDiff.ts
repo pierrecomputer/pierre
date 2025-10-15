@@ -85,8 +85,7 @@ interface DiffFileBaseOptions<LAnnotation> {
   renderCustomMetadata?: RenderCustomFileMetadata;
   detectLanguage?: boolean;
   renderAnnotation?(
-    annotation: LineAnnotation<LAnnotation>,
-    diff: FileDiffMetadata
+    annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
   onLineClick?(props: OnLineClickProps, fileDiff: FileDiffMetadata): unknown;
   onLineEnter?(props: LineEventBaseProps, fileDiff: FileDiffMetadata): unknown;
@@ -121,7 +120,10 @@ export class FileDiff<LAnnotation = undefined> {
   >();
   private resizeObserver: ResizeObserver | undefined;
 
-  constructor(options: DiffFileRendererOptions<LAnnotation>) {
+  constructor(
+    options: DiffFileRendererOptions<LAnnotation>,
+    private isReact = false // NOTE(amadeus): Temp hack while we use this component in a react context
+  ) {
     this.options = options;
   }
 
@@ -261,10 +263,11 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.annotationElements.length = 0;
 
+    if (this.isReact) return;
     const { renderAnnotation } = this.options;
     if (renderAnnotation != null && this.lineAnnotations.length > 0) {
       for (const annotation of this.lineAnnotations) {
-        const content = renderAnnotation(annotation, fileDiff);
+        const content = renderAnnotation(annotation);
         if (content == null) continue;
         const el = document.createElement('div');
         el.dataset.annotationSlot = '';

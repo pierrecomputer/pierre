@@ -8,7 +8,13 @@ import {
   parseDiffFromFiles,
 } from '@pierre/diff-ui';
 import deepEqual from 'fast-deep-equal';
-import { type CSSProperties, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 const BLANK_FILE = { name: '__', contents: '' };
 
@@ -19,6 +25,7 @@ interface FileDiffProps<LAnnotation = undefined> {
   annotations?: LineAnnotation[];
   className?: string;
   style?: CSSProperties;
+  renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
 }
 
 export function FileDiff({
@@ -28,8 +35,9 @@ export function FileDiff({
   annotations,
   className,
   style,
+  renderAnnotation,
 }: FileDiffProps) {
-  const [diffRenderer] = useState(() => new FileDiffUI(options));
+  const [diffRenderer] = useState(() => new FileDiffUI(options, true));
   const ref = useRef<HTMLElement>(null);
   const optionsRef = useRef(options);
   const filesRef = useRef<[FileContents, FileContents]>([
@@ -60,5 +68,17 @@ export function FileDiff({
       });
     }
   });
-  return <pjs-container ref={ref} className={className} style={style} />;
+  return (
+    <pjs-container ref={ref} className={className} style={style}>
+      {renderAnnotation != null &&
+        annotations?.map((annotation) => (
+          <div
+            key={`${annotation.side}-${annotation.lineNumber}`}
+            slot={`${annotation.side}-${annotation.lineNumber}`}
+          >
+            {renderAnnotation(annotation)}
+          </div>
+        ))}
+    </pjs-container>
+  );
 }
