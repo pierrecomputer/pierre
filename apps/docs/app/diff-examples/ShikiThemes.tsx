@@ -238,20 +238,28 @@ export function ShikiThemes() {
           </ButtonGroupItem>
         </ButtonGroup>
       </div>
-      <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
-        options={{
-          detectLanguage: true,
-          diffStyle: 'unified',
-          themeMode: selectedColorMode,
-          themes: {
-            dark: selectedDarkTheme,
-            light: selectedLightTheme,
-          },
-        }}
-      />
+      <div
+        style={
+          {
+            '--pjs-font-family': `var(--font-berkeley-mono)`,
+          } as React.CSSProperties
+        }
+      >
+        <FileDiff
+          oldFile={OLD_FILE}
+          newFile={NEW_FILE}
+          className="rounded-lg overflow-hidden border"
+          options={{
+            detectLanguage: true,
+            diffStyle: 'unified',
+            themeMode: selectedColorMode,
+            themes: {
+              dark: selectedDarkTheme,
+              light: selectedLightTheme,
+            },
+          }}
+        />
+      </div>
     </div>
   );
 }

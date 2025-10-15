@@ -64,16 +64,25 @@ export function SplitUnified() {
           Stacked
         </ButtonGroupItem>
       </ButtonGroup>
-      <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
-        options={{
-          detectLanguage: true,
-          theme: 'pierre-dark',
-          diffStyle,
-        }}
-      />
+
+      <div
+        style={
+          {
+            '--pjs-font-family': `var(--font-berkeley-mono)`,
+          } as React.CSSProperties
+        }
+      >
+        <FileDiff
+          oldFile={OLD_FILE}
+          newFile={NEW_FILE}
+          className="rounded-lg overflow-hidden border"
+          options={{
+            detectLanguage: true,
+            theme: 'pierre-dark',
+            diffStyle,
+          }}
+        />
+      </div>
     </div>
   );
 }

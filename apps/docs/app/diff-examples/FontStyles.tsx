@@ -52,6 +52,7 @@ export default function Home() {
 };
 
 const fontMap: Record<string, string> = {
+  'Berkeley Mono': '--font-berkeley-mono',
   'Geist Mono': '--font-geist-mono',
   'Fira Code': '--font-fira-mono',
   'IBM Plex Mono': '--font-ibm-plex-mono',
@@ -60,7 +61,7 @@ const fontMap: Record<string, string> = {
 };
 
 export function FontStyles() {
-  const [selectedFont, setSelectedFont] = useState('Geist Mono');
+  const [selectedFont, setSelectedFont] = useState('Berkeley Mono');
   const [selectedFontSize, setSelectedFontSize] = useState('14px');
   const [selectedLineHeight, setSelectedLineHeight] = useState('20px');
 
@@ -86,6 +87,14 @@ export function FontStyles() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    onClick={() => setSelectedFont('Berkeley Mono')}
+                  >
+                    Berkeley Mono
+                    {selectedFont === 'Berkeley Mono' && (
+                      <IconCheck className="ml-auto" />
+                    )}
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => setSelectedFont('Geist Mono')}
                   >

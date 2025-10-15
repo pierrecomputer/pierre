@@ -47,16 +47,24 @@ export function ArbitraryFiles() {
         title="Diff arbitrary files"
         description="In addition to rendering standard Git diffs and patches, you can pass any two files in Precision Diffs and get a diff between them. This is especially useful when comparing across generative snapshots where linear history isn't always available."
       />
-      <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
-        options={{
-          detectLanguage: true,
-          theme: 'pierre-dark',
-          diffStyle: 'unified',
-        }}
-      />
+      <div
+        style={
+          {
+            '--pjs-font-family': `var(--font-berkeley-mono)`,
+          } as React.CSSProperties
+        }
+      >
+        <FileDiff
+          oldFile={OLD_FILE}
+          newFile={NEW_FILE}
+          className="rounded-lg overflow-hidden border"
+          options={{
+            detectLanguage: true,
+            theme: 'pierre-dark',
+            diffStyle: 'unified',
+          }}
+        />
+      </div>
     </div>
   );
 }

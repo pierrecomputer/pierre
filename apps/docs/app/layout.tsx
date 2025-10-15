@@ -9,6 +9,8 @@ import {
   IBM_Plex_Mono,
   JetBrains_Mono,
 } from 'next/font/google';
+import localFont from 'next/font/local';
+
 import './globals.css';
 // import '../styles/tokens.css';
 
@@ -17,6 +19,11 @@ import { Toaster } from '@/components/ui/sonner';
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
+});
+
+const berkeleyMono = localFont({
+  src: './BerkeleyMonoVariable.woff2',
+  variable: '--font-berkeley-mono',
 });
 
 const firaMono = Fira_Code({
@@ -34,12 +41,6 @@ const ibmPlexMono = IBM_Plex_Mono({
 const jetbrainsMono = JetBrains_Mono({
   weight: ['400'],
   variable: '--font-jetbrains-mono',
-  subsets: ['latin'],
-});
-
-const googleSansCode = Google_Sans_Code({
-  weight: ['400'],
-  variable: '--font-google-sans-code',
   subsets: ['latin'],
 });
 
@@ -68,7 +69,7 @@ export default function RootLayout({
             // minHeight: '100vh',
           }
         }
-        className={`${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable} ${googleSansCode.variable}`}
+        className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable}`}
       >
         <RootProvider>
           {children}
