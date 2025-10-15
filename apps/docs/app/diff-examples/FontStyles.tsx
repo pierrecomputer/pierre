@@ -160,6 +160,12 @@ export function FontStyles() {
                       <IconCheck className="ml-auto" />
                     )}
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSelectedFontSize('13px')}>
+                    13px
+                    {selectedFontSize === '13px' && (
+                      <IconCheck className="ml-auto" />
+                    )}
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setSelectedFontSize('14px')}>
                     14px
                     {selectedFontSize === '14px' && (

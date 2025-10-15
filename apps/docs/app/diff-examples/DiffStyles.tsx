@@ -2,10 +2,11 @@
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import {
-  IconCheck,
   IconCheckLg,
+  IconCheckboxFill,
   IconCodeStyleBars,
   IconCodeStyleInline,
+  IconParagraph,
   IconSymbolDiffstat,
   IconSymbolPlaceholder,
 } from '@/components/icons';
@@ -17,9 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
 import type { FileContents } from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
@@ -115,7 +113,7 @@ export function DiffStyles() {
                 ) : value === 'classic' ? (
                   <IconSymbolDiffstat />
                 ) : (
-                  <IconSymbolPlaceholder />
+                  <IconParagraph />
                 )}
                 {value}
               </ButtonGroupItem>
@@ -160,37 +158,50 @@ export function DiffStyles() {
             </DropdownMenu>
           </div>
 
-          <div className="flex items-center gap-1 md:ml-auto">
-            <Switch
-              id="background-colors"
-              checked={!disableBackground}
-              onCheckedChange={(checked: boolean) =>
-                setDisableBackground(!checked)
+          <ButtonGroup
+            value={disableBackground ? 'disable' : 'enable'}
+            onValueChange={(value) => {
+              if (value === 'disable') {
+                setDisableBackground(true);
+              } else {
+                setDisableBackground(false);
               }
-            />
-            <Label
-              htmlFor="background-colors"
-              className={cn(!disableBackground ? '' : 'text-muted-foreground')}
-            >
-              Background colors
-            </Label>
-          </div>
+            }}
+          >
+            {['enable', 'disable'].map((value) => (
+              <ButtonGroupItem key={value} value={value}>
+                {(value === 'enable' && !disableBackground) ||
+                (value === 'disable' && disableBackground) ? (
+                  <IconCheckboxFill />
+                ) : (
+                  <IconSymbolPlaceholder />
+                )}
+                {value === 'disable' ? 'Off' : 'Background colors'}
+              </ButtonGroupItem>
+            ))}
+          </ButtonGroup>
 
-          <div className="flex items-center gap-1">
-            <Switch
-              id="line-wrapping"
-              checked={overflow === 'wrap'}
-              onCheckedChange={(checked: boolean) =>
-                setOverflow(checked ? 'wrap' : 'scroll')
-              }
-            />
-            <Label
-              htmlFor="line-wrapping"
-              className={cn(overflow === 'wrap' ? '' : 'text-muted-foreground')}
-            >
+          <ButtonGroup
+            value={overflow}
+            onValueChange={(value) => setOverflow(value as 'wrap' | 'scroll')}
+          >
+            <ButtonGroupItem value="wrap">
+              {overflow === 'wrap' ? (
+                <IconCheckboxFill />
+              ) : (
+                <IconSymbolPlaceholder />
+              )}
               Word wrap
-            </Label>
-          </div>
+            </ButtonGroupItem>
+            <ButtonGroupItem value="scroll">
+              {overflow === 'scroll' ? (
+                <IconCheckboxFill />
+              ) : (
+                <IconSymbolPlaceholder />
+              )}
+              Off
+            </ButtonGroupItem>
+          </ButtonGroup>
         </div>
       </div>
       <FileDiff
