@@ -80,12 +80,9 @@ function ButtonGroupItem({
         'bg-transparent border-transparent text-muted-foreground hover:cursor-pointer',
         isSelected &&
           'bg-background border-border text-accent-foreground hover:bg-background hover:border-border',
-        // isFirst && 'rounded-r-none',
-        // isLast && 'rounded-l-none',
-        // isMiddle && 'rounded-none',
         className
       )}
-      variant={isSelected ? 'outline' : context.variant}
+      variant={isSelected ? 'outline' : 'ghost'}
       size={context.size}
       onClick={handleClick}
       {...props}

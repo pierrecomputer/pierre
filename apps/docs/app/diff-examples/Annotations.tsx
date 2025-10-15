@@ -184,14 +184,14 @@ export function CommentThread({
       <div className="mt-4 ml-8 sm:ml-[52px] flex items-center gap-4">
         <button
           onClick={onAddReply}
-          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
         >
           <CornerDownRight className="h-4 w-4" />
           Add reply...
         </button>
         <button
           onClick={onResolve}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
         >
           Resolve
         </button>

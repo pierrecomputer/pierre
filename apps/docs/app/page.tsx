@@ -174,7 +174,7 @@ const Hero = () => {
           <TooltipTrigger asChild>
             <button
               onClick={() => void copyToClipboard()}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-md text-white bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 transition-colors font-mono text-sm"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-md text-white bg-gray-900 hover:bg-gray-800 dark:bg-black dark:border dark:border-white/20 dark:hover:border-white/30 transition-colors font-mono text-sm"
             >
               <span>npm i @pierre/precision-diffs</span>
               {copied ? <IconCheck /> : <IconCopyFill />}
