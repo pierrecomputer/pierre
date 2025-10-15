@@ -157,7 +157,7 @@ export function SplitUnified() {
     <div className="space-y-5">
       <FeatureHeader
         title="Diff layout styles"
-        description="Choose from stacked (unified) or split (side-by-side). Both use CSS Grid under the hood, meaning fewer DOM nodes and faster rendering."
+        description="Choose from stacked (unified) or split (side-by-side). Both use CSS Grid and Shadow DOM under the hood, meaning fewer DOM nodes and faster rendering."
       />
       <ButtonGroup
         value={diffStyle}

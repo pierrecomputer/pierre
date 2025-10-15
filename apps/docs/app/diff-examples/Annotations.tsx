@@ -47,7 +47,7 @@ export function Annotations() {
     <div className="space-y-5">
       <FeatureHeader
         title="Comments & Annotations"
-        description="Precision Diffs provides a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
+        description="Precision Diffs provide a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
       />
       <FileDiff
         oldFile={OLD_FILE}

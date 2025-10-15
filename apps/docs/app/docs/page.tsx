@@ -1,6 +1,7 @@
 'use client';
 
 import Footer from '@/components/Footer';
+import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 import { Header } from '@/components/ui/header';
 import { useEffect, useState } from 'react';
 
@@ -68,10 +69,14 @@ export default function DocsPage() {
       <div className="docs-container prose dark:prose-invert max-w-none">
         <section className="space-y-4">
           <h2>Installation</h2>
-          <p>Install the Precision Diffs package using npm, yarn, or pnpm:</p>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>npm install @pierre/precision-diffs</code>
-          </pre>
+          <p>
+            Install the Precision Diffs package using bun, pnpm, npm, or yarn:
+          </p>
+          <SimpleCodeBlock
+            code="bun add @pierre/precision-diffs"
+            language="bash"
+            lineNumbers={false}
+          />
         </section>
 
         <section className="space-y-4">
@@ -80,8 +85,8 @@ export default function DocsPage() {
             The FileDiff component accepts two file objects (old and new) and
             renders a visual diff between them. Here's a basic example:
           </p>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>{`import { FileDiff } from '@pierre/precision-diffs';
+          <SimpleCodeBlock
+            code={`import { FileDiff } from '@pierre/precision-diffs';
 import type { FileContents } from '@pierre/precision-diffs';
 
 const oldFile: FileContents = {
@@ -105,8 +110,9 @@ export default function MyComponent() {
       }}
     />
   );
-}`}</code>
-          </pre>
+}`}
+            language="tsx"
+          />
         </section>
 
         <section className="space-y-4">
@@ -120,9 +126,30 @@ export default function MyComponent() {
                 Type: <code>FileContents</code> | Required
               </p>
               <p>The original file object containing name and contents.</p>
-              <pre className="bg-muted p-3 rounded mt-2 text-sm">
-                <code>{`{ name: string, contents: string }`}</code>
-              </pre>
+              {/* <CodeBlock
+                data={[
+                  {
+                    language: 'typescript',
+                    filename: 'type.ts',
+                    code: '{ name: string, contents: string }',
+                  },
+                ]}
+                defaultValue="typescript"
+                className="mt-2"
+              >
+                <CodeBlockHeader>
+                  <CodeBlockCopyButton />
+                </CodeBlockHeader>
+                <CodeBlockBody>
+                  {(item) => (
+                    <CodeBlockItem key={item.language} value={item.language} lineNumbers={false}>
+                      <CodeBlockContent language={item.language}>
+                        {item.code}
+                      </CodeBlockContent>
+                    </CodeBlockItem>
+                  )}
+                </CodeBlockBody>
+              </CodeBlock> */}
             </div>
 
             <div className="border rounded-lg p-4">
@@ -153,13 +180,16 @@ export default function MyComponent() {
                 Array of line annotations to display inline comments or
                 decorations.
               </p>
-              <pre className="bg-muted p-3 rounded mt-2 text-sm">
-                <code>{`[{
+              <SimpleCodeBlock
+                code={`[{
   side: 'additions' | 'deletions',
   lineNumber: number,
   data?: any
-}]`}</code>
-              </pre>
+}]`}
+                language="typescript"
+                className="mt-2 text-sm"
+                lineNumbers={false}
+              />
             </div>
 
             <div className="border rounded-lg p-4">
@@ -207,9 +237,12 @@ export default function MyComponent() {
                 Shiki theme name. Supports any Shiki theme (e.g., 'pierre-dark',
                 'github-light', 'nord', etc.)
               </p>
-              <pre className="bg-muted p-3 rounded mt-2 text-sm">
-                <code>{`options={{ theme: 'pierre-dark' }}`}</code>
-              </pre>
+              <SimpleCodeBlock
+                code="options={{ theme: 'pierre-dark' }}"
+                language="typescript"
+                className="mt-2 text-sm"
+                lineNumbers={false}
+              />
             </div>
 
             <div className="border rounded-lg p-4">
@@ -222,14 +255,17 @@ export default function MyComponent() {
                 Dual theme configuration for automatic light/dark mode
                 switching.
               </p>
-              <pre className="bg-muted p-3 rounded mt-2 text-sm">
-                <code>{`options={{
+              <SimpleCodeBlock
+                code={`options={{
   themes: {
     light: 'github-light',
     dark: 'github-dark'
   }
-}}`}</code>
-              </pre>
+}}`}
+                language="typescript"
+                className="mt-2 text-sm"
+                lineNumbers={false}
+              />
             </div>
 
             <div className="border rounded-lg p-4">
@@ -338,14 +374,17 @@ export default function MyComponent() {
                 </code>
               </p>
               <p>Called when a line is clicked.</p>
-              <pre className="bg-muted p-3 rounded mt-2 text-sm">
-                <code>{`options={{
+              <SimpleCodeBlock
+                code={`options={{
   onLineClick: (props, fileDiff) => {
     console.log('Clicked line:', props.lineNumber);
     console.log('Side:', props.annotationSide);
   }
-}}`}</code>
-              </pre>
+}}`}
+                language="typescript"
+                className="mt-2 text-sm"
+                lineNumbers={false}
+              />
             </div>
 
             <div className="border rounded-lg p-4">
@@ -377,8 +416,8 @@ export default function MyComponent() {
         <section className="space-y-4">
           <h2>Complete Example</h2>
           <p>Here's a more complete example with multiple options:</p>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>{`import { FileDiff } from '@pierre/precision-diffs';
+          <SimpleCodeBlock
+            code={`import { FileDiff } from '@pierre/precision-diffs';
 import type { FileContents, LineAnnotation } from '@pierre/precision-diffs';
 import { useState } from 'react';
 
@@ -454,30 +493,33 @@ export function Header() {
       />
     </div>
   );
-}`}</code>
-          </pre>
+}`}
+            className="rounded-lg overflow-hidden border"
+          />
         </section>
 
         <section className="space-y-4">
           <h2>Styling</h2>
           <p>You can customize fonts and other styles using CSS variables:</p>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>{`:root {
+          <SimpleCodeBlock
+            code={`:root {
   --pjs-font-family: 'Berkeley Mono', monospace;
   --pjs-font-size: 14px;
   --pjs-line-height: 1.5;
-}`}</code>
-          </pre>
+}`}
+            className="rounded-lg overflow-hidden border"
+          />
           <p>Or apply inline styles to the container:</p>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>{`<FileDiff
+          <SimpleCodeBlock
+            code={`<FileDiff
   style={{
     '--pjs-font-family': 'JetBrains Mono, monospace',
     '--pjs-font-size': '13px'
   } as React.CSSProperties}
   // ... other props
-/>`}</code>
-          </pre>
+/>`}
+            className="rounded-lg overflow-hidden border"
+          />
         </section>
 
         <section className="space-y-4">
@@ -485,8 +527,8 @@ export function Header() {
           <p>
             The package is fully typed with TypeScript. Import types as needed:
           </p>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>{`import type {
+          <SimpleCodeBlock
+            code={`import type {
   FileContents,
   DiffFileRendererOptions,
   LineAnnotation,
@@ -494,39 +536,9 @@ export function Header() {
   OnLineClickProps,
   OnLineEnterProps,
   OnLineLeaveProps,
-} from '@pierre/precision-diffs';`}</code>
-          </pre>
-        </section>
-
-        <section className="space-y-4">
-          <h2>Additional Resources</h2>
-          <ul className="list-disc list-inside space-y-2">
-            <li>
-              <a href="/" className="text-blue-600 hover:underline">
-                View interactive examples on the homepage
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://github.com/pierreco/precision-diffs"
-                className="text-blue-600 hover:underline"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                GitHub Repository
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://discord.gg/pierre"
-                className="text-blue-600 hover:underline"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Join our Discord community
-              </a>
-            </li>
-          </ul>
+} from '@pierre/precision-diffs';`}
+            className="rounded-lg overflow-hidden border"
+          />
         </section>
       </div>
 

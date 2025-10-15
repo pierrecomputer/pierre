@@ -86,8 +86,13 @@ export class CodeRenderer {
     return this.highlighter;
   }
 
-  private queuedSetupArgs: [ReadableStream<string>, HTMLElement] | undefined;
-  async setup(_source: ReadableStream<string>, _wrapper: HTMLElement) {
+  private queuedSetupArgs:
+    | [ReadableStream<string> | string, HTMLElement]
+    | undefined;
+  async setup(
+    _source: ReadableStream<string> | string,
+    _wrapper: HTMLElement
+  ) {
     const isSettingUp = this.queuedSetupArgs != null;
     this.queuedSetupArgs = [_source, _wrapper];
     if (isSettingUp) {
@@ -99,7 +104,19 @@ export class CodeRenderer {
 
     const [source, wrapper] = this.queuedSetupArgs;
     this.queuedSetupArgs = undefined;
-    this.setupStream(source, wrapper, this.highlighter);
+
+    // Convert string to ReadableStream if needed
+    const stream =
+      typeof source === 'string'
+        ? new ReadableStream<string>({
+            start(controller) {
+              controller.enqueue(source);
+              controller.close();
+            },
+          })
+        : source;
+
+    this.setupStream(stream, wrapper, this.highlighter);
   }
 
   private setupStream(
