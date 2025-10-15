@@ -102,6 +102,7 @@ export function createSpanFromToken(token: ThemedToken) {
   const style = token.htmlStyle ?? getTokenStyleObject(token);
   element.style = stringifyTokenStyle(style);
   element.textContent = token.content;
+  element.dataset.span = ''
   return element;
 }
 

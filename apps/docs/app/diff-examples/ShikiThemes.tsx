@@ -244,7 +244,7 @@ export function ShikiThemes() {
         className="rounded-lg overflow-hidden border"
         options={{
           detectLanguage: true,
-          diffStyle: 'unified',
+          diffStyle: 'split',
           themeMode: selectedColorMode,
           themes: {
             dark: selectedDarkTheme,
