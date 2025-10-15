@@ -494,17 +494,13 @@ export class FileDiff<LAnnotation = undefined> {
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
 
-    if (this.lineAnnotations.length === 0 || this.options.overflow === 'wrap') {
+    if (this.options.overflow === 'wrap') {
       return;
     }
 
     const annotationElements = pre.querySelectorAll(
       '[data-line-annotation*=","]'
     );
-
-    if (annotationElements.length === 0) {
-      return;
-    }
 
     this.resizeObserver ??= new ResizeObserver(this.handleResizeObserver);
     const codeElements = pre.querySelectorAll('code');
@@ -654,22 +650,26 @@ export class FileDiff<LAnnotation = undefined> {
           if (specs.inlineSize !== item.codeWidth) {
             item.codeWidth = specs.inlineSize;
             item.codeElement.style.setProperty(
-              '--pjs-annotation-content-width',
+              '--pjs-column-content-width',
               `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
+            );
+            item.codeElement.style.setProperty(
+              '--pjs-column-width',
+              `${item.codeWidth}px`
             );
           }
         } else if (target === item.numberElement) {
           if (specs.inlineSize !== item.numberWidth) {
             item.numberWidth = specs.inlineSize;
             item.codeElement.style.setProperty(
-              '--pjs-number-column-width',
+              '--pjs-column-number-width',
               `${item.numberWidth}px`
             );
             // We probably need to update code width variable if
             // `numberWidth` changed
             if (item.codeWidth !== 'auto') {
               item.codeElement.style.setProperty(
-                '--pjs-annotation-content-width',
+                '--pjs-column-content-width',
                 `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
               );
             }

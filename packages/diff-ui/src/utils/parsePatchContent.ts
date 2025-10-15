@@ -108,6 +108,7 @@ function processPatch(data: string): ParsedPatch {
         deletedStart: parseInt(match[1]),
         hunkContent: lines.length > 0 ? lines : undefined,
         hunkContext: match[5],
+        hunkSpecs: firstLine,
       };
       if (
         isNaN(hunkData.additionCount) ||

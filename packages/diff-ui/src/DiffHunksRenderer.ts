@@ -153,6 +153,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const {
       diffStyle = 'split',
       disableLineNumbers = false,
+      hunkSeparators = 'file-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
       maxLineLengthForHighlighting = 1000,
@@ -165,6 +166,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return {
         diffStyle,
         disableLineNumbers,
+        hunkSeparators,
         lineDiffType,
         maxLineDiffLength,
         maxLineLengthForHighlighting,
@@ -176,6 +178,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return {
       diffStyle,
       disableLineNumbers,
+      hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
       maxLineLengthForHighlighting,
@@ -288,7 +291,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     highlighter,
     state,
     transformer,
+    prevHunk,
+    isLastHunk,
   }: RenderHunkProps): HunksRenderResult {
+    const { hunkSeparators } = this.getOptionsWithDefaults();
     let additionsHTML = '';
     let deletionsHTML = '';
     let unifiedHTML = '';
@@ -311,8 +317,39 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.createHastOptions(transformer, computed.decorations, hasLongLines)
       );
       const transformedNodes = this.getNodesToRender(nodes);
-      if (hunkIndex !== 0) {
-        transformedNodes.unshift(createSeparator());
+      if (hunkSeparators === 'file-info') {
+        const lines =
+          (() => {
+            const hunkStart = hunk.additionStart;
+            if (prevHunk == null) {
+              return hunkStart;
+            }
+            return (
+              hunkStart - (prevHunk.additionStart + prevHunk.additionCount)
+            );
+          })() - 1;
+        if (lines > 0) {
+          transformedNodes.unshift(
+            createSeparator({
+              type: 'expando-lad',
+              content: `${lines} unmodified lines`,
+            })
+          );
+        }
+
+        if (isLastHunk) {
+          // FIXME(amadeus): Actually push me once i figure out the logic with files
+          createSeparator({
+            type: 'expando-lad',
+            content: `Show rest of file`,
+          });
+        }
+      } else if (hunkSeparators === 'metadata') {
+        transformedNodes.unshift(
+          createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
+        );
+      } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
+        transformedNodes.unshift(createSeparator({ type: 'empty' }));
       }
       // FIXME(amadeus): Implement the final gap if needed, maybe generate a
       // padded lad if nothing else...

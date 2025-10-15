@@ -61,6 +61,7 @@ export interface Hunk {
   deletedStart: number;
   hunkContent: string[] | undefined;
   hunkContext: string | undefined;
+  hunkSpecs: string;
 }
 
 export interface FileDiffMetadata {
@@ -92,6 +93,7 @@ export interface BaseRendererOptions extends BaseCodeProps {
   diffStyle?: 'unified' | 'split'; // split is default
   diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
   disableBackground?: boolean;
+  hunkSeparators?: 'simple' | 'metadata' | 'file-info'; // file-info is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
   lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default

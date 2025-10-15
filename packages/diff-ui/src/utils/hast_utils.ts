@@ -14,7 +14,7 @@ export function createTextNode(value: string): Text {
 }
 
 interface CreateHastElementProps {
-  tagName: 'span' | 'div' | 'slot';
+  tagName: 'span' | 'div' | 'slot' | 'svg' | 'use';
   children?: ElementContent[];
   properties?: Properties;
 }
@@ -32,10 +32,60 @@ export function createHastElement({
   };
 }
 
-export function createSeparator(): Element {
+interface CreateSeparatorProps {
+  type: 'empty' | 'metadata' | 'expando-lad';
+  content?: string;
+}
+
+export function createSeparator({
+  type,
+  content,
+}: CreateSeparatorProps): Element {
+  const children = [];
+  if (type === 'metadata' && content != null) {
+    children.push(
+      createHastElement({
+        tagName: 'div',
+        children: [createTextNode(content)],
+        properties: { 'data-separator-content': '' },
+      })
+    );
+  }
+  if (type === 'expando-lad' && content != null) {
+    children.push(
+      createHastElement({
+        tagName: 'div',
+        children: [
+          createIcon({ name: 'pjs-icon-expand' }),
+          createTextNode(content),
+        ],
+        properties: { 'data-separator-content': '' },
+      })
+    );
+  }
   return createHastElement({
     tagName: 'div',
-    properties: { 'data-separator': '' },
+    children,
+    properties: { 'data-separator': children.length === 0 ? '' : type },
+  });
+}
+
+interface CreateIconProps {
+  name: string;
+  width?: number;
+  height?: number;
+}
+
+export function createIcon({ name, width = 16, height = 16 }: CreateIconProps) {
+  return createHastElement({
+    tagName: 'svg',
+    properties: { width, height, viewBox: '0 0 16 16' },
+    children: [
+      createHastElement({
+        tagName: 'use',
+        properties: { href: `#${name}` },
+      }),
+    ],
   });
 }
 

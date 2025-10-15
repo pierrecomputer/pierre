@@ -238,6 +238,7 @@ export function renderFileHeader({
   const icon = createSVGElement('svg');
   icon.setAttribute('width', '16');
   icon.setAttribute('height', '16');
+  icon.setAttribute('viewBox', '0 0 16 16');
   const useEl = createSVGElement('use');
   useEl.setAttribute('href', getIconForType(file.type));
   icon.appendChild(useEl);
