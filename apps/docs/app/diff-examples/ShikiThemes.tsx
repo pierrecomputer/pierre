@@ -152,7 +152,7 @@ export function ShikiThemes() {
         title="Adapts to any Shiki theme"
         description="Precision Diffs are built with Shiki for syntax highlighting and general theming. Our components automatically adapt to blend in with your theme selection, including across color modes."
       />
-      <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex flex-col md:flex-row md:items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

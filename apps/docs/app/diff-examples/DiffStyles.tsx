@@ -121,7 +121,7 @@ export function DiffStyles() {
           title="Choose how changes are styled"
           description="Your diffs, your choice. Render changed lines with classic diff indicators (+/–), full-width background colors, or vertical bars. You can even highlight inline changes—character or word based—and toggle line wrapping, hide numbers, and more."
         />
-        <div className="flex flex-col md:flex-row gap-3">
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
           <ButtonGroup
             value={diffIndicators}
             onValueChange={(value) =>
