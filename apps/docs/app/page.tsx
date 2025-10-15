@@ -23,7 +23,6 @@ import { Annotations } from './diff-examples/Annotations';
 import { ArbitraryFiles } from './diff-examples/ArbitraryFiles';
 import { DiffStyles } from './diff-examples/DiffStyles';
 import { FontStyles } from './diff-examples/FontStyles';
-import { PrebuiltReact } from './diff-examples/PrebuiltReact';
 import { ShikiThemes } from './diff-examples/ShikiThemes';
 import { SplitUnified } from './diff-examples/SplitUnified';
 

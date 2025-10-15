@@ -2,34 +2,13 @@
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import {
-  IconAnnotate,
-  IconBarChart,
-  IconBarChart2,
   IconCheck,
-  IconCheckLg,
-  IconCodeBlock,
-  IconCommentSuggest,
-  IconEye,
-  IconEyeSlash,
   IconMakeShorter,
-  IconPaperclip,
   IconParagraph,
-  IconParagraphPlus,
-  IconPencil,
-  IconPencilSquircle,
-  IconSquircleLg,
   IconSquircleLgFill,
-  IconSquircleSpeechText,
-  IconSymbolAdded,
-  IconSymbolDeleted,
   IconSymbolDiffstat,
-  IconSymbolIgnored,
-  IconSymbolMap,
-  IconSymbolModified,
-  IconSymbolMoved,
   IconSymbolPlaceholder,
   IconSymbolRef,
-  IconSymbolResolved,
   IconWordWrap,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -162,6 +141,20 @@ export function DiffStyles() {
               </ButtonGroupItem>
             ))}
           </ButtonGroup>
+
+          <ButtonGroup
+            value={overflow}
+            onValueChange={(value) => setOverflow(value as 'wrap' | 'scroll')}
+          >
+            <ButtonGroupItem value="wrap">
+              <IconWordWrap />
+              Wrap
+            </ButtonGroupItem>
+            <ButtonGroupItem value="scroll">
+              <IconParagraph />
+              No wrap
+            </ButtonGroupItem>
+          </ButtonGroup>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -169,8 +162,9 @@ export function DiffStyles() {
                 className="justify-start w-full md:w-auto"
               >
                 <IconMakeShorter />
+                {}
                 {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
-                  ?.label || lineDiffStyle}
+                  ?.label ?? lineDiffStyle}
                 <ChevronDown className="ml-auto h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -194,20 +188,6 @@ export function DiffStyles() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <ButtonGroup
-            value={overflow}
-            onValueChange={(value) => setOverflow(value as 'wrap' | 'scroll')}
-          >
-            <ButtonGroupItem value="wrap">
-              <IconWordWrap />
-              Wrap
-            </ButtonGroupItem>
-            <ButtonGroupItem value="scroll">
-              <IconParagraph />
-              No wrap
-            </ButtonGroupItem>
-          </ButtonGroup>
         </div>
       </div>
       <FileDiff
