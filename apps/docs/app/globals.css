@@ -142,3 +142,8 @@
     grid-row-start: 1;
   }
 }
+
+::selection {
+  background-color: #ffff00;
+  color: oklch(0.145 0 0);
+}
