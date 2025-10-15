@@ -153,66 +153,70 @@ export function ShikiThemes() {
         description="Precision Diffs are built with Shiki for syntax highlighting and general theming. Our components automatically adapt to blend in with your theme selection, including across color modes."
       />
       <div className="flex flex-col md:flex-row md:items-center gap-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="justify-start w-full md:w-auto"
-            >
-              <IconColorLight />
-              {selectedLightTheme}
-              <ChevronDown className="ml-auto h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {LIGHT_THEMES.map((theme) => (
-              <DropdownMenuItem
-                key={theme}
-                onClick={() => setSelectedLightTheme(theme)}
-                className={
-                  selectedLightTheme === theme ? 'bg-accent' : undefined
-                }
+        <div className="p-[2px] rounded-lg bg-secondary">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="justify-start w-full md:w-auto"
               >
-                {theme}
-                {selectedLightTheme === theme && (
-                  <IconCheck className="ml-auto" />
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <IconColorLight />
+                {selectedLightTheme}
+                <ChevronDown className="ml-auto h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {LIGHT_THEMES.map((theme) => (
+                <DropdownMenuItem
+                  key={theme}
+                  onClick={() => setSelectedLightTheme(theme)}
+                  className={
+                    selectedLightTheme === theme ? 'bg-accent' : undefined
+                  }
+                >
+                  {theme}
+                  {selectedLightTheme === theme && (
+                    <IconCheck className="ml-auto" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="justify-start w-full md:w-auto"
-            >
-              <IconColorDark />
-              {selectedDarkTheme}
-              <ChevronDown className="ml-auto h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="overflow-auto max-h-[550px]"
-          >
-            {DARK_THEMES.map((theme) => (
-              <DropdownMenuItem
-                key={theme}
-                onClick={() => setSelectedDarkTheme(theme)}
-                className={
-                  selectedDarkTheme === theme ? 'bg-accent' : undefined
-                }
+        <div className="p-[2px] rounded-lg bg-secondary">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="justify-start w-full md:w-auto"
               >
-                {theme}
-                {selectedDarkTheme === theme && (
-                  <IconCheck className="ml-auto" />
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <IconColorDark />
+                {selectedDarkTheme}
+                <ChevronDown className="ml-auto h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="overflow-auto max-h-[550px]"
+            >
+              {DARK_THEMES.map((theme) => (
+                <DropdownMenuItem
+                  key={theme}
+                  onClick={() => setSelectedDarkTheme(theme)}
+                  className={
+                    selectedDarkTheme === theme ? 'bg-accent' : undefined
+                  }
+                >
+                  {theme}
+                  {selectedDarkTheme === theme && (
+                    <IconCheck className="ml-auto" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <ButtonGroup
           value={selectedColorMode}

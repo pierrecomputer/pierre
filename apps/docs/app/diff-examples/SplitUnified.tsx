@@ -54,7 +54,6 @@ export function SplitUnified() {
       <ButtonGroup
         value={diffStyle}
         onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
-        size="lg"
       >
         <ButtonGroupItem value="split">
           <IconDiffSplit />

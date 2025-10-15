@@ -47,7 +47,6 @@ export default function Home() {
 export function Annotations() {
   const [element, setElement] = useState<HTMLElement | undefined>(undefined);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setElement(document.createElement('div'));
   }, []);
 
@@ -109,7 +108,7 @@ const Thread = () => (
         {
           author: 'Mark',
           timestamp: '2h',
-          content: "*checks notes* …… it's not been a short amount of time.",
+          content: '*checks notes*… it’s not been a short amount of time.',
           avatarUrl:
             'https://db.heypierre.app/storage/v1/object/public/avatars/BET9cPgr_400x400.jpg',
         },
@@ -150,7 +149,7 @@ export function Comment({
           </span>
           <span className="text-sm text-muted-foreground">{timestamp}</span>
         </div>
-        <p className="mt-1 text-foreground leading-relaxed">{content}</p>
+        <p className="text-foreground leading-relaxed">{content}</p>
       </div>
     </div>
   );
@@ -174,24 +173,24 @@ export function CommentThread({
       <Comment {...mainComment} />
 
       {replies.length > 0 && (
-        <div className="mt-4 ml-8 sm:ml-[52px] space-y-4">
+        <div className="mt-4 ml-8 sm:ml-[32px] space-y-4">
           {replies.map((reply, index) => (
             <Comment key={index} {...reply} />
           ))}
         </div>
       )}
 
-      <div className="mt-4 ml-8 sm:ml-[52px] flex items-center gap-4">
+      <div className="mt-4 ml-8 sm:ml-[32px] flex items-center gap-4">
         <button
           onClick={onAddReply}
-          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
         >
           <CornerDownRight className="h-4 w-4" />
           Add reply...
         </button>
         <button
           onClick={onResolve}
-          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
         >
           Resolve
         </button>

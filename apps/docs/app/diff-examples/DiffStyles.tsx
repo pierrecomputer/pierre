@@ -3,13 +3,11 @@
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import {
   IconCheck,
-  IconMakeShorter,
-  IconParagraph,
-  IconSquircleLgFill,
+  IconCheckLg,
+  IconCodeStyleBars,
+  IconCodeStyleInline,
   IconSymbolDiffstat,
   IconSymbolPlaceholder,
-  IconSymbolRef,
-  IconWordWrap,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -19,6 +17,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import type { FileContents } from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
@@ -64,22 +65,22 @@ const diffStyleOptions = [
   {
     value: 'word-alt',
     label: 'Word-Alt',
-    description: 'Highlights entire words, uses enhanced algorithm',
+    description: 'Highlight entire words with enhanced algorithm',
   },
   {
     value: 'word',
     label: 'Word',
-    description: 'Highlights changed words within lines',
+    description: 'Highlight changed words within lines',
   },
   {
     value: 'char',
     label: 'Character',
-    description: 'Highlights individual character changes',
+    description: 'Highlight individual character changes',
   },
   {
     value: 'none',
     label: 'None',
-    description: 'Shows line-level changes only',
+    description: 'Show line-level changes only',
   },
 ] as const;
 
@@ -108,9 +109,9 @@ export function DiffStyles() {
             }
           >
             {['bars', 'classic', 'none'].map((value) => (
-              <ButtonGroupItem key={value} value={value}>
+              <ButtonGroupItem key={value} value={value} className="capitalize">
                 {value === 'bars' ? (
-                  <IconSymbolRef />
+                  <IconCodeStyleBars />
                 ) : value === 'classic' ? (
                   <IconSymbolDiffstat />
                 ) : (
@@ -120,74 +121,76 @@ export function DiffStyles() {
               </ButtonGroupItem>
             ))}
           </ButtonGroup>
-          <ButtonGroup
-            value={disableBackground ? 'disable' : 'enable'}
-            onValueChange={(value) => {
-              if (value === 'disable') {
-                setDisableBackground(true);
-              } else {
-                setDisableBackground(false);
-              }
-            }}
-          >
-            {['enable', 'disable'].map((value) => (
-              <ButtonGroupItem key={value} value={value}>
-                {value === 'enable' ? (
-                  <IconSquircleLgFill />
-                ) : (
-                  <IconSymbolPlaceholder />
-                )}
-                {value === 'disable' ? 'Disable BG' : 'Enable BG'}
-              </ButtonGroupItem>
-            ))}
-          </ButtonGroup>
 
-          <ButtonGroup
-            value={overflow}
-            onValueChange={(value) => setOverflow(value as 'wrap' | 'scroll')}
-          >
-            <ButtonGroupItem value="wrap">
-              <IconWordWrap />
-              Wrap
-            </ButtonGroupItem>
-            <ButtonGroupItem value="scroll">
-              <IconParagraph />
-              No wrap
-            </ButtonGroupItem>
-          </ButtonGroup>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="justify-start w-full md:w-auto"
-              >
-                <IconMakeShorter />
-                {}
-                {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
-                  ?.label ?? lineDiffStyle}
-                <ChevronDown className="ml-auto h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              {diffStyleOptions.map((option) => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setLineDiffStyle(option.value)}
-                  className="flex-col items-start py-2"
+          <div className="p-[2px] rounded-lg bg-secondary">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="justify-start w-full md:w-auto"
                 >
-                  <div className="flex w-full items-center">
-                    <span className="font-medium">{option.label}</span>
-                    {lineDiffStyle === option.value && (
-                      <IconCheck className="ml-auto" />
+                  <IconCodeStyleInline />
+                  {}
+                  {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
+                    ?.label ?? lineDiffStyle}
+                  <ChevronDown className="text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-82">
+                {diffStyleOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onClick={() => setLineDiffStyle(option.value)}
+                    className="flex items-start py-2 gap-2"
+                  >
+                    {lineDiffStyle === option.value ? (
+                      <IconCheckLg className="mt-[1px]" />
+                    ) : (
+                      <div className="w-4 h-4" />
                     )}
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {option.description}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                    <div className="flex flex-col w-full items-start">
+                      <span className="font-medium">{option.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="flex items-center gap-1 md:ml-auto">
+            <Switch
+              id="background-colors"
+              checked={!disableBackground}
+              onCheckedChange={(checked: boolean) =>
+                setDisableBackground(!checked)
+              }
+            />
+            <Label
+              htmlFor="background-colors"
+              className={cn(!disableBackground ? '' : 'text-muted-foreground')}
+            >
+              Background colors
+            </Label>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Switch
+              id="line-wrapping"
+              checked={overflow === 'wrap'}
+              onCheckedChange={(checked: boolean) =>
+                setOverflow(checked ? 'wrap' : 'scroll')
+              }
+            />
+            <Label
+              htmlFor="line-wrapping"
+              className={cn(overflow === 'wrap' ? '' : 'text-muted-foreground')}
+            >
+              Word wrap
+            </Label>
+          </div>
         </div>
       </div>
       <FileDiff

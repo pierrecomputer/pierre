@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function Footer() {
   return (
-    <footer className="pt-8 pb-12">
+    <footer className="pt-12 pb-12">
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">Precision Diffs</div>
         <nav className="flex items-center gap-4">
@@ -12,12 +12,12 @@ export default function Footer() {
           >
             Home
           </Link>
-          <Link
+          {/* <Link
             href="/playground"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Playground
-          </Link>
+          </Link> */}
           <Link
             href="/docs"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"

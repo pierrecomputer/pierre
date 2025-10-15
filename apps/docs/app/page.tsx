@@ -94,12 +94,12 @@ export default function Home() {
         </p>
       </section> */}
 
-      <section className="py-12 space-y-6">
-        <div className="space-y-4">
-          <h2 className="text-3xl font-bold">
+      <section className="py-16 mt-8 space-y-6 border-y">
+        <div className="space-y-3">
+          <h2 className="text-2xl font-medium">
             With love from The Pierre Computer Company
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground max-w-2xl">
             Our team has decades of cumulative experience in open source,
             developer tools, and more. We’ve worked on projects like Coinbase,
             GitHub, Bootstrap, Twitter, Medium, and more. This stuff is our
@@ -120,7 +120,7 @@ export default function Home() {
           </Button>
           <Button variant="outline" asChild>
             <Link
-              href="https://github.com/pierreco/"
+              href="https://github.com/pierredotco/"
               target="_blank"
               rel="noopener noreferrer"
             >
