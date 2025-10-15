@@ -4,6 +4,7 @@
   "compilerOptions": {
     "outDir": "dist",
     "emitDeclarationOnly": false,
+    "jsxFactory": "createElement",
     "baseUrl": ".",
     "rootDir": "src",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],

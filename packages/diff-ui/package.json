@@ -20,6 +20,7 @@
     "typescript": "catalog:"
   },
   "dependencies": {
+    "@lit-labs/ssr-react": "catalog:",
     "@pierre/shiki-stream": "workspace:*",
     "diff": "catalog:",
     "hast-util-to-html": "catalog:",

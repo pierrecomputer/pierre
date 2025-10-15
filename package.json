@@ -30,6 +30,7 @@
     "catalog": {
       "@eslint/eslintrc": "3.3.1",
       "@eslint/js": "9.36.0",
+      "@lit-labs/ssr-react": "0.3.3",
       "@next/eslint-plugin-next": "15.5.5",
       "@octokit/app": "16.1.1",
       "@octokit/auth-app": "8.1.1",
