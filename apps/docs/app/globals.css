@@ -132,3 +132,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+.gridstack {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+
+  > * {
+    grid-column-start: 1;
+    grid-row-start: 1;
+  }
+}

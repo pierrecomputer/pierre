@@ -160,28 +160,31 @@ export function DiffStyles() {
             </DropdownMenu>
           </div>
 
-          <div className="p-[2px] rounded-lg bg-secondary">
-            <div
-              className="flex items-center justify-between w-full md:w-auto gap-3 px-3 h-9 rounded-md border border-input bg-background text-sm cursor-pointer"
+          <div className="p-[2px] rounded-lg bg-secondary gridstack">
+            <Button
+              variant="outline"
+              className="justify-between w-full md:w-auto gap-3 pl-3 pr-11"
               onClick={() => setDisableBackground(!disableBackground)}
             >
               <div className="flex items-center gap-2">
                 <IconCodeStyleBg />
                 Backgrounds
               </div>
-              <Switch
-                checked={!disableBackground}
-                onCheckedChange={(checked: boolean) =>
-                  setDisableBackground(!checked)
-                }
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+            </Button>
+            <Switch
+              checked={!disableBackground}
+              onCheckedChange={(checked: boolean) =>
+                setDisableBackground(!checked)
+              }
+              onClick={(e) => e.stopPropagation()}
+              className="justify-self-end place-self-center mr-3 pointer-events-none"
+            />
           </div>
 
-          <div className="p-[2px] rounded-lg bg-secondary">
-            <div
-              className="flex items-center justify-between w-full md:w-auto gap-3 px-3 h-9 rounded-md border border-input bg-background text-sm cursor-pointer"
+          <div className="p-[2px] rounded-lg bg-secondary gridstack ">
+            <Button
+              variant="outline"
+              className="justify-between w-full md:w-auto gap-3 pl-3 pr-11"
               onClick={() =>
                 setOverflow(overflow === 'wrap' ? 'scroll' : 'wrap')
               }
@@ -190,14 +193,15 @@ export function DiffStyles() {
                 <IconWordWrap />
                 Wrapping
               </div>
-              <Switch
-                checked={overflow === 'wrap'}
-                onCheckedChange={(checked: boolean) =>
-                  setOverflow(checked ? 'wrap' : 'scroll')
-                }
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+            </Button>
+            <Switch
+              checked={overflow === 'wrap'}
+              onCheckedChange={(checked: boolean) =>
+                setOverflow(checked ? 'wrap' : 'scroll')
+              }
+              onClick={(e) => e.stopPropagation()}
+              className="justify-self-end place-self-center mr-3 pointer-events-none"
+            />
           </div>
         </div>
       </div>
