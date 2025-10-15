@@ -1,8 +1,8 @@
-import type { HUNK_LINE_TYPE } from '../types';
+import type { HunkLineType } from '../types';
 
 export interface ParseLineTypeReturn {
   line: string;
-  type: HUNK_LINE_TYPE;
+  type: HunkLineType;
   longLine: boolean;
 }
 

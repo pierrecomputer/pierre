@@ -7,7 +7,7 @@ import {
   type SupportedLanguages,
   getFiletypeFromFileName,
   isHighlighterNull,
-  parseDiffFromFiles,
+  parseDiffFromFile,
   parsePatchContent,
   preloadHighlighter,
 } from '@pierre/diff-ui';
@@ -118,7 +118,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
       const instance = new FileDiff<LineCommentMetadata>({
-        themes: { dark: 'tokyo-night', light: 'solarized-light' },
+        themes: { dark: 'pierre-dark', light: 'pierre-light' },
         diffStyle: unified ? 'unified' : 'split',
         detectLanguage: true,
         overflow: wrap ? 'wrap' : 'scroll',
@@ -280,11 +280,8 @@ if (diff2Files != null) {
       };
 
       lastWrapper?.parentNode?.removeChild(lastWrapper);
-      const parsed = parseDiffFromFiles(oldFile, newFile);
-      for (const patch of parsed) {
-        patch.patchMetadata = undefined;
-      }
-      renderDiff(parsed);
+      const parsed = parseDiffFromFile(oldFile, newFile);
+      renderDiff([{ files: [parsed] }]);
     });
     bottomWrapper.appendChild(render);
 
@@ -302,6 +299,21 @@ if (diff2Files != null) {
   });
 }
 
+// For quick testing diffs
+// (() => {
+//   const oldFile = {
+//     name: 'file_old.ts',
+//     contents: FILE_OLD,
+//   };
+//   const newFile = {
+//     name: 'file_new.ts',
+//     contents: FILE_NEW,
+//   };
+//
+//   const parsed = parseDiffFromFile(oldFile, newFile);
+//   renderDiff([{ files: [parsed] }]);
+// })();
+//
 function toggleTheme() {
   const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'

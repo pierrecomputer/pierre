@@ -33,13 +33,15 @@ export function createHastElement({
 }
 
 interface CreateSeparatorProps {
-  type: 'empty' | 'metadata' | 'expando-lad';
+  type: 'empty' | 'metadata' | 'line-info';
   content?: string;
+  expandIndex?: number;
 }
 
 export function createSeparator({
   type,
   content,
+  expandIndex,
 }: CreateSeparatorProps): Element {
   const children = [];
   if (type === 'metadata' && content != null) {
@@ -51,14 +53,15 @@ export function createSeparator({
       })
     );
   }
-  if (type === 'expando-lad' && content != null) {
+  if (type === 'line-info' && content != null) {
+    const contentChildren: ElementContent[] = [createTextNode(content)];
+    if (expandIndex != null) {
+      contentChildren.unshift(createIcon({ name: 'pjs-icon-expand' }));
+    }
     children.push(
       createHastElement({
         tagName: 'div',
-        children: [
-          createIcon({ name: 'pjs-icon-expand' }),
-          createTextNode(content),
-        ],
+        children: contentChildren,
         properties: { 'data-separator-content': '' },
       })
     );
@@ -66,7 +69,10 @@ export function createSeparator({
   return createHastElement({
     tagName: 'div',
     children,
-    properties: { 'data-separator': children.length === 0 ? '' : type },
+    properties: {
+      'data-separator': children.length === 0 ? '' : type,
+      'data-expand-index': expandIndex,
+    },
   });
 }
 

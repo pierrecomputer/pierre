@@ -1,9 +1,8 @@
-import type { FileDiffMetadata, LineAnnotation } from '@pierre/diff-ui';
+import type { LineAnnotation } from '@pierre/diff-ui';
 import type { LineCommentMetadata } from 'src/mocks';
 
 export function renderAnnotation(
-  annotation: LineAnnotation<LineCommentMetadata>,
-  _fileDiff: FileDiffMetadata
+  annotation: LineAnnotation<LineCommentMetadata>
 ): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'comment';

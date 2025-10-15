@@ -11,6 +11,7 @@ import type {
   BaseRendererOptions,
   FileDiffMetadata,
   LineAnnotation,
+  LineEventBaseProps,
   PJSHighlighter,
   PJSThemeNames,
   RenderCustomFileMetadata,
@@ -57,11 +58,9 @@ interface FileDiffRenderProps {
 
 type FileBaseRendererOptions = Omit<BaseRendererOptions, 'lang'>;
 
-export interface LineEventBaseProps {
-  annotationSide: AnnotationSide;
-  type: 'context' | 'change-deletion' | 'change-addition';
-  lineNumber: number;
-  lineElement: HTMLElement;
+interface ExpandoEventProps {
+  type: 'line-info';
+  hunkIndex: number;
 }
 
 export interface OnLineClickProps extends LineEventBaseProps {
@@ -296,8 +295,13 @@ export class FileDiff<LAnnotation = undefined> {
       this.spriteSVG.setAttribute('aria-hidden', 'true');
       this.fileContainer.shadowRoot?.appendChild(this.spriteSVG);
     }
-    const { onLineClick, onLineEnter, onLineLeave } = this.options;
-    if (onLineClick != null) {
+    const {
+      onLineClick,
+      onLineEnter,
+      onLineLeave,
+      hunkSeparators = 'line-info',
+    } = this.options;
+    if (onLineClick != null || hunkSeparators === 'line-info') {
       this.fileContainer.addEventListener('click', this.handleMouseClick);
     }
     if (onLineEnter != null || onLineLeave != null) {
@@ -326,26 +330,41 @@ export class FileDiff<LAnnotation = undefined> {
     this.hoveredRow = undefined;
   };
 
-  private getLineData(path: EventTarget[]): LineEventBaseProps | undefined {
+  private getLineData(
+    path: EventTarget[]
+  ): LineEventBaseProps | ExpandoEventProps | undefined {
     const lineElement = path.find(
-      (element) => element instanceof HTMLElement && 'line' in element.dataset
+      (element) =>
+        element instanceof HTMLElement &&
+        ('line' in element.dataset || 'expandIndex' in element.dataset)
     );
     if (!(lineElement instanceof HTMLElement)) return undefined;
+    if (lineElement.dataset.expandIndex != null) {
+      const hunkIndex = parseInt(lineElement.dataset.expandIndex);
+      if (isNaN(hunkIndex)) {
+        return undefined;
+      }
+      return {
+        type: 'line-info',
+        hunkIndex,
+      };
+    }
     const lineNumber = parseInt(lineElement.dataset.line ?? '');
     if (isNaN(lineNumber)) return;
-    const type = lineElement.dataset.lineType;
+    const lineType = lineElement.dataset.lineType;
     if (
-      type !== 'context' &&
-      type !== 'change-deletion' &&
-      type !== 'change-addition'
+      lineType !== 'context' &&
+      lineType !== 'context-expanded' &&
+      lineType !== 'change-deletion' &&
+      lineType !== 'change-addition'
     ) {
       return undefined;
     }
     const annotationSide: AnnotationSide = (() => {
-      if (type === 'change-deletion') {
+      if (lineType === 'change-deletion') {
         return 'deletions';
       }
-      if (type === 'change-addition') {
+      if (lineType === 'change-addition') {
         return 'additions';
       }
       const parent = lineElement.closest('[data-code]');
@@ -355,8 +374,9 @@ export class FileDiff<LAnnotation = undefined> {
       return 'deletions' in parent.dataset ? 'deletions' : 'additions';
     })();
     return {
+      type: 'line',
       annotationSide,
-      type,
+      lineType,
       lineElement,
       lineNumber,
     };
@@ -367,14 +387,17 @@ export class FileDiff<LAnnotation = undefined> {
     const data = this.getLineData(event.composedPath());
     switch (eventType) {
       case 'move': {
-        if (this.hoveredRow?.lineElement === data?.lineElement) {
+        if (
+          data?.type === 'line' &&
+          this.hoveredRow?.lineElement === data.lineElement
+        ) {
           break;
         }
         if (this.hoveredRow != null) {
           this.options.onLineLeave?.(this.hoveredRow, this.fileDiff);
           this.hoveredRow = undefined;
         }
-        if (data != null) {
+        if (data?.type === 'line') {
           this.hoveredRow = data;
           this.options.onLineEnter?.(this.hoveredRow, this.fileDiff);
         }
@@ -382,7 +405,14 @@ export class FileDiff<LAnnotation = undefined> {
       }
       case 'click':
         if (data == null) break;
-        this.options.onLineClick?.({ ...data, event }, this.fileDiff);
+        if (data.type === 'line-info') {
+          this.hunksRenderer?.expandHunk(data.hunkIndex);
+          void this.rerender();
+          break;
+        }
+        if (data.type === 'line') {
+          this.options.onLineClick?.({ ...data, event }, this.fileDiff);
+        }
         break;
     }
   }

@@ -13,8 +13,8 @@ import type {
   CodeToHastOptions,
   DecorationItem,
   FileDiffMetadata,
-  HUNK_LINE_TYPE,
   Hunk,
+  HunkLineType,
   LineAnnotation,
   LineInfo,
   LineSpans,
@@ -101,6 +101,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   highlighter: PJSHighlighter | undefined;
   options: DiffHunksRendererOptions;
   diff: FileDiffMetadata | undefined;
+  expandedHunks = new Set<number>();
 
   constructor(options: DiffHunksRendererOptions) {
     this.options = options;
@@ -115,6 +116,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   setOptions(options: DiffHunksRendererOptions) {
     this.options = options;
+  }
+
+  expandHunk(index: number) {
+    this.expandedHunks.add(index);
   }
 
   private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
@@ -153,7 +158,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const {
       diffStyle = 'split',
       disableLineNumbers = false,
-      hunkSeparators = 'file-info',
+      hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
       maxLineLengthForHighlighting = 1000,
@@ -305,7 +310,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const { additions, deletions, unified, hasLongLines } = this.processLines(
       hunk,
-      hunkIndex
+      hunkIndex,
+      prevHunk,
+      isLastHunk
     );
 
     const generateHTML = (computed: ComputedContent) => {
@@ -317,45 +324,56 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.createHastOptions(transformer, computed.decorations, hasLongLines)
       );
       const transformedNodes = this.getNodesToRender(nodes);
-      if (hunkSeparators === 'file-info') {
-        const lines =
-          (() => {
+      if (!this.expandedHunks.has(hunkIndex)) {
+        if (hunkSeparators === 'line-info') {
+          const lines = (() => {
             const hunkStart = hunk.additionStart;
             if (prevHunk == null) {
-              return hunkStart;
+              return hunkStart - 1;
             }
             return (
               hunkStart - (prevHunk.additionStart + prevHunk.additionCount)
             );
-          })() - 1;
-        if (lines > 0) {
+          })();
+          if (lines > 0) {
+            transformedNodes.unshift(
+              createSeparator({
+                type: 'line-info',
+                content: getModifiedLinesString(lines),
+                expandIndex:
+                  this.diff?.newLines != null ? hunkIndex : undefined,
+              })
+            );
+          }
+        } else if (hunkSeparators === 'metadata') {
           transformedNodes.unshift(
+            createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
+          );
+        } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
+          transformedNodes.unshift(createSeparator({ type: 'empty' }));
+        }
+      }
+
+      if (
+        isLastHunk &&
+        !this.expandedHunks.has(hunkIndex + 1) &&
+        this.diff?.newLines != null
+      ) {
+        const lines =
+          this.diff.newLines.length -
+          (hunk.additionStart + hunk.additionCount - 1);
+        if (lines > 0) {
+          transformedNodes.push(
             createSeparator({
-              type: 'expando-lad',
-              content: `${lines} unmodified lines`,
+              type: 'line-info',
+              content: getModifiedLinesString(lines),
+              expandIndex: hunkIndex + 1,
             })
           );
         }
-
-        if (isLastHunk) {
-          // FIXME(amadeus): Actually push me once i figure out the logic with files
-          createSeparator({
-            type: 'expando-lad',
-            content: `Show rest of file`,
-          });
-        }
-      } else if (hunkSeparators === 'metadata') {
-        transformedNodes.unshift(
-          createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
-        );
-      } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
-        transformedNodes.unshift(createSeparator({ type: 'empty' }));
       }
       // FIXME(amadeus): Implement the final gap if needed, maybe generate a
       // padded lad if nothing else...
-      // if (isLastHunk) {
-      //   transformedNodes.push(createSeparator());
-      // }
       return toHtml(transformedNodes);
     };
 
@@ -374,7 +392,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { additionsHTML, deletionsHTML, unifiedHTML };
   }
 
-  private processLines(hunk: Hunk, hunkIndex: number): ProcessLinesReturn {
+  private processLines(
+    hunk: Hunk,
+    hunkIndex: number,
+    prevHunk: Hunk | undefined,
+    isLastHunk: boolean
+  ): ProcessLinesReturn {
     const { maxLineLengthForHighlighting, diffStyle } =
       this.getOptionsWithDefaults();
     const { deletionAnnotations, additionAnnotations } = this;
@@ -385,11 +408,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const additionContent: string[] = [];
     const additionLineInfo: Record<number, LineInfo | undefined> = {};
-    let additionLineNumber = hunk.additionStart;
+    let additionLineNumber = hunk.additionStart - 1;
 
     const deletionContent: string[] = [];
     const deletionLineInfo: Record<number, LineInfo | undefined> = {};
-    let deletionLineNumber = hunk.deletedStart;
+    let deletionLineNumber = hunk.deletedStart - 1;
 
     const unifiedContent: string[] = [];
     const unifiedLineInfo: Record<number, LineInfo | undefined> = {};
@@ -522,15 +545,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       resolveUnresolvedSpans();
     }
 
-    let diffLineIndex = -1;
-    let lastType: HUNK_LINE_TYPE | undefined;
-    for (const rawLine of hunk.hunkContent ?? []) {
-      diffLineIndex++;
-      const { line, type, longLine } = parseLineType(
-        rawLine,
-        maxLineLengthForHighlighting
-      );
-      hasLongLines = hasLongLines || longLine;
+    const processRawLine = (
+      line: string,
+      type: HunkLineType,
+      isExpandedContext: boolean = false
+    ) => {
       if (type === 'context') {
         createGapSpanIfNecessary();
       }
@@ -547,8 +566,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (unified) {
           unifiedContent.push(line);
           unifiedLineInfo[unifiedContent.length] = {
-            type: 'context',
-            number: additionLineNumber,
+            type: isExpandedContext ? 'context-expanded' : 'context',
+            number: additionLineNumber + 1,
             diffLineIndex,
           };
           const span = createMirroredAnnotationSpan({
@@ -565,13 +584,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           deletionContent.push(line);
           additionContent.push(line);
           deletionLineInfo[deletionContent.length] = {
-            type: 'context',
-            number: deletionLineNumber,
+            type: isExpandedContext ? 'context-expanded' : 'context',
+            number: deletionLineNumber + 1,
             diffLineIndex,
           };
           additionLineInfo[additionContent.length] = {
-            type: 'context',
-            number: additionLineNumber,
+            type: isExpandedContext ? 'context-expanded' : 'context',
+            number: additionLineNumber + 1,
             diffLineIndex,
           };
           const [deletionSpan, additionSpan] = createMirroredAnnotationSpan({
@@ -643,7 +662,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content.push(line);
         lineInfo[content.length] = {
           type: 'change-deletion',
-          number: deletionLineNumber,
+          number: deletionLineNumber + 1,
           diffLineIndex,
         };
         pushOrMergeSpan(span, content.length, lineInfo);
@@ -668,7 +687,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content.push(line);
         lineInfo[content.length] = {
           type: 'change-addition',
-          number: additionLineNumber,
+          number: additionLineNumber + 1,
           diffLineIndex,
         };
         pushOrMergeSpan(span, content.length, lineInfo);
@@ -676,8 +695,58 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
 
       lastType = type;
+    };
+
+    let diffLineIndex = -1;
+    let lastType: HunkLineType | undefined;
+
+    // Proses hunk expanded content if expanded
+    if (this.expandedHunks.has(hunkIndex) && this.diff?.newLines != null) {
+      const { expandAddedStart, expandDeletedStart } = (() => {
+        if (prevHunk != null) {
+          return {
+            expandAddedStart:
+              prevHunk.additionStart + prevHunk.additionCount - 1,
+            expandDeletedStart:
+              prevHunk.deletedStart + prevHunk.deletedCount - 1,
+          };
+        }
+        return { expandAddedStart: 0, expandDeletedStart: 0 };
+      })();
+      if (additionLineNumber - expandAddedStart > 0) {
+        additionLineNumber = expandAddedStart;
+        deletionLineNumber = expandDeletedStart;
+        for (let i = additionLineNumber; i < hunk.additionStart - 1; i++) {
+          const line = this.diff.newLines[i];
+          processRawLine(line, 'context', true);
+        }
+      }
+    }
+
+    // Process diff content
+    for (const rawLine of hunk.hunkContent ?? []) {
+      diffLineIndex++;
+      const { line, type, longLine } = parseLineType(
+        rawLine,
+        maxLineLengthForHighlighting
+      );
+      hasLongLines = hasLongLines || longLine;
+      processRawLine(line, type);
     }
     createGapSpanIfNecessary();
+
+    // Process final expansion hunk if necessary
+    if (
+      isLastHunk &&
+      this.expandedHunks.has(hunkIndex + 1) &&
+      this.diff?.newLines != null
+    ) {
+      for (let i = additionLineNumber; i < this.diff.newLines.length; i++) {
+        const line = this.diff.newLines[i];
+        processRawLine(line, 'context', true);
+      }
+    }
+
     const { unifiedDecorations, deletionDecorations, additionDecorations } =
       this.parseDecorations(diffGroups);
     return {
@@ -1115,6 +1184,10 @@ function mergeAnnotations(base: string[], newAnnotations: string[]): string[] {
     baseSet.add(item);
   }
   return Array.from(baseSet);
+}
+
+function getModifiedLinesString(lines: number) {
+  return `${lines} unmodified line${lines > 1 ? 's' : ''}`;
 }
 
 interface PushOrJoinSpanProps {

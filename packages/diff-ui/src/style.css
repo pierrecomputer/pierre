@@ -52,7 +52,7 @@ code {
   --pjs-mixer: light-dark(black, white);
 
   --pjs-bg: light-dark(var(--pjs-light-bg), var(--pjs-dark-bg));
-  --pjs-bg-buffer: color-mix(in srgb, var(--pjs-bg) 97%, var(--pjs-mixer));
+  --pjs-bg-buffer: color-mix(in srgb, var(--pjs-bg) 96%, var(--pjs-mixer));
   --pjs-bg-hover: color-mix(in srgb, var(--pjs-bg) 95%, var(--pjs-mixer));
 
   --pjs-fg: light-dark(var(--pjs-light), var(--pjs-dark));
@@ -91,24 +91,24 @@ code {
 
   --pjs-bg-deletions: color-mix(
     in oklch,
-    var(--pjs-bg) 90%,
+    var(--pjs-bg) 80%,
     var(--pjs-deletion-base)
   );
 
   --pjs-bg-additions: color-mix(
     in oklch,
-    var(--pjs-bg) 90%,
+    var(--pjs-bg) 80%,
     var(--pjs-addition-base)
   );
 
   --pjs-bg-deletions-emphasis: color-mix(
     in oklch,
-    var(--pjs-bg) 70%,
+    var(--pjs-bg) 65%,
     var(--pjs-deletion-base)
   );
   --pjs-bg-additions-emphasis: color-mix(
     in oklch,
-    var(--pjs-bg) 70%,
+    var(--pjs-bg) 65%,
     var(--pjs-addition-base)
   );
   --pjs-bg-deletions-number: color-mix(
@@ -241,7 +241,7 @@ code {
   padding: 4px 1ch;
 }
 
-[data-separator='expando-lad'] [data-separator-content] {
+[data-separator='line-info'] [data-separator-content] {
   position: sticky;
   display: flex;
   align-items: center;
@@ -253,9 +253,13 @@ code {
   width: calc(var(--pjs-column-width) - 8px);
 }
 
+[data-separator][data-expand-index] {
+  cursor: pointer;
+}
+
 [data-type='file']
   [data-code]
-  [data-separator='expando-lad']
+  [data-separator='line-info']
   [data-separator-content] {
   left: 8px;
   margin-left: 8px;
@@ -265,7 +269,7 @@ code {
 
 [data-type='split']
   [data-deletions]
-  [data-separator='expando-lad']
+  [data-separator='line-info']
   [data-separator-content] {
   left: 8px;
   margin-left: 8px;
@@ -275,7 +279,7 @@ code {
 
 [data-type='split']
   [data-additions]
-  [data-separator='expando-lad']
+  [data-separator='line-info']
   [data-separator-content] {
   left: 0;
   margin-right: 8px;
@@ -431,6 +435,14 @@ code {
 
   [data-column-number] {
     background-color: var(--pjs-bg-deletions-number);
+  }
+}
+
+[data-line-type='context-expanded'] {
+  background-color: var(--pjs-bg-buffer);
+
+  [data-column-number] {
+    background-color: var(--pjs-bg-buffer);
   }
 }
 
