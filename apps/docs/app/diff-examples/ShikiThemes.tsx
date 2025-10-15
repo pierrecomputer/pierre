@@ -152,7 +152,7 @@ export function ShikiThemes() {
         title="Adapts to any Shiki theme"
         description="Precision Diffs are built with Shiki for syntax highlighting and general theming. Our components automatically adapt to blend in with your theme selection, including across color modes."
       />
-      <div className="flex flex-col md:flex-row md:items-center gap-3">
+      <div className="flex flex-col sm:flex-row flex-wrap md:items-center gap-3">
         <div className="p-[2px] rounded-lg bg-secondary">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -224,15 +224,15 @@ export function ShikiThemes() {
             setSelectedColorMode(value as 'system' | 'light' | 'dark')
           }
         >
-          <ButtonGroupItem value="system">
+          <ButtonGroupItem value="system" className="flex-1">
             <IconColorAuto />
             Auto
           </ButtonGroupItem>
-          <ButtonGroupItem value="light">
+          <ButtonGroupItem value="light" className="flex-1">
             <IconColorLight />
             Light
           </ButtonGroupItem>
-          <ButtonGroupItem value="dark">
+          <ButtonGroupItem value="dark" className="flex-1">
             <IconColorDark />
             Dark
           </ButtonGroupItem>

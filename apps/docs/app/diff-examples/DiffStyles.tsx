@@ -100,7 +100,7 @@ export function DiffStyles() {
           title="Choose how changes are styled"
           description="Your diffs, your choice. Render changed lines with classic diff indicators (+/–), full-width background colors, or vertical bars. You can even highlight inline changes—character or word based—and toggle line wrapping, hide numbers, and more."
         />
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap md:items-center gap-3">
           <ButtonGroup
             value={diffIndicators}
             onValueChange={(value) =>
@@ -108,7 +108,11 @@ export function DiffStyles() {
             }
           >
             {['bars', 'classic', 'none'].map((value) => (
-              <ButtonGroupItem key={value} value={value} className="capitalize">
+              <ButtonGroupItem
+                key={value}
+                value={value}
+                className="capitalize flex-1"
+              >
                 {value === 'bars' ? (
                   <IconCodeStyleBars />
                 ) : value === 'classic' ? (
@@ -132,7 +136,7 @@ export function DiffStyles() {
                   {}
                   {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
                     ?.label ?? lineDiffStyle}
-                  <ChevronDown className="text-muted-foreground" />
+                  <ChevronDown className="text-muted-foreground ml-auto" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-82">

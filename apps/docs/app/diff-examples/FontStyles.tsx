@@ -60,6 +60,9 @@ const fontMap: Record<string, string> = {
   'Cascadia Code': '--font-cascadia-code',
 };
 
+const fontSizes = ['10px', '12px', '13px', '14px', '18px'];
+const lineHeights = ['16px', '20px', '24px', '28px'];
+
 export function FontStyles() {
   const [selectedFont, setSelectedFont] = useState('Berkeley Mono');
   const [selectedFontSize, setSelectedFontSize] = useState('14px');
@@ -72,69 +75,32 @@ export function FontStyles() {
           title="Bring your own fonts"
           description="Precision Diffs is adaptable to any font, font-size, line-height, and even font-feature-settings you may have set. Configure font options with your preferred CSS method globally or on a per-component basis."
         />
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap md:items-center gap-3">
           <div className="flex flex-wrap gap-3">
-            <div className="p-[2px] rounded-lg bg-secondary">
+            <div className="p-[2px] rounded-lg bg-secondary flex-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    className="justify-start min-w-[140px]"
+                    className="justify-start min-w-[140px] w-full"
                   >
                     <IconType className="h-4 w-4" />
                     {selectedFont}
                     <ChevronDown className="h-4 w-4 ml-auto" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    onClick={() => setSelectedFont('Berkeley Mono')}
-                  >
-                    Berkeley Mono
-                    {selectedFont === 'Berkeley Mono' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedFont('Geist Mono')}
-                  >
-                    Geist Mono
-                    {selectedFont === 'Geist Mono' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedFont('Fira Code')}
-                  >
-                    Fira Code
-                    {selectedFont === 'Fira Code' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedFont('IBM Plex Mono')}
-                  >
-                    IBM Plex Mono
-                    {selectedFont === 'IBM Plex Mono' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedFont('JetBrains Mono')}
-                  >
-                    JetBrains Mono
-                    {selectedFont === 'JetBrains Mono' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedFont('Cascadia Code')}
-                  >
-                    Cascadia Code
-                    {selectedFont === 'Cascadia Code' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
+                <DropdownMenuContent align="start" className="w-40">
+                  {Object.keys(fontMap).map((font) => (
+                    <DropdownMenuItem
+                      key={font}
+                      onClick={() => setSelectedFont(font)}
+                    >
+                      {font}
+                      {selectedFont === font && (
+                        <IconCheck className="ml-auto" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -148,36 +114,17 @@ export function FontStyles() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setSelectedFontSize('10px')}>
-                    10px
-                    {selectedFontSize === '10px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSelectedFontSize('12px')}>
-                    12px
-                    {selectedFontSize === '12px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSelectedFontSize('13px')}>
-                    13px
-                    {selectedFontSize === '13px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSelectedFontSize('14px')}>
-                    14px
-                    {selectedFontSize === '14px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSelectedFontSize('18px')}>
-                    18px
-                    {selectedFontSize === '18px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
+                  {fontSizes.map((size) => (
+                    <DropdownMenuItem
+                      key={size}
+                      onClick={() => setSelectedFontSize(size)}
+                    >
+                      {size}
+                      {selectedFontSize === size && (
+                        <IconCheck className="ml-auto" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -191,38 +138,17 @@ export function FontStyles() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    onClick={() => setSelectedLineHeight('16px')}
-                  >
-                    16px
-                    {selectedLineHeight === '16px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedLineHeight('20px')}
-                  >
-                    20px
-                    {selectedLineHeight === '20px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedLineHeight('24px')}
-                  >
-                    24px
-                    {selectedLineHeight === '24px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setSelectedLineHeight('28px')}
-                  >
-                    28px
-                    {selectedLineHeight === '28px' && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
+                  {lineHeights.map((height) => (
+                    <DropdownMenuItem
+                      key={height}
+                      onClick={() => setSelectedLineHeight(height)}
+                    >
+                      {height}
+                      {selectedLineHeight === height && (
+                        <IconCheck className="ml-auto" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -232,7 +158,7 @@ export function FontStyles() {
             <InputWithIcon
               icon={<IconFunction className="h-4 w-4" />}
               placeholder="Font feature settings"
-              className="max-w-xs"
+              className="md:max-w-xs"
             />
           </div>
         </div>
