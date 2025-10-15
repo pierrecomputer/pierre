@@ -22,6 +22,7 @@ export default [
       '{packages,apps}/*/build/**',
       '{packages,apps}/*/next-env.d.ts',
       '{packages,apps}/*/.source/**',
+      'apps/docs/components/icons/icons/**',
     ],
   },
   js.configs.recommended,
