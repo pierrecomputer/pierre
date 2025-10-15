@@ -161,9 +161,8 @@ export function DiffStyles() {
           </div>
 
           <div className="p-[2px] rounded-lg bg-secondary">
-            <Button
-              variant="outline"
-              className="justify-between w-full md:w-auto gap-3 px-3"
+            <div
+              className="flex items-center justify-between w-full md:w-auto gap-3 px-3 h-9 rounded-md border border-input bg-background text-sm cursor-pointer"
               onClick={() => setDisableBackground(!disableBackground)}
             >
               <div className="flex items-center gap-2">
@@ -177,13 +176,12 @@ export function DiffStyles() {
                 }
                 onClick={(e) => e.stopPropagation()}
               />
-            </Button>
+            </div>
           </div>
 
           <div className="p-[2px] rounded-lg bg-secondary">
-            <Button
-              variant="outline"
-              className="justify-between w-full md:w-auto gap-3 px-3"
+            <div
+              className="flex items-center justify-between w-full md:w-auto gap-3 px-3 h-9 rounded-md border border-input bg-background text-sm cursor-pointer"
               onClick={() =>
                 setOverflow(overflow === 'wrap' ? 'scroll' : 'wrap')
               }
@@ -199,7 +197,7 @@ export function DiffStyles() {
                 }
                 onClick={(e) => e.stopPropagation()}
               />
-            </Button>
+            </div>
           </div>
         </div>
       </div>
