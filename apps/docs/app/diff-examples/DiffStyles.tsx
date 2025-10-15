@@ -7,7 +7,6 @@ import {
   IconCodeStyleBg,
   IconCodeStyleInline,
   IconParagraph,
-  IconSquircleLgFill,
   IconSymbolDiffstat,
   IconWordWrap,
 } from '@/components/icons';
