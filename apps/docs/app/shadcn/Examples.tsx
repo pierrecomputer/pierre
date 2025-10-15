@@ -8,7 +8,7 @@ import {
   type PlatformConfigObject,
   type RepositoryData,
   type SyncedRepo,
-} from '@/registry/new-york/blocks/git-platform-sync/git-platform-sync';
+} from '@/registry/new-york/blocks/git-platform-sync/components/git-platform-sync';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
 import { Lollipop, Menu } from 'lucide-react';
 import { Fragment, useState } from 'react';
