@@ -31,6 +31,5 @@ export function parseDiffFromFile(
   }
   fileData.oldLines = oldFile.contents.split(SPLIT_WITH_NEWLINES);
   fileData.newLines = newFile.contents.split(SPLIT_WITH_NEWLINES);
-  console.log(fileData);
   return fileData;
 }

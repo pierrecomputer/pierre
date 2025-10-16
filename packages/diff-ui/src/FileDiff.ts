@@ -501,14 +501,16 @@ export class FileDiff<LAnnotation = undefined> {
     // Clear existing content
     pre.innerHTML = '';
 
+    let codeDeletions: HTMLElement | undefined;
+    let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
     if (result.deletionsHTML.length > 0) {
-      const codeDeletions = createCodeNode({ columnType: 'deletions' });
+      codeDeletions = createCodeNode({ columnType: 'deletions' });
       codeDeletions.innerHTML = result.deletionsHTML;
       pre.appendChild(codeDeletions);
     }
     if (result.additionsHTML.length > 0) {
-      const codeAdditions = createCodeNode({ columnType: 'additions' });
+      codeAdditions = createCodeNode({ columnType: 'additions' });
       codeAdditions.innerHTML = result.additionsHTML;
       pre.appendChild(codeAdditions);
     }
@@ -517,6 +519,57 @@ export class FileDiff<LAnnotation = undefined> {
       codeUnified.innerHTML = result.unifiedHTML;
       pre.appendChild(codeUnified);
     }
+
+    if (
+      codeAdditions != null &&
+      codeDeletions != null &&
+      (this.options.overflow ?? 'scroll') === 'scroll'
+    ) {
+      this.setupScrollSync(codeDeletions, codeAdditions);
+    }
+  }
+
+  private setupScrollSync(
+    codeDeletions: HTMLElement,
+    codeAdditions: HTMLElement
+  ) {
+    const state = {
+      isLeftScrolling: false,
+      isRightScrolling: false,
+      timeoutId: -1 as unknown as NodeJS.Timeout,
+    };
+
+    codeDeletions.addEventListener(
+      'scroll',
+      () => {
+        if (state.isRightScrolling) {
+          return;
+        }
+        state.isLeftScrolling = true;
+        clearTimeout(state.timeoutId);
+        state.timeoutId = setTimeout(() => {
+          state.isLeftScrolling = false;
+        }, 300);
+        codeAdditions.scrollTo({ left: codeDeletions.scrollLeft });
+      },
+      { passive: true }
+    );
+
+    codeAdditions.addEventListener(
+      'scroll',
+      () => {
+        if (state.isLeftScrolling) {
+          return;
+        }
+        state.isRightScrolling = true;
+        clearTimeout(state.timeoutId);
+        state.timeoutId = setTimeout(() => {
+          state.isRightScrolling = false;
+        }, 300);
+        codeDeletions.scrollTo({ left: codeAdditions.scrollLeft });
+      },
+      { passive: true }
+    );
   }
 
   private setupResizeObserver(pre: HTMLPreElement) {
