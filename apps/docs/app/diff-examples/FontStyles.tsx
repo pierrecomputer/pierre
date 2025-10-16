@@ -162,7 +162,6 @@ export function FontStyles() {
         newFile={NEW_FILE}
         className="rounded-lg overflow-hidden border"
         options={{
-          detectLanguage: true,
           theme: 'pierre-dark',
           diffStyle: 'unified',
         }}

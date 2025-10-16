@@ -27,6 +27,7 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
+import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import {
   convertLine,
   createAnnotationElement,
@@ -103,7 +104,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   diff: FileDiffMetadata | undefined;
   expandedHunks = new Set<number>();
 
-  constructor(options: DiffHunksRendererOptions) {
+  constructor(options: DiffHunksRendererOptions = { theme: 'none' }) {
     this.options = options;
   }
 
@@ -200,17 +201,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private queuedDiff: FileDiffMetadata | undefined;
   private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
+  private computedLang: SupportedLanguages = 'text';
   async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
     this.queuedDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
     }
     this.queuedRender = (async () => {
+      this.computedLang =
+        this.options.lang ?? getFiletypeFromFileName(diff.name);
       // If we have changed theme or language on our diff instance, we need to
       // double check the highlighter has loaded the appropriate languages and
       // themes
       if (
-        !hasLoadedLanguage(this.options.lang ?? 'text') ||
+        !hasLoadedLanguage(this.computedLang) ||
         !hasLoadedThemes(this.getThemes())
       ) {
         this.highlighter = undefined;
@@ -274,7 +278,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return {
         theme: this.options.theme,
         cssVariablePrefix: formatCSSVariablePrefix(),
-        lang: forceTextLang ? 'text' : (this.options.lang ?? 'text'),
+        lang: forceTextLang ? 'text' : this.computedLang,
         defaultColor: this.options.defaultColor ?? false,
         transformers: [transformer],
         decorations,
@@ -283,7 +287,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return {
       themes: this.options.themes,
       cssVariablePrefix: formatCSSVariablePrefix(),
-      lang: forceTextLang ? 'text' : (this.options.lang ?? 'text'),
+      lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: this.options.defaultColor ?? false,
       transformers: [transformer],
       decorations,
@@ -878,16 +882,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private getHighlighterOptions() {
-    const {
-      lang,
-      themes: _themes,
-      theme,
-      preferWasmHighlighter,
-    } = this.options;
-    const langs: SupportedLanguages[] = [];
-    if (lang != null) {
-      langs.push(lang);
-    }
+    const { themes: _themes, theme, preferWasmHighlighter } = this.options;
     const themes: PJSThemeNames[] = [];
     if (theme != null) {
       themes.push(theme);
@@ -895,7 +890,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themes.push(_themes.dark);
       themes.push(_themes.light);
     }
-    return { langs, themes, preferWasmHighlighter };
+    return {
+      langs: [this.computedLang],
+      themes,
+      preferWasmHighlighter,
+    };
   }
 
   private getThemes(): PJSThemeNames[] {

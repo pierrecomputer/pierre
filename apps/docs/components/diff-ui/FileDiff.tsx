@@ -5,7 +5,6 @@ import {
   type FileContents,
   FileDiff as FileDiffUI,
   type LineAnnotation,
-  parseDiffFromFile,
 } from '@pierre/diff-ui';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -62,13 +61,12 @@ export function FileDiff<LAnnotation = undefined>({
     }
     if (hasFileChange || hasOptionsChange) {
       filesRef.current = [oldFile, newFile];
-      const fileDiff = parseDiffFromFile(oldFile, newFile);
-      if (annotations != null) {
-        diffRenderer.setLineAnnotations(annotations);
-      }
       void diffRenderer.render({
-        fileDiff,
+        forceRender: true,
+        oldFile,
+        newFile,
         fileContainer: ref.current ?? undefined,
+        lineAnnotations: annotations,
       });
     }
   });

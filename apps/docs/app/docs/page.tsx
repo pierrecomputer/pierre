@@ -148,14 +148,10 @@ import type { DiffFileRendererOptions } from '@pierre/precision-diffs';
 // Create a container element
 const container = document.getElementById('diff-container');
 
-// Initialize the renderer
-const diffRenderer = new FileDiff<{ message: string }>();
-
 // Configure options
 const options: DiffFileRendererOptions = {
   theme: 'pierre-dark',
   diffStyle: 'split',
-  detectLanguage: true,
   diffIndicators: 'bars',
   overflow: 'scroll',
   onLineClick: (props, fileDiff) => {
@@ -163,9 +159,13 @@ const options: DiffFileRendererOptions = {
   }
 };
 
+// Initialize the renderer with sub times for annotations
+const diffRenderer = new FileDiff<{ message: string }>(options);
+
 // Render the diff
 await diffRenderer.render({
-  container,
+  // HTMLElement to inject the code block into
+  containerWrapper, 
   oldFile: {
     name: 'example.tsx',
     contents: 'const greeting = "Hello";'
@@ -174,7 +174,6 @@ await diffRenderer.render({
     name: 'example.tsx',
     contents: 'const greeting = "Hello, World!";'
   },
-  options,
   lineAnnotations: [
     {
       side: 'additions',
@@ -184,11 +183,14 @@ await diffRenderer.render({
   ]
 });
 
+// Update options
+diffRenderer.setOptions({ diffStyle: 'unified' });
+// Most option changes will require a re-render. 
+diffRenderer.rerender();
+
 // Update theme mode dynamically
 diffRenderer.setThemeMode('dark');
 
-// Update options
-diffRenderer.setOptions({ diffStyle: 'unified' });
 
 // Cleanup when done
 diffRenderer.cleanUp();`}
@@ -537,17 +539,6 @@ disposeHighlighter();`}
             </div>
 
             <div className="border rounded-lg p-4">
-              <h4 className="font-mono text-sm font-bold">detectLanguage</h4>
-              <p className="text-sm text-muted-foreground">
-                Type: <code>boolean</code> | Default: <code>false</code>
-              </p>
-              <p>
-                Automatically detect language from file name for syntax
-                highlighting.
-              </p>
-            </div>
-
-            <div className="border rounded-lg p-4">
               <h4 className="font-mono text-sm font-bold">disableFileHeader</h4>
               <p className="text-sm text-muted-foreground">
                 Type: <code>boolean</code> | Default: <code>false</code>
@@ -704,7 +695,6 @@ export function Header() {
         options={{
           theme: 'pierre-dark',
           diffStyle,
-          detectLanguage: true,
           diffIndicators: 'bars',
           overflow: 'scroll',
           onLineClick: (props) => {

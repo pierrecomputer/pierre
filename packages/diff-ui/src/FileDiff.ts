@@ -1,3 +1,5 @@
+import deepEquals from 'fast-deep-equal';
+
 import {
   DiffHeaderRenderer,
   type DiffHeaderRendererOptions,
@@ -19,12 +21,15 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
-import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import {
   createCodeNode,
   createSVGElement,
   setWrapperProps,
 } from './utils/html_render_utils';
+import {
+  type FileContents,
+  parseDiffFromFile,
+} from './utils/parseDiffFromFile';
 
 interface ObservedAnnotationNodes {
   type: 'annotations';
@@ -49,12 +54,30 @@ interface ObservedGridNodes {
   numberWidth: number;
 }
 
-interface FileDiffRenderProps {
-  lang?: BaseRendererOptions['lang'];
-  fileDiff: FileDiffMetadata;
+interface FileDiffRenderBaseProps<LAnnotation> {
+  forceRender?: boolean;
   fileContainer?: HTMLElement;
-  wrapper?: HTMLElement;
+  containerWrapper?: HTMLElement;
+  lineAnnotations?: LineAnnotation<LAnnotation>[];
 }
+
+interface FileDiffRenderDiffProps<LAnnotation>
+  extends FileDiffRenderBaseProps<LAnnotation> {
+  fileDiff: FileDiffMetadata;
+  oldFile?: undefined;
+  newFile?: undefined;
+}
+
+interface FileDiffRenderFilesProps<LAnnotation>
+  extends FileDiffRenderBaseProps<LAnnotation> {
+  oldFile: FileContents;
+  newFile: FileContents;
+  fileDiff?: undefined;
+}
+
+type FileDiffRenderProps<LAnnotation> =
+  | FileDiffRenderFilesProps<LAnnotation>
+  | FileDiffRenderDiffProps<LAnnotation>;
 
 type FileBaseRendererOptions = Omit<BaseRendererOptions, 'lang'>;
 
@@ -82,7 +105,6 @@ type HandleMouseEventProps =
 interface DiffFileBaseOptions<LAnnotation> {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderCustomFileMetadata;
-  detectLanguage?: boolean;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
@@ -118,6 +140,10 @@ export class FileDiff<LAnnotation = undefined> {
     ObservedAnnotationNodes | ObservedGridNodes
   >();
   private resizeObserver: ResizeObserver | undefined;
+  private oldFile: FileContents | undefined;
+  private newFile: FileContents | undefined;
+  private fileDiff: FileDiffMetadata | undefined;
+  private annotationElements: HTMLElement[] = [];
 
   constructor(
     options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
@@ -142,7 +168,17 @@ export class FileDiff<LAnnotation = undefined> {
 
   async rerender() {
     if (this.fileDiff != null) {
-      await this.render({ fileDiff: this.fileDiff });
+      await this.render({
+        fileDiff: this.fileDiff,
+        forceRender: true,
+      });
+    }
+    if (this.oldFile != null && this.newFile != null) {
+      await this.render({
+        oldFile: this.oldFile,
+        newFile: this.newFile,
+        forceRender: true,
+      });
     }
   }
 
@@ -202,24 +238,34 @@ export class FileDiff<LAnnotation = undefined> {
     this.resizeObserver = undefined;
   }
 
-  private annotationElements: HTMLElement[] = [];
-  private fileDiff: FileDiffMetadata | undefined;
-  async render({
-    fileDiff,
-    fileContainer,
-    wrapper,
-    lang = (this.options.detectLanguage ?? false)
-      ? getFiletypeFromFileName(fileDiff.name)
-      : 'text',
-  }: FileDiffRenderProps) {
-    this.fileDiff = fileDiff;
-    fileContainer = this.getOrCreateFileContainer(fileContainer);
-    if (wrapper != null && fileContainer.parentNode !== wrapper) {
-      wrapper.appendChild(fileContainer);
+  async render(props: FileDiffRenderProps<LAnnotation>) {
+    const { forceRender = false, lineAnnotations, containerWrapper } = props;
+    if (
+      props.fileDiff == null &&
+      !forceRender &&
+      deepEquals(props.oldFile, this.oldFile) &&
+      deepEquals(props.newFile, this.newFile)
+    ) {
+      return;
+    }
+
+    if (props.fileDiff != null) {
+      this.fileDiff = props.fileDiff;
+    } else {
+      this.oldFile = props.oldFile;
+      this.newFile = props.newFile;
+      this.fileDiff = parseDiffFromFile(props.oldFile, props.newFile);
+    }
+    if (lineAnnotations != null) {
+      this.setLineAnnotations(lineAnnotations);
+    }
+    const fileContainer = this.getOrCreateFileContainer(props.fileContainer);
+    if (containerWrapper != null) {
+      containerWrapper.appendChild(fileContainer);
     }
     const pre = this.getOrCreatePre(fileContainer);
-    this.hunksRenderer ??= new DiffHunksRenderer({ ...this.options, lang });
-    this.hunksRenderer.setOptions({ ...this.options, lang });
+    this.hunksRenderer ??= new DiffHunksRenderer();
+    this.hunksRenderer.setOptions({ ...this.options });
 
     // This is kinda jank, lol
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
@@ -246,7 +292,7 @@ export class FileDiff<LAnnotation = undefined> {
 
     const [highlighter, headerResult, hunksResult] = await Promise.all([
       getSharedHighlighter({ themes: this.getThemes(), langs: [] }),
-      this.headerRenderer?.render(fileDiff),
+      this.headerRenderer?.render(this.fileDiff),
       this.hunksRenderer.render(this.fileDiff),
     ]);
 
@@ -315,6 +361,10 @@ export class FileDiff<LAnnotation = undefined> {
         );
       }
     }
+    return this.fileContainer;
+  }
+
+  getFileContainer() {
     return this.fileContainer;
   }
 

@@ -243,7 +243,6 @@ export function ShikiThemes() {
         newFile={NEW_FILE}
         className="rounded-lg overflow-hidden border"
         options={{
-          detectLanguage: true,
           diffStyle: 'split',
           themeMode: selectedColorMode,
           themes: {

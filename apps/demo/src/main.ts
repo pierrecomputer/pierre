@@ -120,7 +120,6 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
       const instance = new FileDiff<LineCommentMetadata>({
         themes: { dark: 'pierre-dark', light: 'pierre-light' },
         diffStyle: unified ? 'unified' : 'split',
-        detectLanguage: true,
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation,
         themeMode,
@@ -145,10 +144,11 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         //   );
         // },
       });
-      if (fileAnnotations != null) {
-        instance.setLineAnnotations(fileAnnotations);
-      }
-      void instance.render({ fileDiff, wrapper });
+      void instance.render({
+        fileDiff,
+        lineAnnotations: fileAnnotations,
+        containerWrapper: wrapper,
+      });
       diffInstances.push(instance);
       hunkIndex++;
     }
