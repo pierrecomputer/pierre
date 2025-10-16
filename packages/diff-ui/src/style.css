@@ -520,10 +520,9 @@ code {
   white-space: nowrap;
 }
 
-[data-prev-name]::before {
-  display: inline-block;
-  content: '➤';
-  margin-inline-end: 1ch;
+[data-rename-icon] {
+  flex-shrink: 0;
+  flex-grow: 0;
 }
 
 [data-pjs-header] [data-metadata] {

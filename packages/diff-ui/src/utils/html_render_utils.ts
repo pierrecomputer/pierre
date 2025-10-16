@@ -251,7 +251,16 @@ export function renderFileHeader({
     const prevName = document.createElement('div');
     prevName.dataset.prevName = '';
     prevName.textContent = file.prevName;
+    const icon = createSVGElement('svg');
+    icon.dataset.renameIcon = '';
+    icon.setAttribute('width', '16');
+    icon.setAttribute('height', '16');
+    icon.setAttribute('viewBox', '0 0 16 16');
+    const useEl = createSVGElement('use');
+    useEl.setAttribute('href', '#pjs-arrow');
+    icon.appendChild(useEl);
     content.appendChild(prevName);
+    content.appendChild(icon);
   }
   title.innerText = file.name;
   content.appendChild(title);
