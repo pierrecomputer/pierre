@@ -98,8 +98,7 @@ export default function DocsPage() {
             to render a diff between two files:
           </p>
           <SimpleCodeBlock
-            code={`import { FileDiff } from '@pierre/precision-diffs';
-import type { FileContents } from '@pierre/precision-diffs';
+            code={`import { FileDiff, type FileContents} from '@pierre/precision-diffs';
 
 const oldFile: FileContents = {
   name: 'example.tsx',
@@ -121,17 +120,12 @@ export default function MyComponent() {
 }`}
             language="tsx"
           />
-
-          <p>
-            Alternatively, you can also pass a unified diff directly to the
-            FileDiff component.
-          </p>
         </section>
 
         <section className="space-y-4">
           <h2>Vanilla JS API</h2>
           <p>
-            The <code>@pierre/precision-diffs</code> package exports several
+            The <code>@pierre/precision-diffs</code> package exports some
             renderer classes for framework-agnostic usage. These are the same
             renderers used internally by the React components.
           </p>
@@ -238,19 +232,20 @@ await renderer.setup({
 
           <h3>DiffHunksRenderer</h3>
           <p>
-            Low-level renderer for individual diff hunks. Useful when you need
-            fine-grained control over diff rendering.
+            Low-level string renderer for individual diff hunks. Useful when you
+            need fine-grained control over diff rendering, say if you wanted to
+            render things in your own component
           </p>
           <SimpleCodeBlock
-            code={`import { DiffHunksRenderer, parseDiffFromFiles } from '@pierre/precision-diffs';
+            code={`import { DiffHunksRenderer, parseDiffFromFile, parsePatchContent } from '@pierre/precision-diffs';
 
 const container = document.getElementById('hunks-container');
 const renderer = new DiffHunksRenderer();
 
-// Parse diff content
-const diffResult = parseDiffFromFiles(
-  'const greeting = "Hello";',
-  'const greeting = "Hello, World!";'
+// Parse diff content from 2 versions of a file
+const diffResult = parseDiffFromFile(
+  {name: 'file.ts', contents: 'const greeting = "Hello";'},
+  {name: 'file.ts', contents: 'const greeting = "Hello, World!";'}
 );
 
 // Render hunks
@@ -262,7 +257,44 @@ await renderer.render({
     diffStyle: 'split',
     lang: 'typescript'
   }
-});`}
+});
+
+// If you have the string data for any github or git/unified patch file, you can alternatively load that into
+// parsePatchContent
+const patchContent = parseDiffFromFile(\`commit e4c066d37a38889612d8e3d18089729e4109fd09 (from 2103046f14fe9047609b3921f44c4f406f86d89f)
+Merge: 2103046 7210630
+Author: Amadeus Demarzi <amadeusdemarzi@gmail.com>
+Date:   Mon Sep 15 11:25:22 2025 -0700
+
+    Merge branch 'react-tests'
+
+diff --git a/eslint.config.js b/eslint.config.js
+index c52c9ca..f3b592b 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -2,6 +2,7 @@ import js from '@eslint/js';
+ import tseslint from 'typescript-eslint';
+ 
+ export default tseslint.config(
++  { ignores: ['dist/**'] },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
+@@ -10,7 +11,6 @@ export default tseslint.config(
+         'error',
+         { argsIgnorePattern: '^_' },
+       ],
+-      '@typescript-eslint/no-explicit-any': 'warn',
+     },
+   }
+ );
+\`);
+
+for (const fileDiff of patchContent.files) {
+  const instance = new DiffHunksRenderer();
+  await instance.render({ fileDiff }); // returns raw strings of html based on your settings
+}
+`}
             language="typescript"
           />
 
@@ -274,28 +306,26 @@ await renderer.render({
           <SimpleCodeBlock
             code={`import { DiffHeaderRenderer } from '@pierre/precision-diffs';
 
+const diff: FileDiffMetadata = parseDiffFromFile(/*...*/)
 const container = document.getElementById('header-container');
 const renderer = new DiffHeaderRenderer();
 
-await renderer.render({
-  container,
-  fileDiff: {
-    oldFileName: 'src/utils/format.ts',
-    newFileName: 'src/utils/format.ts',
-    additions: 12,
-    deletions: 5
-  },
-  options: {
-    theme: 'pierre-dark'
-  }
-});`}
+render.setOptions(options)
+
+await renderer.render(diff);`}
             language="typescript"
           />
 
           <h3>Shared Highlighter Utilities</h3>
           <p>
-            Manage Shiki highlighter instances for optimal performance across
-            multiple renders.
+            When using Shiki, it&lsquo;s important to re-use your highlighter
+            instance and also ensure that all languages and themes are
+            pre-loaded before attempting to render. By utilizing the existing
+            components or classes, all of this is taken care of for you. In
+            cases where you would like to use a custom Shiki theme, you simply
+            need to register a name and loader for the theme, and then when you
+            use any of our library&lsquo;s built in APIs they will automatically
+            load everything as needed on demand
           </p>
           <SimpleCodeBlock
             code={`import {
@@ -311,23 +341,15 @@ await preloadHighlighter({
   langs: ['typescript', 'python', 'rust']
 });
 
-// Register custom themes
-await registerCustomTheme({
-  name: 'my-custom-theme',
-  type: 'dark',
-  colors: {
-    'editor.background': '#1a1b26',
-    'editor.foreground': '#a9b1d6'
-  },
-  tokenColors: [
-    // ... token color definitions
-  ]
-});
+// Register custom themes (make sure the name you pass for your theme and the
+// name in your shiki json theme are identical)
+registerCustomTheme('my-custom-theme', () => import('./theme.json'));
 
 // Get the shared highlighter instance
 const highlighter = await getSharedHighlighter();
 
-// Cleanup when shutting down
+// Cleanup when shutting down. Just note that if you call this, all themes and
+// languages will have to be re-loaded
 disposeHighlighter();`}
             language="typescript"
           />
@@ -392,7 +414,7 @@ disposeHighlighter();`}
             <div className="border rounded-lg p-4">
               <h4 className="font-mono text-sm font-bold">annotations</h4>
               <p className="text-sm text-muted-foreground">
-                Type: <code>LineAnnotation[]</code> | Optional
+                Type: <code>LineAnnotation&lt;T&gt;[]</code> | Optional
               </p>
               <p>
                 Array of line annotations to display inline comments or
@@ -402,7 +424,7 @@ disposeHighlighter();`}
                 code={`[{
   side: 'additions' | 'deletions',
   lineNumber: number,
-  data?: any
+  metadata?: T // When you instantiate a component or class that consumes LineAnnotations
 }]`}
                 language="typescript"
                 className="mt-2 text-sm"
