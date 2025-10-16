@@ -79,8 +79,6 @@ type FileDiffRenderProps<LAnnotation> =
   | FileDiffRenderFilesProps<LAnnotation>
   | FileDiffRenderDiffProps<LAnnotation>;
 
-type FileBaseRendererOptions = Omit<BaseRendererOptions, 'lang'>;
-
 interface ExpandoEventProps {
   type: 'line-info';
   hunkIndex: number;
@@ -114,12 +112,12 @@ interface DiffFileBaseOptions<LAnnotation> {
 }
 
 interface DiffFileThemeRendererOptions<LAnnotation>
-  extends FileBaseRendererOptions,
+  extends BaseRendererOptions,
     ThemeRendererOptions,
     DiffFileBaseOptions<LAnnotation> {}
 
 interface DiffFileThemesRendererOptions<LAnnotation>
-  extends FileBaseRendererOptions,
+  extends BaseRendererOptions,
     ThemesRendererOptions,
     DiffFileBaseOptions<LAnnotation> {}
 
