@@ -5,21 +5,8 @@ import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 import { Header } from '@/components/ui/header';
 import { useEffect, useState } from 'react';
 
-import DocsSidebar from '../../components/DocsSidebar';
-import MobileMenuButton from '../../components/MobileMenuButton';
-
-// import '../css/index.css';
-
 export default function DocsPage() {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const handleMobileMenuToggle = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  const handleMobileMenuClose = () => {
-    setIsMobileMenuOpen(false);
-  };
+  const [isMobileMenuOpen] = useState(false);
 
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
@@ -107,8 +94,8 @@ export default function DocsPage() {
 
           <h3>Basic Usage</h3>
           <p>
-            Here's a basic example of using the React FileDiff component to
-            render a diff between two files:
+            Here&lsquo;s a basic example of using the React FileDiff component
+            to render a diff between two files:
           </p>
           <SimpleCodeBlock
             code={`import { FileDiff } from '@pierre/precision-diffs';
@@ -463,8 +450,9 @@ disposeHighlighter();`}
                 Type: <code>string</code> | Optional
               </p>
               <p>
-                Shiki theme name. Supports any Shiki theme (e.g., 'pierre-dark',
-                'github-light', 'nord', etc.)
+                Shiki theme name. Supports any Shiki theme (e.g.,
+                &apos;pierre-dark&apos;, &apos;github-light&apos;,
+                &apos;nord&apos;, etc.)
               </p>
               <SimpleCodeBlock
                 code="options={{ theme: 'pierre-dark' }}"
@@ -500,29 +488,38 @@ disposeHighlighter();`}
             <div className="border rounded-lg p-4">
               <h4 className="font-mono text-sm font-bold">themeMode</h4>
               <p className="text-sm text-muted-foreground">
-                Type: <code>'light' | 'dark' | 'system'</code> | Default:{' '}
-                <code>'system'</code>
+                Type:{' '}
+                <code>
+                  &apos;light&apos; | &apos;dark&apos; | &apos;system&apos;
+                </code>{' '}
+                | Default: <code>&apos;system&apos;</code>
               </p>
-              <p>Theme mode to use. 'system' respects user's OS preference.</p>
+              <p>
+                Theme mode to use. &apos;system&apos; respects user&apos;s OS
+                preference.
+              </p>
             </div>
 
             <div className="border rounded-lg p-4">
               <h4 className="font-mono text-sm font-bold">diffStyle</h4>
               <p className="text-sm text-muted-foreground">
-                Type: <code>'split' | 'unified'</code> | Default:{' '}
-                <code>'split'</code>
+                Type: <code>&apos;split&apos; | &apos;unified&apos;</code> |
+                Default: <code>&apos;split&apos;</code>
               </p>
               <p>
-                Layout style: 'split' for side-by-side view, 'unified' for
-                stacked view.
+                Layout style: &apos;split&apos; for side-by-side view,
+                &apos;unified&apos; for stacked view.
               </p>
             </div>
 
             <div className="border rounded-lg p-4">
               <h4 className="font-mono text-sm font-bold">diffIndicators</h4>
               <p className="text-sm text-muted-foreground">
-                Type: <code>'bars' | 'minimal' | 'invisible'</code> | Default:{' '}
-                <code>'bars'</code>
+                Type:{' '}
+                <code>
+                  &apos;bars&apos; | &apos;minimal&apos; | &apos;invisible&apos;
+                </code>{' '}
+                | Default: <code>&apos;bars&apos;</code>
               </p>
               <p>Visual style for diff indicators (the +/- markers).</p>
             </div>
@@ -530,12 +527,12 @@ disposeHighlighter();`}
             <div className="border rounded-lg p-4">
               <h4 className="font-mono text-sm font-bold">overflow</h4>
               <p className="text-sm text-muted-foreground">
-                Type: <code>'scroll' | 'wrap'</code> | Default:{' '}
-                <code>'scroll'</code>
+                Type: <code>&apos;scroll&apos; | &apos;wrap&apos;</code> |
+                Default: <code>&apos;scroll&apos;</code>
               </p>
               <p>
-                How to handle long lines: 'scroll' enables horizontal scrolling,
-                'wrap' wraps lines.
+                How to handle long lines: &apos;scroll&apos; enables horizontal
+                scrolling, &apos;wrap&apos; wraps lines.
               </p>
             </div>
 
@@ -579,7 +576,7 @@ disposeHighlighter();`}
               </p>
               <p>
                 Explicitly set the language for syntax highlighting (e.g.,
-                'tsx', 'python', 'rust').
+                &apos;tsx&apos;, &apos;python&apos;, &apos;rust&apos;).
               </p>
             </div>
           </div>
@@ -644,7 +641,7 @@ disposeHighlighter();`}
 
         <section className="space-y-4">
           <h2>Complete Example</h2>
-          <p>Here's a more complete example with multiple options:</p>
+          <p>Here&lsquo;s a more complete example with multiple options:</p>
           <SimpleCodeBlock
             code={`import { FileDiff } from '@pierre/precision-diffs';
 import type { FileContents, LineAnnotation } from '@pierre/precision-diffs';

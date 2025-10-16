@@ -1,5 +1,14 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import {
   type IconType,
   SiAstro,
@@ -86,15 +95,6 @@ import {
   useEffect,
   useState,
 } from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
 
 export type BundledLanguage = string;
 
@@ -249,7 +249,6 @@ const codeBlockClassName = cn(
   '[&_.line]:relative'
 );
 
-
 type CodeBlockData = {
   language: string;
   filename: string;
@@ -365,10 +364,10 @@ export const CodeBlockFilename = ({
 
   return (
     <div
-      className="flex items-center gap-2 bg-secondary px-4 py-1.5 text-muted-foreground text-xs"
+      className={`${className ?? ''} flex items-center gap-2 bg-secondary px-4 py-1.5 text-muted-foreground text-xs`}
       {...props}
     >
-      {Icon && <Icon className="h-4 w-4 shrink-0" />}
+      {Icon != null && <Icon className="h-4 w-4 shrink-0" />}
       <span className="flex-1 truncate">{children}</span>
     </div>
   );
@@ -435,7 +434,7 @@ export type CodeBlockCopyButtonProps = ComponentProps<typeof Button> & {
 };
 
 export const CodeBlockCopyButton = ({
-  asChild,
+  asChild = false,
   onCopy,
   onError,
   timeout = 2000,
@@ -450,13 +449,14 @@ export const CodeBlockCopyButton = ({
   const copyToClipboard = () => {
     if (
       typeof window === 'undefined' ||
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
       !navigator.clipboard.writeText ||
       !code
     ) {
       return;
     }
 
-    navigator.clipboard.writeText(code).then(() => {
+    void navigator.clipboard.writeText(code).then(() => {
       setIsCopied(true);
       onCopy?.();
 
@@ -587,7 +587,7 @@ export const CodeBlockContent = ({
     const loadHighlightedCode = async () => {
       try {
         const { codeToHtml } = await import('shiki');
-        
+
         const html = await codeToHtml(children, {
           lang: language,
           themes: {
@@ -599,12 +599,15 @@ export const CodeBlockContent = ({
         setHighlightedCode(html);
         setIsLoading(false);
       } catch (error) {
-        console.error(`Failed to highlight code for language "${language}":`, error);
+        console.error(
+          `Failed to highlight code for language "${language}":`,
+          error
+        );
         setIsLoading(false);
       }
     };
 
-    loadHighlightedCode();
+    void loadHighlightedCode();
   }, [children, language, themes, syntaxHighlighting]);
 
   if (!syntaxHighlighting || isLoading) {
@@ -612,9 +615,6 @@ export const CodeBlockContent = ({
   }
 
   return (
-    <div
-      dangerouslySetInnerHTML={{ __html: highlightedCode }}
-      {...props}
-    />
+    <div dangerouslySetInnerHTML={{ __html: highlightedCode }} {...props} />
   );
 };

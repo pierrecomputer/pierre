@@ -32,7 +32,7 @@ export function SimpleCodeBlock({
         },
       ]}
       defaultValue={language}
-      className={`not-prose ${className || ''}`}
+      className={`not-prose ${className ?? ''}`}
     >
       <CodeBlockHeader>
         <CodeBlockFiles>
