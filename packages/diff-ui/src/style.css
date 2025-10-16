@@ -261,6 +261,12 @@ code {
   background-color: var(--pjs-bg-buffer);
   width: auto;
   width: calc(var(--pjs-column-width) - 8px);
+  opacity: 0.8;
+  font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
+}
+
+[data-separator='line-info']:hover [data-separator-content] {
+  opacity: 1;
 }
 
 [data-separator][data-expand-index] {
