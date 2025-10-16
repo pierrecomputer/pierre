@@ -169,7 +169,7 @@ const Hero = () => {
         <Link
           target="_blank"
           href="https://pierre.computer"
-          className="underline hover:text-foreground transition-colors"
+          className="underline underline-offset-2 hover:text-foreground transition-colors"
         >
           The Pierre Computer Company
         </Link>

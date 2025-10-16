@@ -2,6 +2,7 @@
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import {
+  IconArrowDownRight,
   IconCheck,
   IconColorAuto,
   IconColorDark,
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { type FileContents, preloadHighlighter } from '@pierre/diff-ui';
 import { ChevronDown } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
@@ -251,6 +253,20 @@ export function ShikiThemes() {
           },
         }}
       />
+      <div className="flex gap-1">
+        <IconArrowDownRight className="my-[2px] text-muted-foreground opacity-50" />
+        <p className="text-sm text-muted-foreground">
+          Love the Pierre themes?{' '}
+          <Link
+            href="https://marketplace.visualstudio.com/items?itemName=pierre-computer-co.pierre-vscode-theme"
+            target="_blank"
+            className="underline text-foreground hover:text-foreground transition-colors underline-offset-2"
+          >
+            Install our Pierre VS Code Theme pack
+          </Link>{' '}
+          with light and dark flavors.
+        </p>
+      </div>
     </div>
   );
 }
