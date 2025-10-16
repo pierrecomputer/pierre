@@ -8,7 +8,7 @@ import {
   getFiletypeFromFileName,
   isHighlighterNull,
   parseDiffFromFile,
-  parsePatchContent,
+  parsePatchFiles,
   preloadHighlighter,
 } from '@pierre/diff-ui';
 
@@ -59,7 +59,7 @@ let parsedPatches: ParsedPatch[] | undefined;
 async function handlePreloadDiff() {
   if (parsedPatches != null || !isHighlighterNull()) return;
   const content = await loadPatchContent();
-  parsedPatches = parsePatchContent(content);
+  parsedPatches = parsePatchFiles(content);
   console.log('Parsed File:', parsedPatches);
   const langs = new Set<SupportedLanguages>();
   for (const parsedPatch of parsedPatches) {
@@ -191,7 +191,7 @@ const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
   loadDiff.addEventListener('click', () => {
     void (async () => {
-      renderDiff(parsedPatches ?? parsePatchContent(await loadPatchContent()));
+      renderDiff(parsedPatches ?? parsePatchFiles(await loadPatchContent()));
     })();
   });
   loadDiff.addEventListener('mouseenter', () => void handlePreloadDiff);

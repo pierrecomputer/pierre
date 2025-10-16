@@ -152,7 +152,7 @@ function processPatch(data: string): ParsedPatch {
   return { patchMetadata, files };
 }
 
-export function parsePatchContent(data: string): ParsedPatch[] {
+export function parsePatchFiles(data: string): ParsedPatch[] {
   // NOTE(amadeus): This function is pretty forgiving in that it can accept a
   // patch file that includes commit metdata, multiple commits, or not
   const patches: ParsedPatch[] = [];

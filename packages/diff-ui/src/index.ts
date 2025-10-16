@@ -11,6 +11,6 @@ export * from './utils/getFiletypeFromFileName';
 export * from './utils/html_render_utils';
 export * from './utils/parseDiffFromFile';
 export * from './utils/parseLineType';
-export * from './utils/parsePatchContent';
+export * from './utils/parsePatchFiles';
 
 export type * from './types';
