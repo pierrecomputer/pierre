@@ -14,9 +14,11 @@ import { RendererOptions } from './RendererOptions';
 import { Styling } from './Styling';
 import { TypescriptSupport } from './TypescriptSupport';
 import { VanillaAPI } from './VanillaAPI';
+import type { DocsExampleTypes } from './types';
 
 export default function DocsPage() {
   const [isMobileMenuOpen] = useState(false);
+  const [exampleTypes, setExampleType] = useState<DocsExampleTypes>('vanilla');
 
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
@@ -37,7 +39,7 @@ export default function DocsPage() {
       <DocsHeader />
       <div className="docs-container prose dark:prose-invert max-w-none">
         <Installation />
-        <Overview />
+        <Overview exampleType={exampleTypes} setExampleType={setExampleType} />
         <ReactAPI />
         <VanillaAPI />
         <ComponentProps />
