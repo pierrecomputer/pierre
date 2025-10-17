@@ -200,9 +200,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private queuedDiff: FileDiffMetadata | undefined;
-  private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
+  private queuedRender:
+    | Promise<Partial<HunksRenderResult> | undefined>
+    | undefined;
   private computedLang: SupportedLanguages = 'text';
-  async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
+  async render(
+    diff: FileDiffMetadata
+  ): Promise<Partial<HunksRenderResult> | undefined> {
     this.queuedDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -237,7 +241,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private renderDiff(
     fileDiff: FileDiffMetadata,
     highlighter: PJSHighlighter
-  ): HunksRenderResult {
+  ): Partial<HunksRenderResult> {
     const { disableLineNumbers } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
@@ -266,7 +270,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       prevHunk = hunk;
     }
 
-    return { additionsHTML, deletionsHTML, unifiedHTML };
+    return {
+      additionsHTML: additionsHTML.length > 0 ? additionsHTML : undefined,
+      deletionsHTML: deletionsHTML.length > 0 ? deletionsHTML : undefined,
+      unifiedHTML: unifiedHTML.length > 0 ? unifiedHTML : undefined,
+    };
   }
 
   private createHastOptions(
