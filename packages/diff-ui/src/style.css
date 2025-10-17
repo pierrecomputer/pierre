@@ -149,21 +149,21 @@ code {
     --pjs-bg-deletion-override,
     light-dark(
       color-mix(in oklch, var(--pjs-bg) 88%, var(--pjs-deletion-base)),
-      color-mix(in oklch, var(--pjs-bg) 75%, var(--pjs-deletion-base))
+      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-deletion-base))
     )
   );
   --pjs-bg-deletion-number: var(
     --pjs-bg-deletion-number-override,
     light-dark(
       color-mix(in oklch, var(--pjs-bg) 91%, var(--pjs-deletion-base)),
-      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-deletion-base))
+      color-mix(in oklch, var(--pjs-bg) 85%, var(--pjs-deletion-base))
     )
   );
   --pjs-bg-deletion-hover: var(
     --pjs-bg-deletion-hover-override,
     light-dark(
       color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-deletion-base)),
-      color-mix(in oklch, var(--pjs-bg) 70%, var(--pjs-deletion-base))
+      color-mix(in oklch, var(--pjs-bg) 75%, var(--pjs-deletion-base))
     )
   );
   --pjs-bg-deletion-emphasis: var(
