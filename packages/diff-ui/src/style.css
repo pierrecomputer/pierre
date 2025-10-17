@@ -18,6 +18,7 @@
     --pjs-bg-buffer-override
     --pjs-bg-hover-override
     --pjs-bg-context-override
+    --pjs-bg-separator-override
 
     --pjs-fg-number-override
 
@@ -94,6 +95,13 @@ code {
     light-dark(
       color-mix(in srgb, var(--pjs-bg) 98.5%, var(--pjs-mixer)),
       color-mix(in srgb, var(--pjs-bg) 92.5%, var(--pjs-mixer))
+    )
+  );
+  --pjs-bg-separator: var(
+    --pjs-bg-separator-override,
+    light-dark(
+      color-mix(in srgb, var(--pjs-bg) 96%, var(--pjs-mixer)),
+      color-mix(in srgb, var(--pjs-bg) 85%, var(--pjs-mixer))
     )
   );
 
@@ -306,7 +314,7 @@ code {
 [data-separator='metadata'],
 [data-separator]:empty {
   min-height: 4px;
-  background-color: var(--pjs-bg-buffer);
+  background-color: var(--pjs-bg-separator);
   display: grid;
   grid-template-columns: subgrid;
 }
@@ -330,7 +338,7 @@ code {
   gap: 4px;
   padding: 8px 12px;
   border-radius: 6px;
-  background-color: var(--pjs-bg-buffer);
+  background-color: var(--pjs-bg-separator);
   width: auto;
   width: calc(var(--pjs-column-width) - 8px);
   opacity: 0.8;
