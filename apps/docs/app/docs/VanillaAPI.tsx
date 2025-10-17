@@ -1,126 +1,311 @@
 import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { useState } from 'react';
 
-const CODE_FILE_DIFF = `import { FileDiff } from '@pierre/precision-diffs';
-import type { DiffFileRendererOptions } from '@pierre/precision-diffs';
+export function VanillaAPI() {
+  const [componentType, setComponentType] = useState<'file-diff' | 'file'>(
+    'file-diff'
+  );
+  const [hunkType, setHunkType] = useState<'hunk-file' | 'hunk-patch'>(
+    'hunk-file'
+  );
+  return (
+    <section className="space-y-4">
+      <h2>Vanilla JS API</h2>
+      <p>
+        The vanilla JS api for Precision Diffs exposes a mix of components and
+        raw classes. The components and the React API are built on many of these
+        foundation classes. The goal has been to abstract away a lot of the
+        heavy lifting when working with Shiki directly and provide a set of
+        standardized APIs that can be used with any framework and even server
+        rendered if necessary.
+      </p>
+      <p>
+        You can import all of this via the core package{' '}
+        <code>@pierre/precision-diffs</code>
+      </p>
+      <h3>Components</h3>
+      <p>
+        There are two core components in the vanilla js API,{' '}
+        <code>FileDiff</code> and <code>File</code>
+      </p>
+      <ButtonGroup
+        value={componentType}
+        onValueChange={(value) =>
+          setComponentType(value as 'file-diff' | 'file')
+        }
+      >
+        <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
+        <ButtonGroupItem value="file">File</ButtonGroupItem>
+      </ButtonGroup>
+      {componentType === 'file-diff' ? (
+        <SimpleCodeBlock code={CODE_FILE_DIFF} language="typescript" />
+      ) : (
+        <SimpleCodeBlock code="// Coming Soon" language="typescript" />
+      )}
+      <h3>Classes</h3>
+      <p>
+        These core classes can be thought of as the building blocks for the
+        different components and APIs in Precision Diffs. Most of them should be
+        usable in a variety of environments (server and browser).
+      </p>
+      <h4>DiffHunksRenderer</h4>
+      <p>
+        Essentially a class that takes <code>FileDiffMetadata</code> data
+        structure and can render out the raw lines of code as HTML. You can
+        generate <code>FileDiffMetadata</code> via{' '}
+        <code>parseDiffFromFile</code> or <code>parsePatchFiles</code> utility
+        functions.
+      </p>
+      <ButtonGroup
+        value={hunkType}
+        onValueChange={(value) =>
+          setHunkType(value as 'hunk-file' | 'hunk-patch')
+        }
+      >
+        <ButtonGroupItem value="hunk-file">
+          DiffHunksRenderer File
+        </ButtonGroupItem>
+        <ButtonGroupItem value="hunk-patch">
+          DiffHunksRenderer Patch
+        </ButtonGroupItem>
+      </ButtonGroup>
+      {hunkType === 'hunk-file' ? (
+        <SimpleCodeBlock
+          code={CODE_HUNKS_RENDERER_FILE}
+          language="typescript"
+        />
+      ) : (
+        <SimpleCodeBlock
+          code={CODE_HUNKS_RENDERER_PATCH_FILE}
+          language="typescript"
+        />
+      )}
+      <h3>Shared Highlighter Utilities</h3>
+      <p>
+        Because it&lsquo;s important to re-use your highlighter instance when
+        using Shiki, we&lsquo;ve ensured that all the classes and components you
+        use with Precision Diffs will automatically use a shared highlighter
+        instance and also automatically load languages and themes on demand as
+        necessary.
+      </p>
+      <p>
+        We also provide APIs to preload the highlighter, themes and languages if
+        you would like to do that, along with some cleanup utilities if you want
+        to be memory concious.
+      </p>
+      <p>
+        Shiki comes with a lot of built in{' '}
+        <a href="https://shiki.style/themes" target="_blank">
+          themes
+        </a>
+        , however if you would like to use your own custom or modified theme,
+        you simply have to register it and then it&lsquo;ll just work as any
+        other built in theme.
+      </p>
+      <SimpleCodeBlock code={CODE_UTILITIES} language="typescript" />
+    </section>
+  );
+}
 
-// Create a container element
-const container = document.getElementById('diff-container');
+const CODE_FILE_DIFF = `import {
+  type FileContents,
+  FileDiff,
+  type LineAnnotation,
+} from '@pierre/precision-diffs';
 
-// Configure options
-const options: DiffFileRendererOptions = {
-  theme: 'pierre-dark',
-  diffStyle: 'split',
-  diffIndicators: 'bars',
-  overflow: 'scroll',
-  onLineClick: (props, fileDiff) => {
-    console.log('Clicked line:', props.lineNumber, props.annotationSide);
-  }
+const oldFile: FileContents = {
+  name: 'filename.ts',
+  contents: 'console.log("Hello world")',
 };
 
-// Initialize the renderer with sub times for annotations
-const diffRenderer = new FileDiff<{ message: string }>(options);
+const newFile: FileContents = {
+  name: 'filename.ts',
+  contents: 'console.warn("Uh oh")',
+};
 
-// Render the diff
-await diffRenderer.render({
-  // HTMLElement to inject the code block into
-  containerWrapper, 
-  oldFile: {
-    name: 'example.tsx',
-    contents: 'const greeting = "Hello";'
+interface ThreadMetadata {
+  threadId: string;
+}
+
+// Annotation metadata can be typed any way you'd like
+const lineAnnotations: LineAnnotation<ThreadMetadata>[] = [
+  {
+    side: 'additions',
+    // The line number specified for an annotation is the visual line number
+    // you see in the number column of a diff
+    lineNumber: 16,
+    metadata: { threadId: '68b329da9893e34099c7d8ad5cb9c940' },
   },
-  newFile: {
-    name: 'example.tsx',
-    contents: 'const greeting = "Hello, World!";'
+];
+
+const instance = new FileDiff<ThreadMetadata>({
+  // You can provide a 'theme' prop that maps to any
+  // built in shiki theme or you can register a custom
+  // theme. We also include 2 custom themes
+  //
+  // 'pierre-night' and 'pierre-light
+  //
+  // For the rest of the  available shiki themes, check out:
+  // https://shiki.style/themes
+  theme: 'none',
+  // Or can also provide a 'themes' prop, which allows the code to adapt
+  // to your OS light or dark theme
+  // themes: { dark: 'pierre-night', light: 'pierre-light' },
+
+  // When using the 'themes' prop, 'themeMode' allows you to force 'dark'
+  // or 'light' theme, or inherit from the OS ('system') theme.
+  themeMode: 'system',
+
+  // Disable the line numbers for your diffs, generally not recommended
+  disableLineNumbers: false,
+
+  // Whether code should 'wrap' with long lines or 'scroll'.
+  overflow: 'scroll',
+
+  // Normally you shouldn't need this prop, but if you don't provide a
+  // valid filename or your file doesn't have an extension you may want to
+  // override the automatic detection. You can specify that language here:
+  // https://shiki.style/languages
+  // lang?: SupportedLanguages;
+
+  // 'diffStyle' controls whether the diff is presented side by side or
+  // in a unified (single column) view
+  diffStyle: 'split',
+
+  // Line decorators to help highlight changes.
+  // 'bars' (default):
+  // Shows some red-ish or green-ish (theme dependent) bars on the left
+  // edge of relevant lines
+  //
+  // 'classic':
+  // shows '+' characters on additions and '-' characters on deletions
+  //
+  // 'none':
+  // No special diff indicators are shown
+  diffIndicators: 'bars',
+
+  // By default green-ish or red-ish background are shown on added and
+  // deleted lines respectively. Disable that feature here
+  disableBackground: false,
+
+  // Diffs are split up into hunks, this setting customizes what to show
+  // between each hunk.
+  //
+  // 'line-info' (default):
+  // Shows a bar that tells you how many lines are collapsed. If you are
+  // using the oldFile/newFile API then you can click those bars to
+  // expand the content between them
+  //
+  // 'metadata':
+  // Shows the content you'd see in a normal patch file, usually in some
+  // format like '@@ -60,6 +60,22 @@'. You cannot use these to expand
+  // hidden content
+  //
+  // 'simple':
+  // Just a subtle bar separator between each hunk
+  hunkSeparators: 'line-info',
+
+  // On lines that have both additions and deletions, we can run a
+  // separate diff check to mark parts of the lines that change.
+  // 'none':
+  // Do not show these secondary highlights
+  //
+  // 'char':
+  // Show changes at a per character granularity
+  //
+  // 'word':
+  // Show changes but rounded up to word boundaries
+  //
+  // 'word-alt' (default):
+  // Similar to 'word', however we attempt to minimize single character
+  // gaps between highlighted changes
+  lineDiffType: 'word-alt',
+
+  // If lines exceed these character lengths then we won't perform the
+  // line lineDiffType check
+  maxLineDiffLength: 1000,
+
+  // If any line in the diff exceeds this value then we won't attempt to
+  // syntax highlight the diff
+  maxLineLengthForHighlighting: 1000,
+
+  // Enabling this property will hide the file header with file name and
+  // diff stats.
+  disableFileHeader: false,
+
+  // You can optionally pass a render function for rendering out line
+  // annotations.  Just return the dom node to render
+  renderAnnotation(annotation: LineAnnotation<ThreadMetadata>): HTMLElement {
+    // Despite the diff itself being rendered in the shadow dom,
+    // annotations are inserted via the web components 'slots' api and you
+    // can use all your normal normal css and styling for them
+    const element = document.createElement('div');
+    element.innerText = annotation.metadata.threadId;
+    return element;
   },
-  lineAnnotations: [
-    {
-      side: 'additions',
-      lineNumber: 1,
-      data: { message: 'Updated greeting' }
-    }
-  ]
 });
 
-// Update options
-diffRenderer.setOptions({ diffStyle: 'unified' });
-// Most option changes will require a re-render. 
-diffRenderer.rerender();
-
-// Update theme mode dynamically
-diffRenderer.setThemeMode('dark');
-
-
-// Cleanup when done
-diffRenderer.cleanUp();`;
-
-const CODE_CODE_RENDERER = `import { CodeRenderer } from '@pierre/precision-diffs';
-
-const container = document.getElementById('code-container');
-const renderer = new CodeRenderer();
-
-// Setup the renderer
-await renderer.setup({
-  container,
-  source: 'const message = "Hello, World!";',
-  language: 'typescript',
+// If you ever want to update the options for an instance, simple call
+// 'setOptions' with the new options. Bear in mind, this does NOT merge
+// existing properties, it's a full replace
+instance.setOptions({
+  ...instance.options,
   theme: 'pierre-dark',
-  lineNumbers: true
+  themes: undefined,
 });
 
-// Or use streaming
-const stream = new ReadableStream({
-  start(controller) {
-    controller.enqueue('const ');
-    controller.enqueue('message = ');
-    controller.enqueue('"Hello, World!";');
-    controller.close();
-  }
-});
-
-await renderer.setup({
-  container,
-  source: stream,
-  language: 'typescript',
-  theme: 'pierre-dark'
+// When ready to render, simply call .render with old/new file, optional
+// annotations and a container element to hold the diff
+await instance.render({
+  oldFile,
+  newFile,
+  lineAnnotations,
+  containerWrapper: document.body,
 });`;
 
-const CODE_DIFF_HEADER_RENDERER = `import { DiffHeaderRenderer } from '@pierre/precision-diffs';
+const CODE_HUNKS_RENDERER_FILE = `import {
+  DiffHunksRenderer,
+  type FileDiffMetadata,
+  type HunksRenderResult,
+  parseDiffFromFile,
+} from '@pierre/precision-diffs';
 
-const diff: FileDiffMetadata = parseDiffFromFile(/*...*/)
-const container = document.getElementById('header-container');
-const renderer = new DiffHeaderRenderer();
-
-render.setOptions(options)
-
-await renderer.render(diff);`;
-
-const CODE_DIFF_RENDERER = `import { DiffHunksRenderer, parseDiffFromFile, parsePatchContent } from '@pierre/precision-diffs';
-
-const container = document.getElementById('hunks-container');
 const renderer = new DiffHunksRenderer();
 
+// this API is a full replacement of any existing options, it will not merge in
+// existing options already set
+renderer.setOptions({ theme: 'github-dark', diffStyle: 'split' });
+
 // Parse diff content from 2 versions of a file
-const diffResult = parseDiffFromFile(
-  {name: 'file.ts', contents: 'const greeting = "Hello";'},
-  {name: 'file.ts', contents: 'const greeting = "Hello, World!";'}
+const fileDiff: FileDiffMetadata = parseDiffFromFile(
+  { name: 'file.ts', contents: 'const greeting = "Hello";' },
+  { name: 'file.ts', contents: 'const greeting = "Hello, World!";' }
 );
 
 // Render hunks
-await renderer.render({
-  container,
-  hunks: diffResult.hunks,
-  options: {
-    theme: 'github-dark',
-    diffStyle: 'split',
-    lang: 'typescript'
-  }
-});
+const result: HunksRenderResult | undefined = await renderer.render(fileDiff);
+// Depending on your diffStyle settings and depending the type of changes,
+// you'll get raw text html lines for each column type. If you're diffStyle is
+// 'unified', then additionsHTML and deletionsHTML will be undefined and
+// 'split' will be the inverse
+console.log(result?.additionsHTML);
+console.log(result?.deletionsHTML);
+console.log(result?.unifiedHTML);`;
+
+const CODE_HUNKS_RENDERER_PATCH_FILE = `import {
+  DiffHunksRenderer,
+  type FileDiffMetadata,
+  type HunksRenderResult,
+  parsePatchFiles,
+} from '@pierre/precision-diffs';
 
 // If you have the string data for any github or git/unified patch file, you can alternatively load that into
 // parsePatchContent
-const patchContent = parseDiffFromFile(\`commit e4c066d37a38889612d8e3d18089729e4109fd09 (from 2103046f14fe9047609b3921f44c4f406f86d89f)
+const patches =
+  parsePatchFiles(\`commit e4c066d37a38889612d8e3d18089729e4109fd09 (from 2103046f14fe9047609b3921f44c4f406f86d89f)
 Merge: 2103046 7210630
-Author: Amadeus Demarzi <amadeusdemarzi@gmail.com>
+Author: James Dean <jamesdean@jamesdean.co>
 Date:   Mon Sep 15 11:25:22 2025 -0700
 
     Merge branch 'react-tests'
@@ -147,11 +332,24 @@ index c52c9ca..f3b592b 100644
  );
 \`);
 
-for (const fileDiff of patchContent.files) {
-  const instance = new DiffHunksRenderer();
-  await instance.render({ fileDiff }); // returns raw strings of html based on your settings
-}
-`;
+for (const patch of patches) {
+  for (const fileDiff of patch.files) {
+    // Ideally you create a new hunks renderer for each file separately
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      theme: 'pierre-dark',
+    });
+    const result: HunksRenderResult | undefined =
+      await instance.render(fileDiff); // returns raw strings of html based on your settings
+    // Depending on your diffStyle settings and depending the type of changes,
+    // you'll get raw text html lines for each column type. If you're diffStyle is
+    // 'unified', then additionsHTML and deletionsHTML will be undefined and
+    // 'split' will be the inverse
+    console.log(result?.additionsHTML);
+    console.log(result?.deletionsHTML);
+    console.log(result?.unifiedHTML);
+  }
+}`;
 
 const CODE_UTILITIES = `import {
   getSharedHighlighter,
@@ -174,56 +372,5 @@ registerCustomTheme('my-custom-theme', () => import('./theme.json'));
 const highlighter = await getSharedHighlighter();
 
 // Cleanup when shutting down. Just note that if you call this, all themes and
-// languages will have to be re-loaded
+// languages will have to be reloaded
 disposeHighlighter();`;
-
-export function VanillaAPI() {
-  return (
-    <section className="space-y-4">
-      <h2>Vanilla JS API</h2>
-      <p>
-        The <code>@pierre/precision-diffs</code> package exports some renderer
-        classes for framework-agnostic usage. These are the same renderers used
-        internally by the React components.
-      </p>
-      <h3>FileDiff Renderer</h3>
-      <p>
-        The main renderer class for displaying complete file diffs with headers,
-        hunks, and annotations.
-      </p>
-      <SimpleCodeBlock code={CODE_FILE_DIFF} language="typescript" />
-      <h3>CodeRenderer</h3>
-      <p>
-        A standalone renderer for syntax-highlighted code blocks with streaming
-        support.
-      </p>
-      <SimpleCodeBlock code={CODE_CODE_RENDERER} language="typescript" />
-      <h3>DiffHunksRenderer</h3>
-      <p>
-        Low-level string renderer for individual diff hunks. Useful when you
-        need fine-grained control over diff rendering, say if you wanted to
-        render things in your own component
-      </p>
-      <SimpleCodeBlock code={CODE_DIFF_RENDERER} language="typescript" />
-
-      <h3>DiffHeaderRenderer</h3>
-      <p>
-        Renders the file header section of a diff, showing file names and
-        metadata.
-      </p>
-      <SimpleCodeBlock code={CODE_DIFF_HEADER_RENDERER} language="typescript" />
-      <h3>Shared Highlighter Utilities</h3>
-      <p>
-        When using Shiki, it&lsquo;s important to re-use your highlighter
-        instance and also ensure that all languages and themes are pre-loaded
-        before attempting to render. By utilizing the existing components or
-        classes, all of this is taken care of for you. In cases where you would
-        like to use a custom Shiki theme, you simply need to register a name and
-        loader for the theme, and then when you use any of our library&lsquo;s
-        built in APIs they will automatically load everything as needed on
-        demand
-      </p>
-      <SimpleCodeBlock code={CODE_UTILITIES} language="typescript" />
-    </section>
-  );
-}

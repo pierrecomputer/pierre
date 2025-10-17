@@ -1,9 +1,25 @@
 import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 
 const CODE_GLOBAL = `:root {
+  /* Available Custom CSS Variables. Most should be self explanatory */
+  /* Sets code font, very important */
   --pjs-font-family: 'Berkeley Mono', monospace;
   --pjs-font-size: 14px;
   --pjs-line-height: 1.5;
+  /* Controls tab character size */
+  --pjs-tab-size: 2;
+  /* Font used in header and separator components, typically not a monospace
+   * font, but it's your call */
+  --pjs-header-font-family: Helvetica
+  /* Override or customize any 'font-feature-settings' for your code font */
+  --pjs-font-features: normal;
+
+  /* By default we try to inherit the deletion/addition/modified colors from
+   * the existing Shiki theme, however if you'd like to override them, you can do
+   * so via these css variables: */
+  --pjs-deletion-color-override: orange;
+  --pjs-addition-color-override: yellow;
+  --pjs-modified-color-override: purple;
 }`;
 
 const CODE_INLINE = `<FileDiff
@@ -18,12 +34,18 @@ export function Styling() {
   return (
     <section className="space-y-4">
       <h2>Styling</h2>
-      <p>You can customize fonts and other styles using CSS variables:</p>
+      <p>
+        Diff and code are rendered using shadow dom APIs. This means that the
+        styles applied to the diffs will be well isolated from your pages
+        existing CSS. However it also means if you want to customize the built
+        in styles, you&lsquo;ll have to utilize some custom CSS variables. These
+        can be done either in your global CSS, as style props on parent
+        components, or the event <code>FileDiff</code> component directly.
+      </p>
       <SimpleCodeBlock
         code={CODE_GLOBAL}
         className="rounded-lg overflow-hidden border"
       />
-      <p>Or apply inline styles to the container:</p>
       <SimpleCodeBlock
         code={CODE_INLINE}
         className="rounded-lg overflow-hidden border"

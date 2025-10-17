@@ -3,16 +3,11 @@
 import Footer from '@/components/Footer';
 import { useEffect, useState } from 'react';
 
-import { CompleteExample } from './CompleteExample';
-import { ComponentProps } from './ComponentProps';
 import { DocsHeader } from './DocsHeader';
-import { EventHandlers } from './EventHandlers';
 import { Installation } from './Installation';
 import { Overview } from './Overview';
 import { ReactAPI } from './ReactAPI';
-import { RendererOptions } from './RendererOptions';
 import { Styling } from './Styling';
-import { TypescriptSupport } from './TypescriptSupport';
 import { VanillaAPI } from './VanillaAPI';
 import type { DocsExampleTypes } from './types';
 
@@ -42,12 +37,12 @@ export default function DocsPage() {
         <Overview exampleType={exampleTypes} setExampleType={setExampleType} />
         <ReactAPI />
         <VanillaAPI />
-        <ComponentProps />
-        <RendererOptions />
-        <EventHandlers />
-        <CompleteExample />
         <Styling />
-        <TypescriptSupport />
+        {/* <ComponentProps /> */}
+        {/* <RendererOptions /> */}
+        {/* <EventHandlers /> */}
+        {/* <CompleteExample /> */}
+        {/* <TypescriptSupport /> */}
       </div>
       <Footer />
     </div>
