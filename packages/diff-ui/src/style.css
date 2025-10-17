@@ -11,6 +11,33 @@
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
     Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 
+  --pjs-mixer: light-dark(black, white);
+
+  /*
+    // Available CSS Variable Overrides
+    --pjs-bg-buffer-override
+    --pjs-bg-hover-override
+    --pjs-bg-context-override
+    --pjs-bg-separator-override
+
+    --pjs-fg-number-override
+
+    --pjs-deletion-color-override
+    --pjs-addition-color-override
+    --pjs-modified-color-override
+
+    --pjs-bg-deletion-override
+    --pjs-bg-deletion-number-override
+    --pjs-bg-deletion-hover-override
+    --pjs-bg-deletion-emphasis-override
+
+    --pjs-bg-addition-override
+    --pjs-bg-addition-number-override
+    --pjs-bg-addition-hover-override
+    --pjs-bg-addition-emphasis-override
+  */
+
+  color-scheme: light dark;
   display: block;
 }
 
@@ -48,79 +75,132 @@ code {
 
 [data-pjs-header],
 [data-pjs] {
-  color-scheme: light dark;
-
-  --pjs-mixer: light-dark(black, white);
-
   --pjs-bg: light-dark(var(--pjs-light-bg), var(--pjs-dark-bg));
-  --pjs-bg-buffer: color-mix(in srgb, var(--pjs-bg) 92%, var(--pjs-mixer));
-  --pjs-bg-hover: color-mix(in srgb, var(--pjs-bg) 95%, var(--pjs-mixer));
+  --pjs-bg-buffer: var(
+    --pjs-bg-buffer-override,
+    light-dark(
+      color-mix(in srgb, var(--pjs-bg) 92%, var(--pjs-mixer)),
+      color-mix(in srgb, var(--pjs-bg) 92%, var(--pjs-mixer))
+    )
+  );
+  --pjs-bg-hover: var(
+    --pjs-bg-hover-override,
+    light-dark(
+      color-mix(in srgb, var(--pjs-bg) 97%, var(--pjs-mixer)),
+      color-mix(in srgb, var(--pjs-bg) 91%, var(--pjs-mixer))
+    )
+  );
+  --pjs-bg-context: var(
+    --pjs-bg-context-override,
+    light-dark(
+      color-mix(in srgb, var(--pjs-bg) 98.5%, var(--pjs-mixer)),
+      color-mix(in srgb, var(--pjs-bg) 92.5%, var(--pjs-mixer))
+    )
+  );
+  --pjs-bg-separator: var(
+    --pjs-bg-separator-override,
+    light-dark(
+      color-mix(in srgb, var(--pjs-bg) 96%, var(--pjs-mixer)),
+      color-mix(in srgb, var(--pjs-bg) 85%, var(--pjs-mixer))
+    )
+  );
 
   --pjs-fg: light-dark(var(--pjs-light), var(--pjs-dark));
-  --pjs-fg-number: color-mix(in srgb, currentColor 65%, transparent);
+  --pjs-fg-number: var(
+    --pjs-fg-number-override,
+    light-dark(
+      color-mix(in srgb, var(--pjs-fg) 65%, var(--pjs-bg)),
+      color-mix(in srgb, var(--pjs-fg) 65%, var(--pjs-bg))
+    )
+  );
 
-  --pjs-deletion-base: light-dark(
-    var(
-      --pjs-deletion-color-override,
-      var(--pjs-light-deletion-color, var(--pjs-deletion-color, rgb(255, 0, 0)))
-    ),
-    var(
-      --pjs-deletion-color-override,
+  --pjs-deletion-base: var(
+    --pjs-deletion-color-override,
+    light-dark(
+      var(
+        --pjs-light-deletion-color,
+        var(--pjs-deletion-color, rgb(255, 0, 0))
+      ),
       var(--pjs-dark-deletion-color, var(--pjs-deletion-color, rgb(255, 0, 0)))
     )
   );
-  --pjs-addition-base: light-dark(
-    var(
-      --pjs-addition-color-override,
-      var(--pjs-light-addition-color, var(--pjs-addition-color, rgb(0, 255, 0)))
-    ),
-    var(
-      --pjs-addition-color-override,
+  --pjs-addition-base: var(
+    --pjs-addition-color-override,
+    light-dark(
+      var(
+        --pjs-light-addition-color,
+        var(--pjs-addition-color, rgb(0, 255, 0))
+      ),
       var(--pjs-dark-addition-color, var(--pjs-addition-color, rgb(0, 255, 0)))
     )
   );
-  --pjs-modified-base: light-dark(
-    var(
-      --pjs-modified-color-override,
-      var(--pjs-light-modified-color, var(--pjs-modified-color, rgb(0, 0, 255)))
-    ),
-    var(
-      --pjs-modified-color-override,
+  --pjs-modified-base: var(
+    --pjs-modified-color-override,
+    light-dark(
+      var(
+        --pjs-light-modified-color,
+        var(--pjs-modified-color, rgb(0, 0, 255))
+      ),
       var(--pjs-dark-modified-color, var(--pjs-modified-color, rgb(0, 0, 255)))
     )
   );
 
-  --pjs-bg-deletions: color-mix(
-    in oklch,
-    var(--pjs-bg) 80%,
-    var(--pjs-deletion-base)
+  --pjs-bg-deletion: var(
+    --pjs-bg-deletion-override,
+    light-dark(
+      color-mix(in oklch, var(--pjs-bg) 88%, var(--pjs-deletion-base)),
+      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-deletion-base))
+    )
+  );
+  --pjs-bg-deletion-number: var(
+    --pjs-bg-deletion-number-override,
+    light-dark(
+      color-mix(in oklch, var(--pjs-bg) 91%, var(--pjs-deletion-base)),
+      color-mix(in oklch, var(--pjs-bg) 85%, var(--pjs-deletion-base))
+    )
+  );
+  --pjs-bg-deletion-hover: var(
+    --pjs-bg-deletion-hover-override,
+    light-dark(
+      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-deletion-base)),
+      color-mix(in oklch, var(--pjs-bg) 75%, var(--pjs-deletion-base))
+    )
+  );
+  --pjs-bg-deletion-emphasis: var(
+    --pjs-bg-deletion-emphasis-override,
+    light-dark(
+      rgb(from var(--pjs-deletion-base) r g b / 0.15),
+      rgb(from var(--pjs-deletion-base) r g b / 0.1)
+    )
   );
 
-  --pjs-bg-additions: color-mix(
-    in oklch,
-    var(--pjs-bg) 80%,
-    var(--pjs-addition-base)
+  --pjs-bg-addition: var(
+    --pjs-bg-addition-override,
+    light-dark(
+      color-mix(in oklch, var(--pjs-bg) 88%, var(--pjs-addition-base)),
+      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-addition-base))
+    )
   );
-
-  --pjs-bg-deletions-emphasis: color-mix(
-    in oklch,
-    var(--pjs-bg) 65%,
-    var(--pjs-deletion-base)
+  --pjs-bg-addition-number: var(
+    --pjs-bg-addition-number-override,
+    light-dark(
+      color-mix(in oklch, var(--pjs-bg) 91%, var(--pjs-addition-base)),
+      color-mix(in oklch, var(--pjs-bg) 85%, var(--pjs-addition-base))
+    )
   );
-  --pjs-bg-additions-emphasis: color-mix(
-    in oklch,
-    var(--pjs-bg) 65%,
-    var(--pjs-addition-base)
+  --pjs-bg-addition-hover: var(
+    --pjs-bg-addition-hover-override,
+    light-dark(
+      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-addition-base)),
+      color-mix(in oklch, var(--pjs-bg) 70%, var(--pjs-addition-base))
+    )
   );
-  --pjs-bg-deletions-number: color-mix(
-    in oklch,
-    var(--pjs-bg) 85%,
-    var(--pjs-deletion-base)
-  );
-  --pjs-bg-additions-number: color-mix(
-    in oklch,
-    var(--pjs-bg) 85%,
-    var(--pjs-addition-base)
+  --pjs-bg-addition-emphasis: var(
+    --pjs-bg-addition-emphasis-override,
+    light-dark(
+      rgb(from var(--pjs-addition-base) r g b / 0.15),
+      rgb(from var(--pjs-addition-base) r g b / 0.1)
+    )
   );
 
   background-color: var(--pjs-bg);
@@ -234,7 +314,7 @@ code {
 [data-separator='metadata'],
 [data-separator]:empty {
   min-height: 4px;
-  background-color: var(--pjs-bg-buffer);
+  background-color: var(--pjs-bg-separator);
   display: grid;
   grid-template-columns: subgrid;
 }
@@ -258,7 +338,7 @@ code {
   gap: 4px;
   padding: 8px 12px;
   border-radius: 6px;
-  background-color: var(--pjs-bg-buffer);
+  background-color: var(--pjs-bg-separator);
   width: auto;
   width: calc(var(--pjs-column-width) - 8px);
   opacity: 0.8;
@@ -370,7 +450,7 @@ code {
   [data-line-type='change-addition'] [data-column-number]::before {
     content: '';
     display: block;
-    width: 0.5ch;
+    width: 4px;
     height: 100%;
     position: absolute;
     top: 0;
@@ -384,7 +464,7 @@ code {
     background-attachment: fixed;
     background-image: linear-gradient(
       0deg,
-      var(--pjs-bg-deletions) 50%,
+      var(--pjs-bg-deletion) 50%,
       var(--pjs-deletion-base) 50%
     );
     background-size: calc(1lh / round(1lh / 2px)) calc(1lh / round(1lh / 2px));
@@ -430,7 +510,7 @@ code {
   }
 
   [data-diff-span] {
-    background-color: var(--pjs-bg-additions-emphasis);
+    background-color: var(--pjs-bg-addition-emphasis);
   }
 }
 
@@ -440,31 +520,31 @@ code {
   }
 
   [data-diff-span] {
-    background-color: var(--pjs-bg-deletions-emphasis);
+    background-color: var(--pjs-bg-deletion-emphasis);
   }
 }
 
 [data-background] [data-line-type='change-addition'] {
-  background-color: var(--pjs-bg-additions);
+  background-color: var(--pjs-bg-addition);
 
   [data-column-number] {
-    background-color: var(--pjs-bg-additions-number);
+    background-color: var(--pjs-bg-addition-number);
   }
 }
 
 [data-background] [data-line-type='change-deletion'] {
-  background-color: var(--pjs-bg-deletions);
+  background-color: var(--pjs-bg-deletion);
 
   [data-column-number] {
-    background-color: var(--pjs-bg-deletions-number);
+    background-color: var(--pjs-bg-deletion-number);
   }
 }
 
 [data-line-type='context-expanded'] {
-  background-color: var(--pjs-bg-buffer);
+  background-color: var(--pjs-bg-context);
 
   [data-column-number] {
-    background-color: var(--pjs-bg-buffer);
+    background-color: var(--pjs-bg-context);
   }
 }
 
@@ -476,20 +556,14 @@ code {
 }
 
 [data-background] [data-line]:hover {
-  &[data-line-type='change-addition'] [data-column-number] {
-    background-color: var(--pjs-bg-additions-number);
-  }
-
-  &[data-line-type='change-addition'] [data-column-content] {
-    background-color: var(--pjs-bg-additions-number);
-  }
-
-  &[data-line-type='change-deletion'] [data-column-number] {
-    background-color: var(--pjs-bg-deletions-number);
-  }
-
+  &[data-line-type='change-deletion'] [data-column-number],
   &[data-line-type='change-deletion'] [data-column-content] {
-    background-color: var(--pjs-bg-deletions-number);
+    background-color: var(--pjs-bg-deletion-hover);
+  }
+
+  &[data-line-type='change-addition'] [data-column-number],
+  &[data-line-type='change-addition'] [data-column-content] {
+    background-color: var(--pjs-bg-addition-hover);
   }
 }
 

@@ -539,7 +539,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private applyHunksToDOM(
-    result: HunksRenderResult,
+    result: Partial<HunksRenderResult>,
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ) {
@@ -554,17 +554,17 @@ export class FileDiff<LAnnotation = undefined> {
     let codeDeletions: HTMLElement | undefined;
     let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
-    if (result.deletionsHTML.length > 0) {
+    if (result.deletionsHTML != null) {
       codeDeletions = createCodeNode({ columnType: 'deletions' });
       codeDeletions.innerHTML = result.deletionsHTML;
       pre.appendChild(codeDeletions);
     }
-    if (result.additionsHTML.length > 0) {
+    if (result.additionsHTML != null) {
       codeAdditions = createCodeNode({ columnType: 'additions' });
       codeAdditions.innerHTML = result.additionsHTML;
       pre.appendChild(codeAdditions);
     }
-    if (result.unifiedHTML.length > 0) {
+    if (result.unifiedHTML != null) {
       const codeUnified = createCodeNode({ columnType: 'unified' });
       codeUnified.innerHTML = result.unifiedHTML;
       pre.appendChild(codeUnified);
