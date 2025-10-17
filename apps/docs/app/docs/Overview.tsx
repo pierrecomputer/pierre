@@ -161,29 +161,29 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
         subject to change.
       </p>
       <p>
-        Precision Diffs is a library for rendering code and diffs on the web.
-        This includes both high level easy-to-use components as well as exposing
-        many of the internals if you want to selectively use specific pieces.
-        We’ve built syntax highlighting on top of{' '}
+        <strong>Precision Diffs</strong> is a library for rendering code and
+        diffs on the web. This includes both high level easy-to-use components
+        as well as exposing many of the internals if you want to selectively use
+        specific pieces. We’ve built syntax highlighting on top of{' '}
         <Link href="https://shiki.dev" target="_blank">
           Shiki
         </Link>{' '}
         which provides a lot of great theme and language support.
       </p>
       <p>
-        We’ve taken a somewhat opinionated stance in our architecture in that
-        browsers are pretty efficient at rendering raw html and we lean into
-        this by having all the lower level APIs purely rendering strings (raw
-        html) that can then be consumed by higher order components and
-        utilities. This gives us great performance and flexibility to support
-        popular libraries like React as well as provide great tools if you want
-        to stick to vanilla JavaScript and HTML. The higher order components
-        render all this out into Shadow DOM and CSS grid layout.
+        We have an opinionated stance in our architecture:{' '}
+        <strong>browsers are rather efficient at rendering raw HTML</strong>. We
+        lean into this by having all the lower level APIs purely rendering
+        strings (the raw HTML) that are then consumed by higher-order components
+        and utilities. This gives us great performance and flexibility to
+        support popular libraries like React as well as provide great tools if
+        you want to stick to vanilla JavaScript and HTML. The higher-order
+        components render all this out into Shadow DOM and CSS grid layout.
       </p>
       <p>
         Generally speaking, you’re probably going to want to use the higher
         level components since they provide an easy-to-use API that you can get
-        started with rather quickly. Currently we only have components for
+        started with rather quickly. We currently only have components for
         vanilla JavaScript and React, but will add more if there’s demand.
       </p>
       <p>
@@ -202,10 +202,13 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
         There are two ways to render diffs with <code>FileDiff</code>:
       </p>
       <ol>
-        <li>Providing 2 versions of a file or code to compare</li>
-        <li>Consuming a patch file</li>
+        <li>Provide two versions of a file or code to compare</li>
+        <li>Consume a patch file</li>
       </ol>
-      <p>Below are are examples of both approaches.</p>
+      <p>
+        You can see examples of both these approaches below, in both JavaScript
+        and React.
+      </p>
       <div className="flex gap-2">
         <ButtonGroup
           value={exampleType}
