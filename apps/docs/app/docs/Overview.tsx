@@ -177,32 +177,35 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
         html) that can then be consumed by higher order components and
         utilities. This gives us great performance and flexibility to support
         popular libraries like React as well as provide great tools if you want
-        to stick to vanilla js and html. The higher order components render all
-        this out into shadow dom and css grids.
+        to stick to vanilla JavaScript and HTML. The higher order components
+        render all this out into Shadow DOM and CSS grid layout.
       </p>
       <p>
-        Generally speaking you’re probably going to want to use the higher level
-        components since they provide an easy to use API that you can get
+        Generally speaking, you’re probably going to want to use the higher
+        level components since they provide an easy-to-use API that you can get
         started with rather quickly. Currently we only have components for
-        vanilla js and React, but will add more if there’s demand.
+        vanilla JavaScript and React, but will add more if there’s demand.
       </p>
       <p>
-        For this overview we’ll talk about the vanilla js components for now but
-        there are React equivalents for all of these.
+        For this overview, we’ll talk about the vanilla JavaScript components
+        for now but there are React equivalents for all of these.
       </p>
       <h3>Rendering Diffs</h3>
       <p>
         It’s in the name, it’s probably why you’re here. Our goal with
         visualizing diffs was to provide some flexible and easy to use APIs for{' '}
         <em>how</em> you might want to render diffs. For this we provide a
-        component called <code>FileDiff</code> (both a vanilla js implementation
-        and a React version).
+        component called <code>FileDiff</code> (available in both JavaScript and
+        React versions).
       </p>
       <p>
-        With <code>FileDiff</code> there are two basic ways to render diffs,
-        either providing 2 versions of a file or code to compare, or consuming a
-        patch file.
+        There are two ways to render diffs with <code>FileDiff</code>:
       </p>
+      <ol>
+        <li>Providing 2 versions of a file or code to compare</li>
+        <li>Consuming a patch file</li>
+      </ol>
+      <p>Below are are examples of both approaches.</p>
       <div className="flex gap-2">
         <ButtonGroup
           value={exampleType}
