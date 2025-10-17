@@ -53,15 +53,6 @@ export default function DocsPage() {
         Menu
       </Button>
 
-      <Button
-        variant="outline"
-        onClick={toggleMobileMenu}
-        className="md:hidden sticky top-5 z-50 mt-8 bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted"
-      >
-        <IconParagraph />
-        Menu
-      </Button>
-
       <div className="md:grid md:grid-cols-[220px_1fr] gap-6 md:gap-12">
         <DocsSidebar
           isMobileOpen={isMobileMenuOpen}
