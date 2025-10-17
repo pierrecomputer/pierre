@@ -19,7 +19,7 @@ export function DocsHeader() {
         </Header.Logo>
       }
     >
-      <Header.Nav>
+      <Header.Nav className="mt-2 md:mt-0">
         <Header.NavLink href="/">Home</Header.NavLink>
         <Header.NavLink href="/docs">Docs</Header.NavLink>
         <Header.NavLink href="https://discord.gg/pierre" external>
