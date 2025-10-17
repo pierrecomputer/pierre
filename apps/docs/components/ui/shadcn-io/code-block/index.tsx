@@ -291,7 +291,10 @@ export const CodeBlock = ({
   return (
     <CodeBlockContext.Provider value={{ value, onValueChange, data }}>
       <div
-        className={cn('size-full overflow-hidden rounded-md border', className)}
+        className={cn(
+          'size-full overflow-hidden rounded-md border border-border',
+          className
+        )}
         {...props}
       />
     </CodeBlockContext.Provider>
@@ -306,7 +309,7 @@ export const CodeBlockHeader = ({
 }: CodeBlockHeaderProps) => (
   <div
     className={cn(
-      'flex flex-row items-center border-b bg-secondary p-1',
+      'flex flex-row items-center border-b border-border bg-secondary bg-clip-padding',
       className
     )}
     {...props}
