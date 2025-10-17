@@ -8,7 +8,9 @@ import {
   CodeBlockHeader,
   CodeBlockItem,
 } from '@/components/ui/shadcn-io/code-block';
-import { pierreDarkTheme, pierreLightTheme } from '@pierre/diff-ui';
+
+import pierreDarkTheme from '../themes/pierre-dark.json';
+import pierreLightTheme from '../themes/pierre-light.json';
 
 interface SimpleCodeBlockProps {
   code: string;
