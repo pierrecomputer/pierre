@@ -12,6 +12,14 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./themes/pierre-dark.json": {
+      "import": "./src/themes/pierre-dark.json",
+      "types": "./src/themes/pierre-dark.json"
+    },
+    "./themes/pierre-light.json": {
+      "import": "./src/themes/pierre-light.json",
+      "types": "./src/themes/pierre-light.json"
     }
   },
   "devDependencies": {

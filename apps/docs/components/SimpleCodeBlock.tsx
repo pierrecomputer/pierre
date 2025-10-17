@@ -8,6 +8,7 @@ import {
   CodeBlockHeader,
   CodeBlockItem,
 } from '@/components/ui/shadcn-io/code-block';
+import { pierreDarkTheme, pierreLightTheme } from '@pierre/diff-ui';
 
 interface SimpleCodeBlockProps {
   code: string;
@@ -51,7 +52,13 @@ export function SimpleCodeBlock({
             value={item.language}
             lineNumbers={lineNumbers}
           >
-            <CodeBlockContent language={item.language}>
+            <CodeBlockContent
+              language={item.language}
+              themes={{
+                light: pierreLightTheme,
+                dark: pierreDarkTheme,
+              }}
+            >
               {item.code}
             </CodeBlockContent>
           </CodeBlockItem>
