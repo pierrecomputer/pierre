@@ -370,7 +370,7 @@ code {
   [data-line-type='change-addition'] [data-column-number]::before {
     content: '';
     display: block;
-    width: 0.5ch;
+    width: 4px;
     height: 100%;
     position: absolute;
     top: 0;
