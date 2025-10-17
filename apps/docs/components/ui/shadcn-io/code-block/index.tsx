@@ -237,7 +237,7 @@ const wordHighlightClassNames = cn(
 );
 
 const codeBlockClassName = cn(
-  'mt-0 bg-background text-sm',
+  'mt-0 bg-background text-[13px] leading-[20px]',
   '[&_pre]:py-4',
   '[&_.shiki]:!bg-[var(--shiki-bg)]',
   '[&_code]:w-full',
@@ -560,8 +560,8 @@ export const CodeBlockItem = ({
 
 export type CodeBlockContentProps = HTMLAttributes<HTMLDivElement> & {
   themes?: {
-    light: string;
-    dark: string;
+    light: string | object;
+    dark: string | object;
   };
   language?: BundledLanguage;
   syntaxHighlighting?: boolean;
