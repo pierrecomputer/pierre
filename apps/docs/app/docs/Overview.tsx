@@ -1,4 +1,5 @@
 import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import { IconCiWarningFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -154,9 +155,10 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
   return (
     <section className="space-y-4">
       <h2>Overview</h2>
-      <p className="bg-amber-500 px-4 py-2 rounded-md">
-        <strong>NOTE</strong>: Precision Diffs is in early active development
-        and many of these APIs will change or are incomplete.
+      <p className="flex gap-2 text-sm bg-cyan-500/10 border border-cyan-500/20 px-5 py-4 rounded-md text-cyan-600 dark:text-cyan-300">
+        <IconCiWarningFill className="mt-[2px]" />
+        Precision Diffs is in early active development—many of these APIs are
+        subject to change.
       </p>
       <p>
         Precision Diffs is a library for rendering code and diffs on the web.

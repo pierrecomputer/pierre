@@ -6,11 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 
 import { DocsHeader } from './DocsHeader';
-<<<<<<< HEAD
-=======
 import { DocsSidebar } from './DocsSidebar';
-import { EventHandlers } from './EventHandlers';
->>>>>>> 159a8c9 (wip)
 import { Installation } from './Installation';
 import { Overview } from './Overview';
 import { ReactAPI } from './ReactAPI';
@@ -57,17 +53,35 @@ export default function DocsPage() {
         Menu
       </Button>
 
+      <Button
+        variant="outline"
+        onClick={toggleMobileMenu}
+        className="md:hidden sticky top-5 z-50 mt-8 bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted"
+      >
+        <IconParagraph />
+        Menu
+      </Button>
+
       <div className="md:grid md:grid-cols-[220px_1fr] gap-6 md:gap-12">
-        <Installation />
-        <Overview exampleType={exampleTypes} setExampleType={setExampleType} />
-        <ReactAPI />
-        <VanillaAPI />
-        <Styling />
-        {/* <ComponentProps /> */}
-        {/* <RendererOptions /> */}
-        {/* <EventHandlers /> */}
-        {/* <CompleteExample /> */}
-        {/* <TypescriptSupport /> */}
+        <DocsSidebar
+          isMobileOpen={isMobileMenuOpen}
+          onMobileClose={closeMobileMenu}
+        />
+        <div className="prose dark:prose-invert w-full min-w-0 max-w-full">
+          <Installation />
+          <Overview
+            exampleType={exampleTypes}
+            setExampleType={setExampleType}
+          />
+          <ReactAPI />
+          <VanillaAPI />
+          <Styling />
+          {/* <ComponentProps /> */}
+          {/* <RendererOptions /> */}
+          {/* <EventHandlers /> */}
+          {/* <CompleteExample /> */}
+          {/* <TypescriptSupport /> */}
+        </div>
       </div>
       <Footer />
     </div>
