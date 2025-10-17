@@ -560,8 +560,8 @@ export const CodeBlockItem = ({
 
 export type CodeBlockContentProps = HTMLAttributes<HTMLDivElement> & {
   themes?: {
-    light: string;
-    dark: string;
+    light: string | object;
+    dark: string | object;
   };
   language?: BundledLanguage;
   syntaxHighlighting?: boolean;
