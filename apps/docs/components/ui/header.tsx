@@ -40,7 +40,7 @@ function Header({ className, logo, children, ...props }: HeaderProps) {
     <header
       data-slot="header"
       className={cn(
-        'flex items-center justify-between py-6 border-b ',
+        'flex flex-col md:flex-row md:items-center justify-between py-6 border-b ',
         className
       )}
       {...props}
@@ -107,9 +107,9 @@ function HeaderNavLink({
         href={hrefString}
         className={cn(
           navigationMenuTriggerStyle(),
-          'h-auto py-1.5 px-2 text-muted-foreground font-normal bg-transparent',
+          'h-auto py-1.5 px-0 text-muted-foreground font-normal bg-transparent',
           isActive && 'text-accent-foreground font-medium',
-          external && 'inline-flex items-center gap-1',
+          external && 'inline-flex items-center gap-[2px]',
           className
         )}
         target={external ? '_blank' : undefined}
