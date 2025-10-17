@@ -313,7 +313,7 @@ if (diff2Files != null) {
 //   const parsed = parseDiffFromFile(oldFile, newFile);
 //   renderDiff([{ files: [parsed] }]);
 // })();
-//
+
 function toggleTheme() {
   const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'

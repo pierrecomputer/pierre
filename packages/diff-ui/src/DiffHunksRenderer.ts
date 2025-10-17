@@ -554,7 +554,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           );
         }
       }
-      resolveUnresolvedSpans();
     }
 
     const processRawLine = (
@@ -562,6 +561,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       type: HunkLineType,
       isExpandedContext: boolean = false
     ) => {
+      diffLineIndex++;
       if (type === 'context') {
         createGapSpanIfNecessary();
       }
@@ -583,8 +583,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             diffLineIndex,
           };
           const span = createMirroredAnnotationSpan({
-            deletionLineNumber,
-            additionLineNumber,
+            deletionLineNumber: deletionLineNumber + 1,
+            additionLineNumber: additionLineNumber + 1,
             hunkIndex,
             diffLineIndex: unifiedContent.length,
             deletionAnnotations,
@@ -606,8 +606,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             diffLineIndex,
           };
           const [deletionSpan, additionSpan] = createMirroredAnnotationSpan({
-            deletionLineNumber,
-            additionLineNumber,
+            deletionLineNumber: deletionLineNumber + 1,
+            additionLineNumber: additionLineNumber + 1,
             hunkIndex,
             diffLineIndex,
             deletionAnnotations,
@@ -730,6 +730,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         deletionLineNumber = expandDeletedStart;
         for (let i = additionLineNumber; i < hunk.additionStart - 1; i++) {
           const line = this.diff.newLines[i];
+          hasLongLines =
+            hasLongLines || line.length > maxLineLengthForHighlighting;
           processRawLine(line, 'context', true);
         }
       }
@@ -737,7 +739,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // Process diff content
     for (const rawLine of hunk.hunkContent ?? []) {
-      diffLineIndex++;
       const { line, type, longLine } = parseLineType(
         rawLine,
         maxLineLengthForHighlighting
@@ -755,9 +756,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       for (let i = additionLineNumber; i < this.diff.newLines.length; i++) {
         const line = this.diff.newLines[i];
+        hasLongLines =
+          hasLongLines || line.length > maxLineLengthForHighlighting;
         processRawLine(line, 'context', true);
       }
     }
+    resolveUnresolvedSpans();
 
     const { unifiedDecorations, deletionDecorations, additionDecorations } =
       this.parseDecorations(diffGroups);
