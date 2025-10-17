@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode } from 'react';
 
-import styles from './NavLink.module.css';
 import { IconArrowUpRight } from './icons';
 
 interface NavLinkProps {
@@ -30,7 +29,16 @@ const NavLink = ({
     active ??
     (pathname === href || (href !== '/' && pathname.startsWith(href)));
 
-  const linkClasses = cn(styles.navLink, isActive && styles.active, className);
+  const baseClasses = cn(
+    // Base styles
+    'flex items-center gap-2 px-3 py-[6px] rounded-md text-sm transition-all duration-150 ease-in-out cursor-pointer',
+    'text-muted-foreground',
+    // Hover states
+    'hover:text-foreground',
+    // Active states
+    isActive && 'text-foreground bg-muted font-medium',
+    className
+  );
 
   if (external) {
     return (
@@ -38,18 +46,24 @@ const NavLink = ({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={linkClasses}
+        className={baseClasses}
       >
-        {icon != null && <span className={styles.navLinkIcon}>{icon}</span>}
-        <span className={styles.navLinkText}>{children}</span>
+        {icon != null && (
+          <span className="flex items-center justify-center w-4 h-4">
+            {icon}
+          </span>
+        )}
+        <span className="flex-1">{children}</span>
         <IconArrowUpRight color="fg4" />
       </a>
     );
   }
 
   return (
-    <Link href={href} className={linkClasses}>
-      {icon != null && <span className={styles.navLinkIcon}>{icon}</span>}
+    <Link href={href} className={baseClasses}>
+      {icon != null && (
+        <span className="flex items-center justify-center w-4 h-4">{icon}</span>
+      )}
       {children}
     </Link>
   );

@@ -1,5 +1,4 @@
 import Button from './Button';
-import styles from './MobileMenuButton.module.css';
 import { IconParagraph } from './icons';
 
 interface MobileMenuButtonProps {
@@ -12,7 +11,7 @@ const MobileMenuButton = ({ onClick, className }: MobileMenuButtonProps) => {
   return (
     <Button
       onClick={onClick}
-      className={`${styles.mobileMenuButton} ${className ?? ''}`}
+      className={`hidden md:hidden mb-4 place-self-start ${className ?? ''}`}
       aria-label="Toggle navigation menu"
     >
       <IconParagraph />

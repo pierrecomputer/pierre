@@ -1,5 +1,6 @@
 import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import type { DocsExampleTypes } from './types';
@@ -159,38 +160,41 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
       </p>
       <p>
         Precision Diffs is a library for rendering code and diffs on the web.
-        This includes both high level easy to use components as well as exposing
+        This includes both high level easy-to-use components as well as exposing
         many of the internals if you want to selectively use specific pieces.
-        We&lsquo;ve built syntax highlighting on top of Shiki which provides a
-        lot of great theme and language support.
+        We’ve built syntax highlighting on top of{' '}
+        <Link href="https://shiki.dev" target="_blank">
+          Shiki
+        </Link>{' '}
+        which provides a lot of great theme and language support.
       </p>
       <p>
-        We&lsquo;ve taken a somewhat opinionated stance in our architecture in
-        that browsers are pretty effecient at rendering raw html and we lean
-        into this by having all the lower level APIs purely rendering strings
-        (raw html) that can then be consumed by higher order components and
+        We’ve taken a somewhat opinionated stance in our architecture in that
+        browsers are pretty efficient at rendering raw html and we lean into
+        this by having all the lower level APIs purely rendering strings (raw
+        html) that can then be consumed by higher order components and
         utilities. This gives us great performance and flexibility to support
         popular libraries like React as well as provide great tools if you want
         to stick to vanilla js and html. The higher order components render all
         this out into shadow dom and css grids.
       </p>
       <p>
-        Generally speaking you&lsquo;re probably going to want to use the higher
-        level components since they provide an easy to use API that you can get
+        Generally speaking you’re probably going to want to use the higher level
+        components since they provide an easy to use API that you can get
         started with rather quickly. Currently we only have components for
-        vanilla js and React, but will add more if there&lsquo;s demand.
+        vanilla js and React, but will add more if there’s demand.
       </p>
       <p>
-        For this overview we&lsquo;ll talk about the vanilla js components for
-        now but there are React equivalents for all of these.
+        For this overview we’ll talk about the vanilla js components for now but
+        there are React equivalents for all of these.
       </p>
       <h3>Rendering Diffs</h3>
       <p>
-        It&lsquo;s in the name, it&lsquo;s probably why you&lsquo;re here. Our
-        goal with visualizing diffs was to provide some flexible and easy to use
-        APIs for <em>how</em> you might want to render diffs. For this we
-        provide a component called <code>FileDiff</code> (both a vanilla js
-        implementation and a React version).
+        It’s in the name, it’s probably why you’re here. Our goal with
+        visualizing diffs was to provide some flexible and easy to use APIs for{' '}
+        <em>how</em> you might want to render diffs. For this we provide a
+        component called <code>FileDiff</code> (both a vanilla js implementation
+        and a React version).
       </p>
       <p>
         With <code>FileDiff</code> there are two basic ways to render diffs,
@@ -213,8 +217,8 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
             setExample(value as 'single-file' | 'patch-file')
           }
         >
-          <ButtonGroupItem value="single-file">Single File</ButtonGroupItem>
-          <ButtonGroupItem value="patch-file">Patch File</ButtonGroupItem>
+          <ButtonGroupItem value="single-file">Single file</ButtonGroupItem>
+          <ButtonGroupItem value="patch-file">Patch file</ButtonGroupItem>
         </ButtonGroup>
       </div>
       {exampleType === 'react' ? (
