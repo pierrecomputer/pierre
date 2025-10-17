@@ -21,11 +21,7 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
-import {
-  createCodeNode,
-  createSVGElement,
-  setWrapperProps,
-} from './utils/html_render_utils';
+import { createSVGElement, setWrapperProps } from './utils/html_render_utils';
 import {
   type FileContents,
   parseDiffFromFile,
@@ -551,28 +547,22 @@ export class FileDiff<LAnnotation = undefined> {
     // Clear existing content
     pre.innerHTML = '';
 
-    let codeDeletions: HTMLElement | undefined;
-    let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
     if (result.deletionsHTML != null) {
-      codeDeletions = createCodeNode({ columnType: 'deletions' });
-      codeDeletions.innerHTML = result.deletionsHTML;
-      pre.appendChild(codeDeletions);
+      pre.insertAdjacentHTML('beforeend', result.deletionsHTML);
     }
     if (result.additionsHTML != null) {
-      codeAdditions = createCodeNode({ columnType: 'additions' });
-      codeAdditions.innerHTML = result.additionsHTML;
-      pre.appendChild(codeAdditions);
+      pre.insertAdjacentHTML('beforeend', result.additionsHTML);
     }
     if (result.unifiedHTML != null) {
-      const codeUnified = createCodeNode({ columnType: 'unified' });
-      codeUnified.innerHTML = result.unifiedHTML;
-      pre.appendChild(codeUnified);
+      pre.insertAdjacentHTML('beforeend', result.unifiedHTML);
     }
 
+    const codeAdditions = pre.querySelector('code[data-additions]');
+    const codeDeletions = pre.querySelector('code[data-deletions]');
     if (
-      codeAdditions != null &&
-      codeDeletions != null &&
+      codeAdditions instanceof HTMLElement &&
+      codeDeletions instanceof HTMLElement &&
       (this.options.overflow ?? 'scroll') === 'scroll'
     ) {
       this.setupScrollSync(codeDeletions, codeAdditions);

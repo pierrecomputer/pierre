@@ -14,7 +14,7 @@ export function createTextNode(value: string): Text {
 }
 
 interface CreateHastElementProps {
-  tagName: 'span' | 'div' | 'slot' | 'svg' | 'use';
+  tagName: 'span' | 'div' | 'code' | 'slot' | 'svg' | 'use';
   children?: ElementContent[];
   properties?: Properties;
 }

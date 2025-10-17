@@ -32,6 +32,7 @@ import {
   convertLine,
   createAnnotationElement,
   createEmptyRowBuffer,
+  createHastElement,
   createSeparator,
   findCodeElement,
 } from './utils/hast_utils';
@@ -59,6 +60,9 @@ interface RenderHunkProps {
   highlighter: PJSHighlighter;
   state: SharedRenderState;
   transformer: ShikiTransformer;
+  additionsLines: ElementContent[];
+  deletionsLines: ElementContent[];
+  unifiedLines: ElementContent[];
 }
 
 interface UnresolvedAnnotationSpan {
@@ -82,11 +86,15 @@ interface ProcessLinesReturn {
 
 interface DiffHunkThemeRendererOptions
   extends BaseRendererOptions,
-    ThemeRendererOptions {}
+    ThemeRendererOptions {
+  disableCodeWrappers?: boolean;
+}
 
 interface DiffHunkThemesRendererOptions
   extends BaseRendererOptions,
-    ThemesRendererOptions {}
+    ThemesRendererOptions {
+  disableCodeWrappers?: boolean;
+}
 
 export type DiffHunksRendererOptions =
   | DiffHunkThemeRendererOptions
@@ -157,6 +165,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   getOptionsWithDefaults() {
     const {
+      disableCodeWrappers = false,
       diffStyle = 'split',
       disableLineNumbers = false,
       hunkSeparators = 'line-info',
@@ -170,6 +179,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } = this.options;
     if (themes != null) {
       return {
+        disableCodeWrappers,
         diffStyle,
         disableLineNumbers,
         hunkSeparators,
@@ -182,6 +192,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
     return {
+      disableCodeWrappers,
       diffStyle,
       disableLineNumbers,
       hunkSeparators,
@@ -245,16 +256,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { disableLineNumbers } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
-    let additionsHTML = '';
-    let deletionsHTML = '';
-    let unifiedHTML = '';
+    const additionsLines: ElementContent[] = [];
+    const deletionsLines: ElementContent[] = [];
+    const unifiedLines: ElementContent[] = [];
     const { state, transformer } =
       createTransformerWithState(disableLineNumbers);
     let hunkIndex = 0;
 
     let prevHunk: Hunk | undefined;
     for (const hunk of fileDiff.hunks) {
-      const hunkResult = this.renderHunks({
+      this.renderHunks({
         hunk,
         prevHunk,
         hunkIndex,
@@ -262,19 +273,43 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         state,
         transformer,
         isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
+        additionsLines,
+        deletionsLines,
+        unifiedLines,
       });
-      additionsHTML += hunkResult.additionsHTML;
-      deletionsHTML += hunkResult.deletionsHTML;
-      unifiedHTML += hunkResult.unifiedHTML;
       hunkIndex++;
       prevHunk = hunk;
     }
 
     return {
-      additionsHTML: additionsHTML.length > 0 ? additionsHTML : undefined,
-      deletionsHTML: deletionsHTML.length > 0 ? deletionsHTML : undefined,
-      unifiedHTML: unifiedHTML.length > 0 ? unifiedHTML : undefined,
+      additionsHTML: this.getCodeHTML('additions', additionsLines),
+      deletionsHTML: this.getCodeHTML('deletions', deletionsLines),
+      unifiedHTML: this.getCodeHTML('unified', unifiedLines),
     };
+  }
+
+  private getCodeHTML(
+    columnType: 'additions' | 'deletions' | 'unified',
+    lines: ElementContent[]
+  ): string | undefined {
+    // FIXME(amadeus): Implement the final gap if needed, maybe generate a
+    // padded lad if nothing else...
+    const { disableCodeWrappers } = this.getOptionsWithDefaults();
+    if (lines.length === 0) {
+      return undefined;
+    }
+    return !disableCodeWrappers
+      ? toHtml(
+          createHastElement({
+            tagName: 'code',
+            children: lines,
+            properties: {
+              'data-code': '',
+              [`data-${columnType}`]: '',
+            },
+          })
+        )
+      : toHtml(lines);
   }
 
   private createHastOptions(
@@ -310,16 +345,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     transformer,
     prevHunk,
     isLastHunk,
-  }: RenderHunkProps): HunksRenderResult {
-    const { hunkSeparators } = this.getOptionsWithDefaults();
-    let additionsHTML = '';
-    let deletionsHTML = '';
-    let unifiedHTML = '';
-
+    additionsLines,
+    deletionsLines,
+    unifiedLines,
+  }: RenderHunkProps) {
     if (hunk.hunkContent == null) {
-      return { additionsHTML, deletionsHTML, unifiedHTML };
+      return;
     }
 
+    const { hunkSeparators } = this.getOptionsWithDefaults();
     const { additions, deletions, unified, hasLongLines } = this.processLines(
       hunk,
       hunkIndex,
@@ -327,7 +361,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       isLastHunk
     );
 
-    const generateHTML = (computed: ComputedContent) => {
+    const generateHTML = (
+      computed: ComputedContent,
+      linesElements: ElementContent[]
+    ) => {
       // Remove trailing blank line
       const content = computed.content.join('').replace(/\n$/, '');
       state.lineInfo = computed.lineInfo;
@@ -335,7 +372,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content,
         this.createHastOptions(transformer, computed.decorations, hasLongLines)
       );
-      const transformedNodes = this.getNodesToRender(nodes);
       if (!this.expandedHunks.has(hunkIndex)) {
         if (hunkSeparators === 'line-info') {
           const lines = (() => {
@@ -348,7 +384,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
           })();
           if (lines > 0) {
-            transformedNodes.unshift(
+            linesElements.push(
               createSeparator({
                 type: 'line-info',
                 content: getModifiedLinesString(lines),
@@ -358,14 +394,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
           }
         } else if (hunkSeparators === 'metadata') {
-          transformedNodes.unshift(
+          linesElements.push(
             createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
           );
         } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
-          transformedNodes.unshift(createSeparator({ type: 'empty' }));
+          linesElements.push(createSeparator({ type: 'empty' }));
         }
       }
-
+      for (const line of this.getNodesToRender(nodes)) {
+        linesElements.push(line);
+      }
       if (
         isLastHunk &&
         !this.expandedHunks.has(hunkIndex + 1) &&
@@ -375,7 +413,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           this.diff.newLines.length -
           (hunk.additionStart + hunk.additionCount - 1);
         if (lines > 0) {
-          transformedNodes.push(
+          linesElements.push(
             createSeparator({
               type: 'line-info',
               content: getModifiedLinesString(lines),
@@ -384,24 +422,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           );
         }
       }
-      // FIXME(amadeus): Implement the final gap if needed, maybe generate a
-      // padded lad if nothing else...
-      return toHtml(transformedNodes);
     };
 
     if (unified.content.length > 0) {
-      unifiedHTML = generateHTML(unified);
+      generateHTML(unified, unifiedLines);
     }
 
     if (deletions.content.length > 0) {
-      deletionsHTML = generateHTML(deletions);
+      generateHTML(deletions, deletionsLines);
     }
 
     if (additions.content.length > 0) {
-      additionsHTML = generateHTML(additions);
+      generateHTML(additions, additionsLines);
     }
-
-    return { additionsHTML, deletionsHTML, unifiedHTML };
   }
 
   private processLines(
