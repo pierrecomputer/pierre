@@ -23,6 +23,10 @@ Note that publishing precision diffs is a bit artisinal. You need to update the 
 Long term, im hoping we can use publishConfig to override this, but because we
 rely on Bun for package managment, we currently don't have this functionality.
 
+This means, before publishing, you need to manually update the exports inside the package.json.
+
+This is dangerous.
+
 ## Architectural Notes
 
 This is just a basic-ass vite project, so most of what you'll probably want to
