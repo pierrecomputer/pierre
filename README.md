@@ -15,6 +15,14 @@ bun install
 bun run dev
 ```
 
+## Publishing precision diffs
+
+Note that publishing precision diffs is a bit artisinal. You need to update the exports to be
+/dist/ before exporting, otherwise the package wont work.
+
+Long term, im hoping we can use publishConfig to override this, but because we
+rely on Bun for package managment, we currently don't have this functionality.
+
 ## Architectural Notes
 
 This is just a basic-ass vite project, so most of what you'll probably want to
