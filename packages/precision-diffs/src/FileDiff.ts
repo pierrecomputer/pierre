@@ -562,21 +562,21 @@ export class FileDiff<LAnnotation = undefined> {
     // Create code elements and insert HTML content
     if (result.unifiedAST != null) {
       const codeUnified = createCodeNode({ columnType: 'unified' });
-      codeUnified.innerHTML = this.hunksRenderer.renderPartialCodeAST(
+      codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
         result.unifiedAST
       );
       pre.appendChild(codeUnified);
     } else {
       if (result.deletionsAST != null) {
         codeDeletions = createCodeNode({ columnType: 'deletions' });
-        codeDeletions.innerHTML = this.hunksRenderer.renderPartialCodeAST(
+        codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
           result.deletionsAST
         );
         pre.appendChild(codeDeletions);
       }
       if (result.additionsAST != null) {
         codeAdditions = createCodeNode({ columnType: 'additions' });
-        codeAdditions.innerHTML = this.hunksRenderer.renderPartialCodeAST(
+        codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
           result.additionsAST
         );
         pre.appendChild(codeAdditions);

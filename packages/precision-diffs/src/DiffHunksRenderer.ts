@@ -310,7 +310,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  renderFullASTResult(result: HunksRenderResult): string {
+  renderFullHTML(result: HunksRenderResult): string {
     if (result.unifiedAST != null) {
       result.preNode.children.push(
         createHastElement({
@@ -350,7 +350,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return toHtml(result.preNode);
   }
 
-  renderPartialCodeAST(
+  renderPartialHTML(
     children: ElementContent[],
     columnType?: 'unified' | 'deletions' | 'additions'
   ): string {

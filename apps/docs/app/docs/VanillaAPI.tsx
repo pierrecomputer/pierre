@@ -342,12 +342,26 @@ for (const patch of patches) {
     const result: HunksRenderResult | undefined =
       await instance.render(fileDiff); // returns raw strings of html based on your settings
     // Depending on your diffStyle settings and depending the type of changes,
-    // you'll get raw text html lines for each column type. If your diffStyle is
-    // 'unified', then additionsHTML and deletionsHTML will be undefined and
-    // 'split' will be the inverse
-    console.log(result?.additionsHTML);
-    console.log(result?.deletionsHTML);
-    console.log(result?.unifiedHTML);
+    // you'll get raw HAST nodes for each lines for each column type. If your
+    // diffStyle is 'unified', then additionsHTML and deletionsHTML will be
+    // undefined and if your setting is 'split' then it will be the inverse
+    console.log(result.additionsAST);
+    console.log(result.deletionsAST);
+    console.log(result.unifiedAST);
+    
+    // If you want to render out these nodes, just pass the result to
+    // 'renderFullHTML'. This string will include a wrapper '<pre' element
+    // and '<code' elements for each column.
+    const fullHTML: string = instance.renderFullHTML(result);
+
+    // If you'd prefer to just render out a particular column to html, with or
+    // without the '<code' wrapper, you can do so via:
+    const partialHTML = instance.renderPartialHTML(
+      result.unifiedAST,
+      // if you pass this optional argument of 'unified' | 'additions' |
+      // 'deletions' then the lines will be wrapped in a '<code' element
+      'unified' 
+    );
   }
 }`;
 
