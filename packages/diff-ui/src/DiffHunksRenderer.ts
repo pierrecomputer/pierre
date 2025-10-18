@@ -27,15 +27,17 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
+import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import {
   convertLine,
   createAnnotationElement,
   createEmptyRowBuffer,
+  createHastElement,
+  createPreWrapperProperties,
   createSeparator,
   findCodeElement,
 } from './utils/hast_utils';
-import { formatCSSVariablePrefix } from './utils/html_render_utils';
 import { parseLineType } from './utils/parseLineType';
 
 type AnnotationLineMap<LAnnotation> = Record<
@@ -59,6 +61,9 @@ interface RenderHunkProps {
   highlighter: PJSHighlighter;
   state: SharedRenderState;
   transformer: ShikiTransformer;
+  additionsAST: ElementContent[];
+  deletionsAST: ElementContent[];
+  unifiedAST: ElementContent[];
 }
 
 interface UnresolvedAnnotationSpan {
@@ -93,9 +98,10 @@ export type DiffHunksRendererOptions =
   | DiffHunkThemesRendererOptions;
 
 export interface HunksRenderResult {
-  additionsHTML: string;
-  deletionsHTML: string;
-  unifiedHTML: string;
+  additionsAST: ElementContent[] | undefined;
+  deletionsAST: ElementContent[] | undefined;
+  unifiedAST: ElementContent[] | undefined;
+  preNode: Element;
 }
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
@@ -158,6 +164,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   getOptionsWithDefaults() {
     const {
       diffStyle = 'split',
+      diffIndicators = 'bars',
+      disableBackground = false,
       disableLineNumbers = false,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
@@ -170,7 +178,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } = this.options;
     if (themes != null) {
       return {
+        diffIndicators,
         diffStyle,
+        disableBackground,
         disableLineNumbers,
         hunkSeparators,
         lineDiffType,
@@ -182,7 +192,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
     return {
+      diffIndicators,
       diffStyle,
+      disableBackground,
       disableLineNumbers,
       hunkSeparators,
       lineDiffType,
@@ -200,13 +212,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private queuedDiff: FileDiffMetadata | undefined;
-  private queuedRender:
-    | Promise<Partial<HunksRenderResult> | undefined>
-    | undefined;
+  private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
   private computedLang: SupportedLanguages = 'text';
-  async render(
-    diff: FileDiffMetadata
-  ): Promise<Partial<HunksRenderResult> | undefined> {
+  async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
     this.queuedDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -241,20 +249,29 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private renderDiff(
     fileDiff: FileDiffMetadata,
     highlighter: PJSHighlighter
-  ): Partial<HunksRenderResult> {
-    const { disableLineNumbers } = this.getOptionsWithDefaults();
+  ): HunksRenderResult {
+    const {
+      disableLineNumbers,
+      theme,
+      themes,
+      diffStyle,
+      overflow,
+      themeMode,
+      disableBackground,
+      diffIndicators,
+    } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
-    let additionsHTML = '';
-    let deletionsHTML = '';
-    let unifiedHTML = '';
+    const additionsAST: ElementContent[] = [];
+    const deletionsAST: ElementContent[] = [];
+    const unifiedAST: ElementContent[] = [];
     const { state, transformer } =
       createTransformerWithState(disableLineNumbers);
     let hunkIndex = 0;
 
     let prevHunk: Hunk | undefined;
     for (const hunk of fileDiff.hunks) {
-      const hunkResult = this.renderHunks({
+      this.renderHunks({
         hunk,
         prevHunk,
         hunkIndex,
@@ -262,19 +279,94 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         state,
         transformer,
         isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
+        additionsAST,
+        deletionsAST,
+        unifiedAST,
       });
-      additionsHTML += hunkResult.additionsHTML;
-      deletionsHTML += hunkResult.deletionsHTML;
-      unifiedHTML += hunkResult.unifiedHTML;
       hunkIndex++;
       prevHunk = hunk;
     }
 
     return {
-      additionsHTML: additionsHTML.length > 0 ? additionsHTML : undefined,
-      deletionsHTML: deletionsHTML.length > 0 ? deletionsHTML : undefined,
-      unifiedHTML: unifiedHTML.length > 0 ? unifiedHTML : undefined,
+      additionsAST: additionsAST.length > 0 ? additionsAST : undefined,
+      deletionsAST: deletionsAST.length > 0 ? deletionsAST : undefined,
+      unifiedAST: unifiedAST.length > 0 ? unifiedAST : undefined,
+      preNode: createHastElement({
+        tagName: 'pre',
+        properties: createPreWrapperProperties({
+          diffIndicators,
+          disableBackground,
+          highlighter,
+          overflow,
+          split:
+            diffStyle === 'unified'
+              ? false
+              : additionsAST.length > 0 && additionsAST.length > 0,
+          theme,
+          themeMode,
+          themes,
+        }),
+      }),
     };
+  }
+
+  renderFullASTResult(result: HunksRenderResult): string {
+    if (result.unifiedAST != null) {
+      result.preNode.children.push(
+        createHastElement({
+          tagName: 'code',
+          children: result.unifiedAST,
+          properties: {
+            'data-code': '',
+            'data-unified': '',
+          },
+        })
+      );
+    }
+    if (result.deletionsAST != null) {
+      result.preNode.children.push(
+        createHastElement({
+          tagName: 'code',
+          children: result.deletionsAST,
+          properties: {
+            'data-code': '',
+            'data-deletions': '',
+          },
+        })
+      );
+    }
+    if (result.additionsAST != null) {
+      result.preNode.children.push(
+        createHastElement({
+          tagName: 'code',
+          children: result.additionsAST,
+          properties: {
+            'data-code': '',
+            'data-additions': '',
+          },
+        })
+      );
+    }
+    return toHtml(result.preNode);
+  }
+
+  renderPartialCodeAST(
+    children: ElementContent[],
+    columnType?: 'unified' | 'deletions' | 'additions'
+  ): string {
+    if (columnType == null) {
+      return toHtml(children);
+    }
+    return toHtml(
+      createHastElement({
+        tagName: 'code',
+        children,
+        properties: {
+          'data-code': '',
+          [`data-${columnType}`]: '',
+        },
+      })
+    );
   }
 
   private createHastOptions(
@@ -310,16 +402,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     transformer,
     prevHunk,
     isLastHunk,
-  }: RenderHunkProps): HunksRenderResult {
-    const { hunkSeparators } = this.getOptionsWithDefaults();
-    let additionsHTML = '';
-    let deletionsHTML = '';
-    let unifiedHTML = '';
-
+    additionsAST,
+    deletionsAST,
+    unifiedAST,
+  }: RenderHunkProps) {
     if (hunk.hunkContent == null) {
-      return { additionsHTML, deletionsHTML, unifiedHTML };
+      return;
     }
 
+    const { hunkSeparators } = this.getOptionsWithDefaults();
     const { additions, deletions, unified, hasLongLines } = this.processLines(
       hunk,
       hunkIndex,
@@ -327,7 +418,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       isLastHunk
     );
 
-    const generateHTML = (computed: ComputedContent) => {
+    const generateLinesAST = (
+      computed: ComputedContent,
+      linesAST: ElementContent[]
+    ) => {
       // Remove trailing blank line
       const content = computed.content.join('').replace(/\n$/, '');
       state.lineInfo = computed.lineInfo;
@@ -335,7 +429,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content,
         this.createHastOptions(transformer, computed.decorations, hasLongLines)
       );
-      const transformedNodes = this.getNodesToRender(nodes);
       if (!this.expandedHunks.has(hunkIndex)) {
         if (hunkSeparators === 'line-info') {
           const lines = (() => {
@@ -348,7 +441,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
           })();
           if (lines > 0) {
-            transformedNodes.unshift(
+            linesAST.push(
               createSeparator({
                 type: 'line-info',
                 content: getModifiedLinesString(lines),
@@ -358,14 +451,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
           }
         } else if (hunkSeparators === 'metadata') {
-          transformedNodes.unshift(
+          linesAST.push(
             createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
           );
         } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
-          transformedNodes.unshift(createSeparator({ type: 'empty' }));
+          linesAST.push(createSeparator({ type: 'empty' }));
         }
       }
-
+      for (const line of this.getNodesToRender(nodes)) {
+        linesAST.push(line);
+      }
       if (
         isLastHunk &&
         !this.expandedHunks.has(hunkIndex + 1) &&
@@ -375,7 +470,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           this.diff.newLines.length -
           (hunk.additionStart + hunk.additionCount - 1);
         if (lines > 0) {
-          transformedNodes.push(
+          linesAST.push(
             createSeparator({
               type: 'line-info',
               content: getModifiedLinesString(lines),
@@ -384,24 +479,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           );
         }
       }
-      // FIXME(amadeus): Implement the final gap if needed, maybe generate a
-      // padded lad if nothing else...
-      return toHtml(transformedNodes);
     };
 
     if (unified.content.length > 0) {
-      unifiedHTML = generateHTML(unified);
+      generateLinesAST(unified, unifiedAST);
     }
 
     if (deletions.content.length > 0) {
-      deletionsHTML = generateHTML(deletions);
+      generateLinesAST(deletions, deletionsAST);
     }
 
     if (additions.content.length > 0) {
-      additionsHTML = generateHTML(additions);
+      generateLinesAST(additions, additionsAST);
     }
-
-    return { additionsHTML, deletionsHTML, unifiedHTML };
   }
 
   private processLines(

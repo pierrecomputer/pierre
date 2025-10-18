@@ -7,14 +7,22 @@ import type {
   Text,
 } from 'hast';
 
-import type { AnnotationSpan, SharedRenderState } from '../types';
+import type {
+  AnnotationSpan,
+  BaseRendererOptions,
+  PJSHighlighter,
+  PJSThemeNames,
+  SharedRenderState,
+  ThemesType,
+} from '../types';
+import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 
 export function createTextNode(value: string): Text {
   return { type: 'text', value };
 }
 
 interface CreateHastElementProps {
-  tagName: 'span' | 'div' | 'slot' | 'svg' | 'use';
+  tagName: 'span' | 'div' | 'code' | 'pre' | 'slot' | 'svg' | 'use';
   children?: ElementContent[];
   properties?: Properties;
 }
@@ -186,4 +194,56 @@ export function convertLine(
       'data-line-type': lineInfo.type,
     },
   });
+}
+
+interface CreatePreWrapperPropertiesProps
+  extends Pick<
+    BaseRendererOptions,
+    'overflow' | 'themeMode' | 'diffIndicators' | 'disableBackground'
+  > {
+  theme?: PJSThemeNames;
+  themes?: ThemesType;
+  split: boolean;
+  highlighter: PJSHighlighter;
+}
+
+export function createPreWrapperProperties({
+  diffIndicators = 'bars',
+  disableBackground = false,
+  highlighter,
+  overflow = 'scroll',
+  split,
+  theme,
+  themeMode = 'system',
+  themes,
+}: CreatePreWrapperPropertiesProps): Properties {
+  const properties: Properties = {
+    'data-pjs': '',
+    'data-type': split ? 'split' : 'file',
+    'data-overflow': overflow,
+    // NOTE(amadeus): Alex, here we would probably set a class property
+    // instead, when that's working and supported
+    style: getHighlighterThemeStyles({ theme, themes, highlighter }),
+    tabIndex: 0,
+  };
+
+  if (theme != null && themeMode !== 'system') {
+    properties['data-theme-mode'] = themeMode;
+  } else if (theme != null) {
+    const themeData = highlighter.getTheme(theme);
+    properties['data-theme-mode'] = themeData.type;
+  }
+
+  switch (diffIndicators) {
+    case 'bars':
+    case 'classic':
+      properties['data-indicators'] = diffIndicators;
+      break;
+  }
+
+  if (!disableBackground) {
+    properties['data-background'] = '';
+  }
+
+  return properties;
 }

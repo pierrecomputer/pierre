@@ -130,7 +130,7 @@ export class FileDiff<LAnnotation = undefined> {
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
 
-  private hunksRenderer: DiffHunksRenderer<LAnnotation> | undefined;
+  private hunksRenderer: DiffHunksRenderer<LAnnotation>;
   private headerRenderer: DiffHeaderRenderer | undefined;
 
   private observedNodes = new Map<
@@ -148,6 +148,7 @@ export class FileDiff<LAnnotation = undefined> {
     private isReact = false // NOTE(amadeus): Temp hack while we use this component in a react context
   ) {
     this.options = options;
+    this.hunksRenderer = new DiffHunksRenderer(options);
   }
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
@@ -228,7 +229,6 @@ export class FileDiff<LAnnotation = undefined> {
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
     this.fileContainer = undefined;
-    this.hunksRenderer = undefined;
     this.pre = undefined;
     this.headerRenderer = undefined;
     this.headerElement = undefined;
@@ -262,7 +262,6 @@ export class FileDiff<LAnnotation = undefined> {
       containerWrapper.appendChild(fileContainer);
     }
     const pre = this.getOrCreatePre(fileContainer);
-    this.hunksRenderer ??= new DiffHunksRenderer();
     this.hunksRenderer.setOptions({ ...this.options });
 
     // This is kinda jank, lol
@@ -456,7 +455,7 @@ export class FileDiff<LAnnotation = undefined> {
       case 'click':
         if (data == null) break;
         if (data.type === 'line-info') {
-          this.hunksRenderer?.expandHunk(data.hunkIndex);
+          this.hunksRenderer.expandHunk(data.hunkIndex);
           void this.rerender();
           break;
         }
@@ -543,10 +542,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ) {
-    // Apply pre attributes
-    if (this.hunksRenderer != null) {
-      this.setPreAttributes(pre, highlighter);
-    }
+    this.setPreAttributes(pre, highlighter);
 
     // Clear existing content
     pre.innerHTML = '';
@@ -554,20 +550,27 @@ export class FileDiff<LAnnotation = undefined> {
     let codeDeletions: HTMLElement | undefined;
     let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
-    if (result.deletionsHTML != null) {
-      codeDeletions = createCodeNode({ columnType: 'deletions' });
-      codeDeletions.innerHTML = result.deletionsHTML;
-      pre.appendChild(codeDeletions);
-    }
-    if (result.additionsHTML != null) {
-      codeAdditions = createCodeNode({ columnType: 'additions' });
-      codeAdditions.innerHTML = result.additionsHTML;
-      pre.appendChild(codeAdditions);
-    }
-    if (result.unifiedHTML != null) {
+    if (result.unifiedAST != null) {
       const codeUnified = createCodeNode({ columnType: 'unified' });
-      codeUnified.innerHTML = result.unifiedHTML;
+      codeUnified.innerHTML = this.hunksRenderer.renderPartialCodeAST(
+        result.unifiedAST
+      );
       pre.appendChild(codeUnified);
+    } else {
+      if (result.deletionsAST != null) {
+        codeDeletions = createCodeNode({ columnType: 'deletions' });
+        codeDeletions.innerHTML = this.hunksRenderer.renderPartialCodeAST(
+          result.deletionsAST
+        );
+        pre.appendChild(codeDeletions);
+      }
+      if (result.additionsAST != null) {
+        codeAdditions = createCodeNode({ columnType: 'additions' });
+        codeAdditions.innerHTML = this.hunksRenderer.renderPartialCodeAST(
+          result.additionsAST
+        );
+        pre.appendChild(codeAdditions);
+      }
     }
 
     if (
