@@ -14,11 +14,11 @@ import type {
   ThemedToken,
   ThemesType,
 } from './types';
+import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import {
   createCodeNode,
   createRow,
   createSpanFromToken,
-  formatCSSVariablePrefix,
   setWrapperProps,
 } from './utils/html_render_utils';
 
@@ -89,10 +89,7 @@ export class CodeRenderer {
   private queuedSetupArgs:
     | [ReadableStream<string> | string, HTMLElement]
     | undefined;
-  async setup(
-    _source: ReadableStream<string> | string,
-    _wrapper: HTMLElement
-  ) {
+  async setup(_source: ReadableStream<string> | string, _wrapper: HTMLElement) {
     const isSettingUp = this.queuedSetupArgs != null;
     this.queuedSetupArgs = [_source, _wrapper];
     if (isSettingUp) {

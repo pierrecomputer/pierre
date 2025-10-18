@@ -7,6 +7,7 @@ import {
   hasLoadedLanguage,
   hasLoadedThemes,
 } from './SharedHighlighter';
+import { CONTENT_REPLACE_KEY } from './constants';
 import type {
   AnnotationSpan,
   BaseRendererOptions,
@@ -27,16 +28,18 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
+import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import {
   convertLine,
   createAnnotationElement,
   createEmptyRowBuffer,
   createHastElement,
+  createPreWrapperProperties,
   createSeparator,
+  createTextNode,
   findCodeElement,
 } from './utils/hast_utils';
-import { formatCSSVariablePrefix } from './utils/html_render_utils';
 import { parseLineType } from './utils/parseLineType';
 
 type AnnotationLineMap<LAnnotation> = Record<
@@ -165,8 +168,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   getOptionsWithDefaults() {
     const {
-      disableCodeWrappers = false,
       diffStyle = 'split',
+      diffIndicators = 'bars',
+      disableBackground = false,
+      disableCodeWrappers = false,
       disableLineNumbers = false,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
@@ -179,8 +184,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } = this.options;
     if (themes != null) {
       return {
-        disableCodeWrappers,
+        diffIndicators,
         diffStyle,
+        disableBackground,
+        disableCodeWrappers,
         disableLineNumbers,
         hunkSeparators,
         lineDiffType,
@@ -192,8 +199,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
     return {
-      disableCodeWrappers,
+      diffIndicators,
       diffStyle,
+      disableBackground,
+      disableCodeWrappers,
       disableLineNumbers,
       hunkSeparators,
       lineDiffType,
@@ -286,6 +295,47 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       deletionsHTML: this.getCodeHTML('deletions', deletionsLines),
       unifiedHTML: this.getCodeHTML('unified', unifiedLines),
     };
+  }
+
+  async wrapRenderedHunks(
+    hunkResult: Partial<HunksRenderResult>
+  ): Promise<string> {
+    this.highlighter ??= await this.initializeHighlighter();
+    const {
+      theme,
+      themes,
+      diffStyle,
+      overflow,
+      themeMode,
+      disableBackground,
+      diffIndicators,
+    } = this.getOptionsWithDefaults();
+    const html = toHtml(
+      createHastElement({
+        tagName: 'pre',
+        children: [createTextNode(CONTENT_REPLACE_KEY)],
+        properties: createPreWrapperProperties({
+          diffIndicators,
+          disableBackground,
+          highlighter: this.highlighter,
+          overflow,
+          split:
+            diffStyle === 'unified'
+              ? false
+              : hunkResult.additionsHTML != null &&
+                hunkResult.deletionsHTML != null,
+          theme,
+          themeMode,
+          themes,
+        }),
+      })
+    ).replace(CONTENT_REPLACE_KEY, () => {
+      if (hunkResult.unifiedHTML != null) {
+        return hunkResult.unifiedHTML;
+      }
+      return `${hunkResult.deletionsHTML ?? ''}${hunkResult.additionsHTML ?? ''}`;
+    });
+    return html;
   }
 
   private getCodeHTML(
