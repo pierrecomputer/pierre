@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, copyFileSync } from 'fs';
+import { copyFileSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 // Read the CSS file
@@ -52,10 +52,7 @@ writeFileSync(containerPath, containerContent);
 // Remove the style.css import from index.js since Container handles it
 const indexPath = resolve('dist/index.js');
 let indexContent = readFileSync(indexPath, 'utf-8');
-indexContent = indexContent.replace(
-  /import ['"]\.\/style\.css['"];?\n?/g,
-  ''
-);
+indexContent = indexContent.replace(/import ['"]\.\/style\.css['"];?\n?/g, '');
 writeFileSync(indexPath, indexContent);
 
 console.log('✓ CSS inlined to dist/style.css.js and copied to dist/style.css');
