@@ -1,16 +1,12 @@
-import {
-  CodeToTokenTransformStream,
-  type RecallToken,
-} from './shiki-stream';
-
 import { getSharedHighlighter } from './SharedHighlighter';
 import { queueRender } from './UniversalRenderer';
+import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
 import type {
   BaseCodeProps,
   PJSHighlighter,
   PJSThemeNames,
   SupportedLanguages,
-  ThemeModes,
+  ThemeTypes,
   ThemedToken,
   ThemesType,
 } from './types';
@@ -61,21 +57,21 @@ export class CodeRenderer {
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
   }
 
-  setThemeMode(themeMode: ThemeModes) {
-    if ((this.options.themeMode ?? 'system') === themeMode) {
+  setThemeType(themeType: ThemeTypes) {
+    if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
-    this.options = { ...this.options, themeMode };
+    this.options = { ...this.options, themeType };
 
     // Update pre element theme mode
     if (this.pre != null) {
-      switch (themeMode) {
+      switch (themeType) {
         case 'system':
-          delete this.pre.dataset.themeMode;
+          delete this.pre.dataset.themeType;
           break;
         case 'light':
         case 'dark':
-          this.pre.dataset.themeMode = themeMode;
+          this.pre.dataset.themeType = themeType;
           break;
       }
     }
@@ -125,7 +121,7 @@ export class CodeRenderer {
       themes,
       theme,
       overflow = 'scroll',
-      themeMode = 'system',
+      themeType = 'system',
     } = this.options;
     const fileContainer = this.getOrCreateFileContainer();
     if (fileContainer.parentElement == null) {
@@ -142,7 +138,7 @@ export class CodeRenderer {
       themes,
       highlighter,
       wrap: overflow === 'wrap',
-      themeMode,
+      themeType,
       diffIndicators: 'none',
       disableBackground: true,
     });

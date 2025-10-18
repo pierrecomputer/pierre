@@ -26,11 +26,11 @@
   box-sizing: border-box;
 }
 
-html[data-theme-mode='light'] {
+html[data-theme-type='light'] {
   color-scheme: light;
 }
 
-html[data-theme-mode='dark'] {
+html[data-theme-type='dark'] {
   color-scheme: dark;
 }
 

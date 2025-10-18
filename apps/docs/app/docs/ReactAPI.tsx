@@ -66,9 +66,9 @@ export function SingleDiff() {
         // to your OS light or dark theme
         // themes: { dark: 'pierre-night', light: 'pierre-light' },
 
-        // When using the 'themes' prop, 'themeMode' allows you to force 'dark'
+        // When using the 'themes' prop, 'themeType' allows you to force 'dark'
         // or 'light' theme, or inherit from the OS ('system') theme.
-        themeMode: 'system',
+        themeType: 'system',
 
         // Disable the line numbers for your diffs, generally not recommended
         disableLineNumbers: false,

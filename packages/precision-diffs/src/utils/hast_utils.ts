@@ -15,7 +15,7 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   SharedRenderState,
-  ThemeModes,
+  ThemeTypes,
   ThemesType,
 } from '../types';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
@@ -209,7 +209,7 @@ export function convertLine(
 interface CreatePreWrapperPropertiesProps
   extends Pick<
     BaseRendererOptions,
-    'overflow' | 'themeMode' | 'diffIndicators' | 'disableBackground'
+    'overflow' | 'themeType' | 'diffIndicators' | 'disableBackground'
   > {
   theme?: PJSThemeNames;
   themes?: ThemesType;
@@ -224,7 +224,7 @@ export function createPreWrapperProperties({
   overflow = 'scroll',
   split,
   theme,
-  themeMode = 'system',
+  themeType = 'system',
   themes,
 }: CreatePreWrapperPropertiesProps): Properties {
   const properties: Properties = {
@@ -237,11 +237,11 @@ export function createPreWrapperProperties({
     tabIndex: 0,
   };
 
-  if (theme != null && themeMode !== 'system') {
-    properties['data-theme-mode'] = themeMode;
+  if (theme != null && themeType !== 'system') {
+    properties['data-theme-type'] = themeType;
   } else if (theme != null) {
     const themeData = highlighter.getTheme(theme);
-    properties['data-theme-mode'] = themeData.type;
+    properties['data-theme-type'] = themeData.type;
   }
 
   switch (diffIndicators) {
@@ -264,7 +264,7 @@ interface CreateFileHeaderProps {
   themes?: ThemesType;
   highlighter: PJSHighlighter;
   prefix?: string;
-  themeMode?: ThemeModes;
+  themeType?: ThemeTypes;
 }
 
 export function createFileHeaderElement({
@@ -273,7 +273,7 @@ export function createFileHeaderElement({
   themes,
   highlighter,
   prefix,
-  themeMode = 'system',
+  themeType = 'system',
 }: CreateFileHeaderProps): Element {
   const properties: Properties = {
     'data-pjs-header': '',
@@ -286,13 +286,13 @@ export function createFileHeaderElement({
     }),
   };
 
-  // If a theme is specified, then we should just override the themeMode and
+  // If a theme is specified, then we should just override the themeType and
   // ignore whatever might be passed in
   if (theme != null) {
     const themeData = highlighter.getTheme(theme);
-    properties['data-theme-mode'] = themeData.type;
-  } else if (themeMode !== 'system') {
-    properties['data-theme-mode'] = themeMode;
+    properties['data-theme-type'] = themeData.type;
+  } else if (themeType !== 'system') {
+    properties['data-theme-type'] = themeType;
   }
 
   return createHastElement({

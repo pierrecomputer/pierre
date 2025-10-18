@@ -19,8 +19,8 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   RenderCustomFileMetadata,
-  ThemeModes,
   ThemeRendererOptions,
+  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
@@ -185,33 +185,33 @@ export class FileDiff<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeMode(themeMode: ThemeModes) {
-    if (this.options.themeMode === themeMode) {
+  setThemeType(themeType: ThemeTypes) {
+    if (this.options.themeType === themeType) {
       return;
     }
-    this.mergeOptions({ themeMode });
-    this.hunksRenderer.setThemeMode(themeMode);
-    this.headerRenderer.setThemeMode(themeMode);
+    this.mergeOptions({ themeType });
+    this.hunksRenderer.setThemeType(themeType);
+    this.headerRenderer.setThemeType(themeType);
 
     // Update pre element theme mode
     if (this.pre != null) {
-      switch (themeMode) {
+      switch (themeType) {
         case 'system':
-          delete this.pre.dataset.themeMode;
+          delete this.pre.dataset.themeType;
           break;
         case 'light':
         case 'dark':
-          this.pre.dataset.themeMode = themeMode;
+          this.pre.dataset.themeType = themeType;
           break;
       }
     }
 
     // Update header instance theme mode
     if (this.headerElement != null) {
-      if (themeMode === 'system') {
-        delete this.headerElement.dataset.themeMode;
+      if (themeType === 'system') {
+        delete this.headerElement.dataset.themeType;
       } else {
-        this.headerElement.dataset.themeMode = themeMode;
+        this.headerElement.dataset.themeType = themeType;
       }
     }
   }
@@ -275,11 +275,11 @@ export class FileDiff<LAnnotation = undefined> {
         this.headerElement = undefined;
       }
     } else {
-      const { theme, themes, themeMode } = this.options;
+      const { theme, themes, themeType } = this.options;
       const options: DiffHeaderRendererOptions =
         theme != null
-          ? { theme, renderCustomMetadata, themeMode }
-          : { themes, renderCustomMetadata, themeMode };
+          ? { theme, renderCustomMetadata, themeType }
+          : { themes, renderCustomMetadata, themeType };
       this.headerRenderer.setOptions(options);
     }
 
@@ -524,7 +524,7 @@ export class FileDiff<LAnnotation = undefined> {
       overflow = 'scroll',
       theme,
       themes,
-      themeMode = 'system',
+      themeType = 'system',
       diffIndicators = 'bars',
       disableBackground = false,
     } = this.options;
@@ -541,7 +541,7 @@ export class FileDiff<LAnnotation = undefined> {
       highlighter,
       split,
       wrap,
-      themeMode,
+      themeType,
       diffIndicators,
       disableBackground,
     });

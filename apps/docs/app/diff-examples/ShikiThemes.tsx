@@ -246,7 +246,7 @@ export function ShikiThemes() {
         className="rounded-lg overflow-hidden border"
         options={{
           diffStyle: 'split',
-          themeMode: selectedColorMode,
+          themeType: selectedColorMode,
           themes: {
             dark: selectedDarkTheme,
             light: selectedLightTheme,

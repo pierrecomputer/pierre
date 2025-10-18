@@ -233,22 +233,22 @@ code {
   }
 }
 
-[data-pjs-header][data-theme-mode='light'],
-[data-pjs][data-theme-mode='light'] {
+[data-pjs-header][data-theme-type='light'],
+[data-pjs][data-theme-type='light'] {
   color-scheme: light;
 }
 
-[data-pjs][data-theme-mode='light'] [data-column-content] span {
+[data-pjs][data-theme-type='light'] [data-column-content] span {
   font-weight: var(--pjs-light-font-weight);
   font-style: var(--pjs-light-font-style);
 }
 
-[data-pjs-header][data-theme-mode='dark'],
-[data-pjs][data-theme-mode='dark'] {
+[data-pjs-header][data-theme-type='dark'],
+[data-pjs][data-theme-type='dark'] {
   color-scheme: dark;
 }
 
-[data-pjs][data-theme-mode='dark'] [data-column-content] span {
+[data-pjs][data-theme-type='dark'] [data-column-content] span {
   font-weight: var(--pjs-dark-font-weight);
   font-style: var(--pjs-dark-font-style);
 }

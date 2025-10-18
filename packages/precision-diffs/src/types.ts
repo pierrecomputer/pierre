@@ -84,12 +84,12 @@ export type HunkLineType =
   | 'deletion'
   | 'metadata';
 
-export type ThemeModes = 'system' | 'light' | 'dark';
+export type ThemeTypes = 'system' | 'light' | 'dark';
 
 export interface BaseCodeProps {
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
-  themeMode?: ThemeModes; // 'system' is default
+  themeType?: ThemeTypes; // 'system' is default
 
   // Shiki config options
   lang?: SupportedLanguages;

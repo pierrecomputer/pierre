@@ -23,8 +23,8 @@ import type {
   SharedRenderState,
   ShikiTransformer,
   SupportedLanguages,
-  ThemeModes,
   ThemeRendererOptions,
+  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
@@ -134,11 +134,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeMode(themeMode: ThemeModes) {
-    if (this.getOptionsWithDefaults().themeMode === themeMode) {
+  setThemeType(themeType: ThemeTypes) {
+    if (this.getOptionsWithDefaults().themeType === themeType) {
       return;
     }
-    this.mergeOptions({ themeMode });
+    this.mergeOptions({ themeType });
   }
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
@@ -173,7 +173,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineLengthForHighlighting = 1000,
       overflow = 'scroll',
       theme,
-      themeMode = 'system',
+      themeType = 'system',
       themes,
     } = this.options;
     if (themes != null) {
@@ -187,7 +187,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         maxLineDiffLength,
         maxLineLengthForHighlighting,
         overflow,
-        themeMode,
+        themeType,
         themes,
       };
     }
@@ -201,7 +201,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength,
       maxLineLengthForHighlighting,
       overflow,
-      themeMode,
+      themeType,
       theme,
     };
   }
@@ -256,7 +256,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themes,
       diffStyle,
       overflow,
-      themeMode,
+      themeType,
       disableBackground,
       diffIndicators,
     } = this.getOptionsWithDefaults();
@@ -303,7 +303,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               ? false
               : additionsAST.length > 0 && additionsAST.length > 0,
           theme,
-          themeMode,
+          themeType,
           themes,
         }),
       }),

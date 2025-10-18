@@ -101,8 +101,8 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
   const wrap =
     wrapCheckbox instanceof HTMLInputElement ? wrapCheckbox.checked : false;
   let patchIndex = 0;
-  const parentThemeSetting = document.documentElement.dataset.themeMode;
-  const themeMode =
+  const parentThemeSetting = document.documentElement.dataset.themeType;
+  const themeType =
     parentThemeSetting === 'dark'
       ? 'dark'
       : parentThemeSetting === 'light'
@@ -122,7 +122,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         diffStyle: unified ? 'unified' : 'split',
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation,
-        themeMode,
+        themeType,
         onLineClick(props, diff) {
           console.log(diff.name, 'onLineClick', props);
         },
@@ -319,22 +319,22 @@ function toggleTheme() {
     ? 'dark'
     : 'light';
   const pageTheme =
-    (document.documentElement.dataset.themeMode ?? systemTheme) === 'dark'
+    (document.documentElement.dataset.themeType ?? systemTheme) === 'dark'
       ? 'dark'
       : 'light';
 
-  document.documentElement.dataset.themeMode =
+  document.documentElement.dataset.themeType =
     pageTheme === 'dark' ? 'light' : 'dark';
 
   for (const instance of diffInstances) {
-    const themeSetting = instance.options.themeMode ?? 'system';
+    const themeSetting = instance.options.themeType ?? 'system';
     const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeMode(currentMode === 'light' ? 'dark' : 'light');
+    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
   }
 
   for (const instance of streamingInstances) {
-    const themeSetting = instance.options.themeMode ?? 'system';
+    const themeSetting = instance.options.themeType ?? 'system';
     const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeMode(currentMode === 'light' ? 'dark' : 'light');
+    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
   }
 }

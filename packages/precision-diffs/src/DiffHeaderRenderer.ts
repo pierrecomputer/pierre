@@ -7,14 +7,14 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   RenderCustomFileMetadata,
-  ThemeModes,
   ThemeRendererOptions,
+  ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { createFileHeaderElement } from './utils/hast_utils';
 
 interface BaseProps {
-  themeMode?: ThemeModes;
+  themeType?: ThemeTypes;
   renderCustomMetadata?: RenderCustomFileMetadata;
 }
 
@@ -50,11 +50,11 @@ export class DiffHeaderRenderer {
     this.options = options;
   }
 
-  setThemeMode(themeMode: ThemeModes) {
-    if ((this.options.themeMode ?? 'system') === themeMode) {
+  setThemeType(themeType: ThemeTypes) {
+    if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
-    this.mergeOptions({ themeMode });
+    this.mergeOptions({ themeType });
   }
 
   private async initializeHighlighter() {

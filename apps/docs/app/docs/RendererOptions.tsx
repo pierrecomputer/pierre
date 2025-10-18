@@ -53,7 +53,7 @@ export function RendererOptions() {
         </div>
 
         <div className="border rounded-lg p-4">
-          <h4 className="font-mono text-sm font-bold">themeMode</h4>
+          <h4 className="font-mono text-sm font-bold">themeType</h4>
           <p className="text-sm text-muted-foreground">
             Type:{' '}
             <code>

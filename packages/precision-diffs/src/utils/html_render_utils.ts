@@ -3,7 +3,7 @@ import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
 import type {
   PJSHighlighter,
   PJSThemeNames,
-  ThemeModes,
+  ThemeTypes,
   ThemedToken,
   ThemesType,
 } from '../types';
@@ -40,7 +40,7 @@ interface SetupWrapperNodesProps {
   highlighter: PJSHighlighter;
   split: boolean;
   wrap: boolean;
-  themeMode: ThemeModes;
+  themeType: ThemeTypes;
   diffIndicators: 'bars' | 'classic' | 'none';
   disableBackground: boolean;
 }
@@ -67,19 +67,19 @@ export function setWrapperProps({
   themes,
   split,
   wrap,
-  themeMode,
+  themeType,
   diffIndicators,
   disableBackground,
 }: SetupWrapperNodesProps) {
   const styles = getHighlighterThemeStyles({ theme, themes, highlighter });
-  if (themeMode === 'system') {
-    delete pre.dataset.themeMode;
+  if (themeType === 'system') {
+    delete pre.dataset.themeType;
   } else {
-    pre.dataset.themeMode = themeMode;
+    pre.dataset.themeType = themeType;
   }
   if (theme != null) {
     const themeData = highlighter.getTheme(theme);
-    pre.dataset.themeMode = themeData.type;
+    pre.dataset.themeType = themeData.type;
   }
   switch (diffIndicators) {
     case 'bars':
