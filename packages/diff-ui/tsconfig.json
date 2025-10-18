@@ -8,10 +8,5 @@
     "rootDir": "src",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "resolveJsonModule": true
-  },
-  "references": [
-    {
-      "path": "../shiki-stream"
-    }
-  ]
+  }
 }

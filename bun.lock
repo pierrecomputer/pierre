@@ -94,7 +94,7 @@
       "name": "@pierre/diff-ui",
       "version": "0.0.0",
       "dependencies": {
-        "@pierre/shiki-stream": "workspace:*",
+        "@shikijs/core": "catalog:",
         "diff": "catalog:",
         "fast-deep-equal": "catalog:",
         "hast-util-to-html": "catalog:",
@@ -103,17 +103,6 @@
       "devDependencies": {
         "@trivago/prettier-plugin-sort-imports": "catalog:",
         "@types/hast": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/shiki-stream": {
-      "name": "@pierre/shiki-stream",
-      "version": "0.0.0",
-      "dependencies": {
-        "@shikijs/core": "catalog:",
-      },
-      "devDependencies": {
-        "@trivago/prettier-plugin-sort-imports": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -533,8 +522,6 @@
     "@pierre/js-demo": ["@pierre/js-demo@workspace:apps/demo"],
 
     "@pierre/js-docs": ["@pierre/js-docs@workspace:apps/docs"],
-
-    "@pierre/shiki-stream": ["@pierre/shiki-stream@workspace:packages/shiki-stream"],
 
     "@pierre/storage": ["@pierre/storage@0.0.10", "", { "dependencies": { "jose": "^5.10.0", "snakecase-keys": "^9.0.2" } }, "sha512-fDFrsnRiNTq7lpY56MGE4vRjYAHfTFLsxN18wbnxBlOk1XB1pxzgMfx5DwiqRcXs8+Gt2lmeXvlYAa1gGR4c7w=="],
 

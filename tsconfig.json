@@ -12,9 +12,6 @@
       "path": "apps/docs"
     },
     {
-      "path": "packages/shiki-stream"
-    },
-    {
       "path": "packages/storage-elements"
     },
     {

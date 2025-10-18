@@ -1,7 +1,7 @@
 import {
   CodeToTokenTransformStream,
   type RecallToken,
-} from '@pierre/shiki-stream';
+} from './shiki-stream';
 
 import { getSharedHighlighter } from './SharedHighlighter';
 import { queueRender } from './UniversalRenderer';

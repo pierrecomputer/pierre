@@ -1,6 +1,6 @@
 import './style.css';
 
-export * from '@pierre/shiki-stream';
+export * from './shiki-stream';
 export * from './CodeRenderer';
 export * from './DiffHeaderRenderer';
 export * from './DiffHunksRenderer';
