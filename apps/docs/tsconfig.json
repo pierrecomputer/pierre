@@ -11,7 +11,7 @@
   "exclude": ["node_modules"],
   "references": [
     {
-      "path": "../../packages/diff-ui"
+      "path": "../../packages/precision-diffs"
     }
   ],
   "compilerOptions": {

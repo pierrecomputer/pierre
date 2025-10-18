@@ -6,7 +6,7 @@
       "path": "apps/demo"
     },
     {
-      "path": "packages/diff-ui"
+      "path": "packages/precision-diffs"
     },
     {
       "path": "apps/docs"

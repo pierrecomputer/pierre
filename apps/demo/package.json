@@ -20,7 +20,7 @@
     "vite": "catalog:"
   },
   "dependencies": {
-    "@pierre/diff-ui": "workspace:*",
+    "@pierre/precision-diffs": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shiki": "catalog:"

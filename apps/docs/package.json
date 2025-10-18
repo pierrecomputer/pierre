@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
-    "@pierre/diff-ui": "workspace:*",
+    "@pierre/precision-diffs": "workspace:*",
     "@pierre/storage": "catalog:",
     "@pierre/storage-elements-next": "workspace:*",
     "@radix-ui/react-avatar": "catalog:",

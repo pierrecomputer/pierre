@@ -3,7 +3,7 @@
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { IconDiffBlended, IconDiffSplit } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import type { FileContents } from '@pierre/diff-ui';
+import type { FileContents } from '@pierre/precision-diffs';
 import { useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';

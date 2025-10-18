@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { type FileContents, preloadHighlighter } from '@pierre/diff-ui';
+import { type FileContents, preloadHighlighter } from '@pierre/precision-diffs';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';

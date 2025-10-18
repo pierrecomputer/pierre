@@ -10,7 +10,7 @@ import {
   parseDiffFromFile,
   parsePatchFiles,
   preloadHighlighter,
-} from '@pierre/diff-ui';
+} from '@pierre/precision-diffs';
 
 import {
   CodeConfigs,

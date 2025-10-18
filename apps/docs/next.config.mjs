@@ -20,7 +20,7 @@ const nextConfig = {
         loaders: ['raw-loader'],
         as: '*.js',
       },
-      '../../packages/diff-ui/src/style.css': {
+      '../../packages/precision-diffs/src/style.css': {
         loaders: ['raw-loader'],
         as: '*.js',
       },
@@ -36,7 +36,7 @@ const nextConfig = {
   //   // For specific CSS file with ?raw query parameter
   //   config.module.rules.push({
   //     resourceQuery: /raw/,
-  //     test: /packages\/diff-ui\/src\/style\.css$/,
+  //     test: /packages\/precision-diffs\/src\/style\.css$/,
   //     type: 'asset/source',
   //   });
   //   return config;

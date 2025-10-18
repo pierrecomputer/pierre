@@ -2,7 +2,7 @@
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { FileContents } from '@pierre/diff-ui';
+import type { FileContents } from '@pierre/precision-diffs';
 import { CornerDownRight } from 'lucide-react';
 
 import { FeatureHeader } from './FeatureHeader';

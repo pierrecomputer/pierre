@@ -11,7 +11,7 @@ const sourceDir = '/Users/mdo/work/pierre/pierre-vscode-theme/themes';
 
 // Target directories
 const targetDirs = [
-  '/Users/mdo/work/pierre/pierrejs/packages/diff-ui/src/themes',
+  '/Users/mdo/work/pierre/pierrejs/packages/precision-diffs/src/themes',
   '/Users/mdo/work/pierre/pierrejs/apps/docs/themes',
 ];
 

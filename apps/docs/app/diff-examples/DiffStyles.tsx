@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import type { FileContents } from '@pierre/diff-ui';
+import type { FileContents } from '@pierre/precision-diffs';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 

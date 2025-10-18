@@ -21,7 +21,7 @@
       "name": "@pierre/js-demo",
       "version": "0.0.0",
       "dependencies": {
-        "@pierre/diff-ui": "workspace:*",
+        "@pierre/precision-diffs": "workspace:*",
         "react": "catalog:",
         "react-dom": "catalog:",
         "shiki": "catalog:",
@@ -40,7 +40,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@icons-pack/react-simple-icons": "catalog:",
-        "@pierre/diff-ui": "workspace:*",
+        "@pierre/precision-diffs": "workspace:*",
         "@pierre/storage": "catalog:",
         "@pierre/storage-elements-next": "workspace:*",
         "@radix-ui/react-avatar": "catalog:",
@@ -90,9 +90,9 @@
         "typescript": "catalog:",
       },
     },
-    "packages/diff-ui": {
-      "name": "@pierre/diff-ui",
-      "version": "0.0.0",
+    "packages/precision-diffs": {
+      "name": "@pierre/precision-diffs",
+      "version": "0.0.1-alpha.0",
       "dependencies": {
         "@shikijs/core": "catalog:",
         "diff": "catalog:",
@@ -517,11 +517,11 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.90.0", "", {}, "sha512-fWvaufWUcLtm/OBKcNmxUkR0kQW5ZKAF0t03BXPqdzpxmnVCmSKzvUDRCOKnSagSfNzG/3ZdKpComH3GMy881g=="],
 
-    "@pierre/diff-ui": ["@pierre/diff-ui@workspace:packages/diff-ui"],
-
     "@pierre/js-demo": ["@pierre/js-demo@workspace:apps/demo"],
 
     "@pierre/js-docs": ["@pierre/js-docs@workspace:apps/docs"],
+
+    "@pierre/precision-diffs": ["@pierre/precision-diffs@workspace:packages/precision-diffs"],
 
     "@pierre/storage": ["@pierre/storage@0.0.10", "", { "dependencies": { "jose": "^5.10.0", "snakecase-keys": "^9.0.2" } }, "sha512-fDFrsnRiNTq7lpY56MGE4vRjYAHfTFLsxN18wbnxBlOk1XB1pxzgMfx5DwiqRcXs8+Gt2lmeXvlYAa1gGR4c7w=="],
 

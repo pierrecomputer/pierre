@@ -3,7 +3,7 @@ import {
   type PJSThemeNames,
   isHighlighterNull,
   preloadHighlighter,
-} from '@pierre/diff-ui';
+} from '@pierre/precision-diffs';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 

@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InputWithIcon } from '@/components/ui/input-group';
-import type { FileContents } from '@pierre/diff-ui';
+import type { FileContents } from '@pierre/precision-diffs';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 

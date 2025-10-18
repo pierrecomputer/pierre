@@ -5,7 +5,7 @@ import {
   type FileContents,
   FileDiff as FileDiffUI,
   type LineAnnotation,
-} from '@pierre/diff-ui';
+} from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,

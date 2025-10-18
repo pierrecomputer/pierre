@@ -1,4 +1,4 @@
-import type { LineAnnotation } from '@pierre/diff-ui';
+import type { LineAnnotation } from '@pierre/precision-diffs';
 import type { LineCommentMetadata } from 'src/mocks';
 
 export function renderAnnotation(

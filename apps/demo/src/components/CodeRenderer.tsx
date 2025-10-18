@@ -1,7 +1,7 @@
 import {
   CodeRenderer as CodeRendererClass,
   type CodeRendererOptions,
-} from '@pierre/diff-ui';
+} from '@pierre/precision-diffs';
 import { useEffect, useRef, useState } from 'react';
 
 export type { CodeRendererOptions };
