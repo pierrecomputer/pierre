@@ -41,7 +41,6 @@ const NEW_FILE: FileContents = {
       <div className="space-y-4">
         <FeatureHeader
           title="Structural diffs"
-          description="Structural diffs display blended changes across multiple lines."
         />
       </div>
       <FileDiff
@@ -51,12 +50,16 @@ const NEW_FILE: FileContents = {
         options={{
           theme: 'pierre-dark',
           diffStyle: 'unified',
-          structural: true,
-          lineDiffType: 'word-alt',
+          foo: 'bar',
+          baz: 'qux',
+          disableBackground: true,
         }}
       />
     </div>
   );
+  // this is an entirely new comment
+  // i have no clude what will happen here
+  // maybe it will be interestging…
 }
 `,
 };
@@ -66,8 +69,8 @@ export function Structural() {
     <div className="space-y-5">
       <div className="space-y-4">
         <FeatureHeader
-          title="Structural diffs"
-          description="Structural diffs display blended changes across multiple lines."
+          title="Blended diffs"
+          description="Blended diffs are a unified diff format that minimizes display density. It tries to blend lines changed by just showing the structural delta."
         />
       </div>
       <FileDiff
@@ -79,6 +82,7 @@ export function Structural() {
           diffStyle: 'unified',
           structural: true,
           lineDiffType: 'word-alt',
+          // disableBackground: true,
         }}
       />
     </div>

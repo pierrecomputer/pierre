@@ -868,17 +868,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     resolveUnresolvedSpans();
 
+    let { unifiedDecorations, deletionDecorations, additionDecorations } =
+      this.parseDecorations(diffGroups);
+
     // In structural mode and unified layout, merge paired deletion/addition lines
     if (structural && unified) {
-      this.mergeStructuralLines(
+      const lineMapping = this.mergeStructuralLines(
         diffGroups,
         unifiedContent,
         unifiedLineInfo
       );
+      // Update decoration line numbers based on the line mapping
+      unifiedDecorations = this.remapDecorations(unifiedDecorations, lineMapping);
     }
-
-    const { unifiedDecorations, deletionDecorations, additionDecorations } =
-      this.parseDecorations(diffGroups);
     return {
       hasLongLines,
       additions: {
@@ -903,9 +905,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diffGroups: ChangeHunk[],
     content: string[],
     lineInfo: Record<number, LineInfo | undefined>
-  ) {
+  ): Map<number, number> {
     const { lineDiffType = 'word-alt', maxLineDiffLength = 1000 } =
       this.getOptionsWithDefaults();
+
+    const indicesToHide = new Set<number>();
 
     for (const group of diffGroups) {
       const pairCount = Math.min(
@@ -934,19 +938,83 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             ? diffChars(deletionLine, additionLine)
             : diffWordsWithSpace(deletionLine, additionLine);
 
-        // Build merged line showing both deletions and additions inline
-        let mergedLine = '';
+        // Check if lines are "similar" - they have some unchanged content
+        let hasUnchangedContent = false;
         for (const item of lineDiff) {
-          mergedLine += item.value;
+          if (!item.added && !item.removed) {
+            hasUnchangedContent = true;
+            break;
+          }
         }
 
-        // Replace the addition line content with the merged version
-        const additionIndex = group.additionStartIndex + i;
-        if (content[additionIndex] != null) {
-          content[additionIndex] = mergedLine;
+        // Only merge and hide deletion if lines are similar
+        if (hasUnchangedContent) {
+          // Build merged line showing both deletions and additions inline
+          let mergedLine = '';
+          for (const item of lineDiff) {
+            mergedLine += item.value;
+          }
+
+          // Replace the addition line content with the merged version
+          const additionIndex = group.additionStartIndex + i;
+          if (content[additionIndex] != null) {
+            content[additionIndex] = mergedLine;
+          }
+
+          // Mark the deletion line to be hidden
+          const deletionIndex = group.deletionStartIndex + i;
+          indicesToHide.add(deletionIndex);
         }
       }
     }
+
+    // Filter out hidden deletion lines and build line mapping
+    const newContent: string[] = [];
+    const newLineInfo: Record<number, LineInfo | undefined> = {};
+    const lineMapping = new Map<number, number>(); // old index -> new index
+
+    for (let i = 0; i < content.length; i++) {
+      if (indicesToHide.has(i)) {
+        continue;
+      }
+      lineMapping.set(i, newContent.length);
+      newContent.push(content[i]);
+      const info = lineInfo[i + 1];
+      if (info != null) {
+        newLineInfo[newContent.length] = info;
+      }
+    }
+
+    // Replace content and lineInfo arrays
+    content.length = 0;
+    content.push(...newContent);
+    Object.keys(lineInfo).forEach(key => delete lineInfo[Number(key)]);
+    Object.assign(lineInfo, newLineInfo);
+
+    return lineMapping;
+  }
+
+  private remapDecorations(
+    decorations: DecorationItem[],
+    lineMapping: Map<number, number>
+  ): DecorationItem[] {
+    return decorations
+      .map(decoration => {
+        const newStartLine = lineMapping.get(decoration.start.line);
+        const newEndLine = lineMapping.get(decoration.end.line);
+
+        // If either line was removed, skip this decoration
+        if (newStartLine === undefined || newEndLine === undefined) {
+          return null;
+        }
+
+        return {
+          ...decoration,
+          start: { ...decoration.start, line: newStartLine },
+          end: { ...decoration.end, line: newEndLine },
+        };
+      })
+      .filter((d): d is DecorationItem => d !== null);
   }
 
   private parseDecorations(
