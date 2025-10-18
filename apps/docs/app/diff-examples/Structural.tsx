@@ -39,9 +39,7 @@ const NEW_FILE: FileContents = {
   return (
     <div>
       <div className="space-y-4">
-        <FeatureHeader
-          title="Structural diffs"
-        />
+        <FeatureHeader />
       </div>
       <FileDiff
         oldFile={OLD_FILE}
@@ -70,7 +68,7 @@ export function Structural() {
       <div className="space-y-4">
         <FeatureHeader
           title="Blended diffs"
-          description="Blended diffs are a unified diff format that minimizes display density. It tries to blend lines changed by just showing the structural delta."
+          description="Blended diffs are a unified diff format that minimizes display density. It tries to blend lines changed by just showing the perceptual delta."
         />
       </div>
       <FileDiff
@@ -79,10 +77,9 @@ export function Structural() {
         className="rounded-lg overflow-hidden border"
         options={{
           theme: 'pierre-dark',
-          diffStyle: 'unified',
-          structural: true,
+          diffStyle: 'blended',
           lineDiffType: 'word-alt',
-          // disableBackground: true,
+          disableBackground: true,
         }}
       />
     </div>

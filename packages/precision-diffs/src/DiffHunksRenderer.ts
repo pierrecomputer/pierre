@@ -172,7 +172,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength = 1000,
       maxLineLengthForHighlighting = 1000,
       overflow = 'scroll',
-      structural = false,
       theme,
       themeMode = 'system',
       themes,
@@ -188,7 +187,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         maxLineDiffLength,
         maxLineLengthForHighlighting,
         overflow,
-        structural,
         themeMode,
         themes,
       };
@@ -203,7 +201,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength,
       maxLineLengthForHighlighting,
       overflow,
-      structural,
       themeMode,
       theme,
     };
@@ -291,8 +288,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     return {
-      additionsAST: additionsAST.length > 0 ? additionsAST : undefined,
-      deletionsAST: deletionsAST.length > 0 ? deletionsAST : undefined,
+      additionsAST: diffStyle === 'blended' ? undefined : (additionsAST.length > 0 ? additionsAST : undefined),
+      deletionsAST: diffStyle === 'blended' ? undefined : (deletionsAST.length > 0 ? deletionsAST : undefined),
       unifiedAST: unifiedAST.length > 0 ? unifiedAST : undefined,
       preNode: createHastElement({
         tagName: 'pre',
@@ -302,9 +299,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           highlighter,
           overflow,
           split:
-            diffStyle === 'unified'
+            diffStyle === 'unified' || diffStyle === 'blended'
               ? false
-              : additionsAST.length > 0 && additionsAST.length > 0,
+              : deletionsAST.length > 0 && additionsAST.length > 0,
           theme,
           themeMode,
           themes,
@@ -503,12 +500,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     prevHunk: Hunk | undefined,
     isLastHunk: boolean
   ): ProcessLinesReturn {
-    const { maxLineLengthForHighlighting, diffStyle, structural } =
+    const { maxLineLengthForHighlighting, diffStyle } =
       this.getOptionsWithDefaults();
     const { deletionAnnotations, additionAnnotations } = this;
     // NOTE(amadeus): We will probably need to rectify this
     // for full additions/deletions
-    const unified = diffStyle === 'unified';
+    // Treat 'blended' as 'unified' for rendering
+    const unified = diffStyle === 'unified' || diffStyle === 'blended';
     let hasLongLines = false;
 
     const additionContent: string[] = [];
@@ -764,25 +762,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           annotationMap: this.deletionAnnotations,
         });
         addToChangeGroup('deletion', line, span);
-        // In structural mode, render deletions to unified content
-        // (they'll be merged with additions later if paired, or shown as pure deletions)
-        if (structural && unified) {
-          content.push(line);
-          lineInfo[content.length] = {
-            type: 'change-deletion',
-            number: deletionLineNumber + 1,
-            diffLineIndex,
-          };
-          pushOrMergeSpan(span, content.length, lineInfo);
-        } else if (!structural) {
-          content.push(line);
-          lineInfo[content.length] = {
-            type: 'change-deletion',
-            number: deletionLineNumber + 1,
-            diffLineIndex,
-          };
-          pushOrMergeSpan(span, content.length, lineInfo);
-        }
+        content.push(line);
+        lineInfo[content.length] = {
+          type: 'change-deletion',
+          number: deletionLineNumber + 1,
+          diffLineIndex,
+        };
+        pushOrMergeSpan(span, content.length, lineInfo);
         deletionLineNumber++;
       } else if (type === 'addition') {
         // Reset diffLineIndex back to start if we are jumping columns
@@ -871,8 +857,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     let { unifiedDecorations, deletionDecorations, additionDecorations } =
       this.parseDecorations(diffGroups);
 
-    // In structural mode and unified layout, merge paired deletion/addition lines
-    if (structural && unified) {
+    // In blended mode, merge paired deletion/addition lines
+    if (diffStyle === 'blended') {
       const lineMapping = this.mergeStructuralLines(
         diffGroups,
         unifiedContent,
@@ -1021,9 +1007,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diffGroups: ChangeHunk[],
     disableDecorations = false
   ) {
-    const { lineDiffType, maxLineDiffLength, diffStyle, structural } =
+    const { lineDiffType, maxLineDiffLength, diffStyle } =
       this.getOptionsWithDefaults();
-    const unified = diffStyle === 'unified';
+    const unified = diffStyle === 'unified' || diffStyle === 'blended';
     const unifiedDecorations: DecorationItem[] = [];
     const additionDecorations: DecorationItem[] = [];
     const deletionDecorations: DecorationItem[] = [];
@@ -1057,9 +1043,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const additionSpans: [0 | 1, string][] = [];
         const enableJoin = lineDiffType === 'word-alt';
 
-        // In structural mode, we want to show both additions and deletions
+        // In blended mode, we want to show both additions and deletions
         // inline within the addition line
-        if (structural && unified) {
+        if (diffStyle === 'blended') {
           // Build spans that include both additions and deletions
           let spanIndex = 0;
           for (const item of lineDiff) {
@@ -1124,8 +1110,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
           spanIndex += span[1].length;
         }
-        // In structural mode, skip deletion decorations since they're inline
-        if (!structural) {
+        // In blended mode, skip deletion decorations since they're inline
+        if (diffStyle !== 'blended') {
           spanIndex = 0;
           for (const span of deletionSpans) {
             if (span[0] === 1) {

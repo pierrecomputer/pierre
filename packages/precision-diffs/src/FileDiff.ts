@@ -518,7 +518,7 @@ export class FileDiff<LAnnotation = undefined> {
       diffIndicators = 'bars',
       disableBackground = false,
     } = this.options;
-    const unified = diffStyle === 'unified';
+    const unified = diffStyle === 'unified' || diffStyle === 'blended';
     const split = unified
       ? false
       : this.fileDiff?.type === 'change' ||

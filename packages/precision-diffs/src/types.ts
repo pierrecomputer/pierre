@@ -98,7 +98,7 @@ export interface BaseCodeProps {
 }
 
 export interface BaseRendererOptions extends BaseCodeProps {
-  diffStyle?: 'unified' | 'split'; // split is default
+  diffStyle?: 'unified' | 'split' | 'blended'; // split is default
   diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
   disableBackground?: boolean;
   hunkSeparators?: 'simple' | 'metadata' | 'line-info'; // line-info is default
@@ -107,7 +107,6 @@ export interface BaseRendererOptions extends BaseCodeProps {
   lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
   maxLineLengthForHighlighting?: number; // 1000 is default
-  structural?: boolean; // false is default
 }
 
 export type RenderCustomFileMetadata = (

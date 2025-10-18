@@ -510,6 +510,7 @@ code {
   padding-bottom: 1.5px;
   position: relative;
   text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.7);
   opacity: 0.7;
 }
 
@@ -551,6 +552,13 @@ code {
   [data-column-number] {
     background-color: var(--pjs-bg-deletion-number);
   }
+}
+
+/* In unified/blended mode, deletion lines should have strikethrough */
+[data-unified] [data-line-type='change-deletion'] [data-column-content] {
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.7);
+  opacity: 0.7;
 }
 
 [data-line-type='context-expanded'] {
