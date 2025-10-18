@@ -149,7 +149,7 @@ const Hero = () => {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText('npm i @pierre/precision-diffs');
+      await navigator.clipboard.writeText('bun i @pierre/precision-diffs');
       setCopied(true);
       setTimeout(() => setCopied(false), 5000);
     } catch (err) {
@@ -183,7 +183,7 @@ const Hero = () => {
               onClick={() => void copyToClipboard()}
               className="inline-flex items-center gap-2 px-4 py-3 rounded-md text-white bg-gray-900 hover:bg-gray-800 dark:bg-black dark:border dark:border-white/20 dark:hover:border-white/30 transition-colors font-mono text-sm"
             >
-              <span>npm i @pierre/precision-diffs</span>
+              <span>bun i @pierre/precision-diffs</span>
               {copied ? <IconCheck /> : <IconCopyFill />}
             </button>
           </TooltipTrigger>
