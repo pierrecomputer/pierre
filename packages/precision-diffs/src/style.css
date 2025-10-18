@@ -59,6 +59,10 @@ code {
   font-feature-settings: var(--pjs-font-features);
 }
 
+[data-icon-sprite] {
+  display: none;
+}
+
 [data-pjs-header] *,
 [data-pjs-header] *::before,
 [data-pjs-header] *::after {

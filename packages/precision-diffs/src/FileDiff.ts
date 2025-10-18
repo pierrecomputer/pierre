@@ -23,11 +23,7 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
-import {
-  createCodeNode,
-  createSVGElement,
-  setWrapperProps,
-} from './utils/html_render_utils';
+import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import {
   type FileContents,
   parseDiffFromFile,
@@ -334,11 +330,13 @@ export class FileDiff<LAnnotation = undefined> {
     this.fileContainer =
       fileContainer ?? document.createElement('pjs-container');
     if (this.spriteSVG == null) {
-      this.spriteSVG = createSVGElement('svg');
-      this.spriteSVG.innerHTML = svgSprite;
-      this.spriteSVG.style.display = 'none';
-      this.spriteSVG.setAttribute('aria-hidden', 'true');
-      this.fileContainer.shadowRoot?.appendChild(this.spriteSVG);
+      const fragment = document.createElement('div');
+      fragment.innerHTML = svgSprite;
+      const firstChild = fragment.firstChild;
+      if (firstChild instanceof SVGElement) {
+        this.spriteSVG = firstChild;
+        this.fileContainer.shadowRoot?.appendChild(this.spriteSVG);
+      }
     }
     const {
       onLineClick,
@@ -489,9 +487,8 @@ export class FileDiff<LAnnotation = undefined> {
   ) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerHTML);
-    const newHeader = tempDiv.firstElementChild as HTMLElement | undefined;
-
-    if (newHeader == null) {
+    const newHeader = tempDiv.firstElementChild;
+    if (!(newHeader instanceof HTMLElement)) {
       return;
     }
     if (this.headerElement != null) {
