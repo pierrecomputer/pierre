@@ -80,6 +80,7 @@ import {
   SiVuedotjs,
   SiWebassembly,
 } from '@icons-pack/react-simple-icons';
+import { codeToHtml } from '@pierre/precision-diffs';
 import { useControllableState } from '@radix-ui/react-use-controllable-state';
 import { CheckIcon, CopyIcon } from 'lucide-react';
 import type {
@@ -589,8 +590,6 @@ export const CodeBlockContent = ({
 
     const loadHighlightedCode = async () => {
       try {
-        const { codeToHtml } = await import('shiki');
-
         const html = await codeToHtml(children, {
           lang: language,
           themes: {

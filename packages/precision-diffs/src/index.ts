@@ -14,3 +14,5 @@ export * from './utils/parseLineType';
 export * from './utils/parsePatchFiles';
 
 export type * from './types';
+
+export { codeToHtml } from 'shiki';
