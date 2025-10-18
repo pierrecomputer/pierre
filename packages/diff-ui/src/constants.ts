@@ -7,4 +7,3 @@ export const HUNK_HEADER =
 export const SPLIT_WITH_NEWLINES = /(?<=\n)/;
 export const FILENAME_HEADER_REGEX = /^(---|\+\+\+)\s+([^\t\n]+)/;
 export const FILENAME_HEADER_REGEX_GIT = /^(---|\+\+\+)\s+[ab]\/([^\t\n]+)/;
-export const CONTENT_REPLACE_KEY = `___PJS_REPLACE_${Math.random()}_PJS_REPLACE___`;
