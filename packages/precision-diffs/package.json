@@ -1,6 +1,6 @@
 {
   "name": "@pierre/precision-diffs",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1-alpha.1-1",
   "type": "module",
   "scripts": {
     "build": "tsc --build && node build-css.js",
@@ -9,16 +9,8 @@
   },
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
-    }
-  },
-  "publishConfig": {
-    "exports": {
-      ".": {
-        "import": "./dist/index.js",
-        "types": "./dist/index.d.ts"
-      }
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "files": [
