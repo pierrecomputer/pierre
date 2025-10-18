@@ -7,15 +7,19 @@ import type {
   Text,
 } from 'hast';
 
+import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type {
   AnnotationSpan,
   BaseRendererOptions,
+  FileDiffMetadata,
   PJSHighlighter,
   PJSThemeNames,
   SharedRenderState,
+  ThemeModes,
   ThemesType,
 } from '../types';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
+import { getIconForType } from './getIconForType';
 
 export function createTextNode(value: string): Text {
   return { type: 'text', value };
@@ -88,16 +92,22 @@ interface CreateIconProps {
   name: string;
   width?: number;
   height?: number;
+  properties?: Properties;
 }
 
-export function createIcon({ name, width = 16, height = 16 }: CreateIconProps) {
+export function createIcon({
+  name,
+  width = 16,
+  height = 16,
+  properties,
+}: CreateIconProps) {
   return createHastElement({
     tagName: 'svg',
-    properties: { width, height, viewBox: '0 0 16 16' },
+    properties: { width, height, viewBox: '0 0 16 16', ...properties },
     children: [
       createHastElement({
         tagName: 'use',
-        properties: { href: `#${name}` },
+        properties: { href: `#${name.replace(/^#/, '')}` },
       }),
     ],
   });
@@ -246,4 +256,140 @@ export function createPreWrapperProperties({
   }
 
   return properties;
+}
+
+interface CreateFileHeaderProps {
+  file: FileDiffMetadata;
+  theme?: PJSThemeNames;
+  themes?: ThemesType;
+  highlighter: PJSHighlighter;
+  prefix?: string;
+  themeMode?: ThemeModes;
+}
+
+export function createFileHeaderElement({
+  file,
+  theme,
+  themes,
+  highlighter,
+  prefix,
+  themeMode = 'system',
+}: CreateFileHeaderProps): Element {
+  const properties: Properties = {
+    'data-pjs-header': '',
+    'data-change-type': file.type,
+    style: getHighlighterThemeStyles({
+      theme,
+      themes,
+      highlighter,
+      prefix,
+    }),
+  };
+
+  // If a theme is specified, then we should just override the themeMode and
+  // ignore whatever might be passed in
+  if (theme != null) {
+    const themeData = highlighter.getTheme(theme);
+    properties['data-theme-mode'] = themeData.type;
+  } else if (themeMode !== 'system') {
+    properties['data-theme-mode'] = themeMode;
+  }
+
+  return createHastElement({
+    tagName: 'div',
+    children: [createHeaderElement(file), createMetadataElement(file)],
+    properties,
+  });
+}
+
+function createHeaderElement(file: FileDiffMetadata): Element {
+  const children: ElementContent[] = [
+    createIcon({
+      name: getIconForType(file.type),
+      properties: { 'data-change-icon': file.type },
+    }),
+  ];
+  if (file.prevName != null) {
+    children.push(
+      createHastElement({
+        tagName: 'div',
+        children: [createTextNode(file.prevName)],
+        properties: {
+          'data-prev-name': '',
+        },
+      })
+    );
+    children.push(
+      createIcon({
+        name: 'pjs-arrow',
+        properties: {
+          'data-rename-icon': '',
+        },
+      })
+    );
+  }
+  children.push(
+    createHastElement({
+      tagName: 'div',
+      children: [createTextNode(file.name)],
+      properties: { 'data-title': '' },
+    })
+  );
+  return createHastElement({
+    tagName: 'div',
+    children,
+    properties: { 'data-header-content': '' },
+  });
+}
+
+function createMetadataElement(file: FileDiffMetadata): Element {
+  const children: ElementContent[] = [];
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of file.hunks) {
+    for (const line of hunk.hunkContent ?? []) {
+      if (line.startsWith('+')) {
+        additions++;
+      } else if (line.startsWith('-')) {
+        deletions++;
+      }
+    }
+  }
+  if (deletions > 0) {
+    children.push(
+      createHastElement({
+        tagName: 'span',
+        children: [createTextNode(`-${deletions}`)],
+        properties: { 'data-deletions-count': '' },
+      })
+    );
+  }
+  if (additions > 0) {
+    children.push(
+      createHastElement({
+        tagName: 'span',
+        children: [createTextNode(`+${additions}`)],
+        properties: { 'data-additions-count': '' },
+      })
+    );
+  }
+  if (deletions === 0 && additions === 0) {
+    children.push(
+      createHastElement({
+        tagName: 'span',
+        children: [createTextNode('NC')],
+      })
+    );
+  }
+  children.push(
+    createHastElement({
+      tagName: 'slot',
+      properties: { name: HEADER_METADATA_SLOT_ID },
+    })
+  );
+  return createHastElement({
+    tagName: 'div',
+    children,
+    properties: { 'data-metadata': '' },
+  });
 }

@@ -607,12 +607,12 @@ code {
   white-space: nowrap;
 }
 
-[data-pjs-header] [data-additions] {
+[data-pjs-header] [data-additions-count] {
   font-family: var(--pjs-font-family, var(--pjs-font-fallback));
   color: var(--pjs-addition-base);
 }
 
-[data-pjs-header] [data-deletions] {
+[data-pjs-header] [data-deletions-count] {
   font-family: var(--pjs-font-family, var(--pjs-font-fallback));
   color: var(--pjs-deletion-base);
 }

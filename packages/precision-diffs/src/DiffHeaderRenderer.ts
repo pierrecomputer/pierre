@@ -1,3 +1,6 @@
+import type { Element } from 'hast';
+import { toHtml } from 'hast-util-to-html';
+
 import { getSharedHighlighter, hasLoadedThemes } from './SharedHighlighter';
 import type {
   FileDiffMetadata,
@@ -8,7 +11,7 @@ import type {
   ThemeRendererOptions,
   ThemesRendererOptions,
 } from './types';
-import { renderFileHeader } from './utils/html_render_utils';
+import { createFileHeaderElement } from './utils/hast_utils';
 
 interface BaseProps {
   themeMode?: ThemeModes;
@@ -73,8 +76,8 @@ export class DiffHeaderRenderer {
 
   diff: FileDiffMetadata | undefined;
   private queuedRenderDiff: FileDiffMetadata | undefined;
-  private queuedRender: Promise<string | undefined> | undefined;
-  async render(diff: FileDiffMetadata): Promise<string | undefined> {
+  private queuedRender: Promise<Element | undefined> | undefined;
+  async render(diff: FileDiffMetadata): Promise<Element | undefined> {
     this.queuedRenderDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -100,16 +103,17 @@ export class DiffHeaderRenderer {
   private renderHeader(
     diff: FileDiffMetadata,
     highlighter: PJSHighlighter
-  ): string {
+  ): Element {
     this.diff = diff;
-    const header = renderFileHeader({
+    return createFileHeaderElement({
       ...this.options,
       file: diff,
       highlighter,
     });
+  }
 
-    // FIXME(amadeus): This is hacky af lol
-    return header.outerHTML;
+  renderResultToHTML(element: Element) {
+    return toHtml(element);
   }
 
   private getThemes(): PJSThemeNames[] {
