@@ -505,6 +505,14 @@ code {
   position: relative;
 }
 
+[data-diff-span-removed] {
+  padding-top: 1.5px;
+  padding-bottom: 1.5px;
+  position: relative;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
 [data-line-type='change-addition'] {
   [data-column-number] {
     color: var(--pjs-addition-base);
@@ -512,6 +520,10 @@ code {
 
   [data-diff-span] {
     background-color: var(--pjs-bg-addition-emphasis);
+  }
+
+  [data-diff-span-removed] {
+    background-color: var(--pjs-bg-deletion-emphasis);
   }
 }
 

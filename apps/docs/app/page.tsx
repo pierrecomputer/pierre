@@ -25,6 +25,7 @@ import { DiffStyles } from './diff-examples/DiffStyles';
 import { FontStyles } from './diff-examples/FontStyles';
 import { ShikiThemes } from './diff-examples/ShikiThemes';
 import { SplitUnified } from './diff-examples/SplitUnified';
+import { Structural } from './diff-examples/Structural';
 
 export default function Home() {
   return (
@@ -89,6 +90,7 @@ export default function Home() {
         {/* <PrebuiltReact /> */}
         <Annotations />
         <ArbitraryFiles />
+        <Structural />
       </section>
 
       {/* TODO: add this back once we add the migration APIs

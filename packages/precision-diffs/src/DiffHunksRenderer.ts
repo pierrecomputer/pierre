@@ -172,6 +172,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength = 1000,
       maxLineLengthForHighlighting = 1000,
       overflow = 'scroll',
+      structural = false,
       theme,
       themeMode = 'system',
       themes,
@@ -187,6 +188,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         maxLineDiffLength,
         maxLineLengthForHighlighting,
         overflow,
+        structural,
         themeMode,
         themes,
       };
@@ -201,6 +203,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength,
       maxLineLengthForHighlighting,
       overflow,
+      structural,
       themeMode,
       theme,
     };
@@ -500,7 +503,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     prevHunk: Hunk | undefined,
     isLastHunk: boolean
   ): ProcessLinesReturn {
-    const { maxLineLengthForHighlighting, diffStyle } =
+    const { maxLineLengthForHighlighting, diffStyle, structural } =
       this.getOptionsWithDefaults();
     const { deletionAnnotations, additionAnnotations } = this;
     // NOTE(amadeus): We will probably need to rectify this
@@ -761,13 +764,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           annotationMap: this.deletionAnnotations,
         });
         addToChangeGroup('deletion', line, span);
-        content.push(line);
-        lineInfo[content.length] = {
-          type: 'change-deletion',
-          number: deletionLineNumber + 1,
-          diffLineIndex,
-        };
-        pushOrMergeSpan(span, content.length, lineInfo);
+        // In structural mode, render deletions to unified content
+        // (they'll be merged with additions later if paired, or shown as pure deletions)
+        if (structural && unified) {
+          content.push(line);
+          lineInfo[content.length] = {
+            type: 'change-deletion',
+            number: deletionLineNumber + 1,
+            diffLineIndex,
+          };
+          pushOrMergeSpan(span, content.length, lineInfo);
+        } else if (!structural) {
+          content.push(line);
+          lineInfo[content.length] = {
+            type: 'change-deletion',
+            number: deletionLineNumber + 1,
+            diffLineIndex,
+          };
+          pushOrMergeSpan(span, content.length, lineInfo);
+        }
         deletionLineNumber++;
       } else if (type === 'addition') {
         // Reset diffLineIndex back to start if we are jumping columns
@@ -853,6 +868,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     resolveUnresolvedSpans();
 
+    // In structural mode and unified layout, merge paired deletion/addition lines
+    if (structural && unified) {
+      this.mergeStructuralLines(
+        diffGroups,
+        unifiedContent,
+        unifiedLineInfo
+      );
+    }
+
     const { unifiedDecorations, deletionDecorations, additionDecorations } =
       this.parseDecorations(diffGroups);
     return {
@@ -875,11 +899,61 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
+  private mergeStructuralLines(
+    diffGroups: ChangeHunk[],
+    content: string[],
+    lineInfo: Record<number, LineInfo | undefined>
+  ) {
+    const { lineDiffType = 'word-alt', maxLineDiffLength = 1000 } =
+      this.getOptionsWithDefaults();
+
+    for (const group of diffGroups) {
+      const pairCount = Math.min(
+        group.additionLines.length,
+        group.deletionLines.length
+      );
+
+      for (let i = 0; i < pairCount; i++) {
+        const deletionLine = group.deletionLines[i];
+        const additionLine = group.additionLines[i];
+
+        if (deletionLine == null || additionLine == null) {
+          continue;
+        }
+
+        // Skip if lines are too long
+        if (
+          deletionLine.length > maxLineDiffLength ||
+          additionLine.length > maxLineDiffLength
+        ) {
+          continue;
+        }
+
+        const lineDiff =
+          lineDiffType === 'char'
+            ? diffChars(deletionLine, additionLine)
+            : diffWordsWithSpace(deletionLine, additionLine);
+
+        // Build merged line showing both deletions and additions inline
+        let mergedLine = '';
+        for (const item of lineDiff) {
+          mergedLine += item.value;
+        }
+
+        // Replace the addition line content with the merged version
+        const additionIndex = group.additionStartIndex + i;
+        if (content[additionIndex] != null) {
+          content[additionIndex] = mergedLine;
+        }
+      }
+    }
+  }
+
   private parseDecorations(
     diffGroups: ChangeHunk[],
     disableDecorations = false
   ) {
-    const { lineDiffType, maxLineDiffLength, diffStyle } =
+    const { lineDiffType, maxLineDiffLength, diffStyle, structural } =
       this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
     const unifiedDecorations: DecorationItem[] = [];
@@ -914,26 +988,61 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const deletionSpans: [0 | 1, string][] = [];
         const additionSpans: [0 | 1, string][] = [];
         const enableJoin = lineDiffType === 'word-alt';
-        for (const item of lineDiff) {
-          if (!item.added && !item.removed) {
-            pushOrJoinSpan({
-              item,
-              arr: deletionSpans,
-              enableJoin,
-              isNeutral: true,
-            });
-            pushOrJoinSpan({
-              item,
-              arr: additionSpans,
-              enableJoin,
-              isNeutral: true,
-            });
-          } else if (item.removed) {
-            pushOrJoinSpan({ item, arr: deletionSpans, enableJoin });
-          } else {
-            pushOrJoinSpan({ item, arr: additionSpans, enableJoin });
+
+        // In structural mode, we want to show both additions and deletions
+        // inline within the addition line
+        if (structural && unified) {
+          // Build spans that include both additions and deletions
+          let spanIndex = 0;
+          for (const item of lineDiff) {
+            if (item.removed) {
+              // Add decoration for removed content (will be styled differently)
+              (unified ? unifiedDecorations : additionDecorations).push({
+                start: { line: group.additionStartIndex + i, character: spanIndex },
+                end: {
+                  line: group.additionStartIndex + i,
+                  character: spanIndex + item.value.length,
+                },
+                properties: { 'data-diff-span-removed': '' },
+                alwaysWrap: true,
+              });
+            } else if (item.added) {
+              // Add decoration for added content
+              (unified ? unifiedDecorations : additionDecorations).push({
+                start: { line: group.additionStartIndex + i, character: spanIndex },
+                end: {
+                  line: group.additionStartIndex + i,
+                  character: spanIndex + item.value.length,
+                },
+                properties: { 'data-diff-span': '' },
+                alwaysWrap: true,
+              });
+            }
+            spanIndex += item.value.length;
+          }
+        } else {
+          for (const item of lineDiff) {
+            if (!item.added && !item.removed) {
+              pushOrJoinSpan({
+                item,
+                arr: deletionSpans,
+                enableJoin,
+                isNeutral: true,
+              });
+              pushOrJoinSpan({
+                item,
+                arr: additionSpans,
+                enableJoin,
+                isNeutral: true,
+              });
+            } else if (item.removed) {
+              pushOrJoinSpan({ item, arr: deletionSpans, enableJoin });
+            } else {
+              pushOrJoinSpan({ item, arr: additionSpans, enableJoin });
+            }
           }
         }
+
         let spanIndex = 0;
         for (const span of additionSpans) {
           if (span[0] === 1) {
@@ -947,18 +1056,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
           spanIndex += span[1].length;
         }
-        spanIndex = 0;
-        for (const span of deletionSpans) {
-          if (span[0] === 1) {
-            (unified ? unifiedDecorations : deletionDecorations).push(
-              createDiffSpanDecoration({
-                line: group.deletionStartIndex + i,
-                spanStart: spanIndex,
-                spanLength: span[1].length,
-              })
-            );
+        // In structural mode, skip deletion decorations since they're inline
+        if (!structural) {
+          spanIndex = 0;
+          for (const span of deletionSpans) {
+            if (span[0] === 1) {
+              (unified ? unifiedDecorations : deletionDecorations).push(
+                createDiffSpanDecoration({
+                  line: group.deletionStartIndex + i,
+                  spanStart: spanIndex,
+                  spanLength: span[1].length,
+                })
+              );
+            }
+            spanIndex += span[1].length;
           }
-          spanIndex += span[1].length;
         }
       }
     }

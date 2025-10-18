@@ -107,6 +107,7 @@ export interface BaseRendererOptions extends BaseCodeProps {
   lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
   maxLineLengthForHighlighting?: number; // 1000 is default
+  structural?: boolean; // false is default
 }
 
 export type RenderCustomFileMetadata = (
