@@ -1,6 +1,7 @@
 import type {
   DiffLineAnnotation,
   FileStreamOptions,
+  LineAnnotation,
 } from '@pierre/precision-diffs';
 
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
@@ -40,7 +41,66 @@ export interface LineCommentMetadata {
   message: string;
 }
 
-export const FAKE_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>[][][] =
+export const FAKE_LINE_ANNOTATIONS: LineAnnotation<LineCommentMetadata>[] = [
+  {
+    lineNumber: 2,
+    metadata: {
+      author: 'Sarah Chen',
+      message: 'Consider refactoring this for better performance',
+    },
+  },
+  {
+    lineNumber: 4,
+    metadata: {
+      author: 'Marcus Rodriguez',
+      message: 'Why are we removing this functionality?',
+    },
+  },
+  {
+    lineNumber: 4,
+    metadata: {
+      author: 'Olivia Kim',
+      message: 'This was deprecated last quarter, good catch',
+    },
+  },
+  {
+    lineNumber: 6,
+    metadata: {
+      author: 'Raj Patel',
+      message: 'We should add unit tests for this change',
+    },
+  },
+  {
+    lineNumber: 9,
+    metadata: {
+      author: 'Emma Thompson',
+      message: 'Nice improvement! This should handle edge cases better',
+    },
+  },
+  {
+    lineNumber: 11,
+    metadata: {
+      author: 'David Johnson',
+      message: 'This could break backward compatibility',
+    },
+  },
+  {
+    lineNumber: 13,
+    metadata: {
+      author: 'Sofia Martinez',
+      message: 'Finally cleaning up legacy code!',
+    },
+  },
+  {
+    lineNumber: 15,
+    metadata: {
+      author: 'Alex Turner',
+      message: 'Does this follow our style guide?',
+    },
+  },
+];
+
+export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>[][][] =
   [
     [
       [

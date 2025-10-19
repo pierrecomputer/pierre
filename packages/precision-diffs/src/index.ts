@@ -1,5 +1,6 @@
 export * from './DiffHeaderRenderer';
 export * from './DiffHunksRenderer';
+export * from './File';
 export * from './FileDiff';
 export * from './FileStream';
 export * from './SharedHighlighter';

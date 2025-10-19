@@ -136,6 +136,8 @@ export interface GapSpan {
 export type LineSpans = GapSpan | AnnotationSpan;
 
 // Types of rendered lines in a rendered diff
+// Should we have yet another type for files? seems silly for
+// use to have a type in that case?
 export type LineTypes =
   | 'change-deletion'
   | 'change-addition'
@@ -144,7 +146,9 @@ export type LineTypes =
 
 export interface LineInfo {
   type: LineTypes;
+  // FIXME: probably change this to `lineNumber` to be clearer
   number: number;
+  // FIXME: probably shouldn't have the word `diff` in it
   diffLineIndex: number;
   metadataContent?: string;
   spans?: LineSpans[];
@@ -159,6 +163,7 @@ export interface SharedRenderState {
 export interface AnnotationSpan {
   type: 'annotation';
   hunkIndex: number;
+  // FIXME: probably shouldn't have the word `diff` in it
   diffLineIndex: number;
   annotations: string[];
 }

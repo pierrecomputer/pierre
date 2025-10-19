@@ -1,5 +1,6 @@
 import {
   type BundledLanguage,
+  File,
   FileDiff,
   FileStream,
   type PJSThemeNames,
@@ -14,6 +15,7 @@ import {
 
 import {
   CodeConfigs,
+  FAKE_DIFF_LINE_ANNOTATIONS,
   FAKE_LINE_ANNOTATIONS,
   FILE_NEW,
   FILE_OLD,
@@ -21,7 +23,10 @@ import {
 } from './mocks/';
 import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
-import { renderAnnotation } from './utils/renderAnnotation';
+import {
+  renderAnnotation,
+  renderDiffAnnotation,
+} from './utils/renderAnnotation';
 
 let loadingPatch: Promise<string> | undefined;
 async function loadPatchContent() {
@@ -113,7 +118,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
     if (parsedPatch.patchMetadata != null) {
       wrapper.appendChild(createFileMetadata(parsedPatch.patchMetadata));
     }
-    const patchAnnotations = FAKE_LINE_ANNOTATIONS[patchIndex] ?? [];
+    const patchAnnotations = FAKE_DIFF_LINE_ANNOTATIONS[patchIndex] ?? [];
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
@@ -121,7 +126,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         themes: { dark: 'pierre-dark', light: 'pierre-light' },
         diffStyle: unified ? 'unified' : 'split',
         overflow: wrap ? 'wrap' : 'scroll',
-        renderAnnotation,
+        renderAnnotation: renderDiffAnnotation,
         themeType,
         onLineClick(props, diff) {
           console.log(diff.name, 'onLineClick', props);
@@ -337,4 +342,29 @@ function toggleTheme() {
     const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
     instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
   }
+
+  for (const instance of fileInstances) {
+    const themeSetting = instance.options.themeType ?? 'system';
+    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
+    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
+  }
+}
+
+const fileInstances: File<unknown>[] = [];
+const renderFileButton = document.getElementById('render-file');
+if (renderFileButton != null) {
+  renderFileButton.addEventListener('click', () => {
+    const wrapper = document.getElementById('wrapper');
+    if (wrapper == null) return;
+    const instance = new File<LineCommentMetadata>({
+      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+      renderAnnotation,
+    });
+    void instance.render({
+      file: { name: 'main.tsx', contents: FILE_NEW },
+      containerWrapper: wrapper,
+      lineAnnotations: FAKE_LINE_ANNOTATIONS,
+    });
+    fileInstances.push(instance);
+  });
 }
