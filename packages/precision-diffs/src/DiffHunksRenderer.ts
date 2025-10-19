@@ -379,7 +379,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         theme: this.options.theme,
         cssVariablePrefix: formatCSSVariablePrefix(),
         lang: forceTextLang ? 'text' : this.computedLang,
-        defaultColor: this.options.defaultColor ?? false,
+        defaultColor: false,
         transformers: [transformer],
         decorations,
       };
@@ -388,7 +388,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themes: this.options.themes,
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
-      defaultColor: this.options.defaultColor ?? false,
+      defaultColor: false,
       transformers: [transformer],
       decorations,
     };

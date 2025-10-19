@@ -1,4 +1,7 @@
-import type { CodeRendererOptions, LineAnnotation } from '@pierre/precision-diffs';
+import type {
+  CodeRendererOptions,
+  LineAnnotation,
+} from '@pierre/precision-diffs';
 
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import mdContent from './example_md.txt?raw';
@@ -15,7 +18,6 @@ export const CodeConfigs = [
     options: {
       lang: 'tsx',
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
-      defaultColor: false,
       ...createHighlighterCleanup(),
     } satisfies CodeRendererOptions,
   },
@@ -25,7 +27,6 @@ export const CodeConfigs = [
     options: {
       lang: 'markdown',
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
-      defaultColor: false,
       ...createHighlighterCleanup(),
     } satisfies CodeRendererOptions,
   },
