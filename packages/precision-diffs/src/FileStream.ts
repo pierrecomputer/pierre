@@ -21,8 +21,8 @@ import {
 interface CodeTokenOptionsBase extends BaseCodeProps {
   startingLineIndex?: number;
 
-  onPreRender?(instance: CodeRenderer): unknown;
-  onPostRender?(instance: CodeRenderer): unknown;
+  onPreRender?(instance: FileStream): unknown;
+  onPostRender?(instance: FileStream): unknown;
 
   onStreamStart?(controller: WritableStreamDefaultController): unknown;
   onStreamWrite?(token: ThemedToken | RecallToken): unknown;
@@ -40,21 +40,25 @@ interface CodeTokenOptionsMultiThemes extends CodeTokenOptionsBase {
   themes: ThemesType;
 }
 
-export type CodeRendererOptions =
+export type FileStreamOptions =
   | CodeTokenOptionsSingleTheme
   | CodeTokenOptionsMultiThemes;
 
-export class CodeRenderer {
+export class FileStream {
   private highlighter: PJSHighlighter | undefined;
-  options: CodeRendererOptions;
+  options: FileStreamOptions;
   private stream: ReadableStream<string> | undefined;
   private fileContainer: HTMLElement | undefined;
   pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
 
-  constructor(options: CodeRendererOptions) {
+  constructor(options: FileStreamOptions) {
     this.options = options;
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
+  }
+
+  cleanUp() {
+    void this.stream?.cancel();
   }
 
   setThemeType(themeType: ThemeTypes) {
@@ -158,6 +162,7 @@ export class CodeRenderer {
           ...this.options,
           highlighter,
           allowRecalls: true,
+          defaultColor: false,
           cssVariablePrefix: formatCSSVariablePrefix(),
         })
       )
@@ -199,12 +204,12 @@ export class CodeRenderer {
       if ('recall' in token) {
         if (this.currentLineElement == null) {
           throw new Error(
-            'CodeRenderer.render: no current line element, shouldnt be possible to get here'
+            'FileStream.render: no current line element, shouldnt be possible to get here'
           );
         }
         if (token.recall > this.currentLineElement.childNodes.length) {
           throw new Error(
-            `CodeRenderer.render: Token recall exceed the current line, there's probably a bug...`
+            `FileStream.render: Token recall exceed the current line, there's probably a bug...`
           );
         }
         for (let i = 0; i < token.recall; i++) {

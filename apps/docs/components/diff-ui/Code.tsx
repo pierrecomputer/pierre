@@ -1,21 +1,18 @@
 'use client';
 
-import {
-  CodeRenderer,
-  type CodeRendererOptions,
-} from '@pierre/precision-diffs';
+import { FileStream, type FileStreamOptions } from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
 import { type CSSProperties, useLayoutEffect, useRef, useState } from 'react';
 
 interface CodeProps {
   text: string;
-  options: CodeRendererOptions;
+  options: FileStreamOptions;
   className?: string;
   style?: CSSProperties;
 }
 
 export function Code({ text, options, className, style }: CodeProps) {
-  const [codeRenderer] = useState(() => new CodeRenderer(options));
+  const [fileStream] = useState(() => new FileStream(options));
   const ref = useRef<HTMLDivElement>(null);
   const optionsRef = useRef(options);
   const textRef = useRef('');
@@ -32,7 +29,7 @@ export function Code({ text, options, className, style }: CodeProps) {
     if (hasTextChange || hasOptionsChange || ref.current != null) {
       textRef.current = text;
       if (ref.current != null) {
-        void codeRenderer.setup(text, ref.current);
+        void fileStream.setup(text, ref.current);
       }
     }
   });
