@@ -50,7 +50,7 @@ interface CreateCodeNodeProps {
   columnType?: 'additions' | 'deletions' | 'unified';
 }
 
-export function createCodeNode({ pre, columnType }: CreateCodeNodeProps) {
+export function createCodeNode({ pre, columnType }: CreateCodeNodeProps = {}) {
   const code = document.createElement('code');
   code.dataset.code = '';
   if (columnType != null) {
