@@ -6,6 +6,7 @@ export * from './SharedHighlighter';
 export * from './UniversalRenderer';
 export * from './shiki-stream';
 export * from './utils/getFiletypeFromFileName';
+export * from './utils/getLineAnnotationId';
 export * from './utils/html_render_utils';
 export * from './utils/parseDiffFromFile';
 export * from './utils/parseLineType';

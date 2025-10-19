@@ -5,6 +5,7 @@ import {
   type DiffLineAnnotation,
   type FileContents,
   FileDiff as FileDiffUI,
+  getLineAnnotationId,
 } from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -75,8 +76,8 @@ export function FileDiff<LAnnotation = undefined>({
       {renderAnnotation != null &&
         annotations?.map((annotation) => (
           <div
-            key={`${annotation.side}-${annotation.lineNumber}`}
-            slot={`${annotation.side}-${annotation.lineNumber}`}
+            key={getLineAnnotationId(annotation)}
+            slot={getLineAnnotationId(annotation)}
           >
             {renderAnnotation(annotation)}
           </div>
