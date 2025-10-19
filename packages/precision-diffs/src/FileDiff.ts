@@ -23,6 +23,7 @@ import type {
   ThemeTypes,
   ThemesRendererOptions,
 } from './types';
+import { getLineAnnotationId } from './utils/getLineAnnotationId';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import {
   type FileContents,
@@ -311,7 +312,7 @@ export class FileDiff<LAnnotation = undefined> {
         if (content == null) continue;
         const el = document.createElement('div');
         el.dataset.annotationSlot = '';
-        el.slot = `${annotation.side}-${annotation.lineNumber}`;
+        el.slot = getLineAnnotationId(annotation);
         el.appendChild(content);
         this.annotationElements.push(el);
         fileContainer.appendChild(el);

@@ -31,6 +31,7 @@ import type {
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
+import { getLineAnnotationId } from './utils/getLineAnnotationId';
 import {
   createHastElement,
   createPreWrapperProperties,
@@ -1106,7 +1107,7 @@ function createSingleAnnotationSpan<LAnnotation>({
     annotations: [],
   };
   for (const anno of annotationMap[rowNumber] ?? []) {
-    span.annotations.push(`${anno.side}-${anno.lineNumber}`);
+    span.annotations.push(getLineAnnotationId(anno));
   }
   return span.annotations.length > 0 ? span : undefined;
 }
@@ -1141,13 +1142,11 @@ function createMirroredAnnotationSpan<LAnnotation>({
   | undefined {
   const dAnnotations: string[] = [];
   for (const anno of deletionAnnotations[deletionLineNumber] ?? []) {
-    dAnnotations.push(`${anno.side}-${anno.lineNumber}`);
+    dAnnotations.push(getLineAnnotationId(anno));
   }
   const aAnnotations: string[] = [];
   for (const anno of additionAnnotations[additionLineNumber] ?? []) {
-    (unified ? dAnnotations : aAnnotations).push(
-      `${anno.side}-${anno.lineNumber}`
-    );
+    (unified ? dAnnotations : aAnnotations).push(getLineAnnotationId(anno));
   }
   if (aAnnotations.length === 0 && dAnnotations.length === 0) {
     if (unified) {
