@@ -1,7 +1,7 @@
 import {
   type BundledLanguage,
-  CodeRenderer,
   FileDiff,
+  FileStream,
   type PJSThemeNames,
   type ParsedPatch,
   type SupportedLanguages,
@@ -35,7 +35,7 @@ async function loadPatchContent() {
   return loadingPatch;
 }
 
-const streamingInstances: CodeRenderer[] = [];
+const streamingInstances: FileStream[] = [];
 function startStreaming() {
   const container = document.getElementById('wrapper');
   if (container == null) return;
@@ -46,7 +46,7 @@ function startStreaming() {
     streamCode.parentElement?.removeChild(streamCode);
   }
   for (const { content, letterByLetter, options } of CodeConfigs) {
-    const instance = new CodeRenderer(options);
+    const instance = new FileStream(options);
     void instance.setup(
       createFakeContentStream(content, letterByLetter),
       container

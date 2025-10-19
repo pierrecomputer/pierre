@@ -1,5 +1,5 @@
 import type {
-  CodeRendererOptions,
+  FileStreamOptions,
   LineAnnotation,
 } from '@pierre/precision-diffs';
 
@@ -19,7 +19,7 @@ export const CodeConfigs = [
       lang: 'tsx',
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
       ...createHighlighterCleanup(),
-    } satisfies CodeRendererOptions,
+    } satisfies FileStreamOptions,
   },
   {
     content: mdContent,
@@ -28,7 +28,7 @@ export const CodeConfigs = [
       lang: 'markdown',
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
       ...createHighlighterCleanup(),
-    } satisfies CodeRendererOptions,
+    } satisfies FileStreamOptions,
   },
 ] as const;
 

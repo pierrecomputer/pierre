@@ -10,10 +10,10 @@ import { useCallback, useState } from 'react';
 import { CodeConfigs } from '../mocks/';
 import '../style.css';
 import { createFakeContentStream } from '../utils/createFakeContentStream';
-import { CodeRenderer, type CodeRendererProps } from './CodeRenderer';
+import { FileStream, type FileStreamProps } from './FileStream';
 
 export function App() {
-  const [codez, setCodez] = useState<CodeRendererProps[]>([]);
+  const [codez, setCodez] = useState<FileStreamProps[]>([]);
 
   const handleStartStreaming = useCallback(() => {
     setCodez(
@@ -56,7 +56,7 @@ export function App() {
       </div>
       <div id="content" className="content">
         {codez.map((props, index) => (
-          <CodeRenderer {...props} key={index} />
+          <FileStream {...props} key={index} />
         ))}
       </div>
     </>
