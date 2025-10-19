@@ -83,17 +83,17 @@ interface ProcessLinesReturn {
   unified: ComputedContent;
 }
 
-interface DiffHunkThemeRendererOptions
+interface DiffHunkRendererThemeOptions
   extends BaseRendererOptions,
     ThemeRendererOptions {}
 
-interface DiffHunkThemesRendererOptions
+interface DiffHunkRendererThemesOptions
   extends BaseRendererOptions,
     ThemesRendererOptions {}
 
 export type DiffHunksRendererOptions =
-  | DiffHunkThemeRendererOptions
-  | DiffHunkThemesRendererOptions;
+  | DiffHunkRendererThemeOptions
+  | DiffHunkRendererThemesOptions;
 
 export interface HunksRenderResult {
   additionsAST: ElementContent[] | undefined;
