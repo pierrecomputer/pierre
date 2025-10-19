@@ -1,7 +1,7 @@
 import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 
 const CODE = `import { FileDiff } from '@pierre/precision-diffs';
-import type { FileContents, LineAnnotation } from '@pierre/precision-diffs';
+import type { FileContents, DiffLineAnnotation } from '@pierre/precision-diffs';
 import { useState } from 'react';
 
 export default function DiffViewer() {
@@ -40,7 +40,7 @@ export function Header() {
 }\`
   };
 
-  const annotations: LineAnnotation[] = [
+  const annotations: DiffLineAnnotation[] = [
     {
       side: 'additions',
       lineNumber: 3,

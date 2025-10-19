@@ -115,7 +115,7 @@ export function VanillaAPI() {
 const CODE_FILE_DIFF = `import {
   type FileContents,
   FileDiff,
-  type LineAnnotation,
+  type DiffLineAnnotation,
 } from '@pierre/precision-diffs';
 
 const oldFile: FileContents = {
@@ -133,7 +133,7 @@ interface ThreadMetadata {
 }
 
 // Annotation metadata can be typed any way you'd like
-const lineAnnotations: LineAnnotation<ThreadMetadata>[] = [
+const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   {
     side: 'additions',
     // The line number specified for an annotation is the visual line number
@@ -240,7 +240,7 @@ const instance = new FileDiff<ThreadMetadata>({
 
   // You can optionally pass a render function for rendering out line
   // annotations.  Just return the dom node to render
-  renderAnnotation(annotation: LineAnnotation<ThreadMetadata>): HTMLElement {
+  renderAnnotation(annotation: DiffLineAnnotation<ThreadMetadata>): HTMLElement {
     // Despite the diff itself being rendered in the shadow dom,
     // annotations are inserted via the web components 'slots' api and you
     // can use all your normal normal css and styling for them

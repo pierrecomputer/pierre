@@ -1,6 +1,6 @@
 import type {
+  DiffLineAnnotation,
   FileStreamOptions,
-  LineAnnotation,
 } from '@pierre/precision-diffs';
 
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
@@ -40,7 +40,7 @@ export interface LineCommentMetadata {
   message: string;
 }
 
-export const FAKE_LINE_ANNOTATIONS: LineAnnotation<LineCommentMetadata>[][][] =
+export const FAKE_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>[][][] =
   [
     [
       [

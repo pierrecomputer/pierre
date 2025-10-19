@@ -13,8 +13,8 @@ import svgSprite from './sprite.txt?raw';
 import type {
   AnnotationSide,
   BaseRendererOptions,
+  DiffLineAnnotation,
   FileDiffMetadata,
-  LineAnnotation,
   LineEventBaseProps,
   PJSHighlighter,
   PJSThemeNames,
@@ -56,7 +56,7 @@ interface FileDiffRenderBaseProps<LAnnotation> {
   forceRender?: boolean;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
-  lineAnnotations?: LineAnnotation<LAnnotation>[];
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
 interface FileDiffRenderDiffProps<LAnnotation>
@@ -102,7 +102,7 @@ interface DiffFileBaseOptions<LAnnotation> {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderCustomFileMetadata;
   renderAnnotation?(
-    annotation: LineAnnotation<LAnnotation>
+    annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
   onLineClick?(props: OnLineClickProps, fileDiff: FileDiffMetadata): unknown;
   onLineEnter?(props: LineEventBaseProps, fileDiff: FileDiffMetadata): unknown;
@@ -216,8 +216,8 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
-  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]) {
+  private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
+  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]) {
     this.lineAnnotations = lineAnnotations;
   }
 

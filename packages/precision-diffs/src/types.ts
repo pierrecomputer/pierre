@@ -115,10 +115,18 @@ export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 
 export type AnnotationSide = 'deletions' | 'additions';
 
+type OptionalMetadata<T> = T extends undefined
+  ? { metadata?: undefined }
+  : { metadata: T };
+
 export type LineAnnotation<T = undefined> = {
+  lineNumber: number;
+} & OptionalMetadata<T>;
+
+export type DiffLineAnnotation<T = undefined> = {
   side: AnnotationSide;
   lineNumber: number;
-} & (T extends undefined ? { metadata?: undefined } : { metadata: T });
+} & OptionalMetadata<T>;
 
 export interface GapSpan {
   type: 'gap';

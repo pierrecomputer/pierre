@@ -13,10 +13,10 @@ import type {
   BaseRendererOptions,
   CodeToHastOptions,
   DecorationItem,
+  DiffLineAnnotation,
   FileDiffMetadata,
   Hunk,
   HunkLineType,
-  LineAnnotation,
   LineInfo,
   LineSpans,
   PJSHighlighter,
@@ -40,7 +40,7 @@ import { parseLineType } from './utils/parseLineType';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
-  LineAnnotation<LAnnotation>[] | undefined
+  DiffLineAnnotation<LAnnotation>[] | undefined
 >;
 
 interface ChangeHunk {
@@ -186,7 +186,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
-  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]) {
+  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]) {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     for (const annotation of lineAnnotations) {

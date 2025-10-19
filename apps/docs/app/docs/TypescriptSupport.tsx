@@ -3,7 +3,7 @@ import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 const CODE = `import type {
   FileContents,
   DiffFileRendererOptions,
-  LineAnnotation,
+  DiffLineAnnotation,
   FileDiffMetadata,
   OnLineClickProps,
   OnLineEnterProps,

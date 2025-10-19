@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 const CODE = `import {
   type FileContents,
-  type LineAnnotation,
+  type DiffLineAnnotation,
   FileDiff,
 } from '@pierre/precision-diffs/react';
 
@@ -23,7 +23,7 @@ interface ThreadMetadata {
 }
 
 // Annotation metadata can be typed any way you'd like
-const lineAnnotations: LineAnnotation<ThreadMetadata>[] = [
+const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   {
     side: 'additions',
     // The line number specified for an annotation is the visual line number
@@ -43,7 +43,7 @@ export function SingleDiff() {
       oldFile={oldFile}
       newFile={newFile}
       lineAnnotations={lineAnnotations}
-      renderLineAnnotation={(annotation: LineAnnotation) => {
+      renderLineAnnotation={(annotation: DiffLineAnnotation) => {
         // Despite the diff itself being rendered in the shadow dom,
         // annotations are inserted via the web components 'slots' api and you
         // can use all your normal normal css and styling for them

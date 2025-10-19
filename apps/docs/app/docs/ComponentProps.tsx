@@ -3,7 +3,7 @@ import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 const CODE = `[{
   side: 'additions' | 'deletions',
   lineNumber: number,
-  metadata?: T // When you instantiate a component or class that consumes LineAnnotations
+  metadata?: T // When you instantiate a component or class that consumes DiffLineAnnotations
 }]`;
 
 export function ComponentProps() {
