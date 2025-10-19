@@ -165,8 +165,34 @@ export interface AnnotationSpan {
 
 export interface LineEventBaseProps {
   type: 'line';
-  annotationSide: AnnotationSide;
-  lineType: LineTypes;
   lineNumber: number;
   lineElement: HTMLElement;
+}
+
+export interface DiffLineEventBaseProps extends LineEventBaseProps {
+  annotationSide: AnnotationSide;
+  lineType: LineTypes;
+}
+
+export interface ObservedAnnotationNodes {
+  type: 'annotations';
+  column1: {
+    container: HTMLElement;
+    child: HTMLElement;
+    childHeight: number;
+  };
+  column2: {
+    container: HTMLElement;
+    child: HTMLElement;
+    childHeight: number;
+  };
+  currentHeight: number | 'auto';
+}
+
+export interface ObservedGridNodes {
+  type: 'code';
+  codeElement: HTMLElement;
+  numberElement: HTMLElement | null;
+  codeWidth: number | 'auto';
+  numberWidth: number;
 }

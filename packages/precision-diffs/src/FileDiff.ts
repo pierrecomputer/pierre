@@ -14,8 +14,10 @@ import type {
   AnnotationSide,
   BaseRendererOptions,
   DiffLineAnnotation,
+  DiffLineEventBaseProps,
   FileDiffMetadata,
-  LineEventBaseProps,
+  ObservedAnnotationNodes,
+  ObservedGridNodes,
   PJSHighlighter,
   PJSThemeNames,
   RenderCustomFileMetadata,
@@ -29,29 +31,6 @@ import {
   type FileContents,
   parseDiffFromFile,
 } from './utils/parseDiffFromFile';
-
-interface ObservedAnnotationNodes {
-  type: 'annotations';
-  column1: {
-    container: HTMLElement;
-    child: HTMLElement;
-    childHeight: number;
-  };
-  column2: {
-    container: HTMLElement;
-    child: HTMLElement;
-    childHeight: number;
-  };
-  currentHeight: number | 'auto';
-}
-
-interface ObservedGridNodes {
-  type: 'code';
-  codeElement: HTMLElement;
-  numberElement: HTMLElement | null;
-  codeWidth: number | 'auto';
-  numberWidth: number;
-}
 
 interface FileDiffRenderBaseProps<LAnnotation> {
   forceRender?: boolean;
@@ -83,15 +62,15 @@ interface ExpandoEventProps {
   hunkIndex: number;
 }
 
-export interface OnLineClickProps extends LineEventBaseProps {
+export interface OnDiffLineClickProps extends DiffLineEventBaseProps {
   event: PointerEvent;
 }
 
-export interface OnLineEnterProps extends LineEventBaseProps {
+export interface OnDiffLineEnterProps extends DiffLineEventBaseProps {
   event: MouseEvent;
 }
 
-export interface OnLineLeaveProps extends LineEventBaseProps {
+export interface OnDiffLineLeaveProps extends DiffLineEventBaseProps {
   event: MouseEvent;
 }
 
@@ -105,9 +84,18 @@ interface DiffFileBaseOptions<LAnnotation> {
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
-  onLineClick?(props: OnLineClickProps, fileDiff: FileDiffMetadata): unknown;
-  onLineEnter?(props: LineEventBaseProps, fileDiff: FileDiffMetadata): unknown;
-  onLineLeave?(props: LineEventBaseProps, fileDiff: FileDiffMetadata): unknown;
+  onLineClick?(
+    props: OnDiffLineClickProps,
+    fileDiff: FileDiffMetadata
+  ): unknown;
+  onLineEnter?(
+    props: DiffLineEventBaseProps,
+    fileDiff: FileDiffMetadata
+  ): unknown;
+  onLineLeave?(
+    props: DiffLineEventBaseProps,
+    fileDiff: FileDiffMetadata
+  ): unknown;
 }
 
 interface DiffFileThemeRendererOptions<LAnnotation>
@@ -261,7 +249,7 @@ export class FileDiff<LAnnotation = undefined> {
       containerWrapper.appendChild(fileContainer);
     }
     const pre = this.getOrCreatePre(fileContainer);
-    this.hunksRenderer.setOptions({ ...this.options });
+    this.hunksRenderer.setOptions(this.options);
 
     // This is kinda jank, lol
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
@@ -298,13 +286,14 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.setupResizeObserver(pre);
 
+    if (this.isReact) return;
+
     // Handle annotation elements
     for (const element of this.annotationElements) {
       element.parentNode?.removeChild(element);
     }
     this.annotationElements.length = 0;
 
-    if (this.isReact) return;
     const { renderAnnotation } = this.options;
     if (renderAnnotation != null && this.lineAnnotations.length > 0) {
       for (const annotation of this.lineAnnotations) {
@@ -368,7 +357,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.handleMouseEvent({ eventType: 'click', event });
   };
 
-  hoveredRow: LineEventBaseProps | undefined;
+  hoveredRow: DiffLineEventBaseProps | undefined;
   handleMouseMove = (event: MouseEvent) => {
     this.handleMouseEvent({ eventType: 'move', event });
   };
@@ -380,7 +369,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   private getLineData(
     path: EventTarget[]
-  ): LineEventBaseProps | ExpandoEventProps | undefined {
+  ): DiffLineEventBaseProps | ExpandoEventProps | undefined {
     const lineElement = path.find(
       (element) =>
         element instanceof HTMLElement &&
@@ -743,7 +732,7 @@ export class FileDiff<LAnnotation = undefined> {
       const { target, borderBoxSize } = entry;
       if (!(target instanceof HTMLElement)) {
         console.error(
-          'DiffFileRenderer.handleResizeObserver: Invalid element for ResizeObserver',
+          'FileDiff.handleResizeObserver: Invalid element for ResizeObserver',
           entry
         );
         continue;
@@ -751,7 +740,7 @@ export class FileDiff<LAnnotation = undefined> {
       const item = this.observedNodes.get(target);
       if (item == null) {
         console.error(
-          'DiffFileRenderer.handleResizeObserver: Not a valid observed node',
+          'FileDiff.handleResizeObserver: Not a valid observed node',
           entry
         );
         continue;
@@ -770,7 +759,7 @@ export class FileDiff<LAnnotation = undefined> {
 
         if (column == null) {
           console.error(
-            `DiffFileRenderer.handleResizeObserver: Couldn't find a column for`,
+            `FileDiff.handleResizeObserver: Couldn't find a column for`,
             { item, target }
           );
           continue;
