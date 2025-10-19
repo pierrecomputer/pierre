@@ -1,7 +1,6 @@
 import type {
   BundledLanguage,
   BundledTheme,
-  CodeOptionsMultipleThemes,
   CodeToHastOptions,
   DecorationItem,
   HighlighterGeneric,
@@ -93,7 +92,6 @@ export interface BaseCodeProps {
 
   // Shiki config options
   lang?: SupportedLanguages;
-  defaultColor?: CodeOptionsMultipleThemes['defaultColor'];
   preferWasmHighlighter?: boolean;
 }
 

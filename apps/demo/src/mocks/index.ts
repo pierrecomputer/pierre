@@ -18,7 +18,6 @@ export const CodeConfigs = [
     options: {
       lang: 'tsx',
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
-      defaultColor: false,
       ...createHighlighterCleanup(),
     } satisfies CodeRendererOptions,
   },
@@ -28,7 +27,6 @@ export const CodeConfigs = [
     options: {
       lang: 'markdown',
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
-      defaultColor: false,
       ...createHighlighterCleanup(),
     } satisfies CodeRendererOptions,
   },
