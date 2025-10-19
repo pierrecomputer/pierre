@@ -309,8 +309,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   renderFullHTML(result: HunksRenderResult): string {
+    const _children = result.preNode.children;
+    const tempChildren = [..._children];
     if (result.unifiedAST != null) {
-      result.preNode.children.push(
+      tempChildren.push(
         createHastElement({
           tagName: 'code',
           children: result.unifiedAST,
@@ -322,7 +324,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     }
     if (result.deletionsAST != null) {
-      result.preNode.children.push(
+      tempChildren.push(
         createHastElement({
           tagName: 'code',
           children: result.deletionsAST,
@@ -334,7 +336,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     }
     if (result.additionsAST != null) {
-      result.preNode.children.push(
+      tempChildren.push(
         createHastElement({
           tagName: 'code',
           children: result.additionsAST,
@@ -345,7 +347,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         })
       );
     }
-    return toHtml(result.preNode);
+    result.preNode.children = tempChildren;
+    const html = toHtml(result.preNode);
+    result.preNode.children = _children;
+    return html;
   }
 
   renderPartialHTML(
@@ -456,7 +461,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           linesAST.push(createSeparator({ type: 'empty' }));
         }
       }
-      for (const line of this.getNodesToRender(nodes)) {
+      for (const line of this.getLineNodes(nodes)) {
         linesAST.push(line);
       }
       if (
@@ -963,7 +968,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { unifiedDecorations, deletionDecorations, additionDecorations };
   }
 
-  private getNodesToRender(nodes: Root): ElementContent[] {
+  private getLineNodes(nodes: Root): ElementContent[] {
     let firstChild: RootContent | Element | Root | null = nodes.children[0];
     while (firstChild != null) {
       if (firstChild.type === 'element' && firstChild.tagName === 'code') {
