@@ -2,9 +2,9 @@
 
 import {
   type DiffFileRendererOptions,
+  type DiffLineAnnotation,
   type FileContents,
   FileDiff as FileDiffUI,
-  type LineAnnotation,
 } from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -21,8 +21,8 @@ interface FileDiffProps<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
   options?: DiffFileRendererOptions<LAnnotation>;
-  annotations?: LineAnnotation<LAnnotation>[];
-  renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
+  annotations?: DiffLineAnnotation<LAnnotation>[];
+  renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   className?: string;
   style?: CSSProperties;
 }
