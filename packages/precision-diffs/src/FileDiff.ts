@@ -209,16 +209,18 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   cleanUp() {
-    this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     this.hunksRenderer.cleanUp();
     this.headerRenderer.cleanUp();
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
-    this.fileContainer = undefined;
     this.pre = undefined;
     this.headerElement = undefined;
     this.fileDiff = undefined;
     this.resizeObserver = undefined;
+    if (!this.isReact) {
+      this.fileContainer?.parentNode?.removeChild(this.fileContainer);
+    }
+    this.fileContainer = undefined;
   }
 
   async render(props: FileDiffRenderProps<LAnnotation>) {

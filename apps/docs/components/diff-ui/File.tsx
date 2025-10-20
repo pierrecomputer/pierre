@@ -1,5 +1,3 @@
-'use client';
-
 import {
   type FileContents,
   type FileOptions,
@@ -12,10 +10,13 @@ import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
   type ReactNode,
+  useEffect,
   useLayoutEffect,
   useRef,
-  useState,
 } from 'react';
+
+const useIsometricEffect =
+  typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface FileProps<LAnnotation> {
   file: FileContents;
@@ -27,7 +28,7 @@ interface FileProps<LAnnotation> {
   style?: CSSProperties;
 }
 
-export function File<LAnnotations = undefined>({
+export function File<LAnnotation = undefined>({
   file,
   lineAnnotations,
   options,
@@ -35,23 +36,29 @@ export function File<LAnnotations = undefined>({
   style,
   renderAnnotation,
   renderHeaderMetadata,
-}: FileProps<LAnnotations>) {
-  'use no memo';
-  const [fileInstance] = useState(() => new FileUI(options, true));
+}: FileProps<LAnnotation>) {
+  const instanceRef = useRef<FileUI<LAnnotation> | null>(null);
   const ref = useRef<HTMLElement>(null);
 
-  useLayoutEffect(() => {
+  useIsometricEffect(() => {
     if (ref.current == null) return;
-    const forceRender = !deepEqual(fileInstance.options, options);
-    fileInstance.setOptions(options);
-    void fileInstance.render({
+    instanceRef.current ??= new FileUI<LAnnotation>(options, true);
+    const forceRender = !deepEqual(instanceRef.current.options, options);
+    instanceRef.current.setOptions(options);
+    void instanceRef.current.render({
       file,
       fileContainer: ref.current,
       lineAnnotations,
       forceRender,
     });
   });
-  // useEffect(() => () => fileInstance.cleanUp(), [fileInstance]);
+  useIsometricEffect(
+    () => () => {
+      instanceRef.current?.cleanUp();
+      instanceRef.current = null;
+    },
+    []
+  );
 
   const metadata = renderHeaderMetadata?.(file);
   return (
