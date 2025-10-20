@@ -643,7 +643,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           additionStartIndex: unified ? -1 : additionContent.length,
           deletionLines: [],
           additionLines: [],
-          diffGroupStartIndex: diffLineIndex,
+          diffGroupStartIndex: lineIndex,
         };
         diffGroups.push(currentChangeGroup);
       }
@@ -711,13 +711,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       type: HunkLineType,
       isExpandedContext: boolean = false
     ) => {
-      diffLineIndex++;
+      lineIndex++;
       if (type === 'context') {
         createGapSpanIfNecessary();
       }
       if (type === 'context') {
         if (currentChangeGroup != null) {
-          diffLineIndex =
+          lineIndex =
             currentChangeGroup.diffGroupStartIndex +
             Math.max(
               currentChangeGroup.additionLines.length,
@@ -730,7 +730,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           unifiedLineInfo[unifiedContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
             lineNumber: additionLineNumber + 1,
-            diffLineIndex,
+            lineIndex,
           };
           const span = createMirroredAnnotationSpan({
             deletionLineNumber: deletionLineNumber + 1,
@@ -748,18 +748,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           deletionLineInfo[deletionContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
             lineNumber: deletionLineNumber + 1,
-            diffLineIndex,
+            lineIndex,
           };
           additionLineInfo[additionContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
             lineNumber: additionLineNumber + 1,
-            diffLineIndex,
+            lineIndex,
           };
           const [deletionSpan, additionSpan] = createMirroredAnnotationSpan({
             deletionLineNumber: deletionLineNumber + 1,
             additionLineNumber: additionLineNumber + 1,
             hunkIndex,
-            diffLineIndex,
+            diffLineIndex: lineIndex,
             deletionAnnotations,
             additionAnnotations,
             unified: false,
@@ -792,7 +792,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           // NOTE(amadeus): Metadata lines do not have line numbers associated
           // with them
           lineNumber: -1,
-          diffLineIndex: -1,
+          lineIndex: -1,
           metadataContent: line.trim(),
         };
         // Push a filler blank line so we have something to render
@@ -817,7 +817,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const span = createSingleAnnotationSpan({
           rowNumber: deletionLineNumber + 1,
           hunkIndex,
-          diffLineIndex,
+          diffLineIndex: lineIndex,
           annotationMap: this.deletionAnnotations,
         });
         addToChangeGroup('deletion', line, span);
@@ -825,15 +825,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         lineInfo[content.length] = {
           type: 'change-deletion',
           lineNumber: deletionLineNumber + 1,
-          diffLineIndex,
+          lineIndex,
         };
         pushOrMergeSpan(span, content.length, lineInfo);
         deletionLineNumber++;
       } else if (type === 'addition') {
         // Reset diffLineIndex back to start if we are jumping columns
         if (lastType === 'deletion' && !unified) {
-          diffLineIndex =
-            currentChangeGroup?.diffGroupStartIndex ?? diffLineIndex;
+          lineIndex = currentChangeGroup?.diffGroupStartIndex ?? lineIndex;
         }
         const { content, lineInfo } = (() =>
           unified
@@ -842,7 +841,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const span = createSingleAnnotationSpan({
           rowNumber: additionLineNumber + 1,
           hunkIndex,
-          diffLineIndex,
+          diffLineIndex: lineIndex,
           annotationMap: this.additionAnnotations,
         });
         addToChangeGroup('addition', line, span);
@@ -850,7 +849,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         lineInfo[content.length] = {
           type: 'change-addition',
           lineNumber: additionLineNumber + 1,
-          diffLineIndex,
+          lineIndex,
         };
         pushOrMergeSpan(span, content.length, lineInfo);
         additionLineNumber++;
@@ -859,7 +858,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lastType = type;
     };
 
-    let diffLineIndex = -1;
+    let lineIndex = -1;
     let lastType: HunkLineType | undefined;
 
     // Proses hunk expanded content if expanded
@@ -1198,7 +1197,7 @@ function pushOrMergeSpan(
     lineInfo = {
       type: 'context',
       lineNumber: -1,
-      diffLineIndex: -1,
+      lineIndex: -1,
       spans: [],
     };
     spanMap[0] = lineInfo;
@@ -1242,7 +1241,7 @@ function pushOrMergeSpan(
     }
     const spanMarkers: (AnnotationSpan | 0)[] = new Array(gapSize).fill(0);
     for (const annotation of annotations) {
-      const annotationIndex = annotation.diffLineIndex - lineInfo.diffLineIndex;
+      const annotationIndex = annotation.diffLineIndex - lineInfo.lineIndex;
       const currentItem = spanMarkers[annotationIndex];
       if (currentItem === 0 || currentItem == null) {
         spanMarkers.splice(annotationIndex, 0, annotation);
