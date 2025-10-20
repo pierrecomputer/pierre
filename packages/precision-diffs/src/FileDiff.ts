@@ -270,7 +270,9 @@ export class FileDiff<LAnnotation = undefined> {
 
     const [highlighter, headerResult, hunksResult] = await Promise.all([
       getSharedHighlighter({ themes: this.getThemes(), langs: [] }),
-      this.headerRenderer.render(this.fileDiff),
+      !disableFileHeader
+        ? this.headerRenderer.render(this.fileDiff)
+        : undefined,
       this.hunksRenderer.render(this.fileDiff),
     ]);
 

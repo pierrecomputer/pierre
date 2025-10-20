@@ -179,7 +179,7 @@ export class File<LAnnotation = undefined> {
 
     const [highlighter, headerResult, fileResult] = await Promise.all([
       getSharedHighlighter({ themes: this.getThemes(), langs: [] }),
-      this.headerRenderer.render(file),
+      !disableFileHeader ? this.headerRenderer.render(file) : undefined,
       this.fileRenderer.render(file),
     ]);
 
