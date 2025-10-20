@@ -30,7 +30,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-    "incremental": true,
+    "composite": false,
     "plugins": [
       {
         "name": "next"
