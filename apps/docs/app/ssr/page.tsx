@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { type FileContents } from '@pierre/precision-diffs';
 import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
 

@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// # IMPORTANT #
+// THIS SCRIPT IS ONLY USED ON MDO'S LAPTOP
+console.warn(
+  "This script is only used on @mdo's laptop. If you are not @mdo, you might not like the results."
+);
+
+// import { fileURLToPath } from 'url';
+
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
 
 // Source theme files
 const sourceDir = '/Users/mdo/work/pierre/pierre-vscode-theme/themes';

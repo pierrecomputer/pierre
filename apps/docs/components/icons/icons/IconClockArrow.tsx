@@ -1,12 +1,11 @@
 // Generated from svgs/IconClockArrow.svg
-
-import { type Color, Colors } from "../Color";
+import { type Color, Colors } from '../Color';
 
 interface IconProps {
-	size?: 10 | 12 | 16 | 20 | 32 | 48 | "1em";
-	color?: keyof Color | "currentcolor";
-	style?: React.CSSProperties;
-	className?: string;
+  size?: 10 | 12 | 16 | 20 | 32 | 48 | '1em';
+  color?: keyof Color | 'currentcolor';
+  style?: React.CSSProperties;
+  className?: string;
 }
 
 // prettier-ignore
