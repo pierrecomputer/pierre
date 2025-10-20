@@ -579,9 +579,10 @@ code {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+  align-items: center;
   gap: var(--pjs-gap);
-  /* HACK VALUES FOR NOW... */
-  padding: 12px 16px;
+  min-height: calc(1lh + (var(--pjs-gap) * 3));
+  padding-inline: 16px;
 }
 
 [data-header-content] {
@@ -661,4 +662,8 @@ code {
 
 [data-change-icon='deleted'] {
   color: var(--pjs-deletion-base);
+}
+
+[data-change-icon='file'] {
+  opacity: 0.6;
 }

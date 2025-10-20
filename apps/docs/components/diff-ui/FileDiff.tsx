@@ -5,12 +5,15 @@ import {
   type DiffLineAnnotation,
   type FileContents,
   FileDiff as FileDiffUI,
+  HEADER_METADATA_SLOT_ID,
+  type RenderHeaderMetadataProps,
   getLineAnnotationId,
 } from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
   type ReactNode,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -24,6 +27,7 @@ interface FileDiffProps<LAnnotation> {
   options?: DiffFileRendererOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
+  renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
   className?: string;
   style?: CSSProperties;
 }
@@ -36,6 +40,7 @@ export function FileDiff<LAnnotation = undefined>({
   className,
   style,
   renderAnnotation,
+  renderHeaderMetadata,
 }: FileDiffProps<LAnnotation>) {
   const [diffRenderer] = useState(
     () => new FileDiffUI<LAnnotation>(options, true)
@@ -71,8 +76,11 @@ export function FileDiff<LAnnotation = undefined>({
       });
     }
   });
+  useEffect(() => () => diffRenderer.cleanUp(), [diffRenderer]);
+  const metadata = renderHeaderMetadata?.({ oldFile, newFile });
   return (
     <pjs-container ref={ref} className={className} style={style}>
+      {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
       {renderAnnotation != null &&
         annotations?.map((annotation) => (
           <div

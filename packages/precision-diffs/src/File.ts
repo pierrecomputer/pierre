@@ -18,7 +18,7 @@ import type {
   ObservedGridNodes,
   PJSHighlighter,
   PJSThemeNames,
-  RenderCustomFileMetadata,
+  RenderFileMetadata,
   ThemeTypes,
 } from './types';
 import { getLineAnnotationId } from './utils/getLineAnnotationId';
@@ -50,7 +50,7 @@ interface FileRenderProps<LAnnotation> {
 
 interface BaseOptions<LAnnotation> {
   disableFileHeader?: boolean;
-  renderCustomMetadata?: RenderCustomFileMetadata;
+  renderCustomMetadata?: RenderFileMetadata;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
@@ -84,7 +84,10 @@ export class File<LAnnotation = undefined> {
   private observedNodes = new Map<HTMLElement, ObservedGridNodes>();
   private resizeObserver: ResizeObserver | undefined;
 
-  constructor(public options: FileOptions<LAnnotation>) {
+  constructor(
+    public options: FileOptions<LAnnotation>,
+    private isReact = false
+  ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(options);
     this.headerRenderer = new FileHeaderRenderer(options);
   }
@@ -245,6 +248,8 @@ export class File<LAnnotation = undefined> {
       container.shadowRoot?.prepend(newHeader);
     }
     this.headerElement = newHeader;
+
+    if (this.isReact) return;
 
     const { renderCustomMetadata } = this.options;
     if (this.headerMetadata != null) {

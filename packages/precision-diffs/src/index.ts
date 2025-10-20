@@ -5,6 +5,7 @@ export * from './FileHeaderRenderer';
 export * from './FileStream';
 export * from './SharedHighlighter';
 export * from './UniversalRenderer';
+export * from './constants';
 export * from './shiki-stream';
 export * from './utils/getFiletypeFromFileName';
 export * from './utils/getLineAnnotationId';

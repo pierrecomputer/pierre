@@ -115,11 +115,17 @@ export interface BaseRendererOptions extends BaseCodeProps {
   maxLineLengthForHighlighting?: number; // 1000 is default
 }
 
-export type RenderCustomDiffMetadata = (
-  file: FileDiffMetadata
+export interface RenderHeaderMetadataProps {
+  oldFile?: FileContents;
+  newFile?: FileContents;
+  fileDiff?: FileDiffMetadata;
+}
+
+export type RenderHeaderMetadataCallback = (
+  props: RenderHeaderMetadataProps
 ) => Element | null | undefined | string | number;
 
-export type RenderCustomFileMetadata = (
+export type RenderFileMetadata = (
   file: FileContents
 ) => Element | null | undefined | string | number;
 
