@@ -11,6 +11,10 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./ssr": {
+      "import": "./src/react-ssr/index.ts",
+      "types": "./src/react-ssr/index.ts"
     }
   },
   "files": [
@@ -19,13 +23,22 @@
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "catalog:",
     "@types/hast": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "typescript": "catalog:"
   },
   "dependencies": {
+    "@lit-labs/ssr-client": "catalog:",
+    "@lit-labs/ssr-react": "catalog:",
+    "@pierre/shiki-stream": "workspace:*",
     "@shikijs/core": "catalog:",
+    "@shikijs/transformers": "catalog:",
     "diff": "catalog:",
     "fast-deep-equal": "catalog:",
     "hast-util-to-html": "catalog:",
+    "lit": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "shiki": "catalog:"
   }
 }

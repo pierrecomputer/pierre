@@ -32,6 +32,8 @@
       "@eslint/eslintrc": "3.3.1",
       "@eslint/js": "9.36.0",
       "@icons-pack/react-simple-icons": "13.8.0",
+      "@lit-labs/ssr-client": "1.1.7",
+      "@lit-labs/ssr-react": "0.3.3",
       "@next/eslint-plugin-next": "15.5.5",
       "@octokit/app": "16.1.1",
       "@octokit/auth-app": "8.1.1",
@@ -76,6 +78,7 @@
       "fumadocs-mdx": "12.0.1",
       "fumadocs-ui": "15.8.0",
       "hast-util-to-html": "9.0.5",
+      "lit": "3.3.1",
       "lucide-react": "0.545.0",
       "next": "15.5.4",
       "next-themes": "0.4.6",
@@ -114,5 +117,8 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
+  },
+  "dependencies": {
+    "@lit-labs/ssr-client": "^1.1.7"
   }
 }

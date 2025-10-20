@@ -1,3 +1,4 @@
+import { transformerStyleToClass } from '@shikijs/transformers';
 import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
@@ -60,10 +61,16 @@ interface RenderHunkProps {
   hunkIndex: number;
   highlighter: PJSHighlighter;
   state: SharedRenderState;
+<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
   transformer: ShikiTransformer;
   additionsAST: ElementContent[];
   deletionsAST: ElementContent[];
   unifiedAST: ElementContent[];
+||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
+  transformer: ShikiTransformer;
+=======
+  transformer: ShikiTransformer | ShikiTransformer[];
+>>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
 }
 
 interface UnresolvedAnnotationSpan {
@@ -98,11 +105,67 @@ export type DiffHunksRendererOptions =
   | DiffHunkThemesRendererOptions;
 
 export interface HunksRenderResult {
+<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
   additionsAST: ElementContent[] | undefined;
   deletionsAST: ElementContent[] | undefined;
   unifiedAST: ElementContent[] | undefined;
   preNode: Element;
+||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
+  additionsHTML: string;
+  deletionsHTML: string;
+  unifiedHTML: string;
+=======
+  additionsHTML: string;
+  deletionsHTML: string;
+  unifiedHTML: string;
+  css?: string;
+>>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
 }
+
+// Create a transformer that converts token color/fontStyle to htmlStyle
+// This needs to run BEFORE transformerStyleToClass
+const tokenStyleNormalizer: ShikiTransformer = {
+  name: 'token-style-normalizer',
+  tokens(lines) {
+    for (const line of lines) {
+      for (const token of line) {
+        // Skip if htmlStyle is already set
+        if (token.htmlStyle != null) continue;
+
+        const style: Record<string, string> = {};
+
+        if (token.color != null) {
+          style.color = token.color;
+        }
+        if (token.bgColor != null) {
+          style['background-color'] = token.bgColor;
+        }
+        if (token.fontStyle != null && token.fontStyle !== 0) {
+          // FontStyle is a bitmask: 1 = italic, 2 = bold, 4 = underline
+          if ((token.fontStyle & 1) !== 0) {
+            style['font-style'] = 'italic';
+          }
+          if ((token.fontStyle & 2) !== 0) {
+            style['font-weight'] = 'bold';
+          }
+          if ((token.fontStyle & 4) !== 0) {
+            style['text-decoration'] = 'underline';
+          }
+        }
+
+        // Only set htmlStyle if we have any styles
+        if (Object.keys(style).length > 0) {
+          token.htmlStyle = style;
+        }
+      }
+    }
+  },
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+const toClass = transformerStyleToClass({
+  classPrefix: 'hl-',
+});
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
   highlighter: PJSHighlighter | undefined;
@@ -262,10 +325,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
+<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
     const additionsAST: ElementContent[] = [];
     const deletionsAST: ElementContent[] = [];
     const unifiedAST: ElementContent[] = [];
     const { state, transformer } =
+||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
+    let additionsHTML = '';
+    let deletionsHTML = '';
+    let unifiedHTML = '';
+    const { state, transformer } =
+=======
+    let additionsHTML = '';
+    let deletionsHTML = '';
+    let unifiedHTML = '';
+    const { state, transformer: lineNumberTransformer } =
+>>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
       createTransformerWithState(disableLineNumbers);
     let hunkIndex = 0;
 
@@ -277,7 +352,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hunkIndex,
         highlighter,
         state,
-        transformer,
+        transformer: [lineNumberTransformer, tokenStyleNormalizer, toClass],
         isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
         additionsAST,
         deletionsAST,
@@ -287,6 +362,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       prevHunk = hunk;
     }
 
+<<<<<<< HEAD:packages/precision-diffs/src/DiffHunksRenderer.ts
     return {
       additionsAST: additionsAST.length > 0 ? additionsAST : undefined,
       deletionsAST: deletionsAST.length > 0 ? deletionsAST : undefined,
@@ -367,10 +443,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         },
       })
     );
+||||||| parent of 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
+    return { additionsHTML, deletionsHTML, unifiedHTML };
+=======
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    return { additionsHTML, deletionsHTML, unifiedHTML, css: toClass.getCSS() };
+>>>>>>> 957bd30 (make sure rewrite to fumadocs is in the right place):packages/diff-ui/src/DiffHunksRenderer.ts
   }
 
   private createHastOptions(
-    transformer: ShikiTransformer,
+    transformer: ShikiTransformer | ShikiTransformer[],
     decorations?: DecorationItem[],
     forceTextLang: boolean = false
   ): CodeToHastOptions<PJSThemeNames> {
@@ -380,7 +462,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         cssVariablePrefix: formatCSSVariablePrefix(),
         lang: forceTextLang ? 'text' : this.computedLang,
         defaultColor: this.options.defaultColor ?? false,
-        transformers: [transformer],
+        transformers: Array.isArray(transformer) ? transformer : [transformer],
         decorations,
       };
     }
@@ -389,7 +471,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: this.options.defaultColor ?? false,
-      transformers: [transformer],
+      transformers: Array.isArray(transformer) ? transformer : [transformer],
       decorations,
     };
   }

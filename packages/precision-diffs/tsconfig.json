@@ -6,7 +6,11 @@
     "emitDeclarationOnly": false,
     "baseUrl": ".",
     "rootDir": "src",
+    "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "resolveJsonModule": true
+    "target": "ES2017",
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
   }
 }

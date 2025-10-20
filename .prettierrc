@@ -8,5 +8,6 @@
   "importOrder": ["<THIRD_PARTY_MODULES>", "^\\."],
   "importOrderSortSpecifiers": true,
   "importOrderSeparation": true,
-  "plugins": ["@trivago/prettier-plugin-sort-imports"]
+  "plugins": ["@trivago/prettier-plugin-sort-imports"],
+  "importOrderParserPlugins": ["typescript", "jsx", "decorators"]
 }

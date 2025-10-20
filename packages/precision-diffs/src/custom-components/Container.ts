@@ -1,3 +1,5 @@
+'use client';
+
 import styles from '../style.css?raw';
 
 // If HTMLElement is undefined it usually means we are in a server environment
@@ -26,3 +28,12 @@ if (typeof HTMLElement !== 'undefined') {
 
   customElements.define('pjs-container', PJSContainer);
 }
+
+// Generate a hash of the style injection
+// import crypto from 'node:crypto';
+// const hash = crypto
+//   .createHash('sha256')
+//   .update(Buffer.from(styles, 'utf8'))
+//   .digest('base64');
+
+// console.log(`sha256-${hash}`);
