@@ -13,13 +13,10 @@ import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
   type ReactNode,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from 'react';
-
-const BLANK_FILE = { name: '__', contents: '' };
 
 interface FileDiffProps<LAnnotation> {
   oldFile: FileContents;
@@ -42,41 +39,28 @@ export function FileDiff<LAnnotation = undefined>({
   renderAnnotation,
   renderHeaderMetadata,
 }: FileDiffProps<LAnnotation>) {
+  'use no memo';
   const [diffRenderer] = useState(
     () => new FileDiffUI<LAnnotation>(options, true)
   );
   const ref = useRef<HTMLElement>(null);
-  const optionsRef = useRef(options);
-  const filesRef = useRef<[FileContents, FileContents]>([
-    BLANK_FILE,
-    BLANK_FILE,
-  ]);
-
   // NOTE(amadeus): This is all a temporary hack until we can figure out proper
   // innerHTML shadow dom stuff
   useLayoutEffect(() => {
-    const [prevOldFile, prevNewFile] = filesRef.current;
-    const hasFileChange =
-      !deepEqual(prevOldFile, oldFile) || !deepEqual(prevNewFile, newFile);
-
-    let hasOptionsChange = false;
-    if (!deepEqual(optionsRef.current, options)) {
-      optionsRef.current = options;
-      hasOptionsChange = true;
+    let forceRender = false;
+    if (!deepEqual(diffRenderer.options, options)) {
+      forceRender = true;
       diffRenderer.setOptions(options);
     }
-    if (hasFileChange || hasOptionsChange) {
-      filesRef.current = [oldFile, newFile];
-      void diffRenderer.render({
-        forceRender: true,
-        oldFile,
-        newFile,
-        fileContainer: ref.current ?? undefined,
-        lineAnnotations: annotations,
-      });
-    }
+    void diffRenderer.render({
+      forceRender,
+      oldFile,
+      newFile,
+      fileContainer: ref.current ?? undefined,
+      lineAnnotations: annotations,
+    });
   });
-  useEffect(() => () => diffRenderer.cleanUp(), [diffRenderer]);
+  // useEffect(() => () => diffRenderer.cleanUp(), [diffRenderer]);
   const metadata = renderHeaderMetadata?.({ oldFile, newFile });
   return (
     <pjs-container ref={ref} className={className} style={style}>
