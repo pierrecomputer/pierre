@@ -237,7 +237,7 @@ export class FileRenderer<LAnnotation = undefined> {
           {
             type: 'annotation',
             hunkIndex: 0,
-            diffLineIndex: lineIndex,
+            lineIndex,
             annotations: annotations.map((annotation) =>
               getLineAnnotationId(annotation)
             ),

@@ -179,8 +179,7 @@ export interface SharedRenderState {
 export interface AnnotationSpan {
   type: 'annotation';
   hunkIndex: number;
-  // FIXME: probably shouldn't have the word `diff` in it
-  diffLineIndex: number;
+  lineIndex: number;
   annotations: string[];
 }
 
