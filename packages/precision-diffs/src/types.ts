@@ -12,6 +12,8 @@ import type {
 export interface FileContents {
   name: string;
   contents: string;
+  // Technically our diff library can take a `header` property, but we don't
+  // have any way of rendering it at the moment
   header?: string;
 }
 
@@ -47,7 +49,7 @@ export type PJSHighlighter = HighlighterGeneric<
   PJSThemeNames
 >;
 
-export type FileTypes =
+export type ChangeTypes =
   | 'change'
   | 'rename-pure'
   | 'rename-changed'
@@ -72,7 +74,7 @@ export interface Hunk {
 export interface FileDiffMetadata {
   name: string;
   prevName: string | undefined;
-  type: FileTypes;
+  type: ChangeTypes;
   hunks: Hunk[];
   lines: number;
   oldLines?: string[];

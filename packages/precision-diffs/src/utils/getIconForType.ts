@@ -1,6 +1,6 @@
-import type { FileTypes } from '../types';
+import type { ChangeTypes } from '../types';
 
-export function getIconForType(type: FileTypes | 'file') {
+export function getIconForType(type: ChangeTypes | 'file') {
   switch (type) {
     case 'file':
       return 'pjs-file';
