@@ -601,7 +601,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const resolvedSpan: AnnotationSpan = {
           type: 'annotation',
           hunkIndex,
-          diffLineIndex: unresolvedSpan.span.diffLineIndex,
+          lineIndex: unresolvedSpan.span.lineIndex,
           annotations: [],
         };
         if (unresolvedSpan.type === 'addition') {
@@ -736,7 +736,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             deletionLineNumber: deletionLineNumber + 1,
             additionLineNumber: additionLineNumber + 1,
             hunkIndex,
-            diffLineIndex: unifiedContent.length,
+            lineIndex: unifiedContent.length,
             deletionAnnotations,
             additionAnnotations,
             unified: true,
@@ -759,7 +759,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             deletionLineNumber: deletionLineNumber + 1,
             additionLineNumber: additionLineNumber + 1,
             hunkIndex,
-            diffLineIndex: lineIndex,
+            lineIndex,
             deletionAnnotations,
             additionAnnotations,
             unified: false,
@@ -817,7 +817,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const span = createSingleAnnotationSpan({
           rowNumber: deletionLineNumber + 1,
           hunkIndex,
-          diffLineIndex: lineIndex,
+          lineIndex,
           annotationMap: this.deletionAnnotations,
         });
         addToChangeGroup('deletion', line, span);
@@ -841,7 +841,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const span = createSingleAnnotationSpan({
           rowNumber: additionLineNumber + 1,
           hunkIndex,
-          diffLineIndex: lineIndex,
+          lineIndex,
           annotationMap: this.additionAnnotations,
         });
         addToChangeGroup('addition', line, span);
@@ -1093,7 +1093,7 @@ function createDiffSpanDecoration({
 
 interface CreateSingleAnnotationProps<LAnnotation> {
   hunkIndex: number;
-  diffLineIndex: number;
+  lineIndex: number;
   rowNumber: number;
   annotationMap: AnnotationLineMap<LAnnotation>;
 }
@@ -1101,13 +1101,13 @@ interface CreateSingleAnnotationProps<LAnnotation> {
 function createSingleAnnotationSpan<LAnnotation>({
   rowNumber,
   hunkIndex,
-  diffLineIndex,
+  lineIndex,
   annotationMap,
 }: CreateSingleAnnotationProps<LAnnotation>): AnnotationSpan | undefined {
   const span: AnnotationSpan = {
     type: 'annotation',
     hunkIndex,
-    diffLineIndex,
+    lineIndex,
     annotations: [],
   };
   for (const anno of annotationMap[rowNumber] ?? []) {
@@ -1120,7 +1120,7 @@ interface CreateMirroredAnnotationSpanProps<LAnnotation> {
   deletionLineNumber: number;
   additionLineNumber: number;
   hunkIndex: number;
-  diffLineIndex: number;
+  lineIndex: number;
   deletionAnnotations: AnnotationLineMap<LAnnotation>;
   additionAnnotations: AnnotationLineMap<LAnnotation>;
 }
@@ -1135,7 +1135,7 @@ function createMirroredAnnotationSpan<LAnnotation>({
   deletionLineNumber,
   additionLineNumber,
   hunkIndex,
-  diffLineIndex,
+  lineIndex,
   deletionAnnotations,
   additionAnnotations,
   unified,
@@ -1162,7 +1162,7 @@ function createMirroredAnnotationSpan<LAnnotation>({
     return {
       type: 'annotation',
       hunkIndex,
-      diffLineIndex,
+      lineIndex,
       annotations: dAnnotations,
     };
   }
@@ -1170,13 +1170,13 @@ function createMirroredAnnotationSpan<LAnnotation>({
     {
       type: 'annotation',
       hunkIndex,
-      diffLineIndex,
+      lineIndex,
       annotations: dAnnotations,
     },
     {
       type: 'annotation',
       hunkIndex,
-      diffLineIndex,
+      lineIndex,
       annotations: aAnnotations,
     },
   ];
@@ -1221,10 +1221,7 @@ function pushOrMergeSpan(
     let merged = false;
     for (const item of spans) {
       if (item.type === 'annotation') {
-        if (
-          span.type === 'annotation' &&
-          span.diffLineIndex === item.diffLineIndex
-        ) {
+        if (span.type === 'annotation' && span.lineIndex === item.lineIndex) {
           merged = true;
           item.annotations = mergeAnnotations(
             item.annotations,
@@ -1241,7 +1238,7 @@ function pushOrMergeSpan(
     }
     const spanMarkers: (AnnotationSpan | 0)[] = new Array(gapSize).fill(0);
     for (const annotation of annotations) {
-      const annotationIndex = annotation.diffLineIndex - lineInfo.lineIndex;
+      const annotationIndex = annotation.lineIndex - lineInfo.lineIndex;
       const currentItem = spanMarkers[annotationIndex];
       if (currentItem === 0 || currentItem == null) {
         spanMarkers.splice(annotationIndex, 0, annotation);

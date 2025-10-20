@@ -128,7 +128,7 @@ export function createAnnotationElement(span: AnnotationSpan): Element {
       }),
     ],
     properties: {
-      'data-line-annotation': `${span.hunkIndex},${span.diffLineIndex}`,
+      'data-line-annotation': `${span.hunkIndex},${span.lineIndex}`,
     },
   });
 }
