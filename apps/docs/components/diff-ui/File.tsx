@@ -15,6 +15,8 @@ import {
   useRef,
 } from 'react';
 
+export type { FileContents };
+
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
