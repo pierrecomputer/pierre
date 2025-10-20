@@ -12,7 +12,6 @@ import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
   type ReactNode,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -37,6 +36,7 @@ export function File<LAnnotations = undefined>({
   renderAnnotation,
   renderHeaderMetadata,
 }: FileProps<LAnnotations>) {
+  'use no memo';
   const [fileInstance] = useState(() => new FileUI(options, true));
   const ref = useRef<HTMLElement>(null);
 
@@ -51,7 +51,7 @@ export function File<LAnnotations = undefined>({
       forceRender,
     });
   });
-  useEffect(() => () => fileInstance.cleanUp(), [fileInstance]);
+  // useEffect(() => () => fileInstance.cleanUp(), [fileInstance]);
 
   const metadata = renderHeaderMetadata?.(file);
   return (
