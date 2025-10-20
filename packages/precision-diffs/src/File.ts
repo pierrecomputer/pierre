@@ -139,7 +139,10 @@ export class File<LAnnotation = undefined> {
 
   cleanUp() {
     this.fileRenderer.cleanUp();
+    this.headerRenderer.cleanUp();
     this.pre = undefined;
+    this.headerElement?.parentNode?.removeChild(this.headerElement);
+    this.headerElement = undefined;
     if (!this.isReact) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
