@@ -95,7 +95,11 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  cleanUp() {}
+  cleanUp() {
+    this.highlighter = undefined;
+    this.fileContent = undefined;
+    this.queuedFile = undefined;
+  }
 
   private computedLang: SupportedLanguages = 'text';
   private queuedFile: FileContents | undefined;

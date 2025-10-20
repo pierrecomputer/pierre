@@ -1,5 +1,3 @@
-'use client';
-
 import {
   type DiffFileRendererOptions,
   type DiffLineAnnotation,
@@ -13,10 +11,13 @@ import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
   type ReactNode,
+  useEffect,
   useLayoutEffect,
   useRef,
-  useState,
 } from 'react';
+
+const useIsometricEffect =
+  typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface FileDiffProps<LAnnotation> {
   oldFile: FileContents;
@@ -40,19 +41,15 @@ export function FileDiff<LAnnotation = undefined>({
   renderHeaderMetadata,
 }: FileDiffProps<LAnnotation>) {
   'use no memo';
-  const [diffRenderer] = useState(
-    () => new FileDiffUI<LAnnotation>(options, true)
-  );
+  const instanceRef = useRef<FileDiffUI<LAnnotation> | null>(null);
   const ref = useRef<HTMLElement>(null);
   // NOTE(amadeus): This is all a temporary hack until we can figure out proper
   // innerHTML shadow dom stuff
-  useLayoutEffect(() => {
-    let forceRender = false;
-    if (!deepEqual(diffRenderer.options, options)) {
-      forceRender = true;
-      diffRenderer.setOptions(options);
-    }
-    void diffRenderer.render({
+  useIsometricEffect(() => {
+    instanceRef.current ??= new FileDiffUI<LAnnotation>(options, true);
+    const forceRender = !deepEqual(instanceRef.current.options, options);
+    instanceRef.current.setOptions(options);
+    void instanceRef.current.render({
       forceRender,
       oldFile,
       newFile,
@@ -60,7 +57,13 @@ export function FileDiff<LAnnotation = undefined>({
       lineAnnotations: annotations,
     });
   });
-  // useEffect(() => () => diffRenderer.cleanUp(), [diffRenderer]);
+  useIsometricEffect(
+    () => () => {
+      instanceRef.current?.cleanUp();
+      instanceRef.current = null;
+    },
+    []
+  );
   const metadata = renderHeaderMetadata?.({ oldFile, newFile });
   return (
     <pjs-container ref={ref} className={className} style={style}>

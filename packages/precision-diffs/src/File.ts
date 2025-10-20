@@ -138,10 +138,12 @@ export class File<LAnnotation = undefined> {
   }
 
   cleanUp() {
-    this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     this.fileRenderer.cleanUp();
-    this.fileContainer = undefined;
     this.pre = undefined;
+    if (!this.isReact) {
+      this.fileContainer?.parentNode?.removeChild(this.fileContainer);
+    }
+    this.fileContainer = undefined;
   }
 
   private file: FileContents | undefined;
