@@ -165,8 +165,7 @@ export type LineTypes =
 export interface LineInfo {
   type: LineTypes;
   lineNumber: number;
-  // FIXME: probably shouldn't have the word `diff` in it
-  diffLineIndex: number;
+  lineIndex: number;
   metadataContent?: string;
   spans?: LineSpans[];
 }
