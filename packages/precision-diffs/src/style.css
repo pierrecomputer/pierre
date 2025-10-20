@@ -282,6 +282,14 @@ code {
   padding-top: 0;
 }
 
+[data-pjs][data-overflow='wrap'] {
+  padding-block: var(--pjs-gap);
+}
+
+[data-pjs-header] + [data-icon-sprite] + [data-pjs][data-overflow='wrap'] {
+  padding-top: 0;
+}
+
 [data-type='split'][data-overflow='wrap'] [data-code] {
   display: contents;
 }
