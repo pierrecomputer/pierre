@@ -18,22 +18,22 @@ interface BaseProps {
   renderCustomMetadata?: RenderCustomFileMetadata;
 }
 
-interface DiffHeaderThemeRendererOptions
+interface FileHeaderRendererThemeOptions
   extends ThemeRendererOptions,
     BaseProps {}
 
-interface DiffHeaderThemesRendererOptions
+interface FileHeaderRendererThemesOptions
   extends ThemesRendererOptions,
     BaseProps {}
 
-export type DiffHeaderRendererOptions =
-  | DiffHeaderThemeRendererOptions
-  | DiffHeaderThemesRendererOptions;
+export type FileHeaderRendererOptions =
+  | FileHeaderRendererThemeOptions
+  | FileHeaderRendererThemesOptions;
 
-export class DiffHeaderRenderer {
+export class FileHeaderRenderer {
   private highlighter: PJSHighlighter | undefined;
 
-  constructor(public options: DiffHeaderRendererOptions) {}
+  constructor(public options: FileHeaderRendererOptions) {}
 
   cleanUp() {
     this.highlighter = undefined;
@@ -41,12 +41,12 @@ export class DiffHeaderRenderer {
     this.queuedRender = undefined;
   }
 
-  private mergeOptions(options: Partial<DiffHeaderRendererOptions>) {
+  private mergeOptions(options: Partial<FileHeaderRendererOptions>) {
     // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
-  setOptions(options: DiffHeaderRendererOptions) {
+  setOptions(options: FileHeaderRendererOptions) {
     this.options = options;
   }
 

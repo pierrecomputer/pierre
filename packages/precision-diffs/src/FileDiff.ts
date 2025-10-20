@@ -1,11 +1,11 @@
 import deepEquals from 'fast-deep-equal';
 import type { Element } from 'hast';
 
-import {
-  DiffHeaderRenderer,
-  type DiffHeaderRendererOptions,
-} from './DiffHeaderRenderer';
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
+import {
+  FileHeaderRenderer,
+  type FileHeaderRendererOptions,
+} from './FileHeaderRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
 import { HEADER_METADATA_SLOT_ID } from './constants';
 import './custom-components/Container';
@@ -118,7 +118,7 @@ export class FileDiff<LAnnotation = undefined> {
   private pre: HTMLPreElement | undefined;
 
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
-  private headerRenderer: DiffHeaderRenderer;
+  private headerRenderer: FileHeaderRenderer;
 
   private observedNodes = new Map<
     HTMLElement,
@@ -136,7 +136,7 @@ export class FileDiff<LAnnotation = undefined> {
   ) {
     this.options = options;
     this.hunksRenderer = new DiffHunksRenderer(options);
-    this.headerRenderer = new DiffHeaderRenderer(options);
+    this.headerRenderer = new FileHeaderRenderer(options);
   }
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
@@ -265,7 +265,7 @@ export class FileDiff<LAnnotation = undefined> {
       }
     } else {
       const { theme, themes, themeType } = this.options;
-      const options: DiffHeaderRendererOptions =
+      const options: FileHeaderRendererOptions =
         theme != null
           ? { theme, renderCustomMetadata, themeType }
           : { themes, renderCustomMetadata, themeType };
