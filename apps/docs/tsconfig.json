@@ -12,6 +12,9 @@
   "references": [
     {
       "path": "../../packages/precision-diffs"
+    },
+    {
+      "path": "../../packages/storage-elements-next"
     }
   ],
   "compilerOptions": {

@@ -1,5 +1,11 @@
 import type { components } from '@octokit/openapi-types';
-import { type NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+
+type NextRequestLike = {
+  cookies: {
+    get(name: string): { value: string } | undefined;
+  };
+};
 
 type Installation = components['schemas']['installation'];
 
@@ -75,7 +81,7 @@ export class CodeStorageGitHubInstallations {
       .filter((account): account is Owner => account !== null);
   }
 
-  async handleRequest(request: NextRequest) {
+  async handleRequest(request: NextRequestLike) {
     const token = request.cookies.get(this.cookieName)?.value;
 
     if (token == null || token.trim() === '') {

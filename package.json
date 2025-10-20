@@ -100,7 +100,8 @@
   "overrides": {
     "typescript": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "next": "catalog:"
   },
   "devDependencies": {
     "@eslint/eslintrc": "catalog:",

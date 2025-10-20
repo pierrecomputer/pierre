@@ -1,4 +1,7 @@
-import type { CodeRendererOptions, LineAnnotation } from '@pierre/precision-diffs';
+import type {
+  CodeRendererOptions,
+  LineAnnotation,
+} from '@pierre/precision-diffs';
 
 import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import mdContent from './example_md.txt?raw';

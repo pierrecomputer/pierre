@@ -23,10 +23,21 @@ export default [
       '{packages,apps}/*/next-env.d.ts',
       '{packages,apps}/*/.source/**',
       'apps/docs/components/icons/icons/**',
+      'packages/storage-elements/blocks/git-platform-sync/api/**/*',
+      'packages/storage-elements/blocks/git-platform-sync/pages/**/*',
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ['**/*.js'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {

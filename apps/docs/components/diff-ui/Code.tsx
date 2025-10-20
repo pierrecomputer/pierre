@@ -5,12 +5,7 @@ import {
   type CodeRendererOptions,
 } from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
-import {
-  type CSSProperties,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type CSSProperties, useLayoutEffect, useRef, useState } from 'react';
 
 interface CodeProps {
   text: string;
@@ -42,7 +37,5 @@ export function Code({ text, options, className, style }: CodeProps) {
     }
   });
 
-  return (
-    <div ref={ref} className={className} style={style} />
-  );
+  return <div ref={ref} className={className} style={style} />;
 }

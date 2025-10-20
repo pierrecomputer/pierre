@@ -8,6 +8,6 @@ const successCallback = new CodeStorageSuccessCallback({
   env: process.env.NODE_ENV,
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   return successCallback.handleRequest(request);
 }
