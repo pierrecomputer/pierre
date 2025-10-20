@@ -1,9 +1,11 @@
-import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import { File } from '@/components/diff-ui/File';
 import { IconCiWarningFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { FileContents } from '@pierre/precision-diffs';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { CopyCodeButton } from './CopyCodeButton';
 import type { DocsExampleTypes } from './types';
 
 const CODE_VANILLA_SINGLE_FILE = `import {
@@ -143,6 +145,26 @@ function Patches() {
   );
 }`;
 
+const ReactSingleFile: FileContents = {
+  name: 'react_single_file.tsx',
+  contents: CODE_REACT_SINGLE_FILE,
+};
+
+const ReactPatchFile: FileContents = {
+  name: 'react_patch_file.tsx',
+  contents: CODE_REACT_PATCH_FILE,
+};
+
+const VanillaSingleFile: FileContents = {
+  name: 'vanilla_single_file.ts',
+  contents: CODE_VANILLA_SINGLE_FILE,
+};
+
+const VanillaPatchFile: FileContents = {
+  name: 'vanilla_single_file.ts',
+  contents: CODE_VANILLA_PATCH_FILE,
+};
+
 interface OverviewProps {
   exampleType: DocsExampleTypes;
   setExampleType(type: DocsExampleTypes): unknown;
@@ -152,6 +174,20 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
   const [example, setExample] = useState<'single-file' | 'patch-file'>(
     'single-file'
   );
+  const file = (() => {
+    if (exampleType === 'react') {
+      if (example === 'single-file') {
+        return ReactSingleFile;
+      } else {
+        return ReactPatchFile;
+      }
+    }
+    if (example === 'single-file') {
+      return VanillaSingleFile;
+    } else {
+      return VanillaPatchFile;
+    }
+  })();
   return (
     <section className="space-y-4">
       <h2>Overview</h2>
@@ -229,35 +265,14 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
           <ButtonGroupItem value="patch-file">Patch file</ButtonGroupItem>
         </ButtonGroup>
       </div>
-      {exampleType === 'react' ? (
-        <>
-          {example === 'single-file' ? (
-            <SimpleCodeBlock
-              code={CODE_REACT_SINGLE_FILE}
-              language="typescript"
-            />
-          ) : (
-            <SimpleCodeBlock
-              code={CODE_REACT_PATCH_FILE}
-              language="typescript"
-            />
-          )}
-        </>
-      ) : (
-        <>
-          {example === 'single-file' ? (
-            <SimpleCodeBlock
-              code={CODE_VANILLA_SINGLE_FILE}
-              language="typescript"
-            />
-          ) : (
-            <SimpleCodeBlock
-              code={CODE_VANILLA_PATCH_FILE}
-              language="typescript"
-            />
-          )}
-        </>
-      )}
+      <File
+        file={file}
+        options={{ themes: { dark: 'pierre-dark', light: 'pierre-light' } }}
+        className="rounded-md border-1 overflow-hidden"
+        renderHeaderMetadata={(file) => (
+          <CopyCodeButton content={file.contents} />
+        )}
+      />
     </section>
   );
 }
