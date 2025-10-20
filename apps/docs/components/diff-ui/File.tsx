@@ -4,12 +4,15 @@ import {
   type FileContents,
   type FileOptions,
   File as FileUI,
+  HEADER_METADATA_SLOT_ID,
   type LineAnnotation,
+  getLineAnnotationId,
 } from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
   type ReactNode,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -20,6 +23,7 @@ interface FileProps<LAnnotation> {
   options: FileOptions<LAnnotation>;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
+  renderHeaderMetadata?(file: FileContents): ReactNode;
   className?: string;
   style?: CSSProperties;
 }
@@ -30,8 +34,10 @@ export function File<LAnnotations = undefined>({
   options,
   className,
   style,
+  renderAnnotation,
+  renderHeaderMetadata,
 }: FileProps<LAnnotations>) {
-  const [fileInstance] = useState(() => new FileUI(options));
+  const [fileInstance] = useState(() => new FileUI(options, true));
   const ref = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
@@ -45,6 +51,21 @@ export function File<LAnnotations = undefined>({
       forceRender,
     });
   });
+  useEffect(() => () => fileInstance.cleanUp(), [fileInstance]);
 
-  return <pjs-container ref={ref} className={className} style={style} />;
+  const metadata = renderHeaderMetadata?.(file);
+  return (
+    <pjs-container ref={ref} className={className} style={style}>
+      {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
+      {renderAnnotation != null &&
+        lineAnnotations?.map((annotation) => (
+          <div
+            key={getLineAnnotationId(annotation)}
+            slot={getLineAnnotationId(annotation)}
+          >
+            {renderAnnotation(annotation)}
+          </div>
+        ))}
+    </pjs-container>
+  );
 }

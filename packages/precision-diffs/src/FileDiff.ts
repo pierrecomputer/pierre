@@ -21,7 +21,7 @@ import type {
   ObservedGridNodes,
   PJSHighlighter,
   PJSThemeNames,
-  RenderCustomDiffMetadata,
+  RenderHeaderMetadataCallback,
   ThemeRendererOptions,
   ThemeTypes,
   ThemesRendererOptions,
@@ -78,7 +78,7 @@ type HandleMouseEventProps =
 
 interface DiffFileBaseOptions<LAnnotation> {
   disableFileHeader?: boolean;
-  renderCustomMetadata?: RenderCustomDiffMetadata;
+  renderHeaderMetadata?: RenderHeaderMetadataCallback;
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
@@ -277,7 +277,7 @@ export class FileDiff<LAnnotation = undefined> {
     ]);
 
     if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer, this.fileDiff);
+      this.applyHeaderToDOM(headerResult, fileContainer);
     }
     if (hunksResult != null) {
       this.applyHunksToDOM(hunksResult, pre, highlighter);
@@ -468,11 +468,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
-  private applyHeaderToDOM(
-    headerHTML: Element,
-    container: HTMLElement,
-    fileDiff: FileDiffMetadata
-  ) {
+  private applyHeaderToDOM(headerHTML: Element, container: HTMLElement) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerHTML);
     const newHeader = tempDiv.firstElementChild;
@@ -486,11 +482,18 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.headerElement = newHeader;
 
-    const { renderCustomMetadata } = this.options;
+    if (this.isReact) return;
+
+    const { renderHeaderMetadata: renderCustomMetadata } = this.options;
     if (this.headerMetadata != null) {
       this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
     }
-    const content = renderCustomMetadata?.(fileDiff) ?? undefined;
+    const content =
+      renderCustomMetadata?.({
+        oldFile: this.oldFile,
+        newFile: this.newFile,
+        fileDiff: this.fileDiff,
+      }) ?? undefined;
     if (content != null) {
       this.headerMetadata = document.createElement('div');
       this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
