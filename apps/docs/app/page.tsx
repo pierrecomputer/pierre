@@ -28,14 +28,7 @@ import { SplitUnified } from './diff-examples/SplitUnified';
 
 export default function Home() {
   return (
-    <div
-      className="min-h-screen max-w-5xl px-5 mx-auto"
-      style={
-        {
-          '--pjs-font-family': `var(--font-berkeley-mono)`,
-        } as React.CSSProperties
-      }
-    >
+    <div className="min-h-screen max-w-5xl px-5 mx-auto">
       <Header
         logo={
           <Header.Logo

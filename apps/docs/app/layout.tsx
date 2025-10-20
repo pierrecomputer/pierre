@@ -59,17 +59,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        style={
-          {
-            // display: 'flex',
-            // flexDirection: 'column',
-            // minHeight: '100vh',
-          }
-        }
-        className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable}`}
-      >
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable}`}
+    >
+      <body>
         <RootProvider>
           {children}
           <Toaster />

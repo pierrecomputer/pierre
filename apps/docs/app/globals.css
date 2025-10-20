@@ -147,3 +147,7 @@
   background-color: #ffff00;
   color: oklch(0.145 0 0);
 }
+
+:root {
+  --pjs-font-family: var(--font-berkeley-mono);
+}
