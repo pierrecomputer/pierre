@@ -10,6 +10,7 @@ import { SPLIT_WITH_NEWLINES } from './constants';
 import type {
   CodeToHastOptions,
   DecorationItem,
+  FileContents,
   LineAnnotation,
   LineInfo,
   PJSHighlighter,
@@ -28,7 +29,6 @@ import {
   createHastElement,
   createPreWrapperProperties,
 } from './utils/hast_utils';
-import type { FileContents } from './utils/parseDiffFromFile';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
