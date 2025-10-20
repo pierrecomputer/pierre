@@ -672,7 +672,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           unifiedContent.push(line);
           unifiedLineInfo[unifiedContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
-            number: additionLineNumber + 1,
+            lineNumber: additionLineNumber + 1,
             diffLineIndex,
           };
           const span = createMirroredAnnotationSpan({
@@ -690,12 +690,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           additionContent.push(line);
           deletionLineInfo[deletionContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
-            number: deletionLineNumber + 1,
+            lineNumber: deletionLineNumber + 1,
             diffLineIndex,
           };
           additionLineInfo[additionContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
-            number: additionLineNumber + 1,
+            lineNumber: additionLineNumber + 1,
             diffLineIndex,
           };
           const [deletionSpan, additionSpan] = createMirroredAnnotationSpan({
@@ -734,7 +734,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 : 'context',
           // NOTE(amadeus): Metadata lines do not have line numbers associated
           // with them
-          number: -1,
+          lineNumber: -1,
           diffLineIndex: -1,
           metadataContent: line.trim(),
         };
@@ -767,7 +767,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content.push(line);
         lineInfo[content.length] = {
           type: 'change-deletion',
-          number: deletionLineNumber + 1,
+          lineNumber: deletionLineNumber + 1,
           diffLineIndex,
         };
         pushOrMergeSpan(span, content.length, lineInfo);
@@ -792,7 +792,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content.push(line);
         lineInfo[content.length] = {
           type: 'change-addition',
-          number: additionLineNumber + 1,
+          lineNumber: additionLineNumber + 1,
           diffLineIndex,
         };
         pushOrMergeSpan(span, content.length, lineInfo);
@@ -1140,7 +1140,7 @@ function pushOrMergeSpan(
   if (lineInfo == null && index === 0 && span.type === 'gap') {
     lineInfo = {
       type: 'context',
-      number: -1,
+      lineNumber: -1,
       diffLineIndex: -1,
       spans: [],
     };

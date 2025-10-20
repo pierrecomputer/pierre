@@ -229,7 +229,7 @@ export class FileRenderer<LAnnotation = undefined> {
       const lineInfo: LineInfo = {
         type: 'context',
         diffLineIndex: lineIndex,
-        number: startingLineNumber + lineIndex,
+        lineNumber: startingLineNumber + lineIndex,
       };
       const annotations = this.lineAnnotations[startingLineNumber + lineIndex];
       if (annotations != null) {

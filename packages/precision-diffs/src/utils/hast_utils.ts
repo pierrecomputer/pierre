@@ -192,7 +192,7 @@ export function convertLine(
         tagName: 'span',
         children:
           lineInfo.metadataContent == null
-            ? [{ type: 'text', value: `${lineInfo.number}` }]
+            ? [{ type: 'text', value: `${lineInfo.lineNumber}` }]
             : [],
         properties: { 'data-column-number': '' },
       })
@@ -202,7 +202,8 @@ export function convertLine(
     tagName: 'div',
     children,
     properties: {
-      'data-line': lineInfo.metadataContent == null ? `${lineInfo.number}` : '',
+      'data-line':
+        lineInfo.metadataContent == null ? `${lineInfo.lineNumber}` : '',
       'data-line-type': lineInfo.type,
     },
   });
