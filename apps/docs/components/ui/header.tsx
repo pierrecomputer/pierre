@@ -102,7 +102,6 @@ function HeaderNavLink({
 
   return (
     <NavigationMenuItem>
-      {/* @ts-expect-error todo: Alex type check this */}
       <NavigationMenuLink
         href={hrefString}
         className={cn(
