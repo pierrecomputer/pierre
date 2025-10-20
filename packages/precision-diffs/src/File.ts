@@ -1,5 +1,7 @@
 import deepEquals from 'fast-deep-equal';
+import type { Element } from 'hast';
 
+import { FileHeaderRenderer } from './FileHeaderRenderer';
 import {
   type FileRenderResult,
   FileRenderer,
@@ -7,18 +9,20 @@ import {
   type FileRendererThemesOptions,
 } from './FileRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
+import { HEADER_METADATA_SLOT_ID } from './constants';
 import svgSprite from './sprite.txt?raw';
 import type {
+  FileContents,
   LineAnnotation,
   LineEventBaseProps,
   ObservedGridNodes,
   PJSHighlighter,
   PJSThemeNames,
+  RenderCustomFileMetadata,
   ThemeTypes,
 } from './types';
 import { getLineAnnotationId } from './utils/getLineAnnotationId';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
-import type { FileContents } from './utils/parseDiffFromFile';
 
 export interface OnLineClickProps extends LineEventBaseProps {
   event: PointerEvent;
@@ -45,6 +49,8 @@ interface FileRenderProps<LAnnotation> {
 }
 
 interface BaseOptions<LAnnotation> {
+  disableFileHeader?: boolean;
+  renderCustomMetadata?: RenderCustomFileMetadata;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
@@ -67,6 +73,7 @@ export type FileOptions<LAnnotation> =
 
 export class File<LAnnotation = undefined> {
   private fileRenderer: FileRenderer<LAnnotation>;
+  private headerRenderer: FileHeaderRenderer;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
@@ -79,6 +86,7 @@ export class File<LAnnotation = undefined> {
 
   constructor(public options: FileOptions<LAnnotation>) {
     this.fileRenderer = new FileRenderer<LAnnotation>(options);
+    this.headerRenderer = new FileHeaderRenderer(options);
   }
 
   setOptions(options: FileOptions<LAnnotation>) {
@@ -156,10 +164,28 @@ export class File<LAnnotation = undefined> {
       containerWrapper.appendChild(fileContainer);
     }
     const pre = this.getOrCreatePre(fileContainer);
-    const [highlighter, fileResult] = await Promise.all([
+
+    const { disableFileHeader = false } = this.options;
+    if (disableFileHeader) {
+      this.headerRenderer.cleanUp();
+      // Remove existing header from DOM
+      if (this.headerElement != null) {
+        this.headerElement.parentNode?.removeChild(this.headerElement);
+        this.headerElement = undefined;
+      }
+    } else {
+      this.headerRenderer.setOptions(this.options);
+    }
+
+    const [highlighter, headerResult, fileResult] = await Promise.all([
       getSharedHighlighter({ themes: this.getThemes(), langs: [] }),
+      this.headerRenderer.render(file),
       this.fileRenderer.render(file),
     ]);
+
+    if (headerResult != null) {
+      this.applyHeaderToDOM(headerResult, fileContainer, file);
+    }
 
     if (fileResult != null) {
       this.applyHunksToDOM(fileResult, pre, highlighter);
@@ -198,6 +224,43 @@ export class File<LAnnotation = undefined> {
     this.code ??= createCodeNode();
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
     pre.appendChild(this.code);
+  }
+
+  private headerElement: HTMLElement | undefined;
+  private headerMetadata: HTMLElement | undefined;
+  private applyHeaderToDOM(
+    headerHTML: Element,
+    container: HTMLElement,
+    file: FileContents
+  ) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerHTML);
+    const newHeader = tempDiv.firstElementChild;
+    if (!(newHeader instanceof HTMLElement)) {
+      return;
+    }
+    if (this.headerElement != null) {
+      container.shadowRoot?.replaceChild(newHeader, this.headerElement);
+    } else {
+      container.shadowRoot?.prepend(newHeader);
+    }
+    this.headerElement = newHeader;
+
+    const { renderCustomMetadata } = this.options;
+    if (this.headerMetadata != null) {
+      this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+    }
+    const content = renderCustomMetadata?.(file) ?? undefined;
+    if (content != null) {
+      this.headerMetadata = document.createElement('div');
+      this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
+      if (content instanceof Element) {
+        this.headerMetadata.appendChild(content);
+      } else {
+        this.headerMetadata.innerText = `${content}`;
+      }
+      container.appendChild(this.headerMetadata);
+    }
   }
 
   spriteSVG: SVGElement | undefined;

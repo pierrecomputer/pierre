@@ -1,14 +1,8 @@
 import { createTwoFilesPatch } from 'diff';
 
 import { SPLIT_WITH_NEWLINES } from '../constants';
-import type { FileDiffMetadata } from '../types';
+import type { FileContents, FileDiffMetadata } from '../types';
 import { parsePatchFiles } from './parsePatchFiles';
-
-export interface FileContents {
-  name: string;
-  contents: string;
-  header?: string;
-}
 
 export function parseDiffFromFile(
   oldFile: FileContents,

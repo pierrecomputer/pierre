@@ -3,10 +3,10 @@ import { toHtml } from 'hast-util-to-html';
 
 import { getSharedHighlighter, hasLoadedThemes } from './SharedHighlighter';
 import type {
+  FileContents,
   FileDiffMetadata,
   PJSHighlighter,
   PJSThemeNames,
-  RenderCustomFileMetadata,
   ThemeRendererOptions,
   ThemeTypes,
   ThemesRendererOptions,
@@ -15,7 +15,6 @@ import { createFileHeaderElement } from './utils/hast_utils';
 
 interface BaseProps {
   themeType?: ThemeTypes;
-  renderCustomMetadata?: RenderCustomFileMetadata;
 }
 
 interface FileHeaderRendererThemeOptions
@@ -37,7 +36,7 @@ export class FileHeaderRenderer {
 
   cleanUp() {
     this.highlighter = undefined;
-    this.queuedRenderDiff = undefined;
+    this.queuedRenderFileOrDiff = undefined;
     this.queuedRender = undefined;
   }
 
@@ -74,11 +73,13 @@ export class FileHeaderRenderer {
     return { themes, langs: [] };
   }
 
-  diff: FileDiffMetadata | undefined;
-  private queuedRenderDiff: FileDiffMetadata | undefined;
+  fileOrDiff: FileDiffMetadata | FileContents | undefined;
+  private queuedRenderFileOrDiff: FileDiffMetadata | FileContents | undefined;
   private queuedRender: Promise<Element | undefined> | undefined;
-  async render(diff: FileDiffMetadata): Promise<Element | undefined> {
-    this.queuedRenderDiff = diff;
+  async render(
+    fileOrDiff: FileDiffMetadata | FileContents
+  ): Promise<Element | undefined> {
+    this.queuedRenderFileOrDiff = fileOrDiff;
     if (this.queuedRender != null) {
       return this.queuedRender;
     }
@@ -87,27 +88,27 @@ export class FileHeaderRenderer {
         this.highlighter = undefined;
       }
       this.highlighter ??= await this.initializeHighlighter();
-      if (this.queuedRenderDiff == null) {
+      if (this.queuedRenderFileOrDiff == null) {
         // If we get in here, it's likely we called cleanup and therefore we
         // should just return early with empty result
         return undefined;
       }
-      return this.renderHeader(this.queuedRenderDiff, this.highlighter);
+      return this.renderHeader(this.queuedRenderFileOrDiff, this.highlighter);
     })();
     const result = await this.queuedRender;
-    this.queuedRenderDiff = undefined;
+    this.queuedRenderFileOrDiff = undefined;
     this.queuedRender = undefined;
     return result;
   }
 
   private renderHeader(
-    diff: FileDiffMetadata,
+    fileOrDiff: FileDiffMetadata | FileContents,
     highlighter: PJSHighlighter
   ): Element {
-    this.diff = diff;
+    this.fileOrDiff = fileOrDiff;
     return createFileHeaderElement({
       ...this.options,
-      file: diff,
+      fileOrDiff,
       highlighter,
     });
   }

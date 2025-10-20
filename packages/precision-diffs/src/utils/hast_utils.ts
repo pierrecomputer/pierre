@@ -11,7 +11,9 @@ import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type {
   AnnotationSpan,
   BaseRendererOptions,
+  FileContents,
   FileDiffMetadata,
+  FileTypes,
   PJSHighlighter,
   PJSThemeNames,
   SharedRenderState,
@@ -259,7 +261,7 @@ export function createPreWrapperProperties({
 }
 
 interface CreateFileHeaderProps {
-  file: FileDiffMetadata;
+  fileOrDiff: FileDiffMetadata | FileContents;
   theme?: PJSThemeNames;
   themes?: ThemesType;
   highlighter: PJSHighlighter;
@@ -268,16 +270,16 @@ interface CreateFileHeaderProps {
 }
 
 export function createFileHeaderElement({
-  file,
+  fileOrDiff,
   theme,
   themes,
   highlighter,
   prefix,
   themeType = 'system',
 }: CreateFileHeaderProps): Element {
+  const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-pjs-header': '',
-    'data-change-type': file.type,
     style: getHighlighterThemeStyles({
       theme,
       themes,
@@ -285,6 +287,10 @@ export function createFileHeaderElement({
       prefix,
     }),
   };
+
+  if (fileDiff != null) {
+    properties['data-change-type'] = fileDiff.type;
+  }
 
   // If a theme is specified, then we should just override the themeType and
   // ignore whatever might be passed in
@@ -297,23 +303,40 @@ export function createFileHeaderElement({
 
   return createHastElement({
     tagName: 'div',
-    children: [createHeaderElement(file), createMetadataElement(file)],
+    children: [
+      createHeaderElement({
+        name: fileOrDiff.name,
+        prevName: 'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
+        iconType: fileDiff?.type ?? 'file',
+      }),
+      createMetadataElement(fileDiff),
+    ],
     properties,
   });
 }
 
-function createHeaderElement(file: FileDiffMetadata): Element {
+interface CreateHeaderElementOptions {
+  name: string;
+  prevName?: string;
+  iconType: FileTypes | 'file';
+}
+
+function createHeaderElement({
+  name,
+  prevName,
+  iconType,
+}: CreateHeaderElementOptions): Element {
   const children: ElementContent[] = [
     createIcon({
-      name: getIconForType(file.type),
-      properties: { 'data-change-icon': file.type },
+      name: getIconForType(iconType),
+      properties: { 'data-change-icon': iconType },
     }),
   ];
-  if (file.prevName != null) {
+  if (prevName != null) {
     children.push(
       createHastElement({
         tagName: 'div',
-        children: [createTextNode(file.prevName)],
+        children: [createTextNode(prevName)],
         properties: {
           'data-prev-name': '',
         },
@@ -331,7 +354,7 @@ function createHeaderElement(file: FileDiffMetadata): Element {
   children.push(
     createHastElement({
       tagName: 'div',
-      children: [createTextNode(file.name)],
+      children: [createTextNode(name)],
       properties: { 'data-title': '' },
     })
   );
@@ -342,44 +365,48 @@ function createHeaderElement(file: FileDiffMetadata): Element {
   });
 }
 
-function createMetadataElement(file: FileDiffMetadata): Element {
+function createMetadataElement(
+  fileDiff: FileDiffMetadata | undefined
+): Element {
   const children: ElementContent[] = [];
-  let additions = 0;
-  let deletions = 0;
-  for (const hunk of file.hunks) {
-    for (const line of hunk.hunkContent ?? []) {
-      if (line.startsWith('+')) {
-        additions++;
-      } else if (line.startsWith('-')) {
-        deletions++;
+  if (fileDiff != null) {
+    let additions = 0;
+    let deletions = 0;
+    for (const hunk of fileDiff.hunks) {
+      for (const line of hunk.hunkContent ?? []) {
+        if (line.startsWith('+')) {
+          additions++;
+        } else if (line.startsWith('-')) {
+          deletions++;
+        }
       }
     }
-  }
-  if (deletions > 0) {
-    children.push(
-      createHastElement({
-        tagName: 'span',
-        children: [createTextNode(`-${deletions}`)],
-        properties: { 'data-deletions-count': '' },
-      })
-    );
-  }
-  if (additions > 0) {
-    children.push(
-      createHastElement({
-        tagName: 'span',
-        children: [createTextNode(`+${additions}`)],
-        properties: { 'data-additions-count': '' },
-      })
-    );
-  }
-  if (deletions === 0 && additions === 0) {
-    children.push(
-      createHastElement({
-        tagName: 'span',
-        children: [createTextNode('NC')],
-      })
-    );
+    if (deletions > 0) {
+      children.push(
+        createHastElement({
+          tagName: 'span',
+          children: [createTextNode(`-${deletions}`)],
+          properties: { 'data-deletions-count': '' },
+        })
+      );
+    }
+    if (additions > 0) {
+      children.push(
+        createHastElement({
+          tagName: 'span',
+          children: [createTextNode(`+${additions}`)],
+          properties: { 'data-additions-count': '' },
+        })
+      );
+    }
+    if (deletions === 0 && additions === 0) {
+      children.push(
+        createHastElement({
+          tagName: 'span',
+          children: [createTextNode('NC')],
+        })
+      );
+    }
   }
   children.push(
     createHastElement({

@@ -15,22 +15,20 @@ import type {
   BaseRendererOptions,
   DiffLineAnnotation,
   DiffLineEventBaseProps,
+  FileContents,
   FileDiffMetadata,
   ObservedAnnotationNodes,
   ObservedGridNodes,
   PJSHighlighter,
   PJSThemeNames,
-  RenderCustomFileMetadata,
+  RenderCustomDiffMetadata,
   ThemeRendererOptions,
   ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { getLineAnnotationId } from './utils/getLineAnnotationId';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
-import {
-  type FileContents,
-  parseDiffFromFile,
-} from './utils/parseDiffFromFile';
+import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
 interface FileDiffRenderBaseProps<LAnnotation> {
   forceRender?: boolean;
@@ -80,7 +78,7 @@ type HandleMouseEventProps =
 
 interface DiffFileBaseOptions<LAnnotation> {
   disableFileHeader?: boolean;
-  renderCustomMetadata?: RenderCustomFileMetadata;
+  renderCustomMetadata?: RenderCustomDiffMetadata;
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
@@ -254,7 +252,7 @@ export class FileDiff<LAnnotation = undefined> {
     // This is kinda jank, lol
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
-    const { renderCustomMetadata, disableFileHeader = false } = this.options;
+    const { disableFileHeader = false } = this.options;
 
     if (disableFileHeader) {
       this.headerRenderer.cleanUp();
@@ -266,9 +264,7 @@ export class FileDiff<LAnnotation = undefined> {
     } else {
       const { theme, themes, themeType } = this.options;
       const options: FileHeaderRendererOptions =
-        theme != null
-          ? { theme, renderCustomMetadata, themeType }
-          : { themes, renderCustomMetadata, themeType };
+        theme != null ? { theme, themeType } : { themes, themeType };
       this.headerRenderer.setOptions(options);
     }
 

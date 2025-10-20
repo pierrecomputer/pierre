@@ -9,6 +9,12 @@ import type {
   ThemedToken,
 } from 'shiki';
 
+export interface FileContents {
+  name: string;
+  contents: string;
+  header?: string;
+}
+
 export type {
   BundledLanguage,
   CodeToHastOptions,
@@ -107,8 +113,12 @@ export interface BaseRendererOptions extends BaseCodeProps {
   maxLineLengthForHighlighting?: number; // 1000 is default
 }
 
-export type RenderCustomFileMetadata = (
+export type RenderCustomDiffMetadata = (
   file: FileDiffMetadata
+) => Element | null | undefined | string | number;
+
+export type RenderCustomFileMetadata = (
+  file: FileContents
 ) => Element | null | undefined | string | number;
 
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
