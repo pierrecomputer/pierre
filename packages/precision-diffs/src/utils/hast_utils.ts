@@ -11,9 +11,9 @@ import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type {
   AnnotationSpan,
   BaseRendererOptions,
+  ChangeTypes,
   FileContents,
   FileDiffMetadata,
-  FileTypes,
   PJSHighlighter,
   PJSThemeNames,
   SharedRenderState,
@@ -318,7 +318,7 @@ export function createFileHeaderElement({
 interface CreateHeaderElementOptions {
   name: string;
   prevName?: string;
-  iconType: FileTypes | 'file';
+  iconType: ChangeTypes | 'file';
 }
 
 function createHeaderElement({
