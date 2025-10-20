@@ -2,11 +2,8 @@ import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
 } from '../DiffHunksRenderer';
-import type { LineAnnotation } from '../types';
-import {
-  type FileContents,
-  parseDiffFromFile,
-} from '../utils/parseDiffFromFile';
+import type { FileContents, LineAnnotation } from '../types';
+import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 
 export type PreloadFileDiffOptions<LAnnotation> = {
   oldFile: FileContents;
