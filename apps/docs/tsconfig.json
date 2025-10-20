@@ -19,7 +19,7 @@
   ],
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -31,8 +31,6 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
     "plugins": [
       {
         "name": "next"
