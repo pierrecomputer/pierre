@@ -1,6 +1,8 @@
-import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { FileContents } from '@pierre/precision-diffs';
 import { useState } from 'react';
+
+import { DocsCodeExample } from './DocsCodeExample';
 
 export function VanillaAPI() {
   const [componentType, setComponentType] = useState<'file-diff' | 'file'>(
@@ -39,9 +41,9 @@ export function VanillaAPI() {
         <ButtonGroupItem value="file">File</ButtonGroupItem>
       </ButtonGroup>
       {componentType === 'file-diff' ? (
-        <SimpleCodeBlock code={CODE_FILE_DIFF} language="typescript" />
+        <DocsCodeExample file={CODE_FILE_DIFF} />
       ) : (
-        <SimpleCodeBlock code="// Coming Soon" language="typescript" />
+        <DocsCodeExample file={CODE_COMING_SOON} />
       )}
       <h4>Hunk Separators</h4>
       <p>
@@ -49,7 +51,7 @@ export function VanillaAPI() {
         with the content, there's a few tricks you will need to employ. See the
         following code snippet:
       </p>
-      <SimpleCodeBlock code={CODE_CUSTOM_HUNK_EXAMPLE} language="typescript" />
+      <DocsCodeExample file={CODE_CUSTOM_HUNK_EXAMPLE} />
       <h3>Classes</h3>
       <p>
         These core classes can be thought of as the building blocks for the
@@ -82,15 +84,9 @@ export function VanillaAPI() {
         </ButtonGroupItem>
       </ButtonGroup>
       {hunkType === 'hunk-file' ? (
-        <SimpleCodeBlock
-          code={CODE_HUNKS_RENDERER_FILE}
-          language="typescript"
-        />
+        <DocsCodeExample file={CODE_HUNKS_RENDERER_FILE} />
       ) : (
-        <SimpleCodeBlock
-          code={CODE_HUNKS_RENDERER_PATCH_FILE}
-          language="typescript"
-        />
+        <DocsCodeExample file={CODE_HUNKS_RENDERER_PATCH_FILE} />
       )}
       <h3>Shared Highlighter Utilities</h3>
       <p>
@@ -114,12 +110,19 @@ export function VanillaAPI() {
         you simply have to register it and then it&lsquo;ll just work as any
         other built in theme.
       </p>
-      <SimpleCodeBlock code={CODE_UTILITIES} language="typescript" />
+      <DocsCodeExample file={CODE_UTILITIES} />
     </section>
   );
 }
 
-const CODE_FILE_DIFF = `import {
+const CODE_COMING_SOON: FileContents = {
+  name: 'coming_soon.ts',
+  contents: '// coming soon',
+};
+
+const CODE_FILE_DIFF: FileContents = {
+  name: 'file_diff.ts',
+  contents: `import {
   type FileContents,
   FileDiff,
   type DiffLineAnnotation,
@@ -283,9 +286,12 @@ await instance.render({
   newFile,
   lineAnnotations,
   containerWrapper: document.body,
-});`;
+});`,
+};
 
-const CODE_HUNKS_RENDERER_FILE = `import {
+const CODE_HUNKS_RENDERER_FILE: FileContents = {
+  name: 'hunks_renderer_file.ts',
+  contents: `import {
   DiffHunksRenderer,
   type FileDiffMetadata,
   type HunksRenderResult,
@@ -316,9 +322,12 @@ console.log(result?.unifiedAST);
 
 // There are 2 utility methods on the instance to render these hast nodes to
 // html, '.renderFullHTML' and '.renderPartialHTML'
-`;
+`,
+};
 
-const CODE_HUNKS_RENDERER_PATCH_FILE = `import {
+const CODE_HUNKS_RENDERER_PATCH_FILE: FileContents = {
+  name: 'hunks_renderer_patch.ts',
+  contents: `import {
   DiffHunksRenderer,
   type FileDiffMetadata,
   type HunksRenderResult,
@@ -388,9 +397,12 @@ for (const patch of patches) {
       'unified'
     );
   }
-}`;
+}`,
+};
 
-const CODE_UTILITIES = `import {
+const CODE_UTILITIES: FileContents = {
+  name: 'misc.ts',
+  contents: `import {
   getSharedHighlighter,
   preloadHighlighter,
   registerCustomTheme,
@@ -412,59 +424,63 @@ const highlighter = await getSharedHighlighter();
 
 // Cleanup when shutting down. Just note that if you call this, all themes and
 // languages will have to be reloaded
-disposeHighlighter();`;
+disposeHighlighter();`,
+};
 
-const CODE_CUSTOM_HUNK_EXAMPLE = `import { FileDiff } from '@pierre/precision-diffs';
+const CODE_CUSTOM_HUNK_EXAMPLE = {
+  name: 'hunks_example.ts',
+  contents: `import { FileDiff } from '@pierre/precision-diffs';
 
 // A hunk separator that utilizes the existing grid to have a number column and
 // a content column where neither will scroll with the code
 const instance = new FileDiff({
-  hunkSeparators(hunkData: HunkData) {
-    const fragment = document.createDocumentFragment();
-    const numCol = document.createElement('div');
-    numCol.textContent = \`\${hunkData.lines}\`;
-    numCol.style.position = 'sticky';
-    numCol.style.left = '0';
-    numCol.style.backgroundColor = 'var(--pjs-bg)';
-    numCol.style.zIndex = '2';
-    fragment.appendChild(numCol);
-    const contentCol = document.createElement('div');
-    contentCol.textContent = 'unmodified lines';
-    contentCol.style.position = 'sticky';
-    contentCol.style.width = 'var(--pjs-column-content-width)';
-    contentCol.style.left = 'var(--pjs-column-number-width)';
-    fragment.appendChild(contentCol);
-    return fragment;
-  },
+hunkSeparators(hunkData: HunkData) {
+const fragment = document.createDocumentFragment();
+const numCol = document.createElement('div');
+numCol.textContent = \`\${hunkData.lines}\`;
+numCol.style.position = 'sticky';
+numCol.style.left = '0';
+numCol.style.backgroundColor = 'var(--pjs-bg)';
+numCol.style.zIndex = '2';
+fragment.appendChild(numCol);
+const contentCol = document.createElement('div');
+contentCol.textContent = 'unmodified lines';
+contentCol.style.position = 'sticky';
+contentCol.style.width = 'var(--pjs-column-content-width)';
+contentCol.style.left = 'var(--pjs-column-number-width)';
+fragment.appendChild(contentCol);
+return fragment;
+},
 })
 
 // If you want to create a single column that spans both colums and doesn't
 // scroll, you can do something like this:
 const instance2 = new FileDiff({
-  hunkSeparators(hunkData: HunkData) {
-    const wrapper = document.createElement('div');
-    wrapper.style.gridColumn = 'span 2';
-    const contentCol = document.createElement('div');
-    contentCol.textContent = \`\${hunkData.lines} unmodified lines\`;
-    contentCol.style.position = 'sticky';
-    contentCol.style.width = 'var(--pjs-column-width)';
-    contentCol.style.left = '0';
-    wrapper.appendChild(contentCol);
-    return wrapper;
-  },
+hunkSeparators(hunkData: HunkData) {
+const wrapper = document.createElement('div');
+wrapper.style.gridColumn = 'span 2';
+const contentCol = document.createElement('div');
+contentCol.textContent = \`\${hunkData.lines} unmodified lines\`;
+contentCol.style.position = 'sticky';
+contentCol.style.width = 'var(--pjs-column-width)';
+contentCol.style.left = '0';
+wrapper.appendChild(contentCol);
+return wrapper;
+},
 })
 
 // If you want to create a single column that's aligned with the content column
 // and doesn't scroll, you can do something like this:
 const instance2 = new FileDiff({
-  hunkSeparators(hunkData: HunkData) {
-    const wrapper = document.createElement('div');
-    wrapper.style.gridColumn = '2 / 3';
-    wrapper.textContent = \`\${hunkData.lines} unmodified lines\`;
-    wrapper.style.position = 'sticky';
-    wrapper.style.width = 'var(--pjs-column-content-width)';
-    wrapper.style.left = 'var(--pjs-column-number-width)';
-    return wrapper;
-  },
+hunkSeparators(hunkData: HunkData) {
+const wrapper = document.createElement('div');
+wrapper.style.gridColumn = '2 / 3';
+wrapper.textContent = \`\${hunkData.lines} unmodified lines\`;
+wrapper.style.position = 'sticky';
+wrapper.style.width = 'var(--pjs-column-content-width)';
+wrapper.style.left = 'var(--pjs-column-number-width)';
+return wrapper;
+},
 })
-`;
+`,
+};

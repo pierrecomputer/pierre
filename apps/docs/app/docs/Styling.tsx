@@ -1,34 +1,6 @@
-import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import type { FileContents } from '@pierre/precision-diffs';
 
-const CODE_GLOBAL = `:root {
-  /* Available Custom CSS Variables. Most should be self explanatory */
-  /* Sets code font, very important */
-  --pjs-font-family: 'Berkeley Mono', monospace;
-  --pjs-font-size: 14px;
-  --pjs-line-height: 1.5;
-  /* Controls tab character size */
-  --pjs-tab-size: 2;
-  /* Font used in header and separator components, typically not a monospace
-   * font, but it's your call */
-  --pjs-header-font-family: Helvetica
-  /* Override or customize any 'font-feature-settings' for your code font */
-  --pjs-font-features: normal;
-
-  /* By default we try to inherit the deletion/addition/modified colors from
-   * the existing Shiki theme, however if you'd like to override them, you can do
-   * so via these css variables: */
-  --pjs-deletion-color-override: orange;
-  --pjs-addition-color-override: yellow;
-  --pjs-modified-color-override: purple;
-}`;
-
-const CODE_INLINE = `<FileDiff
-  style={{
-    '--pjs-font-family': 'JetBrains Mono, monospace',
-    '--pjs-font-size': '13px'
-  } as React.CSSProperties}
-  // ... other props
-/>`;
+import { DocsCodeExample } from './DocsCodeExample';
 
 export function Styling() {
   return (
@@ -42,14 +14,44 @@ export function Styling() {
         can be done either in your global CSS, as style props on parent
         components, or the event <code>FileDiff</code> component directly.
       </p>
-      <SimpleCodeBlock
-        code={CODE_GLOBAL}
-        className="overflow-hidden rounded-lg border"
-      />
-      <SimpleCodeBlock
-        code={CODE_INLINE}
-        className="overflow-hidden rounded-lg border"
-      />
+      <DocsCodeExample file={CODE_GLOBAL} />
+      <DocsCodeExample file={CODE_INLINE} />
     </section>
   );
 }
+
+const CODE_GLOBAL: FileContents = {
+  name: 'global.css',
+  contents: `:root {
+  /* Available Custom CSS Variables. Most should be self explanatory */
+  /* Sets code font, very important */
+  --pjs-font-family: 'Berkeley Mono', monospace;
+  --pjs-font-size: 14px;
+  --pjs-line-height: 1.5;
+  /* Controls tab character size */
+  --pjs-tab-size: 2;
+  /* Font used in header and separator components, typically not a monospace
+   * font, but it's your call */
+  --pjs-header-font-family: Helvetica;
+  /* Override or customize any 'font-feature-settings' for your code font */
+  --pjs-font-features: normal;
+
+  /* By default we try to inherit the deletion/addition/modified colors from
+   * the existing Shiki theme, however if you'd like to override them, you can do
+   * so via these css variables: */
+  --pjs-deletion-color-override: orange;
+  --pjs-addition-color-override: yellow;
+  --pjs-modified-color-override: purple;
+}`,
+};
+
+const CODE_INLINE: FileContents = {
+  name: 'inline.tsx',
+  contents: `<FileDiff
+  style={{
+    '--pjs-font-family': 'JetBrains Mono, monospace',
+    '--pjs-font-size': '13px'
+  } as React.CSSProperties}
+  // ... other props
+/>`,
+};

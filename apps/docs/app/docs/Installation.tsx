@@ -1,7 +1,6 @@
-import { File } from '@/components/diff-ui/File';
 import type { FileContents } from '@pierre/precision-diffs';
 
-import { CopyCodeButton } from './CopyCodeButton';
+import { DocsCodeExample } from './DocsCodeExample';
 
 const Code: FileContents = {
   name: 'example.sh',
@@ -13,14 +12,7 @@ export function Installation() {
     <section className="space-y-4">
       <h2>Installation</h2>
       <p>Install the Precision Diffs package using bun, pnpm, npm, or yarn:</p>
-      <File
-        file={Code}
-        className="overflow-hidden rounded-md border-1"
-        options={{ themes: { dark: 'pierre-dark', light: 'pierre-light' } }}
-        renderHeaderMetadata={(file) => (
-          <CopyCodeButton content={file.contents} />
-        )}
-      />
+      <DocsCodeExample file={Code} />
     </section>
   );
 }

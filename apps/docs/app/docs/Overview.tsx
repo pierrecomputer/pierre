@@ -1,11 +1,11 @@
 import { IconCiWarningFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { FileContents } from '@pierre/precision-diffs';
-import { File, FileDiff } from '@pierre/precision-diffs/react';
+import { FileDiff } from '@pierre/precision-diffs/react';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { CopyCodeButton } from './CopyCodeButton';
+import { DocsCodeExample } from './DocsCodeExample';
 import type { DocsExampleTypes } from './types';
 
 const CODE_VANILLA_SINGLE_FILE = `import {
@@ -323,14 +323,7 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
           <ButtonGroupItem value="patch-file">Patch file</ButtonGroupItem>
         </ButtonGroup>
       </div>
-      <File
-        file={file}
-        options={{ themes: { dark: 'pierre-dark', light: 'pierre-light' } }}
-        className="overflow-hidden rounded-md border-1"
-        renderHeaderMetadata={(file) => (
-          <CopyCodeButton content={file.contents} />
-        )}
-      />
+      <DocsCodeExample file={file} />
     </section>
   );
 }

@@ -1,8 +1,12 @@
-import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { FileContents } from '@pierre/precision-diffs';
 import { useState } from 'react';
 
-const CODE = `import {
+import { DocsCodeExample } from './DocsCodeExample';
+
+const FileDiffCode: FileContents = {
+  name: 'file_diff.tsx',
+  contents: `import {
   type FileContents,
   type DiffLineAnnotation,
   FileDiff,
@@ -149,9 +153,17 @@ export function SingleDiff() {
       }}
     />
   );
-}`;
+}`,
+};
 
-const CODE_PATCH = `import { FileDiff } from '@pierre/precision-diffs/react';
+const FileCode: FileContents = {
+  name: 'file.tsx',
+  contents: '// coming soon',
+};
+
+const FilePatch: FileContents = {
+  name: 'file_patch.tsx',
+  contents: `import { FileDiff } from '@pierre/precision-diffs/react';
 
 const patch = \`diff --git a/foo.ts b/foo.ts
 --- a/foo.ts
@@ -162,8 +174,9 @@ const patch = \`diff --git a/foo.ts b/foo.ts
 \`;
 
 export function SingleDiffFromPatch() {
-  return <FileDiff patch={patch} />;
-}`;
+return <FileDiff patch={patch} />;
+}`,
+};
 
 export function ReactAPI() {
   const [example, setExample] = useState<'file-diff' | 'file'>('file-diff');
@@ -190,16 +203,16 @@ export function ReactAPI() {
       </ButtonGroup>
       {example === 'file-diff' ? (
         <>
-          <SimpleCodeBlock code={CODE} language="tsx" />
+          <DocsCodeExample file={FileDiffCode} />
           <p>
             Alternatively, if you already have a unified diff for a single file,
-            pass it via the <code>patch</code> prop instead of <code>oldFile</code> and{' '}
-            <code>newFile</code>.
+            pass it via the <code>patch</code> prop instead of{' '}
+            <code>oldFile</code> and <code>newFile</code>.
           </p>
-          <SimpleCodeBlock code={CODE_PATCH} language="tsx" />
+          <DocsCodeExample file={FilePatch} />
         </>
       ) : (
-        <SimpleCodeBlock code="// Coming Soon" language="tsx" />
+        <DocsCodeExample file={FileCode} />
       )}
     </section>
   );
