@@ -18,6 +18,6 @@ export function FileStream({ stream, options }: FileStreamProps) {
     if (ref.current == null) return;
     void fileStream.setup(stream, ref.current);
     return () => fileStream.cleanUp();
-  }, [fileStream]);
+  }, [fileStream, stream]);
   return <pre ref={ref} />;
 }

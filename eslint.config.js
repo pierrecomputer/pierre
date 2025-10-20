@@ -1,16 +1,7 @@
-import { FlatCompat } from '@eslint/eslintrc';
 import js from '@eslint/js';
+import nextPlugin from '@next/eslint-plugin-next';
 import reactHooks from 'eslint-plugin-react-hooks';
-import { dirname } from 'path';
 import tseslint from 'typescript-eslint';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
 
 export default [
   {
@@ -25,6 +16,8 @@ export default [
       'apps/docs/components/icons/icons/**',
       'packages/storage-elements/blocks/git-platform-sync/api/**/*',
       'packages/storage-elements/blocks/git-platform-sync/pages/**/*',
+      'packages/precision-diffs/build-css.js',
+      'update-themes.js',
     ],
   },
   js.configs.recommended,
@@ -100,22 +93,20 @@ export default [
     },
   },
   // Next.js specific config for docs package
-  ...compat
-    .extends('next/core-web-vitals', 'next/typescript')
-    .map((config) => ({
-      ...config,
-      files: ['apps/docs/**/*.{js,jsx,ts,tsx}'],
-      settings: {
-        ...config.settings,
-        next: {
-          rootDir: 'apps/docs',
-        },
+  {
+    files: ['apps/docs/**/*.{js,jsx,ts,tsx}'],
+    plugins: {
+      '@next/next': nextPlugin,
+    },
+    settings: {
+      next: {
+        rootDir: 'apps/docs',
       },
-      rules: {
-        ...config.rules,
-        'jsx-a11y/alt-text': 'off',
-        '@next/next/no-img-element': 'off',
-        'react-hooks/set-state-in-effect': 'off',
-      },
-    })),
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
+      '@next/next/no-img-element': 'off',
+    },
+  },
 ];
