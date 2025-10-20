@@ -603,6 +603,10 @@ code {
   white-space: nowrap;
 }
 
+[data-prev-name] {
+  opacity: 0.7;
+}
+
 [data-rename-icon] {
   flex-shrink: 0;
   flex-grow: 0;
