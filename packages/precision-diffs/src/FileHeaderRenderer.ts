@@ -32,7 +32,11 @@ export type FileHeaderRendererOptions =
 export class FileHeaderRenderer {
   private highlighter: PJSHighlighter | undefined;
 
-  constructor(public options: FileHeaderRendererOptions) {}
+  constructor(
+    public options: FileHeaderRendererOptions = {
+      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+    }
+  ) {}
 
   cleanUp() {
     this.highlighter = undefined;

@@ -13,6 +13,7 @@
 
   --pjs-mixer: light-dark(black, white);
 
+  --pjs-annotation-min-height: 1lh;
   /*
     // Available CSS Variable Overrides
     --pjs-bg-buffer-override
