@@ -1,6 +1,8 @@
 import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { IconCiWarningFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { FileContents } from '@pierre/precision-diffs';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -13,18 +15,30 @@ const CODE_VANILLA_SINGLE_FILE = `import {
 
 // Comparing two files
 const oldFile: FileContents = {
-  name: 'filename.ts',
-  contents: 'console.log("Hello world")',
+  name: 'main.zig',
+  contents: \`const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hi you, {s}!\\\\n", .{"world"});
+}
+\`,
 };
 
 const newFile: FileContents = {
-  name: 'filename.ts',
-  contents: 'console.warn("Uh oh")',
+  name: 'main.zig',
+  contents: \`const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hello there, {s}!\\\\n", .{"zig"});
+}
+\`,
 };
 
 // We automatically detect the language based on the filename
 // You can also provide a lang property when instantiating FileDiff.
-const fileDiffInstance = new FileDiff({ theme: 'pierre-night' });
+const fileDiffInstance = new FileDiff({ theme: 'pierre-dark' });
 
 // Render is awaitable if you need that
 await fileDiffInstance.render({
@@ -72,13 +86,25 @@ const CODE_REACT_SINGLE_FILE = `import {
 } from '@pierre/precision-diffs/react';
 
 const oldFile: FileContents = {
-  name: 'filename.ts',
-  contents: 'console.log("Hello world")',
+  name: 'main.zig',
+  contents: \`const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hi you, {s}!\\\\n", .{"world"});
+}
+\`,
 };
 
 const newFile: FileContents = {
-  name: 'filename.ts',
-  contents: 'console.warn("Uh oh")',
+  name: 'main.zig',
+  contents: \`const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hello there, {s}!\\\\n", .{"zig"});
+}
+\`,
 };
 
 // Comparing two files
@@ -90,7 +116,7 @@ function SingleDiff() {
       // rendering FileDiff
       oldFile={oldFile}
       newFile={newFile}
-      options={{ theme: 'pierre-night' }}
+      options={{ theme: 'pierre-dark' }}
     />
   );
 }`;
@@ -133,7 +159,7 @@ function Patches() {
               fileDiff={fileDiff}
               options={{
                 // Automatically theme based on users OS settings
-                themes: { dark: 'pierre-night', light: 'pierre-light' },
+                themes: { dark: 'pierre-dark', light: 'pierre-light' },
               }}
             />
           ))}
@@ -142,6 +168,28 @@ function Patches() {
     </>
   );
 }`;
+
+const OLD_FILE: FileContents = {
+  name: 'main.zig',
+  contents: `const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hi you, {s}!\\n", .{"world"});
+}
+`,
+};
+
+const NEW_FILE: FileContents = {
+  name: 'main.zig',
+  contents: `const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hello there, {s}!\\n", .{"zig"});
+}
+`,
+};
 
 interface OverviewProps {
   exampleType: DocsExampleTypes;
@@ -155,10 +203,10 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
   return (
     <section className="space-y-4">
       <h2>Overview</h2>
-      <p className="flex gap-2 text-sm bg-cyan-500/10 border border-cyan-500/20 px-5 py-4 rounded-md text-cyan-600 dark:text-cyan-300">
-        <IconCiWarningFill className="mt-[2px]" />
-        Precision Diffs is in early active development—many of these APIs are
-        subject to change.
+      <p className="flex gap-2 text-md bg-cyan-500/10 border border-cyan-500/20 px-5 py-4 rounded-md text-cyan-600 dark:text-cyan-300">
+        <IconCiWarningFill className="mt-[6px]" />
+        Precision Diffs is in early active development—APIs are subject to
+        change.
       </p>
       <p>
         <strong>Precision Diffs</strong> is a library for rendering code and
@@ -170,6 +218,18 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
         </Link>{' '}
         which provides a lot of great theme and language support.
       </p>
+      <FileDiff
+        oldFile={OLD_FILE}
+        newFile={NEW_FILE}
+        className="rounded-lg overflow-hidden border"
+        options={{
+          theme: 'pierre-dark',
+          diffStyle: 'unified',
+          diffIndicators: 'bars',
+          overflow: 'wrap',
+          lineDiffType: 'word-alt',
+        }}
+      />
       <p>
         We have an opinionated stance in our architecture:{' '}
         <strong>browsers are rather efficient at rendering raw HTML</strong>. We
