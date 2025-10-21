@@ -3,7 +3,11 @@
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import type { FileContents, DiffLineAnnotation, AnnotationSide } from '@pierre/precision-diffs';
+import type {
+  AnnotationSide,
+  DiffLineAnnotation,
+  FileContents,
+} from '@pierre/precision-diffs';
 import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -50,15 +54,17 @@ interface AnnotationMetadata {
 }
 
 export function Annotations() {
-  const [annotations, setAnnotations] = useState<DiffLineAnnotation<AnnotationMetadata>[]>([
+  const [annotations, setAnnotations] = useState<
+    DiffLineAnnotation<AnnotationMetadata>[]
+  >([
     {
       side: 'additions',
       lineNumber: 8,
       metadata: {
         key: 'additions-8',
         isThread: true,
-      }
-    }
+      },
+    },
   ]);
   const [buttonPosition, setButtonPosition] = useState<{
     top: number;
@@ -70,36 +76,43 @@ export function Annotations() {
   } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleLineEnter = useCallback((props: any) => {
-    const lineElement = props.lineElement as HTMLElement;
-    const container = containerRef.current;
+  const handleLineEnter = useCallback(
+    (props: {
+      lineElement: HTMLElement;
+      annotationSide: AnnotationSide;
+      lineNumber: number;
+    }) => {
+      const lineElement = props.lineElement;
+      const container = containerRef.current;
 
-    if (!container) return;
+      if (container == null) return;
 
-    const { annotationSide, lineNumber } = props;
+      const { annotationSide, lineNumber } = props;
 
-    // Don't show button if there's already an annotation on this line
-    const hasAnnotation = annotations.some(
-      (ann) => ann.side === annotationSide && ann.lineNumber === lineNumber
-    );
+      // Don't show button if there's already an annotation on this line
+      const hasAnnotation = annotations.some(
+        (ann) => ann.side === annotationSide && ann.lineNumber === lineNumber
+      );
 
-    if (hasAnnotation) {
-      setButtonPosition(null);
-      setHoveredLine(null);
-      return;
-    }
+      if (hasAnnotation) {
+        setButtonPosition(null);
+        setHoveredLine(null);
+        return;
+      }
 
-    // Get the position of the line element relative to the container
-    const containerRect = container.getBoundingClientRect();
-    const lineRect = lineElement.getBoundingClientRect();
+      // Get the position of the line element relative to the container
+      const containerRect = container.getBoundingClientRect();
+      const lineRect = lineElement.getBoundingClientRect();
 
-    setButtonPosition({
-      top: lineRect.top - containerRect.top + lineRect.height / 2,
-      left: 16, // Fixed position from left edge
-    });
+      setButtonPosition({
+        top: lineRect.top - containerRect.top + lineRect.height / 2,
+        left: 16, // Fixed position from left edge
+      });
 
-    setHoveredLine({ side: annotationSide, lineNumber });
-  }, [annotations]);
+      setHoveredLine({ side: annotationSide, lineNumber });
+    },
+    [annotations]
+  );
 
   const handleLineLeave = useCallback(() => {
     setButtonPosition(null);
@@ -112,7 +125,7 @@ export function Annotations() {
   }, []);
 
   const handleAddComment = useCallback(() => {
-    if (hoveredLine) {
+    if (hoveredLine != null) {
       setAnnotations((prev) => [
         ...prev,
         {
@@ -129,21 +142,24 @@ export function Annotations() {
     }
   }, [hoveredLine]);
 
-  const handleSubmitComment = useCallback((side: AnnotationSide, lineNumber: number) => {
-    setAnnotations((prev) =>
-      prev.map((ann) =>
-        ann.side === side && ann.lineNumber === lineNumber
-          ? { ...ann, metadata: { isThread: true } }
-          : ann
-      )
-    );
-  }, []);
+  const handleSubmitComment = useCallback(
+    (side: AnnotationSide, lineNumber: number) => {
+      // TODO: Implement
+      console.log('submit comment', side, lineNumber);
+    },
+    []
+  );
 
-  const handleCancelComment = useCallback((side: AnnotationSide, lineNumber: number) => {
-    setAnnotations((prev) =>
-      prev.filter((ann) => !(ann.side === side && ann.lineNumber === lineNumber))
-    );
-  }, []);
+  const handleCancelComment = useCallback(
+    (side: AnnotationSide, lineNumber: number) => {
+      setAnnotations((prev) =>
+        prev.filter(
+          (ann) => !(ann.side === side && ann.lineNumber === lineNumber)
+        )
+      );
+    },
+    []
+  );
 
   return (
     <div className="space-y-5">
@@ -151,7 +167,11 @@ export function Annotations() {
         title="Comments & Annotations"
         description="Precision Diffs provide a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
       />
-      <div ref={containerRef} style={{ position: 'relative' }} onMouseLeave={handleContainerMouseLeave}>
+      <div
+        ref={containerRef}
+        style={{ position: 'relative' }}
+        onMouseLeave={handleContainerMouseLeave}
+      >
         {buttonPosition != null && (
           <Button
             size="icon-sm"
@@ -254,7 +274,11 @@ function CommentForm({
               className="w-full min-h-[60px] p-2 text-sm text-foreground bg-background border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="mt-3 flex items-center gap-2">
-              <Button size="sm" className="cursor-pointer" onClick={handleSubmit}>
+              <Button
+                size="sm"
+                className="cursor-pointer"
+                onClick={handleSubmit}
+              >
                 Comment
               </Button>
               <button
