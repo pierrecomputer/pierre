@@ -3,7 +3,7 @@
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import type { FileContents } from '@pierre/precision-diffs';
+import type { FileContents, DiffLineAnnotation, AnnotationSide } from '@pierre/precision-diffs';
 import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -44,18 +44,30 @@ export default function Home() {
 `,
 };
 
-type LineKey = `${string}-${number}`;
+interface AnnotationMetadata {
+  key: string;
+  isThread: boolean;
+}
 
 export function Annotations() {
-  const [commentThreads, setCommentThreads] = useState<Set<LineKey>>(
-    new Set(['additions-8'])
-  );
-  const [activeCommentForm, setActiveCommentForm] = useState<LineKey | null>(null);
+  const [annotations, setAnnotations] = useState<DiffLineAnnotation<AnnotationMetadata>[]>([
+    {
+      side: 'additions',
+      lineNumber: 8,
+      metadata: {
+        key: 'additions-8',
+        isThread: true,
+      }
+    }
+  ]);
   const [buttonPosition, setButtonPosition] = useState<{
     top: number;
     left: number;
   } | null>(null);
-  const [hoveredLineKey, setHoveredLineKey] = useState<LineKey | null>(null);
+  const [hoveredLine, setHoveredLine] = useState<{
+    side: AnnotationSide;
+    lineNumber: number;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleLineEnter = useCallback((props: any) => {
@@ -64,12 +76,16 @@ export function Annotations() {
 
     if (!container) return;
 
-    const key: LineKey = `${props.annotationSide}-${props.lineNumber}`;
+    const { annotationSide, lineNumber } = props;
 
-    // Don't show button if there's already a comment or form on this line
-    if (commentThreads.has(key) || activeCommentForm === key) {
+    // Don't show button if there's already an annotation on this line
+    const hasAnnotation = annotations.some(
+      (ann) => ann.side === annotationSide && ann.lineNumber === lineNumber
+    );
+
+    if (hasAnnotation) {
       setButtonPosition(null);
-      setHoveredLineKey(null);
+      setHoveredLine(null);
       return;
     }
 
@@ -82,50 +98,52 @@ export function Annotations() {
       left: 16, // Fixed position from left edge
     });
 
-    setHoveredLineKey(key);
-  }, [commentThreads, activeCommentForm]);
+    setHoveredLine({ side: annotationSide, lineNumber });
+  }, [annotations]);
 
   const handleLineLeave = useCallback(() => {
     setButtonPosition(null);
-    setHoveredLineKey(null);
+    setHoveredLine(null);
   }, []);
 
   const handleContainerMouseLeave = useCallback(() => {
     setButtonPosition(null);
-    setHoveredLineKey(null);
+    setHoveredLine(null);
   }, []);
 
   const handleAddComment = useCallback(() => {
-    if (hoveredLineKey) {
-      setActiveCommentForm(hoveredLineKey);
+    if (hoveredLine) {
+      setAnnotations((prev) => [
+        ...prev,
+        {
+          side: hoveredLine.side,
+          lineNumber: hoveredLine.lineNumber,
+          metadata: {
+            key: `${hoveredLine.side}-${hoveredLine.lineNumber}`,
+            isThread: false, // Start as a form, not a thread yet
+          },
+        },
+      ]);
       setButtonPosition(null);
-      setHoveredLineKey(null);
+      setHoveredLine(null);
     }
-  }, [hoveredLineKey]);
+  }, [hoveredLine]);
 
-  const handleSubmitComment = useCallback((lineKey: LineKey) => {
-    setCommentThreads((prev) => new Set([...prev, lineKey]));
-    setActiveCommentForm(null);
+  const handleSubmitComment = useCallback((side: AnnotationSide, lineNumber: number) => {
+    setAnnotations((prev) =>
+      prev.map((ann) =>
+        ann.side === side && ann.lineNumber === lineNumber
+          ? { ...ann, metadata: { isThread: true } }
+          : ann
+      )
+    );
   }, []);
 
-  const handleCancelComment = useCallback(() => {
-    setActiveCommentForm(null);
+  const handleCancelComment = useCallback((side: AnnotationSide, lineNumber: number) => {
+    setAnnotations((prev) =>
+      prev.filter((ann) => !(ann.side === side && ann.lineNumber === lineNumber))
+    );
   }, []);
-
-  const annotations = [
-    ...Array.from(commentThreads).map((key) => ({
-      key,
-      side: key.split('-')[0] as 'additions' | 'deletions',
-      lineNumber: parseInt(key.split('-')[1], 10),
-      isThread: true,
-    })),
-    ...(activeCommentForm ? [{
-      key: activeCommentForm,
-      side: activeCommentForm.split('-')[0] as 'additions' | 'deletions',
-      lineNumber: parseInt(activeCommentForm.split('-')[1], 10),
-      isThread: false,
-    }] : [])
-  ];
 
   return (
     <div className="space-y-5">
@@ -165,10 +183,13 @@ export function Annotations() {
           }}
           annotations={annotations}
           renderAnnotation={(annotation) =>
-            annotation.isThread ? (
+            annotation.metadata.isThread ? (
               <Thread />
             ) : (
               <CommentForm
+                side={annotation.side}
+                lineNumber={annotation.lineNumber}
+                onSubmit={handleSubmitComment}
                 onCancel={handleCancelComment}
               />
             )
@@ -179,7 +200,17 @@ export function Annotations() {
   );
 }
 
-function CommentForm({ onCancel }: { onCancel: () => void }) {
+function CommentForm({
+  side,
+  lineNumber,
+  onSubmit,
+  onCancel,
+}: {
+  side: AnnotationSide;
+  lineNumber: number;
+  onSubmit: (side: AnnotationSide, lineNumber: number) => void;
+  onCancel: (side: AnnotationSide, lineNumber: number) => void;
+}) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -187,6 +218,14 @@ function CommentForm({ onCancel }: { onCancel: () => void }) {
       textareaRef.current?.focus();
     }, 0);
   }, []);
+
+  const handleSubmit = useCallback(() => {
+    onSubmit(side, lineNumber);
+  }, [side, lineNumber, onSubmit]);
+
+  const handleCancel = useCallback(() => {
+    onCancel(side, lineNumber);
+  }, [side, lineNumber, onCancel]);
 
   return (
     <div
@@ -215,11 +254,11 @@ function CommentForm({ onCancel }: { onCancel: () => void }) {
               className="w-full min-h-[60px] p-2 text-sm text-foreground bg-background border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="mt-3 flex items-center gap-2">
-              <Button size="sm" className="cursor-pointer">
+              <Button size="sm" className="cursor-pointer" onClick={handleSubmit}>
                 Comment
               </Button>
               <button
-                onClick={onCancel}
+                onClick={handleCancel}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1 cursor-pointer"
               >
                 Cancel

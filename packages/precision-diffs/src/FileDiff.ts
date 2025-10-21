@@ -225,9 +225,14 @@ export class FileDiff<LAnnotation = undefined> {
 
   async render(props: FileDiffRenderProps<LAnnotation>) {
     const { forceRender = false, lineAnnotations, containerWrapper } = props;
+    const annotationsChanged = !deepEquals(
+      lineAnnotations,
+      this.lineAnnotations
+    );
     if (
       props.fileDiff == null &&
       !forceRender &&
+      !annotationsChanged &&
       deepEquals(props.oldFile, this.oldFile) &&
       deepEquals(props.newFile, this.newFile)
     ) {
