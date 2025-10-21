@@ -704,6 +704,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           );
         }
       }
+      resolveUnresolvedSpans();
     }
 
     const processRawLine = (
