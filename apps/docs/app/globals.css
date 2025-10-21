@@ -132,6 +132,9 @@
   body {
     @apply bg-background text-foreground;
   }
+  textarea {
+    @apply outline-offset-1;
+  }
 
   ::selection {
     background-color: #00ffff4d;

@@ -8,7 +8,7 @@ import { FeatureHeader } from './FeatureHeader';
 
 // Local components to avoid class name duplication
 const FileLabel = ({ children }: { children: React.ReactNode }) => (
-  <label className="absolute top-1 left-1 block text-xs font-medium uppercase text-muted-foreground py-2 px-3 select-none rounded-lg bg-muted">
+  <label className="absolute top-[1px] left-[1px] block text-xs font-medium uppercase text-muted-foreground py-2 px-3 select-none rounded-lg bg-muted">
     {children}
   </label>
 );
@@ -25,7 +25,7 @@ const FileTextarea = ({
   <textarea
     value={value}
     onChange={onChange}
-    className={`w-full h-40 font-mono text-sm bg-muted border rounded-lg resize-none  pt-10 px-4 ${className}`}
+    className={`w-full h-40 font-mono text-sm bg-muted border rounded-lg resize-none pt-10 px-4 ${className}`}
     spellCheck={false}
   />
 );
