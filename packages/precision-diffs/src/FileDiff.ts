@@ -315,12 +315,11 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   spriteSVG: SVGElement | undefined;
-  private eventListenersAttached = false;
 
   private attachEventListeners() {
     if (this.fileContainer == null) return;
 
-    const shadowRoot = this.fileContainer.shadowRoot;
+    const shadowRoot = this.fileContainer.shadowRoot as HTMLElement | null;
     if (shadowRoot == null) return;
 
     // Remove old event listeners if they exist
@@ -344,7 +343,6 @@ export class FileDiff<LAnnotation = undefined> {
         shadowRoot.addEventListener('mouseleave', this.handleMouseLeave);
       }
     }
-    this.eventListenersAttached = true;
   }
 
   getOrCreateFileContainer(fileContainer?: HTMLElement) {
