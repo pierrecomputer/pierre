@@ -369,9 +369,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  renderFullHTML(result: HunksRenderResult): string {
-    const _children = result.preNode.children;
-    const tempChildren = [..._children];
+  renderFullAST(
+    result: HunksRenderResult,
+    tempChildren: ElementContent[] = []
+  ): Element {
     if (result.unifiedAST != null) {
       tempChildren.push(
         createHastElement({
@@ -408,10 +409,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         })
       );
     }
-    result.preNode.children = tempChildren;
-    const html = toHtml(result.preNode);
-    result.preNode.children = _children;
-    return html;
+    return { ...result.preNode, children: tempChildren };
+  }
+
+  renderFullHTML(
+    result: HunksRenderResult,
+    tempChildren: ElementContent[] = []
+  ): string {
+    return toHtml(this.renderFullAST(result, tempChildren));
   }
 
   renderPartialHTML(
