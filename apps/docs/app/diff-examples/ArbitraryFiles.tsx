@@ -25,7 +25,7 @@ const FileTextarea = ({
   <textarea
     value={value}
     onChange={onChange}
-    className={`w-full h-48 font-mono text-sm bg-muted border rounded-lg resize-none  pt-10 px-4 ${className}`}
+    className={`w-full h-40 font-mono text-sm bg-muted border rounded-lg resize-none  pt-10 px-4 ${className}`}
     spellCheck={false}
   />
 );
