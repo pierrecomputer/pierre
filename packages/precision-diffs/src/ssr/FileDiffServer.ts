@@ -361,12 +361,13 @@ code {
   left: 0;
   grid-column: 1 / 3;
   user-select: none;
+  /* We multiply by 1.414 (√2) to better approximate the diagonal repeat distance */
   background-image: repeating-linear-gradient(
     -45deg,
-    var(--pjs-bg-buffer) 0,
-    var(--pjs-bg-buffer) 1px,
-    transparent 1px,
-    transparent 5px
+    transparent,
+    transparent calc(3px * 1.414),
+    var(--pjs-bg-buffer) calc(3px * 1.414),
+    var(--pjs-bg-buffer) calc(4px * 1.414)
   );
   min-height: 1lh;
   width: var(--pjs-column-width, auto);
