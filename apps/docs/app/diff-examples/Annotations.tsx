@@ -2,8 +2,10 @@
 
 import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import type { FileContents } from '@pierre/precision-diffs';
-import { CornerDownRight } from 'lucide-react';
+import { CornerDownRight, Plus } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
 
@@ -42,24 +44,190 @@ export default function Home() {
 `,
 };
 
+type LineKey = `${string}-${number}`;
+
 export function Annotations() {
+  const [commentThreads, setCommentThreads] = useState<Set<LineKey>>(
+    new Set(['additions-8'])
+  );
+  const [activeCommentForm, setActiveCommentForm] = useState<LineKey | null>(null);
+  const [buttonPosition, setButtonPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const [hoveredLineKey, setHoveredLineKey] = useState<LineKey | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleLineEnter = useCallback((props: any) => {
+    const lineElement = props.lineElement as HTMLElement;
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    const key: LineKey = `${props.annotationSide}-${props.lineNumber}`;
+
+    // Don't show button if there's already a comment or form on this line
+    if (commentThreads.has(key) || activeCommentForm === key) {
+      setButtonPosition(null);
+      setHoveredLineKey(null);
+      return;
+    }
+
+    // Get the position of the line element relative to the container
+    const containerRect = container.getBoundingClientRect();
+    const lineRect = lineElement.getBoundingClientRect();
+
+    setButtonPosition({
+      top: lineRect.top - containerRect.top + lineRect.height / 2,
+      left: 16, // Fixed position from left edge
+    });
+
+    setHoveredLineKey(key);
+  }, [commentThreads, activeCommentForm]);
+
+  const handleLineLeave = useCallback(() => {
+    setButtonPosition(null);
+    setHoveredLineKey(null);
+  }, []);
+
+  const handleContainerMouseLeave = useCallback(() => {
+    setButtonPosition(null);
+    setHoveredLineKey(null);
+  }, []);
+
+  const handleAddComment = useCallback(() => {
+    if (hoveredLineKey) {
+      setActiveCommentForm(hoveredLineKey);
+      setButtonPosition(null);
+      setHoveredLineKey(null);
+    }
+  }, [hoveredLineKey]);
+
+  const handleSubmitComment = useCallback((lineKey: LineKey) => {
+    setCommentThreads((prev) => new Set([...prev, lineKey]));
+    setActiveCommentForm(null);
+  }, []);
+
+  const handleCancelComment = useCallback(() => {
+    setActiveCommentForm(null);
+  }, []);
+
+  const annotations = [
+    ...Array.from(commentThreads).map((key) => ({
+      key,
+      side: key.split('-')[0] as 'additions' | 'deletions',
+      lineNumber: parseInt(key.split('-')[1], 10),
+      isThread: true,
+    })),
+    ...(activeCommentForm ? [{
+      key: activeCommentForm,
+      side: activeCommentForm.split('-')[0] as 'additions' | 'deletions',
+      lineNumber: parseInt(activeCommentForm.split('-')[1], 10),
+      isThread: false,
+    }] : [])
+  ];
+
   return (
     <div className="space-y-5">
       <FeatureHeader
         title="Comments & Annotations"
         description="Precision Diffs provide a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
       />
-      <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
-        options={{
-          theme: 'pierre-dark',
-          diffStyle: 'unified',
-        }}
-        annotations={[{ side: 'additions', lineNumber: 8 }]}
-        renderAnnotation={() => <Thread />}
-      />
+      <div ref={containerRef} style={{ position: 'relative' }} onMouseLeave={handleContainerMouseLeave}>
+        {buttonPosition != null && (
+          <Button
+            size="icon-sm"
+            variant="default"
+            onClick={handleAddComment}
+            style={{
+              position: 'absolute',
+              top: buttonPosition.top,
+              left: buttonPosition.left + 4,
+              transform: 'translateY(-50%)',
+              zIndex: 10,
+              backgroundColor: '#1a76d4',
+              transition: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        )}
+        <FileDiff
+          oldFile={OLD_FILE}
+          newFile={NEW_FILE}
+          className="rounded-lg overflow-hidden border"
+          options={{
+            theme: 'pierre-dark',
+            diffStyle: 'unified',
+            onLineEnter: handleLineEnter,
+            onLineLeave: handleLineLeave,
+          }}
+          annotations={annotations}
+          renderAnnotation={(annotation) =>
+            annotation.isThread ? (
+              <Thread />
+            ) : (
+              <CommentForm
+                onCancel={handleCancelComment}
+              />
+            )
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function CommentForm({ onCancel }: { onCancel: () => void }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+  }, []);
+
+  return (
+    <div
+      className="max-w-[95%] sm:max-w-[70%]"
+      style={{
+        whiteSpace: 'normal',
+        margin: 20,
+        fontFamily: 'Geist',
+      }}
+    >
+      <div className="rounded-lg border bg-card p-5 shadow-sm">
+        <div className="flex gap-2">
+          <div className="relative flex-shrink-0 -mt-0.5">
+            <Avatar className="h-6 w-6">
+              <AvatarImage
+                src="https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg"
+                alt="You"
+              />
+              <AvatarFallback>Y</AvatarFallback>
+            </Avatar>
+          </div>
+          <div className="flex-1">
+            <textarea
+              ref={textareaRef}
+              placeholder="Leave a comment"
+              className="w-full min-h-[60px] p-2 text-sm text-foreground bg-background border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <div className="mt-3 flex items-center gap-2">
+              <Button size="sm" className="cursor-pointer">
+                Comment
+              </Button>
+              <button
+                onClick={onCancel}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1 cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -183,6 +351,28 @@ export function CommentThread({
           Resolve
         </button>
       </div>
+    </div>
+  );
+}
+
+function AddCommentButton({ onClick }: { onClick: () => void }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: '-32px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        zIndex: 10,
+      }}
+    >
+      <button
+        onClick={onClick}
+        className="flex items-center justify-center w-6 h-6 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-sm"
+        title="Add comment"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
     </div>
   );
 }

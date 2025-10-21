@@ -310,11 +310,45 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   spriteSVG: SVGElement | undefined;
+  private eventListenersAttached = false;
+
+  private attachEventListeners() {
+    if (this.fileContainer == null) return;
+
+    const shadowRoot = this.fileContainer.shadowRoot;
+    if (shadowRoot == null) return;
+
+    // Remove old event listeners if they exist
+    shadowRoot.removeEventListener('click', this.handleMouseClick);
+    shadowRoot.removeEventListener('mousemove', this.handleMouseMove);
+    shadowRoot.removeEventListener('mouseleave', this.handleMouseLeave);
+
+    const {
+      onLineClick,
+      onLineEnter,
+      onLineLeave,
+      hunkSeparators = 'line-info',
+    } = this.options;
+
+    if (onLineClick != null || hunkSeparators === 'line-info') {
+      shadowRoot.addEventListener('click', this.handleMouseClick);
+    }
+    if (onLineEnter != null || onLineLeave != null) {
+      shadowRoot.addEventListener('mousemove', this.handleMouseMove);
+      if (onLineLeave != null) {
+        shadowRoot.addEventListener('mouseleave', this.handleMouseLeave);
+      }
+    }
+    this.eventListenersAttached = true;
+  }
+
   getOrCreateFileContainer(fileContainer?: HTMLElement) {
     if (
       (fileContainer != null && fileContainer === this.fileContainer) ||
       (fileContainer == null && this.fileContainer != null)
     ) {
+      // Re-attach event listeners with updated callbacks
+      this.attachEventListeners();
       return this.fileContainer;
     }
     this.fileContainer =
@@ -328,24 +362,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.fileContainer.shadowRoot?.appendChild(this.spriteSVG);
       }
     }
-    const {
-      onLineClick,
-      onLineEnter,
-      onLineLeave,
-      hunkSeparators = 'line-info',
-    } = this.options;
-    if (onLineClick != null || hunkSeparators === 'line-info') {
-      this.fileContainer.addEventListener('click', this.handleMouseClick);
-    }
-    if (onLineEnter != null || onLineLeave != null) {
-      this.fileContainer.addEventListener('mousemove', this.handleMouseMove);
-      if (onLineLeave != null) {
-        this.fileContainer.addEventListener(
-          'mouseleave',
-          this.handleMouseLeave
-        );
-      }
-    }
+    this.attachEventListeners();
     return this.fileContainer;
   }
 
