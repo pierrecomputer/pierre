@@ -1,4 +1,4 @@
-<svg data-icon-sprite aria-hidden="true" width="0" height="0">
+export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="pjs-icon-diff-split">
     <path
       d="M14 0H8.5V16H14C15.1046 16 16 15.1046 16 14V2C16 0.895431 15.1046 0 14 0ZM12.5 6.5V7.5H13.5C13.7761 7.5 14 7.72386 14 8C14 8.27614 13.7761 8.5 13.5 8.5H12.5V9.5C12.5 9.77614 12.2761 10 12 10C11.7239 10 11.5 9.77614 11.5 9.5V8.5H10.5C10.2239 8.5 10 8.27614 10 8C10 7.72386 10.2239 7.5 10.5 7.5H11.5V6.5C11.5 6.22386 11.7239 6 12 6C12.2761 6 12.5 6.22386 12.5 6.5Z"
@@ -118,4 +118,4 @@
       fill="currentcolor"
     />
   </symbol>
-</svg>
+</svg>`;

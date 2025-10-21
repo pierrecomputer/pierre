@@ -10,7 +10,7 @@ import {
 } from './FileRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
 import { HEADER_METADATA_SLOT_ID } from './constants';
-import svgSprite from './sprite.txt?raw';
+import { SVGSpriteSheet } from './sprite';
 import type {
   FileContents,
   LineAnnotation,
@@ -285,7 +285,7 @@ export class File<LAnnotation = undefined> {
       fileContainer ?? document.createElement('pjs-container');
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
-      fragment.innerHTML = svgSprite;
+      fragment.innerHTML = SVGSpriteSheet;
       const firstChild = fragment.firstChild;
       if (firstChild instanceof SVGElement) {
         this.spriteSVG = firstChild;
