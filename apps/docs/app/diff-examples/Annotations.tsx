@@ -417,25 +417,3 @@ export function CommentThread({
     </div>
   );
 }
-
-function AddCommentButton({ onClick }: { onClick: () => void }) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: '-32px',
-        top: '50%',
-        transform: 'translateY(-50%)',
-        zIndex: 10,
-      }}
-    >
-      <button
-        onClick={onClick}
-        className="flex items-center justify-center w-6 h-6 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-sm"
-        title="Add comment"
-      >
-        <Plus className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
