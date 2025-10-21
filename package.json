@@ -18,6 +18,7 @@
     "docs:tsc": "bun run --elide-lines 0 --filter @pierre/js-docs tsc",
     "clean": "rm -rf {packages,apps}/*/dist && rm -rf {packages,apps}/*/tsconfig.tsbuildinfo && rm -rf {packages,apps}/demo/node_modules/.vite && rm -rf {packages,apps}/demo/node_modules/.vite-temp",
     "update-themes": "node update-themes.js",
+    "icons:build": "node scripts/build-sprite.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -88,6 +89,8 @@
       "shadcn": "3.3.1",
       "shiki": "3.13.0",
       "sonner": "2.0.7",
+      "svgo": "3.3.2",
+      "chokidar": "3.6.0",
       "tailwind-merge": "3.3.1",
       "tailwindcss": "4.1.13",
       "tw-animate-css": "1.4.0",
@@ -115,5 +118,8 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
+  },
+  "dependencies": {
+    "svgo": "^4.0.0"
   }
 }
