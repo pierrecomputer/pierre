@@ -404,7 +404,7 @@ function createMetadataElement(
       children.push(
         createHastElement({
           tagName: 'span',
-          children: [createTextNode('NC')],
+          children: [createTextNode('No diff')],
         })
       );
     }
