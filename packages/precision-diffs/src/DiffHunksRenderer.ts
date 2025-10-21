@@ -154,7 +154,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   diff: FileDiffMetadata | undefined;
   expandedHunks = new Set<number>();
 
-  constructor(options: DiffHunksRendererOptions = { theme: 'none' }) {
+  constructor(
+    options: DiffHunksRendererOptions = {
+      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+    }
+  ) {
     this.options = options;
   }
 
