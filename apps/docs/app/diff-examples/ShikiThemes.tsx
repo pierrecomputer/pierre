@@ -211,8 +211,10 @@ export function ShikiThemes() {
                   }
                 >
                   {theme}
-                  {selectedDarkTheme === theme && (
+                  {selectedDarkTheme === theme ? (
                     <IconCheck className="ml-auto" />
+                  ) : (
+                    <div className="w-4 h-4 ml-2" />
                   )}
                 </DropdownMenuItem>
               ))}

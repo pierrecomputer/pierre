@@ -346,17 +346,25 @@ code {
   padding: 4px 1ch;
 }
 
+[data-separator='line-info']:not(:first-child) {
+  margin-top: var(--pjs-gap);
+}
+
+[data-separator='line-info']:not(:last-child) {
+  margin-bottom: var(--pjs-gap);
+}
+
 [data-separator='line-info'] [data-separator-content] {
   position: sticky;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: calc(1ch / 2);
+  padding: calc(1lh / 4) 1ch;
   border-radius: 6px;
   background-color: var(--pjs-bg-separator);
   width: auto;
   width: calc(var(--pjs-column-width) - 8px);
-  opacity: 0.8;
+  opacity: 0.65;
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
 }
 

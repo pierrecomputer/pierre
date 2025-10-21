@@ -6,6 +6,30 @@ import { useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
 
+// Local components to avoid class name duplication
+const FileLabel = ({ children }: { children: React.ReactNode }) => (
+  <label className="absolute top-1 left-1 block text-xs font-medium uppercase text-muted-foreground py-2 px-3 select-none rounded-lg bg-muted">
+    {children}
+  </label>
+);
+
+const FileTextarea = ({
+  value,
+  onChange,
+  className = '',
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  className?: string;
+}) => (
+  <textarea
+    value={value}
+    onChange={onChange}
+    className={`w-full h-48 font-mono text-sm bg-muted border rounded-lg resize-none  pt-10 px-4 ${className}`}
+    spellCheck={false}
+  />
+);
+
 const INITIAL_BEFORE = `.pizza {
   display: flex;
   justify-content: center;
@@ -39,26 +63,18 @@ export function ArbitraryFiles() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground pb-1 block">
-            Before.css
-          </label>
-          <textarea
+        <div className="relative">
+          <FileLabel>before.css</FileLabel>
+          <FileTextarea
             value={beforeContent}
             onChange={(e) => setBeforeContent(e.target.value)}
-            className="w-full h-48 p-3 font-mono text-sm bg-background border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            spellCheck={false}
           />
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground pb-1 block">
-            After.css
-          </label>
-          <textarea
+        <div className="relative">
+          <FileLabel>after.css</FileLabel>
+          <FileTextarea
             value={afterContent}
             onChange={(e) => setAfterContent(e.target.value)}
-            className="w-full h-48 p-3 font-mono text-sm bg-background border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            spellCheck={false}
           />
         </div>
       </div>
