@@ -1,20 +1,35 @@
 'use client';
 
 import Footer from '@/components/Footer';
+import { IconBell } from '@/components/icons';
 import { Header } from '@/components/ui/header';
 import '@pierre/precision-diffs/ssr';
-import { type PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import {
+  FileDiffSsr,
+  type PreloadedFileDiffResult,
+} from '@pierre/precision-diffs/ssr';
+import { useState } from 'react';
 
-declare module 'react' {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace JSX {
-    interface IntrinsicElements {
-      'file-diff': React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement>,
-        HTMLElement
-      >;
-    }
-  }
+// Annotation component with its own state for proper hydration
+function ErrorAnnotation({ message }: { message: string }) {
+  const [clickCount, setClickCount] = useState<number>(0);
+  const handleClick = () => {
+    setClickCount((count) => count + 1);
+  };
+
+  return (
+    <div className="bg-red-500 px-2 text-xs font-[Helvetica] flex gap-1.5 justify-items-start items-center leading-[20px]">
+      <IconBell className="size-3" />
+      {message}{' '}
+      <a
+        role="button"
+        onClick={handleClick}
+        className="cursor-pointer px-2 -my-1 select-none bg-amber-200 text-amber-950"
+      >
+        {clickCount}
+      </a>
+    </div>
+  );
 }
 
 export function SsrPage({
@@ -64,11 +79,20 @@ export function SsrPage({
         SSR Demo
       </h1>
 
-      <file-diff
-        {...preloadedFileDiff}
+      <FileDiffSsr
+        preloadedFileDiff={preloadedFileDiff}
         className="rounded-lg overflow-hidden border"
+        annotations={[
+          {
+            line: 8,
+            side: 'additions',
+            Component: ErrorAnnotation,
+            props: {
+              message: 'There was a sneaky lil error on this line in CI.',
+            },
+          },
+        ]}
       />
-
       <Footer />
     </div>
   );

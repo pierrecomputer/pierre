@@ -50,6 +50,12 @@ export default async function Ssr() {
       diffIndicators: 'bars',
       overflow: 'scroll',
     },
+    annotations: [
+      {
+        side: 'additions',
+        lineNumber: 8,
+      },
+    ],
   });
 
   return <SsrPage preloadedFileDiff={preloadedFileDiff} />;

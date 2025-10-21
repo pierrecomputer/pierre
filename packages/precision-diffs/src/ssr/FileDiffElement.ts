@@ -10,4 +10,4 @@ if (typeof HTMLElement !== 'undefined') {
   }
 }
 
-export const FileDiffElementHasLoaded = true;
+export {};

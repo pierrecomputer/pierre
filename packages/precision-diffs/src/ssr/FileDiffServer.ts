@@ -2,16 +2,16 @@ import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
 } from '../DiffHunksRenderer';
-import type { FileContents, LineAnnotation } from '../types';
+import type { DiffLineAnnotation, FileContents } from '../types';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 
 export type PreloadFileDiffOptions<LAnnotation> = {
   oldFile: FileContents;
   newFile: FileContents;
   options?: DiffHunksRendererOptions;
-  annotations?: LineAnnotation<LAnnotation>[];
+  annotations?: DiffLineAnnotation<LAnnotation>[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  renderAnnotation?(annotations: LineAnnotation<LAnnotation>): any;
+  renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): any;
   className?: string;
   style?: Record<string, string>;
 };
@@ -27,10 +27,16 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   oldFile,
   newFile,
   options,
-  // annotations,
+  annotations,
 }: PreloadFileDiffOptions<LAnnotation>) {
   const fileDiff = parseDiffFromFile(oldFile, newFile);
   const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>(options);
+
+  // Set line annotations if provided
+  if (annotations !== undefined && annotations.length > 0) {
+    diffHunksRenderer.setLineAnnotations(annotations);
+  }
+
   const result = await diffHunksRenderer.render(fileDiff, true);
   if (result == null) {
     throw new Error('Failed to render file diff');
@@ -73,6 +79,8 @@ const rawStyles = `:host {
     Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 
   --pjs-mixer: light-dark(black, white);
+
+  --pjs-annotation-min-height: 1lh;
 
   /*
     // Available CSS Variable Overrides

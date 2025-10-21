@@ -23,6 +23,8 @@
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "catalog:",
     "@types/hast": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "typescript": "catalog:"
   },
   "dependencies": {
@@ -31,6 +33,8 @@
     "diff": "catalog:",
     "fast-deep-equal": "catalog:",
     "hast-util-to-html": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "shiki": "catalog:"
   }
 }
