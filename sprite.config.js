@@ -5,7 +5,7 @@ export const spriteConfig = {
     'IconChevronsNarrow',
     'IconDiffSplit',
     'IconDiffUnified',
-    'IconFile',
+    'IconFileCode',
     'IconSymbolDiffstat',
     'IconSymbolAdded',
     'IconSymbolDeleted',

@@ -3,7 +3,7 @@ import type { ChangeTypes } from '../types';
 export function getIconForType(type: ChangeTypes | 'file') {
   switch (type) {
     case 'file':
-      return 'pjs-icon-file';
+      return 'pjs-icon-file-code';
     case 'change':
       return 'pjs-icon-symbol-modified';
     case 'new':
