@@ -13,7 +13,6 @@ export default [
       '{packages,apps}/*/build/**',
       '{packages,apps}/*/next-env.d.ts',
       '{packages,apps}/*/.source/**',
-      'apps/docs/components/icons/icons/**',
       'packages/storage-elements/blocks/git-platform-sync/api/**/*',
       'packages/storage-elements/blocks/git-platform-sync/pages/**/*',
       'packages/precision-diffs/build-css.js',

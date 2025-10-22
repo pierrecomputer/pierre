@@ -20,7 +20,9 @@ export type Color = {
   border: string;
 };
 
-export const Colors = {
+export const Colors: Record<string, string | undefined> = {
+  currentcolor: 'currentcolor',
+
   black: 'var(--color-black)',
   white: 'var(--color-white)',
 
@@ -39,3 +41,10 @@ export const Colors = {
   bg: 'var(--color-bg)',
   border: 'var(--color-border)',
 };
+
+export interface IconProps {
+  size?: 10 | 12 | 16 | 20 | 32 | 48 | '1em';
+  color?: keyof Color | 'currentcolor' | (string & {});
+  style?: React.CSSProperties;
+  className?: string;
+}

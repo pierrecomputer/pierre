@@ -56,41 +56,24 @@ package.json.
 Long term, I'm hoping we can use publishConfig to override this, but because we
 rely on Bun for package managment, we currently don't have this functionality.
 
-## Architectural Notes
+## Building Icons
 
-This is just a basic-ass vite project, so most of what you'll probably want to
-be messing with is in the `./src` directory. I've setup 2 routes within this
-vite project, one for react related stuff and the other for raw vanilla js api.
+To build all our SVG icons from figma there's a couple preparation steps that
+you need to run first.
 
-From a high level, I've been architecting this project to run on raw JS and
-manipulating raw dom nodes for rendering, the reason being because this becomes
-portable to pretty much any other platform in the future and it's not uncommon
-for code snippets/files to be quite large and we want to make performance a
-priority from day one.
+Perform a full export of all `Published Icons` the `Pierre Design` figma file
 
-Another thing I've done for testing is putting all `pierrejs` style related code
-into a `pierre-js` sup directory and created a typescript alias to roughly make
-it feel like a module. There's probably better ways we could architect this
-repo for development and testing, but this works nicely for now. It does mean
-that auto imports aren't super great at detecting the alias, so you often have
-to manipulate whatever is generated.
+Do this by selecting all the icons but not the art board and in the bottom right
+click `Export XXX Layers` and make sure to point it to a `./svg` folder at the
+root level of this project
 
-As of this writing there are two man classes for rendering code - `CodeRenderer`
-and `DiffRenderer`.
+Once that's done, simply run:
 
-### CodeRenderer
+```bash
+bun run icons:build
+```
 
-Will probably be renamed, but it's goal is taking a `ReadableStream<string>`
-that can be used to render code being streamed using Shiki.
+This will run a full build of all the icons into
+`./apps/docs/components/icons/icons`
 
-### DiffRenderer
-
-The goal of this class is rendering out data parsed out from a patch file. It
-doesn't support streaming at the moment (but may in the future... have to figure
-out how that might work because it's non-trivial).
-
-### Shared Stuff
-
-I've architected some internal utilities for ensuring only one shared shiki
-highlighter instance and in cases of streaming, that all updates are piped
-through a shared requestAnimationFrame.
+Then make sure to check in any changes needed
