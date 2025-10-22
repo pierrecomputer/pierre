@@ -3,10 +3,6 @@
   "workspaces": {
     "": {
       "name": "@pierre/js",
-      "dependencies": {
-        "chokidar": "^4.0.3",
-        "svgo": "^4.0.0",
-      },
       "devDependencies": {
         "@eslint/eslintrc": "catalog:",
         "@eslint/js": "catalog:",
@@ -17,6 +13,7 @@
         "eslint-config-next": "catalog:",
         "eslint-plugin-react-hooks": "catalog:",
         "prettier": "catalog:",
+        "svgo": "catalog:",
         "typescript": "catalog:",
         "typescript-eslint": "catalog:",
       },
@@ -225,7 +222,7 @@
     "shadcn": "3.3.1",
     "shiki": "3.13.0",
     "sonner": "2.0.7",
-    "svgo": "3.3.2",
+    "svgo": "4.0.0",
     "tailwind-merge": "3.3.1",
     "tailwindcss": "4.1.13",
     "tw-animate-css": "1.4.0",

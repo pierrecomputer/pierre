@@ -90,7 +90,7 @@
       "shadcn": "3.3.1",
       "shiki": "3.13.0",
       "sonner": "2.0.7",
-      "svgo": "3.3.2",
+      "svgo": "4.0.0",
       "chokidar": "3.6.0",
       "tailwind-merge": "3.3.1",
       "tailwindcss": "4.1.13",
@@ -117,10 +117,8 @@
     "eslint-config-next": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "prettier": "catalog:",
+    "svgo": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
-  },
-  "dependencies": {
-    "svgo": "^4.0.0"
   }
 }
