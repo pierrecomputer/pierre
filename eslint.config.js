@@ -15,7 +15,6 @@ export default [
       '{packages,apps}/*/.source/**',
       'packages/storage-elements/blocks/git-platform-sync/api/**/*',
       'packages/storage-elements/blocks/git-platform-sync/pages/**/*',
-      'packages/precision-diffs/build-css.js',
       'update-themes.js',
     ],
   },
