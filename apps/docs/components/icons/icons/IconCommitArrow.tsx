@@ -1,27 +1,28 @@
-// Generated from svgs/IconCommitArrow.svg
-import { type Color, Colors } from '../Color';
+// Generated `bun run icons:build`, see README for details
+import { Colors, type IconProps } from '../Color';
 
-interface IconProps {
-  size?: 10 | 12 | 16 | 20 | 32 | 48 | '1em';
-  color?: keyof Color | 'currentcolor';
-  style?: React.CSSProperties;
-  className?: string;
+export function IconCommitArrow({
+  size = 16,
+  color = 'currentcolor',
+  style,
+  className,
+  ...props
+}: IconProps) {
+  const height = size;
+  const width = size === '1em' ? '1em' : Math.round(Number(size) * 1);
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      width={width}
+      height={height}
+      fill={Colors[color] ?? color}
+      style={style}
+      className={`pi${className ? ` ${className}` : ''}`}
+      {...props}
+    >
+      <path d="m1 8.75.056-.002a5.001 5.001 0 0 0 9.888 0L11 8.75h2.44l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06l-3.25-3.25a.75.75 0 1 0-1.06 1.06l1.97 1.97H11l-.056.002a5.001 5.001 0 0 0-9.888 0L1 7.25H.75a.75.75 0 0 0 0 1.5zm5 2.75a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7" />
+    </svg>
+  );
 }
-
-// prettier-ignore
-export const IconCommitArrow = ({
-	size = 16,
-	color = "currentcolor",
-	style,
-	className,
-	...props
-}: IconProps) => {
-	const height = size;
-	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
-
-	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="m1 8.75.056-.002a5.001 5.001 0 0 0 9.888 0L11 8.75h2.44l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06l-3.25-3.25a.75.75 0 1 0-1.06 1.06l1.97 1.97H11l-.056.002a5.001 5.001 0 0 0-9.888 0L1 7.25H.75a.75.75 0 0 0 0 1.5zm5 2.75a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></svg>
-	);
-};
-
-export { IconCommitArrow as ReactComponent };
