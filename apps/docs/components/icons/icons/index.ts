@@ -114,7 +114,7 @@ export { IconCrown } from './IconCrown';
 export { IconCrownFill } from './IconCrownFill';
 export { IconCursor } from './IconCursor';
 export { IconDesktop } from './IconDesktop';
-export { IconDiffBlended } from './IconDiffBlended';
+export { IconDiffUnified } from './IconDiffUnified';
 export { IconDiffSplit } from './IconDiffSplit';
 export { IconDock } from './IconDock';
 export { IconDraft } from './IconDraft';

@@ -1,11 +1,11 @@
 export const spriteConfig = {
   icons: [
-    'IconArrowShort',
-    'IconArrowUpRight',
-    'IconBook',
-    'IconCopyFill',
+    'IconArrow',
+    'IconBrandGithub',
+    'IconChevronsNarrow',
     'IconDiffSplit',
     'IconDiffUnified',
+    'IconFile',
     'IconSymbolDiffstat',
     'IconSymbolAdded',
     'IconSymbolDeleted',
@@ -13,11 +13,10 @@ export const spriteConfig = {
     'IconSymbolModified',
     'IconSymbolMoved',
     'IconSymbolRef',
-    'IconBrandGithub',
   ],
 
   output: {
-    file: 'apps/docs/app/IconSprite.tsx',
+    file: 'packages/precision-diffs/src/sprite.ts',
     symbolPrefix: 'pjs-icon-',
   },
 

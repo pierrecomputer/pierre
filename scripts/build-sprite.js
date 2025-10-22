@@ -53,28 +53,24 @@ function iconNameToKebabCase(iconName) {
 }
 
 /**
- * Generate the React component for the sprite
+ * Generate the TypeScript sprite string
  */
-function generateSpriteComponent(symbols) {
-  const symbolsJsx = symbols
+function generateSpriteString(symbols) {
+  const symbolsHtml = symbols
     .map(
       (symbol) =>
-        `      <symbol id="${symbol.id}" viewBox="${symbol.viewBox}">
+        `  <symbol id="${symbol.id}" viewBox="${symbol.viewBox}">
 ${symbol.content
   .split('\n')
-  .map((line) => `        ${line}`)
+  .map((line) => `    ${line}`)
   .join('\n')}
-      </symbol>`
+  </symbol>`
     )
     .join('\n');
 
-  return `export default function IconSprite() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" style={{ display: 'none' }}>
-${symbolsJsx}
-    </svg>
-  );
-}`;
+  return `export const SVGSpriteSheet = \`<svg data-icon-sprite aria-hidden="true" width="0" height="0">
+${symbolsHtml}
+</svg>\`;`;
 }
 
 /**
@@ -99,15 +95,23 @@ async function buildSprite() {
   }
 
   const files = await readdir(sourceDir);
-  const svgFiles = files
-    .filter(
-      (file) => extname(file).toLowerCase() === spriteConfig.source.extension
-    )
-    .filter((file) =>
-      spriteConfig.icons.includes(basename(file, spriteConfig.source.extension))
-    );
+  const allSvgFiles = files.filter(
+    (file) => extname(file).toLowerCase() === spriteConfig.source.extension
+  );
 
-  if (svgFiles.length === 0) {
+  const foundFiles = [];
+  const missingFiles = [];
+
+  for (const iconName of spriteConfig.icons) {
+    const fileName = `${iconName}.svg`;
+    if (allSvgFiles.includes(fileName)) {
+      foundFiles.push(fileName);
+    } else {
+      missingFiles.push(iconName);
+    }
+  }
+
+  if (foundFiles.length === 0) {
     console.error(
       `${colors.red}× Error:${colors.reset} No matching SVG files found.`
     );
@@ -118,16 +122,23 @@ async function buildSprite() {
   }
 
   console.log(
-    `${colors.blue}➜ Found ${colors.bright}${svgFiles.length}${colors.reset}${colors.blue} SVG files to process:${colors.reset}`
+    `${colors.blue}➜ Processing ${colors.bright}${foundFiles.length}${colors.reset}${colors.blue} of ${colors.bright}${spriteConfig.icons.length}${colors.reset}${colors.blue} requested SVG files:${colors.reset}`
   );
-  svgFiles.forEach((file) =>
-    console.log(`${colors.dim}  - ${file}${colors.reset}`)
+
+  foundFiles.forEach((file) =>
+    console.log(`${colors.dim}  ✔ ${file}${colors.reset}`)
   );
+
+  if (missingFiles.length > 0) {
+    missingFiles.forEach((iconName) =>
+      console.log(`${colors.red}  × ${iconName}.svg${colors.reset}`)
+    );
+  }
 
   const symbols = [];
   const errors = [];
 
-  for (const file of svgFiles) {
+  for (const file of foundFiles) {
     const filePath = join(sourceDir, file);
     const iconName = basename(file, spriteConfig.source.extension);
 
@@ -156,9 +167,9 @@ async function buildSprite() {
 
   symbols.sort((a, b) => a.id.localeCompare(b.id));
 
-  const componentContent = generateSpriteComponent(symbols);
+  const spriteContent = generateSpriteString(symbols);
 
-  await writeFile(outputFile, componentContent, 'utf-8');
+  await writeFile(outputFile, spriteContent, 'utf-8');
 
   console.log(
     `${colors.green}↪ Sprite generated:${colors.reset} ${colors.bright}${spriteConfig.output.file}${colors.reset}`
