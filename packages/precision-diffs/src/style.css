@@ -515,9 +515,17 @@ code {
 }
 
 [data-diff-span] {
-  padding-top: 1.5px;
-  padding-bottom: 1.5px;
   position: relative;
+}
+
+[data-diff-span]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 3px;
 }
 
 [data-line-type='change-addition'] {
@@ -525,7 +533,7 @@ code {
     color: var(--pjs-addition-base);
   }
 
-  [data-diff-span] {
+  [data-diff-span]::before {
     background-color: var(--pjs-bg-addition-emphasis);
   }
 }
@@ -535,7 +543,7 @@ code {
     color: var(--pjs-deletion-base);
   }
 
-  [data-diff-span] {
+  [data-diff-span]::before {
     background-color: var(--pjs-bg-deletion-emphasis);
   }
 }
