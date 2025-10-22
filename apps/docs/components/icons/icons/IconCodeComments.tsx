@@ -20,7 +20,7 @@ export const IconCodeComments = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M10.059 15H8.136l3.941-14H14zM3.923 15H2L5.941 1h1.923z" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M10.059 15H8.136l3.941-14H14zm-6.136 0H2L5.941 1h1.923z"/></svg>
 	);
 };
 

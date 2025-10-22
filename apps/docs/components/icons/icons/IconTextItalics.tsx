@@ -20,7 +20,7 @@ export const IconTextItalics = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M13 2.5h-2.79l-2.341 11H10.5V15h-7v-1.5h2.752l2.34-11H6V1h7z" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M13 2.5h-2.79l-2.341 11H10.5V15h-7v-1.5h2.752l2.34-11H6V1h7z"/></svg>
 	);
 };
 

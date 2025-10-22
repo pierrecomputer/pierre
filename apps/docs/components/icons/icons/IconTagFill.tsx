@@ -20,7 +20,7 @@ export const IconTagFill = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path fillRule="evenodd" d="M0 1.25C0 .56.56 0 1.25 0h5.879a2.25 2.25 0 0 1 1.59.659l6.5 6.5a2.25 2.25 0 0 1 0 3.182l-4.878 4.879a2.25 2.25 0 0 1-3.182 0l-6.5-6.5A2.25 2.25 0 0 1 0 7.129zM4.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" clipRule="evenodd" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M0 1.25C0 .56.56 0 1.25 0h5.879a2.25 2.25 0 0 1 1.59.659l6.5 6.5a2.25 2.25 0 0 1 0 3.182l-4.878 4.879a2.25 2.25 0 0 1-3.182 0l-6.5-6.5A2.25 2.25 0 0 1 0 7.129zM4.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" clip-rule="evenodd"/></svg>
 	);
 };
 

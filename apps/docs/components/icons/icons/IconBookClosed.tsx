@@ -20,7 +20,7 @@ export const IconBookClosed = ({
 	const width = size === "1em" ? "1em" : Math.round(Number(size) * 1);
 
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path fillRule="evenodd" d="M4.75 1A2.75 2.75 0 0 0 2 3.75v9.75q0 .045.006.091A2.25 2.25 0 0 0 4.344 16h9.406a.75.75 0 0 0 0-1.5h-.25V13h.25a.75.75 0 0 0 .75-.75V1.75a.75.75 0 0 0-.75-.75zm-.453 13.501.047-.001H12V13H4.5a1 1 0 0 1-.125-.01 1 1 0 0 1-.125.01.75.75 0 0 0 0 1.5zm.078-2.99A1 1 0 0 1 4.5 11.5V2.525c-.57.116-1 .62-1 1.225v7.878q.354-.126.75-.128.064 0 .125.01M6 11.5v-9h2V6l1.5-1L11 6V2.5h2v9z" clipRule="evenodd" /></svg>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={width} height={height} fill={Colors[color as 'black'] || color} style={style} className={`pi ${className ? className : ''}`} {...props}><path d="M4.75 1A2.75 2.75 0 0 0 2 3.75v9.75q0 .045.006.091A2.25 2.25 0 0 0 4.344 16h9.406a.75.75 0 0 0 0-1.5h-.25V13h.25a.75.75 0 0 0 .75-.75V1.75a.75.75 0 0 0-.75-.75zm-.453 13.501.047-.001H12V13H4.5a1 1 0 0 1-.125-.01 1 1 0 0 1-.125.01.75.75 0 0 0 0 1.5zm.078-2.99A1 1 0 0 1 4.5 11.5V2.525c-.57.116-1 .62-1 1.225v7.878q.354-.126.75-.128.064 0 .125.01M6 11.5v-9h2V6l1.5-1L11 6V2.5h2v9z" clip-rule="evenodd"/></svg>
 	);
 };
 
