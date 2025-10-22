@@ -40,6 +40,14 @@ pub fn main() !void {
 `,
 };
 
+// Define annotation positions once in the server component
+const annotationPositions = [
+  {
+    side: 'additions' as const,
+    lineNumber: 8,
+  },
+];
+
 export default async function Ssr() {
   const preloadedFileDiff = await preloadFileDiff({
     oldFile: OLD_FILE,
@@ -50,13 +58,13 @@ export default async function Ssr() {
       diffIndicators: 'bars',
       overflow: 'scroll',
     },
-    annotations: [
-      {
-        side: 'additions',
-        lineNumber: 8,
-      },
-    ],
+    annotations: annotationPositions,
   });
 
-  return <SsrPage preloadedFileDiff={preloadedFileDiff} />;
+  return (
+    <SsrPage
+      preloadedFileDiff={preloadedFileDiff}
+      annotationPositions={annotationPositions}
+    />
+  );
 }

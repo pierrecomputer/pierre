@@ -6,6 +6,7 @@ import { Header } from '@/components/ui/header';
 import '@pierre/precision-diffs/ssr';
 import {
   FileDiffSsr,
+  type LineAnnotation,
   type PreloadedFileDiffResult,
 } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
@@ -34,9 +35,21 @@ function ErrorAnnotation({ message }: { message: string }) {
 
 export function SsrPage({
   preloadedFileDiff,
+  annotationPositions,
 }: {
   preloadedFileDiff: PreloadedFileDiffResult;
+  annotationPositions: Array<{ lineNumber: number; side: 'additions' | 'deletions' }>;
 }) {
+  // Build full annotations with render functions from positions
+  const annotations: LineAnnotation[] = annotationPositions.map(
+    ({ lineNumber, side }) => ({
+      line: lineNumber,
+      side,
+      render: () => (
+        <ErrorAnnotation message="There was a sneaky lil error on this line in CI." />
+      ),
+    })
+  );
   return (
     <div
       className="min-h-screen max-w-5xl px-5 mx-auto"
@@ -82,16 +95,7 @@ export function SsrPage({
       <FileDiffSsr
         preloadedFileDiff={preloadedFileDiff}
         className="rounded-lg overflow-hidden border"
-        annotations={[
-          {
-            line: 8,
-            side: 'additions',
-            Component: ErrorAnnotation,
-            props: {
-              message: 'There was a sneaky lil error on this line in CI.',
-            },
-          },
-        ]}
+        annotations={annotations}
       />
       <Footer />
     </div>

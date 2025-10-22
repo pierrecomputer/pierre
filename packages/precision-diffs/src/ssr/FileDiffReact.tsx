@@ -1,29 +1,34 @@
 'use client';
 
-import {
-  type CSSProperties,
-  type ComponentType,
-  useEffect,
-  useRef,
-} from 'react';
+import { type CSSProperties, useEffect, useRef } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
 import type { PreloadedFileDiffResult } from './FileDiffServer';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface LineAnnotation<TProps = any> {
+export interface LineAnnotation {
   line: number;
   side: 'additions' | 'deletions';
-  // For proper hydration, pass props instead of a render function
-  Component: ComponentType<TProps>;
-  props: TProps;
+  render: () => React.ReactElement;
+}
+
+/**
+ * Helper to extract annotation positions for preloadFileDiff.
+ * This allows you to define annotations once with render functions,
+ * then extract just the positions for SSR.
+ */
+export function getAnnotationPositions(
+  annotations: LineAnnotation[]
+): Array<{ lineNumber: number; side: 'additions' | 'deletions' }> {
+  return annotations.map(({ line, side }) => ({
+    lineNumber: line,
+    side,
+  }));
 }
 
 interface FileDiffSsrProps {
   preloadedFileDiff: PreloadedFileDiffResult;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  annotations?: LineAnnotation<any>[];
+  annotations?: LineAnnotation[];
   className?: string;
   style?: CSSProperties;
 }
@@ -68,17 +73,15 @@ export function FileDiffSsr({
     const styleAttr =
       style !== undefined ? ` style="${serializeStyle(style)}"` : '';
 
-    // Render annotations as static HTML slots with props serialized for hydration
+    // Render annotations as static HTML slots for SSR
     const annotationSlots =
       annotations !== undefined && annotations.length > 0
         ? annotations
-            .map(({ line, side, Component, props }) => {
+            .map(({ line, side, render }) => {
               const slotName = `annotation-${side}-${line}`;
-              // Serialize props for client-side hydration
-              const propsJson = escapeHtml(JSON.stringify(props));
               // Render the component with React markers for proper hydration
-              const content = renderToString(<Component {...props} />);
-              return `<div slot="${slotName}" data-props="${propsJson}">${content}</div>`;
+              const content = renderToString(render());
+              return `<div slot="${slotName}">${content}</div>`;
             })
             .join('')
         : '';
@@ -89,7 +92,7 @@ export function FileDiffSsr({
   }
 
   useEffect(() => {
-    // After mount, hydrate the slots with React using serialized props
+    // After mount, hydrate the slots with React using render functions
     if (
       wrapperRef.current !== null &&
       annotations !== undefined &&
@@ -110,10 +113,7 @@ export function FileDiffSsr({
           });
 
           if (annotation !== undefined) {
-            const propsJson = slotElement.getAttribute('data-props');
-            const props = propsJson ? JSON.parse(propsJson) : {};
-
-            hydrateRoot(slotElement, <annotation.Component {...props} />);
+            hydrateRoot(slotElement, annotation.render());
           }
         });
 
