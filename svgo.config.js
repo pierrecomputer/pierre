@@ -1,4 +1,4 @@
-export const svgoConfig = {
+export const SVGOConfig = {
   plugins: [
     {
       name: 'preset-default',
@@ -21,5 +21,3 @@ export const svgoConfig = {
     },
   ],
 };
-
-export default svgoConfig;

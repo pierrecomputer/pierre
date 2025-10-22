@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+import { transform } from '@svgr/core';
 import { readFile, readdir, stat, writeFile } from 'fs/promises';
 import { basename, dirname, extname, join } from 'path';
-import { optimize } from 'svgo';
 import { fileURLToPath } from 'url';
 
-import { svgoConfig } from '../svgo.config.js';
+import { SVGOConfig } from '../svgo.config.js';
+import template from './svgr-template.js';
 
 const colors = {
   reset: '\x1b[0m',
@@ -19,68 +20,6 @@ const colors = {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
-
-/**
- * Process a single SVG file with SVGO
- */
-async function processSvg(filePath) {
-  const svgContent = await readFile(filePath, 'utf-8');
-  const result = optimize(svgContent, svgoConfig);
-
-  if (result.error) {
-    throw new Error(`SVGO error: ${result.error}`);
-  }
-
-  return result.data;
-}
-
-/**
- * Extract viewBox and path content from SVG
- */
-function parseSvg(svgContent) {
-  const viewBoxMatch = svgContent.match(/viewBox="([^"]*)"/);
-  const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 16 16';
-
-  const contentMatch = svgContent.match(/<svg[^>]*>(.*?)<\/svg>/s);
-  const content = contentMatch ? contentMatch[1].trim() : '';
-
-  return { viewBox, content };
-}
-
-/**
- * Generate TypeScript component content
- */
-function generateIconComponent(iconName, svgContent) {
-  const { viewBox, content } = parseSvg(svgContent);
-
-  // Calculate aspect ratio from viewBox
-  let aspectRatio = 1; // Default to square if no viewBox found
-  if (viewBox) {
-    const viewBoxValues = viewBox.split(' ').map(Number);
-    if (viewBoxValues.length >= 4) {
-      const [, , viewBoxWidth, viewBoxHeight] = viewBoxValues;
-      aspectRatio = viewBoxWidth / viewBoxHeight;
-    }
-  }
-
-  return `// Generated \`bun run icons:build\`, see README for details
-import { Colors, type IconProps } from '../Color';
-
-export function ${iconName}({
-	size = 16,
-	color = "currentcolor",
-	style,
-	className,
-	...props
-}: IconProps) {
-	const height = size;
-	const width = size === "1em" ? "1em" : Math.round(Number(size) * ${aspectRatio});
-
-	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width={width} height={height} fill={Colors[color] ?? color} style={style} className={\`pi\${className ? \` \${className}\` : ''}\`} {...props}>${content}</svg>
-	);
-}`;
-}
 
 /**
  * Clean up existing generated files
@@ -122,7 +61,7 @@ async function cleanupGeneratedFiles(componentsDir) {
  */
 async function buildIcons() {
   console.log(
-    `${colors.cyan}➜ Processing SVG icons with SVGO and generating TypeScript components…${colors.reset}`
+    `${colors.cyan}➜ Processing SVG icons with SVGR and generating TypeScript components…${colors.reset}`
   );
 
   const sourceDir = join(projectRoot, 'svgs');
@@ -169,15 +108,36 @@ async function buildIcons() {
     const iconName = basename(file, '.svg');
 
     try {
-      // Process with SVGO
-      const optimizedSvg = await processSvg(filePath);
-      await writeFile(filePath, optimizedSvg, 'utf-8');
-      processedFiles.push(file);
+      const svgContent = await readFile(filePath, 'utf-8');
 
-      // Generate TypeScript component
-      const componentContent = generateIconComponent(iconName, optimizedSvg);
+      // Transform with SVGR
+      const componentCode = await transform(
+        svgContent,
+        {
+          typescript: true,
+          icon: false,
+          plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
+          svgoConfig: SVGOConfig,
+          template,
+          jsxRuntime: 'automatic',
+          // Replace className and add custom attributes
+          replaceAttrValues: {},
+          svgProps: {
+            width: '{width}',
+            height: '{height}',
+            fill: '{Colors[color] ?? color}',
+            style: '{style}',
+            className: "{`pi${className != null ? ` ${className}` : ''}`}",
+          },
+        },
+        { componentName: iconName }
+      );
+
+      // Write component file
       const componentPath = join(componentsDir, `${iconName}.tsx`);
-      await writeFile(componentPath, componentContent, 'utf-8');
+      await writeFile(componentPath, componentCode, 'utf-8');
+
+      processedFiles.push(file);
       generatedComponents.push(iconName);
 
       console.log(`${colors.dim}  ✔ ${file} → ${iconName}.tsx${colors.reset}`);

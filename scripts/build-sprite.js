@@ -5,7 +5,7 @@ import { optimize } from 'svgo';
 import { fileURLToPath } from 'url';
 
 import { spriteConfig } from '../sprite.config.js';
-import { svgoConfig } from '../svgo.config.js';
+import { SVGOConfig } from '../svgo.config.js';
 
 const colors = {
   reset: '\x1b[0m',
@@ -26,7 +26,7 @@ const projectRoot = join(__dirname, '..');
  */
 async function processSvg(filePath) {
   const svgContent = await readFile(filePath, 'utf-8');
-  const result = optimize(svgContent, svgoConfig);
+  const result = optimize(svgContent, SVGOConfig);
 
   if (result.error) {
     throw new Error(`SVGO error: ${result.error}`);
