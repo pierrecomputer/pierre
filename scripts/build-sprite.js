@@ -85,6 +85,7 @@ async function buildSprite() {
   try {
     await stat(sourceDir);
   } catch (error) {
+    console.erro(error);
     console.error(
       `${colors.red}×Error:${colors.reset} Source directory not found: ${sourceDir}`
     );

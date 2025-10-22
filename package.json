@@ -19,7 +19,7 @@
     "clean": "rm -rf {packages,apps}/*/dist && rm -rf {packages,apps}/*/tsconfig.tsbuildinfo && rm -rf {packages,apps}/demo/node_modules/.vite && rm -rf {packages,apps}/demo/node_modules/.vite-temp",
     "update-themes": "node update-themes.js",
     "icons:build": "node scripts/build-icons.js && bun run format",
-    "icons:sprite": "node scripts/build-sprite.js",
+    "icons:sprite": "node scripts/build-sprite.js && bun run format",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
