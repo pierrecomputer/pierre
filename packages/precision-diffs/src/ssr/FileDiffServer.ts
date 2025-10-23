@@ -766,6 +766,7 @@ code {
 }
 
 [data-change-icon] {
+  fill: currentColor;
   flex-shrink: 0;
 }
 
