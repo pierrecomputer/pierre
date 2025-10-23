@@ -38,7 +38,10 @@ export function SsrPage({
   annotationPositions,
 }: {
   preloadedFileDiff: PreloadedFileDiffResult;
-  annotationPositions: Array<{ lineNumber: number; side: 'additions' | 'deletions' }>;
+  annotationPositions: Array<{
+    lineNumber: number;
+    side: 'additions' | 'deletions';
+  }>;
 }) {
   // Build full annotations with render functions from positions
   const annotations: LineAnnotation[] = annotationPositions.map(
