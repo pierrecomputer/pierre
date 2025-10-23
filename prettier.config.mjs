@@ -8,5 +8,8 @@ export default {
   importOrder: ['<THIRD_PARTY_MODULES>', '^\\.'],
   importOrderSortSpecifiers: true,
   importOrderSeparation: true,
-  plugins: ['@trivago/prettier-plugin-sort-imports'],
+  plugins: [
+    '@trivago/prettier-plugin-sort-imports',
+    'prettier-plugin-tailwindcss',
+  ],
 };
