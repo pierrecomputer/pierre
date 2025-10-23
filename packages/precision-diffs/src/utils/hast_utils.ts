@@ -79,7 +79,7 @@ export function createSeparator({
   if (type === 'line-info' && content != null) {
     const contentChildren: ElementContent[] = [createTextNode(content)];
     if (expandIndex != null) {
-      contentChildren.unshift(createIcon({ name: 'pjs-icon-expand' }));
+      contentChildren.unshift(createIcon({ name: 'pjs-icon-chevrons-narrow' }));
     }
     children.push(
       createHastElement({
@@ -354,7 +354,7 @@ function createHeaderElement({
     );
     children.push(
       createIcon({
-        name: 'pjs-arrow',
+        name: 'pjs-icon-arrow',
         properties: {
           'data-rename-icon': '',
         },
