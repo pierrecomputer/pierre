@@ -1,8 +1,13 @@
+import { toHtml } from 'hast-util-to-html';
+
 import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
 } from '../DiffHunksRenderer';
+import { FileHeaderRenderer } from '../FileHeaderRenderer';
+import { SVGSpriteSheet } from '../sprite';
 import type { DiffLineAnnotation, FileContents } from '../types';
+import { createHastElement, createTextNode } from '../utils/hast_utils';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 
 export type PreloadFileDiffOptions<LAnnotation> = {
@@ -23,7 +28,7 @@ export type PreloadedFileDiffResult = {
   };
 };
 
-export async function preloadFileDiff<LAnnotation = undefined>({
+export async function preloadFileDiff<LAnnotation>({
   oldFile,
   newFile,
   options,
@@ -31,38 +36,48 @@ export async function preloadFileDiff<LAnnotation = undefined>({
 }: PreloadFileDiffOptions<LAnnotation>) {
   const fileDiff = parseDiffFromFile(oldFile, newFile);
   const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>(options);
+  const fileHeader = new FileHeaderRenderer(options);
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {
     diffHunksRenderer.setLineAnnotations(annotations);
   }
 
-  const result = await diffHunksRenderer.render(fileDiff, true);
-  if (result == null) {
+  const [hunkResult, headerResult] = await Promise.all([
+    diffHunksRenderer.render(fileDiff, true),
+    fileHeader.render(fileDiff),
+  ]);
+  if (hunkResult == null) {
     throw new Error('Failed to render file diff');
   }
-  const html = diffHunksRenderer.renderFullHTML(result);
-
-  const prerenderedHTML = `<template shadowrootmode="open">
-  <style>
-    @layer base, theme;
+  const cssText = `@layer base, theme;
     @layer base {
       ${rawStyles}
     }
     @layer theme {
-      ${result.css}
-    }
-  </style>
-  <div class="file-diff-container">${html}</div>
-  <slot></slot>
-</template>`;
+      ${hunkResult.css}
+    }`;
+
+  const children = [
+    createHastElement({
+      tagName: 'style',
+      children: [createTextNode(cssText)],
+    }),
+  ];
+  if (headerResult != null) {
+    children.push(headerResult);
+  }
+  children.push(diffHunksRenderer.renderFullAST(hunkResult));
+
+  const __html = `<template shadowrootmode="open">
+${SVGSpriteSheet}
+${toHtml(children)}
+  </template>`;
 
   return {
     suppressHydrationWarning: true,
-    dangerouslySetInnerHTML: {
-      __html: prerenderedHTML,
-    },
-  } satisfies PreloadedFileDiffResult;
+    dangerouslySetInnerHTML: { __html },
+  };
 }
 
 const rawStyles = `:host {
@@ -81,7 +96,6 @@ const rawStyles = `:host {
   --pjs-mixer: light-dark(black, white);
 
   --pjs-annotation-min-height: 1lh;
-
   /*
     // Available CSS Variable Overrides
     --pjs-bg-buffer-override
@@ -344,8 +358,19 @@ code {
   overscroll-behavior-x: contain;
   tab-size: var(--pjs-tab-size);
   align-self: flex-start;
-  /* TEMP HACK */
-  padding-bottom: var(--pjs-gap);
+  padding-block: var(--pjs-gap);
+}
+
+[data-pjs-header] ~ [data-pjs] [data-code] {
+  padding-top: 0;
+}
+
+[data-pjs][data-overflow='wrap'] {
+  padding-block: var(--pjs-gap);
+}
+
+[data-pjs-header] + [data-icon-sprite] + [data-pjs][data-overflow='wrap'] {
+  padding-top: 0;
 }
 
 [data-type='split'][data-overflow='wrap'] [data-code] {
@@ -405,17 +430,25 @@ code {
   padding: 4px 1ch;
 }
 
+[data-separator='line-info']:not(:first-child) {
+  margin-top: var(--pjs-gap);
+}
+
+[data-separator='line-info']:not(:last-child) {
+  margin-bottom: var(--pjs-gap);
+}
+
 [data-separator='line-info'] [data-separator-content] {
   position: sticky;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: calc(1ch / 2);
+  padding: calc(1lh / 4) 1ch;
   border-radius: 6px;
   background-color: var(--pjs-bg-separator);
   width: auto;
   width: calc(var(--pjs-column-width) - 8px);
-  opacity: 0.8;
+  opacity: 0.65;
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
 }
 
@@ -574,9 +607,17 @@ code {
 }
 
 [data-diff-span] {
-  padding-top: 1.5px;
-  padding-bottom: 1.5px;
   position: relative;
+}
+
+[data-diff-span]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 3px;
 }
 
 [data-line-type='change-addition'] {
@@ -584,7 +625,7 @@ code {
     color: var(--pjs-addition-base);
   }
 
-  [data-diff-span] {
+  [data-diff-span]::before {
     background-color: var(--pjs-bg-addition-emphasis);
   }
 }
@@ -594,7 +635,7 @@ code {
     color: var(--pjs-deletion-base);
   }
 
-  [data-diff-span] {
+  [data-diff-span]::before {
     background-color: var(--pjs-bg-deletion-emphasis);
   }
 }
@@ -646,9 +687,10 @@ code {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+  align-items: center;
   gap: var(--pjs-gap);
-  /* HACK VALUES FOR NOW... */
-  padding: 14px 20px;
+  min-height: calc(1lh + (var(--pjs-gap) * 3));
+  padding-inline: 16px;
 }
 
 [data-header-content] {
@@ -667,6 +709,10 @@ code {
   text-overflow: ellipsis;
   min-width: 0;
   white-space: nowrap;
+}
+
+[data-prev-name] {
+  opacity: 0.7;
 }
 
 [data-rename-icon] {
@@ -705,7 +751,7 @@ code {
   overflow: hidden;
 }
 
-/* Undo some of the stuff that the \`pre\` tag does */
+/* Undo some of the stuff that the 'pre' tag does */
 [data-annotation-slot] {
   text-wrap-mode: wrap;
   word-break: normal;
@@ -728,4 +774,8 @@ code {
 
 [data-change-icon='deleted'] {
   color: var(--pjs-deletion-base);
+}
+
+[data-change-icon='file'] {
+  opacity: 0.6;
 }`;

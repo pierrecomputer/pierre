@@ -1,4 +1,7 @@
-import { type FileContents } from '@pierre/precision-diffs';
+import {
+  type DiffLineAnnotation,
+  type FileContents,
+} from '@pierre/precision-diffs';
 import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
 
 import { SsrPage } from './SsrPage';
@@ -41,9 +44,9 @@ pub fn main() !void {
 };
 
 // Define annotation positions once in the server component
-const annotationPositions = [
+const annotationPositions: DiffLineAnnotation[] = [
   {
-    side: 'additions' as const,
+    side: 'additions',
     lineNumber: 8,
   },
 ];
