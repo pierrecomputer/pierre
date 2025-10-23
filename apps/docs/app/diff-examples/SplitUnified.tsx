@@ -176,7 +176,7 @@ export function SplitUnified() {
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
         options={{
           theme: 'pierre-dark',
           diffStyle,

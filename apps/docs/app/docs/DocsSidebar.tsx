@@ -95,22 +95,9 @@ export function DocsSidebar({
       )}
 
       <aside
-        className={`
-        p-5
-        md:px-0
-        md:relative md:py-7 md:block md:transform-none md:transition-none
-        md:shadow-none md:border-none md:bg-transparent md:z-auto
-        md:left-auto md:top-auto md:h-auto md:w-auto md:overflow-visible
-        md:translate-x-0 md:opacity-100 md:pointer-events-auto
-
-        fixed top-0 left-0 z-50 w-72 h-screen
-        bg-background border-r border-border
-        transform -translate-x-full transition-transform duration-300 ease-in-out
-        overflow-y-auto shadow-xl
-        ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}
+        className={`bg-background border-border fixed top-0 left-0 z-50 h-screen w-72 -translate-x-full transform overflow-y-auto border-r p-5 shadow-xl transition-transform duration-300 ease-in-out md:pointer-events-auto md:relative md:top-auto md:left-auto md:z-auto md:block md:h-auto md:w-auto md:translate-x-0 md:transform-none md:overflow-visible md:border-none md:bg-transparent md:px-0 md:py-7 md:opacity-100 md:shadow-none md:transition-none ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} `}
       >
-        <nav className="sticky top-0 py-5 space-y-0.5" onClick={onMobileClose}>
+        <nav className="sticky top-0 space-y-0.5 py-5" onClick={onMobileClose}>
           {headings.map((heading) => (
             <NavLink
               key={heading.id}

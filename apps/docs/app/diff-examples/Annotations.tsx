@@ -194,7 +194,7 @@ export function Annotations() {
         <FileDiff
           oldFile={OLD_FILE}
           newFile={NEW_FILE}
-          className="rounded-lg overflow-hidden border"
+          className="overflow-hidden rounded-lg border"
           options={{
             theme: 'pierre-dark',
             diffStyle: 'unified',
@@ -256,9 +256,9 @@ function CommentForm({
         fontFamily: 'Geist',
       }}
     >
-      <div className="rounded-lg border bg-card p-5 shadow-sm">
+      <div className="bg-card rounded-lg border p-5 shadow-sm">
         <div className="flex gap-2">
-          <div className="relative flex-shrink-0 -mt-0.5">
+          <div className="relative -mt-0.5 flex-shrink-0">
             <Avatar className="h-6 w-6">
               <AvatarImage
                 src="https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg"
@@ -271,7 +271,7 @@ function CommentForm({
             <textarea
               ref={textareaRef}
               placeholder="Leave a comment"
-              className="w-full min-h-[60px] p-2 text-sm text-foreground bg-background border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              className="text-foreground bg-background focus:ring-ring min-h-[60px] w-full resize-none rounded-md border p-2 text-sm focus:ring-2 focus:outline-none"
             />
             <div className="mt-3 flex items-center gap-2">
               <Button
@@ -283,7 +283,7 @@ function CommentForm({
               </Button>
               <button
                 onClick={handleCancel}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground cursor-pointer px-3 py-1 text-sm transition-colors"
               >
                 Cancel
               </button>
@@ -355,18 +355,18 @@ export function Comment({
 }: CommentProps) {
   return (
     <div className="flex gap-2">
-      <div className="relative flex-shrink-0 -mt-0.5">
+      <div className="relative -mt-0.5 flex-shrink-0">
         <Avatar className="h-6 w-6">
           <AvatarImage src={avatarUrl ?? '/placeholder.svg'} alt={author} />
           <AvatarFallback>{author[0]}</AvatarFallback>
         </Avatar>
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="font-semibold text-foreground">
+          <span className="text-foreground font-semibold">
             {isYou ? 'You' : author}
           </span>
-          <span className="text-sm text-muted-foreground">{timestamp}</span>
+          <span className="text-muted-foreground text-sm">{timestamp}</span>
         </div>
         <p className="text-foreground leading-relaxed">{content}</p>
       </div>
@@ -388,28 +388,28 @@ export function CommentThread({
   onResolve,
 }: CommentThreadProps) {
   return (
-    <div className="rounded-lg border bg-card p-5 shadow-sm">
+    <div className="bg-card rounded-lg border p-5 shadow-sm">
       <Comment {...mainComment} />
 
       {replies.length > 0 && (
-        <div className="mt-4 ml-8 sm:ml-[32px] space-y-4">
+        <div className="mt-4 ml-8 space-y-4 sm:ml-[32px]">
           {replies.map((reply, index) => (
             <Comment key={index} {...reply} />
           ))}
         </div>
       )}
 
-      <div className="mt-4 ml-8 sm:ml-[32px] flex items-center gap-4">
+      <div className="mt-4 ml-8 flex items-center gap-4 sm:ml-[32px]">
         <button
           onClick={onAddReply}
-          className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
         >
           <CornerDownRight className="h-4 w-4" />
           Add reply...
         </button>
         <button
           onClick={onResolve}
-          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          className="text-sm text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Resolve
         </button>

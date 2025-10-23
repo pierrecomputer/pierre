@@ -28,7 +28,7 @@ import { SplitUnified } from './diff-examples/SplitUnified';
 
 export default function Home() {
   return (
-    <div className="min-h-screen max-w-5xl px-5 mx-auto">
+    <div className="mx-auto min-h-screen max-w-5xl px-5">
       <Header
         logo={
           <Header.Logo
@@ -62,7 +62,7 @@ export default function Home() {
 
       <hr className="mt-2 mb-8 w-[120px]" />
 
-      <section className="py-8 space-y-8">
+      <section className="space-y-8 py-8">
         <div className="space-y-2">
           <h2 className="text-2xl font-medium">
             Everything but the kitchen sink
@@ -94,7 +94,7 @@ export default function Home() {
         </p>
       </section> */}
 
-      <section className="py-16 mt-8 space-y-6 border-y">
+      <section className="mt-8 space-y-6 border-y py-16">
         <div className="space-y-3">
           <h2 className="text-2xl font-medium">
             With love from The Pierre Computer Company
@@ -151,30 +151,30 @@ const Hero = () => {
   };
 
   return (
-    <section className="py-16 flex flex-col gap-2 max-w-3xl">
-      <h1 className="text-3xl md:text-4xl font-medium tracking-tight">
+    <section className="flex max-w-3xl flex-col gap-2 py-16">
+      <h1 className="text-3xl font-medium tracking-tight md:text-4xl">
         Precision Diffs
       </h1>
-      <p className="text-md md:text-lg text-muted-foreground mb-2 max-w-2x">
+      <p className="text-md text-muted-foreground max-w-2x mb-2 md:text-lg">
         Fast, exact diffing for modern apps. Fully open source, built with
         Shiki, insanely customizable, and packed with the features you need.
         Made with love by{' '}
         <Link
           target="_blank"
           href="https://pierre.computer"
-          className="underline underline-offset-2 hover:text-foreground transition-colors"
+          className="hover:text-foreground underline underline-offset-2 transition-colors"
         >
           The Pierre Computer Company
         </Link>
         .
       </p>
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               onClick={() => void copyToClipboard()}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-md text-white bg-gray-900 hover:bg-gray-800 dark:bg-black dark:border dark:border-white/20 dark:hover:border-white/30 transition-colors font-mono text-sm"
+              className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-3 font-mono text-sm text-white transition-colors hover:bg-gray-800 dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
             >
               <span>bun i @pierre/precision-diffs</span>
               {copied ? <IconCheck /> : <IconCopyFill />}

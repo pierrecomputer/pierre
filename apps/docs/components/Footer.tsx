@@ -4,11 +4,11 @@ export default function Footer() {
   return (
     <footer className="pt-12 pb-12">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">Precision Diffs</div>
+        <div className="text-muted-foreground text-sm">Precision Diffs</div>
         <nav className="flex items-center gap-4">
           <Link
             href="/"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
             Home
           </Link>
@@ -20,7 +20,7 @@ export default function Footer() {
           </Link> */}
           <Link
             href="/docs"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
             Docs
           </Link>

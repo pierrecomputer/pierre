@@ -33,19 +33,19 @@ function SuccessPageContent() {
   }, [installationId, setupAction, state]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
         <div className="text-center">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />
+          <h1 className="mb-2 text-2xl font-bold text-gray-900">
             Installation Successful!
           </h1>
-          <p className="text-gray-600 mb-6">
+          <p className="mb-6 text-gray-600">
             Your GitHub App has been successfully{' '}
             {setupAction === 'install' ? 'installed' : 'updated'}.
           </p>
           {installationId != null && (
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="mb-6 text-sm text-gray-500">
               Installation ID: {installationId}
             </p>
           )}

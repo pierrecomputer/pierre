@@ -44,11 +44,11 @@ export function Styling() {
       </p>
       <SimpleCodeBlock
         code={CODE_GLOBAL}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
       />
       <SimpleCodeBlock
         code={CODE_INLINE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
       />
     </section>
   );

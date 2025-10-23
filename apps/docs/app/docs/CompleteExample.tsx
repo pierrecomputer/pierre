@@ -84,7 +84,7 @@ export function CompleteExample() {
       <p>Here&lsquo;s a more complete example with multiple options:</p>
       <SimpleCodeBlock
         code={CODE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
       />
     </section>
   );

@@ -18,9 +18,9 @@ export function RendererOptions() {
       </p>
 
       <div className="space-y-3">
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">theme</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>string</code> | Optional
           </p>
           <p>
@@ -36,9 +36,9 @@ export function RendererOptions() {
           />
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">themes</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>{`{ light: string, dark: string }`}</code> | Optional
           </p>
           <p>
@@ -52,9 +52,9 @@ export function RendererOptions() {
           />
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">themeType</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type:{' '}
             <code>
               &apos;light&apos; | &apos;dark&apos; | &apos;system&apos;
@@ -67,9 +67,9 @@ export function RendererOptions() {
           </p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">diffStyle</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>&apos;split&apos; | &apos;unified&apos;</code> |
             Default: <code>&apos;split&apos;</code>
           </p>
@@ -79,9 +79,9 @@ export function RendererOptions() {
           </p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">diffIndicators</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type:{' '}
             <code>
               &apos;bars&apos; | &apos;minimal&apos; | &apos;invisible&apos;
@@ -91,9 +91,9 @@ export function RendererOptions() {
           <p>Visual style for diff indicators (the +/- markers).</p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">overflow</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>&apos;scroll&apos; | &apos;wrap&apos;</code> | Default:{' '}
             <code>&apos;scroll&apos;</code>
           </p>
@@ -103,9 +103,9 @@ export function RendererOptions() {
           </p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">disableFileHeader</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>boolean</code> | Default: <code>false</code>
           </p>
           <p>
@@ -114,9 +114,9 @@ export function RendererOptions() {
           </p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">disableBackground</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>boolean</code> | Default: <code>false</code>
           </p>
           <p>
@@ -125,9 +125,9 @@ export function RendererOptions() {
           </p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">lang</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>string</code> | Optional
           </p>
           <p>

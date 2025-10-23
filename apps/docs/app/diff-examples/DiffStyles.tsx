@@ -102,7 +102,7 @@ export function DiffStyles() {
           title="Choose how changes are styled"
           description="Your diffs, your choice. Render changed lines with classic diff indicators (+/–), full-width background colors, or vertical bars. You can even highlight inline changes—character or word based—and toggle line wrapping, hide numbers, and more."
         />
-        <div className="flex flex-col sm:flex-row flex-wrap md:items-center gap-3">
+        <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
           <ButtonGroup
             value={diffIndicators}
             onValueChange={(value) =>
@@ -113,7 +113,7 @@ export function DiffStyles() {
               <ButtonGroupItem
                 key={value}
                 value={value}
-                className="capitalize flex-1"
+                className="flex-1 capitalize"
               >
                 {value === 'bars' ? (
                   <IconCodeStyleBars />
@@ -127,12 +127,12 @@ export function DiffStyles() {
             ))}
           </ButtonGroup>
 
-          <div className="p-[2px] rounded-lg bg-secondary">
+          <div className="bg-secondary rounded-lg p-[2px]">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="justify-start w-full md:w-auto"
+                  className="w-full justify-start md:w-auto"
                 >
                   <IconCodeStyleInline />
                   {}
@@ -146,16 +146,16 @@ export function DiffStyles() {
                   <DropdownMenuItem
                     key={option.value}
                     onClick={() => setLineDiffStyle(option.value)}
-                    className="flex items-start py-2 gap-2"
+                    className="flex items-start gap-2 py-2"
                   >
                     {lineDiffStyle === option.value ? (
                       <IconCheckLg className="mt-[1px]" />
                     ) : (
-                      <div className="w-4 h-4" />
+                      <div className="h-4 w-4" />
                     )}
-                    <div className="flex flex-col w-full items-start">
+                    <div className="flex w-full flex-col items-start">
                       <span className="font-medium">{option.label}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-muted-foreground text-xs">
                         {option.description}
                       </span>
                     </div>
@@ -165,10 +165,10 @@ export function DiffStyles() {
             </DropdownMenu>
           </div>
 
-          <div className="p-[2px] rounded-lg bg-secondary gridstack">
+          <div className="bg-secondary gridstack rounded-lg p-[2px]">
             <Button
               variant="outline"
-              className="justify-between w-full md:w-auto gap-3 pl-3 pr-11"
+              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
               onClick={() => setDisableBackground(!disableBackground)}
             >
               <div className="flex items-center gap-2">
@@ -182,14 +182,14 @@ export function DiffStyles() {
                 setDisableBackground(!checked)
               }
               onClick={(e) => e.stopPropagation()}
-              className="justify-self-end place-self-center mr-3 pointer-events-none"
+              className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>
 
-          <div className="p-[2px] rounded-lg bg-secondary gridstack ">
+          <div className="bg-secondary gridstack rounded-lg p-[2px]">
             <Button
               variant="outline"
-              className="justify-between w-full md:w-auto gap-3 pl-3 pr-11"
+              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
               onClick={() =>
                 setOverflow(overflow === 'wrap' ? 'scroll' : 'wrap')
               }
@@ -205,7 +205,7 @@ export function DiffStyles() {
                 setOverflow(checked ? 'wrap' : 'scroll')
               }
               onClick={(e) => e.stopPropagation()}
-              className="justify-self-end place-self-center mr-3 pointer-events-none"
+              className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>
         </div>
@@ -213,7 +213,7 @@ export function DiffStyles() {
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
         options={{
           theme: 'pierre-dark',
           diffStyle: 'split',

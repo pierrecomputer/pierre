@@ -30,10 +30,10 @@ function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
   };
 
   return (
-    <div className="relative group">
-      <div className="rounded-lg border bg-muted/30 dark:bg-muted/50">
-        <div className="flex items-center justify-between px-4 py-2 border-b">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+    <div className="group relative">
+      <div className="bg-muted/30 dark:bg-muted/50 rounded-lg border">
+        <div className="flex items-center justify-between border-b px-4 py-2">
+          <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             {language}
           </span>
           <Tooltip>
@@ -53,7 +53,7 @@ function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
           </Tooltip>
         </div>
         <div className="p-4">
-          <pre className="text-sm font-mono leading-relaxed">
+          <pre className="font-mono text-sm leading-relaxed">
             <code className="text-foreground">{code}</code>
           </pre>
         </div>
@@ -84,7 +84,7 @@ export function PrebuiltReact() {
           title="Pre-built React and JavaScript components"
           description="No two codebases are alike, so we give you the freedom to implement Precision Diffs however you like. Components are logically separated—file wrapper, header, hunk, and more—and are all available in React or JavaScript versions."
         />
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <CodeBlock code={reactCode} language="React" />
           <CodeBlock code={jsCode} language="JavaScript" />
         </div>

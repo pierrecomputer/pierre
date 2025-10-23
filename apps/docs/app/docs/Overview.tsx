@@ -203,7 +203,7 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
   return (
     <section className="space-y-4">
       <h2>Overview</h2>
-      <p className="flex gap-2 text-md bg-cyan-500/10 border border-cyan-500/20 px-5 py-4 rounded-md text-cyan-600 dark:text-cyan-300">
+      <p className="text-md flex gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 text-cyan-600 dark:text-cyan-300">
         <IconCiWarningFill className="mt-[6px]" />
         Precision Diffs is in early active development—APIs are subject to
         change.
@@ -221,7 +221,7 @@ export function Overview({ exampleType, setExampleType }: OverviewProps) {
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
         options={{
           theme: 'pierre-dark',
           diffStyle: 'unified',

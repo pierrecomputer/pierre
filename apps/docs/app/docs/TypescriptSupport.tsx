@@ -17,7 +17,7 @@ export function TypescriptSupport() {
       <p>The package is fully typed with TypeScript. Import types as needed:</p>
       <SimpleCodeBlock
         code={CODE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
       />
     </section>
   );

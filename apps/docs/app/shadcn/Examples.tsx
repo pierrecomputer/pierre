@@ -58,12 +58,12 @@ function FakeTopBar({
   return (
     <div
       className={cn(
-        'flex w-full gap-2 justify-end p-2 border-2 rounded-lg',
+        'flex w-full justify-end gap-2 rounded-lg border-2 p-2',
         className
       )}
       {...props}
     >
-      <div className="flex-1 flex justify-start items-center text-foreground">
+      <div className="text-foreground flex flex-1 items-center justify-start">
         <Lollipop />
       </div>
       {children}
@@ -104,19 +104,19 @@ const Example = ({
 
   return (
     <div id={id}>
-      <h4 className="text-lg font-bold tracking-tight mb-2">{title}</h4>
+      <h4 className="mb-2 text-lg font-bold tracking-tight">{title}</h4>
       {details != null ? (
-        <p className="text-sm text-muted-foreground mb-2">{details}</p>
+        <p className="text-muted-foreground mb-2 text-sm">{details}</p>
       ) : null}
       <div
         className={cn(
-          'flex flex-col md:flex-row justify-evenly border rounded-t-lg relative min-h-[180px] bg-background overflow-hidden',
+          'bg-background relative flex min-h-[180px] flex-col justify-evenly overflow-hidden rounded-t-lg border md:flex-row',
           className
         )}
         {...props}
       >
-        <div className="w-full md:w-1/2 light">
-          <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
+        <div className="light w-full md:w-1/2">
+          <div className="bg-background flex h-full min-h-[120px] flex-col items-center justify-center gap-2 p-4">
             {Array.isArray(exampleProps) ? (
               exampleProps.map(
                 (
@@ -131,7 +131,7 @@ const Example = ({
                 ) => (
                   <Fragment key={index}>
                     {__label != null ? (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-muted-foreground text-sm">
                         {__label}
                       </div>
                     ) : null}
@@ -165,8 +165,8 @@ const Example = ({
             )}
           </div>
         </div>
-        <div className="w-full md:w-1/2 dark">
-          <div className="bg-background flex flex-col gap-2 justify-center items-center p-4 h-full min-h-[120px]">
+        <div className="dark w-full md:w-1/2">
+          <div className="bg-background flex h-full min-h-[120px] flex-col items-center justify-center gap-2 p-4">
             {Array.isArray(exampleProps) ? (
               exampleProps.map(
                 (
@@ -181,7 +181,7 @@ const Example = ({
                 ) => (
                   <Fragment key={index}>
                     {__label != null ? (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-muted-foreground text-sm">
                         {__label}
                       </div>
                     ) : null}
@@ -258,7 +258,7 @@ function ExampleDefaultUsage() {
       id="git-platform-sync--default-usage"
       details={
         <>
-          Currently <span className="font-bold font-mono">github</span> is the
+          Currently <span className="font-mono font-bold">github</span> is the
           only supported platform.
           <br />
           <em>

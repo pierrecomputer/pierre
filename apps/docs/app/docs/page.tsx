@@ -41,24 +41,24 @@ export default function DocsPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-5xl px-5 mx-auto max-w-full">
+    <div className="relative mx-auto min-h-screen w-5xl max-w-full px-5">
       <DocsHeader />
 
       <Button
         variant="outline"
         onClick={toggleMobileMenu}
-        className="md:hidden sticky top-5 z-50 mt-8 bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted"
+        className="bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted sticky top-5 z-50 mt-8 md:hidden"
       >
         <IconParagraph />
         Menu
       </Button>
 
-      <div className="md:grid md:grid-cols-[220px_1fr] gap-6 md:gap-12">
+      <div className="gap-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
         <DocsSidebar
           isMobileOpen={isMobileMenuOpen}
           onMobileClose={closeMobileMenu}
         />
-        <div className="prose dark:prose-invert w-full min-w-0 max-w-full">
+        <div className="prose dark:prose-invert w-full max-w-full min-w-0">
           <Installation />
           <Overview
             exampleType={exampleTypes}

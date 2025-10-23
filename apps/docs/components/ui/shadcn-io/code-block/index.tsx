@@ -293,7 +293,7 @@ export const CodeBlock = ({
     <CodeBlockContext.Provider value={{ value, onValueChange, data }}>
       <div
         className={cn(
-          'size-full overflow-hidden rounded-md border border-border',
+          'border-border size-full overflow-hidden rounded-md border',
           className
         )}
         {...props}
@@ -310,7 +310,7 @@ export const CodeBlockHeader = ({
 }: CodeBlockHeaderProps) => (
   <div
     className={cn(
-      'flex flex-row items-center border-b border-border bg-secondary bg-clip-padding',
+      'border-border bg-secondary flex flex-row items-center border-b bg-clip-padding',
       className
     )}
     {...props}
@@ -368,7 +368,7 @@ export const CodeBlockFilename = ({
 
   return (
     <div
-      className={`${className ?? ''} flex items-center gap-2 bg-secondary px-4 py-1.5 text-muted-foreground text-xs`}
+      className={`${className ?? ''} bg-secondary text-muted-foreground flex items-center gap-2 px-4 py-1.5 text-xs`}
       {...props}
     >
       {Icon != null && <Icon className="h-4 w-4 shrink-0" />}
@@ -393,7 +393,7 @@ export const CodeBlockSelectTrigger = ({
 }: CodeBlockSelectTriggerProps) => (
   <SelectTrigger
     className={cn(
-      'w-fit border-none text-muted-foreground text-xs shadow-none',
+      'text-muted-foreground w-fit border-none text-xs shadow-none',
       className
     )}
     {...props}

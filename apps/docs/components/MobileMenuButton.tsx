@@ -11,7 +11,7 @@ const MobileMenuButton = ({ onClick, className }: MobileMenuButtonProps) => {
   return (
     <Button
       onClick={onClick}
-      className={`hidden md:hidden mb-4 place-self-start ${className ?? ''}`}
+      className={`mb-4 hidden place-self-start md:hidden ${className ?? ''}`}
       aria-label="Toggle navigation menu"
     >
       <IconParagraph />
