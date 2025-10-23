@@ -140,7 +140,7 @@ export function ComboBox({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'justify-between select-none gap-1.5',
+            'justify-between gap-1.5 select-none',
             width === 'fit' && '[&[role=combobox]]:w-fit',
             width === 'full' && '[&[role=combobox]]:w-full',
             className
@@ -155,7 +155,7 @@ export function ComboBox({
                   className="h-4 w-4 shrink-0 rounded-full"
                 />
               ) : null}
-              <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                 {selectedOption.label}
               </span>
             </span>
@@ -202,7 +202,7 @@ export function ComboBox({
                       className="h-4 w-4 flex-shrink-0 rounded-full"
                     />
                   ) : null}
-                  <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                     {option.label}
                   </span>
                   <CheckIcon
@@ -547,14 +547,14 @@ export function GitPlatformSync({
             >
               <span
                 className={cn(
-                  'justify-between items-center gap-1.5 text-foreground transition-width delay-200 group-focus:delay-0 duration-150 ease-in-out overflow-hidden inline-flex select-none',
+                  'text-foreground transition-width inline-flex items-center justify-between gap-1.5 overflow-hidden delay-200 duration-150 ease-in-out select-none group-focus:delay-0',
                   variant === 'icon-grow' && !isPopoverOpen
-                    ? 'max-w-0 opacity-0 group-hover:opacity-100 group-hover:max-w-48 group-focus:opacity-100 group-focus:max-w-48 group-focus:pl-1.5 group-focus:-mr-0.5 group-hover:pl-1.5 group-hover:-mr-0.5'
-                    : 'max-w-48 pl-1.5 -mr-0.5 opacity-100'
+                    ? 'max-w-0 opacity-0 group-hover:-mr-0.5 group-hover:max-w-48 group-hover:pl-1.5 group-hover:opacity-100 group-focus:-mr-0.5 group-focus:max-w-48 group-focus:pl-1.5 group-focus:opacity-100'
+                    : '-mr-0.5 max-w-48 pl-1.5 opacity-100'
                 )}
               >
                 {labelText}
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground mt-0.25" />
+                <ChevronDown className="text-muted-foreground group-hover:text-foreground mt-0.25 h-4 w-4 transition-colors" />
               </span>
             </BaseSyncButton>
           </PopoverTrigger>
@@ -572,7 +572,7 @@ function LilDotGuy({ status }: { status?: GitPlatformSyncStatus }) {
   return (
     <div
       className={cn(
-        'absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background',
+        'border-background absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border',
         status === 'connected' && 'bg-green-500',
         status === 'connected-syncing' && 'bg-yellow-500',
         status === 'connected-warning' && 'bg-red-500'
@@ -593,13 +593,13 @@ function BaseSyncButton({
     <Button
       variant="outline"
       className={cn(
-        'group flex justify-between items-center gap-2 text-foreground px-2',
+        'group text-foreground flex items-center justify-between gap-2 px-2',
         className
       )}
       {...props}
     >
       <div
-        className="relative flex justify-center items-center w-4 mx-0.25"
+        className="relative mx-0.25 flex w-4 items-center justify-center"
         aria-hidden
       >
         <GitHubIcon />
@@ -753,13 +753,13 @@ function StepManage({ codeStorageRepo, __container }: StepManageProps) {
     __container != null ? { __container: __container } : {};
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center gap-2 text-sm">
         <StatusDot status="connected" />
         Connected to GitHub
       </div>
       <div className="flex flex-col gap-4">
         <div className="flex flex-row gap-1">
-          <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+          <Field className="w-fit max-w-1/2 flex-shrink-0 gap-1">
             <FieldLabel
               htmlFor="storage-elements-github-owner"
               className="font-normal"
@@ -777,7 +777,7 @@ function StepManage({ codeStorageRepo, __container }: StepManageProps) {
           </Field>
           <div
             aria-hidden
-            className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+            className="text-muted-foreground self-end px-1 py-1 text-xl font-normal"
           >
             /
           </div>
@@ -816,7 +816,7 @@ function StepManage({ codeStorageRepo, __container }: StepManageProps) {
             />
           </Field>
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-muted-foreground text-xs">
           Changes are being automatically synced to this branch.
         </div>
       </div>
@@ -939,19 +939,19 @@ function StepCreate({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <h4 className="font-normal leading-none">Sync to GitHub</h4>
-        <p className="text-sm text-muted-foreground">
+        <h4 className="leading-none font-normal">Sync to GitHub</h4>
+        <p className="text-muted-foreground text-sm">
           Create a new repository or choose an existing one to sync your
           changes. We&apos;ll push changes with each new prompt you send.
         </p>
       </div>
       {status === 'loading' ? (
-        <div className="flex justify-center items-center">
+        <div className="flex items-center justify-center">
           <Loader2 className="h-4 w-4 animate-spin" />
         </div>
       ) : null}
       {status === 'error' ? (
-        <div className="flex justify-center items-center">
+        <div className="flex items-center justify-center">
           <AlertCircle className="h-4 w-4" />
           <p className="text-sm text-red-500">
             Error loading GitHub accounts. Please try again.
@@ -959,8 +959,8 @@ function StepCreate({
         </div>
       ) : null}
       {status === 'success' && owners.length === 0 ? (
-        <div className="flex justify-center items-center">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-center">
+          <p className="text-muted-foreground text-sm">
             No GitHub accounts found. Please check the app permissions in your
             GitHub settings.
           </p>
@@ -970,7 +970,7 @@ function StepCreate({
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col gap-4">
             <div className="flex flex-row gap-1">
-              <Field className="w-fit flex-shrink-0 max-w-1/2 gap-1">
+              <Field className="w-fit max-w-1/2 flex-shrink-0 gap-1">
                 <FieldLabel
                   htmlFor="storage-elements-github-owner"
                   className="font-normal"
@@ -1000,7 +1000,7 @@ function StepCreate({
               </Field>
               <div
                 aria-hidden
-                className="font-normal self-end py-1 px-1 text-xl text-muted-foreground"
+                className="text-muted-foreground self-end px-1 py-1 text-xl font-normal"
               >
                 /
               </div>
@@ -1051,8 +1051,8 @@ function StepWelcome({
     <>
       <div className="space-y-4">
         <div className="space-y-2">
-          <h4 className="font-normal leading-none">Connect to GitHub</h4>
-          <p className="text-sm text-muted-foreground">
+          <h4 className="leading-none font-normal">Connect to GitHub</h4>
+          <p className="text-muted-foreground text-sm">
             Sync your changes to GitHub to backup your code at every snapshot by
             installing our app on your personal account or organization.
           </p>
@@ -1076,7 +1076,7 @@ function StepWelcome({
             size="lg"
             className={cn(
               'w-full',
-              isPendingConnection && 'opacity-80 pointer-events-none'
+              isPendingConnection && 'pointer-events-none opacity-80'
             )}
           >
             <GitHubIcon />{' '}

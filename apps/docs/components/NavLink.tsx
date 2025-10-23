@@ -49,7 +49,7 @@ const NavLink = ({
         className={baseClasses}
       >
         {icon != null && (
-          <span className="flex items-center justify-center w-4 h-4">
+          <span className="flex h-4 w-4 items-center justify-center">
             {icon}
           </span>
         )}
@@ -62,7 +62,7 @@ const NavLink = ({
   return (
     <Link href={href} className={baseClasses}>
       {icon != null && (
-        <span className="flex items-center justify-center w-4 h-4">{icon}</span>
+        <span className="flex h-4 w-4 items-center justify-center">{icon}</span>
       )}
       {children}
     </Link>

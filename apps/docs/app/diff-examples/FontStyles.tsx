@@ -65,18 +65,18 @@ export function FontStyles() {
           title="Bring your own fonts"
           description="Precision Diffs is adaptable to any font, font-size, line-height, and even font-feature-settings you may have set. Configure font options with your preferred CSS method globally or on a per-component basis."
         />
-        <div className="flex flex-col sm:flex-row flex-wrap md:items-center gap-3">
+        <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
           <div className="flex flex-wrap gap-3">
-            <div className="p-[2px] rounded-lg bg-secondary flex-1">
+            <div className="bg-secondary flex-1 rounded-lg p-[2px]">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    className="justify-start min-w-[140px] w-full"
+                    className="w-full min-w-[140px] justify-start"
                   >
                     <IconType className="h-4 w-4" />
                     {selectedFont}
-                    <ChevronDown className="h-4 w-4 ml-auto" />
+                    <ChevronDown className="ml-auto h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-40">
@@ -95,12 +95,12 @@ export function FontStyles() {
               </DropdownMenu>
             </div>
 
-            <div className="p-[2px] rounded-lg bg-secondary">
+            <div className="bg-secondary rounded-lg p-[2px]">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="min-w-[80px]">
                     {selectedFontSize}
-                    <ChevronDown className="h-4 w-4 ml-auto" />
+                    <ChevronDown className="ml-auto h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -119,12 +119,12 @@ export function FontStyles() {
               </DropdownMenu>
             </div>
 
-            <div className="p-[2px] rounded-lg bg-secondary">
+            <div className="bg-secondary rounded-lg p-[2px]">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="min-w-[80px]">
                     {selectedLineHeight}
-                    <ChevronDown className="h-4 w-4 ml-auto" />
+                    <ChevronDown className="ml-auto h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -144,7 +144,7 @@ export function FontStyles() {
             </div>
           </div>
 
-          <div className="p-[2px] rounded-lg bg-secondary">
+          <div className="bg-secondary rounded-lg p-[2px]">
             <InputWithIcon
               value={fontFeatureSettings}
               onChange={({ currentTarget }) =>
@@ -160,7 +160,7 @@ export function FontStyles() {
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
         options={{
           theme: 'pierre-dark',
           diffStyle: 'unified',

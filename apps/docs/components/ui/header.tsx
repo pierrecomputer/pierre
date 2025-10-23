@@ -40,7 +40,7 @@ function Header({ className, logo, children, ...props }: HeaderProps) {
     <header
       data-slot="header"
       className={cn(
-        'flex flex-col md:flex-row md:items-center justify-between py-6 border-b ',
+        'flex flex-col justify-between border-b py-6 md:flex-row md:items-center',
         className
       )}
       {...props}
@@ -61,14 +61,14 @@ function HeaderLogo({
     <Link
       data-slot="header-logo"
       className={cn(
-        'flex flex-col leading-tight text-foreground hover:text-foreground/80 transition-colors',
+        'text-foreground hover:text-foreground/80 flex flex-col leading-tight transition-colors',
         className
       )}
       {...props}
     >
       <span className="text-lg font-semibold">{children}</span>
       {subtitle != null && (
-        <small className="text-xs text-muted-foreground">{subtitle}</small>
+        <small className="text-muted-foreground text-xs">{subtitle}</small>
       )}
     </Link>
   );
@@ -106,7 +106,7 @@ function HeaderNavLink({
         href={hrefString}
         className={cn(
           navigationMenuTriggerStyle(),
-          'h-auto py-1.5 px-0 text-muted-foreground font-normal bg-transparent',
+          'text-muted-foreground h-auto bg-transparent px-0 py-1.5 font-normal',
           isActive && 'text-accent-foreground font-medium',
           external && 'inline-flex items-center gap-[2px]',
           className

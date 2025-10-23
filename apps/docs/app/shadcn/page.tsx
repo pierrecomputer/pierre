@@ -4,7 +4,7 @@ import { Examples } from './Examples';
 
 export default function Home() {
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col min-h-svh px-4 py-8 gap-8">
+    <div className="mx-auto flex min-h-svh w-full max-w-4xl flex-col gap-8 px-4 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold tracking-tight">
           Pierre Shadcn Component Registry
@@ -35,7 +35,7 @@ export default function Home() {
         />
       </aside>
       <main
-        className="flex flex-col flex-1 gap-8"
+        className="flex flex-1 flex-col gap-8"
         aria-labelledby="available-components"
       >
         <Examples />

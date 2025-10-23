@@ -8,7 +8,7 @@ import { FeatureHeader } from './FeatureHeader';
 
 // Local components to avoid class name duplication
 const FileLabel = ({ children }: { children: React.ReactNode }) => (
-  <label className="absolute top-[1px] left-[1px] block text-xs font-medium uppercase text-muted-foreground py-2 px-3 select-none rounded-lg bg-muted">
+  <label className="text-muted-foreground bg-muted absolute top-[1px] left-[1px] block rounded-lg px-3 py-2 text-xs font-medium uppercase select-none">
     {children}
   </label>
 );
@@ -25,7 +25,7 @@ const FileTextarea = ({
   <textarea
     value={value}
     onChange={onChange}
-    className={`w-full h-40 font-mono text-sm bg-muted border rounded-lg resize-none pt-10 px-4 ${className}`}
+    className={`bg-muted h-40 w-full resize-none rounded-lg border px-4 pt-10 font-mono text-sm ${className}`}
     spellCheck={false}
   />
 );
@@ -62,7 +62,7 @@ export function ArbitraryFiles() {
         description="In addition to rendering standard Git diffs and patches, you can pass any two files in Precision Diffs and get a diff between them. This is especially useful when comparing across generative snapshots where linear history isn't always available. Edit the css below to see the diff."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="relative">
           <FileLabel>before.css</FileLabel>
           <FileTextarea
@@ -82,7 +82,7 @@ export function ArbitraryFiles() {
       <FileDiff
         oldFile={oldFile}
         newFile={newFile}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
         options={{
           theme: 'pierre-dark',
           diffStyle: 'unified',

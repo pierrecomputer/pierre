@@ -154,13 +154,13 @@ export function ShikiThemes() {
         title="Adapts to any Shiki theme"
         description="Precision Diffs are built with Shiki for syntax highlighting and general theming. Our components automatically adapt to blend in with your theme selection, including across color modes."
       />
-      <div className="flex flex-col sm:flex-row flex-wrap md:items-center gap-3">
-        <div className="p-[2px] rounded-lg bg-secondary">
+      <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
+        <div className="bg-secondary rounded-lg p-[2px]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="justify-start w-full md:w-auto"
+                className="w-full justify-start md:w-auto"
               >
                 <IconColorLight />
                 {selectedLightTheme}
@@ -186,12 +186,12 @@ export function ShikiThemes() {
           </DropdownMenu>
         </div>
 
-        <div className="p-[2px] rounded-lg bg-secondary">
+        <div className="bg-secondary rounded-lg p-[2px]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="justify-start w-full md:w-auto"
+                className="w-full justify-start md:w-auto"
               >
                 <IconColorDark />
                 {selectedDarkTheme}
@@ -200,7 +200,7 @@ export function ShikiThemes() {
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="overflow-auto max-h-[550px]"
+              className="max-h-[550px] overflow-auto"
             >
               {DARK_THEMES.map((theme) => (
                 <DropdownMenuItem
@@ -214,7 +214,7 @@ export function ShikiThemes() {
                   {selectedDarkTheme === theme ? (
                     <IconCheck className="ml-auto" />
                   ) : (
-                    <div className="w-4 h-4 ml-2" />
+                    <div className="ml-2 h-4 w-4" />
                   )}
                 </DropdownMenuItem>
               ))}
@@ -245,7 +245,7 @@ export function ShikiThemes() {
       <FileDiff
         oldFile={OLD_FILE}
         newFile={NEW_FILE}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
         options={{
           diffStyle: 'split',
           themeType: selectedColorMode,
@@ -256,13 +256,13 @@ export function ShikiThemes() {
         }}
       />
       <div className="flex gap-1">
-        <IconArrowDownRight className="my-[2px] text-muted-foreground opacity-50" />
-        <p className="text-sm text-muted-foreground">
+        <IconArrowDownRight className="text-muted-foreground my-[2px] opacity-50" />
+        <p className="text-muted-foreground text-sm">
           Love the Pierre themes?{' '}
           <Link
             href="https://marketplace.visualstudio.com/items?itemName=pierre-computer-co.pierre-vscode-theme"
             target="_blank"
-            className="underline text-foreground hover:text-foreground transition-colors underline-offset-2"
+            className="text-foreground hover:text-foreground underline underline-offset-2 transition-colors"
           >
             Install our Pierre VS Code Theme pack
           </Link>{' '}

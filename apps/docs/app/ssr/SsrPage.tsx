@@ -19,13 +19,13 @@ function ErrorAnnotation({ message }: { message: string }) {
   };
 
   return (
-    <div className="bg-red-500 px-2 text-xs font-[Helvetica] flex gap-1.5 justify-items-start items-center leading-[20px]">
+    <div className="flex items-center justify-items-start gap-1.5 bg-red-500 px-2 font-[Helvetica] text-xs leading-[20px]">
       <IconBell className="size-3" />
       {message}{' '}
       <a
         role="button"
         onClick={handleClick}
-        className="cursor-pointer px-2 -my-1 select-none bg-amber-200 text-amber-950"
+        className="-my-1 cursor-pointer bg-amber-200 px-2 text-amber-950 select-none"
       >
         {clickCount}
       </a>
@@ -55,7 +55,7 @@ export function SsrPage({
   );
   return (
     <div
-      className="min-h-screen max-w-5xl px-5 mx-auto"
+      className="mx-auto min-h-screen max-w-5xl px-5"
       style={
         {
           '--pjs-font-family': `var(--font-berkeley-mono)`,
@@ -91,13 +91,13 @@ export function SsrPage({
         </Header.Nav>
       </Header>
 
-      <h1 className="text-3xl md:text-4xl font-medium tracking-tight py-8">
+      <h1 className="py-8 text-3xl font-medium tracking-tight md:text-4xl">
         SSR Demo
       </h1>
 
       <FileDiffSsr
         preloadedFileDiff={preloadedFileDiff}
-        className="rounded-lg overflow-hidden border"
+        className="overflow-hidden rounded-lg border"
         annotations={annotations}
       />
       <Footer />

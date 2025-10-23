@@ -41,7 +41,7 @@ function ButtonGroup({
       }}
     >
       <div
-        className={cn('inline-flex p-[2px] rounded-lg bg-secondary', className)}
+        className={cn('bg-secondary inline-flex rounded-lg p-[2px]', className)}
         role="group"
         {...props}
       >
@@ -77,7 +77,7 @@ function ButtonGroupItem({
   return (
     <Button
       className={cn(
-        'bg-transparent border-transparent text-muted-foreground hover:cursor-pointer',
+        'text-muted-foreground border-transparent bg-transparent hover:cursor-pointer',
         isSelected &&
           'bg-background border-border text-accent-foreground hover:bg-background hover:border-border',
         className

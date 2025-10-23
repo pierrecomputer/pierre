@@ -12,9 +12,9 @@ export function ComponentProps() {
       <h2>Component Props</h2>
       <h3>FileDiff Props</h3>
       <div className="space-y-3">
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">oldFile</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>FileContents</code> | Required
           </p>
           <p>The original file object containing name and contents.</p>
@@ -44,17 +44,17 @@ export function ComponentProps() {
               </CodeBlock> */}
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">newFile</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>FileContents</code> | Required
           </p>
           <p>The modified file object containing name and contents.</p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">options</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>DiffFileRendererOptions</code> | Required
           </p>
           <p>
@@ -63,9 +63,9 @@ export function ComponentProps() {
           </p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">annotations</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>LineAnnotation&lt;T&gt;[]</code> | Optional
           </p>
           <p>
@@ -79,25 +79,25 @@ export function ComponentProps() {
           />
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">className</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>string</code> | Optional
           </p>
           <p>CSS class name to apply to the container element.</p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">style</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>CSSProperties</code> | Optional
           </p>
           <p>Inline styles to apply to the container element.</p>
         </div>
 
-        <div className="border rounded-lg p-4">
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">renderAnnotation</h4>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Type: <code>(annotation: LineAnnotation) =&gt; ReactNode</code> |
             Optional
           </p>
