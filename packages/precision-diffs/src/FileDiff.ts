@@ -223,6 +223,42 @@ export class FileDiff<LAnnotation = undefined> {
     this.fileContainer = undefined;
   }
 
+  // FIXME(amadeus): We may need to do more work here...
+  hydrate(props: FileDiffRenderProps<LAnnotation>) {
+    this.fileContainer = props.fileContainer;
+    if (this.fileContainer == null) {
+      throw new Error(
+        'FileDiff: you must provide a fileContainer on hydration'
+      );
+    }
+    this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
+    if (props.newFile != null && props.oldFile != null) {
+      this.newFile = props.newFile;
+      this.oldFile = props.oldFile;
+    }
+    if (props.fileDiff != null) {
+      this.fileDiff = props.fileDiff;
+    }
+    for (const element of this.fileContainer.shadowRoot?.children ?? []) {
+      if (element instanceof SVGElement) {
+        this.spriteSVG = element;
+        continue;
+      }
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+      if (element instanceof HTMLPreElement) {
+        this.pre = element;
+        continue;
+      }
+      if ('pjsHeader' in element.dataset) {
+        this.headerElement = element;
+        continue;
+      }
+    }
+    this.attachEventListeners();
+  }
+
   async render(props: FileDiffRenderProps<LAnnotation>) {
     const { forceRender = false, lineAnnotations, containerWrapper } = props;
     const annotationsChanged = !deepEquals(

@@ -21,19 +21,24 @@ export type PreloadFileDiffOptions<LAnnotation> = {
   style?: Record<string, string>;
 };
 
-export type PreloadedFileDiffResult = {
-  suppressHydrationWarning: boolean;
-  dangerouslySetInnerHTML: {
-    __html: string;
+export interface PreloadedFileDiffResult<LAnnotation> {
+  oldFile: FileContents;
+  newFile: FileContents;
+  options?: DiffHunksRendererOptions;
+  annotations?: DiffLineAnnotation<LAnnotation>[];
+  preload: {
+    dangerouslySetInnerHTML: {
+      __html: string;
+    };
   };
-};
+}
 
 export async function preloadFileDiff<LAnnotation>({
   oldFile,
   newFile,
   options,
   annotations,
-}: PreloadFileDiffOptions<LAnnotation>) {
+}: PreloadedFileDiffResult<LAnnotation>) {
   const fileDiff = parseDiffFromFile(oldFile, newFile);
   const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>(options);
   const fileHeader = new FileHeaderRenderer(options);
@@ -69,14 +74,16 @@ export async function preloadFileDiff<LAnnotation>({
   }
   children.push(diffHunksRenderer.renderFullAST(hunkResult));
 
-  const __html = `<template shadowrootmode="open">
-${SVGSpriteSheet}
-${toHtml(children)}
-  </template>`;
-
   return {
-    suppressHydrationWarning: true,
-    dangerouslySetInnerHTML: { __html },
+    oldFile,
+    newFile,
+    options,
+    annotations,
+    preload: {
+      dangerouslySetInnerHTML: {
+        __html: `${SVGSpriteSheet}${toHtml(children)}`,
+      },
+    },
   };
 }
 

@@ -26,8 +26,8 @@ export function getAnnotationPositions(
   }));
 }
 
-interface FileDiffSsrProps {
-  preloadedFileDiff: PreloadedFileDiffResult;
+interface FileDiffSsrProps<LAnnotation> {
+  preloadedFileDiff: PreloadedFileDiffResult<LAnnotation>;
   annotations?: LineAnnotation[];
   className?: string;
   style?: CSSProperties;
@@ -53,12 +53,12 @@ function serializeStyle(style: CSSProperties): string {
     .join(';');
 }
 
-export function FileDiffSsr({
+export function FileDiffSsr<LAnnotation>({
   preloadedFileDiff,
   annotations,
   className,
   style,
-}: FileDiffSsrProps) {
+}: FileDiffSsrProps<LAnnotation>) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const hydratedRef = useRef(false);
 

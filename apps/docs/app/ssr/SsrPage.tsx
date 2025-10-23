@@ -1,14 +1,12 @@
 'use client';
 
 import Footer from '@/components/Footer';
+import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { IconBell } from '@/components/icons';
 import { Header } from '@/components/ui/header';
+import type { DiffLineAnnotation } from '@pierre/precision-diffs';
 import '@pierre/precision-diffs/ssr';
-import {
-  FileDiffSsr,
-  type LineAnnotation,
-  type PreloadedFileDiffResult,
-} from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
 // Annotation component with its own state for proper hydration
@@ -33,26 +31,17 @@ function ErrorAnnotation({ message }: { message: string }) {
   );
 }
 
-export function SsrPage({
+export function SsrPage<LAnnotation>({
   preloadedFileDiff,
-  annotationPositions,
 }: {
-  preloadedFileDiff: PreloadedFileDiffResult;
-  annotationPositions: Array<{
-    lineNumber: number;
-    side: 'additions' | 'deletions';
-  }>;
+  preloadedFileDiff: PreloadedFileDiffResult<LAnnotation>;
 }) {
-  // Build full annotations with render functions from positions
-  const annotations: LineAnnotation[] = annotationPositions.map(
-    ({ lineNumber, side }) => ({
-      line: lineNumber,
-      side,
-      render: () => (
-        <ErrorAnnotation message="There was a sneaky lil error on this line in CI." />
-      ),
-    })
+  const [diffStyle, setDiffStyle] = useState(
+    preloadedFileDiff.options?.diffStyle ?? 'split'
   );
+  const [annotations, setAnnotations] = useState<
+    DiffLineAnnotation<LAnnotation>[]
+  >(preloadedFileDiff.annotations ?? []);
   return (
     <div
       className="mx-auto min-h-screen max-w-5xl px-5"
@@ -95,10 +84,34 @@ export function SsrPage({
         SSR Demo
       </h1>
 
-      <FileDiffSsr
-        preloadedFileDiff={preloadedFileDiff}
+      <button
+        className="mb-2 cursor-pointer rounded-md bg-blue-500 px-3 py-1 text-white"
+        onClick={() =>
+          setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')
+        }
+      >
+        Toggle Style
+      </button>
+      <FileDiff<LAnnotation>
+        {...preloadedFileDiff}
+        // @ts-expect-error lol
+        options={{
+          ...preloadedFileDiff.options,
+          diffStyle,
+          onLineClick: (a) => {
+            // @ts-expect-error lol
+            const annotation: DiffLineAnnotation<LAnnotation> = {
+              side: a.annotationSide,
+              lineNumber: a.lineNumber,
+            };
+            setAnnotations((annotations) => {
+              return [...annotations, annotation];
+            });
+          },
+        }}
         className="overflow-hidden rounded-lg border"
         annotations={annotations}
+        renderAnnotation={() => <ErrorAnnotation message="LFGGGG" />}
       />
       <Footer />
     </div>

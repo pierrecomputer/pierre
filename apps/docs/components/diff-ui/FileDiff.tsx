@@ -30,34 +30,47 @@ interface FileDiffProps<LAnnotation> {
   renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
   className?: string;
   style?: CSSProperties;
+  preload?: {
+    dangerouslySetInnerHTML: {
+      __html: string;
+    };
+  };
 }
 
-export function FileDiff<LAnnotation = undefined>({
-  oldFile,
-  newFile,
-  options,
-  annotations,
-  className,
-  style,
-  renderAnnotation,
-  renderHeaderMetadata,
-}: FileDiffProps<LAnnotation>) {
-  'use no memo';
+export function FileDiff<LAnnotation = undefined>(
+  props: FileDiffProps<LAnnotation>
+) {
+  const { oldFile, newFile, options, annotations, className, style, preload } =
+    props;
   const instanceRef = useRef<FileDiffUI<LAnnotation> | null>(null);
   const ref = useRef<HTMLElement>(null);
   // NOTE(amadeus): This is all a temporary hack until we can figure out proper
   // innerHTML shadow dom stuff
   useIsometricEffect(() => {
+    if (ref.current == null) return;
+    const firstRender = instanceRef.current == null;
     instanceRef.current ??= new FileDiffUI<LAnnotation>(options, true);
     const forceRender = !deepEqual(instanceRef.current.options, options);
     instanceRef.current.setOptions(options);
-    void instanceRef.current.render({
-      forceRender,
-      oldFile,
-      newFile,
-      fileContainer: ref.current ?? undefined,
-      lineAnnotations: annotations,
-    });
+    if (firstRender && preload != null) {
+      if (annotations != null) {
+        instanceRef.current.setLineAnnotations(annotations);
+      }
+      instanceRef.current.hydrate({
+        oldFile,
+        newFile,
+        fileContainer: ref.current,
+        lineAnnotations: annotations,
+      });
+    } else {
+      void instanceRef.current.render({
+        forceRender,
+        oldFile,
+        newFile,
+        fileContainer: ref.current ?? undefined,
+        lineAnnotations: annotations,
+      });
+    }
   });
   useIsometricEffect(
     () => () => {
@@ -66,19 +79,46 @@ export function FileDiff<LAnnotation = undefined>({
     },
     []
   );
-  const metadata = renderHeaderMetadata?.({ oldFile, newFile });
   return (
-    <pjs-container ref={ref} className={className} style={style}>
+    // @ts-expect-error lol
+    <file-diff ref={ref} className={className} style={style}>
+      {templateRender(props)}
+      {/* @ts-expect-error lol */}
+    </file-diff>
+  );
+}
+
+function templateRender<LAnnotation>({
+  oldFile,
+  newFile,
+  annotations,
+  renderAnnotation,
+  renderHeaderMetadata,
+  preload,
+}: FileDiffProps<LAnnotation>) {
+  const metadata = renderHeaderMetadata?.({ oldFile, newFile });
+  const children = (
+    <>
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
       {renderAnnotation != null &&
-        annotations?.map((annotation) => (
-          <div
-            key={getLineAnnotationId(annotation)}
-            slot={getLineAnnotationId(annotation)}
-          >
+        annotations?.map((annotation, index) => (
+          <div key={index} slot={getLineAnnotationId(annotation)}>
             {renderAnnotation(annotation)}
           </div>
         ))}
-    </pjs-container>
+    </>
   );
+  if (typeof window === 'undefined' && preload != null) {
+    return (
+      <>
+        <template
+          // @ts-expect-error lol
+          shadowrootmode="open"
+          {...preload}
+        />
+        {children}
+      </>
+    );
+  }
+  return <>{children}</>;
 }
