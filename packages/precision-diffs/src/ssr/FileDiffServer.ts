@@ -417,6 +417,7 @@ code {
 
 [data-separator-content] {
   user-select: none;
+  fill: currentColor;
 }
 
 [data-separator='metadata'] [data-separator-content] {
