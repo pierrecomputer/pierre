@@ -1,10 +1,10 @@
 'use client';
 
 import Footer from '@/components/Footer';
-import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { IconBell } from '@/components/icons';
 import { Header } from '@/components/ui/header';
 import type { DiffLineAnnotation } from '@pierre/precision-diffs';
+import { FileDiff } from '@pierre/precision-diffs/react';
 import '@pierre/precision-diffs/ssr';
 import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';

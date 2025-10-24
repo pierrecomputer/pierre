@@ -1,6 +1,5 @@
 'use client';
 
-import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import type {
@@ -8,6 +7,7 @@ import type {
   DiffLineAnnotation,
   FileContents,
 } from '@pierre/precision-diffs';
+import { FileDiff } from '@pierre/precision-diffs/react';
 import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

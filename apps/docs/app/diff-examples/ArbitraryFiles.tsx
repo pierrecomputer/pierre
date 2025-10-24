@@ -1,7 +1,7 @@
 'use client';
 
-import { FileDiff } from '@/components/diff-ui/FileDiff';
 import type { FileContents } from '@pierre/precision-diffs';
+import { FileDiff } from '@pierre/precision-diffs/react';
 import { useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';

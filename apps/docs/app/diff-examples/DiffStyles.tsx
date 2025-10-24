@@ -1,6 +1,5 @@
 'use client';
 
-import { FileDiff } from '@/components/diff-ui/FileDiff';
 import {
   IconCheckLg,
   IconCodeStyleBars,
@@ -20,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import type { FileContents } from '@pierre/precision-diffs';
+import { FileDiff } from '@pierre/precision-diffs/react';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 

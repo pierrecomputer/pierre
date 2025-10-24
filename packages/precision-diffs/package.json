@@ -12,6 +12,10 @@
       "import": "./src/index.ts",
       "types": "./src/index.ts"
     },
+    "./react": {
+      "import": "./src/react/index.ts",
+      "types": "./src/react/index.ts"
+    },
     "./ssr": {
       "import": "./src/ssr/index.ts",
       "types": "./src/ssr/index.ts"

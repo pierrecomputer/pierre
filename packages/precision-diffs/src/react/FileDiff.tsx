@@ -1,13 +1,5 @@
-import { useEffectEvent } from '@/lib/useEffectEvent';
-import {
-  type DiffFileRendererOptions,
-  type DiffLineAnnotation,
-  type FileContents,
-  FileDiff as FileDiffUI,
-  HEADER_METADATA_SLOT_ID,
-  type RenderHeaderMetadataProps,
-  getLineAnnotationId,
-} from '@pierre/precision-diffs';
+'use client';
+
 import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
@@ -17,12 +9,25 @@ import {
   useRef,
 } from 'react';
 
+import {
+  type DiffFileRendererOptions,
+  FileDiff as FileDiffUI,
+} from '../FileDiff';
+import { HEADER_METADATA_SLOT_ID } from '../constants';
+import {
+  type DiffLineAnnotation,
+  type FileContents,
+  type RenderHeaderMetadataProps,
+} from '../types';
+import { getLineAnnotationId } from '../utils/getLineAnnotationId';
+import { useStableCallback } from './utils/useStableCallback';
+
 export type { FileContents };
 
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface FileDiffProps<LAnnotation> {
+export interface FileDiffProps<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
   options?: DiffFileRendererOptions<LAnnotation>;
@@ -46,7 +51,7 @@ export function FileDiff<LAnnotation = undefined>({
   renderHeaderMetadata,
 }: FileDiffProps<LAnnotation>) {
   const instanceRef = useRef<FileDiffUI<LAnnotation> | null>(null);
-  const ref = useEffectEvent((node: HTMLElement | null) => {
+  const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
       if (instanceRef.current != null) {
         throw new Error(
