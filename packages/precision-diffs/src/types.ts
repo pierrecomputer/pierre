@@ -30,6 +30,8 @@ export type PJSThemeNames =
   | BundledTheme
   | 'pierre-dark'
   | 'pierre-light'
+  | 'pierre-dark-vibrant'
+  | 'pierre-light-vibrant'
   | (string & {});
 
 export type ThemesType = Record<'dark' | 'light', PJSThemeNames>;

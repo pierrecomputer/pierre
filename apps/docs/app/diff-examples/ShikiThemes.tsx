@@ -60,6 +60,7 @@ export default function Home() {
 
 const LIGHT_THEMES = [
   'pierre-light',
+  'pierre-light-vibrant',
   'catppuccin-latte',
   'everforest-light',
   'github-light',
@@ -82,6 +83,7 @@ const LIGHT_THEMES = [
 
 const DARK_THEMES = [
   'pierre-dark',
+  'pierre-dark-vibrant',
   'andromeeda',
   'aurora-x',
   'ayu-dark',
@@ -141,9 +143,9 @@ export function ShikiThemes() {
   }, []);
 
   const [selectedLightTheme, setSelectedLightTheme] =
-    useState<(typeof LIGHT_THEMES)[number]>('pierre-light');
+    useState<(typeof LIGHT_THEMES)[number]>('pierre-light-vibrant');
   const [selectedDarkTheme, setSelectedDarkTheme] =
-    useState<(typeof DARK_THEMES)[number]>('pierre-dark');
+    useState<(typeof DARK_THEMES)[number]>('pierre-dark-vibrant');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');

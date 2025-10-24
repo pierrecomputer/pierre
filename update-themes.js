@@ -23,7 +23,12 @@ const targetDirs = [
 ];
 
 // Theme files to copy
-const themeFiles = ['pierre-dark.json', 'pierre-light.json'];
+const themeFiles = [
+  'pierre-dark.json',
+  'pierre-light.json',
+  'pierre-dark-vibrant.json',
+  'pierre-light-vibrant.json',
+];
 
 function updateThemeName(content) {
   try {
