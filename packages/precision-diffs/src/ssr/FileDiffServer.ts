@@ -15,10 +15,6 @@ export type PreloadFileDiffOptions<LAnnotation> = {
   newFile: FileContents;
   options?: DiffHunksRendererOptions;
   annotations?: DiffLineAnnotation<LAnnotation>[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): any;
-  className?: string;
-  style?: Record<string, string>;
 };
 
 export interface PreloadedFileDiffResult<LAnnotation> {
@@ -26,11 +22,7 @@ export interface PreloadedFileDiffResult<LAnnotation> {
   newFile: FileContents;
   options?: DiffHunksRendererOptions;
   annotations?: DiffLineAnnotation<LAnnotation>[];
-  preload: {
-    dangerouslySetInnerHTML: {
-      __html: string;
-    };
-  };
+  prerenderedHTML: string;
 }
 
 export async function preloadFileDiff<LAnnotation>({
@@ -38,7 +30,9 @@ export async function preloadFileDiff<LAnnotation>({
   newFile,
   options,
   annotations,
-}: PreloadedFileDiffResult<LAnnotation>) {
+}: PreloadFileDiffOptions<LAnnotation>): Promise<
+  PreloadedFileDiffResult<LAnnotation>
+> {
   const fileDiff = parseDiffFromFile(oldFile, newFile);
   const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>(options);
   const fileHeader = new FileHeaderRenderer(options);
@@ -79,11 +73,7 @@ export async function preloadFileDiff<LAnnotation>({
     newFile,
     options,
     annotations,
-    preload: {
-      dangerouslySetInnerHTML: {
-        __html: `${SVGSpriteSheet}${toHtml(children)}`,
-      },
-    },
+    prerenderedHTML: `${SVGSpriteSheet}${toHtml(children)}`,
   };
 }
 

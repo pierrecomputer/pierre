@@ -30,18 +30,20 @@ interface FileDiffProps<LAnnotation> {
   renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
   className?: string;
   style?: CSSProperties;
-  preload?: {
-    dangerouslySetInnerHTML: {
-      __html: string;
-    };
-  };
+  prerenderedHTML?: string;
 }
 
-export function FileDiff<LAnnotation = undefined>(
-  props: FileDiffProps<LAnnotation>
-) {
-  const { oldFile, newFile, options, annotations, className, style, preload } =
-    props;
+export function FileDiff<LAnnotation = undefined>({
+  oldFile,
+  newFile,
+  options,
+  annotations,
+  className,
+  style,
+  prerenderedHTML,
+  renderAnnotation,
+  renderHeaderMetadata,
+}: FileDiffProps<LAnnotation>) {
   const instanceRef = useRef<FileDiffUI<LAnnotation> | null>(null);
   const ref = useRef<HTMLElement>(null);
   // NOTE(amadeus): This is all a temporary hack until we can figure out proper
@@ -52,7 +54,7 @@ export function FileDiff<LAnnotation = undefined>(
     instanceRef.current ??= new FileDiffUI<LAnnotation>(options, true);
     const forceRender = !deepEqual(instanceRef.current.options, options);
     instanceRef.current.setOptions(options);
-    if (firstRender && preload != null) {
+    if (firstRender && prerenderedHTML != null) {
       if (annotations != null) {
         instanceRef.current.setLineAnnotations(annotations);
       }
@@ -79,23 +81,6 @@ export function FileDiff<LAnnotation = undefined>(
     },
     []
   );
-  return (
-    // @ts-expect-error lol
-    <file-diff ref={ref} className={className} style={style}>
-      {templateRender(props)}
-      {/* @ts-expect-error lol */}
-    </file-diff>
-  );
-}
-
-function templateRender<LAnnotation>({
-  oldFile,
-  newFile,
-  annotations,
-  renderAnnotation,
-  renderHeaderMetadata,
-  preload,
-}: FileDiffProps<LAnnotation>) {
   const metadata = renderHeaderMetadata?.({ oldFile, newFile });
   const children = (
     <>
@@ -108,13 +93,23 @@ function templateRender<LAnnotation>({
         ))}
     </>
   );
-  if (typeof window === 'undefined' && preload != null) {
+  return (
+    // @ts-expect-error lol
+    <file-diff ref={ref} className={className} style={style}>
+      {templateRender(children, prerenderedHTML)}
+      {/* @ts-expect-error lol */}
+    </file-diff>
+  );
+}
+
+function templateRender(children: ReactNode, __html?: string) {
+  if (typeof window === 'undefined' && __html != null) {
     return (
       <>
         <template
           // @ts-expect-error lol
           shadowrootmode="open"
-          {...preload}
+          dangerouslySetInnerHTML={{ __html }}
         />
         {children}
       </>

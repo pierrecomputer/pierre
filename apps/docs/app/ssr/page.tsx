@@ -5,6 +5,7 @@ import {
 import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
 
 import { SsrPage } from './SsrPage';
+import type { AnnotationMetadata } from './ssr_types.ts';
 
 const OLD_FILE: FileContents = {
   name: 'main.zig',
@@ -44,15 +45,18 @@ pub fn main() !void {
 };
 
 // Define annotation positions once in the server component
-const annotationPositions: DiffLineAnnotation[] = [
+const annotations: DiffLineAnnotation<AnnotationMetadata>[] = [
   {
     side: 'additions',
     lineNumber: 8,
+    metadata: {
+      message: 'There was a sneaky lil error on this line in CI.',
+    },
   },
 ];
 
 export default async function Ssr() {
-  const preloadedFileDiff = await preloadFileDiff({
+  const preloadedFileDiff = await preloadFileDiff<AnnotationMetadata>({
     oldFile: OLD_FILE,
     newFile: NEW_FILE,
     options: {
@@ -61,13 +65,8 @@ export default async function Ssr() {
       diffIndicators: 'bars',
       overflow: 'scroll',
     },
-    annotations: annotationPositions,
+    annotations,
   });
 
-  return (
-    <SsrPage
-      preloadedFileDiff={preloadedFileDiff}
-      annotationPositions={annotationPositions}
-    />
-  );
+  return <SsrPage preloadedFileDiff={preloadedFileDiff} />;
 }

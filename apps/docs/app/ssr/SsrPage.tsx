@@ -6,8 +6,11 @@ import { IconBell } from '@/components/icons';
 import { Header } from '@/components/ui/header';
 import type { DiffLineAnnotation } from '@pierre/precision-diffs';
 import '@pierre/precision-diffs/ssr';
+import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
+
+import type { AnnotationMetadata } from './ssr_types';
 
 // Annotation component with its own state for proper hydration
 function ErrorAnnotation({ message }: { message: string }) {
@@ -31,16 +34,16 @@ function ErrorAnnotation({ message }: { message: string }) {
   );
 }
 
-export function SsrPage<LAnnotation>({
-  preloadedFileDiff,
-}: {
-  preloadedFileDiff: PreloadedFileDiffResult<LAnnotation>;
-}) {
+interface SsrPageProps {
+  preloadedFileDiff: PreloadedFileDiffResult<AnnotationMetadata>;
+}
+
+export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
   const [diffStyle, setDiffStyle] = useState(
     preloadedFileDiff.options?.diffStyle ?? 'split'
   );
   const [annotations, setAnnotations] = useState<
-    DiffLineAnnotation<LAnnotation>[]
+    DiffLineAnnotation<AnnotationMetadata>[]
   >(preloadedFileDiff.annotations ?? []);
   return (
     <div
@@ -81,39 +84,66 @@ export function SsrPage<LAnnotation>({
       </Header>
 
       <h1 className="py-8 text-3xl font-medium tracking-tight md:text-4xl">
-        SSR Demo
+        SSR Demos
       </h1>
 
-      <button
-        className="mb-2 cursor-pointer rounded-md bg-blue-500 px-3 py-1 text-white"
-        onClick={() =>
-          setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')
-        }
-      >
-        Toggle Style
-      </button>
-      <FileDiff<LAnnotation>
-        {...preloadedFileDiff}
-        // @ts-expect-error lol
-        options={{
-          ...preloadedFileDiff.options,
-          diffStyle,
-          onLineClick: (a) => {
+      <div className="flex flex-col gap-20">
+        <div>
+          <h2 className="text-2xl font-medium tracking-tight md:text-2xl">
+            Static Test
+          </h2>
+          <FileDiffSsr<AnnotationMetadata>
+            prerenderedHTML={preloadedFileDiff.prerenderedHTML}
+            className="overflow-hidden rounded-lg border"
+            annotations={preloadedFileDiff.annotations}
+            renderAnnotation={renderAnnotation}
+          />
+        </div>
+
+        <div>
+          <div className="flex justify-between">
+            <h2 className="text-2xl font-medium tracking-tight md:text-2xl">
+              Interactive Test
+            </h2>
+            <button
+              className="mb-2 cursor-pointer rounded-md bg-blue-500 px-3 py-1 text-white"
+              onClick={() =>
+                setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')
+              }
+            >
+              Toggle Diff Style
+            </button>
+          </div>
+          <FileDiff<AnnotationMetadata>
+            {...preloadedFileDiff}
             // @ts-expect-error lol
-            const annotation: DiffLineAnnotation<LAnnotation> = {
-              side: a.annotationSide,
-              lineNumber: a.lineNumber,
-            };
-            setAnnotations((annotations) => {
-              return [...annotations, annotation];
-            });
-          },
-        }}
-        className="overflow-hidden rounded-lg border"
-        annotations={annotations}
-        renderAnnotation={() => <ErrorAnnotation message="LFGGGG" />}
-      />
+            options={{
+              ...preloadedFileDiff.options,
+              diffStyle,
+              onLineClick: (a) => {
+                const annotation: DiffLineAnnotation<AnnotationMetadata> = {
+                  side: a.annotationSide,
+                  lineNumber: a.lineNumber,
+                  metadata: {
+                    message: 'LFGGGG',
+                  },
+                };
+                setAnnotations((annotations) => {
+                  return [...annotations, annotation];
+                });
+              },
+            }}
+            className="overflow-hidden rounded-lg border"
+            annotations={annotations}
+            renderAnnotation={renderAnnotation}
+          />
+        </div>
+      </div>
       <Footer />
     </div>
   );
+}
+
+function renderAnnotation(annotation: DiffLineAnnotation<AnnotationMetadata>) {
+  return <ErrorAnnotation message={annotation.metadata.message} />;
 }

@@ -1,10 +1,11 @@
 'use client';
 
-import { type CSSProperties, useEffect, useRef } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useRef } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
-import type { PreloadedFileDiffResult } from './FileDiffServer';
+import type { DiffLineAnnotation } from '../types';
+import { getLineAnnotationId } from '../utils/getLineAnnotationId';
 
 export interface LineAnnotation {
   line: number;
@@ -27,8 +28,9 @@ export function getAnnotationPositions(
 }
 
 interface FileDiffSsrProps<LAnnotation> {
-  preloadedFileDiff: PreloadedFileDiffResult<LAnnotation>;
-  annotations?: LineAnnotation[];
+  prerenderedHTML: string;
+  annotations?: DiffLineAnnotation<LAnnotation>[];
+  renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   className?: string;
   style?: CSSProperties;
 }
@@ -54,10 +56,11 @@ function serializeStyle(style: CSSProperties): string {
 }
 
 export function FileDiffSsr<LAnnotation>({
-  preloadedFileDiff,
+  prerenderedHTML,
   annotations,
   className,
   style,
+  renderAnnotation,
 }: FileDiffSsrProps<LAnnotation>) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const hydratedRef = useRef(false);
@@ -75,18 +78,20 @@ export function FileDiffSsr<LAnnotation>({
 
     // Render annotations as static HTML slots for SSR
     const annotationSlots =
-      annotations !== undefined && annotations.length > 0
+      annotations !== undefined &&
+      annotations.length > 0 &&
+      renderAnnotation != null
         ? annotations
-            .map(({ line, side, render }) => {
-              const slotName = `annotation-${side}-${line}`;
+            .map((annotation) => {
+              const slotName = getLineAnnotationId(annotation);
               // Render the component with React markers for proper hydration
-              const content = renderToString(render());
+              const content = renderToString(renderAnnotation(annotation));
               return `<div slot="${slotName}">${content}</div>`;
             })
             .join('')
         : '';
 
-    const fullHTML = `<file-diff${classAttr}${styleAttr}>${preloadedFileDiff.dangerouslySetInnerHTML.__html}${annotationSlots}</file-diff>`;
+    const fullHTML = `<file-diff${classAttr}${styleAttr}><template shadowrootmode="open">${prerenderedHTML}</template>${annotationSlots}</file-diff>`;
 
     htmlObjectRef.current = { __html: fullHTML };
   }
@@ -108,19 +113,19 @@ export function FileDiffSsr<LAnnotation>({
           if (slotName === null) return;
 
           // Find the matching annotation
-          const annotation = annotations.find(({ line, side }) => {
-            return slotName === `annotation-${side}-${line}`;
+          const annotation = annotations.find((annotation) => {
+            return slotName === getLineAnnotationId(annotation);
           });
 
-          if (annotation !== undefined) {
-            hydrateRoot(slotElement, annotation.render());
+          if (annotation !== undefined && renderAnnotation != null) {
+            hydrateRoot(slotElement, renderAnnotation(annotation));
           }
         });
 
         hydratedRef.current = true;
       }
     }
-  }, [annotations]);
+  }, [annotations, renderAnnotation]);
 
   return (
     <div
