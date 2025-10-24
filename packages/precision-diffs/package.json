@@ -22,7 +22,7 @@
     }
   },
   "files": [
-    "src"
+    "dist"
   ],
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "catalog:",
