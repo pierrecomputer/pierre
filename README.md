@@ -28,8 +28,8 @@ bun run clean
 cd packages/precision-diffs
 ```
 
-Next modify exports to both increment the version and update exports/files like
-so:
+Next modify package.json to both increment the version and update exports like
+so. You'll want to commit the version change but NOT the exports change.
 
 ```json
 {
@@ -37,9 +37,12 @@ so:
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react/index.js",
+      "types": "./dist/react/index.d.ts"
     }
-  },
-  "files": ["dist"]
+  }
 }
 ```
 

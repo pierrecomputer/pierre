@@ -7,6 +7,7 @@
     "baseUrl": ".",
     "rootDir": "src",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "resolveJsonModule": true
   }
 }

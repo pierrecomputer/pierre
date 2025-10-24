@@ -1,6 +1,5 @@
 'use client';
 
-import { FileDiff } from '@/components/diff-ui/FileDiff';
 import { IconCheck, IconFunction, IconType } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { InputWithIcon } from '@/components/ui/input-group';
 import type { FileContents } from '@pierre/precision-diffs';
+import { FileDiff } from '@pierre/precision-diffs/react';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 

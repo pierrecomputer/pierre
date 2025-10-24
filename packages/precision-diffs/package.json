@@ -3,7 +3,7 @@
   "version": "0.0.2-alpha.1-1",
   "type": "module",
   "scripts": {
-    "build": "tsc --build && node build-css.js",
+    "build": "tsc --build && node post-build.js",
     "dev": "tsc --build --watch",
     "tsc": "tsc"
   },
@@ -12,13 +12,17 @@
       "import": "./src/index.ts",
       "types": "./src/index.ts"
     },
+    "./react": {
+      "import": "./src/react/index.ts",
+      "types": "./src/react/index.ts"
+    },
     "./ssr": {
       "import": "./src/ssr/index.ts",
       "types": "./src/ssr/index.ts"
     }
   },
   "files": [
-    "src"
+    "dist"
   ],
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "catalog:",
