@@ -635,6 +635,7 @@ code {
 }
 
 [data-rename-icon] {
+  fill: currentColor;
   flex-shrink: 0;
   flex-grow: 0;
 }
