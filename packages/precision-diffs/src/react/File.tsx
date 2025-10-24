@@ -1,11 +1,3 @@
-import {
-  type FileContents,
-  type FileOptions,
-  File as FileUI,
-  HEADER_METADATA_SLOT_ID,
-  type LineAnnotation,
-  getLineAnnotationId,
-} from '@pierre/precision-diffs';
 import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
@@ -15,12 +7,17 @@ import {
   useRef,
 } from 'react';
 
+import { type FileOptions, File as FileUI } from '../File';
+import { HEADER_METADATA_SLOT_ID } from '../constants';
+import type { FileContents, LineAnnotation } from '../types';
+import { getLineAnnotationId } from '../utils/getLineAnnotationId';
+
 export type { FileContents };
 
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface FileProps<LAnnotation> {
+export interface FileProps<LAnnotation> {
   file: FileContents;
   options: FileOptions<LAnnotation>;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
