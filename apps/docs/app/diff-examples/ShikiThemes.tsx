@@ -142,10 +142,12 @@ export function ShikiThemes() {
     });
   }, []);
 
-  const [selectedLightTheme, setSelectedLightTheme] =
-    useState<(typeof LIGHT_THEMES)[number]>('pierre-light-vibrant');
-  const [selectedDarkTheme, setSelectedDarkTheme] =
-    useState<(typeof DARK_THEMES)[number]>('pierre-dark-vibrant');
+  const [selectedLightTheme, setSelectedLightTheme] = useState<
+    (typeof LIGHT_THEMES)[number]
+  >('pierre-light-vibrant');
+  const [selectedDarkTheme, setSelectedDarkTheme] = useState<
+    (typeof DARK_THEMES)[number]
+  >('pierre-dark-vibrant');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');

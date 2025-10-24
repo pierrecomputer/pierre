@@ -1,25 +1,21 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// # IMPORTANT #
-// THIS SCRIPT IS ONLY USED ON MDO'S LAPTOP
-console.warn(
-  "This script is only used on @mdo's laptop. If you are not @mdo, you might not like the results."
-);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// import { fileURLToPath } from 'url';
+// Get the project root (pierrejs directory)
+const projectRoot = path.resolve(__dirname);
 
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
+// Source theme files - assume pierre-vscode-theme is a sibling directory
+const sourceDir = path.resolve(projectRoot, '../pierre-vscode-theme/themes');
 
-// Source theme files
-const sourceDir = '/Users/mdo/work/pierre/pierre-vscode-theme/themes';
-
-// Target directories
+// Target directories - relative to project root
 const targetDirs = [
-  '/Users/mdo/work/pierre/pierrejs/packages/precision-diffs/src/themes',
-  '/Users/mdo/work/pierre/pierrejs/apps/docs/themes',
+  path.resolve(projectRoot, 'packages/precision-diffs/src/themes'),
+  path.resolve(projectRoot, 'apps/docs/themes'),
 ];
 
 // Theme files to copy
@@ -69,14 +65,61 @@ function copyAndUpdateTheme(sourceFile, targetDir) {
   }
 }
 
+function validateDirectoryStructure() {
+  console.log('🔍 Validating directory structure...\n');
+
+  // Check if we're in the pierrejs directory by looking for package.json
+  const packageJsonPath = path.resolve(projectRoot, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    console.error(
+      `❌ Not in pierrejs directory. Expected package.json at: ${packageJsonPath}`
+    );
+    process.exit(1);
+  }
+
+  // Verify this is actually the pierrejs project by checking package.json name
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    if (packageJson.name !== '@pierre/js') {
+      console.error(
+        `❌ This doesn't appear to be the pierrejs project. Found package name: ${packageJson.name}`
+      );
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error(`❌ Error reading package.json: ${error.message}`);
+    process.exit(1);
+  }
+
+  // Check if pierre-vscode-theme is a sibling directory
+  const pierreVscodeThemeDir = path.resolve(
+    projectRoot,
+    '../pierre-vscode-theme'
+  );
+  if (!fs.existsSync(pierreVscodeThemeDir)) {
+    console.error(
+      `❌ pierre-vscode-theme directory not found at: ${pierreVscodeThemeDir}`
+    );
+    console.error(
+      '   Expected pierrejs and pierre-vscode-theme to be sibling directories.'
+    );
+    process.exit(1);
+  }
+
+  // Check if source themes directory exists
+  if (!fs.existsSync(sourceDir)) {
+    console.error(`❌ Source themes directory not found: ${sourceDir}`);
+    process.exit(1);
+  }
+
+  console.log('✅ Directory structure validation passed\n');
+}
+
 function main() {
   console.log('🎨 Updating theme files...\n');
 
-  // Check if source directory exists
-  if (!fs.existsSync(sourceDir)) {
-    console.error(`❌ Source directory not found: ${sourceDir}`);
-    process.exit(1);
-  }
+  // Validate directory structure first
+  validateDirectoryStructure();
 
   // Process each theme file
   themeFiles.forEach((themeFile) => {
