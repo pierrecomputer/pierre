@@ -5,7 +5,7 @@ import {
 import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
 
 import { SsrPage } from './SsrPage';
-import type { AnnotationMetadata } from './ssr_types.ts';
+import type { AnnotationMetadata } from './ssr_types';
 
 const OLD_FILE: FileContents = {
   name: 'main.zig',
