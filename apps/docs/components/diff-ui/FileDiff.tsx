@@ -55,9 +55,6 @@ export function FileDiff<LAnnotation = undefined>({
     const forceRender = !deepEqual(instanceRef.current.options, options);
     instanceRef.current.setOptions(options);
     if (firstRender && prerenderedHTML != null) {
-      if (annotations != null) {
-        instanceRef.current.setLineAnnotations(annotations);
-      }
       instanceRef.current.hydrate({
         oldFile,
         newFile,

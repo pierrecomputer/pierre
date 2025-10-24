@@ -214,7 +214,6 @@ export class FileDiff<LAnnotation = undefined> {
     this.fileContainer = undefined;
   }
 
-  // FIXME(amadeus): We may need to do more work here...
   hydrate(props: FileDiffRenderProps<LAnnotation>) {
     this.fileContainer = props.fileContainer;
     if (this.fileContainer == null) {
