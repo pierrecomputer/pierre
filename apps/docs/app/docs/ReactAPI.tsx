@@ -57,14 +57,14 @@ export function SingleDiff() {
         // built in shiki theme or you can register a custom
         // theme. We also include 2 custom themes
         //
-        // 'pierre-night' and 'pierre-light
+        // 'pierre-dark' and 'pierre-light
         //
         // For the rest of the  available shiki themes, check out:
         // https://shiki.style/themes
         theme: 'none',
         // Or can also provide a 'themes' prop, which allows the code to adapt
         // to your OS light or dark theme
-        // themes: { dark: 'pierre-night', light: 'pierre-light' },
+        // themes: { dark: 'pierre-dark', light: 'pierre-light' },
 
         // When using the 'themes' prop, 'themeType' allows you to force 'dark'
         // or 'light' theme, or inherit from the OS ('system') theme.

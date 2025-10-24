@@ -148,14 +148,14 @@ const instance = new FileDiff<ThreadMetadata>({
   // built in shiki theme or you can register a custom
   // theme. We also include 2 custom themes
   //
-  // 'pierre-night' and 'pierre-light
+  // 'pierre-dark' and 'pierre-light
   //
   // For the rest of the  available shiki themes, check out:
   // https://shiki.style/themes
   theme: 'none',
   // Or can also provide a 'themes' prop, which allows the code to adapt
   // to your OS light or dark theme
-  // themes: { dark: 'pierre-night', light: 'pierre-light' },
+  // themes: { dark: 'pierre-dark', light: 'pierre-light' },
 
   // When using the 'themes' prop, 'themeType' allows you to force 'dark'
   // or 'light' theme, or inherit from the OS ('system') theme.
@@ -324,7 +324,7 @@ index c52c9ca..f3b592b 100644
 +++ b/eslint.config.js
 @@ -2,6 +2,7 @@ import js from '@eslint/js';
  import tseslint from 'typescript-eslint';
- 
+
  export default tseslint.config(
 +  { ignores: ['dist/**'] },
    js.configs.recommended,
@@ -347,7 +347,7 @@ for (const patch of patches) {
       diffStyle: 'unified',
       theme: 'pierre-dark',
     });
-    const result: HunksRenderResult | undefined = await instance.render(fileDiff); 
+    const result: HunksRenderResult | undefined = await instance.render(fileDiff);
 
     // Depending on your diffStyle settings and depending the type of changes,
     // you'll get raw HAST nodes for each lines for each column type. If your
@@ -356,7 +356,7 @@ for (const patch of patches) {
     console.log(result.additionsAST);
     console.log(result.deletionsAST);
     console.log(result.unifiedAST);
-    
+
     // If you want to render out these nodes, just pass the result to
     // 'renderFullHTML'. This string will include a wrapper '<pre' element
     // and '<code' elements for each column.
@@ -368,7 +368,7 @@ for (const patch of patches) {
       result.unifiedAST,
       // if you pass this optional argument of 'unified' | 'additions' |
       // 'deletions' then the lines will be wrapped in a '<code' element
-      'unified' 
+      'unified'
     );
   }
 }`;

@@ -69,7 +69,7 @@ for (const patch of parsedPatches) {
     // file from a patch
     const instance = new FileDiff({
       // Automatically theme based on users os settings
-      themes: { dark: 'pierre-night', light: 'pierre-light' },
+      themes: { dark: 'pierre-dark', light: 'pierre-light' },
     });
     // Under the hood, all instances of FileDiff will use a shared Shiki
     // highlighter and manage loading languages and themes for you automatically
