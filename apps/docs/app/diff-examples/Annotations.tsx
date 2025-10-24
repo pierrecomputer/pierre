@@ -114,11 +114,6 @@ export function Annotations() {
     [annotations]
   );
 
-  const handleLineLeave = useCallback(() => {
-    setButtonPosition(null);
-    setHoveredLine(null);
-  }, []);
-
   const handleContainerMouseLeave = useCallback(() => {
     setButtonPosition(null);
     setHoveredLine(null);
@@ -199,7 +194,6 @@ export function Annotations() {
             theme: 'pierre-dark',
             diffStyle: 'unified',
             onLineEnter: handleLineEnter,
-            onLineLeave: handleLineLeave,
           }}
           annotations={annotations}
           renderAnnotation={(annotation) =>
