@@ -1,6 +1,5 @@
 import { useCallback, useInsertionEffect, useRef } from 'react';
 
-// A temp hack for useEffectEvent until we can upgrade to NextJS16
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useStableCallback<T extends (...args: any[]) => any>(
   callback: T
