@@ -121,7 +121,8 @@ export class FileDiff<LAnnotation = undefined> {
 
   constructor(
     options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
-    private isReact = false // NOTE(amadeus): Temp hack while we use this component in a react context
+    // NOTE(amadeus): Temp hack while we use this component in a react context
+    private isContainerManaged = false
   ) {
     this.options = options;
     this.hunksRenderer = new DiffHunksRenderer(options);
@@ -208,7 +209,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.oldFile = undefined;
     this.newFile = undefined;
     this.resizeObserver = undefined;
-    if (!this.isReact) {
+    if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
     this.fileContainer = undefined;
@@ -341,7 +342,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   renderAnnotations() {
-    if (this.isReact || this.fileContainer == null) {
+    if (this.isContainerManaged || this.fileContainer == null) {
       return;
     }
     // Handle annotation elements
@@ -540,7 +541,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.headerElement = newHeader;
 
-    if (this.isReact) return;
+    if (this.isContainerManaged) return;
 
     const { renderHeaderMetadata: renderCustomMetadata } = this.options;
     if (this.headerMetadata != null) {
