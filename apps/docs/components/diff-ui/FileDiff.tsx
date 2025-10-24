@@ -67,7 +67,7 @@ export function FileDiff<LAnnotation = undefined>(
         forceRender,
         oldFile,
         newFile,
-        fileContainer: ref.current ?? undefined,
+        fileContainer: ref.current,
         lineAnnotations: annotations,
       });
     }
