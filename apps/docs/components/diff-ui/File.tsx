@@ -64,7 +64,7 @@ export function File<LAnnotation = undefined>({
 
   const metadata = renderHeaderMetadata?.(file);
   return (
-    <pjs-container ref={ref} className={className} style={style}>
+    <file-diff ref={ref} className={className} style={style}>
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation) => (
@@ -75,6 +75,6 @@ export function File<LAnnotation = undefined>({
             {renderAnnotation(annotation)}
           </div>
         ))}
-    </pjs-container>
+    </file-diff>
   );
 }

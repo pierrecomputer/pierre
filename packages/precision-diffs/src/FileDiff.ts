@@ -377,8 +377,7 @@ export class FileDiff<LAnnotation = undefined> {
     ) {
       return this.fileContainer;
     }
-    this.fileContainer =
-      fileContainer ?? document.createElement('pjs-container');
+    this.fileContainer = fileContainer ?? document.createElement('file-diff');
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;

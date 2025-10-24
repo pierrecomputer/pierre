@@ -94,10 +94,8 @@ export function FileDiff<LAnnotation = undefined>({
     </>
   );
   return (
-    // @ts-expect-error lol
     <file-diff ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}
-      {/* @ts-expect-error lol */}
     </file-diff>
   );
 }
@@ -107,7 +105,7 @@ function templateRender(children: ReactNode, __html?: string) {
     return (
       <>
         <template
-          // @ts-expect-error lol
+          // @ts-expect-error unclear how to fix this
           shadowrootmode="open"
           dangerouslySetInnerHTML={{ __html }}
         />

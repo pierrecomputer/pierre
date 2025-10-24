@@ -190,7 +190,7 @@ code {
   flex-direction: row-reverse;
 }
 
-pjs-container {
+file-diff {
   content-visibility: auto;
   margin-top: 2px;
 }
