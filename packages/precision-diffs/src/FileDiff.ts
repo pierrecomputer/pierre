@@ -260,6 +260,9 @@ export class FileDiff<LAnnotation = undefined> {
       if (props.fileDiff != null) {
         this.fileDiff = props.fileDiff;
       }
+      this.attachEventListeners(this.pre);
+      this.setupResizeObserver(this.pre);
+      this.renderAnnotations();
     }
   }
 
@@ -333,10 +336,14 @@ export class FileDiff<LAnnotation = undefined> {
       const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(hunksResult, pre, highlighter);
       this.setupResizeObserver(pre);
+      this.renderAnnotations();
     }
+  }
 
-    if (this.isReact) return;
-
+  renderAnnotations() {
+    if (this.isReact || this.fileContainer == null) {
+      return;
+    }
     // Handle annotation elements
     for (const element of this.annotationElements) {
       element.parentNode?.removeChild(element);
@@ -353,7 +360,7 @@ export class FileDiff<LAnnotation = undefined> {
         el.slot = getLineAnnotationId(annotation);
         el.appendChild(content);
         this.annotationElements.push(el);
-        fileContainer.appendChild(el);
+        this.fileContainer.appendChild(el);
       }
     }
   }
