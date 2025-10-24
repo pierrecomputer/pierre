@@ -1,3 +1,4 @@
+import { useEffectEvent } from '@/lib/useEffectEvent';
 import {
   type DiffFileRendererOptions,
   type DiffLineAnnotation,
@@ -45,39 +46,43 @@ export function FileDiff<LAnnotation = undefined>({
   renderHeaderMetadata,
 }: FileDiffProps<LAnnotation>) {
   const instanceRef = useRef<FileDiffUI<LAnnotation> | null>(null);
-  const ref = useRef<HTMLElement>(null);
-  // NOTE(amadeus): This is all a temporary hack until we can figure out proper
-  // innerHTML shadow dom stuff
-  useIsometricEffect(() => {
-    if (ref.current == null) return;
-    const firstRender = instanceRef.current == null;
-    instanceRef.current ??= new FileDiffUI<LAnnotation>(options, true);
-    const forceRender = !deepEqual(instanceRef.current.options, options);
-    instanceRef.current.setOptions(options);
-    if (firstRender && prerenderedHTML != null) {
+  const ref = useEffectEvent((node: HTMLElement | null) => {
+    if (node != null) {
+      if (instanceRef.current != null) {
+        throw new Error(
+          'FileDiff: An instance should not already exist when a node is created'
+        );
+      }
+      // FIXME: Ideally we don't use FileDiffUI here, and instead amalgamate
+      // the renderers manually
+      instanceRef.current = new FileDiffUI(options, true);
       instanceRef.current.hydrate({
         oldFile,
         newFile,
-        fileContainer: ref.current,
+        fileContainer: node,
         lineAnnotations: annotations,
       });
     } else {
-      void instanceRef.current.render({
-        forceRender,
-        oldFile,
-        newFile,
-        fileContainer: ref.current,
-        lineAnnotations: annotations,
-      });
+      if (instanceRef.current == null) {
+        throw new Error(
+          'FileDiff: A FileDiff instance should exist when unmounting'
+        );
+      }
+      instanceRef.current.cleanUp();
+      instanceRef.current = null;
     }
   });
-  useIsometricEffect(
-    () => () => {
-      instanceRef.current?.cleanUp();
-      instanceRef.current = null;
-    },
-    []
-  );
+  useIsometricEffect(() => {
+    if (instanceRef.current == null) return;
+    const forceRender = !deepEqual(instanceRef.current.options, options);
+    instanceRef.current.setOptions(options);
+    void instanceRef.current.render({
+      forceRender,
+      oldFile,
+      newFile,
+      lineAnnotations: annotations,
+    });
+  });
   const metadata = renderHeaderMetadata?.({ oldFile, newFile });
   const children = (
     <>

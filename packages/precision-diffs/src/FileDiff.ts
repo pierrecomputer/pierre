@@ -204,14 +204,16 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerRenderer.cleanUp();
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
-    this.pre = undefined;
-    this.headerElement = undefined;
     this.fileDiff = undefined;
+    this.oldFile = undefined;
+    this.newFile = undefined;
     this.resizeObserver = undefined;
     if (!this.isReact) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
     this.fileContainer = undefined;
+    this.pre = undefined;
+    this.headerElement = undefined;
   }
 
   hydrate(props: FileDiffRenderProps<LAnnotation>) {
@@ -220,14 +222,6 @@ export class FileDiff<LAnnotation = undefined> {
       throw new Error(
         'FileDiff: you must provide a fileContainer on hydration'
       );
-    }
-    this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
-    if (props.newFile != null && props.oldFile != null) {
-      this.newFile = props.newFile;
-      this.oldFile = props.oldFile;
-    }
-    if (props.fileDiff != null) {
-      this.fileDiff = props.fileDiff;
     }
     for (const element of Array.from(
       this.fileContainer.shadowRoot?.children ?? []
@@ -241,8 +235,6 @@ export class FileDiff<LAnnotation = undefined> {
       }
       if (element instanceof HTMLPreElement) {
         this.pre = element;
-        this.attachEventListeners(this.pre);
-        this.setupResizeObserver(this.pre);
         continue;
       }
       if ('pjsHeader' in element.dataset) {
@@ -250,14 +242,31 @@ export class FileDiff<LAnnotation = undefined> {
         continue;
       }
     }
+    // If we have no pre tag, then we should render
+    if (this.pre == null) {
+      void this.render(props);
+    }
+    // Otherwise orchestrate our setup
+    else {
+      this.attachEventListeners(this.pre);
+      this.setupResizeObserver(this.pre);
+
+      this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
+      if (props.newFile != null && props.oldFile != null) {
+        this.newFile = props.newFile;
+        this.oldFile = props.oldFile;
+      }
+      if (props.fileDiff != null) {
+        this.fileDiff = props.fileDiff;
+      }
+    }
   }
 
   async render(props: FileDiffRenderProps<LAnnotation>) {
     const { forceRender = false, lineAnnotations, containerWrapper } = props;
-    const annotationsChanged = !deepEquals(
-      lineAnnotations,
-      this.lineAnnotations
-    );
+    const annotationsChanged =
+      lineAnnotations != null &&
+      !deepEquals(lineAnnotations, this.lineAnnotations);
     if (
       props.fileDiff == null &&
       !forceRender &&
@@ -278,11 +287,6 @@ export class FileDiff<LAnnotation = undefined> {
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
-    const fileContainer = this.getOrCreateFileContainer(props.fileContainer);
-    if (containerWrapper != null) {
-      containerWrapper.appendChild(fileContainer);
-    }
-    const pre = this.getOrCreatePre(fileContainer);
     this.hunksRenderer.setOptions(this.options);
 
     // This is kinda jank, lol
@@ -312,13 +316,23 @@ export class FileDiff<LAnnotation = undefined> {
       this.hunksRenderer.render(this.fileDiff),
     ]);
 
+    // If both are null, most likely a cleanup, lets abort
+    if (headerResult == null && hunksResult == null) {
+      return;
+    }
+
+    const fileContainer = this.getOrCreateFileContainer(props.fileContainer);
     if (headerResult != null) {
       this.applyHeaderToDOM(headerResult, fileContainer);
     }
     if (hunksResult != null) {
+      if (containerWrapper != null) {
+        containerWrapper.appendChild(fileContainer);
+      }
+      const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(hunksResult, pre, highlighter);
+      this.setupResizeObserver(pre);
     }
-    this.setupResizeObserver(pre);
 
     if (this.isReact) return;
 
