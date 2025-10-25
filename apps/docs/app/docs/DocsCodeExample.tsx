@@ -1,16 +1,27 @@
-import { File, type FileContents } from '@pierre/precision-diffs/react';
+'use client';
+
+import {
+  File,
+  type FileContents,
+  type FileOptions,
+  type LineAnnotation,
+} from '@pierre/precision-diffs/react';
 
 import { CopyCodeButton } from './CopyCodeButton';
 
-interface DocsCodeExampleProps {
+interface DocsCodeExampleProps<LAnnotation> {
   file: FileContents;
+  options?: FileOptions<LAnnotation>;
+  annotations?: LineAnnotation<LAnnotation>[];
+  prerenderedHTML?: string;
 }
 
-export function DocsCodeExample({ file }: DocsCodeExampleProps) {
+export function DocsCodeExample<LAnnotation = undefined>(
+  props: DocsCodeExampleProps<LAnnotation>
+) {
   return (
     <File
-      file={file}
-      options={{ themes: { dark: 'pierre-dark', light: 'pierre-light' } }}
+      {...props}
       className="overflow-hidden rounded-md border-1"
       renderHeaderMetadata={(file) => (
         <CopyCodeButton content={file.contents} />

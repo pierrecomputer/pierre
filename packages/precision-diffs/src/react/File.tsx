@@ -19,6 +19,8 @@ import { useStableCallback } from './utils/useStableCallback';
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
+export type { FileOptions };
+
 export interface FileProps<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
