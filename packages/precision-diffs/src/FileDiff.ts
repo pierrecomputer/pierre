@@ -287,6 +287,9 @@ export class FileDiff<LAnnotation = undefined> {
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();
+      if ((this.options.overflow ?? 'scroll') === 'scroll') {
+        this.setupScrollSync();
+      }
     }
   }
 
@@ -695,9 +698,26 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private setupScrollSync(
-    codeDeletions: HTMLElement,
-    codeAdditions: HTMLElement
+    codeDeletions?: HTMLElement,
+    codeAdditions?: HTMLElement
   ) {
+    if (codeDeletions == null || codeAdditions == null) {
+      for (const element of this.pre?.children ?? []) {
+        if (!(element instanceof HTMLElement)) {
+          continue;
+        }
+        if ('deletions' in element.dataset) {
+          codeDeletions = element;
+        } else if ('additions' in element.dataset) {
+          codeAdditions = element;
+        }
+      }
+    }
+
+    if (codeAdditions == null || codeDeletions == null) {
+      return;
+    }
+
     const state = {
       isLeftScrolling: false,
       isRightScrolling: false,
