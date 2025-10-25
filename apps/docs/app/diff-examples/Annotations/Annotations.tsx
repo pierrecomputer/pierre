@@ -372,51 +372,74 @@ interface AcceptRejectMetadata {
   accepted?: boolean;
 }
 
+const OLD_FILE_ACCEPT_REJECT: FileContents = {
+  name: 'file.tsx',
+  contents: `import * as 'react';
+import IconSprite from './IconSprite';
+import Header from './Header';
+
+export default function Home() {
+  return (
+    <div>
+      {/* todo: add header and icon sprite */}
+      <ul>
+        <li>Item 1</li>
+        <li>Item 2</li>
+        <li>Item 3</li>
+      </ul>
+    </div>
+  );
+}
+`,
+};
+
+const NEW_FILE_ACCEPT_REJECT: FileContents = {
+  name: 'file.tsx',
+  contents: `import * as 'react';
+import IconSprite from './IconSprite';
+import Header from './Header';
+
+export default function Home() {
+  return (
+    <div>
+      <Header />
+      <IconSprite />
+      <ul>
+        <li>Item 1</li>
+        <li>Item 2</li>
+        <li>Item 3</li>
+      </ul>
+    </div>
+  );
+}
+`,
+};
+
 export function AcceptRejectExample() {
-  const [acceptedChanges, setAcceptedChanges] = useState<Set<string>>(
-    new Set()
-  );
-  const [rejectedChanges, setRejectedChanges] = useState<Set<string>>(
-    new Set()
-  );
+  const [annotationState, setAnnotationState] = useState<
+    'accepted' | 'rejected' | 'pending'
+  >('pending');
 
   // Create annotations for all changed lines
   const annotations: DiffLineAnnotation<AcceptRejectMetadata>[] = [
-    // Deletions
-    { side: 'deletions', lineNumber: 1, metadata: { key: 'del-1' } },
-    { side: 'deletions', lineNumber: 2, metadata: { key: 'del-2' } },
-    { side: 'deletions', lineNumber: 3, metadata: { key: 'del-3' } },
-    { side: 'deletions', lineNumber: 7, metadata: { key: 'del-7' } },
-    // Additions
-    { side: 'additions', lineNumber: 2, metadata: { key: 'add-2' } },
-    { side: 'additions', lineNumber: 3, metadata: { key: 'add-3' } },
-    { side: 'additions', lineNumber: 6, metadata: { key: 'add-6' } },
-    { side: 'additions', lineNumber: 8, metadata: { key: 'add-8' } },
+    { side: 'additions', lineNumber: 9, metadata: { key: 'del-1' } },
   ];
 
-  const handleAccept = useCallback((key: string) => {
-    setAcceptedChanges((prev) => new Set(prev).add(key));
-    setRejectedChanges((prev) => {
-      const next = new Set(prev);
-      next.delete(key);
-      return next;
-    });
+  const handleAccept = useCallback(() => {
+    setAnnotationState('accepted');
   }, []);
 
-  const handleReject = useCallback((key: string) => {
-    setRejectedChanges((prev) => new Set(prev).add(key));
-    setAcceptedChanges((prev) => {
-      const next = new Set(prev);
-      next.delete(key);
-      return next;
-    });
+  const handleReject = useCallback(() => {
+    setAnnotationState('rejected');
   }, []);
+
+  console.log(annotationState);
 
   return (
     <div className="space-y-5">
       <FeatureHeader
         title="Accept/Reject Changes"
-        description="Annotations can be used to build interactive code review interfaces. This example demonstrates accept/reject buttons attached to each change, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
+        description="Annotations can also be used to build interactive code review interfaces. This example demonstrates accept/reject style buttons attached to each change, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
       />
       <p className="text-muted-foreground text-sm">
         Each changed line in the diff below has accept (checkmark) and reject
@@ -425,18 +448,27 @@ export function AcceptRejectExample() {
         system tracks which changes have been accepted or rejected.
       </p>
       <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
+        oldFile={
+          annotationState === 'pending'
+            ? OLD_FILE_ACCEPT_REJECT
+            : annotationState === 'accepted'
+              ? NEW_FILE_ACCEPT_REJECT
+              : OLD_FILE_ACCEPT_REJECT
+        }
+        newFile={
+          annotationState === 'pending'
+            ? NEW_FILE_ACCEPT_REJECT
+            : annotationState === 'accepted'
+              ? NEW_FILE_ACCEPT_REJECT
+              : OLD_FILE_ACCEPT_REJECT
+        }
         className="overflow-hidden rounded-lg border"
         options={{
           theme: 'pierre-dark',
           diffStyle: 'unified',
         }}
-        annotations={annotations}
-        renderAnnotation={(annotation) => {
-          const isAccepted = acceptedChanges.has(annotation.metadata.key);
-          const isRejected = rejectedChanges.has(annotation.metadata.key);
-
+        annotations={annotationState === 'pending' ? annotations : []}
+        renderAnnotation={() => {
           return (
             <div
               style={{
@@ -445,14 +477,27 @@ export function AcceptRejectExample() {
                 width: '100%',
                 backgroundColor: 'red',
                 overflow: 'visible',
+                fontFamily: 'Geist',
               }}
             >
-              <div className="absolute top-0 right-2 flex gap-2">
-                <Button variant="success" size="xs">
-                  Accept
+              <div className="absolute top-1 right-8 flex gap-1">
+                <Button
+                  variant="muted"
+                  size="xs"
+                  className="rounded-[4px]"
+                  onClick={handleReject}
+                >
+                  Undo{' '}
+                  <span className="-ml-0.5 font-normal opacity-80">⌘N</span>
                 </Button>
-                <Button variant="secondary" size="xs">
-                  Undo
+                <Button
+                  variant="success"
+                  size="xs"
+                  className="rounded-[4px] text-black dark:text-black"
+                  onClick={handleAccept}
+                >
+                  Keep{' '}
+                  <span className="-ml-0.5 font-normal opacity-40">⌘Y</span>
                 </Button>
               </div>
             </div>
