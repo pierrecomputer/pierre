@@ -17,47 +17,10 @@ bun run dev
 
 ## Publishing precision diffs
 
-Note that publishing precision diffs is a bit artisinal.
-
-**This is dangerous.**
-
-First run `bun run clean` at root then `cd` into the package directory
-
-```bash
-bun run clean
+```sh
 cd packages/precision-diffs
+bun run publish
 ```
-
-Next modify package.json to both increment the version and update exports like
-so. You'll want to commit the version change but NOT the exports change.
-
-```json
-{
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./react": {
-      "import": "./dist/react/index.js",
-      "types": "./dist/react/index.d.ts"
-    }
-  }
-}
-```
-
-Run build, followed by a publish:
-
-```bash
-bun run build
-bun publish
-```
-
-After the version has been deployed, revert the exports/files changes in
-package.json.
-
-Long term, I'm hoping we can use publishConfig to override this, but because we
-rely on Bun for package managment, we currently don't have this functionality.
 
 ## Building Icons
 
