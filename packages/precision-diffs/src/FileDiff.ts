@@ -295,6 +295,7 @@ export class FileDiff<LAnnotation = undefined> {
     // Otherwise orchestrate our setup
     else {
       this.fileContainer = props.fileContainer;
+      delete this.pre.dataset.dehydrated;
 
       this.attachEventListeners(this.pre);
       this.setupResizeObserver(this.pre);

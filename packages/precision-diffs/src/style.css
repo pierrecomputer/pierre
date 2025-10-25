@@ -222,6 +222,10 @@ code {
   }
 }
 
+[data-pjs][data-dehydrated] {
+  --pjs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
+}
+
 @media (prefers-color-scheme: dark) {
   [data-pjs-header],
   [data-pjs] {

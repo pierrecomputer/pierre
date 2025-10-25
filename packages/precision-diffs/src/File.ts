@@ -185,6 +185,7 @@ export class File<LAnnotation = undefined> {
     // Otherwise orchestrate our setup
     else {
       this.fileContainer = props.fileContainer;
+      delete this.pre.dataset.dehydrated;
 
       this.attachEventListeners(this.pre);
 
