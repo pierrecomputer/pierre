@@ -128,7 +128,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
         themeType,
-        // Custom Hunk Separators Test
+        // Custom Hunk Separators Tests
         // hunkSeparators(hunkData) {
         //   const fragment = document.createDocumentFragment();
         //   const numCol = document.createElement('div');
@@ -145,6 +145,26 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         //   contentCol.style.left = 'var(--pjs-column-number-width)';
         //   fragment.appendChild(contentCol);
         //   return fragment;
+        // },
+        // hunkSeparators(hunkData) {
+        //   const wrapper = document.createElement('div');
+        //   wrapper.style.gridColumn = 'span 2';
+        //   const contentCol = document.createElement('div');
+        //   contentCol.textContent = `${hunkData.lines} unmodified lines`;
+        //   contentCol.style.position = 'sticky';
+        //   contentCol.style.width = 'var(--pjs-column-width)';
+        //   contentCol.style.left = '0';
+        //   wrapper.appendChild(contentCol);
+        //   return wrapper;
+        // },
+        // hunkSeparators(hunkData) {
+        //   const wrapper = document.createElement('div');
+        //   wrapper.style.gridColumn = '2 / 3';
+        //   wrapper.textContent = `${hunkData.lines} unmodified lines`;
+        //   wrapper.style.position = 'sticky';
+        //   wrapper.style.width = 'var(--pjs-column-content-width)';
+        //   wrapper.style.left = 'var(--pjs-column-number-width)';
+        //   return wrapper;
         // },
         onLineClick(props) {
           console.log('onLineClick', props);
