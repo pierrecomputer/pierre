@@ -93,22 +93,24 @@ export const OVERVIEW_REACT_PATCH_FILE: PreloadFileOptions<undefined> = {
   parsePatchFiles,
 } from '@pierre/precision-diffs/react';
 
-// If you consume a patch file, then you'll need to spawn multiple renderers
-// for each file in the patches
+// If you consume a patch file, then you'll need to spawn multiple
+// renderers for each file in the patches
 function Patches() {
   const [parsedPatches, setParsedPatches] = useState<ParsedPatch[]>([]);
   useEffect(() => {
-    // This is a fake function to fetch a github pr patch file, not an actual api
-    fetchGithubPatch('https://github.com/twbs/bootstrap/pull/41766.patch').then(
-      (data: string) => {
-        setParsedPatches(
-          // Github can return multiple patches in 1 file, we handle all
-          // of this automatically for you. Just give us a single patch
-          // or any number
-          parsePatchFiles(data)
-        );
-      }
-    );
+    // This is a fake function to fetch a github pr patch file, not an
+    // actual api
+    fetchGithubPatch('https://github.com/twbs/bootstrap/pull/41766.patch')
+      .then(
+        (data: string) => {
+          setParsedPatches(
+            // Github can return multiple patches in 1 file, we handle all
+            // of this automatically for you. Just give us a single patch
+            // or any number
+            parsePatchFiles(data)
+          );
+        }
+      );
   }, []);
 
   return (
@@ -116,12 +118,13 @@ function Patches() {
       {parsePatchFiles.map((patch, index) => (
         <Fragment key={index}>
           {patch.files.map((fileDiff, index) => (
-            // Under the hood, all instances of FileDiff will use a shared Shiki
-            // highlighter and manage loading languages and themes for you
+            // Under the hood, all instances of FileDiff will use a 
+            // shared Shiki highlighter and manage loading languages 
+            // and themes for you
             <FileDiff
               key={index}
-              // 'fileDiff' is a data structure that includes all hunks for a
-              // specific file from a patch
+              // 'fileDiff' is a data structure that includes all 
+              // hunks for a specific file from a patch
               fileDiff={fileDiff}
               options={{
                 // Automatically theme based on users OS settings
@@ -204,14 +207,15 @@ const patchFileContent: string = await fetchGithubPatch(
 const parsedPatches: ParsedPatch[] = parsePatchFiles(patchFileContent);
 for (const patch of parsedPatches) {
   for (const fileDiff of patch.files) {
-    // 'fileDiff' is a data structure that includes all hunks for a specific
-    // file from a patch
+    // 'fileDiff' is a data structure that includes all hunks for a
+    // specific file from a patch
     const instance = new FileDiff({
       // Automatically theme based on users os settings
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
     });
-    // Under the hood, all instances of FileDiff will use a shared Shiki
-    // highlighter and manage loading languages and themes for you automatically
+    // Under the hood, all instances of FileDiff will use a shared 
+    // Shiki highlighter and manage loading languages and themes for
+    // you automatically
     instance.render({
       fileDiff,
       containerWrapper: document.body,

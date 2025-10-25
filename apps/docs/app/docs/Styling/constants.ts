@@ -15,15 +15,16 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
   --pjs-line-height: 1.5;
   /* Controls tab character size */
   --pjs-tab-size: 2;
-  /* Font used in header and separator components, typically not a monospace
-   * font, but it's your call */
+  /* Font used in header and separator components, 
+   * typically not a monospace font, but it's your call */
   --pjs-header-font-family: Helvetica;
-  /* Override or customize any 'font-feature-settings' for your code font */
+  /* Override or customize any 'font-feature-settings' 
+   * for your code font */
   --pjs-font-features: normal;
 
-  /* By default we try to inherit the deletion/addition/modified colors from
-   * the existing Shiki theme, however if you'd like to override them, you can do
-   * so via these css variables: */
+  /* By default we try to inherit the deletion/addition/modified 
+   * colors from the existing Shiki theme, however if you'd like
+   * to override them, you can do so via these css variables: */
   --pjs-deletion-color-override: orange;
   --pjs-addition-color-override: yellow;
   --pjs-modified-color-override: purple;
