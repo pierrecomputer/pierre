@@ -151,6 +151,20 @@ export function SingleDiff() {
   );
 }`;
 
+const CODE_PATCH = `import { FileDiff } from '@pierre/precision-diffs/react';
+
+const patch = \`diff --git a/foo.ts b/foo.ts
+--- a/foo.ts
++++ b/foo.ts
+@@ -1,3 +1,3 @@
+-console.log("Hello world");
++console.warn("Uh oh");
+\`;
+
+export function SingleDiffFromPatch() {
+  return <FileDiff patch={patch} />;
+}`;
+
 export function ReactAPI() {
   const [example, setExample] = useState<'file-diff' | 'file'>('file-diff');
   return (
@@ -175,7 +189,15 @@ export function ReactAPI() {
         <ButtonGroupItem value="file">File</ButtonGroupItem>
       </ButtonGroup>
       {example === 'file-diff' ? (
-        <SimpleCodeBlock code={CODE} language="tsx" />
+        <>
+          <SimpleCodeBlock code={CODE} language="tsx" />
+          <p>
+            Alternatively, if you already have a unified diff for a single file,
+            pass it via the <code>patch</code> prop instead of <code>oldFile</code> and{' '}
+            <code>newFile</code>.
+          </p>
+          <SimpleCodeBlock code={CODE_PATCH} language="tsx" />
+        </>
       ) : (
         <SimpleCodeBlock code="// Coming Soon" language="tsx" />
       )}

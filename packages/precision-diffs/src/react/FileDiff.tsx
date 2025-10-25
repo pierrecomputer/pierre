@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
 } from 'react';
 
@@ -17,9 +18,11 @@ import { HEADER_METADATA_SLOT_ID } from '../constants';
 import {
   type DiffLineAnnotation,
   type FileContents,
+  type FileDiffMetadata,
   type RenderHeaderMetadataProps,
 } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { parsePatchFiles } from '../utils/parsePatchFiles';
 import { useStableCallback } from './utils/useStableCallback';
 
 export type { FileContents };
@@ -27,9 +30,7 @@ export type { FileContents };
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export interface FileDiffProps<LAnnotation> {
-  oldFile: FileContents;
-  newFile: FileContents;
+interface FileDiffSharedProps<LAnnotation> {
   options?: DiffFileRendererOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
@@ -39,17 +40,74 @@ export interface FileDiffProps<LAnnotation> {
   prerenderedHTML?: string;
 }
 
-export function FileDiff<LAnnotation = undefined>({
-  oldFile,
-  newFile,
-  options,
-  annotations,
-  className,
-  style,
-  prerenderedHTML,
-  renderAnnotation,
-  renderHeaderMetadata,
-}: FileDiffProps<LAnnotation>) {
+interface FileDiffBeforeAfterProps<LAnnotation>
+  extends FileDiffSharedProps<LAnnotation> {
+  patch?: undefined;
+  oldFile: FileContents;
+  newFile: FileContents;
+}
+
+interface FileDiffPatchProps<LAnnotation>
+  extends FileDiffSharedProps<LAnnotation> {
+  patch: string;
+  oldFile?: undefined;
+  newFile?: undefined;
+}
+
+export type FileDiffProps<LAnnotation> =
+  | FileDiffBeforeAfterProps<LAnnotation>
+  | FileDiffPatchProps<LAnnotation>;
+
+export function FileDiff<LAnnotation = undefined>(
+  props: FileDiffProps<LAnnotation>
+) {
+  const {
+    options,
+    annotations,
+    className,
+    style,
+    prerenderedHTML,
+    renderAnnotation,
+    renderHeaderMetadata,
+  } = props;
+
+  const patch = 'patch' in props ? props.patch : undefined;
+  let oldFile: FileContents | undefined;
+  let newFile: FileContents | undefined;
+
+  if (patch == null) {
+    ({ oldFile, newFile } = props as FileDiffBeforeAfterProps<LAnnotation>);
+    if (oldFile == null || newFile == null) {
+      throw new Error(
+        'FileDiff: you must provide either a patch or both oldFile and newFile'
+      );
+    }
+  }
+
+  const fileDiffFromPatch = useMemo<FileDiffMetadata | undefined>(() => {
+    if (patch == null) {
+      return undefined;
+    }
+    const files = parsePatchFiles(patch)
+      .flatMap((parsed) => parsed.files);
+    if (files.length === 0) {
+      throw new Error(
+        'FileDiff: provided patch does not include a file diff'
+      );
+    }
+    if (files.length > 1) {
+      throw new Error(
+        'FileDiff: provided patch must contain exactly one file diff'
+      );
+    }
+    return files[0];
+  }, [patch]);
+
+  const renderProps =
+    fileDiffFromPatch != null
+      ? { fileDiff: fileDiffFromPatch }
+      : { oldFile: oldFile!, newFile: newFile! };
+
   const instanceRef = useRef<FileDiffUI<LAnnotation> | null>(null);
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
@@ -62,8 +120,7 @@ export function FileDiff<LAnnotation = undefined>({
       // the renderers manually
       instanceRef.current = new FileDiffUI(options, true);
       instanceRef.current.hydrate({
-        oldFile,
-        newFile,
+        ...renderProps,
         fileContainer: node,
         lineAnnotations: annotations,
       });
@@ -83,12 +140,15 @@ export function FileDiff<LAnnotation = undefined>({
     instanceRef.current.setOptions(options);
     void instanceRef.current.render({
       forceRender,
-      oldFile,
-      newFile,
+      ...renderProps,
       lineAnnotations: annotations,
     });
   });
-  const metadata = renderHeaderMetadata?.({ oldFile, newFile });
+  const metadata = renderHeaderMetadata?.(
+    'fileDiff' in renderProps
+      ? { fileDiff: renderProps.fileDiff }
+      : { oldFile: renderProps.oldFile, newFile: renderProps.newFile }
+  );
   const children = (
     <>
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
