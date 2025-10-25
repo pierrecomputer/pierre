@@ -110,6 +110,11 @@ export class FileDiff<LAnnotation = undefined> {
   options: DiffFileRendererOptions<LAnnotation>;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
+  private annotationElements: HTMLElement[] = [];
+  private customHunkElements: HTMLElement[] = [];
+  private headerElement: HTMLElement | undefined;
+  private headerMetadata: HTMLElement | undefined;
+  private spriteSVG: SVGElement | undefined;
 
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
@@ -122,10 +127,6 @@ export class FileDiff<LAnnotation = undefined> {
   private oldFile: FileContents | undefined;
   private newFile: FileContents | undefined;
   private fileDiff: FileDiffMetadata | undefined;
-  private annotationElements: HTMLElement[] = [];
-  private customHunkElements: HTMLElement[] = [];
-  private headerElement: HTMLElement | undefined;
-  private headerMetadata: HTMLElement | undefined;
 
   constructor(
     options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
@@ -150,9 +151,8 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(
-    options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' }
-  ) {
+  setOptions(options: DiffFileRendererOptions<LAnnotation> | undefined) {
+    if (options == null) return;
     this.options = options;
     this.hunksRenderer.setOptions({
       ...this.options,
@@ -417,8 +417,6 @@ export class FileDiff<LAnnotation = undefined> {
       }
     }
   }
-
-  spriteSVG: SVGElement | undefined;
 
   private attachEventListeners(pre: HTMLPreElement) {
     // Remove old event listeners if they exist, probably don't

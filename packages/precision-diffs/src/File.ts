@@ -77,6 +77,7 @@ export class File<LAnnotation = undefined> {
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
+  private spriteSVG: SVGElement | undefined;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
@@ -85,14 +86,17 @@ export class File<LAnnotation = undefined> {
   private resizeObserver: ResizeObserver | undefined;
 
   constructor(
-    public options: FileOptions<LAnnotation>,
-    private isReact = false
+    public options: FileOptions<LAnnotation> = {
+      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+    },
+    private isContainerManaged = false
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(options);
     this.headerRenderer = new FileHeaderRenderer(options);
   }
 
-  setOptions(options: FileOptions<LAnnotation>) {
+  setOptions(options: FileOptions<LAnnotation> | undefined) {
+    if (options == null) return;
     this.options = options;
   }
 
@@ -143,10 +147,52 @@ export class File<LAnnotation = undefined> {
     this.pre = undefined;
     this.headerElement?.parentNode?.removeChild(this.headerElement);
     this.headerElement = undefined;
-    if (!this.isReact) {
+    if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
     this.fileContainer = undefined;
+  }
+
+  hydrate(props: FileRenderProps<LAnnotation>) {
+    if (props.fileContainer == null) {
+      throw new Error(
+        'FileDiff: you must provide a fileContainer on hydration'
+      );
+    }
+    for (const element of Array.from(
+      props.fileContainer.shadowRoot?.children ?? []
+    )) {
+      if (element instanceof SVGElement) {
+        this.spriteSVG = element;
+        continue;
+      }
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+      if (element instanceof HTMLPreElement) {
+        this.pre = element;
+        continue;
+      }
+      if ('pjsHeader' in element.dataset) {
+        this.headerElement = element;
+        continue;
+      }
+    }
+    // If we have no pre tag, then we should render
+    if (this.pre == null) {
+      void this.render(props);
+    }
+    // Otherwise orchestrate our setup
+    else {
+      this.fileContainer = props.fileContainer;
+
+      this.attachEventListeners(this.pre);
+
+      this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
+      this.file = props.file;
+      this.attachEventListeners(this.pre);
+      this.renderAnnotations();
+    }
   }
 
   private file: FileContents | undefined;
@@ -161,17 +207,13 @@ export class File<LAnnotation = undefined> {
       return undefined;
     }
 
+    this.file = file;
+
     this.fileRenderer.setOptions(this.options);
     if (lineAnnotations != null) {
       this.fileRenderer.setLineAnnotations(lineAnnotations);
       this.setLineAnnotations(lineAnnotations);
     }
-
-    fileContainer = this.getOrCreateFileContainer(fileContainer);
-    if (containerWrapper != null) {
-      containerWrapper.appendChild(fileContainer);
-    }
-    const pre = this.getOrCreatePre(fileContainer);
 
     const { disableFileHeader = false } = this.options;
     if (disableFileHeader) {
@@ -191,16 +233,30 @@ export class File<LAnnotation = undefined> {
       this.fileRenderer.render(file),
     ]);
 
+    if (headerResult == null && fileResult == null) {
+      return;
+    }
+
+    fileContainer = this.getOrCreateFileContainer(fileContainer);
     if (headerResult != null) {
       this.applyHeaderToDOM(headerResult, fileContainer, file);
     }
 
     if (fileResult != null) {
+      if (containerWrapper != null) {
+        containerWrapper.appendChild(fileContainer);
+      }
+      const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(fileResult, pre, highlighter);
+      this.setupResizeObserver();
+      this.renderAnnotations();
     }
+  }
 
-    this.setupResizeObserver();
-
+  renderAnnotations() {
+    if (this.isContainerManaged || this.fileContainer == null) {
+      return;
+    }
     // Handle annotation elements
     for (const element of this.annotationElements) {
       element.parentNode?.removeChild(element);
@@ -217,7 +273,7 @@ export class File<LAnnotation = undefined> {
         el.slot = getLineAnnotationName(annotation);
         el.appendChild(content);
         this.annotationElements.push(el);
-        fileContainer.appendChild(el);
+        this.fileContainer.appendChild(el);
       }
     }
   }
@@ -228,8 +284,9 @@ export class File<LAnnotation = undefined> {
     highlighter: PJSHighlighter
   ) {
     this.setPreAttributes(pre, highlighter);
+    pre.innerHTML = '';
     // Create code elements and insert HTML content
-    this.code ??= createCodeNode();
+    this.code = createCodeNode();
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
     pre.appendChild(this.code);
   }
@@ -254,7 +311,7 @@ export class File<LAnnotation = undefined> {
     }
     this.headerElement = newHeader;
 
-    if (this.isReact) return;
+    if (this.isContainerManaged) return;
 
     const { renderCustomMetadata } = this.options;
     if (this.headerMetadata != null) {
@@ -273,15 +330,30 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  spriteSVG: SVGElement | undefined;
-  getOrCreateFileContainer(fileContainer?: HTMLElement) {
-    if (
-      (fileContainer != null && fileContainer === this.fileContainer) ||
-      (fileContainer == null && this.fileContainer != null)
-    ) {
-      return this.fileContainer;
+  private attachEventListeners(pre: HTMLPreElement) {
+    // Remove old event listeners if they exist, probably don't
+    pre.removeEventListener('click', this.handleMouseClick);
+    pre.removeEventListener('mousemove', this.handleMouseMove);
+    pre.removeEventListener('mouseout', this.handleMouseLeave);
+
+    const { onLineClick, onLineEnter, onLineLeave } = this.options;
+
+    if (onLineClick != null) {
+      pre.addEventListener('click', this.handleMouseClick);
     }
-    this.fileContainer = fileContainer ?? document.createElement('file-diff');
+    if (onLineEnter != null || onLineLeave != null) {
+      pre.addEventListener('mousemove', this.handleMouseMove);
+      if (onLineLeave != null) {
+        pre.addEventListener('mouseleave', this.handleMouseLeave);
+      }
+    }
+  }
+
+  getOrCreateFileContainer(fileContainer?: HTMLElement) {
+    this.fileContainer =
+      fileContainer ??
+      this.fileContainer ??
+      document.createElement('file-diff');
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -291,19 +363,6 @@ export class File<LAnnotation = undefined> {
         this.fileContainer.shadowRoot?.appendChild(this.spriteSVG);
       }
     }
-    const { onLineClick, onLineEnter, onLineLeave } = this.options;
-    if (onLineClick != null) {
-      this.fileContainer.addEventListener('click', this.handleMouseClick);
-    }
-    if (onLineEnter != null || onLineLeave != null) {
-      this.fileContainer.addEventListener('mousemove', this.handleMouseMove);
-      if (onLineLeave != null) {
-        this.fileContainer.addEventListener(
-          'mouseleave',
-          this.handleMouseLeave
-        );
-      }
-    }
     return this.fileContainer;
   }
 
@@ -311,6 +370,7 @@ export class File<LAnnotation = undefined> {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
+      this.attachEventListeners(this.pre);
       container.shadowRoot?.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and

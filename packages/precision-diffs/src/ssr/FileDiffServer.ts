@@ -5,10 +5,28 @@ import {
   type DiffHunksRendererOptions,
 } from '../DiffHunksRenderer';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
+import { FileRenderer, type FileRendererOptions } from '../FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
-import type { DiffLineAnnotation, FileContents } from '../types';
+import type {
+  DiffLineAnnotation,
+  FileContents,
+  LineAnnotation,
+} from '../types';
 import { createHastElement, createTextNode } from '../utils/hast_utils';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+
+export type PreloadFileOptions<LAnnotation> = {
+  file: FileContents;
+  options?: FileRendererOptions;
+  annotations?: LineAnnotation<LAnnotation>[];
+};
+
+export interface PreloadedFileResult<LAnnotation> {
+  file: FileContents;
+  options?: DiffHunksRendererOptions;
+  annotations?: LineAnnotation<LAnnotation>[];
+  prerenderedHTML: string;
+}
 
 export type PreloadFileDiffOptions<LAnnotation> = {
   oldFile: FileContents;
@@ -25,7 +43,54 @@ export interface PreloadedFileDiffResult<LAnnotation> {
   prerenderedHTML: string;
 }
 
-export async function preloadFileDiff<LAnnotation>({
+export async function preloadFile<LAnnotation = undefined>({
+  file,
+  options,
+  annotations,
+}: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
+  const fileRenderer = new FileRenderer<LAnnotation>(options);
+  const fileHeader = new FileHeaderRenderer(options);
+
+  // Set line annotations if provided
+  if (annotations !== undefined && annotations.length > 0) {
+    fileRenderer.setLineAnnotations(annotations);
+  }
+
+  const [hunkResult, headerResult] = await Promise.all([
+    fileRenderer.render(file, true),
+    fileHeader.render(file),
+  ]);
+  if (hunkResult == null) {
+    throw new Error('Failed to render file diff');
+  }
+  const cssText = `@layer base, theme;
+    @layer base {
+      ${rawStyles}
+    }
+    @layer theme {
+      ${hunkResult.css}
+    }`;
+
+  const children = [
+    createHastElement({
+      tagName: 'style',
+      children: [createTextNode(cssText)],
+    }),
+  ];
+  if (headerResult != null) {
+    children.push(headerResult);
+  }
+  children.push(fileRenderer.renderFullAST(hunkResult));
+
+  return {
+    file,
+    options,
+    annotations,
+    prerenderedHTML: `${SVGSpriteSheet}${toHtml(children)}`,
+  };
+}
+
+export async function preloadFileDiff<LAnnotation = undefined>({
   oldFile,
   newFile,
   options,

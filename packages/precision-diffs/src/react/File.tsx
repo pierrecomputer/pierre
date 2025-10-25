@@ -1,3 +1,5 @@
+'use client';
+
 import deepEqual from 'fast-deep-equal';
 import {
   type CSSProperties,
@@ -11,20 +13,21 @@ import { type FileOptions, File as FileUI } from '../File';
 import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type { FileContents, LineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
-
-export type { FileContents };
+import { templateRender } from './utils/templateRender';
+import { useStableCallback } from './utils/useStableCallback';
 
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 export interface FileProps<LAnnotation> {
   file: FileContents;
-  options: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation>;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
   className?: string;
   style?: CSSProperties;
+  prerenderedHTML?: string;
 }
 
 export function File<LAnnotation = undefined>({
@@ -35,33 +38,46 @@ export function File<LAnnotation = undefined>({
   style,
   renderAnnotation,
   renderHeaderMetadata,
+  prerenderedHTML,
 }: FileProps<LAnnotation>) {
   const instanceRef = useRef<FileUI<LAnnotation> | null>(null);
-  const ref = useRef<HTMLElement>(null);
+  const ref = useStableCallback((node: HTMLElement | null) => {
+    if (node != null) {
+      if (instanceRef.current != null) {
+        throw new Error(
+          'File: An instance should not already exist when a node is created'
+        );
+      }
+      // FIXME: Ideally we don't use FileUI here, and instead amalgamate
+      // the renderers manually
+      instanceRef.current = new FileUI(options, true);
+      instanceRef.current.hydrate({
+        file,
+        fileContainer: node,
+        lineAnnotations,
+      });
+    } else {
+      if (instanceRef.current == null) {
+        throw new Error('File: A File instance should exist when unmounting');
+      }
+      instanceRef.current.cleanUp();
+      instanceRef.current = null;
+    }
+  });
 
   useIsometricEffect(() => {
-    if (ref.current == null) return;
-    instanceRef.current ??= new FileUI<LAnnotation>(options, true);
+    if (instanceRef.current == null) return;
     const forceRender = !deepEqual(instanceRef.current.options, options);
     instanceRef.current.setOptions(options);
     void instanceRef.current.render({
       file,
-      fileContainer: ref.current,
       lineAnnotations,
       forceRender,
     });
   });
-  useIsometricEffect(
-    () => () => {
-      instanceRef.current?.cleanUp();
-      instanceRef.current = null;
-    },
-    []
-  );
-
   const metadata = renderHeaderMetadata?.(file);
-  return (
-    <file-diff ref={ref} className={className} style={style}>
+  const children = (
+    <>
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
@@ -69,6 +85,11 @@ export function File<LAnnotation = undefined>({
             {renderAnnotation(annotation)}
           </div>
         ))}
+    </>
+  );
+  return (
+    <file-diff ref={ref} className={className} style={style}>
+      {templateRender(children, prerenderedHTML)}
     </file-diff>
   );
 }
