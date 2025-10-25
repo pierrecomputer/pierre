@@ -2,156 +2,19 @@
 
 import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import type { FileContents } from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
 
-const OLD_FILE: FileContents = {
-  name: 'example_old.tsx',
-  contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
-
-import type {
-  FileDiffMetadata,
-  FileTypes,
-  PJSHighlighter,
-  PJSThemeNames,
-  RenderCustomFileMetadata,
-  ThemeTypes,
-  ThemeRegistrationResolved,
-  ThemedToken,
-  ThemesType,
-} from '../types';
-
-export function createSpanFromToken(token: ThemedToken) {
-  const element = document.createElement('div');
-  const style = getTokenStyleObject(token);
-  element.style = stringifyTokenStyle(style);
-  return element;
+interface SplitUnifiedProps {
+  prerenderedDiff: PreloadedFileDiffResult<undefined>;
 }
 
-export function createRow(line: number) {
-  const row = document.createElement('div');
-  row.dataset.line = \`\${line}\`;
-
-  const lineColumn = document.createElement('div');
-  lineColumn.dataset.columnNumber = '';
-  lineColumn.textContent = \`\${line}\`;
-
-  const content = document.createElement('div');
-  content.dataset.columnContent = '';
-
-  row.appendChild(lineColumn);
-  row.appendChild(content);
-  return { row, content };
-}
-
-interface SetupWrapperNodesProps {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
-  pre: HTMLElement;
-  highlighter: PJSHighlighter;
-  split: boolean;
-  wrap: boolean;
-  themed: boolean;
-  diffIndicators: 'bars' | 'none';
-}
-
-interface CreateCodeNodeProps {
-  pre?: HTMLPreElement;
-  columnType?: 'additions' | 'deletions' | 'unified';
-}
-
-export function createCodeNode({ pre, columnType }: CreateCodeNodeProps) {
-  const code = document.createElement('code');
-  code.dataset.code = '';
-  if (columnType != null) {
-    code.dataset[columnType] = '';
-  }
-  pre?.appendChild(code);
-  return code;
-}
-
-export function createHunkSeparator() {
-  const separator = document.createElement('div');
-  separator.dataset.separator = '';
-  return separator;
-}
-`,
-};
-
-const NEW_FILE: FileContents = {
-  name: 'example_new.tsx',
-  contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
-
-import type {
-  FileDiffMetadata,
-  FileTypes,
-  PJSHighlighter,
-  PJSThemeNames,
-  RenderCustomFileMetadata,
-  ThemeTypes,
-  ThemeRegistrationResolved,
-  ThemedToken,
-  ThemesType,
-} from '../types';
-
-export function createSpanFromToken(token: ThemedToken) {
-  const element = document.createElement('span');
-  const style = token.htmlStyle ?? getTokenStyleObject(token);
-  element.style = stringifyTokenStyle(style);
-  element.textContent = token.content;
-  element.dataset.span = ''
-  return element;
-}
-
-export function createRow(line: number) {
-  const row = document.createElement('div');
-  row.dataset.line = \`\${line}\`;
-
-  const content = document.createElement('div');
-  content.dataset.columnContent = '';
-
-  row.appendChild(content);
-  return { row, content };
-}
-
-interface SetupWrapperNodesProps {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
-  pre: HTMLElement;
-  highlighter: PJSHighlighter;
-  split: boolean;
-  wrap: boolean;
-  themed: boolean;
-  diffIndicators: 'bars' | 'none';
-}
-
-interface CreateCodeNodeProps {
-  pre?: HTMLPreElement;
-  columnType?: 'additions' | 'deletions' | 'unified';
-}
-
-export function createCodeNode({ pre, columnType }: CreateCodeNodeProps) {
-  const code = document.createElement('code');
-  code.dataset.code = '';
-  if (columnType != null) {
-    code.dataset[columnType] = '';
-  }
-  pre?.appendChild(code);
-  return code;
-}
-
-export function createHunkSeparator() {
-  const separator = document.createElement('div');
-  separator.dataset.separator = '';
-  return separator;
-}
-`,
-};
-
-export function SplitUnified() {
+export function SplitUnified({
+  prerenderedDiff: { options, ...props },
+}: SplitUnifiedProps) {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   return (
     <div className="space-y-5">
@@ -174,11 +37,10 @@ export function SplitUnified() {
       </ButtonGroup>
 
       <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
+        {...props}
         className="overflow-hidden rounded-lg border"
         options={{
-          theme: 'pierre-dark',
+          theme: options?.theme ?? 'pierre-dark',
           diffStyle,
         }}
       />

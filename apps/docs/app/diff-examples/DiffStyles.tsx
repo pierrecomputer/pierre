@@ -18,49 +18,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import type { FileContents } from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
-
-const OLD_FILE: FileContents = {
-  name: 'main.zig',
-  contents: `const std = @import("std");
-const Allocator = std.heap.page_allocator;
-const ArrayList = std.ArrayList;
-
-pub fn main() !void {
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("Hi You, {s}!\\n", .{"World"});
-
-    var list = ArrayList(i32).init(allocator);
-    defer list.deinit();
-}
-`,
-};
-
-const NEW_FILE: FileContents = {
-  name: 'main.zig',
-  contents: `const std = @import("std");
-const GeneralPurposeAllocator = std.heap.GeneralPurposeAllocator;
-const ArrayList = std.ArrayList;
-
-pub fn main() !void {
-    var gpa = GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("Hello There, {s}!\\n", .{"Zig"});
-
-    var list = ArrayList(i32).init(allocator);
-    defer list.deinit();
-    try list.append(42);
-}
-`,
-};
 
 const diffStyleOptions = [
   {
@@ -85,7 +48,12 @@ const diffStyleOptions = [
   },
 ] as const;
 
-export function DiffStyles() {
+interface DiffStylesProps {
+  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+}
+export function DiffStyles({
+  prerenderedDiff: { options, ...props },
+}: DiffStylesProps) {
   const [diffIndicators, setDiffStyle] = useState<'classic' | 'bars' | 'none'>(
     'bars'
   );
@@ -93,7 +61,9 @@ export function DiffStyles() {
     'word-alt' | 'word' | 'char' | 'none'
   >('word-alt');
   const [disableBackground, setDisableBackground] = useState(false);
-  const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('wrap');
+  const [overflow, setOverflow] = useState<'wrap' | 'scroll'>(
+    options?.overflow ?? 'wrap'
+  );
 
   return (
     <div className="space-y-5">
@@ -211,8 +181,7 @@ export function DiffStyles() {
         </div>
       </div>
       <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
+        {...props}
         className="overflow-hidden rounded-lg border"
         options={{
           theme: 'pierre-dark',

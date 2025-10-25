@@ -1,7 +1,7 @@
 'use client';
 
-import type { FileContents } from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
@@ -30,30 +30,13 @@ const FileTextarea = ({
   />
 );
 
-const INITIAL_BEFORE = `.pizza {
-  display: flex;
-  justify-content: center;
+interface ArbitraryFilesProps {
+  prerenderedDiff: PreloadedFileDiffResult<undefined>;
 }
-`;
 
-const INITIAL_AFTER = `.pizza {
-  display: flex;
-}
-`;
-
-export function ArbitraryFiles() {
-  const [beforeContent, setBeforeContent] = useState(INITIAL_BEFORE);
-  const [afterContent, setAfterContent] = useState(INITIAL_AFTER);
-
-  const oldFile: FileContents = {
-    name: 'example.css',
-    contents: beforeContent,
-  };
-
-  const newFile: FileContents = {
-    name: 'example.css',
-    contents: afterContent,
-  };
+export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
+  const [oldFile, setOldFile] = useState(prerenderedDiff.oldFile);
+  const [newFile, setNewFile] = useState(prerenderedDiff.newFile);
 
   return (
     <div className="space-y-5">
@@ -66,27 +49,28 @@ export function ArbitraryFiles() {
         <div className="relative">
           <FileLabel>before.css</FileLabel>
           <FileTextarea
-            value={beforeContent}
-            onChange={(e) => setBeforeContent(e.target.value)}
+            value={oldFile.contents}
+            onChange={(e) => {
+              setOldFile({ ...oldFile, contents: e.target.value });
+            }}
           />
         </div>
         <div className="relative">
           <FileLabel>after.css</FileLabel>
           <FileTextarea
-            value={afterContent}
-            onChange={(e) => setAfterContent(e.target.value)}
+            value={newFile.contents}
+            onChange={(e) => {
+              setNewFile({ ...newFile, contents: e.target.value });
+            }}
           />
         </div>
       </div>
-
+      {/* @ts-expect-error lol */}
       <FileDiff
+        {...prerenderedDiff}
         oldFile={oldFile}
         newFile={newFile}
         className="overflow-hidden rounded-lg border"
-        options={{
-          theme: 'pierre-dark',
-          diffStyle: 'unified',
-        }}
       />
     </div>
   );

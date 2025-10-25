@@ -15,48 +15,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { type FileContents, preloadHighlighter } from '@pierre/precision-diffs';
+import { preloadHighlighter } from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { FeatureHeader } from './FeatureHeader';
-
-const OLD_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
-
-export default function Home() {
-  return (
-    <div>
-      <Header />
-      <IconSprite />
-    </div>
-  );
-}
-`,
-};
-
-const NEW_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import IconSprite from './IconSprite';
-import HeaderSimple from '../components/HeaderSimple';
-import Hero from '../components/Hero';
-
-export default function Home() {
-  return (
-    <div>
-      <HeaderSimple />
-      <IconSprite />
-      <h1>Hello!</h1>
-    </div>
-  );
-}
-`,
-};
 
 const LIGHT_THEMES = [
   'pierre-light',
@@ -126,7 +92,13 @@ const DARK_THEMES = [
   'vitesse-dark',
 ] as const;
 
-export function ShikiThemes() {
+interface ShikiThemesProps {
+  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+}
+
+export function ShikiThemes({
+  prerenderedDiff: { options, ...props },
+}: ShikiThemesProps) {
   useEffect(() => {
     void preloadHighlighter({
       themes: [
@@ -140,10 +112,12 @@ export function ShikiThemes() {
     });
   }, []);
 
-  const [selectedLightTheme, setSelectedLightTheme] =
-    useState<(typeof LIGHT_THEMES)[number]>('pierre-light');
-  const [selectedDarkTheme, setSelectedDarkTheme] =
-    useState<(typeof DARK_THEMES)[number]>('pierre-dark');
+  const [selectedLightTheme, setSelectedLightTheme] = useState<
+    (typeof LIGHT_THEMES)[number]
+  >((options?.themes?.light as 'pierre-light') ?? 'pierre-light');
+  const [selectedDarkTheme, setSelectedDarkTheme] = useState<
+    (typeof DARK_THEMES)[number]
+  >((options?.themes?.light as 'pierre-dark') ?? 'pierre-dark');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');
@@ -243,8 +217,7 @@ export function ShikiThemes() {
         </ButtonGroup>
       </div>
       <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
+        {...props}
         className="overflow-hidden rounded-lg border"
         options={{
           diffStyle: 'split',
