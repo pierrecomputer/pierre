@@ -1,5 +1,4 @@
 import Footer from '@/components/Footer';
-import { ShikiPreloader } from '@/components/ShikiPreloader';
 import {
   IconArrowUpRight,
   IconBrandDiscord,
@@ -98,9 +97,7 @@ export default function Home() {
           </Button>
         </div>
       </section>
-
       <Footer />
-      <ShikiPreloader />
     </div>
   );
 }

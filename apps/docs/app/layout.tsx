@@ -1,4 +1,5 @@
 // sort-imports-ignore
+import { ShikiPreloader } from '@/components/ShikiPreloader';
 import { RootProvider } from 'fumadocs-ui/provider';
 import type { Metadata } from 'next';
 import {
@@ -79,6 +80,7 @@ export default function RootLayout({
             data-theme="light"
           ></div>
         </RootProvider>
+        <ShikiPreloader />
       </body>
     </html>
   );
