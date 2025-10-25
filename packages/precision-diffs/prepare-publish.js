@@ -53,3 +53,10 @@ if (existsSync(licensePath)) {
   copyFileSync(licensePath, resolve('dist/LICENSE'));
   console.log('✓ Copied LICENSE to dist/');
 }
+
+// Copy workspace lockfile so catalog versions can be resolved
+const lockfilePath = resolve('../../bun.lock');
+if (existsSync(lockfilePath)) {
+  copyFileSync(lockfilePath, resolve('dist/bun.lock'));
+  console.log('✓ Copied bun.lock to dist/');
+}
