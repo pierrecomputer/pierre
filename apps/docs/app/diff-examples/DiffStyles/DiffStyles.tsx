@@ -23,7 +23,7 @@ import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
-import { FeatureHeader } from './FeatureHeader';
+import { FeatureHeader } from '../FeatureHeader';
 
 const diffStyleOptions = [
   {

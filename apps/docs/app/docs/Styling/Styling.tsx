@@ -1,6 +1,8 @@
+'use client';
+
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 
-import { DocsCodeExample } from './DocsCodeExample';
+import { DocsCodeExample } from '../DocsCodeExample';
 
 interface StylingProps {
   stylingGlobal: PreloadedFileResult<undefined>;

@@ -11,8 +11,8 @@ import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { AnnotationMetadata } from '../code_snippets.ts';
-import { FeatureHeader } from './FeatureHeader';
+import { FeatureHeader } from '../FeatureHeader';
+import type { AnnotationMetadata } from './constants';
 
 interface AnnotationsProps {
   prerenderedDiff: PreloadedFileDiffResult<AnnotationMetadata>;

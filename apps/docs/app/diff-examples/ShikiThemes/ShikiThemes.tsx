@@ -22,7 +22,7 @@ import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { FeatureHeader } from './FeatureHeader';
+import { FeatureHeader } from '../FeatureHeader';
 
 const LIGHT_THEMES = [
   'pierre-light',
@@ -117,7 +117,7 @@ export function ShikiThemes({
   >((options?.themes?.light as 'pierre-light') ?? 'pierre-light');
   const [selectedDarkTheme, setSelectedDarkTheme] = useState<
     (typeof DARK_THEMES)[number]
-  >((options?.themes?.light as 'pierre-dark') ?? 'pierre-dark');
+  >((options?.themes?.dark as 'pierre-dark') ?? 'pierre-dark');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');

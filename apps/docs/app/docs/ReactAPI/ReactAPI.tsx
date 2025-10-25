@@ -4,7 +4,7 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
-import { DocsCodeExample } from './DocsCodeExample';
+import { DocsCodeExample } from '../DocsCodeExample';
 
 interface ReactAPIProps {
   reactAPIDiff: PreloadedFileResult<undefined>;

@@ -10,8 +10,8 @@ import type {
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { DocsCodeExample } from './DocsCodeExample';
-import type { DocsExampleTypes } from './types';
+import { DocsCodeExample } from '../DocsCodeExample';
+import type { DocsExampleTypes } from '../types';
 
 interface OverviewProps {
   initialDiffProps: PreloadedFileDiffResult<undefined>;
@@ -58,7 +58,7 @@ export function Overview({
         <strong>Precision Diffs</strong> is a library for rendering code and
         diffs on the web. This includes both high level easy-to-use components
         as well as exposing many of the internals if you want to selectively use
-        specific pieces. We’ve built syntax highlighting on top of{' '}
+        specific pieces. We've built syntax highlighting on top of{' '}
         <Link href="https://shiki.dev" target="_blank">
           Shiki
         </Link>{' '}
@@ -81,18 +81,18 @@ export function Overview({
         components render all this out into Shadow DOM and CSS grid layout.
       </p>
       <p>
-        Generally speaking, you’re probably going to want to use the higher
+        Generally speaking, you're probably going to want to use the higher
         level components since they provide an easy-to-use API that you can get
         started with rather quickly. We currently only have components for
-        vanilla JavaScript and React, but will add more if there’s demand.
+        vanilla JavaScript and React, but will add more if there's demand.
       </p>
       <p>
-        For this overview, we’ll talk about the vanilla JavaScript components
+        For this overview, we'll talk about the vanilla JavaScript components
         for now but there are React equivalents for all of these.
       </p>
       <h3>Rendering Diffs</h3>
       <p>
-        It’s in the name, it’s probably why you’re here. Our goal with
+        It's in the name, it's probably why you're here. Our goal with
         visualizing diffs was to provide some flexible and easy to use APIs for{' '}
         <em>how</em> you might want to render diffs. For this we provide a
         component called <code>FileDiff</code> (available in both JavaScript and

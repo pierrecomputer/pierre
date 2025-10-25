@@ -11,37 +11,20 @@ import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
 import { Hero } from './Hero';
-import {
-  ANNOTATION_EXAMPLE,
-  ARBITRARY_DIFF_EXAMPLE,
-  DIFF_STYLES,
-  FONT_STYLES,
-  SHIKI_THEMES,
-  SPLIT_UNIFIED,
-} from './code_snippets';
-import { Annotations } from './diff-examples/Annotations';
-import { ArbitraryFiles } from './diff-examples/ArbitraryFiles';
-import { DiffStyles } from './diff-examples/DiffStyles';
-import { FontStyles } from './diff-examples/FontStyles';
-import { ShikiThemes } from './diff-examples/ShikiThemes';
-import { SplitUnified } from './diff-examples/SplitUnified';
+import { Annotations } from './diff-examples/Annotations/Annotations';
+import { ANNOTATION_EXAMPLE } from './diff-examples/Annotations/constants';
+import { ArbitraryFiles } from './diff-examples/ArbitraryFiles/ArbitraryFiles';
+import { ARBITRARY_DIFF_EXAMPLE } from './diff-examples/ArbitraryFiles/constants';
+import { DiffStyles } from './diff-examples/DiffStyles/DiffStyles';
+import { DIFF_STYLES } from './diff-examples/DiffStyles/constants';
+import { FontStyles } from './diff-examples/FontStyles/FontStyles';
+import { FONT_STYLES } from './diff-examples/FontStyles/constants';
+import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
+import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
+import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
+import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
 
-export default async function Home() {
-  const [
-    splitUnified,
-    shikiThemes,
-    diffStyles,
-    fontStyles,
-    annotationExample,
-    arbitraryDiff,
-  ] = await Promise.all([
-    preloadFileDiff(SPLIT_UNIFIED),
-    preloadFileDiff(SHIKI_THEMES),
-    preloadFileDiff(DIFF_STYLES),
-    preloadFileDiff(FONT_STYLES),
-    preloadFileDiff(ANNOTATION_EXAMPLE),
-    preloadFileDiff(ARBITRARY_DIFF_EXAMPLE),
-  ]);
+export default function Home() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5">
       <HeaderWrapper />
@@ -59,14 +42,13 @@ export default async function Home() {
             from multiple diff visual styles, and much more.
           </p>
         </div>
-
-        <SplitUnified prerenderedDiff={splitUnified} />
-        <ShikiThemes prerenderedDiff={shikiThemes} />
-        <DiffStyles prerenderedDiff={diffStyles} />
-        <FontStyles prerenderedDiff={fontStyles} />
+        <SplitUnifiedSection />
+        <ShikiThemesSection />
+        <DiffStylesSection />
+        <FontStylesSection />
         {/* <PrebuiltReact /> */}
-        <Annotations prerenderedDiff={annotationExample} />
-        <ArbitraryFiles prerenderedDiff={arbitraryDiff} />
+        <AnnotationsSection />
+        <ArbitraryFilesSection />
       </section>
 
       {/* TODO: add this back once we add the migration APIs
@@ -120,5 +102,37 @@ export default async function Home() {
       <Footer />
       <ShikiPreloader />
     </div>
+  );
+}
+
+async function SplitUnifiedSection() {
+  return (
+    <SplitUnified prerenderedDiff={await preloadFileDiff(SPLIT_UNIFIED)} />
+  );
+}
+
+async function ShikiThemesSection() {
+  return <ShikiThemes prerenderedDiff={await preloadFileDiff(SHIKI_THEMES)} />;
+}
+
+async function DiffStylesSection() {
+  return <DiffStyles prerenderedDiff={await preloadFileDiff(DIFF_STYLES)} />;
+}
+
+async function FontStylesSection() {
+  return <FontStyles prerenderedDiff={await preloadFileDiff(FONT_STYLES)} />;
+}
+
+async function AnnotationsSection() {
+  return (
+    <Annotations prerenderedDiff={await preloadFileDiff(ANNOTATION_EXAMPLE)} />
+  );
+}
+
+async function ArbitraryFilesSection() {
+  return (
+    <ArbitraryFiles
+      prerenderedDiff={await preloadFileDiff(ARBITRARY_DIFF_EXAMPLE)}
+    />
   );
 }

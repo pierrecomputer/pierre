@@ -6,7 +6,7 @@ import { FileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
-import { FeatureHeader } from './FeatureHeader';
+import { FeatureHeader } from '../FeatureHeader';
 
 interface SplitUnifiedProps {
   prerenderedDiff: PreloadedFileDiffResult<undefined>;

@@ -4,31 +4,7 @@ import { FileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
-import { FeatureHeader } from './FeatureHeader';
-
-// Local components to avoid class name duplication
-const FileLabel = ({ children }: { children: React.ReactNode }) => (
-  <label className="text-muted-foreground bg-muted absolute top-[1px] left-[1px] block rounded-lg px-3 py-2 text-xs font-medium uppercase select-none">
-    {children}
-  </label>
-);
-
-const FileTextarea = ({
-  value,
-  onChange,
-  className = '',
-}: {
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  className?: string;
-}) => (
-  <textarea
-    value={value}
-    onChange={onChange}
-    className={`bg-muted h-40 w-full resize-none rounded-lg border px-4 pt-10 font-mono text-sm ${className}`}
-    spellCheck={false}
-  />
-);
+import { FeatureHeader } from '../FeatureHeader';
 
 interface ArbitraryFilesProps {
   prerenderedDiff: PreloadedFileDiffResult<undefined>;
@@ -73,5 +49,35 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
         className="overflow-hidden rounded-lg border"
       />
     </div>
+  );
+}
+
+interface FileLabelProps {
+  children: React.ReactNode;
+}
+
+// Local components to avoid class name duplication
+function FileLabel({ children }: FileLabelProps) {
+  return (
+    <label className="text-muted-foreground bg-muted absolute top-[1px] left-[1px] block rounded-lg px-3 py-2 text-xs font-medium uppercase select-none">
+      {children}
+    </label>
+  );
+}
+
+interface FileTextareaProps {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  className?: string;
+}
+
+function FileTextarea({ value, onChange, className = '' }: FileTextareaProps) {
+  return (
+    <textarea
+      value={value}
+      onChange={onChange}
+      className={`bg-muted h-40 w-full resize-none rounded-lg border px-4 pt-10 font-mono text-sm ${className}`}
+      spellCheck={false}
+    />
   );
 }
