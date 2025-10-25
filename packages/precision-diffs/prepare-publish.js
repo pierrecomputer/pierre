@@ -6,14 +6,19 @@ const pkgPath = resolve('package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 
 // Update exports to point to dist instead of src
-const updateExports = (exports) => {
+const updateExports = (exports, key) => {
   if (typeof exports === 'string') {
-    return exports.replace(/\.\/src\//g, './dist/').replace(/\.ts$/, '.js');
+    const updated = exports.replace(/\.\/src\//g, './dist/');
+    // For 'types' field, use .d.ts; for others use .js
+    if (key === 'types') {
+      return updated.replace(/\.ts$/, '.d.ts');
+    }
+    return updated.replace(/\.ts$/, '.js');
   }
   if (typeof exports === 'object' && exports !== null) {
     const updated = {};
-    for (const [key, value] of Object.entries(exports)) {
-      updated[key] = updateExports(value);
+    for (const [k, value] of Object.entries(exports)) {
+      updated[k] = updateExports(value, k);
     }
     return updated;
   }

@@ -8,7 +8,10 @@ const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 // Update exports to point to src instead of dist
 const updateExports = (exports) => {
   if (typeof exports === 'string') {
-    return exports.replace(/\.\/dist\//g, './src/').replace(/\.js$/, '.ts');
+    return exports
+      .replace(/\.\/dist\//g, './src/')
+      .replace(/\.d\.ts$/, '.ts')
+      .replace(/\.js$/, '.ts');
   }
   if (typeof exports === 'object' && exports !== null) {
     const updated = {};
