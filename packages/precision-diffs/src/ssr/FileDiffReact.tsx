@@ -5,7 +5,7 @@ import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
 import type { DiffLineAnnotation } from '../types';
-import { getLineAnnotationId } from '../utils/getLineAnnotationId';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 
 export interface LineAnnotation {
   line: number;
@@ -83,7 +83,7 @@ export function FileDiffSsr<LAnnotation>({
       renderAnnotation != null
         ? annotations
             .map((annotation) => {
-              const slotName = getLineAnnotationId(annotation);
+              const slotName = getLineAnnotationName(annotation);
               // Render the component with React markers for proper hydration
               const content = renderToString(renderAnnotation(annotation));
               return `<div slot="${slotName}">${content}</div>`;
@@ -114,7 +114,7 @@ export function FileDiffSsr<LAnnotation>({
 
           // Find the matching annotation
           const annotation = annotations.find((annotation) => {
-            return slotName === getLineAnnotationId(annotation);
+            return slotName === getLineAnnotationName(annotation);
           });
 
           if (annotation !== undefined && renderAnnotation != null) {

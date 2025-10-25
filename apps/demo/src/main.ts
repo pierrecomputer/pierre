@@ -128,8 +128,26 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
         themeType,
-        onLineClick(props, diff) {
-          console.log(diff.name, 'onLineClick', props);
+        // Custom Hunk Separators Test
+        // hunkSeparators(hunkData) {
+        //   const el = document.createDocumentFragment();
+        //   const num = document.createElement('div');
+        //   num.textContent = `${hunkData.lines}`;
+        //   num.style.position = 'sticky';
+        //   num.style.left = '0';
+        //   num.style.backgroundColor = 'var(--pjs-bg)';
+        //   num.style.zIndex = '2';
+        //   el.appendChild(num);
+        //   const content = document.createElement('div');
+        //   content.textContent = 'unmodified lines';
+        //   content.style.position = 'sticky';
+        //   content.style.width = 'var(--pjs-column-content-width)';
+        //   content.style.left = 'var(--pjs-column-number-width)';
+        //   el.appendChild(content);
+        //   return el;
+        // },
+        onLineClick(props) {
+          console.log('onLineClick', props);
         },
         // Super noisy, but for debuggin
         // onLineEnter(props, diff) {
@@ -149,10 +167,13 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         //   );
         // },
       });
+
+      const fileContainer = document.createElement('file-diff');
+      wrapper.appendChild(fileContainer);
       void instance.render({
         fileDiff,
         lineAnnotations: fileAnnotations,
-        containerWrapper: wrapper,
+        fileContainer,
       });
       diffInstances.push(instance);
       hunkIndex++;

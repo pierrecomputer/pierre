@@ -10,10 +10,11 @@ import type {
 import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type {
   AnnotationSpan,
-  BaseRendererOptions,
+  BaseDiffProps,
   ChangeTypes,
   FileContents,
   FileDiffMetadata,
+  HunkSeparators,
   PJSHighlighter,
   PJSThemeNames,
   SharedRenderState,
@@ -56,15 +57,17 @@ export function createHastElement({
 }
 
 interface CreateSeparatorProps {
-  type: 'empty' | 'metadata' | 'line-info';
+  type: HunkSeparators;
   content?: string;
   expandIndex?: number;
+  slotName?: string;
 }
 
 export function createSeparator({
   type,
   content,
   expandIndex,
+  slotName,
 }: CreateSeparatorProps): Element {
   const children = [];
   if (type === 'metadata' && content != null) {
@@ -86,6 +89,14 @@ export function createSeparator({
         tagName: 'div',
         children: contentChildren,
         properties: { 'data-separator-content': '' },
+      })
+    );
+  }
+  if (type === 'custom' && slotName != null) {
+    children.push(
+      createHastElement({
+        tagName: 'slot',
+        properties: { name: slotName },
       })
     );
   }
@@ -220,7 +231,7 @@ export function convertLine(
 
 interface CreatePreWrapperPropertiesProps
   extends Pick<
-    BaseRendererOptions,
+    BaseDiffProps,
     'overflow' | 'themeType' | 'diffIndicators' | 'disableBackground'
   > {
   theme?: PJSThemeNames;

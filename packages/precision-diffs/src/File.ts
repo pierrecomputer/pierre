@@ -21,7 +21,7 @@ import type {
   RenderFileMetadata,
   ThemeTypes,
 } from './types';
-import { getLineAnnotationId } from './utils/getLineAnnotationId';
+import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 
 export interface OnLineClickProps extends LineEventBaseProps {
@@ -214,7 +214,7 @@ export class File<LAnnotation = undefined> {
         if (content == null) continue;
         const el = document.createElement('div');
         el.dataset.annotationSlot = '';
-        el.slot = getLineAnnotationId(annotation);
+        el.slot = getLineAnnotationName(annotation);
         el.appendChild(content);
         this.annotationElements.push(el);
         fileContainer.appendChild(el);

@@ -19,7 +19,7 @@ import {
   type FileContents,
   type RenderHeaderMetadataProps,
 } from '../types';
-import { getLineAnnotationId } from '../utils/getLineAnnotationId';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { useStableCallback } from './utils/useStableCallback';
 
 export type { FileContents };
@@ -94,7 +94,7 @@ export function FileDiff<LAnnotation = undefined>({
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
       {renderAnnotation != null &&
         annotations?.map((annotation, index) => (
-          <div key={index} slot={getLineAnnotationId(annotation)}>
+          <div key={index} slot={getLineAnnotationName(annotation)}>
             {renderAnnotation(annotation)}
           </div>
         ))}

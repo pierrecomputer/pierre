@@ -10,7 +10,7 @@ import {
 import { type FileOptions, File as FileUI } from '../File';
 import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type { FileContents, LineAnnotation } from '../types';
-import { getLineAnnotationId } from '../utils/getLineAnnotationId';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 
 export type { FileContents };
 
@@ -64,11 +64,8 @@ export function File<LAnnotation = undefined>({
     <file-diff ref={ref} className={className} style={style}>
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
       {renderAnnotation != null &&
-        lineAnnotations?.map((annotation) => (
-          <div
-            key={getLineAnnotationId(annotation)}
-            slot={getLineAnnotationId(annotation)}
-          >
+        lineAnnotations?.map((annotation, index) => (
+          <div key={index} slot={getLineAnnotationName(annotation)}>
             {renderAnnotation(annotation)}
           </div>
         ))}

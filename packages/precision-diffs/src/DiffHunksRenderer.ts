@@ -10,12 +10,13 @@ import {
 } from './SharedHighlighter';
 import type {
   AnnotationSpan,
-  BaseRendererOptions,
+  BaseDiffProps,
   CodeToHastOptions,
   DecorationItem,
   DiffLineAnnotation,
   FileDiffMetadata,
   Hunk,
+  HunkData,
   HunkLineType,
   LineInfo,
   LineSpans,
@@ -31,7 +32,8 @@ import type {
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
-import { getLineAnnotationId } from './utils/getLineAnnotationId';
+import { getHunkSeparatorSlotName } from './utils/getHunkSeparatorSlotName';
+import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import {
   createHastElement,
   createPreWrapperProperties,
@@ -63,6 +65,7 @@ interface RenderHunkProps {
   additionsAST: ElementContent[];
   deletionsAST: ElementContent[];
   unifiedAST: ElementContent[];
+  hunkData: HunkData[];
 }
 
 interface UnresolvedAnnotationSpan {
@@ -85,11 +88,11 @@ interface ProcessLinesReturn {
 }
 
 interface DiffHunkRendererThemeOptions
-  extends BaseRendererOptions,
+  extends BaseDiffProps,
     ThemeRendererOptions {}
 
 interface DiffHunkRendererThemesOptions
-  extends BaseRendererOptions,
+  extends BaseDiffProps,
     ThemesRendererOptions {}
 
 export type DiffHunksRendererOptions =
@@ -100,6 +103,7 @@ export interface HunksRenderResult {
   additionsAST: ElementContent[] | undefined;
   deletionsAST: ElementContent[] | undefined;
   unifiedAST: ElementContent[] | undefined;
+  hunkData: HunkData[];
   css: string;
   preNode: Element;
 }
@@ -324,6 +328,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { state, transformer: lineNumberTransformer } =
       createTransformerWithState(disableLineNumbers);
     let hunkIndex = 0;
+    const hunkData: HunkData[] = [];
 
     let prevHunk: Hunk | undefined;
     for (const hunk of fileDiff.hunks) {
@@ -340,6 +345,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         additionsAST,
         deletionsAST,
         unifiedAST,
+        hunkData,
       });
       hunkIndex++;
       prevHunk = hunk;
@@ -349,6 +355,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionsAST: additionsAST.length > 0 ? additionsAST : undefined,
       deletionsAST: deletionsAST.length > 0 ? deletionsAST : undefined,
       unifiedAST: unifiedAST.length > 0 ? unifiedAST : undefined,
+      hunkData,
       css: toClass.getCSS(),
       preNode: createHastElement({
         tagName: 'pre',
@@ -474,6 +481,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     additionsAST,
     deletionsAST,
     unifiedAST,
+    hunkData,
   }: RenderHunkProps) {
     if (hunk.hunkContent == null) {
       return;
@@ -488,6 +496,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
 
     const generateLinesAST = (
+      type: 'additions' | 'deletions' | 'unified',
       computed: ComputedContent,
       linesAST: ElementContent[]
     ) => {
@@ -499,7 +508,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.createHastOptions(transformer, computed.decorations, hasLongLines)
       );
       if (!this.expandedHunks.has(hunkIndex)) {
-        if (hunkSeparators === 'line-info') {
+        if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
           const lines = (() => {
             const hunkStart = hunk.additionStart;
             if (prevHunk == null) {
@@ -510,21 +519,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
           })();
           if (lines > 0) {
+            const slotName = getHunkSeparatorSlotName(type, hunkIndex);
             linesAST.push(
               createSeparator({
-                type: 'line-info',
+                type: hunkSeparators,
                 content: getModifiedLinesString(lines),
+                slotName,
                 expandIndex:
                   this.diff?.newLines != null ? hunkIndex : undefined,
               })
             );
+            hunkData.push({ slotName, lines });
           }
         } else if (hunkSeparators === 'metadata') {
           linesAST.push(
             createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
           );
         } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
-          linesAST.push(createSeparator({ type: 'empty' }));
+          linesAST.push(createSeparator({ type: 'simple' }));
         }
       }
       for (const line of this.getLineNodes(nodes)) {
@@ -539,27 +551,30 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           this.diff.newLines.length -
           (hunk.additionStart + hunk.additionCount - 1);
         if (lines > 0) {
+          const slotName = getHunkSeparatorSlotName(type, hunkIndex + 1);
           linesAST.push(
             createSeparator({
               type: 'line-info',
               content: getModifiedLinesString(lines),
               expandIndex: hunkIndex + 1,
+              slotName,
             })
           );
+          hunkData.push({ slotName, lines });
         }
       }
     };
 
     if (unified.content.length > 0) {
-      generateLinesAST(unified, unifiedAST);
+      generateLinesAST('unified', unified, unifiedAST);
     }
 
     if (deletions.content.length > 0) {
-      generateLinesAST(deletions, deletionsAST);
+      generateLinesAST('deletions', deletions, deletionsAST);
     }
 
     if (additions.content.length > 0) {
-      generateLinesAST(additions, additionsAST);
+      generateLinesAST('additions', additions, additionsAST);
     }
   }
 
@@ -1121,7 +1136,7 @@ function createSingleAnnotationSpan<LAnnotation>({
     annotations: [],
   };
   for (const anno of annotationMap[rowNumber] ?? []) {
-    span.annotations.push(getLineAnnotationId(anno));
+    span.annotations.push(getLineAnnotationName(anno));
   }
   return span.annotations.length > 0 ? span : undefined;
 }
@@ -1156,11 +1171,11 @@ function createMirroredAnnotationSpan<LAnnotation>({
   | undefined {
   const dAnnotations: string[] = [];
   for (const anno of deletionAnnotations[deletionLineNumber] ?? []) {
-    dAnnotations.push(getLineAnnotationId(anno));
+    dAnnotations.push(getLineAnnotationName(anno));
   }
   const aAnnotations: string[] = [];
   for (const anno of additionAnnotations[additionLineNumber] ?? []) {
-    (unified ? dAnnotations : aAnnotations).push(getLineAnnotationId(anno));
+    (unified ? dAnnotations : aAnnotations).push(getLineAnnotationName(anno));
   }
   if (aAnnotations.length === 0 && dAnnotations.length === 0) {
     if (unified) {

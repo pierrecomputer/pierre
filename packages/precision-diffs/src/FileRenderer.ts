@@ -24,7 +24,7 @@ import type {
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
-import { getLineAnnotationId } from './utils/getLineAnnotationId';
+import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import {
   createHastElement,
   createPreWrapperProperties,
@@ -243,7 +243,7 @@ export class FileRenderer<LAnnotation = undefined> {
             hunkIndex: 0,
             lineIndex,
             annotations: annotations.map((annotation) =>
-              getLineAnnotationId(annotation)
+              getLineAnnotationName(annotation)
             ),
           },
         ];

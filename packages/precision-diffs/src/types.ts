@@ -103,11 +103,13 @@ export interface BaseCodeProps {
   preferWasmHighlighter?: boolean;
 }
 
-export interface BaseRendererOptions extends BaseCodeProps {
+export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
+
+export interface BaseDiffProps extends BaseCodeProps {
   diffStyle?: 'unified' | 'split'; // split is default
   diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
   disableBackground?: boolean;
-  hunkSeparators?: 'simple' | 'metadata' | 'line-info'; // line-info is default
+  hunkSeparators?: HunkSeparators; // line-info is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
   lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
@@ -215,4 +217,9 @@ export interface ObservedGridNodes {
   numberElement: HTMLElement | null;
   codeWidth: number | 'auto';
   numberWidth: number;
+}
+
+export interface HunkData {
+  slotName: string;
+  lines: number;
 }

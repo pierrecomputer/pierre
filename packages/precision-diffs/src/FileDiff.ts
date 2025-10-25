@@ -12,11 +12,13 @@ import './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
   AnnotationSide,
-  BaseRendererOptions,
+  BaseDiffProps,
   DiffLineAnnotation,
   DiffLineEventBaseProps,
   FileContents,
   FileDiffMetadata,
+  HunkData,
+  HunkSeparators,
   ObservedAnnotationNodes,
   ObservedGridNodes,
   PJSHighlighter,
@@ -26,7 +28,7 @@ import type {
   ThemeTypes,
   ThemesRendererOptions,
 } from './types';
-import { getLineAnnotationId } from './utils/getLineAnnotationId';
+import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
@@ -77,6 +79,9 @@ type HandleMouseEventProps =
   | { eventType: 'move'; event: MouseEvent };
 
 interface DiffFileBaseOptions<LAnnotation> {
+  hunkSeparators?:
+    | Exclude<HunkSeparators, 'custom'>
+    | ((hunk: HunkData) => HTMLElement | DocumentFragment);
   disableFileHeader?: boolean;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
   renderAnnotation?(
@@ -88,12 +93,12 @@ interface DiffFileBaseOptions<LAnnotation> {
 }
 
 interface DiffFileThemeRendererOptions<LAnnotation>
-  extends BaseRendererOptions,
+  extends Omit<BaseDiffProps, 'hunkSeparators'>,
     ThemeRendererOptions,
     DiffFileBaseOptions<LAnnotation> {}
 
 interface DiffFileThemesRendererOptions<LAnnotation>
-  extends BaseRendererOptions,
+  extends Omit<BaseDiffProps, 'hunkSeparators'>,
     ThemesRendererOptions,
     DiffFileBaseOptions<LAnnotation> {}
 
@@ -118,6 +123,9 @@ export class FileDiff<LAnnotation = undefined> {
   private newFile: FileContents | undefined;
   private fileDiff: FileDiffMetadata | undefined;
   private annotationElements: HTMLElement[] = [];
+  private customHunkElements: HTMLElement[] = [];
+  private headerElement: HTMLElement | undefined;
+  private headerMetadata: HTMLElement | undefined;
 
   constructor(
     options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
@@ -125,7 +133,13 @@ export class FileDiff<LAnnotation = undefined> {
     private isContainerManaged = false
   ) {
     this.options = options;
-    this.hunksRenderer = new DiffHunksRenderer(options);
+    this.hunksRenderer = new DiffHunksRenderer({
+      ...options,
+      hunkSeparators:
+        typeof options.hunkSeparators === 'function'
+          ? 'custom'
+          : options.hunkSeparators,
+    });
     this.headerRenderer = new FileHeaderRenderer(options);
   }
 
@@ -140,7 +154,13 @@ export class FileDiff<LAnnotation = undefined> {
     options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' }
   ) {
     this.options = options;
-    this.hunksRenderer.setOptions(this.options);
+    this.hunksRenderer.setOptions({
+      ...this.options,
+      hunkSeparators:
+        typeof options.hunkSeparators === 'function'
+          ? 'custom'
+          : options.hunkSeparators,
+    });
   }
 
   async rerender() {
@@ -263,6 +283,8 @@ export class FileDiff<LAnnotation = undefined> {
       }
       this.attachEventListeners(this.pre);
       this.setupResizeObserver(this.pre);
+      // FIXME(amadeus): not sure how to handle this yet...
+      // this.renderSeparators();
       this.renderAnnotations();
     }
   }
@@ -292,7 +314,13 @@ export class FileDiff<LAnnotation = undefined> {
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
-    this.hunksRenderer.setOptions(this.options);
+    this.hunksRenderer.setOptions({
+      ...this.options,
+      hunkSeparators:
+        typeof this.options.hunkSeparators === 'function'
+          ? 'custom'
+          : this.options.hunkSeparators,
+    });
 
     // This is kinda jank, lol
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
@@ -337,7 +365,31 @@ export class FileDiff<LAnnotation = undefined> {
       const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(hunksResult, pre, highlighter);
       this.setupResizeObserver(pre);
+      this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
+    }
+  }
+
+  renderSeparators(hunkData: HunkData[]) {
+    const { hunkSeparators } = this.options;
+    if (
+      this.isContainerManaged ||
+      this.fileContainer == null ||
+      typeof hunkSeparators !== 'function'
+    ) {
+      return;
+    }
+    for (const element of this.customHunkElements) {
+      element.parentNode?.removeChild(element);
+    }
+    this.customHunkElements.length = 0;
+    for (const hunk of hunkData) {
+      const element = document.createElement('div');
+      element.style.display = 'contents';
+      element.slot = hunk.slotName;
+      element.appendChild(hunkSeparators(hunk));
+      this.fileContainer.appendChild(element);
+      this.customHunkElements.push(element);
     }
   }
 
@@ -358,7 +410,7 @@ export class FileDiff<LAnnotation = undefined> {
         if (content == null) continue;
         const el = document.createElement('div');
         el.dataset.annotationSlot = '';
-        el.slot = getLineAnnotationId(annotation);
+        el.slot = getLineAnnotationName(annotation);
         el.appendChild(content);
         this.annotationElements.push(el);
         this.fileContainer.appendChild(el);
@@ -393,7 +445,10 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   getOrCreateFileContainer(fileContainer?: HTMLElement) {
-    this.fileContainer = fileContainer ?? document.createElement('file-diff');
+    this.fileContainer =
+      fileContainer ??
+      this.fileContainer ??
+      document.createElement('file-diff');
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -525,11 +580,9 @@ export class FileDiff<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private headerElement: HTMLElement | undefined;
-  private headerMetadata: HTMLElement | undefined;
-  private applyHeaderToDOM(headerHTML: Element, container: HTMLElement) {
+  private applyHeaderToDOM(headerAST: Element, container: HTMLElement) {
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerHTML);
+    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
     const newHeader = tempDiv.firstElementChild;
     if (!(newHeader instanceof HTMLElement)) {
       return;

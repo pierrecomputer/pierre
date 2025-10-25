@@ -438,6 +438,11 @@ code {
   }
 }
 
+[data-separator='custom'] {
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
 [data-column-content],
 [data-column-number] {
   position: relative;
