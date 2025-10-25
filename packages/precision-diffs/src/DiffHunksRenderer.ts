@@ -494,6 +494,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       prevHunk,
       isLastHunk
     );
+    const expandable = this.diff?.newLines != null;
 
     const generateLinesAST = (
       type: 'additions' | 'deletions' | 'unified',
@@ -524,12 +525,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               createSeparator({
                 type: hunkSeparators,
                 content: getModifiedLinesString(lines),
+                expandIndex: expandable ? hunkIndex : undefined,
                 slotName,
-                expandIndex:
-                  this.diff?.newLines != null ? hunkIndex : undefined,
               })
             );
-            hunkData.push({ slotName, lines, type });
+            hunkData.push({ slotName, lines, type, expandable });
           }
         } else if (hunkSeparators === 'metadata') {
           linesAST.push(
@@ -556,11 +556,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             createSeparator({
               type: 'line-info',
               content: getModifiedLinesString(lines),
-              expandIndex: hunkIndex + 1,
+              expandIndex: expandable ? hunkIndex + 1 : undefined,
               slotName,
             })
           );
-          hunkData.push({ slotName, lines, type });
+          hunkData.push({ slotName, lines, type, expandable });
         }
       }
     };

@@ -303,7 +303,11 @@ code {
   grid-column: 1 / 3;
 }
 
-[data-type='split'][data-overflow='wrap'] [data-additions] [data-line] {
+[data-type='split'][data-overflow='wrap'] [data-additions] [data-line],
+[data-type='split'][data-overflow='wrap'] [data-additions] [data-separator],
+[data-type='split'][data-overflow='wrap']
+  [data-additions]
+  [data-line-annotation] {
   border-left: 2px solid var(--pjs-bg);
 }
 
@@ -371,7 +375,7 @@ code {
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
 }
 
-[data-separator='line-info']:hover [data-separator-content] {
+[data-separator='line-info'][data-expand-index]:hover [data-separator-content] {
   opacity: 1;
 }
 
