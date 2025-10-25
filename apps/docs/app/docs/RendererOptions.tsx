@@ -80,6 +80,17 @@ export function RendererOptions() {
         </div>
 
         <div className="rounded-lg border p-4">
+          <h4 className="font-mono text-sm font-bold">collapseUnchanged</h4>
+          <p className="text-muted-foreground text-sm">
+            Type: <code>boolean</code> | Default: <code>true</code>
+          </p>
+          <p>
+            Disable folding of unchanged hunks to render the full file
+            context.
+          </p>
+        </div>
+
+        <div className="rounded-lg border p-4">
           <h4 className="font-mono text-sm font-bold">diffIndicators</h4>
           <p className="text-muted-foreground text-sm">
             Type:{' '}

@@ -466,6 +466,7 @@ export function AcceptRejectExample() {
         options={{
           theme: 'pierre-dark',
           diffStyle: 'unified',
+          collapseUnchanged: false,
         }}
         annotations={annotationState === 'pending' ? annotations : []}
         renderAnnotation={() => {

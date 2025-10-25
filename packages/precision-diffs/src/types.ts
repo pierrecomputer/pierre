@@ -110,6 +110,7 @@ export interface BaseDiffProps extends BaseCodeProps {
   diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
+  collapseUnchanged?: boolean; // true collapses unchanged hunks
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
   lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default

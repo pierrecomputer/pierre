@@ -136,6 +136,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.expandedHunks.add(index);
   }
 
+  private shouldCollapseUnchanged() {
+    return this.getOptionsWithDefaults().collapseUnchanged;
+  }
+
+  private isHunkExpanded(index: number) {
+    if (!this.shouldCollapseUnchanged()) {
+      return true;
+    }
+    return this.expandedHunks.has(index);
+  }
+
   private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
     // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
@@ -172,6 +183,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const {
       diffStyle = 'split',
       diffIndicators = 'bars',
+      collapseUnchanged = true,
       disableBackground = false,
       disableLineNumbers = false,
       hunkSeparators = 'line-info',
@@ -187,6 +199,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return {
         diffIndicators,
         diffStyle,
+        collapseUnchanged,
         disableBackground,
         disableLineNumbers,
         hunkSeparators,
@@ -201,6 +214,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return {
       diffIndicators,
       diffStyle,
+      collapseUnchanged,
       disableBackground,
       disableLineNumbers,
       hunkSeparators,
@@ -304,6 +318,37 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       });
       hunkIndex++;
       prevHunk = hunk;
+    }
+
+    if (
+      !this.shouldCollapseUnchanged() &&
+      fileDiff.hunks.length === 0 &&
+      this.diff?.newLines != null &&
+      this.diff.newLines.length > 0
+    ) {
+      const lineCount = this.diff.newLines.length;
+      const syntheticHunk: Hunk = {
+        additionCount: lineCount,
+        additionStart: 1,
+        deletedCount: lineCount,
+        deletedStart: 1,
+        hunkContent: this.diff.newLines.map((line) => ` ${line}`),
+        hunkContext: undefined,
+        hunkSpecs: `@@ -1,${lineCount} +1,${lineCount} @@`,
+      };
+      this.renderHunks({
+        hunk: syntheticHunk,
+        prevHunk: undefined,
+        hunkIndex: 0,
+        highlighter,
+        state,
+        transformer: lineNumberTransformer,
+        isLastHunk: true,
+        additionsAST,
+        deletionsAST,
+        unifiedAST,
+        hunkData,
+      });
     }
 
     return {
@@ -463,7 +508,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         content,
         this.createHastOptions(transformers, computed.decorations, hasLongLines)
       );
-      if (!this.expandedHunks.has(hunkIndex)) {
+      if (!this.isHunkExpanded(hunkIndex)) {
         if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
           const lines = (() => {
             const hunkStart = hunk.additionStart;
@@ -499,7 +544,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
       if (
         isLastHunk &&
-        !this.expandedHunks.has(hunkIndex + 1) &&
+        !this.isHunkExpanded(hunkIndex + 1) &&
         this.diff?.newLines != null
       ) {
         const lines =
@@ -541,6 +586,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   ): ProcessLinesReturn {
     const { maxLineLengthForHighlighting, diffStyle } =
       this.getOptionsWithDefaults();
+    const useExpandedContextStyling = this.shouldCollapseUnchanged();
     const { deletionAnnotations, additionAnnotations } = this;
     // NOTE(amadeus): We will probably need to rectify this
     // for full additions/deletions
@@ -842,7 +888,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     let lastType: HunkLineType | undefined;
 
     // Proses hunk expanded content if expanded
-    if (this.expandedHunks.has(hunkIndex) && this.diff?.newLines != null) {
+    if (this.isHunkExpanded(hunkIndex) && this.diff?.newLines != null) {
       const { expandAddedStart, expandDeletedStart } = (() => {
         if (prevHunk != null) {
           return {
@@ -861,7 +907,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           const line = this.diff.newLines[i];
           hasLongLines =
             hasLongLines || line.length > maxLineLengthForHighlighting;
-          processRawLine(line, 'context', true);
+          processRawLine(line, 'context', useExpandedContextStyling);
         }
       }
     }
@@ -880,14 +926,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // Process final expansion hunk if necessary
     if (
       isLastHunk &&
-      this.expandedHunks.has(hunkIndex + 1) &&
+      this.isHunkExpanded(hunkIndex + 1) &&
       this.diff?.newLines != null
     ) {
       for (let i = additionLineNumber; i < this.diff.newLines.length; i++) {
         const line = this.diff.newLines[i];
         hasLongLines =
           hasLongLines || line.length > maxLineLengthForHighlighting;
-        processRawLine(line, 'context', true);
+        processRawLine(line, 'context', useExpandedContextStyling);
       }
     }
     resolveUnresolvedSpans();
