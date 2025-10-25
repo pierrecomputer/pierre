@@ -1,6 +1,7 @@
 'use client';
 
 import Footer from '@/components/Footer';
+import { ShikiPreloader } from '@/components/ShikiPreloader';
 import {
   IconArrowUpRight,
   IconBook,
@@ -191,6 +192,7 @@ const Hero = () => {
           </Link>
         </Button>
       </div>
+      <ShikiPreloader />
     </section>
   );
 };
