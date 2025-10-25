@@ -33,7 +33,7 @@ export function DocsSidebar({
   // Extract headings from the page content
   useEffect(() => {
     const extractHeadings = () => {
-      const headingElements = document.querySelectorAll('h2, h3');
+      const headingElements = document.querySelectorAll('h2, h3, h4');
       const headingItems: HeadingItem[] = [];
 
       headingElements.forEach((element) => {
@@ -103,7 +103,13 @@ export function DocsSidebar({
               key={heading.id}
               href={`#${heading.id}`}
               active={activeHeading === heading.id}
-              className={heading.level === 3 ? 'ml-4' : ''}
+              className={
+                heading.level === 3
+                  ? 'ml-4'
+                  : heading.level === 4
+                    ? 'ml-8'
+                    : undefined
+              }
             >
               {heading.text}
             </NavLink>

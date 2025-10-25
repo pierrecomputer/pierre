@@ -43,6 +43,13 @@ export function VanillaAPI() {
       ) : (
         <SimpleCodeBlock code="// Coming Soon" language="typescript" />
       )}
+      <h4>Hunk Separators</h4>
+      <p>
+        If you would like to render custom hunk separators that won't scroll
+        with the content, there's a few tricks you will need to employ. See the
+        following code snippet:
+      </p>
+      <SimpleCodeBlock code={CODE_CUSTOM_HUNK_EXAMPLE} language="typescript" />
       <h3>Classes</h3>
       <p>
         These core classes can be thought of as the building blocks for the
@@ -200,6 +207,16 @@ const instance = new FileDiff<ThreadMetadata>({
   // Shows a bar that tells you how many lines are collapsed. If you are
   // using the oldFile/newFile API then you can click those bars to
   // expand the content between them
+  //
+  // (hunk: HunkData) => HTMLElement | DocumentFragment:
+  // If you want to fully customize what gets displayed for hunks you can
+  // pass a custom function to generate dom nodes to render. 'hunkData'
+  // will include the number of lines collapsed as well as the 'type' of
+  // column you are rendering into.  Bear in the elements you return will be
+  // subject to the css grid of the document, and if you want to prevent the
+  // elements from scrolling with content you will need to use a few tricks.
+  // See a code example below this file example.  Click to expand will
+  // happen automatically.
   //
   // 'metadata':
   // Shows the content you'd see in a normal patch file, usually in some
@@ -396,3 +413,58 @@ const highlighter = await getSharedHighlighter();
 // Cleanup when shutting down. Just note that if you call this, all themes and
 // languages will have to be reloaded
 disposeHighlighter();`;
+
+const CODE_CUSTOM_HUNK_EXAMPLE = `import { FileDiff } from '@pierre/precision-diffs';
+
+// A hunk separator that utilizes the existing grid to have a number column and
+// a content column where neither will scroll with the code
+const instance = new FileDiff({
+  hunkSeparators(hunkData: HunkData) {
+    const fragment = document.createDocumentFragment();
+    const numCol = document.createElement('div');
+    numCol.textContent = \`\${hunkData.lines}\`;
+    numCol.style.position = 'sticky';
+    numCol.style.left = '0';
+    numCol.style.backgroundColor = 'var(--pjs-bg)';
+    numCol.style.zIndex = '2';
+    fragment.appendChild(numCol);
+    const contentCol = document.createElement('div');
+    contentCol.textContent = 'unmodified lines';
+    contentCol.style.position = 'sticky';
+    contentCol.style.width = 'var(--pjs-column-content-width)';
+    contentCol.style.left = 'var(--pjs-column-number-width)';
+    fragment.appendChild(contentCol);
+    return fragment;
+  },
+})
+
+// If you want to create a single column that spans both colums and doesn't
+// scroll, you can do something like this:
+const instance2 = new FileDiff({
+  hunkSeparators(hunkData: HunkData) {
+    const wrapper = document.createElement('div');
+    wrapper.style.gridColumn = 'span 2';
+    const contentCol = document.createElement('div');
+    contentCol.textContent = \`\${hunkData.lines} unmodified lines\`;
+    contentCol.style.position = 'sticky';
+    contentCol.style.width = 'var(--pjs-column-width)';
+    contentCol.style.left = '0';
+    wrapper.appendChild(contentCol);
+    return wrapper;
+  },
+})
+
+// If you want to create a single column that's aligned with the content column
+// and doesn't scroll, you can do something like this:
+const instance2 = new FileDiff({
+  hunkSeparators(hunkData: HunkData) {
+    const wrapper = document.createElement('div');
+    wrapper.style.gridColumn = '2 / 3';
+    wrapper.textContent = \`\${hunkData.lines} unmodified lines\`;
+    wrapper.style.position = 'sticky';
+    wrapper.style.width = 'var(--pjs-column-content-width)';
+    wrapper.style.left = 'var(--pjs-column-number-width)';
+    return wrapper;
+  },
+})
+`;
