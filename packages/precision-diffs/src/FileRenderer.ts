@@ -295,7 +295,7 @@ export class FileRenderer<LAnnotation = undefined> {
     };
   }
 
-  private async initializeHighlighter() {
+  async initializeHighlighter() {
     this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
     return this.highlighter;
   }

@@ -281,6 +281,7 @@ export class FileDiff<LAnnotation = undefined> {
       if (props.fileDiff != null) {
         this.fileDiff = props.fileDiff;
       }
+      void this.hunksRenderer.initializeHighlighter();
       this.attachEventListeners(this.pre);
       this.setupResizeObserver(this.pre);
       // FIXME(amadeus): not sure how to handle this yet...

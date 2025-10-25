@@ -190,6 +190,7 @@ export class File<LAnnotation = undefined> {
 
       this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
       this.file = props.file;
+      void this.fileRenderer.initializeHighlighter();
       this.attachEventListeners(this.pre);
       this.renderAnnotations();
     }
