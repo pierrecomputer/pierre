@@ -32,6 +32,14 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
+interface ScrollSyncState {
+  isDeletionsScrolling: boolean;
+  isAdditionsScrolling: boolean;
+  timeoutId: NodeJS.Timeout;
+  codeDeletions: HTMLElement | undefined;
+  codeAdditions: HTMLElement | undefined;
+}
+
 interface FileDiffRenderBaseProps<LAnnotation> {
   forceRender?: boolean;
   fileContainer?: HTMLElement;
@@ -127,6 +135,13 @@ export class FileDiff<LAnnotation = undefined> {
   private oldFile: FileContents | undefined;
   private newFile: FileContents | undefined;
   private fileDiff: FileDiffMetadata | undefined;
+  private scrollSyncState: ScrollSyncState = {
+    isDeletionsScrolling: false,
+    isAdditionsScrolling: false,
+    timeoutId: -1 as unknown as NodeJS.Timeout,
+    codeDeletions: undefined,
+    codeAdditions: undefined,
+  };
 
   constructor(
     options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
@@ -225,10 +240,21 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerRenderer.cleanUp();
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
+    this.scrollSyncState.codeDeletions?.removeEventListener(
+      'scroll',
+      this.handleDeletionsScroll
+    );
+    this.scrollSyncState.codeAdditions?.removeEventListener(
+      'scroll',
+      this.handleAdditionsScroll
+    );
+    clearTimeout(this.scrollSyncState.timeoutId);
     this.fileDiff = undefined;
     this.oldFile = undefined;
     this.newFile = undefined;
     this.resizeObserver = undefined;
+    this.scrollSyncState.codeDeletions = undefined;
+    this.scrollSyncState.codeAdditions = undefined;
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
@@ -701,6 +727,8 @@ export class FileDiff<LAnnotation = undefined> {
     codeDeletions?: HTMLElement,
     codeAdditions?: HTMLElement
   ) {
+    // If no code elements were provided, lets try to find them in
+    // the pre element
     if (codeDeletions == null || codeAdditions == null) {
       for (const element of this.pre?.children ?? []) {
         if (!(element instanceof HTMLElement)) {
@@ -713,49 +741,54 @@ export class FileDiff<LAnnotation = undefined> {
         }
       }
     }
-
     if (codeAdditions == null || codeDeletions == null) {
       return;
     }
-
-    const state = {
-      isLeftScrolling: false,
-      isRightScrolling: false,
-      timeoutId: -1 as unknown as NodeJS.Timeout,
-    };
-
-    codeDeletions.addEventListener(
+    this.scrollSyncState.codeDeletions?.removeEventListener(
       'scroll',
-      () => {
-        if (state.isRightScrolling) {
-          return;
-        }
-        state.isLeftScrolling = true;
-        clearTimeout(state.timeoutId);
-        state.timeoutId = setTimeout(() => {
-          state.isLeftScrolling = false;
-        }, 300);
-        codeAdditions.scrollTo({ left: codeDeletions.scrollLeft });
-      },
-      { passive: true }
+      this.handleDeletionsScroll
     );
-
-    codeAdditions.addEventListener(
+    this.scrollSyncState.codeAdditions?.removeEventListener(
       'scroll',
-      () => {
-        if (state.isLeftScrolling) {
-          return;
-        }
-        state.isRightScrolling = true;
-        clearTimeout(state.timeoutId);
-        state.timeoutId = setTimeout(() => {
-          state.isRightScrolling = false;
-        }, 300);
-        codeDeletions.scrollTo({ left: codeAdditions.scrollLeft });
-      },
-      { passive: true }
+      this.handleAdditionsScroll
     );
+    this.scrollSyncState.codeDeletions = codeDeletions;
+    this.scrollSyncState.codeAdditions = codeAdditions;
+    codeDeletions.addEventListener('scroll', this.handleDeletionsScroll, {
+      passive: true,
+    });
+    codeAdditions.addEventListener('scroll', this.handleAdditionsScroll, {
+      passive: true,
+    });
   }
+
+  private handleDeletionsScroll = () => {
+    if (this.scrollSyncState.isAdditionsScrolling) {
+      return;
+    }
+    this.scrollSyncState.isDeletionsScrolling = true;
+    clearTimeout(this.scrollSyncState.timeoutId);
+    this.scrollSyncState.timeoutId = setTimeout(() => {
+      this.scrollSyncState.isDeletionsScrolling = false;
+    }, 300);
+    this.scrollSyncState.codeAdditions?.scrollTo({
+      left: this.scrollSyncState.codeDeletions?.scrollLeft,
+    });
+  };
+
+  private handleAdditionsScroll = () => {
+    if (this.scrollSyncState.isDeletionsScrolling) {
+      return;
+    }
+    this.scrollSyncState.isAdditionsScrolling = true;
+    clearTimeout(this.scrollSyncState.timeoutId);
+    this.scrollSyncState.timeoutId = setTimeout(() => {
+      this.scrollSyncState.isAdditionsScrolling = false;
+    }, 300);
+    this.scrollSyncState.codeDeletions?.scrollTo({
+      left: this.scrollSyncState.codeAdditions?.scrollLeft,
+    });
+  };
 
   private setupResizeObserver(pre: HTMLPreElement) {
     // Disconnect any existing observer
