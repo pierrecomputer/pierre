@@ -1,6 +1,6 @@
 {
   "name": "@pierre/precision-diffs",
-  "version": "0.0.3",
+  "version": "0.3.1",
   "type": "module",
   "scripts": {
     "build": "tsc --build && bun post-build.js",
@@ -31,6 +31,8 @@
     "@types/hast": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "catalog:"
   },
   "dependencies": {
@@ -39,8 +41,10 @@
     "diff": "catalog:",
     "fast-deep-equal": "catalog:",
     "hast-util-to-html": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
     "shiki": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1 || ^19.0.0",
+    "react-dom": "^18.3.1 || ^19.0.0"
   }
 }
