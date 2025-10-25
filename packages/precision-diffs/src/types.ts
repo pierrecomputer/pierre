@@ -222,4 +222,5 @@ export interface ObservedGridNodes {
 export interface HunkData {
   slotName: string;
   lines: number;
+  type: 'additions' | 'deletions' | 'unified';
 }

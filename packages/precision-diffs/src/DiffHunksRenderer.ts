@@ -529,7 +529,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                   this.diff?.newLines != null ? hunkIndex : undefined,
               })
             );
-            hunkData.push({ slotName, lines });
+            hunkData.push({ slotName, lines, type });
           }
         } else if (hunkSeparators === 'metadata') {
           linesAST.push(
@@ -560,7 +560,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               slotName,
             })
           );
-          hunkData.push({ slotName, lines });
+          hunkData.push({ slotName, lines, type });
         }
       }
     };
