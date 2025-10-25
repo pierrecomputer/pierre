@@ -1,13 +1,13 @@
 {
   "name": "@pierre/precision-diffs",
-  "version": "0.0.2-alpha.1-3",
+  "version": "0.0.2-alpha.1-4",
   "type": "module",
   "scripts": {
     "build": "tsc --build && bun post-build.js",
     "dev": "tsc --build --watch",
     "tsc": "tsc",
-    "prepublishOnly": "bun run build && bun prepare-publish.js",
-    "postpublish": "bun restore-exports.js"
+    "prepublishOnly": "echo 'Error: Do not run bun publish directly. Use: bun run publish' && exit 1",
+    "publish": "bun run build && bun prepare-publish.js && cd dist && bun publish"
   },
   "exports": {
     ".": {
