@@ -5,67 +5,23 @@ import { Button } from '@/components/ui/button';
 import type {
   AnnotationSide,
   DiffLineAnnotation,
-  FileContents,
 } from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { FeatureHeader } from './FeatureHeader';
+import { FeatureHeader } from '../FeatureHeader';
+import type { AnnotationMetadata } from './constants';
 
-const OLD_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
-
-export default function Home() {
-  return (
-    <div>
-      <Header />
-      <IconSprite />
-    </div>
-  );
-}
-`,
-};
-
-const NEW_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import IconSprite from './IconSprite';
-import HeaderSimple from '../components/HeaderSimple';
-import Hero from '../components/Hero';
-
-export default function Home() {
-  return (
-    <div>
-      <HeaderSimple />
-      <IconSprite />
-      <h1>Hello!</h1>
-    </div>
-  );
-}
-`,
-};
-
-interface AnnotationMetadata {
-  key: string;
-  isThread: boolean;
+interface AnnotationsProps {
+  prerenderedDiff: PreloadedFileDiffResult<AnnotationMetadata>;
 }
 
-export function Annotations() {
+export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   const [annotations, setAnnotations] = useState<
     DiffLineAnnotation<AnnotationMetadata>[]
-  >([
-    {
-      side: 'additions',
-      lineNumber: 8,
-      metadata: {
-        key: 'additions-8',
-        isThread: true,
-      },
-    },
-  ]);
+  >(prerenderedDiff.annotations ?? []);
   const [buttonPosition, setButtonPosition] = useState<{
     top: number;
     left: number;
@@ -187,12 +143,11 @@ export function Annotations() {
           </Button>
         )}
         <FileDiff
-          oldFile={OLD_FILE}
-          newFile={NEW_FILE}
+          {...prerenderedDiff}
           className="overflow-hidden rounded-lg border"
+          // @ts-expect-error lol
           options={{
-            theme: 'pierre-dark',
-            diffStyle: 'unified',
+            ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
           }}
           annotations={annotations}

@@ -23,6 +23,7 @@ import {
 } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { parsePatchFiles } from '../utils/parsePatchFiles';
+import { templateRender } from './utils/templateRender';
 import { useStableCallback } from './utils/useStableCallback';
 
 export type { FileContents };
@@ -88,12 +89,9 @@ export function FileDiff<LAnnotation = undefined>(
     if (patch == null) {
       return undefined;
     }
-    const files = parsePatchFiles(patch)
-      .flatMap((parsed) => parsed.files);
+    const files = parsePatchFiles(patch).flatMap((parsed) => parsed.files);
     if (files.length === 0) {
-      throw new Error(
-        'FileDiff: provided patch does not include a file diff'
-      );
+      throw new Error('FileDiff: provided patch does not include a file diff');
     }
     if (files.length > 1) {
       throw new Error(
@@ -165,20 +163,4 @@ export function FileDiff<LAnnotation = undefined>(
       {templateRender(children, prerenderedHTML)}
     </file-diff>
   );
-}
-
-function templateRender(children: ReactNode, __html?: string) {
-  if (typeof window === 'undefined' && __html != null) {
-    return (
-      <>
-        <template
-          // @ts-expect-error unclear how to fix this
-          shadowrootmode="open"
-          dangerouslySetInnerHTML={{ __html }}
-        />
-        {children}
-      </>
-    );
-  }
-  return <>{children}</>;
 }

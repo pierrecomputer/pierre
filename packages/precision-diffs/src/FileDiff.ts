@@ -32,6 +32,14 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
+interface ScrollSyncState {
+  isDeletionsScrolling: boolean;
+  isAdditionsScrolling: boolean;
+  timeoutId: NodeJS.Timeout;
+  codeDeletions: HTMLElement | undefined;
+  codeAdditions: HTMLElement | undefined;
+}
+
 interface FileDiffRenderBaseProps<LAnnotation> {
   forceRender?: boolean;
   fileContainer?: HTMLElement;
@@ -110,6 +118,11 @@ export class FileDiff<LAnnotation = undefined> {
   options: DiffFileRendererOptions<LAnnotation>;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
+  private annotationElements: HTMLElement[] = [];
+  private customHunkElements: HTMLElement[] = [];
+  private headerElement: HTMLElement | undefined;
+  private headerMetadata: HTMLElement | undefined;
+  private spriteSVG: SVGElement | undefined;
 
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
@@ -122,10 +135,13 @@ export class FileDiff<LAnnotation = undefined> {
   private oldFile: FileContents | undefined;
   private newFile: FileContents | undefined;
   private fileDiff: FileDiffMetadata | undefined;
-  private annotationElements: HTMLElement[] = [];
-  private customHunkElements: HTMLElement[] = [];
-  private headerElement: HTMLElement | undefined;
-  private headerMetadata: HTMLElement | undefined;
+  private scrollSyncState: ScrollSyncState = {
+    isDeletionsScrolling: false,
+    isAdditionsScrolling: false,
+    timeoutId: -1 as unknown as NodeJS.Timeout,
+    codeDeletions: undefined,
+    codeAdditions: undefined,
+  };
 
   constructor(
     options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
@@ -150,9 +166,8 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(
-    options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' }
-  ) {
+  setOptions(options: DiffFileRendererOptions<LAnnotation> | undefined) {
+    if (options == null) return;
     this.options = options;
     this.hunksRenderer.setOptions({
       ...this.options,
@@ -225,10 +240,21 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerRenderer.cleanUp();
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
+    this.scrollSyncState.codeDeletions?.removeEventListener(
+      'scroll',
+      this.handleDeletionsScroll
+    );
+    this.scrollSyncState.codeAdditions?.removeEventListener(
+      'scroll',
+      this.handleAdditionsScroll
+    );
+    clearTimeout(this.scrollSyncState.timeoutId);
     this.fileDiff = undefined;
     this.oldFile = undefined;
     this.newFile = undefined;
     this.resizeObserver = undefined;
+    this.scrollSyncState.codeDeletions = undefined;
+    this.scrollSyncState.codeAdditions = undefined;
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
@@ -269,6 +295,7 @@ export class FileDiff<LAnnotation = undefined> {
     // Otherwise orchestrate our setup
     else {
       this.fileContainer = props.fileContainer;
+      delete this.pre.dataset.dehydrated;
 
       this.attachEventListeners(this.pre);
       this.setupResizeObserver(this.pre);
@@ -281,11 +308,15 @@ export class FileDiff<LAnnotation = undefined> {
       if (props.fileDiff != null) {
         this.fileDiff = props.fileDiff;
       }
+      void this.hunksRenderer.initializeHighlighter();
       this.attachEventListeners(this.pre);
       this.setupResizeObserver(this.pre);
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();
+      if ((this.options.overflow ?? 'scroll') === 'scroll') {
+        this.setupScrollSync();
+      }
     }
   }
 
@@ -417,8 +448,6 @@ export class FileDiff<LAnnotation = undefined> {
       }
     }
   }
-
-  spriteSVG: SVGElement | undefined;
 
   private attachEventListeners(pre: HTMLPreElement) {
     // Remove old event listeners if they exist, probably don't
@@ -696,47 +725,71 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private setupScrollSync(
-    codeDeletions: HTMLElement,
-    codeAdditions: HTMLElement
+    codeDeletions?: HTMLElement,
+    codeAdditions?: HTMLElement
   ) {
-    const state = {
-      isLeftScrolling: false,
-      isRightScrolling: false,
-      timeoutId: -1 as unknown as NodeJS.Timeout,
-    };
-
-    codeDeletions.addEventListener(
-      'scroll',
-      () => {
-        if (state.isRightScrolling) {
-          return;
+    // If no code elements were provided, lets try to find them in
+    // the pre element
+    if (codeDeletions == null || codeAdditions == null) {
+      for (const element of this.pre?.children ?? []) {
+        if (!(element instanceof HTMLElement)) {
+          continue;
         }
-        state.isLeftScrolling = true;
-        clearTimeout(state.timeoutId);
-        state.timeoutId = setTimeout(() => {
-          state.isLeftScrolling = false;
-        }, 300);
-        codeAdditions.scrollTo({ left: codeDeletions.scrollLeft });
-      },
-      { passive: true }
-    );
-
-    codeAdditions.addEventListener(
-      'scroll',
-      () => {
-        if (state.isLeftScrolling) {
-          return;
+        if ('deletions' in element.dataset) {
+          codeDeletions = element;
+        } else if ('additions' in element.dataset) {
+          codeAdditions = element;
         }
-        state.isRightScrolling = true;
-        clearTimeout(state.timeoutId);
-        state.timeoutId = setTimeout(() => {
-          state.isRightScrolling = false;
-        }, 300);
-        codeDeletions.scrollTo({ left: codeAdditions.scrollLeft });
-      },
-      { passive: true }
+      }
+    }
+    if (codeAdditions == null || codeDeletions == null) {
+      return;
+    }
+    this.scrollSyncState.codeDeletions?.removeEventListener(
+      'scroll',
+      this.handleDeletionsScroll
     );
+    this.scrollSyncState.codeAdditions?.removeEventListener(
+      'scroll',
+      this.handleAdditionsScroll
+    );
+    this.scrollSyncState.codeDeletions = codeDeletions;
+    this.scrollSyncState.codeAdditions = codeAdditions;
+    codeDeletions.addEventListener('scroll', this.handleDeletionsScroll, {
+      passive: true,
+    });
+    codeAdditions.addEventListener('scroll', this.handleAdditionsScroll, {
+      passive: true,
+    });
   }
+
+  private handleDeletionsScroll = () => {
+    if (this.scrollSyncState.isAdditionsScrolling) {
+      return;
+    }
+    this.scrollSyncState.isDeletionsScrolling = true;
+    clearTimeout(this.scrollSyncState.timeoutId);
+    this.scrollSyncState.timeoutId = setTimeout(() => {
+      this.scrollSyncState.isDeletionsScrolling = false;
+    }, 300);
+    this.scrollSyncState.codeAdditions?.scrollTo({
+      left: this.scrollSyncState.codeDeletions?.scrollLeft,
+    });
+  };
+
+  private handleAdditionsScroll = () => {
+    if (this.scrollSyncState.isDeletionsScrolling) {
+      return;
+    }
+    this.scrollSyncState.isAdditionsScrolling = true;
+    clearTimeout(this.scrollSyncState.timeoutId);
+    this.scrollSyncState.timeoutId = setTimeout(() => {
+      this.scrollSyncState.isAdditionsScrolling = false;
+    }, 300);
+    this.scrollSyncState.codeDeletions?.scrollTo({
+      left: this.scrollSyncState.codeAdditions?.scrollLeft,
+    });
+  };
 
   private setupResizeObserver(pre: HTMLPreElement) {
     // Disconnect any existing observer

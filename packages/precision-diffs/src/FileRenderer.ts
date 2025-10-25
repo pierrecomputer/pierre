@@ -38,6 +38,7 @@ type AnnotationLineMap<LAnnotation> = Record<
 export interface FileRenderResult {
   codeAST: ElementContent[];
   preNode: Element;
+  css: string;
 }
 
 interface BaseOptions {
@@ -60,13 +61,19 @@ export interface FileRendererThemesOptions
   extends BaseOptions,
     ThemesRendererOptions {}
 
-type FileRendererOptions = FileRendererThemeOptions | FileRendererThemesOptions;
+export type FileRendererOptions =
+  | FileRendererThemeOptions
+  | FileRendererThemesOptions;
 
 export class FileRenderer<LAnnotation = undefined> {
   highlighter: PJSHighlighter | undefined;
   fileContent: string | undefined;
 
-  constructor(public options: FileRendererOptions) {}
+  constructor(
+    public options: FileRendererOptions = {
+      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+    }
+  ) {}
 
   setOptions(options: FileRendererOptions) {
     this.options = options;
@@ -104,7 +111,10 @@ export class FileRenderer<LAnnotation = undefined> {
   private computedLang: SupportedLanguages = 'text';
   private queuedFile: FileContents | undefined;
   private queuedRender: Promise<FileRenderResult | undefined> | undefined;
-  async render(file: FileContents): Promise<FileRenderResult | undefined> {
+  async render(
+    file: FileContents,
+    useCSSClasses: boolean = false
+  ): Promise<FileRenderResult | undefined> {
     this.queuedFile = file;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -122,7 +132,7 @@ export class FileRenderer<LAnnotation = undefined> {
       if (this.queuedFile == null) {
         return undefined;
       }
-      return this.renderFile(this.queuedFile, this.highlighter);
+      return this.renderFile(this.queuedFile, this.highlighter, useCSSClasses);
     })();
     const result = await this.queuedRender;
     this.queuedFile = undefined;
@@ -132,7 +142,8 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private renderFile(
     file: FileContents,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    useCSSClasses: boolean
   ): FileRenderResult {
     const {
       theme,
@@ -140,15 +151,17 @@ export class FileRenderer<LAnnotation = undefined> {
       themeType,
       disableLineNumbers = false,
     } = this.options;
-    const { state, transformer } =
-      createTransformerWithState(disableLineNumbers);
+    const { state, transformers, toClass } = createTransformerWithState({
+      disableLineNumbers,
+      useCSSClasses,
+    });
 
     const { lineInfoMap, hasLongLines } = this.computeLineInfo(file.contents);
     state.lineInfo = lineInfoMap;
     const codeAST = this.getLineNodes(
       highlighter.codeToHast(
         file.contents.replace(/\n$/, ''),
-        this.createHastOptions(transformer, undefined, hasLongLines)
+        this.createHastOptions(transformers, undefined, hasLongLines)
       )
     );
 
@@ -167,23 +180,26 @@ export class FileRenderer<LAnnotation = undefined> {
           themeType,
         }),
       }),
+      css: toClass.getCSS(),
     };
   }
 
   renderFullHTML(result: FileRenderResult): string {
-    const childrenBackup = result.preNode.children;
-    const tempChildren: ElementContent[] = [
-      ...childrenBackup,
+    return toHtml(this.renderFullAST(result));
+  }
+
+  renderFullAST(
+    result: FileRenderResult,
+    children: ElementContent[] = []
+  ): Element {
+    children.push(
       createHastElement({
         tagName: 'code',
         children: result.codeAST,
         properties: { 'data-code': '' },
-      }),
-    ];
-    result.preNode.children = tempChildren;
-    const html = toHtml(result.preNode);
-    result.preNode.children = childrenBackup;
-    return html;
+      })
+    );
+    return { ...result.preNode, children };
   }
 
   renderPartialHTML(
@@ -255,7 +271,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private createHastOptions(
-    transformer: ShikiTransformer,
+    transformers: ShikiTransformer[],
     decorations?: DecorationItem[],
     forceTextLang: boolean = false
   ): CodeToHastOptions<PJSThemeNames> {
@@ -265,7 +281,7 @@ export class FileRenderer<LAnnotation = undefined> {
         cssVariablePrefix: formatCSSVariablePrefix(),
         lang: forceTextLang ? 'text' : this.computedLang,
         defaultColor: false,
-        transformers: [transformer],
+        transformers,
         decorations,
       };
     }
@@ -274,12 +290,12 @@ export class FileRenderer<LAnnotation = undefined> {
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,
-      transformers: [transformer],
+      transformers,
       decorations,
     };
   }
 
-  private async initializeHighlighter() {
+  async initializeHighlighter() {
     this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
     return this.highlighter;
   }

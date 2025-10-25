@@ -7,26 +7,6 @@ import { renderToString } from 'react-dom/server';
 import type { DiffLineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 
-export interface LineAnnotation {
-  line: number;
-  side: 'additions' | 'deletions';
-  render: () => React.ReactElement;
-}
-
-/**
- * Helper to extract annotation positions for preloadFileDiff.
- * This allows you to define annotations once with render functions,
- * then extract just the positions for SSR.
- */
-export function getAnnotationPositions(
-  annotations: LineAnnotation[]
-): Array<{ lineNumber: number; side: 'additions' | 'deletions' }> {
-  return annotations.map(({ line, side }) => ({
-    lineNumber: line,
-    side,
-  }));
-}
-
 interface FileDiffSsrProps<LAnnotation> {
   prerenderedHTML: string;
   annotations?: DiffLineAnnotation<LAnnotation>[];

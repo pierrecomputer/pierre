@@ -222,6 +222,10 @@ code {
   }
 }
 
+[data-pjs][data-dehydrated] {
+  --pjs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
+}
+
 @media (prefers-color-scheme: dark) {
   [data-pjs-header],
   [data-pjs] {
@@ -279,15 +283,12 @@ code {
   padding-block: var(--pjs-gap);
 }
 
-[data-pjs-header] ~ [data-pjs] [data-code] {
-  padding-top: 0;
-}
-
 [data-pjs][data-overflow='wrap'] {
   padding-block: var(--pjs-gap);
 }
 
-[data-pjs-header] + [data-icon-sprite] + [data-pjs][data-overflow='wrap'] {
+[data-pjs-header] ~ [data-pjs] [data-code],
+[data-pjs-header] ~ [data-pjs][data-overflow='wrap'] {
   padding-top: 0;
 }
 

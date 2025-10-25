@@ -1,16 +1,9 @@
-'use client';
+import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
-import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import type { FileContents } from '@pierre/precision-diffs';
-import { FileDiff } from '@pierre/precision-diffs/react';
-import { useState } from 'react';
-
-import { FeatureHeader } from './FeatureHeader';
-
-const OLD_FILE: FileContents = {
-  name: 'example_old.tsx',
-  contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
+export const SPLIT_UNIFIED: PreloadFileDiffOptions<undefined> = {
+  oldFile: {
+    name: 'example_old.tsx',
+    contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
 
 import type {
   FileDiffMetadata,
@@ -79,11 +72,10 @@ export function createHunkSeparator() {
   return separator;
 }
 `,
-};
-
-const NEW_FILE: FileContents = {
-  name: 'example_new.tsx',
-  contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
+  },
+  newFile: {
+    name: 'example_new.tsx',
+    contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
 
 import type {
   FileDiffMetadata,
@@ -149,39 +141,6 @@ export function createHunkSeparator() {
   return separator;
 }
 `,
+  },
+  options: { theme: 'pierre-dark', diffStyle: 'split' },
 };
-
-export function SplitUnified() {
-  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
-  return (
-    <div className="space-y-5">
-      <FeatureHeader
-        title="Diff layout styles"
-        description="Choose from stacked (unified) or split (side-by-side). Both use CSS Grid and Shadow DOM under the hood, meaning fewer DOM nodes and faster rendering."
-      />
-      <ButtonGroup
-        value={diffStyle}
-        onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
-      >
-        <ButtonGroupItem value="split">
-          <IconDiffSplit />
-          Split
-        </ButtonGroupItem>
-        <ButtonGroupItem value="unified">
-          <IconDiffUnified />
-          Stacked
-        </ButtonGroupItem>
-      </ButtonGroup>
-
-      <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
-        className="overflow-hidden rounded-lg border"
-        options={{
-          theme: 'pierre-dark',
-          diffStyle,
-        }}
-      />
-    </div>
-  );
-}

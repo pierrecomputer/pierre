@@ -1,67 +1,34 @@
-'use client';
-
 import Footer from '@/components/Footer';
 import {
   IconArrowUpRight,
-  IconBook,
   IconBrandDiscord,
   IconBrandGithub,
-  IconCheck,
-  IconCopyFill,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Header } from '@/components/ui/header';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
-import { useState } from 'react';
 
-import { Annotations } from './diff-examples/Annotations';
-import { ArbitraryFiles } from './diff-examples/ArbitraryFiles';
-import { DiffStyles } from './diff-examples/DiffStyles';
-import { FontStyles } from './diff-examples/FontStyles';
-import { ShikiThemes } from './diff-examples/ShikiThemes';
-import { SplitUnified } from './diff-examples/SplitUnified';
+import { HeaderWrapper } from './HeaderWrapper';
+import { Hero } from './Hero';
+import { Annotations } from './diff-examples/Annotations/Annotations';
+import { ANNOTATION_EXAMPLE } from './diff-examples/Annotations/constants';
+import { ArbitraryFiles } from './diff-examples/ArbitraryFiles/ArbitraryFiles';
+import { ARBITRARY_DIFF_EXAMPLE } from './diff-examples/ArbitraryFiles/constants';
+import { DiffStyles } from './diff-examples/DiffStyles/DiffStyles';
+import { DIFF_STYLES } from './diff-examples/DiffStyles/constants';
+import { FontStyles } from './diff-examples/FontStyles/FontStyles';
+import { FONT_STYLES } from './diff-examples/FontStyles/constants';
+import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
+import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
+import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
+import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
 
 export default function Home() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5">
-      <Header
-        logo={
-          <Header.Logo
-            href="/"
-            subtitle={
-              <>
-                by{' '}
-                <span className="font-normal uppercase">
-                  The Pierre Computer Company
-                </span>
-              </>
-            }
-          >
-            Precision Diffs
-          </Header.Logo>
-        }
-      >
-        <Header.Nav>
-          <Header.NavLink href="/">Home</Header.NavLink>
-          <Header.NavLink href="/docs">Docs</Header.NavLink>
-          <Header.NavLink href="https://discord.gg/pierre" external>
-            Discord
-          </Header.NavLink>
-          <Header.NavLink href="https://github.com/pierreco/" external>
-            GitHub
-          </Header.NavLink>
-        </Header.Nav>
-      </Header>
-
+      <HeaderWrapper />
       <Hero />
-
       <hr className="mt-2 mb-8 w-[120px]" />
-
       <section className="space-y-8 py-8">
         <div className="space-y-2">
           <h2 className="text-2xl font-medium">
@@ -74,14 +41,13 @@ export default function Home() {
             from multiple diff visual styles, and much more.
           </p>
         </div>
-
-        <SplitUnified />
-        <ShikiThemes />
-        <DiffStyles />
-        <FontStyles />
+        <SplitUnifiedSection />
+        <ShikiThemesSection />
+        <DiffStylesSection />
+        <FontStylesSection />
         {/* <PrebuiltReact /> */}
-        <Annotations />
-        <ArbitraryFiles />
+        <AnnotationsSection />
+        <ArbitraryFilesSection />
       </section>
 
       {/* TODO: add this back once we add the migration APIs
@@ -131,66 +97,39 @@ export default function Home() {
           </Button>
         </div>
       </section>
-
       <Footer />
     </div>
   );
 }
 
-const Hero = () => {
-  const [copied, setCopied] = useState(false);
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText('bun i @pierre/precision-diffs');
-      setCopied(true);
-      setTimeout(() => setCopied(false), 5000);
-    } catch (err) {
-      console.error('Failed to copy to clipboard', err);
-    }
-  };
-
+async function SplitUnifiedSection() {
   return (
-    <section className="flex max-w-3xl flex-col gap-2 py-16">
-      <h1 className="text-3xl font-medium tracking-tight md:text-4xl">
-        Precision Diffs
-      </h1>
-      <p className="text-md text-muted-foreground max-w-2x mb-2 md:text-lg">
-        Fast, exact diffing for modern apps. Fully open source, built with
-        Shiki, insanely customizable, and packed with the features you need.
-        Made with love by{' '}
-        <Link
-          target="_blank"
-          href="https://pierre.computer"
-          className="hover:text-foreground underline underline-offset-2 transition-colors"
-        >
-          The Pierre Computer Company
-        </Link>
-        .
-      </p>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => void copyToClipboard()}
-              className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-3 font-mono text-sm text-white transition-colors hover:bg-gray-800 dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
-            >
-              <span>bun i @pierre/precision-diffs</span>
-              {copied ? <IconCheck /> : <IconCopyFill />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{'Copy to clipboard'}</p>
-          </TooltipContent>
-        </Tooltip>
-        <Button variant="secondary" asChild size="xl">
-          <Link href="/docs">
-            <IconBook />
-            Documentation
-          </Link>
-        </Button>
-      </div>
-    </section>
+    <SplitUnified prerenderedDiff={await preloadFileDiff(SPLIT_UNIFIED)} />
   );
-};
+}
+
+async function ShikiThemesSection() {
+  return <ShikiThemes prerenderedDiff={await preloadFileDiff(SHIKI_THEMES)} />;
+}
+
+async function DiffStylesSection() {
+  return <DiffStyles prerenderedDiff={await preloadFileDiff(DIFF_STYLES)} />;
+}
+
+async function FontStylesSection() {
+  return <FontStyles prerenderedDiff={await preloadFileDiff(FONT_STYLES)} />;
+}
+
+async function AnnotationsSection() {
+  return (
+    <Annotations prerenderedDiff={await preloadFileDiff(ANNOTATION_EXAMPLE)} />
+  );
+}
+
+async function ArbitraryFilesSection() {
+  return (
+    <ArbitraryFiles
+      prerenderedDiff={await preloadFileDiff(ARBITRARY_DIFF_EXAMPLE)}
+    />
+  );
+}

@@ -9,36 +9,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InputWithIcon } from '@/components/ui/input-group';
-import type { FileContents } from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
-import { FeatureHeader } from './FeatureHeader';
-
-const OLD_FILE: FileContents = {
-  name: 'hello.ts',
-  contents: `function greet(name) {
-  return "Hello, " + name + "!";
-}
-
-const message = greet("World");
-console.log(message);
-`,
-};
-
-const NEW_FILE: FileContents = {
-  name: 'hello.ts',
-  contents: `function greet(name: string): string {
-  return \`Hello, \${name}!\`;
-}
-
-const message: string = greet("World");
-console.log(message);
-
-export { greet };
-`,
-};
+import { FeatureHeader } from '../FeatureHeader';
 
 const fontMap: Record<string, string> = {
   'Berkeley Mono': '--font-berkeley-mono',
@@ -52,7 +28,11 @@ const fontMap: Record<string, string> = {
 const fontSizes = ['10px', '12px', '13px', '14px', '18px'];
 const lineHeights = ['16px', '20px', '24px', '28px'];
 
-export function FontStyles() {
+interface FontStylesProps {
+  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+}
+
+export function FontStyles({ prerenderedDiff }: FontStylesProps) {
   const [selectedFont, setSelectedFont] = useState('Berkeley Mono');
   const [selectedFontSize, setSelectedFontSize] = useState('14px');
   const [selectedLineHeight, setSelectedLineHeight] = useState('20px');
@@ -158,13 +138,10 @@ export function FontStyles() {
         </div>
       </div>
       <FileDiff
-        oldFile={OLD_FILE}
-        newFile={NEW_FILE}
+        {...prerenderedDiff}
+        // @ts-expect-error lol
+        options={{ ...prerenderedDiff.options, hunkSeparators: 'line-info' }}
         className="overflow-hidden rounded-lg border"
-        options={{
-          theme: 'pierre-dark',
-          diffStyle: 'unified',
-        }}
         style={
           {
             '--pjs-font-family': `var(${fontMap[selectedFont]})`,

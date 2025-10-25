@@ -1,4 +1,3 @@
-import { transformerStyleToClass } from '@shikijs/transformers';
 import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
@@ -61,7 +60,7 @@ interface RenderHunkProps {
   hunkIndex: number;
   highlighter: PJSHighlighter;
   state: SharedRenderState;
-  transformer: ShikiTransformer | ShikiTransformer[];
+  transformers: ShikiTransformer[];
   additionsAST: ElementContent[];
   deletionsAST: ElementContent[];
   unifiedAST: ElementContent[];
@@ -107,50 +106,6 @@ export interface HunksRenderResult {
   css: string;
   preNode: Element;
 }
-
-// Create a transformer that converts token color/fontStyle to htmlStyle
-// This needs to run BEFORE transformerStyleToClass
-const tokenStyleNormalizer: ShikiTransformer = {
-  name: 'token-style-normalizer',
-  tokens(lines) {
-    for (const line of lines) {
-      for (const token of line) {
-        // Skip if htmlStyle is already set
-        if (token.htmlStyle != null) continue;
-
-        const style: Record<string, string> = {};
-
-        if (token.color != null) {
-          style.color = token.color;
-        }
-        if (token.bgColor != null) {
-          style['background-color'] = token.bgColor;
-        }
-        if (token.fontStyle != null && token.fontStyle !== 0) {
-          // FontStyle is a bitmask: 1 = italic, 2 = bold, 4 = underline
-          if ((token.fontStyle & 1) !== 0) {
-            style['font-style'] = 'italic';
-          }
-          if ((token.fontStyle & 2) !== 0) {
-            style['font-weight'] = 'bold';
-          }
-          if ((token.fontStyle & 4) !== 0) {
-            style['text-decoration'] = 'underline';
-          }
-        }
-
-        // Only set htmlStyle if we have any styles
-        if (Object.keys(style).length > 0) {
-          token.htmlStyle = style;
-        }
-      }
-    }
-  },
-};
-
-const toClass = transformerStyleToClass({
-  classPrefix: 'hl-',
-});
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
   highlighter: PJSHighlighter | undefined;
@@ -258,7 +213,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  private async initializeHighlighter() {
+  async initializeHighlighter() {
     this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
     return this.highlighter;
   }
@@ -308,7 +263,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private renderDiff(
     fileDiff: FileDiffMetadata,
     highlighter: PJSHighlighter,
-    shouldUseClasses: boolean = false
+    useCSSClasses: boolean = false
   ): HunksRenderResult {
     const {
       disableLineNumbers,
@@ -325,8 +280,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const additionsAST: ElementContent[] = [];
     const deletionsAST: ElementContent[] = [];
     const unifiedAST: ElementContent[] = [];
-    const { state, transformer: lineNumberTransformer } =
-      createTransformerWithState(disableLineNumbers);
+    const { state, transformers, toClass } = createTransformerWithState({
+      disableLineNumbers,
+      useCSSClasses,
+    });
     let hunkIndex = 0;
     const hunkData: HunkData[] = [];
 
@@ -338,9 +295,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hunkIndex,
         highlighter,
         state,
-        transformer: shouldUseClasses
-          ? [lineNumberTransformer, tokenStyleNormalizer, toClass]
-          : [lineNumberTransformer],
+        transformers,
         isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
         additionsAST,
         deletionsAST,
@@ -378,10 +333,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   renderFullAST(
     result: HunksRenderResult,
-    tempChildren: ElementContent[] = []
+    children: ElementContent[] = []
   ): Element {
     if (result.unifiedAST != null) {
-      tempChildren.push(
+      children.push(
         createHastElement({
           tagName: 'code',
           children: result.unifiedAST,
@@ -393,7 +348,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     }
     if (result.deletionsAST != null) {
-      tempChildren.push(
+      children.push(
         createHastElement({
           tagName: 'code',
           children: result.deletionsAST,
@@ -405,7 +360,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     }
     if (result.additionsAST != null) {
-      tempChildren.push(
+      children.push(
         createHastElement({
           tagName: 'code',
           children: result.additionsAST,
@@ -416,7 +371,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         })
       );
     }
-    return { ...result.preNode, children: tempChildren };
+    return { ...result.preNode, children };
   }
 
   renderFullHTML(
@@ -446,7 +401,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private createHastOptions(
-    transformer: ShikiTransformer | ShikiTransformer[],
+    transformers: ShikiTransformer[],
     decorations?: DecorationItem[],
     forceTextLang: boolean = false
   ): CodeToHastOptions<PJSThemeNames> {
@@ -456,7 +411,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         cssVariablePrefix: formatCSSVariablePrefix(),
         lang: forceTextLang ? 'text' : this.computedLang,
         defaultColor: false,
-        transformers: Array.isArray(transformer) ? transformer : [transformer],
+        transformers,
         decorations,
       };
     }
@@ -465,7 +420,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,
-      transformers: Array.isArray(transformer) ? transformer : [transformer],
+      transformers,
       decorations,
     };
   }
@@ -475,7 +430,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     hunkIndex,
     highlighter,
     state,
-    transformer,
+    transformers,
     prevHunk,
     isLastHunk,
     additionsAST,
@@ -506,7 +461,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       state.lineInfo = computed.lineInfo;
       const nodes = highlighter.codeToHast(
         content,
-        this.createHastOptions(transformer, computed.decorations, hasLongLines)
+        this.createHastOptions(transformers, computed.decorations, hasLongLines)
       );
       if (!this.expandedHunks.has(hunkIndex)) {
         if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {

@@ -2,7 +2,7 @@
 
 import { Header } from '@/components/ui/header';
 
-export function DocsHeader() {
+export function HeaderWrapper() {
   return (
     <Header
       logo={
@@ -21,7 +21,7 @@ export function DocsHeader() {
         </Header.Logo>
       }
     >
-      <Header.Nav className="mt-2 md:mt-0">
+      <Header.Nav>
         <Header.NavLink href="/">Home</Header.NavLink>
         <Header.NavLink href="/docs">Docs</Header.NavLink>
         <Header.NavLink href="https://discord.gg/pierre" external>

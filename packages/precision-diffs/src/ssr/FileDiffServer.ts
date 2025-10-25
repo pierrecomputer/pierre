@@ -5,10 +5,28 @@ import {
   type DiffHunksRendererOptions,
 } from '../DiffHunksRenderer';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
+import { FileRenderer, type FileRendererOptions } from '../FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
-import type { DiffLineAnnotation, FileContents } from '../types';
+import type {
+  DiffLineAnnotation,
+  FileContents,
+  LineAnnotation,
+} from '../types';
 import { createHastElement, createTextNode } from '../utils/hast_utils';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+
+export type PreloadFileOptions<LAnnotation> = {
+  file: FileContents;
+  options?: FileRendererOptions;
+  annotations?: LineAnnotation<LAnnotation>[];
+};
+
+export interface PreloadedFileResult<LAnnotation> {
+  file: FileContents;
+  options?: DiffHunksRendererOptions;
+  annotations?: LineAnnotation<LAnnotation>[];
+  prerenderedHTML: string;
+}
 
 export type PreloadFileDiffOptions<LAnnotation> = {
   oldFile: FileContents;
@@ -25,7 +43,56 @@ export interface PreloadedFileDiffResult<LAnnotation> {
   prerenderedHTML: string;
 }
 
-export async function preloadFileDiff<LAnnotation>({
+export async function preloadFile<LAnnotation = undefined>({
+  file,
+  options,
+  annotations,
+}: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
+  const fileRenderer = new FileRenderer<LAnnotation>(options);
+  const fileHeader = new FileHeaderRenderer(options);
+
+  // Set line annotations if provided
+  if (annotations !== undefined && annotations.length > 0) {
+    fileRenderer.setLineAnnotations(annotations);
+  }
+
+  const [hunkResult, headerResult] = await Promise.all([
+    fileRenderer.render(file, true),
+    fileHeader.render(file),
+  ]);
+  if (hunkResult == null) {
+    throw new Error('Failed to render file diff');
+  }
+  const cssText = `@layer base, theme;
+    @layer base {
+      ${rawStyles}
+    }
+    @layer theme {
+      ${hunkResult.css}
+    }`;
+
+  const children = [
+    createHastElement({
+      tagName: 'style',
+      children: [createTextNode(cssText)],
+    }),
+  ];
+  if (headerResult != null) {
+    children.push(headerResult);
+  }
+  const code = fileRenderer.renderFullAST(hunkResult);
+  code.properties['data-dehydrated'] = '';
+  children.push(code);
+
+  return {
+    file,
+    options,
+    annotations,
+    prerenderedHTML: `${SVGSpriteSheet}${toHtml(children)}`,
+  };
+}
+
+export async function preloadFileDiff<LAnnotation = undefined>({
   oldFile,
   newFile,
   options,
@@ -66,7 +133,9 @@ export async function preloadFileDiff<LAnnotation>({
   if (headerResult != null) {
     children.push(headerResult);
   }
-  children.push(diffHunksRenderer.renderFullAST(hunkResult));
+  const code = diffHunksRenderer.renderFullAST(hunkResult);
+  code.properties['data-dehydrated'] = '';
+  children.push(code);
 
   return {
     oldFile,
@@ -301,6 +370,10 @@ code {
   }
 }
 
+[data-pjs][data-dehydrated] {
+  --pjs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
+}
+
 @media (prefers-color-scheme: dark) {
   [data-pjs-header],
   [data-pjs] {
@@ -358,15 +431,12 @@ code {
   padding-block: var(--pjs-gap);
 }
 
-[data-pjs-header] ~ [data-pjs] [data-code] {
-  padding-top: 0;
-}
-
 [data-pjs][data-overflow='wrap'] {
   padding-block: var(--pjs-gap);
 }
 
-[data-pjs-header] + [data-icon-sprite] + [data-pjs][data-overflow='wrap'] {
+[data-pjs-header] ~ [data-pjs] [data-code],
+[data-pjs-header] ~ [data-pjs][data-overflow='wrap'] {
   padding-top: 0;
 }
 
@@ -382,7 +452,11 @@ code {
   grid-column: 1 / 3;
 }
 
-[data-type='split'][data-overflow='wrap'] [data-additions] [data-line] {
+[data-type='split'][data-overflow='wrap'] [data-additions] [data-line],
+[data-type='split'][data-overflow='wrap'] [data-additions] [data-separator],
+[data-type='split'][data-overflow='wrap']
+  [data-additions]
+  [data-line-annotation] {
   border-left: 2px solid var(--pjs-bg);
 }
 
@@ -450,7 +524,7 @@ code {
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
 }
 
-[data-separator='line-info']:hover [data-separator-content] {
+[data-separator='line-info'][data-expand-index]:hover [data-separator-content] {
   opacity: 1;
 }
 
@@ -515,6 +589,11 @@ code {
   [data-separator] {
     grid-column: 3 / 5;
   }
+}
+
+[data-separator='custom'] {
+  display: grid;
+  grid-template-columns: subgrid;
 }
 
 [data-column-content],
