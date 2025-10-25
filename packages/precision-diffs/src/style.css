@@ -13,7 +13,7 @@
 
   --pjs-mixer: light-dark(black, white);
 
-  --pjs-annotation-min-height: 1lh;
+  --pjs-annotation-min-height: 0;
   /*
     // Available CSS Variable Overrides
     --pjs-bg-buffer-override
@@ -678,7 +678,7 @@ code {
   grid-column: 2 / -1;
   width: var(--pjs-column-content-width, auto);
   align-self: flex-start;
-  overflow: hidden;
+  z-index: 2;
 }
 
 /* Undo some of the stuff that the 'pre' tag does */

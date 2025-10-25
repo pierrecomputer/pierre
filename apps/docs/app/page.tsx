@@ -10,7 +10,10 @@ import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
 import { Hero } from './Hero';
-import { Annotations } from './diff-examples/Annotations/Annotations';
+import {
+  AcceptRejectExample,
+  Annotations,
+} from './diff-examples/Annotations/Annotations';
 import { ANNOTATION_EXAMPLE } from './diff-examples/Annotations/constants';
 import { ArbitraryFiles } from './diff-examples/ArbitraryFiles/ArbitraryFiles';
 import { ARBITRARY_DIFF_EXAMPLE } from './diff-examples/ArbitraryFiles/constants';
@@ -48,6 +51,7 @@ export default function Home() {
         {/* <PrebuiltReact /> */}
         <AnnotationsSection />
         <ArbitraryFilesSection />
+        <AcceptRejectExample />
       </section>
 
       {/* TODO: add this back once we add the migration APIs

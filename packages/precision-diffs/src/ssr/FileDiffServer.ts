@@ -826,7 +826,7 @@ code {
   grid-column: 2 / -1;
   width: var(--pjs-column-content-width, auto);
   align-self: flex-start;
-  overflow: hidden;
+  z-index: 2;
 }
 
 /* Undo some of the stuff that the 'pre' tag does */

@@ -366,3 +366,99 @@ export function CommentThread({
     </div>
   );
 }
+
+interface AcceptRejectMetadata {
+  key: string;
+  accepted?: boolean;
+}
+
+export function AcceptRejectExample() {
+  const [acceptedChanges, setAcceptedChanges] = useState<Set<string>>(
+    new Set()
+  );
+  const [rejectedChanges, setRejectedChanges] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Create annotations for all changed lines
+  const annotations: DiffLineAnnotation<AcceptRejectMetadata>[] = [
+    // Deletions
+    { side: 'deletions', lineNumber: 1, metadata: { key: 'del-1' } },
+    { side: 'deletions', lineNumber: 2, metadata: { key: 'del-2' } },
+    { side: 'deletions', lineNumber: 3, metadata: { key: 'del-3' } },
+    { side: 'deletions', lineNumber: 7, metadata: { key: 'del-7' } },
+    // Additions
+    { side: 'additions', lineNumber: 2, metadata: { key: 'add-2' } },
+    { side: 'additions', lineNumber: 3, metadata: { key: 'add-3' } },
+    { side: 'additions', lineNumber: 6, metadata: { key: 'add-6' } },
+    { side: 'additions', lineNumber: 8, metadata: { key: 'add-8' } },
+  ];
+
+  const handleAccept = useCallback((key: string) => {
+    setAcceptedChanges((prev) => new Set(prev).add(key));
+    setRejectedChanges((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const handleReject = useCallback((key: string) => {
+    setRejectedChanges((prev) => new Set(prev).add(key));
+    setAcceptedChanges((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  return (
+    <div className="space-y-5">
+      <FeatureHeader
+        title="Accept/Reject Changes"
+        description="Annotations can be used to build interactive code review interfaces. This example demonstrates accept/reject buttons attached to each change, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
+      />
+      <p className="text-muted-foreground text-sm">
+        Each changed line in the diff below has accept (checkmark) and reject
+        (X) buttons. Click these to approve or dismiss individual changes. The
+        buttons change color to reflect your selection, and the annotation
+        system tracks which changes have been accepted or rejected.
+      </p>
+      <FileDiff
+        oldFile={OLD_FILE}
+        newFile={NEW_FILE}
+        className="overflow-hidden rounded-lg border"
+        options={{
+          theme: 'pierre-dark',
+          diffStyle: 'unified',
+        }}
+        annotations={annotations}
+        renderAnnotation={(annotation) => {
+          const isAccepted = acceptedChanges.has(annotation.metadata.key);
+          const isRejected = rejectedChanges.has(annotation.metadata.key);
+
+          return (
+            <div
+              style={{
+                position: 'relative',
+                zIndex: 10,
+                width: '100%',
+                backgroundColor: 'red',
+                overflow: 'visible',
+              }}
+            >
+              <div className="absolute top-0 right-2 flex gap-2">
+                <Button variant="success" size="xs">
+                  Accept
+                </Button>
+                <Button variant="secondary" size="xs">
+                  Undo
+                </Button>
+              </div>
+            </div>
+          );
+        }}
+      />
+    </div>
+  );
+}
