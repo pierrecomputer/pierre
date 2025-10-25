@@ -130,21 +130,21 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         themeType,
         // Custom Hunk Separators Test
         // hunkSeparators(hunkData) {
-        //   const el = document.createDocumentFragment();
-        //   const num = document.createElement('div');
-        //   num.textContent = `${hunkData.lines}`;
-        //   num.style.position = 'sticky';
-        //   num.style.left = '0';
-        //   num.style.backgroundColor = 'var(--pjs-bg)';
-        //   num.style.zIndex = '2';
-        //   el.appendChild(num);
-        //   const content = document.createElement('div');
-        //   content.textContent = 'unmodified lines';
-        //   content.style.position = 'sticky';
-        //   content.style.width = 'var(--pjs-column-content-width)';
-        //   content.style.left = 'var(--pjs-column-number-width)';
-        //   el.appendChild(content);
-        //   return el;
+        //   const fragment = document.createDocumentFragment();
+        //   const numCol = document.createElement('div');
+        //   numCol.textContent = `${hunkData.lines}`;
+        //   numCol.style.position = 'sticky';
+        //   numCol.style.left = '0';
+        //   numCol.style.backgroundColor = 'var(--pjs-bg)';
+        //   numCol.style.zIndex = '2';
+        //   fragment.appendChild(numCol);
+        //   const contentCol = document.createElement('div');
+        //   contentCol.textContent = 'unmodified lines';
+        //   contentCol.style.position = 'sticky';
+        //   contentCol.style.width = 'var(--pjs-column-content-width)';
+        //   contentCol.style.left = 'var(--pjs-column-number-width)';
+        //   fragment.appendChild(contentCol);
+        //   return fragment;
         // },
         onLineClick(props) {
           console.log('onLineClick', props);
