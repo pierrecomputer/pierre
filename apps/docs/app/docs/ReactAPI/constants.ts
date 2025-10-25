@@ -173,7 +173,7 @@ const patch = \`diff --git a/foo.ts b/foo.ts
 \`;
 
 export function SingleDiffFromPatch() {
-return <FileDiff patch={patch} />;
+  return <FileDiff patch={patch} />;
 }`,
   },
   options,
