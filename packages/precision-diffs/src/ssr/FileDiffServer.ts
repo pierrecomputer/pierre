@@ -161,7 +161,7 @@ const rawStyles = `:host {
 
   --pjs-mixer: light-dark(black, white);
 
-  --pjs-annotation-min-height: 1lh;
+  --pjs-annotation-min-height: 0;
   /*
     // Available CSS Variable Overrides
     --pjs-bg-buffer-override
@@ -578,6 +578,7 @@ code {
 }
 
 [data-line-annotation] {
+  min-height: var(--pjs-annotation-min-height);
   background-color: var(--pjs-bg-context);
 }
 
