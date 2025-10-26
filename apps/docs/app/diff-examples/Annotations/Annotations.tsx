@@ -2,7 +2,10 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import type { AnnotationSide, DiffLineAnnotation } from '@pierre/precision-diffs';
+import type {
+  AnnotationSide,
+  DiffLineAnnotation,
+} from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { CornerDownRight, Plus } from 'lucide-react';
@@ -385,8 +388,12 @@ export function AcceptRejectExample({
   const preloadedAnnotations =
     prerenderedDiff.annotations ?? ACCEPT_REJECT_ANNOTATIONS;
 
-  const { annotations: _ignoredAnnotations, prerenderedHTML, options, ...rest } =
-    prerenderedDiff;
+  const {
+    annotations: _ignoredAnnotations,
+    prerenderedHTML,
+    options,
+    ...rest
+  } = prerenderedDiff;
 
   const resolvedOldFile =
     annotationState === 'pending'
@@ -405,8 +412,7 @@ export function AcceptRejectExample({
   const activeAnnotations =
     annotationState === 'pending' ? preloadedAnnotations : [];
 
-  const diffOptions =
-    options ??
+  const diffOptions = options ??
     ACCEPT_REJECT_EXAMPLE.options ?? {
       theme: 'pierre-dark',
       diffStyle: 'unified',
@@ -443,12 +449,7 @@ export function AcceptRejectExample({
         title="Accept/Reject Changes"
         description="Annotations can also be used to build interactive code review interfaces. This example demonstrates accept/reject style buttons attached to each change, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
       />
-      <p className="text-muted-foreground text-sm">
-        Each changed line in the diff below has accept (checkmark) and reject
-        (X) buttons. Click these to approve or dismiss individual changes. The
-        buttons change color to reflect your selection, and the annotation
-        system tracks which changes have been accepted or rejected.
-      </p>
+
       <FileDiff
         {...fileDiffProps}
         className="overflow-hidden rounded-lg border"
