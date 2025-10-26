@@ -2,17 +2,21 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import type {
-  AnnotationSide,
-  DiffLineAnnotation,
-} from '@pierre/precision-diffs';
+import type { AnnotationSide, DiffLineAnnotation } from '@pierre/precision-diffs';
 import { FileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
-import type { AnnotationMetadata } from './constants';
+import {
+  ACCEPT_REJECT_ANNOTATIONS,
+  ACCEPT_REJECT_EXAMPLE,
+  ACCEPT_REJECT_NEW_FILE,
+  ACCEPT_REJECT_OLD_FILE,
+  type AcceptRejectMetadata,
+  type AnnotationMetadata,
+} from './constants';
 
 interface AnnotationsProps {
   prerenderedDiff: PreloadedFileDiffResult<AnnotationMetadata>;
@@ -367,63 +371,61 @@ export function CommentThread({
   );
 }
 
-interface AcceptRejectMetadata {
-  key: string;
-  accepted?: boolean;
+interface AcceptRejectExampleProps {
+  prerenderedDiff: PreloadedFileDiffResult<AcceptRejectMetadata>;
 }
 
-const OLD_FILE_ACCEPT_REJECT: FileContents = {
-  name: 'file.tsx',
-  contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
-
-export default function Home() {
-  return (
-    <div>
-      {/* todo: add header and icon sprite */}
-      <ul>
-        <li>Item 1</li>
-        <li>Item 2</li>
-        <li>Item 3</li>
-      </ul>
-    </div>
-  );
-}
-`,
-};
-
-const NEW_FILE_ACCEPT_REJECT: FileContents = {
-  name: 'file.tsx',
-  contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
-
-export default function Home() {
-  return (
-    <div>
-      <Header />
-      <IconSprite />
-      <ul>
-        <li>Item 1</li>
-        <li>Item 2</li>
-        <li>Item 3</li>
-      </ul>
-    </div>
-  );
-}
-`,
-};
-
-export function AcceptRejectExample() {
+export function AcceptRejectExample({
+  prerenderedDiff,
+}: AcceptRejectExampleProps) {
   const [annotationState, setAnnotationState] = useState<
     'accepted' | 'rejected' | 'pending'
   >('pending');
 
-  // Create annotations for all changed lines
-  const annotations: DiffLineAnnotation<AcceptRejectMetadata>[] = [
-    { side: 'additions', lineNumber: 9, metadata: { key: 'del-1' } },
-  ];
+  const preloadedAnnotations =
+    prerenderedDiff.annotations ?? ACCEPT_REJECT_ANNOTATIONS;
+
+  const { annotations: _ignoredAnnotations, prerenderedHTML, options, ...rest } =
+    prerenderedDiff;
+
+  const resolvedOldFile =
+    annotationState === 'pending'
+      ? ACCEPT_REJECT_OLD_FILE
+      : annotationState === 'accepted'
+        ? ACCEPT_REJECT_NEW_FILE
+        : ACCEPT_REJECT_OLD_FILE;
+
+  const resolvedNewFile =
+    annotationState === 'pending'
+      ? ACCEPT_REJECT_NEW_FILE
+      : annotationState === 'accepted'
+        ? ACCEPT_REJECT_NEW_FILE
+        : ACCEPT_REJECT_OLD_FILE;
+
+  const activeAnnotations =
+    annotationState === 'pending' ? preloadedAnnotations : [];
+
+  const diffOptions =
+    options ??
+    ACCEPT_REJECT_EXAMPLE.options ?? {
+      theme: 'pierre-dark',
+      diffStyle: 'unified',
+      collapseUnchanged: false,
+    };
+
+  const fileDiffProps =
+    annotationState === 'pending'
+      ? {
+          ...rest,
+          prerenderedHTML,
+          options: diffOptions,
+        }
+      : {
+          ...rest,
+          oldFile: resolvedOldFile,
+          newFile: resolvedNewFile,
+          options: diffOptions,
+        };
 
   const handleAccept = useCallback(() => {
     setAnnotationState('accepted');
@@ -448,27 +450,9 @@ export function AcceptRejectExample() {
         system tracks which changes have been accepted or rejected.
       </p>
       <FileDiff
-        oldFile={
-          annotationState === 'pending'
-            ? OLD_FILE_ACCEPT_REJECT
-            : annotationState === 'accepted'
-              ? NEW_FILE_ACCEPT_REJECT
-              : OLD_FILE_ACCEPT_REJECT
-        }
-        newFile={
-          annotationState === 'pending'
-            ? NEW_FILE_ACCEPT_REJECT
-            : annotationState === 'accepted'
-              ? NEW_FILE_ACCEPT_REJECT
-              : OLD_FILE_ACCEPT_REJECT
-        }
+        {...fileDiffProps}
         className="overflow-hidden rounded-lg border"
-        options={{
-          theme: 'pierre-dark',
-          diffStyle: 'unified',
-          collapseUnchanged: false,
-        }}
-        annotations={annotationState === 'pending' ? annotations : []}
+        annotations={activeAnnotations}
         renderAnnotation={() => {
           return (
             <div

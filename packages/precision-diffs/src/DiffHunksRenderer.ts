@@ -342,7 +342,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hunkIndex: 0,
         highlighter,
         state,
-        transformer: lineNumberTransformer,
+        transformers,
         isLastHunk: true,
         additionsAST,
         deletionsAST,

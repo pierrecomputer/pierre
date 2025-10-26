@@ -10,11 +10,11 @@ import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
 import { Hero } from './Hero';
+import { AcceptRejectExample, Annotations } from './diff-examples/Annotations/Annotations';
 import {
-  AcceptRejectExample,
-  Annotations,
-} from './diff-examples/Annotations/Annotations';
-import { ANNOTATION_EXAMPLE } from './diff-examples/Annotations/constants';
+  ACCEPT_REJECT_EXAMPLE,
+  ANNOTATION_EXAMPLE,
+} from './diff-examples/Annotations/constants';
 import { ArbitraryFiles } from './diff-examples/ArbitraryFiles/ArbitraryFiles';
 import { ARBITRARY_DIFF_EXAMPLE } from './diff-examples/ArbitraryFiles/constants';
 import { DiffStyles } from './diff-examples/DiffStyles/DiffStyles';
@@ -51,7 +51,7 @@ export default function Home() {
         {/* <PrebuiltReact /> */}
         <AnnotationsSection />
         <ArbitraryFilesSection />
-        <AcceptRejectExample />
+        <AcceptRejectSection />
       </section>
 
       {/* TODO: add this back once we add the migration APIs
@@ -134,6 +134,14 @@ async function ArbitraryFilesSection() {
   return (
     <ArbitraryFiles
       prerenderedDiff={await preloadFileDiff(ARBITRARY_DIFF_EXAMPLE)}
+    />
+  );
+}
+
+async function AcceptRejectSection() {
+  return (
+    <AcceptRejectExample
+      prerenderedDiff={await preloadFileDiff(ACCEPT_REJECT_EXAMPLE)}
     />
   );
 }

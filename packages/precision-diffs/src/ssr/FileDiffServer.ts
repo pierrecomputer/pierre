@@ -578,7 +578,6 @@ code {
 }
 
 [data-line-annotation] {
-  min-height: var(--pjs-annotation-min-height);
   background-color: var(--pjs-bg-context);
 }
 
