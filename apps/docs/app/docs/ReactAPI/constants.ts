@@ -96,7 +96,8 @@ export function SingleDiff() {
         diffStyle: 'split',
 
         // Unchanged context regions are collapsed by default, set this 
-        // to true to force them to always render
+        // to true to force them to always render.  This depends on using
+        // the oldFile/newFile API or FileDiffMetadata including newLines.
         expandUnchanged: false,
 
         // Line decorators to help highlight changes.

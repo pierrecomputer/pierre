@@ -73,6 +73,11 @@ const instance = new FileDiff<ThreadMetadata>({
   // in a unified (single column) view
   diffStyle: 'split',
 
+  // Unchanged context regions are collapsed by default, set this 
+  // to true to force them to always render.  This depends on using
+  // the oldFile/newFile API or FileDiffMetadata including newLines.
+  expandUnchanged: false,
+
   // Line decorators to help highlight changes.
   // 'bars' (default):
   // Shows some red-ish or green-ish (theme dependent) bars on the left
