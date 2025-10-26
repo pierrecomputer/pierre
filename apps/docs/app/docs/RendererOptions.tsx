@@ -80,14 +80,11 @@ export function RendererOptions() {
         </div>
 
         <div className="rounded-lg border p-4">
-          <h4 className="font-mono text-sm font-bold">collapseUnchanged</h4>
+          <h4 className="font-mono text-sm font-bold">expandUnchanged</h4>
           <p className="text-muted-foreground text-sm">
-            Type: <code>boolean</code> | Default: <code>true</code>
+            Type: <code>boolean</code> | Default: <code>false</code>
           </p>
-          <p>
-            Disable folding of unchanged hunks to render the full file
-            context.
-          </p>
+          <p>Force unchanged context regions to render expanded.</p>
         </div>
 
         <div className="rounded-lg border p-4">

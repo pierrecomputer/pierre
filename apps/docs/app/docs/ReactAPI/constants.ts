@@ -95,9 +95,9 @@ export function SingleDiff() {
         // side or in a unified (single column) view
         diffStyle: 'split',
 
-        // Collapse unchanged sections into expandable hunks. Set to false to
-        // always show full context.
-        collapseUnchanged: true,
+        // Unchanged context regions are collapsed by default, set this 
+        // to true to force them to always render
+        expandUnchanged: false,
 
         // Line decorators to help highlight changes.
         // 'bars' (default):

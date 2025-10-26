@@ -1,7 +1,4 @@
-import type {
-  DiffLineAnnotation,
-  FileContents,
-} from '@pierre/precision-diffs';
+import type { DiffLineAnnotation, FileContents } from '@pierre/precision-diffs';
 import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export interface AnnotationMetadata {
@@ -114,7 +111,7 @@ export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<AcceptRejectMetadata>
     options: {
       theme: 'pierre-dark',
       diffStyle: 'unified',
-      collapseUnchanged: false,
+      expandUnchanged: true,
     },
     annotations: ACCEPT_REJECT_ANNOTATIONS,
   };

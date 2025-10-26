@@ -416,7 +416,7 @@ export function AcceptRejectExample({
     ACCEPT_REJECT_EXAMPLE.options ?? {
       theme: 'pierre-dark',
       diffStyle: 'unified',
-      collapseUnchanged: false,
+      expandUnchanged: true,
     };
 
   const fileDiffProps =

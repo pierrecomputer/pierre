@@ -136,15 +136,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.expandedHunks.add(index);
   }
 
-  private shouldCollapseUnchanged() {
-    return this.getOptionsWithDefaults().collapseUnchanged;
-  }
-
   private isHunkExpanded(index: number) {
-    if (!this.shouldCollapseUnchanged()) {
-      return true;
-    }
-    return this.expandedHunks.has(index);
+    return (
+      this.getOptionsWithDefaults().expandUnchanged ||
+      this.expandedHunks.has(index)
+    );
   }
 
   private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
@@ -183,7 +179,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const {
       diffStyle = 'split',
       diffIndicators = 'bars',
-      collapseUnchanged = true,
+      expandUnchanged = false,
       disableBackground = false,
       disableLineNumbers = false,
       hunkSeparators = 'line-info',
@@ -199,7 +195,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return {
         diffIndicators,
         diffStyle,
-        collapseUnchanged,
+        expandUnchanged,
         disableBackground,
         disableLineNumbers,
         hunkSeparators,
@@ -214,7 +210,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return {
       diffIndicators,
       diffStyle,
-      collapseUnchanged,
+      expandUnchanged,
       disableBackground,
       disableLineNumbers,
       hunkSeparators,
@@ -288,6 +284,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themeType,
       disableBackground,
       diffIndicators,
+      expandUnchanged,
     } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
@@ -321,7 +318,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     if (
-      !this.shouldCollapseUnchanged() &&
+      expandUnchanged &&
       fileDiff.hunks.length === 0 &&
       this.diff?.newLines != null &&
       this.diff.newLines.length > 0
@@ -584,9 +581,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     prevHunk: Hunk | undefined,
     isLastHunk: boolean
   ): ProcessLinesReturn {
-    const { maxLineLengthForHighlighting, diffStyle } =
+    const { maxLineLengthForHighlighting, diffStyle, expandUnchanged } =
       this.getOptionsWithDefaults();
-    const useExpandedContextStyling = this.shouldCollapseUnchanged();
     const { deletionAnnotations, additionAnnotations } = this;
     // NOTE(amadeus): We will probably need to rectify this
     // for full additions/deletions
@@ -907,7 +903,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           const line = this.diff.newLines[i];
           hasLongLines =
             hasLongLines || line.length > maxLineLengthForHighlighting;
-          processRawLine(line, 'context', useExpandedContextStyling);
+          processRawLine(line, 'context', expandUnchanged ? false : true);
         }
       }
     }
@@ -933,7 +929,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const line = this.diff.newLines[i];
         hasLongLines =
           hasLongLines || line.length > maxLineLengthForHighlighting;
-        processRawLine(line, 'context', useExpandedContextStyling);
+        processRawLine(line, 'context', expandUnchanged ? false : true);
       }
     }
     resolveUnresolvedSpans();
