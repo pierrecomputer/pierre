@@ -68,7 +68,7 @@ export interface Hunk {
   deletedStart: number;
   hunkContent: string[] | undefined;
   hunkContext: string | undefined;
-  hunkSpecs: string;
+  hunkSpecs: string | undefined;
 }
 
 export interface FileDiffMetadata {

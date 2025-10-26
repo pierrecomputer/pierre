@@ -308,16 +308,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.diff?.newLines != null &&
         this.diff.newLines.length > 0
       ) {
-        const lineCount = this.diff.newLines.length;
+        const lineCount = this.diff.newLines.length + 1;
         return [
           {
-            additionCount: lineCount,
-            additionStart: 1,
-            deletedCount: lineCount,
-            deletedStart: 1,
-            hunkContent: this.diff.newLines.map((line) => ` ${line}`),
+            additionCount: 0,
+            additionStart: lineCount,
+            deletedCount: 0,
+            deletedStart: lineCount,
+            hunkContent: [],
             hunkContext: undefined,
-            hunkSpecs: `@@ -1,${lineCount} +1,${lineCount} @@`,
+            hunkSpecs: undefined,
           },
         ];
       }
@@ -521,7 +521,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
             hunkData.push({ slotName, lines, type, expandable });
           }
-        } else if (hunkSeparators === 'metadata') {
+        } else if (hunkSeparators === 'metadata' && hunk.hunkSpecs != null) {
           linesAST.push(
             createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
           );
