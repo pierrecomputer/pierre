@@ -299,7 +299,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const hunkData: HunkData[] = [];
 
     let prevHunk: Hunk | undefined;
-    for (const hunk of fileDiff.hunks) {
+    const hunks = (() => {
+      if (fileDiff.hunks.length > 0) {
+        return fileDiff.hunks;
+      }
+      if (
+        expandUnchanged &&
+        this.diff?.newLines != null &&
+        this.diff.newLines.length > 0
+      ) {
+        const lineCount = this.diff.newLines.length;
+        return [
+          {
+            additionCount: lineCount,
+            additionStart: 1,
+            deletedCount: lineCount,
+            deletedStart: 1,
+            hunkContent: this.diff.newLines.map((line) => ` ${line}`),
+            hunkContext: undefined,
+            hunkSpecs: `@@ -1,${lineCount} +1,${lineCount} @@`,
+          },
+        ];
+      }
+      return [];
+    })();
+    for (const hunk of hunks) {
       this.renderHunks({
         hunk,
         prevHunk,
@@ -315,37 +339,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       });
       hunkIndex++;
       prevHunk = hunk;
-    }
-
-    if (
-      expandUnchanged &&
-      fileDiff.hunks.length === 0 &&
-      this.diff?.newLines != null &&
-      this.diff.newLines.length > 0
-    ) {
-      const lineCount = this.diff.newLines.length;
-      const syntheticHunk: Hunk = {
-        additionCount: lineCount,
-        additionStart: 1,
-        deletedCount: lineCount,
-        deletedStart: 1,
-        hunkContent: this.diff.newLines.map((line) => ` ${line}`),
-        hunkContext: undefined,
-        hunkSpecs: `@@ -1,${lineCount} +1,${lineCount} @@`,
-      };
-      this.renderHunks({
-        hunk: syntheticHunk,
-        prevHunk: undefined,
-        hunkIndex: 0,
-        highlighter,
-        state,
-        transformers,
-        isLastHunk: true,
-        additionsAST,
-        deletionsAST,
-        unifiedAST,
-        hunkData,
-      });
     }
 
     return {
