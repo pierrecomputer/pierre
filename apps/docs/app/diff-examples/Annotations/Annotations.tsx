@@ -441,8 +441,6 @@ export function AcceptRejectExample({
     setAnnotationState('rejected');
   }, []);
 
-  console.log(annotationState);
-
   return (
     <div className="space-y-5">
       <FeatureHeader
