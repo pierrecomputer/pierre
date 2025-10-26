@@ -10,7 +10,10 @@ import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
 import { Hero } from './Hero';
-import { AcceptRejectExample, Annotations } from './diff-examples/Annotations/Annotations';
+import {
+  AcceptRejectExample,
+  Annotations,
+} from './diff-examples/Annotations/Annotations';
 import {
   ACCEPT_REJECT_EXAMPLE,
   ANNOTATION_EXAMPLE,
@@ -50,8 +53,8 @@ export default function Home() {
         <FontStylesSection />
         {/* <PrebuiltReact /> */}
         <AnnotationsSection />
-        <ArbitraryFilesSection />
         <AcceptRejectSection />
+        <ArbitraryFilesSection />
       </section>
 
       {/* TODO: add this back once we add the migration APIs
