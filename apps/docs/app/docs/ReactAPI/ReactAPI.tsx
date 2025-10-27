@@ -6,18 +6,22 @@ import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 
+type ExampleTypes = 'multi-file-diff' | 'patch-diff' | 'file-diff' | 'file';
+
 interface ReactAPIProps {
-  reactAPIDiff: PreloadedFileResult<undefined>;
+  reactAPIMultiFileDiff: PreloadedFileResult<undefined>;
+  reactAPIFileDiff: PreloadedFileResult<undefined>;
+  reactAPIPatch: PreloadedFileResult<undefined>;
   reactAPIFile: PreloadedFileResult<undefined>;
-  reactAPIFilePatch: PreloadedFileResult<undefined>;
 }
 
 export function ReactAPI({
-  reactAPIDiff,
+  reactAPIMultiFileDiff,
+  reactAPIFileDiff,
   reactAPIFile,
-  reactAPIFilePatch,
+  reactAPIPatch,
 }: ReactAPIProps) {
-  const [example, setExample] = useState<'file-diff' | 'file'>('file-diff');
+  const [example, setExample] = useState<ExampleTypes>('multi-file-diff');
   return (
     <section className="space-y-4">
       <h2>React API</h2>
@@ -34,24 +38,25 @@ export function ReactAPI({
       </p>
       <ButtonGroup
         value={example}
-        onValueChange={(value) => setExample(value as 'file-diff' | 'file')}
+        onValueChange={(value) => setExample(value as ExampleTypes)}
       >
+        <ButtonGroupItem value="multi-file-diff">MultiFileDiff</ButtonGroupItem>
+        <ButtonGroupItem value="patch-diff">PatchDiff</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
         <ButtonGroupItem value="file">File</ButtonGroupItem>
       </ButtonGroup>
-      {example === 'file-diff' ? (
-        <>
-          <DocsCodeExample {...reactAPIDiff} />
-          <p>
-            Alternatively, if you already have a unified diff for a single file,
-            pass it via the <code>patch</code> prop instead of{' '}
-            <code>oldFile</code> and <code>newFile</code>.
-          </p>
-          <DocsCodeExample {...reactAPIFilePatch} />
-        </>
-      ) : (
-        <DocsCodeExample {...reactAPIFile} />
-      )}
+      {(() => {
+        switch (example) {
+          case 'multi-file-diff':
+            return <DocsCodeExample {...reactAPIMultiFileDiff} />;
+          case 'file-diff':
+            return <DocsCodeExample {...reactAPIFileDiff} />;
+          case 'patch-diff':
+            return <DocsCodeExample {...reactAPIPatch} />;
+          case 'file':
+            return <DocsCodeExample {...reactAPIFile} />;
+        }
+      })()}
     </section>
   );
 }

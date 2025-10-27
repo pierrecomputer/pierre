@@ -14,9 +14,10 @@ import {
 } from './Overview/constants';
 import { ReactAPI } from './ReactAPI/ReactAPI';
 import {
-  REACT_API_DIFF_FILE,
-  REACT_API_FILE_FILE,
-  REACT_API_FILE_PATCH,
+  REACT_API_FILE,
+  REACT_API_FILE_DIFF,
+  REACT_API_MULTI_FILE_DIFF,
+  REACT_API_PATCH_DIFF,
 } from './ReactAPI/constants';
 import { SidebarWrapper } from './SidebarWrapper';
 import { Styling } from './Styling/Styling';
@@ -86,16 +87,19 @@ async function OverviewSection() {
 }
 
 async function ReactAPISection() {
-  const [reactAPIDiff, reactAPIFile, reactAPIFilePatch] = await Promise.all([
-    preloadFile(REACT_API_DIFF_FILE),
-    preloadFile(REACT_API_FILE_FILE),
-    preloadFile(REACT_API_FILE_PATCH),
-  ]);
+  const [reactAPIDiff, reactAPIFile, reactAPIFilePatch, reactAPIFileDiff] =
+    await Promise.all([
+      preloadFile(REACT_API_MULTI_FILE_DIFF),
+      preloadFile(REACT_API_FILE),
+      preloadFile(REACT_API_PATCH_DIFF),
+      preloadFile(REACT_API_FILE_DIFF),
+    ]);
   return (
     <ReactAPI
-      reactAPIDiff={reactAPIDiff}
+      reactAPIMultiFileDiff={reactAPIDiff}
+      reactAPIPatch={reactAPIFilePatch}
+      reactAPIFileDiff={reactAPIFileDiff}
       reactAPIFile={reactAPIFile}
-      reactAPIFilePatch={reactAPIFilePatch}
     />
   );
 }
