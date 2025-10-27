@@ -535,7 +535,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (
         isLastHunk &&
         !this.isHunkExpanded(hunkIndex + 1) &&
-        this.diff?.newLines != null
+        this.diff?.newLines != null &&
+        (hunkSeparators === 'line-info' || hunkSeparators === 'custom')
       ) {
         const lines =
           this.diff.newLines.length -
@@ -544,7 +545,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           const slotName = getHunkSeparatorSlotName(type, hunkIndex + 1);
           linesAST.push(
             createSeparator({
-              type: 'line-info',
+              type: hunkSeparators,
               content: getModifiedLinesString(lines),
               expandIndex: expandable ? hunkIndex + 1 : undefined,
               slotName,
