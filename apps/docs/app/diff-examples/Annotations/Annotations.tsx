@@ -6,7 +6,7 @@ import type {
   AnnotationSide,
   DiffLineAnnotation,
 } from '@pierre/precision-diffs';
-import { FileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -149,7 +149,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
             <Plus className="h-4 w-4" />
           </Button>
         )}
-        <FileDiff
+        <MultiFileDiff
           {...prerenderedDiff}
           className="overflow-hidden rounded-lg border"
           // @ts-expect-error lol
@@ -157,7 +157,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
           }}
-          annotations={annotations}
+          lineAnnotations={annotations}
           renderAnnotation={(annotation) =>
             annotation.metadata.isThread ? (
               <Thread />
@@ -448,10 +448,10 @@ export function AcceptRejectExample({
         description="Annotations can also be used to build interactive code review interfaces. This example demonstrates accept/reject style buttons attached to each change, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
       />
       {/*  @ts-expect-error lol */}
-      <FileDiff
+      <MultiFileDiff
         {...fileDiffProps}
         className="overflow-hidden rounded-lg border"
-        annotations={activeAnnotations}
+        lineAnnotations={activeAnnotations}
         renderAnnotation={() => {
           return (
             <div

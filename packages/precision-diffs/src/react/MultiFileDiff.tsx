@@ -1,20 +1,22 @@
 'use client';
 
-import type { FileDiffMetadata } from '../types';
+import type { FileContents } from '../types';
 import type { DiffBaseReactProps } from './types';
 import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
-export type { FileDiffMetadata };
+export type { FileContents };
 
-export interface FileDiffProps<LAnnotation>
+export interface MultiFileDiffProps<LAnnotation>
   extends DiffBaseReactProps<LAnnotation> {
-  fileDiff: FileDiffMetadata;
+  oldFile: FileContents;
+  newFile: FileContents;
 }
 
-export function FileDiff<LAnnotation = undefined>({
-  fileDiff,
+export function MultiFileDiff<LAnnotation = undefined>({
+  oldFile,
+  newFile,
   options,
   lineAnnotations,
   className,
@@ -22,10 +24,16 @@ export function FileDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
-}: FileDiffProps<LAnnotation>) {
-  const ref = useFileDiffInstance({ fileDiff, options, lineAnnotations });
+}: MultiFileDiffProps<LAnnotation>) {
+  const ref = useFileDiffInstance({
+    oldFile,
+    newFile,
+    options,
+    lineAnnotations,
+  });
   const children = renderAnnotationChildren({
-    fileDiff,
+    oldFile,
+    newFile,
     renderHeaderMetadata,
     renderAnnotation,
     lineAnnotations,

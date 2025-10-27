@@ -1,23 +1,13 @@
 'use client';
 
-import deepEqual from 'fast-deep-equal';
-import {
-  type CSSProperties,
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 
-import { type FileOptions, File as FileUI } from '../File';
+import { type FileOptions } from '../File';
 import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type { FileContents, LineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { templateRender } from './utils/templateRender';
-import { useStableCallback } from './utils/useStableCallback';
-
-const useIsometricEffect =
-  typeof window === 'undefined' ? useEffect : useLayoutEffect;
+import { useFileInstance } from './utils/useFileInstance';
 
 export type { FileOptions };
 
@@ -42,41 +32,7 @@ export function File<LAnnotation = undefined>({
   renderHeaderMetadata,
   prerenderedHTML,
 }: FileProps<LAnnotation>) {
-  const instanceRef = useRef<FileUI<LAnnotation> | null>(null);
-  const ref = useStableCallback((node: HTMLElement | null) => {
-    if (node != null) {
-      if (instanceRef.current != null) {
-        throw new Error(
-          'File: An instance should not already exist when a node is created'
-        );
-      }
-      // FIXME: Ideally we don't use FileUI here, and instead amalgamate
-      // the renderers manually
-      instanceRef.current = new FileUI(options, true);
-      instanceRef.current.hydrate({
-        file,
-        fileContainer: node,
-        lineAnnotations,
-      });
-    } else {
-      if (instanceRef.current == null) {
-        throw new Error('File: A File instance should exist when unmounting');
-      }
-      instanceRef.current.cleanUp();
-      instanceRef.current = null;
-    }
-  });
-
-  useIsometricEffect(() => {
-    if (instanceRef.current == null) return;
-    const forceRender = !deepEqual(instanceRef.current.options, options);
-    instanceRef.current.setOptions(options);
-    void instanceRef.current.render({
-      file,
-      lineAnnotations,
-      forceRender,
-    });
-  });
+  const ref = useFileInstance({ file, options, lineAnnotations });
   const metadata = renderHeaderMetadata?.(file);
   const children = (
     <>

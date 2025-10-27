@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InputWithIcon } from '@/components/ui/input-group';
-import { FileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
@@ -137,7 +137,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
           </div>
         </div>
       </div>
-      <FileDiff
+      <MultiFileDiff
         {...prerenderedDiff}
         // @ts-expect-error lol
         options={{ ...prerenderedDiff.options, hunkSeparators: 'line-info' }}

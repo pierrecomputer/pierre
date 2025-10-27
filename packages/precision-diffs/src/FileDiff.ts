@@ -40,30 +40,15 @@ interface ScrollSyncState {
   codeAdditions: HTMLElement | undefined;
 }
 
-interface FileDiffRenderBaseProps<LAnnotation> {
+interface FileDiffRenderProps<LAnnotation> {
+  fileDiff?: FileDiffMetadata;
+  oldFile?: FileContents;
+  newFile?: FileContents;
   forceRender?: boolean;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
 }
-
-interface FileDiffRenderDiffProps<LAnnotation>
-  extends FileDiffRenderBaseProps<LAnnotation> {
-  fileDiff: FileDiffMetadata;
-  oldFile?: undefined;
-  newFile?: undefined;
-}
-
-interface FileDiffRenderFilesProps<LAnnotation>
-  extends FileDiffRenderBaseProps<LAnnotation> {
-  oldFile: FileContents;
-  newFile: FileContents;
-  fileDiff?: undefined;
-}
-
-type FileDiffRenderProps<LAnnotation> =
-  | FileDiffRenderFilesProps<LAnnotation>
-  | FileDiffRenderDiffProps<LAnnotation>;
 
 interface ExpandoEventProps {
   type: 'line-info';
@@ -324,23 +309,41 @@ export class FileDiff<LAnnotation = undefined> {
     const { forceRender = false, lineAnnotations, containerWrapper } = props;
     const annotationsChanged =
       lineAnnotations != null &&
+      // Ideally this would just a quick === check because lineAnnotations is
+      // unbounded
       !deepEquals(lineAnnotations, this.lineAnnotations);
     if (
-      props.fileDiff == null &&
       !forceRender &&
+      props.oldFile != null &&
+      props.newFile != null &&
       !annotationsChanged &&
       deepEquals(props.oldFile, this.oldFile) &&
       deepEquals(props.newFile, this.newFile)
     ) {
       return;
     }
+    if (
+      !forceRender &&
+      props.fileDiff != null &&
+      props.fileDiff === this.fileDiff &&
+      !annotationsChanged
+    ) {
+      return;
+    }
 
     if (props.fileDiff != null) {
       this.fileDiff = props.fileDiff;
+      this.oldFile = props.oldFile;
+      this.newFile = props.newFile;
     } else {
       this.oldFile = props.oldFile;
       this.newFile = props.newFile;
-      this.fileDiff = parseDiffFromFile(props.oldFile, props.newFile);
+      if (props.oldFile != null && props.newFile != null) {
+        this.fileDiff = parseDiffFromFile(props.oldFile, props.newFile);
+      }
+    }
+    if (this.fileDiff == null) {
+      return;
     }
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);

@@ -2,7 +2,7 @@
 
 import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import { FileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
@@ -36,7 +36,7 @@ export function SplitUnified({
         </ButtonGroupItem>
       </ButtonGroup>
 
-      <FileDiff
+      <MultiFileDiff
         {...props}
         className="overflow-hidden rounded-lg border"
         options={{

@@ -42,7 +42,7 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
   const [diffStyle, setDiffStyle] = useState(
     preloadedFileDiff.options?.diffStyle ?? 'split'
   );
-  const [annotations, setAnnotations] = useState<
+  const [lineAnnotations, setLineAnnotations] = useState<
     DiffLineAnnotation<AnnotationMetadata>[]
   >(preloadedFileDiff.annotations ?? []);
   return (
@@ -128,13 +128,13 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
                     message: 'LFGGGG',
                   },
                 };
-                setAnnotations((annotations) => {
+                setLineAnnotations((annotations) => {
                   return [...annotations, annotation];
                 });
               },
             }}
             className="overflow-hidden rounded-lg border"
-            annotations={annotations}
+            lineAnnotations={lineAnnotations}
             renderAnnotation={renderAnnotation}
           />
         </div>

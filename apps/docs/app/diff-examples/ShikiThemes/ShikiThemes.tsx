@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { preloadHighlighter } from '@pierre/precision-diffs';
-import { FileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
@@ -216,7 +216,7 @@ export function ShikiThemes({
           </ButtonGroupItem>
         </ButtonGroup>
       </div>
-      <FileDiff
+      <MultiFileDiff
         {...props}
         className="overflow-hidden rounded-lg border"
         options={{

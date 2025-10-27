@@ -1,6 +1,6 @@
 'use client';
 
-import { FileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
@@ -42,7 +42,7 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
         </div>
       </div>
       {/* @ts-expect-error lol */}
-      <FileDiff
+      <MultiFileDiff
         {...prerenderedDiff}
         oldFile={oldFile}
         newFile={newFile}
