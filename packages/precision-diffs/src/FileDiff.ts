@@ -462,7 +462,11 @@ export class FileDiff<LAnnotation = undefined> {
       hunkSeparators = 'line-info',
     } = this.options;
 
-    if (onLineClick != null || hunkSeparators === 'line-info') {
+    if (
+      onLineClick != null ||
+      hunkSeparators === 'line-info' ||
+      typeof hunkSeparators === 'function'
+    ) {
       pre.addEventListener('click', this.handleMouseClick);
     }
     if (onLineEnter != null || onLineLeave != null) {
