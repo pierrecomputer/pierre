@@ -15,7 +15,7 @@
     "docs:prod": "(cd apps/docs && bun run prod)",
     "docs:start": "(cd apps/docs && bun run start)",
     "docs:tsc": "(cd apps/docs && bun run tsc)",
-    "clean": "rm -rf {packages,apps}/*/dist && rm -rf {packages,apps}/*/tsconfig.tsbuildinfo && rm -rf {packages,apps}/demo/node_modules/.vite && rm -rf {packages,apps}/demo/node_modules/.vite-temp",
+    "clean": "rm -rf {packages,apps}/*/dist && rm -rf {packages,apps}/*/tsconfig.tsbuildinfo && rm -rf {packages,apps}/demo/node_modules/.vite && rm -rf {packages,apps}/demo/node_modules/.vite-temp && rm -rf apps/docs/.next",
     "update-themes": "node update-themes.js",
     "icons:build": "node scripts/build-icons.js && bun run format",
     "icons:sprite": "node scripts/build-sprite.js && bun run format",
