@@ -8,11 +8,11 @@ if (
 ) {
   let sheet: CSSStyleSheet | undefined;
 
-  class PJSContainer extends HTMLElement {
+  class FileDiffContainer extends HTMLElement {
     constructor() {
       super();
-      // If shadow root is already open, we can sorta assume the CSS is already
-      // in place
+      // If shadow root is already open, we can sorta assume the
+      // CSS is already in place
       if (this.shadowRoot != null) {
         return;
       }
@@ -30,7 +30,7 @@ if (
     // }
   }
 
-  customElements.define('file-diff', PJSContainer);
+  customElements.define('file-diff', FileDiffContainer);
 }
 
 export const PJSContainerLoaded = true;
