@@ -1,9 +1,6 @@
 :host {
   --pjs-bg: #fff;
   --pjs-fg: #000;
-  --pjs-gap: 8px;
-  --pjs-gap-inline: 12px;
-  --pjs-tab-size: 2;
   --pjs-font-fallback:
     'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
     'Courier New', monospace;
@@ -13,9 +10,8 @@
 
   --pjs-mixer: light-dark(black, white);
 
-  --pjs-annotation-min-height: 0;
   /*
-    // Available CSS Variable Overrides
+    // Available CSS Color Overrides
     --pjs-bg-buffer-override
     --pjs-bg-hover-override
     --pjs-bg-context-override
@@ -36,6 +32,11 @@
     --pjs-bg-addition-number-override
     --pjs-bg-addition-hover-override
     --pjs-bg-addition-emphasis-override
+
+    // Available CSS Layout Overrides
+    --pjs-gap-inline
+    --pjs-gap-block
+    --pjs-tab-size
   */
 
   color-scheme: light dark;
@@ -278,13 +279,13 @@ code {
   overflow-x: auto;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
-  tab-size: var(--pjs-tab-size);
+  tab-size: var(--pjs-tab-size, 2);
   align-self: flex-start;
-  padding-block: var(--pjs-gap);
+  padding-block: var(--pjs-gap-block, 8px);
 }
 
 [data-pjs][data-overflow='wrap'] {
-  padding-block: var(--pjs-gap);
+  padding-block: var(--pjs-gap-block, 8px);
 }
 
 [data-pjs-header] ~ [data-pjs] [data-code],
@@ -355,11 +356,11 @@ code {
 }
 
 [data-separator='line-info']:not(:first-child) {
-  margin-top: var(--pjs-gap);
+  margin-top: var(--pjs-gap-block, 8px);
 }
 
 [data-separator='line-info']:not(:last-child) {
-  margin-bottom: var(--pjs-gap);
+  margin-bottom: var(--pjs-gap-block, 8px);
 }
 
 [data-separator='line-info'] [data-separator-content] {
@@ -430,7 +431,7 @@ code {
 }
 
 [data-line-annotation] {
-  min-height: var(--pjs-annotation-min-height);
+  min-height: var(--pjs-annotation-min-height, 0);
   background-color: var(--pjs-bg-context);
 }
 
@@ -617,8 +618,8 @@ code {
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  gap: var(--pjs-gap);
-  min-height: calc(1lh + (var(--pjs-gap) * 3));
+  gap: var(--pjs-gap-inline, 8px);
+  min-height: calc(1lh + (var(--pjs-gap, 8px) * 3));
   padding-inline: 16px;
 }
 
@@ -626,7 +627,7 @@ code {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: var(--pjs-gap);
+  gap: var(--pjs-gap-inline, 8px);
   min-width: 0;
   white-space: nowrap;
 }
@@ -653,7 +654,7 @@ code {
 [data-pjs-header] [data-metadata] {
   display: flex;
   align-items: center;
-  gap: calc(var(--pjs-gap) / 2);
+  gap: 1ch;
   white-space: nowrap;
 }
 
