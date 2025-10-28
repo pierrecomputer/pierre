@@ -28,6 +28,15 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
   --pjs-deletion-color-override: orange;
   --pjs-addition-color-override: yellow;
   --pjs-modified-color-override: purple;
+
+  /* Some basic variables for tweaking the layouts of some of the built in
+   * components */
+  --pjs-gap-inline: 8px;
+  --pjs-gap-block: 8px;
+
+  /* If you'd like to adjust the size of tab characters,
+   * you can do that here */
+  --pjs-tab-size: 2;
 }`,
   },
   options,
