@@ -33,12 +33,12 @@ export function VanillaAPI({
     <section className="space-y-4">
       <h2>Vanilla JS API</h2>
       <p>
-        The vanilla JS api for Precision Diffs exposes a mix of components and
-        raw classes. The components and the React API are built on many of these
-        foundation classes. The goal has been to abstract away a lot of the
-        heavy lifting when working with Shiki directly and provide a set of
-        standardized APIs that can be used with any framework and even server
-        rendered if necessary.
+        The vanilla JavaScript API for Precision Diffs exposes a mix of
+        components and raw classes. The components and the React API are built
+        on many of these foundation classes. The goal has been to abstract away
+        a lot of the heavy lifting when working with Shiki directly and provide
+        a set of standardized APIs that can be used with any framework and even
+        server rendered if necessary.
       </p>
       <p>
         You can import all of this via the core package{' '}
@@ -46,7 +46,7 @@ export function VanillaAPI({
       </p>
       <h3>Components</h3>
       <p>
-        There are two core components in the vanilla js API,{' '}
+        There are two core components in the vanilla JavaScript API,{' '}
         <code>FileDiff</code> and <code>File</code>
       </p>
       <ButtonGroup
@@ -65,8 +65,8 @@ export function VanillaAPI({
       )}
       <h4>Hunk Separators</h4>
       <p>
-        If you would like to render custom hunk separators that won't scroll
-        with the content, there's a few tricks you will need to employ. See the
+        If you want to render custom hunk separators that won‘t scroll with the
+        content, there are a few tricks you will need to employ. See the
         following code snippet:
       </p>
       <DocsCodeExample {...vanillaAPICustomHunk} />
@@ -83,7 +83,7 @@ export function VanillaAPI({
         <a href="https://github.com/syntax-tree/hast" target="_blank">
           hast
         </a>{' '}
-        elements of the code which can be subsequently rendered as html strings
+        elements of the code which can be subsequently rendered as HTML strings
         or transformed further. You can generate <code>FileDiffMetadata</code>{' '}
         via <code>parseDiffFromFile</code> or <code>parsePatchFiles</code>{' '}
         utility functions.
@@ -108,25 +108,24 @@ export function VanillaAPI({
       )}
       <h3>Shared Highlighter Utilities</h3>
       <p>
-        Because it&lsquo;s important to re-use your highlighter instance when
-        using Shiki, we&lsquo;ve ensured that all the classes and components you
-        use with Precision Diffs will automatically use a shared highlighter
-        instance and also automatically load languages and themes on demand as
-        necessary.
+        Because it‘s important to re-use your highlighter instance when using
+        Shiki, we‘ve ensured that all the classes and components you use with
+        Precision Diffs will automatically use a shared highlighter instance and
+        also automatically load languages and themes on demand as necessary.
       </p>
       <p>
         We provide APIs to preload the highlighter, themes, and languages if you
         want to have that ready before rendering. Also there are some cleanup
-        utilities if you want to be memory concious.
+        utilities if you want to be memory conscious.
       </p>
       <p>
-        Shiki comes with a lot of built in{' '}
+        Shiki comes with a lot of built-in{' '}
         <a href="https://shiki.style/themes" target="_blank">
           themes
         </a>
-        , however if you would like to use your own custom or modified theme,
-        you simply have to register it and then it&lsquo;ll just work as any
-        other built in theme.
+        , but if you would like to use your own custom or modified theme, you
+        simply have to register it and then it‘ll just work as any other
+        built-in theme.
       </p>
       <DocsCodeExample {...vanillaAPICodeUtilities} />
     </section>
