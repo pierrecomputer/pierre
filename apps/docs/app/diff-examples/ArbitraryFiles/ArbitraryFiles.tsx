@@ -41,7 +41,6 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
           />
         </div>
       </div>
-      {/* @ts-expect-error lol */}
       <MultiFileDiff
         {...prerenderedDiff}
         oldFile={oldFile}

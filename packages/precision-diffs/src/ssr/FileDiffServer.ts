@@ -1,11 +1,10 @@
 import { toHtml } from 'hast-util-to-html';
+import type { FileOptions } from 'src/File';
+import type { DiffFileRendererOptions } from 'src/FileDiff';
 
-import {
-  DiffHunksRenderer,
-  type DiffHunksRendererOptions,
-} from '../DiffHunksRenderer';
+import { DiffHunksRenderer } from '../DiffHunksRenderer';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
-import { FileRenderer, type FileRendererOptions } from '../FileRenderer';
+import { FileRenderer } from '../FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
   DiffLineAnnotation,
@@ -17,13 +16,13 @@ import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 
 export type PreloadFileOptions<LAnnotation> = {
   file: FileContents;
-  options?: FileRendererOptions;
+  options?: FileOptions<LAnnotation>;
   annotations?: LineAnnotation<LAnnotation>[];
 };
 
 export interface PreloadedFileResult<LAnnotation> {
   file: FileContents;
-  options?: DiffHunksRendererOptions;
+  options?: FileOptions<LAnnotation>;
   annotations?: LineAnnotation<LAnnotation>[];
   prerenderedHTML: string;
 }
@@ -31,14 +30,14 @@ export interface PreloadedFileResult<LAnnotation> {
 export type PreloadFileDiffOptions<LAnnotation> = {
   oldFile: FileContents;
   newFile: FileContents;
-  options?: DiffHunksRendererOptions;
+  options?: DiffFileRendererOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 };
 
 export interface PreloadedFileDiffResult<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
-  options?: DiffHunksRendererOptions;
+  options?: DiffFileRendererOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
   prerenderedHTML: string;
 }
@@ -101,7 +100,14 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   PreloadedFileDiffResult<LAnnotation>
 > {
   const fileDiff = parseDiffFromFile(oldFile, newFile);
-  const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>(options);
+  const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>({
+    ...options,
+    hunkSeparators:
+      typeof options?.hunkSeparators === 'function'
+        ? 'custom'
+        : options?.hunkSeparators,
+    useCSSClasses: true,
+  });
   const fileHeader = new FileHeaderRenderer(options);
 
   // Set line annotations if provided
@@ -110,7 +116,7 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   }
 
   const [hunkResult, headerResult] = await Promise.all([
-    diffHunksRenderer.render(fileDiff, true),
+    diffHunksRenderer.render(fileDiff),
     fileHeader.render(fileDiff),
   ]);
   if (hunkResult == null) {

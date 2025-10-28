@@ -66,8 +66,6 @@ export function Overview({
       </p>
       <MultiFileDiff
         {...initialDiffProps}
-        // @ts-expect-error lol
-        options={{ ...initialDiffProps.options, hunkSeparators: 'line-info' }}
         className="overflow-hidden rounded-lg border"
       />
       <p>

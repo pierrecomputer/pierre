@@ -7,6 +7,7 @@ import {
   hasLoadedLanguage,
   hasLoadedThemes,
 } from './SharedHighlighter';
+import { DEFAULT_THEMES } from './constants';
 import type {
   AnnotationSpan,
   BaseDiffProps,
@@ -88,11 +89,15 @@ interface ProcessLinesReturn {
 
 interface DiffHunkRendererThemeOptions
   extends BaseDiffProps,
-    ThemeRendererOptions {}
+    ThemeRendererOptions {
+  useCSSClasses?: boolean;
+}
 
 interface DiffHunkRendererThemesOptions
   extends BaseDiffProps,
-    ThemesRendererOptions {}
+    ThemesRendererOptions {
+  useCSSClasses?: boolean;
+}
 
 export type DiffHunksRendererOptions =
   | DiffHunkRendererThemeOptions
@@ -112,10 +117,18 @@ export interface HunksRenderResult {
 }
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
-  highlighter: PJSHighlighter | undefined;
-  options: DiffHunksRendererOptions;
-  diff: FileDiffMetadata | undefined;
-  expandedHunks: Set<number> = new Set();
+  private highlighter: PJSHighlighter | undefined;
+  private options: DiffHunksRendererOptions;
+  private diff: FileDiffMetadata | undefined;
+
+  private expandedHunks = new Set<number>();
+
+  private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
+
+  private queuedDiff: FileDiffMetadata | undefined;
+  private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
+  private computedLang: SupportedLanguages = 'text';
 
   constructor(
     options: DiffHunksRendererOptions = {
@@ -159,8 +172,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.mergeOptions({ themeType });
   }
 
-  private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
-  private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
   setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
@@ -181,11 +192,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   getOptionsWithDefaults(): OptionsWithDefaults {
     const {
-      diffStyle = 'split',
       diffIndicators = 'bars',
-      expandUnchanged = false,
+      diffStyle = 'split',
       disableBackground = false,
       disableLineNumbers = false,
+      expandUnchanged = false,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
@@ -193,38 +204,41 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       overflow = 'scroll',
       theme,
       themeType = 'system',
-      themes,
+      themes = DEFAULT_THEMES,
+      useCSSClasses = false,
     } = this.options;
-    if (themes != null) {
+    if (theme != null) {
       return {
         diffIndicators,
         diffStyle,
-        expandUnchanged,
         disableBackground,
         disableLineNumbers,
+        expandUnchanged,
         hunkSeparators,
         lineDiffType,
         maxLineDiffLength,
         maxLineLengthForHighlighting,
         overflow,
+        theme,
         themeType,
-        themes,
-      } as Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>;
+        useCSSClasses,
+      } as Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
     }
     return {
       diffIndicators,
       diffStyle,
-      expandUnchanged,
       disableBackground,
       disableLineNumbers,
+      expandUnchanged,
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
       maxLineLengthForHighlighting,
       overflow,
       themeType,
-      theme,
-    } as Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
+      themes,
+      useCSSClasses,
+    } as Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>;
   }
 
   async initializeHighlighter(): Promise<PJSHighlighter> {
@@ -232,13 +246,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  private queuedDiff: FileDiffMetadata | undefined;
-  private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
-  private computedLang: SupportedLanguages = 'text';
-  async render(
-    diff: FileDiffMetadata,
-    shouldUseClasses: boolean = false
-  ): Promise<HunksRenderResult | undefined> {
+  async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
     this.queuedDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -262,11 +270,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         // should just return early with empty result
         return undefined;
       }
-      return this.renderDiff(
-        this.queuedDiff,
-        this.highlighter,
-        shouldUseClasses
-      );
+      return this.renderDiff(this.queuedDiff, this.highlighter);
     })();
     const result = await this.queuedRender;
     this.queuedDiff = undefined;
@@ -276,8 +280,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private renderDiff(
     fileDiff: FileDiffMetadata,
-    highlighter: PJSHighlighter,
-    useCSSClasses: boolean = false
+    highlighter: PJSHighlighter
   ): HunksRenderResult {
     const options = this.getOptionsWithDefaults();
     const {
@@ -288,7 +291,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableBackground,
       diffIndicators,
       expandUnchanged,
-    } = options;
+      useCSSClasses,
+    } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
     const additionsAST: ElementContent[] = [];
@@ -454,7 +458,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
     return {
-      themes: this.options.themes,
+      themes: this.options.themes ?? DEFAULT_THEMES,
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,
@@ -1062,11 +1066,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private getHighlighterOptions() {
-    const { themes: _themes, theme, preferWasmHighlighter } = this.options;
+    const {
+      themes: _themes = DEFAULT_THEMES,
+      theme,
+      preferWasmHighlighter,
+    } = this.options;
     const themes: PJSThemeNames[] = [];
     if (theme != null) {
       themes.push(theme);
-    } else if (themes != null) {
+    } else {
       themes.push(_themes.dark);
       themes.push(_themes.light);
     }

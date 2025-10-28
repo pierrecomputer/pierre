@@ -41,7 +41,7 @@ export interface ThemeRendererOptions {
 
 export interface ThemesRendererOptions {
   theme?: never;
-  themes: ThemesType;
+  themes?: ThemesType;
 }
 
 export type PJSHighlighter = HighlighterGeneric<

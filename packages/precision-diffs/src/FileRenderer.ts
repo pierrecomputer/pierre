@@ -6,7 +6,7 @@ import {
   hasLoadedLanguage,
   hasLoadedThemes,
 } from './SharedHighlighter';
-import { SPLIT_WITH_NEWLINES } from './constants';
+import { DEFAULT_THEMES, SPLIT_WITH_NEWLINES } from './constants';
 import type {
   CodeToHastOptions,
   DecorationItem,
@@ -289,7 +289,7 @@ export class FileRenderer<LAnnotation = undefined> {
       };
     }
     return {
-      themes: this.options.themes,
+      themes: this.options.themes ?? DEFAULT_THEMES,
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,
@@ -308,11 +308,15 @@ export class FileRenderer<LAnnotation = undefined> {
     themes: PJSThemeNames[];
     preferWasmHighlighter?: boolean;
   } {
-    const { themes: _themes, theme, preferWasmHighlighter } = this.options;
+    const {
+      themes: _themes = DEFAULT_THEMES,
+      theme,
+      preferWasmHighlighter,
+    } = this.options;
     const themes: PJSThemeNames[] = [];
     if (theme != null) {
       themes.push(theme);
-    } else if (themes != null) {
+    } else {
       themes.push(_themes.dark);
       themes.push(_themes.light);
     }
