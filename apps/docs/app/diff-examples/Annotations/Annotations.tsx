@@ -444,7 +444,7 @@ export function AcceptRejectExample({
     <div className="space-y-5">
       <FeatureHeader
         title="Accept/Reject Changes"
-        description="Annotations can also be used to build interactive code review interfaces. This example demonstrates accept/reject style buttons attached to each change, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
+        description="Annotations can also be used to build interactive code review interfaces. This example demonstrates reviewing changes with accept and reject buttons, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
       />
       <MultiFileDiff
         {...fileDiffProps}

@@ -29,13 +29,13 @@ export function Hero() {
         Precision Diffs
       </h1>
       <p className="text-md text-muted-foreground max-w-2x mb-2 md:text-lg">
-        Fast, exact diffing for modern apps. Fully open source, built with
-        Shiki, insanely customizable, and packed with the features you need.
-        Made with love by{' '}
+        Fast, exact diffing for modern apps. Fully open source, built on Shiki,
+        insanely customizable, and packed with the features you need. Made with
+        love by{' '}
         <Link
           target="_blank"
           href="https://pierre.computer"
-          className="hover:text-foreground underline underline-offset-2 transition-colors"
+          className="hover:text-foreground decoration-[1px]muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-colors"
         >
           The Pierre Computer Company
         </Link>

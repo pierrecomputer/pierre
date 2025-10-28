@@ -39,6 +39,10 @@ export function SplitUnified({
       <MultiFileDiff
         {...props}
         className="overflow-hidden rounded-lg border"
+        style={{
+          width: 'calc(100vw - 96px)',
+          marginLeft: 'calc(50% - 50vw + 48px)',
+        }}
         options={{
           theme: options?.theme ?? 'pierre-dark',
           diffStyle,

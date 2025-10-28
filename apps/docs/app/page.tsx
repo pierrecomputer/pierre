@@ -26,6 +26,7 @@ import { FontStyles } from './diff-examples/FontStyles/FontStyles';
 import { FONT_STYLES } from './diff-examples/FontStyles/constants';
 import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
 import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
+import { SimpleFileDiff } from './diff-examples/SimpleFileDiff';
 import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
 import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
 
@@ -34,9 +35,9 @@ export default function Home() {
     <div className="mx-auto min-h-screen max-w-5xl px-5">
       <HeaderWrapper />
       <Hero />
-      <hr className="mt-2 mb-8 w-[120px]" />
+      {/* <hr className="mt-2 mb-8 w-[120px]" /> */}
       <section className="space-y-8 py-8">
-        <div className="space-y-2">
+        {/* <div className="space-y-2">
           <h2 className="text-2xl font-medium">
             Everything but the kitchen sink
           </h2>
@@ -46,7 +47,8 @@ export default function Home() {
             automatically adapt it, configure diffs as stacked or split, pick
             from multiple diff visual styles, and much more.
           </p>
-        </div>
+        </div> */}
+        {/* <FileDiffSection /> */}
         <SplitUnifiedSection />
         <ShikiThemesSection />
         <DiffStylesSection />
@@ -106,6 +108,12 @@ export default function Home() {
       </section>
       <Footer />
     </div>
+  );
+}
+
+async function FileDiffSection() {
+  return (
+    <SimpleFileDiff prerenderedDiff={await preloadFileDiff(DIFF_STYLES)} />
   );
 }
 
