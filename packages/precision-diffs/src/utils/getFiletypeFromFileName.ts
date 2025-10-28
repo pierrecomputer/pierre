@@ -350,7 +350,7 @@ export function getFiletypeFromFileName(fileName: string): SupportedLanguages {
   return EXTENSION_TO_FILE_FORMAT[simpleMatch?.[1] ?? ''] ?? 'text';
 }
 
-export function extendFileFormatMap(map: ExtensionFormatMap) {
+export function extendFileFormatMap(map: ExtensionFormatMap): void {
   for (const key in map) {
     EXTENSION_TO_FILE_FORMAT[key] = map[key];
   }

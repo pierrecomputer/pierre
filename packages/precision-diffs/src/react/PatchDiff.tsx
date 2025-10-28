@@ -23,7 +23,7 @@ export function PatchDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
-}: PatchDiffProps<LAnnotation>) {
+}: PatchDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = usePatch(patch);
   const ref = useFileDiffInstance({ fileDiff, options, lineAnnotations });
   const children = renderAnnotationChildren({

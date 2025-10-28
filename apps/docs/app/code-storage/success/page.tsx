@@ -15,7 +15,6 @@ function SuccessPageContent() {
 
   useEffect(() => {
     if (window.opener != null) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       window.opener.postMessage(
         {
           type: appInstallType,
@@ -56,7 +55,6 @@ function SuccessPageContent() {
             <Button
               onClick={() => {
                 if (window.opener != null) {
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
                   window.opener.postMessage(
                     {
                       type: appInstallType,

@@ -26,7 +26,9 @@ export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
   lineAnnotations,
-}: UseFileDiffInstanceProps<LAnnotation>) {
+}: UseFileDiffInstanceProps<LAnnotation>): (
+  fileContainer: HTMLElement | null
+) => void {
   const instanceRef = useRef<FileDiff<LAnnotation> | null>(null);
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {

@@ -1,13 +1,26 @@
 {
   "extends": "../../tsconfig.options.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.json",
+    "tsdown.config.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
   "compilerOptions": {
+    "isolatedDeclarations": true,
+    "allowJs": false,
+    "checkJs": false,
+    "emitDeclarationOnly": true,
     "outDir": "dist",
-    "emitDeclarationOnly": false,
     "baseUrl": ".",
-    "rootDir": "src",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "resolveJsonModule": true
+    "target": "esnext",
+    "jsxImportSource": "react",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "rootDir": "."
   }
 }

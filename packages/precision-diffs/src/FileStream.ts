@@ -57,11 +57,11 @@ export class FileStream {
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
   }
 
-  cleanUp() {
+  cleanUp(): void {
     void this.stream?.cancel();
   }
 
-  setThemeType(themeType: ThemeTypes) {
+  setThemeType(themeType: ThemeTypes): void {
     if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
@@ -81,13 +81,16 @@ export class FileStream {
     }
   }
 
-  private async initializeHighlighter() {
+  private async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
     return this.highlighter;
   }
 
   private queuedSetupArgs: [ReadableStream<string>, HTMLElement] | undefined;
-  async setup(_source: ReadableStream<string>, _wrapper: HTMLElement) {
+  async setup(
+    _source: ReadableStream<string>,
+    _wrapper: HTMLElement
+  ): Promise<void> {
     const isSettingUp = this.queuedSetupArgs != null;
     this.queuedSetupArgs = [_source, _wrapper];
     if (isSettingUp) {
@@ -109,7 +112,7 @@ export class FileStream {
     stream: ReadableStream<string>,
     wrapper: HTMLElement,
     highlighter: PJSHighlighter
-  ) {
+  ): void {
     const {
       themes,
       theme,
@@ -223,13 +226,17 @@ export class FileStream {
     this.options.onPostRender?.(this);
   };
 
-  private createLine() {
+  private createLine(): HTMLElement {
     const { row, content } = createRow(this.currentLineIndex);
     this.currentLineElement = content;
     return row;
   }
 
-  private getHighlighterOptions() {
+  private getHighlighterOptions(): {
+    langs: SupportedLanguages[];
+    themes: PJSThemeNames[];
+    preferWasmHighlighter?: boolean;
+  } {
     const {
       lang,
       themes: _themes,
@@ -250,7 +257,7 @@ export class FileStream {
     return { langs, themes, preferWasmHighlighter };
   }
 
-  private getOrCreateFileContainer(fileContainer?: HTMLElement) {
+  private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     if (
       (fileContainer != null && fileContainer === this.fileContainer) ||
       (fileContainer == null && this.fileContainer != null)

@@ -122,7 +122,7 @@ export function createIcon({
   width = 16,
   height = 16,
   properties,
-}: CreateIconProps) {
+}: CreateIconProps): Element {
   return createHastElement({
     tagName: 'svg',
     properties: { width, height, viewBox: '0 0 16 16', ...properties },

@@ -41,7 +41,7 @@ export function FileDiffSsr<LAnnotation>({
   className,
   style,
   renderAnnotation,
-}: FileDiffSsrProps<LAnnotation>) {
+}: FileDiffSsrProps<LAnnotation>): React.JSX.Element {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const hydratedRef = useRef(false);
 

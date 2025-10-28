@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export function templateRender(
   children: ReactNode,
   __html: string | undefined
-) {
+): React.JSX.Element {
   if (typeof window === 'undefined' && __html != null) {
     return (
       <>

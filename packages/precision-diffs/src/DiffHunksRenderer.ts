@@ -98,6 +98,10 @@ export type DiffHunksRendererOptions =
   | DiffHunkRendererThemeOptions
   | DiffHunkRendererThemesOptions;
 
+type OptionsWithDefaults =
+  | Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>
+  | Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
+
 export interface HunksRenderResult {
   additionsAST: ElementContent[] | undefined;
   deletionsAST: ElementContent[] | undefined;
@@ -111,7 +115,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   highlighter: PJSHighlighter | undefined;
   options: DiffHunksRendererOptions;
   diff: FileDiffMetadata | undefined;
-  expandedHunks = new Set<number>();
+  expandedHunks: Set<number> = new Set();
 
   constructor(
     options: DiffHunksRendererOptions = {
@@ -121,24 +125,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.options = options;
   }
 
-  cleanUp() {
+  cleanUp(): void {
     this.highlighter = undefined;
     this.diff = undefined;
     this.queuedDiff = undefined;
     this.queuedRender = undefined;
   }
 
-  setOptions(options: DiffHunksRendererOptions) {
+  setOptions(options: DiffHunksRendererOptions): void {
     this.options = options;
   }
 
-  expandHunk(index: number) {
+  expandHunk(index: number): void {
     this.expandedHunks.add(index);
   }
 
-  private isHunkExpanded(index: number) {
+  private isHunkExpanded(index: number): boolean {
     return (
-      this.getOptionsWithDefaults().expandUnchanged ||
+      (this.getOptionsWithDefaults().expandUnchanged ?? false) ||
       this.expandedHunks.has(index)
     );
   }
@@ -148,7 +152,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes) {
+  setThemeType(themeType: ThemeTypes): void {
     if (this.getOptionsWithDefaults().themeType === themeType) {
       return;
     }
@@ -157,7 +161,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
-  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]) {
+  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     for (const annotation of lineAnnotations) {
@@ -175,7 +179,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  getOptionsWithDefaults() {
+  getOptionsWithDefaults(): OptionsWithDefaults {
     const {
       diffStyle = 'split',
       diffIndicators = 'bars',
@@ -205,7 +209,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         overflow,
         themeType,
         themes,
-      };
+      } as Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>;
     }
     return {
       diffIndicators,
@@ -220,10 +224,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       overflow,
       themeType,
       theme,
-    };
+    } as Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
   }
 
-  async initializeHighlighter() {
+  async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
     return this.highlighter;
   }
@@ -275,24 +279,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     highlighter: PJSHighlighter,
     useCSSClasses: boolean = false
   ): HunksRenderResult {
+    const options = this.getOptionsWithDefaults();
     const {
       disableLineNumbers,
-      theme,
-      themes,
       diffStyle,
       overflow,
       themeType,
       disableBackground,
       diffIndicators,
       expandUnchanged,
-    } = this.getOptionsWithDefaults();
+    } = options;
 
     this.diff = fileDiff;
     const additionsAST: ElementContent[] = [];
     const deletionsAST: ElementContent[] = [];
     const unifiedAST: ElementContent[] = [];
     const { state, transformers, toClass } = createTransformerWithState({
-      disableLineNumbers,
+      disableLineNumbers: disableLineNumbers ?? false,
       useCSSClasses,
     });
     let hunkIndex = 0;
@@ -304,7 +307,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         return fileDiff.hunks;
       }
       if (
-        expandUnchanged &&
+        (expandUnchanged ?? false) &&
         this.diff?.newLines != null &&
         this.diff.newLines.length > 0
       ) {
@@ -358,9 +361,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             diffStyle === 'unified'
               ? false
               : additionsAST.length > 0 && additionsAST.length > 0,
-          theme,
+          theme: 'theme' in options ? options.theme : undefined,
           themeType,
-          themes,
+          themes: 'themes' in options ? options.themes : undefined,
         }),
       }),
     };

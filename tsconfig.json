@@ -6,10 +6,10 @@
       "path": "apps/demo"
     },
     {
-      "path": "packages/precision-diffs"
+      "path": "apps/docs"
     },
     {
-      "path": "apps/docs"
+      "path": "packages/precision-diffs"
     },
     {
       "path": "packages/storage-elements"

@@ -38,34 +38,34 @@ export class FileHeaderRenderer {
     }
   ) {}
 
-  cleanUp() {
+  cleanUp(): void {
     this.highlighter = undefined;
     this.queuedRenderFileOrDiff = undefined;
     this.queuedRender = undefined;
   }
 
-  private mergeOptions(options: Partial<FileHeaderRendererOptions>) {
+  private mergeOptions(options: Partial<FileHeaderRendererOptions>): void {
     // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
-  setOptions(options: FileHeaderRendererOptions) {
+  setOptions(options: FileHeaderRendererOptions): void {
     this.options = options;
   }
 
-  setThemeType(themeType: ThemeTypes) {
+  setThemeType(themeType: ThemeTypes): void {
     if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
     this.mergeOptions({ themeType });
   }
 
-  private async initializeHighlighter() {
+  private async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
     return this.highlighter;
   }
 
-  private getHighlighterOptions() {
+  private getHighlighterOptions(): { themes: PJSThemeNames[]; langs: [] } {
     const themes: PJSThemeNames[] = [];
     if (this.options.theme != null) {
       themes.push(this.options.theme);
@@ -117,7 +117,7 @@ export class FileHeaderRenderer {
     });
   }
 
-  renderResultToHTML(element: Element) {
+  renderResultToHTML(element: Element): string {
     return toHtml(element);
   }
 

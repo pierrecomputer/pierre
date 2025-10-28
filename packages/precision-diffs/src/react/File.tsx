@@ -31,7 +31,7 @@ export function File<LAnnotation = undefined>({
   renderAnnotation,
   renderHeaderMetadata,
   prerenderedHTML,
-}: FileProps<LAnnotation>) {
+}: FileProps<LAnnotation>): React.JSX.Element {
   const ref = useFileInstance({ file, options, lineAnnotations });
   const metadata = renderHeaderMetadata?.(file);
   const children = (

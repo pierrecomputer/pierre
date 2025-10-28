@@ -19,7 +19,7 @@ bun run dev
 
 ```sh
 cd packages/precision-diffs
-bun run publish
+bun publish
 ```
 
 ## Building Icons

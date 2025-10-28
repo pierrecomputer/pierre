@@ -75,16 +75,16 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   ) {}
 
-  setOptions(options: FileRendererOptions) {
+  setOptions(options: FileRendererOptions): void {
     this.options = options;
   }
 
-  private mergeOptions(options: Partial<FileRendererOptions>) {
+  private mergeOptions(options: Partial<FileRendererOptions>): void {
     // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes) {
+  setThemeType(themeType: ThemeTypes): void {
     const currentThemeType = this.options.themeType ?? 'system';
     if (currentThemeType === themeType) {
       return;
@@ -93,7 +93,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
-  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]) {
+  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
     this.lineAnnotations = {};
     for (const annotation of lineAnnotations) {
       const arr = this.lineAnnotations[annotation.lineNumber] ?? [];
@@ -102,7 +102,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  cleanUp() {
+  cleanUp(): void {
     this.highlighter = undefined;
     this.fileContent = undefined;
     this.queuedFile = undefined;
@@ -205,7 +205,7 @@ export class FileRenderer<LAnnotation = undefined> {
   renderPartialHTML(
     children: ElementContent[],
     includeCodeNode: boolean = false
-  ) {
+  ): string {
     if (!includeCodeNode) {
       return toHtml(children);
     }
@@ -236,7 +236,10 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  private computeLineInfo(contents: string) {
+  private computeLineInfo(contents: string): {
+    lineInfoMap: Record<number, LineInfo | undefined>;
+    hasLongLines: boolean;
+  } {
     const { startingLineNumber = 1, maxLineLengthForHighlighting = 1000 } =
       this.options;
     const lineInfoMap: Record<number, LineInfo | undefined> = {};
@@ -295,12 +298,16 @@ export class FileRenderer<LAnnotation = undefined> {
     };
   }
 
-  async initializeHighlighter() {
+  async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
     return this.highlighter;
   }
 
-  private getHighlighterOptions() {
+  private getHighlighterOptions(): {
+    langs: SupportedLanguages[];
+    themes: PJSThemeNames[];
+    preferWasmHighlighter?: boolean;
+  } {
     const { themes: _themes, theme, preferWasmHighlighter } = this.options;
     const themes: PJSThemeNames[] = [];
     if (theme != null) {

@@ -9,7 +9,7 @@ import type {
 } from '../types';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 
-export function createSpanFromToken(token: ThemedToken) {
+export function createSpanFromToken(token: ThemedToken): HTMLSpanElement {
   const element = document.createElement('span');
   const style = token.htmlStyle ?? getTokenStyleObject(token);
   element.style = stringifyTokenStyle(style);
@@ -17,7 +17,10 @@ export function createSpanFromToken(token: ThemedToken) {
   return element;
 }
 
-export function createRow(line: number) {
+export function createRow(line: number): {
+  row: HTMLElement;
+  content: HTMLElement;
+} {
   const row = document.createElement('div');
   row.dataset.line = `${line}`;
 
@@ -50,7 +53,10 @@ interface CreateCodeNodeProps {
   columnType?: 'additions' | 'deletions' | 'unified';
 }
 
-export function createCodeNode({ pre, columnType }: CreateCodeNodeProps = {}) {
+export function createCodeNode({
+  pre,
+  columnType,
+}: CreateCodeNodeProps = {}): HTMLElement {
   const code = document.createElement('code');
   code.dataset.code = '';
   if (columnType != null) {
@@ -70,7 +76,7 @@ export function setWrapperProps({
   themeType,
   diffIndicators,
   disableBackground,
-}: SetupWrapperNodesProps) {
+}: SetupWrapperNodesProps): HTMLPreElement {
   const styles = getHighlighterThemeStyles({ theme, themes, highlighter });
   if (themeType === 'system') {
     delete pre.dataset.themeType;

@@ -1,4 +1,4 @@
-import styles from '../style.css?raw';
+import styles from '../style.css';
 
 // If HTMLElement is undefined it usually means we are in a server environment
 // so best to just not do anything

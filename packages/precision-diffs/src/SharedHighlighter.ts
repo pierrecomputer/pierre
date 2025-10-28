@@ -32,7 +32,7 @@ export async function getSharedHighlighter({
   themes,
   langs,
   preferWasmHighlighter = false,
-}: HighlighterOptions) {
+}: HighlighterOptions): Promise<PJSHighlighter> {
   if (isHighlighterNull(highlighter)) {
     // NOTE(amadeus): We should probably build in some logic for rejection
     // handling...
@@ -122,7 +122,7 @@ export async function getSharedHighlighter({
   return instance;
 }
 
-export function hasLoadedThemes(themes: PJSThemeNames[]) {
+export function hasLoadedThemes(themes: PJSThemeNames[]): boolean {
   for (const theme of themes) {
     if (loadedThemes.get(theme) === true) {
       continue;
@@ -132,7 +132,7 @@ export function hasLoadedThemes(themes: PJSThemeNames[]) {
   return true;
 }
 
-export function hasLoadedLanguage(lang: SupportedLanguages) {
+export function hasLoadedLanguage(lang: SupportedLanguages): boolean {
   return loadedLanguages.get(lang) === true;
 }
 
@@ -154,11 +154,13 @@ export function isHighlighterNull(
   return h == null;
 }
 
-export async function preloadHighlighter(options: HighlighterOptions) {
+export async function preloadHighlighter(
+  options: HighlighterOptions
+): Promise<void> {
   return void (await getSharedHighlighter(options));
 }
 
-export async function disposeHighlighter() {
+export async function disposeHighlighter(): Promise<void> {
   if (highlighter == null) return;
   (await highlighter).dispose();
   loadedThemes.clear();
@@ -174,7 +176,7 @@ const CustomThemes = new Map<
 export function registerCustomTheme(
   themeName: string,
   loader: () => Promise<ThemeRegistrationResolved>
-) {
+): void {
   if (CustomThemes.has(themeName)) {
     console.error(
       'SharedHighlight.registerCustomTheme: theme name already registered',

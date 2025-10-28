@@ -22,7 +22,7 @@ export function FileDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
-}: FileDiffProps<LAnnotation>) {
+}: FileDiffProps<LAnnotation>): React.JSX.Element {
   const ref = useFileDiffInstance({ fileDiff, options, lineAnnotations });
   const children = renderAnnotationChildren({
     fileDiff,

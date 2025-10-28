@@ -6,7 +6,7 @@ let frameId: null | number = null;
 let isRendering = false;
 
 // TODO(amadeus): Figure out a proper name for this module...
-export function queueRender(callback: Callback) {
+export function queueRender(callback: Callback): void {
   if (isRendering) {
     queuedCallbacks.add(callback);
     return;
@@ -15,7 +15,7 @@ export function queueRender(callback: Callback) {
   frameId ??= requestAnimationFrame(render);
 }
 
-function render(time: number) {
+function render(time: number): void {
   isRendering = true;
   for (const callback of callbacks) {
     try {

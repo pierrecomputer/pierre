@@ -17,7 +17,7 @@ export function useFileInstance<LAnnotation>({
   file,
   options,
   lineAnnotations,
-}: UseFileInstanceProps<LAnnotation>) {
+}: UseFileInstanceProps<LAnnotation>): (node: HTMLElement | null) => void {
   const instanceRef = useRef<File<LAnnotation> | null>(null);
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {

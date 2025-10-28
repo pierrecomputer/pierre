@@ -3,18 +3,22 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "bun run elements-next:build && next build --turbopack",
-    "dev": "next dev --turbopack",
-    "prod": "next build --turbopack && next start",
-    "elements-next:build": "bun run --filter @pierre/storage-elements-next build",
-    "registry:build": "shadcn build",
+    "build": "bun run build:deps && bun run build:next",
+    "build:next": "next build --turbopack",
+    "build:deps": "bun run build:deps:precision-diffs && bun run build:deps:elements-next && bun run build:deps:registry",
+    "build:deps:precision-diffs": "(cd ../../packages/precision-diffs && bun run build)",
+    "build:deps:elements-next": "(cd ../../packages/storage-elements-next && bun run build)",
+    "build:deps:registry": "shadcn build",
+    "dev": "concurrently \"bun run dev:deps:precision-diffs\" \"bun run dev:next\" --names \"diffs,docs\" --prefix-colors \"blue,green\"",
+    "dev:next": "next dev --turbopack",
+    "dev:deps:precision-diffs": "(cd ../../packages/precision-diffs && bun run dev)",
+    "prod": "bun run build && next start",
     "start": "next start",
-    "tsc": "tsc --build"
+    "tsc": "bun run build:deps && tsc --noEmit --pretty"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
     "@pierre/precision-diffs": "workspace:*",
-    "@pierre/storage": "catalog:",
     "@pierre/storage-elements-next": "workspace:*",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-dialog": "catalog:",
@@ -35,7 +39,6 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "catalog:",
-    "fast-deep-equal": "catalog:",
     "fumadocs-core": "catalog:",
     "fumadocs-mdx": "catalog:",
     "fumadocs-ui": "catalog:",
@@ -55,13 +58,12 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@octokit/openapi-types": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@types/mdx": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "raw-loader": "catalog:",
+    "concurrently": "catalog:",
     "typescript": "catalog:"
   }
 }

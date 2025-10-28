@@ -21,7 +21,7 @@ export function getHighlighterThemeStyles({
   themes,
   highlighter,
   prefix,
-}: GetHighlighterThemeStylesProps) {
+}: GetHighlighterThemeStylesProps): string {
   let styles = '';
   if (theme != null) {
     const themeData = highlighter.getTheme(theme);

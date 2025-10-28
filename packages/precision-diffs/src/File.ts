@@ -96,17 +96,17 @@ export class File<LAnnotation = undefined> {
     this.headerRenderer = new FileHeaderRenderer(options);
   }
 
-  setOptions(options: FileOptions<LAnnotation> | undefined) {
+  setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
   }
 
-  private mergeOptions(options: Partial<FileOptions<LAnnotation>>) {
+  private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
     // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes) {
+  setThemeType(themeType: ThemeTypes): void {
     const currentThemeType = this.options.themeType ?? 'system';
     if (currentThemeType === themeType) {
       return;
@@ -138,11 +138,11 @@ export class File<LAnnotation = undefined> {
     // }
   }
 
-  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]) {
+  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
     this.lineAnnotations = lineAnnotations;
   }
 
-  cleanUp() {
+  cleanUp(): void {
     this.fileRenderer.cleanUp();
     this.headerRenderer.cleanUp();
     this.pre = undefined;
@@ -154,7 +154,7 @@ export class File<LAnnotation = undefined> {
     this.fileContainer = undefined;
   }
 
-  hydrate(props: FileRenderProps<LAnnotation>) {
+  hydrate(props: FileRenderProps<LAnnotation>): void {
     if (props.fileContainer == null) {
       throw new Error(
         'FileDiff: you must provide a fileContainer on hydration'
@@ -205,7 +205,7 @@ export class File<LAnnotation = undefined> {
     containerWrapper,
     forceRender = false,
     lineAnnotations,
-  }: FileRenderProps<LAnnotation>) {
+  }: FileRenderProps<LAnnotation>): Promise<void> {
     if (!forceRender && deepEquals(this.file, file)) {
       return undefined;
     }
@@ -256,7 +256,7 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  renderAnnotations() {
+  renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       return;
     }
@@ -285,7 +285,7 @@ export class File<LAnnotation = undefined> {
     result: FileRenderResult,
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
-  ) {
+  ): void {
     this.setPreAttributes(pre, highlighter);
     pre.innerHTML = '';
     // Create code elements and insert HTML content
@@ -300,7 +300,7 @@ export class File<LAnnotation = undefined> {
     headerHTML: Element,
     container: HTMLElement,
     file: FileContents
-  ) {
+  ): void {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerHTML);
     const newHeader = tempDiv.firstElementChild;
@@ -333,7 +333,7 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private attachEventListeners(pre: HTMLPreElement) {
+  private attachEventListeners(pre: HTMLPreElement): void {
     // Remove old event listeners if they exist, probably don't
     pre.removeEventListener('click', this.handleMouseClick);
     pre.removeEventListener('mousemove', this.handleMouseMove);
@@ -352,7 +352,7 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  getOrCreateFileContainer(fileContainer?: HTMLElement) {
+  getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
@@ -369,7 +369,7 @@ export class File<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  private getOrCreatePre(container: HTMLElement) {
+  private getOrCreatePre(container: HTMLElement): HTMLPreElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
@@ -384,15 +384,15 @@ export class File<LAnnotation = undefined> {
     return this.pre;
   }
 
-  handleMouseClick = (event: PointerEvent) => {
+  handleMouseClick = (event: PointerEvent): void => {
     this.handleMouseEvent({ eventType: 'click', event });
   };
 
   hoveredRow: LineEventBaseProps | undefined;
-  handleMouseMove = (event: MouseEvent) => {
+  handleMouseMove = (event: MouseEvent): void => {
     this.handleMouseEvent({ eventType: 'move', event });
   };
-  handleMouseLeave = () => {
+  handleMouseLeave = (): void => {
     if (this.hoveredRow == null || this.file == null) return;
     this.options.onLineLeave?.(this.hoveredRow, this.file);
     this.hoveredRow = undefined;

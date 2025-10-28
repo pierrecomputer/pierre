@@ -24,7 +24,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
-}: MultiFileDiffProps<LAnnotation>) {
+}: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const ref = useFileDiffInstance({
     oldFile,
     newFile,

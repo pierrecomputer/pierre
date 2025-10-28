@@ -1,6 +1,6 @@
 import type { ChangeTypes } from '../types';
 
-export function getIconForType(type: ChangeTypes | 'file') {
+export function getIconForType(type: ChangeTypes | 'file'): string {
   switch (type) {
     case 'file':
       return 'pjs-icon-file-code';

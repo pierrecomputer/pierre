@@ -4,10 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "bun run build:diffs && vite build",
+    "build:diffs": "(cd ../../packages/precision-diffs && bun run build)",
     "build-types": "tsc --build",
-    "dev": "vite",
-    "preview": "vite preview",
+    "dev": "bun run build:diffs && concurrently \"bun run dev:diffs\" \"bun run dev:vite\" --names \"diffs,vite\" --prefix-colors \"blue,green\"",
+    "dev:diffs": "(cd ../../packages/precision-diffs && bun run dev)",
+    "dev:vite": "vite",
+    "preview": "bun run preview",
     "prod": "bun run build && bun run preview",
     "tsc": "tsc --noEmit --pretty"
   },
@@ -16,6 +19,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "concurrently": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
   },

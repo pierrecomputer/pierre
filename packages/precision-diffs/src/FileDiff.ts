@@ -158,7 +158,7 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(options: DiffFileRendererOptions<LAnnotation> | undefined) {
+  setOptions(options: DiffFileRendererOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
     this.hunksRenderer.setOptions({
@@ -170,7 +170,7 @@ export class FileDiff<LAnnotation = undefined> {
     });
   }
 
-  async rerender() {
+  async rerender(): Promise<void> {
     if (this.fileDiff != null) {
       await this.render({
         fileDiff: this.fileDiff,
@@ -186,12 +186,14 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private mergeOptions(options: Partial<DiffFileRendererOptions<LAnnotation>>) {
+  private mergeOptions(
+    options: Partial<DiffFileRendererOptions<LAnnotation>>
+  ): void {
     // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes) {
+  setThemeType(themeType: ThemeTypes): void {
     if (this.options.themeType === themeType) {
       return;
     }
@@ -223,11 +225,11 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
-  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]) {
+  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
     this.lineAnnotations = lineAnnotations;
   }
 
-  cleanUp() {
+  cleanUp(): void {
     this.hunksRenderer.cleanUp();
     this.headerRenderer.cleanUp();
     this.resizeObserver?.disconnect();
@@ -255,7 +257,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerElement = undefined;
   }
 
-  hydrate(props: FileDiffRenderProps<LAnnotation>) {
+  hydrate(props: FileDiffRenderProps<LAnnotation>): void {
     if (props.fileContainer == null) {
       throw new Error(
         'FileDiff: you must provide a fileContainer on hydration'
@@ -312,7 +314,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  async render(props: FileDiffRenderProps<LAnnotation>) {
+  async render(props: FileDiffRenderProps<LAnnotation>): Promise<void> {
     const { forceRender = false, lineAnnotations, containerWrapper } = props;
     const annotationsChanged =
       lineAnnotations != null &&
@@ -411,7 +413,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  renderSeparators(hunkData: HunkData[]) {
+  renderSeparators(hunkData: HunkData[]): void {
     const { hunkSeparators } = this.options;
     if (
       this.isContainerManaged ||
@@ -434,7 +436,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  renderAnnotations() {
+  renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       return;
     }
@@ -459,7 +461,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private attachEventListeners(pre: HTMLPreElement) {
+  private attachEventListeners(pre: HTMLPreElement): void {
     const { __debugMouseEvents } = this.options;
     // Remove old event listeners if they exist, probably don't
     pre.removeEventListener('click', this.handleMouseClick);
@@ -523,7 +525,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  getOrCreateFileContainer(fileContainer?: HTMLElement) {
+  getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
@@ -540,11 +542,11 @@ export class FileDiff<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  getFileContainer() {
+  getFileContainer(): HTMLElement | undefined {
     return this.fileContainer;
   }
 
-  handleMouseClick = (event: PointerEvent) => {
+  handleMouseClick = (event: PointerEvent): void => {
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
       'click',
@@ -555,7 +557,7 @@ export class FileDiff<LAnnotation = undefined> {
   };
 
   hoveredRow: DiffLineEventBaseProps | undefined;
-  handleMouseMove = (event: MouseEvent) => {
+  handleMouseMove = (event: MouseEvent): void => {
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
       'move',
@@ -564,7 +566,7 @@ export class FileDiff<LAnnotation = undefined> {
     );
     this.handleMouseEvent({ eventType: 'move', event });
   };
-  handleMouseLeave = () => {
+  handleMouseLeave = (): void => {
     const { __debugMouseEvents } = this.options;
     debugLogIfEnabled(
       __debugMouseEvents,
@@ -735,7 +737,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private getOrCreatePre(container: HTMLElement) {
+  private getOrCreatePre(container: HTMLElement): HTMLPreElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
@@ -750,7 +752,7 @@ export class FileDiff<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private applyHeaderToDOM(headerAST: Element, container: HTMLElement) {
+  private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
     const newHeader = tempDiv.firstElementChild;
@@ -824,7 +826,7 @@ export class FileDiff<LAnnotation = undefined> {
     result: Partial<HunksRenderResult>,
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
-  ) {
+  ): void {
     this.setPreAttributes(pre, highlighter);
 
     // Clear existing content
@@ -868,7 +870,7 @@ export class FileDiff<LAnnotation = undefined> {
   private setupScrollSync(
     codeDeletions?: HTMLElement,
     codeAdditions?: HTMLElement
-  ) {
+  ): void {
     // If no code elements were provided, lets try to find them in
     // the pre element
     if (codeDeletions == null || codeAdditions == null) {
@@ -932,7 +934,7 @@ export class FileDiff<LAnnotation = undefined> {
     });
   };
 
-  private setupResizeObserver(pre: HTMLPreElement) {
+  private setupResizeObserver(pre: HTMLPreElement): void {
     // Disconnect any existing observer
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
