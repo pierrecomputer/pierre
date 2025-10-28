@@ -114,26 +114,30 @@ export class FileDiff<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = PJSContainerLoaded;
 
   readonly __id: number = ++instanceId;
-  options: DiffFileRendererOptions<LAnnotation>;
   private fileContainer: HTMLElement | undefined;
+  private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
-  private annotationElements: HTMLElement[] = [];
-  private customHunkElements: HTMLElement[] = [];
+
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
-  private spriteSVG: SVGElement | undefined;
+  private customHunkElements: HTMLElement[] = [];
 
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
+
+  private annotationElements: HTMLElement[] = [];
+  private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
 
   private observedNodes = new Map<
     HTMLElement,
     ObservedAnnotationNodes | ObservedGridNodes
   >();
   private resizeObserver: ResizeObserver | undefined;
+
   private oldFile: FileContents | undefined;
   private newFile: FileContents | undefined;
   private fileDiff: FileDiffMetadata | undefined;
+
   private scrollSyncState: ScrollSyncState = {
     isDeletionsScrolling: false,
     isAdditionsScrolling: false,
@@ -143,11 +147,12 @@ export class FileDiff<LAnnotation = undefined> {
   };
 
   constructor(
-    options: DiffFileRendererOptions<LAnnotation> = { theme: 'none' },
+    public options: DiffFileRendererOptions<LAnnotation> = {
+      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+    },
     // NOTE(amadeus): Temp hack while we use this component in a react context
     private isContainerManaged = false
   ) {
-    this.options = options;
     this.hunksRenderer = new DiffHunksRenderer({
       ...options,
       hunkSeparators:
@@ -177,22 +182,6 @@ export class FileDiff<LAnnotation = undefined> {
     });
   }
 
-  async rerender(): Promise<void> {
-    if (this.fileDiff != null) {
-      await this.render({
-        fileDiff: this.fileDiff,
-        forceRender: true,
-      });
-    }
-    if (this.oldFile != null && this.newFile != null) {
-      await this.render({
-        oldFile: this.oldFile,
-        newFile: this.newFile,
-        forceRender: true,
-      });
-    }
-  }
-
   private mergeOptions(
     options: Partial<DiffFileRendererOptions<LAnnotation>>
   ): void {
@@ -201,12 +190,20 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   setThemeType(themeType: ThemeTypes): void {
-    if (this.options.themeType === themeType) {
+    if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
     this.mergeOptions({ themeType });
     this.hunksRenderer.setThemeType(themeType);
     this.headerRenderer.setThemeType(themeType);
+
+    if (this.headerElement != null) {
+      if (themeType === 'system') {
+        delete this.headerElement.dataset.themeType;
+      } else {
+        this.headerElement.dataset.themeType = themeType;
+      }
+    }
 
     // Update pre element theme mode
     if (this.pre != null) {
@@ -220,18 +217,8 @@ export class FileDiff<LAnnotation = undefined> {
           break;
       }
     }
-
-    // Update header instance theme mode
-    if (this.headerElement != null) {
-      if (themeType === 'system') {
-        delete this.headerElement.dataset.themeType;
-      } else {
-        this.headerElement.dataset.themeType = themeType;
-      }
-    }
   }
 
-  private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
   setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
     this.lineAnnotations = lineAnnotations;
   }
@@ -264,7 +251,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerElement = undefined;
   }
 
-  hydrate(props: FileDiffRenderProps<LAnnotation>): void {
+  async hydrate(props: FileDiffRenderProps<LAnnotation>): Promise<void> {
     if (props.fileContainer == null) {
       throw new Error(
         'FileDiff: you must provide a fileContainer on hydration'
@@ -291,7 +278,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      void this.render(props);
+      await this.render(props);
     }
     // Otherwise orchestrate our setup
     else {
@@ -321,8 +308,24 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  async render(props: FileDiffRenderProps<LAnnotation>): Promise<void> {
-    const { forceRender = false, lineAnnotations, containerWrapper } = props;
+  async rerender(): Promise<void> {
+    await this.render({
+      oldFile: this.oldFile,
+      newFile: this.newFile,
+      fileDiff: this.fileDiff,
+      forceRender: true,
+    });
+  }
+
+  async render({
+    oldFile,
+    newFile,
+    fileDiff,
+    fileContainer,
+    forceRender = false,
+    lineAnnotations,
+    containerWrapper,
+  }: FileDiffRenderProps<LAnnotation>): Promise<void> {
     const annotationsChanged =
       lineAnnotations != null &&
       // Ideally this would just a quick === check because lineAnnotations is
@@ -330,39 +333,36 @@ export class FileDiff<LAnnotation = undefined> {
       !deepEquals(lineAnnotations, this.lineAnnotations);
     if (
       !forceRender &&
-      props.oldFile != null &&
-      props.newFile != null &&
+      oldFile != null &&
+      newFile != null &&
       !annotationsChanged &&
-      deepEquals(props.oldFile, this.oldFile) &&
-      deepEquals(props.newFile, this.newFile)
+      deepEquals(oldFile, this.oldFile) &&
+      deepEquals(newFile, this.newFile)
     ) {
       return;
     }
     if (
       !forceRender &&
-      props.fileDiff != null &&
-      props.fileDiff === this.fileDiff &&
+      fileDiff != null &&
+      fileDiff === this.fileDiff &&
       !annotationsChanged
     ) {
       return;
     }
 
-    if (props.fileDiff != null) {
-      this.fileDiff = props.fileDiff;
-      this.oldFile = props.oldFile;
-      this.newFile = props.newFile;
-    } else {
-      this.oldFile = props.oldFile;
-      this.newFile = props.newFile;
-      if (props.oldFile != null && props.newFile != null) {
-        this.fileDiff = parseDiffFromFile(props.oldFile, props.newFile);
-      }
+    this.oldFile = oldFile;
+    this.newFile = newFile;
+    if (fileDiff != null) {
+      this.fileDiff = fileDiff;
+    } else if (oldFile != null && newFile != null) {
+      this.fileDiff = parseDiffFromFile(oldFile, newFile);
+    }
+
+    if (lineAnnotations != null) {
+      this.setLineAnnotations(lineAnnotations);
     }
     if (this.fileDiff == null) {
       return;
-    }
-    if (lineAnnotations != null) {
-      this.setLineAnnotations(lineAnnotations);
     }
     this.hunksRenderer.setOptions({
       ...this.options,
@@ -404,7 +404,7 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
 
-    const fileContainer = this.getOrCreateFileContainer(props.fileContainer);
+    fileContainer = this.getOrCreateFileContainer(fileContainer);
     if (headerResult != null) {
       this.applyHeaderToDOM(headerResult, fileContainer);
     }
@@ -420,7 +420,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  renderSeparators(hunkData: HunkData[]): void {
+  private renderSeparators(hunkData: HunkData[]): void {
     const { hunkSeparators } = this.options;
     if (
       this.isContainerManaged ||
@@ -443,7 +443,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  renderAnnotations(): void {
+  private renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       return;
     }
@@ -532,7 +532,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
+  private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
@@ -564,6 +564,7 @@ export class FileDiff<LAnnotation = undefined> {
   };
 
   hoveredRow: DiffLineEventBaseProps | undefined;
+
   handleMouseMove = (event: MouseEvent): void => {
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
@@ -573,6 +574,7 @@ export class FileDiff<LAnnotation = undefined> {
     );
     this.handleMouseEvent({ eventType: 'move', event });
   };
+
   handleMouseLeave = (): void => {
     const { __debugMouseEvents } = this.options;
     debugLogIfEnabled(
@@ -775,12 +777,12 @@ export class FileDiff<LAnnotation = undefined> {
 
     if (this.isContainerManaged) return;
 
-    const { renderHeaderMetadata: renderCustomMetadata } = this.options;
+    const { renderHeaderMetadata } = this.options;
     if (this.headerMetadata != null) {
       this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
     }
     const content =
-      renderCustomMetadata?.({
+      renderHeaderMetadata?.({
         oldFile: this.oldFile,
         newFile: this.newFile,
         fileDiff: this.fileDiff,
