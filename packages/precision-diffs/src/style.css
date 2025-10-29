@@ -517,6 +517,8 @@ code {
       var(--pjs-bg-deletion) 50%,
       var(--pjs-deletion-base) 50%
     );
+    background-repeat: repeat;
+    background-size: 2px 2px;
     background-size: calc(1lh / round(1lh / 2px)) calc(1lh / round(1lh / 2px));
   }
   [data-line-type='change-addition'] [data-column-number]::before {
