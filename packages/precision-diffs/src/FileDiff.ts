@@ -114,6 +114,7 @@ export class FileDiff<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = PJSContainerLoaded;
 
   readonly __id: number = ++instanceId;
+
   private fileContainer: HTMLElement | undefined;
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
