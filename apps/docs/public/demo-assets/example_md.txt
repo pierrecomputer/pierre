@@ -1,0 +1,728 @@
+# Pierre Monorepo
+
+And should feel bad about it
+
+One day all of the code could live here.
+
+## Location
+
+If you want examples to be easier to understand, probably clone this repo at:
+
+```bash
+~/pierre/monorepo
+```
+
+## Installation
+
+We use `moon` (aka [moonrepo](https://moonrepo.dev/)) to manage our monorepo and task running.
+
+We use [`proto`](https://moonrepo.dev/proto) to install system dependencies, including `moon`
+itself.
+
+### Install system dependencies
+
+Proto actually requires `xz`, which if you don't have, you can install with
+[homebrew](https://brew.sh/).
+
+```bash
+brew install xz
+```
+
+If you do not have homebrew, you can install it with:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+### Install `proto`
+
+`proto` makes sure that we're all running the same version of `node` and `pnpm` and `moon` and any
+number of other system commands that we wish. It also makes sure that CI runs the same ones as us.
+
+```bash
+curl -fsSL https://moonrepo.dev/install/proto.sh | bash
+```
+
+It may ask you which of your bash/zsh profile files you want it to update. If you have one you
+personally use, choose that, otherwise just hit enter.
+
+### Start a new terminal instance
+
+In order to run `proto` close the terminal window you were in and run a new one and `proto` should
+now be available.
+
+```bash
+proto --version
+```
+
+That should now return something like `proto 0.36.2` but maybe a different version number.
+
+### Install global tools with `proto`
+
+Make sure you're back in the monorepo folder.
+
+```bash
+cd ~/pierre/monorepo
+```
+
+Then use `proto` to install the global tools that we currently use.
+
+```bash
+proto use
+```
+
+This will either tell you everything is installed, or you'll see it install things like `moon` and
+`pnpm`.
+
+As long as you don't have a different global copy of pnpm that wins, this should also setup a
+[shim](https://moonrepo.dev/docs/proto#shims) for `pnpm` that points to the right version when in
+our repo.
+
+```bash
+# We really only care what pnpm resolves to in the monorepo
+cd ~/pierre/monorepo
+# See where it resolves
+which pnpm
+# Ideally should say something like
+> /Users/you/.proto/shims/pnpm
+```
+
+If this is breaking for you, check out the "Proto and PNPM shims" section in the bottom of the
+readme for environment debugging.
+
+### Install 1Password CLI
+
+Some of our projects use 1Password CLI (`op`) to securely access environment variables. To install
+it:
+
+```bash
+brew install 1password-cli
+```
+
+follow the instructions here to connect the CLI to your 1Password desktop instance:
+https://developer.1password.com/docs/cli/get-started/
+
+After installation, sign in to your 1Password Pierre account:
+
+```bash
+op signin
+```
+
+## Local Development
+
+### Developing against production or staging
+
+In order to develop against production, switch your local environment with:
+
+```bash
+moon dev-env:prod
+```
+
+or, for staging:
+
+```bash
+moon dev-env:staging
+```
+
+or, for local dev as of 3/31/25:
+
+```bash
+brew install otel-tui
+```
+
+Open 5 terminals, then run the following:
+
+```bash
+# terminal 1
+otel-tui || otel-desktop-viewer
+
+# terminal 2
+moon dev-env:local
+docker compose -f packages/dev-env/compose.yaml up -d # start qstash, inggest, redis
+pnpx supabase start # start supabase and related services for auth, magic link signin
+moon db:migrate-local # populate local supabase
+moon db:typegen # make sure the types match
+# NOTE: you will need to manually git restore packages/db/schema.sql before committing
+# when working in local mode -- the schema will be not match other envs. Switch to
+# a non-dev mode to generate or run any migrations impacting staging or prod.
+moon repli-store:dev
+
+# terminal 3
+moon git-api-auth:dev
+
+# terminal 4
+moon backend:dev
+
+# terminal 5
+moon vweb:dev # start local app
+```
+
+Once the above services are running, check the console output for `pnpx supabase start` above and
+navigate to Inbucket URL. Use this to check magic link emails when signing up.
+
+You may need to re-run one of the above commands periodically to synchronize changes to environment
+variables.
+
+### Run the development server for an application in the monorepo
+
+Run the `:dev` moon task for the project you want to work on. For example, run any of the following:
+
+```bash
+moon vweb:dev
+moon docs:dev
+moon repli-store:dev
+moon backend:dev
+```
+
+### Developing against local Cloudflare workers
+
+In order to develop against local Cloudflare workers, you can run:
+
+```bash
+moon dev-env:prod-local-workers
+```
+
+or
+
+```bash
+moon dev-env:staging-local-workers
+```
+
+And then run the workers with `moon repli-store:dev`, `moon git-api-auth:dev`, etc.
+
+You can switch back to developing against the live production or staging environments with
+`moon dev-env:prod` or `moon dev-env:staging`, respectively.
+
+## When do I use `pnpm` vs `moon`?
+
+`moon` automatically tries to detect if you need to update your dependencies and does it for you. So
+you shouldn't need to really care much about `pnpm` day to day.
+
+### You should run `pnpm dedupe` when you're bored or confused
+
+Also we have disabled the automatic behavior in `moon` to run `pnpm dedupe` after all lockfile
+changes. In practice it's super slow and slows us down.
+
+**In theory it's not necessary,** it just removes duplicate packages and moves them up closer to the
+monorepo root when possible.
+
+**In the real world** it has a small likelihood to cause or resolve package resolution bugs where
+some code relied on a package being in a certain place in our dep tree.
+
+May you never need to do it, but feel free to try it out sometimes.
+
+## Moon & Task Running
+
+Moon is the tool we use to make our monorepo work good. It has a few jobs.
+
+Think of it as a cross-over between npm scripts and Bazel.
+
+Moon's job is to understand each subsection of the tasks/scripts for each of our packages. It
+creates a dependency tree of all of our tasks, and aggressively caches the result of each task based
+on those dependencies.
+
+If we make high quality tasks that really leverage this, we can make our builds/tasks/rebuilds/ci
+very fast for small changes.
+
+**If you are looking for docs on specific tasks for each of our projects, then check the README for
+that project, or use `moon` to display the available tasks**
+
+### Running tasks
+
+One of moon's primary jobs is to run our tasks. These are like npm scripts, but they're a little
+fancier, but you don't have to know why to use em.
+
+Most of your moon commands are going to be in the format of:
+
+```bash
+moon project-name:task
+```
+
+So if we want to run the `dev` task on the `web` project, then we can run:
+
+```bash
+moon web:dev
+```
+
+### Common tasks
+
+A few tasks work across nearly all of our projects
+
+#### Check prettier formatting
+
+```bash
+moon web:format
+```
+
+#### Write prettier formatting fixes
+
+```bash
+moon web:format-write
+```
+
+#### Run eslint (fixes when possible)
+
+```bash
+moon web:lint
+```
+
+#### Run typechecks
+
+```bash
+moon web:typecheck
+```
+
+### Dependent tasks
+
+One of the ways that tasks are fancier than npm scripts is by being able to declare _dependent_
+tasks. So if your `preview` task requires you to first run the `build` task, then you can simply
+declare `build` as a `dep` of `preview` and it'll always make sure to run `preview` first.
+
+```bash
+moon web:preview
+```
+
+This is all that's necessary to run, because moon knows to run the dependent tasks first.
+
+### Task caching
+
+Another way tasks are fancier than npm scripts is that tasks can optionally declare input and output
+files and folders, and then cache the output based on changed inputs.
+
+So if configured correctly, running a task is nearly instant the second time you run it if nothing
+has changed in its input.
+
+This means that in the previous example for:
+
+```bash
+moon web:preview
+```
+
+The `web:build` task runs the first time, but if you kill it and run it again, it will simply place
+the cached output from the previous run into place. So even if you deleted the output manually,
+it'll put it back for free.
+
+The more we lean into cacheable tasks, the faster we can make our builds.
+
+If you combine this with cross-build task caching, we can also super charge our CI to be super duper
+fast.
+
+### Implicit task dependencies
+
+Now that you know about task dependencies and task caching, it might be nice to revisit the reason
+that `pnpm install` isn't necessary to run all the time in the monorepo.
+
+`pnpm install` is an implicit dependent task of each JavaScript project!
+
+The **input** source files are `package.json` and `pnpm-lock.yaml`, and the **output** is the
+various `node_modules` folders.
+
+So if you simply run a task like `moon web:dev` you can always be sure that if you have the latest
+dependencies installed, it will skip that step, but if someone else updated a dependency since you
+last ran your command, it will automatically run an install first.
+
+### Cool task tricks
+
+Here's some good stuff to know about how the task runner works.
+
+#### Run multiple tasks with the same name across projects
+
+Technically you don't need to provide a `<project-name>` when you run a moon task. If you omit the
+project name, it will run any project that has that task.
+
+So if you wanted to run the lint command on every project that has a lint command you could just
+run:
+
+```bash
+moon :lint
+```
+
+#### Mark a task as `local` if it only is for local development
+
+Add `local: true` to a task in your `moon.yml` and it won't get automatically run in CI. Something
+like `moon web:dev` or `moon web:preview` are also local because they are long running processes
+that would timeout CI, for instance.
+
+#### The `check` command will run all non-local commands for a project
+
+This is roughly what we'd run in CI. It'd run all tests and all builds and all that in most cases,
+but avoid the preview and dev server tasks. If you wanna make sure everything on a project is
+passing and good, try:
+
+```bash
+moon check web
+```
+
+#### If you wanna `check` the whole monorepo, you can
+
+```bash
+moon check --all
+```
+
+#### Use a shared task alias across projects to spin up project groups
+
+Sometimes to spin up a more complex situation you need to run multiple things at once. Sometimes
+it's something like the `api` app and the `web` app at the same time.
+
+We could go to the `moon.yml` for each of these projects and add a task called `hack` that only
+lists `deps`, rather than doing something on its own.
+
+```yaml
+# api/moon.yml
+tasks:
+  generate:
+    - …
+
+  start:
+    - …
+
+  hack:
+    deps:
+      - 'generate'
+      - 'start'
+```
+
+```yaml
+# web/moon.yml
+tasks:
+  dev:
+    - …
+
+  hack:
+    deps:
+      - 'dev'
+```
+
+Then we can run a moon task that has no explicit project, but runs the `hack` task on any project
+that has it:
+
+```bash
+moon :hack
+```
+
+This will spin up both our `api` and `web` tasks as we've configured.
+
+#### Get information about a project
+
+The output is a little verbose, but it can be an easy command to remember.
+
+```bash
+moon project web
+```
+
+#### List just the tasks for a given project
+
+```bash
+moon query tasks --id projectname
+```
+
+#### List all projects
+
+```bash
+moon query projects
+```
+
+#### Run something without the moon cache
+
+In general this shouldn't be necessary, but when debugging, sometimes this feels really nice to
+double check or force.
+
+```bash
+# Works for any command
+moon run app:build --cache off
+```
+
+#### Add an environment variable to a task
+
+In your `moon.yml` file for your project, a task can have a `env` key that adds environment
+variables to the command that it runs.
+
+#### Moon Cheatsheet
+
+Here's the official [Moon Cheatsheet](https://moonrepo.dev/docs/cheat-sheet)
+
+### Shared tasks
+
+One of the other key differences between moon tasks and npm scripts is the ability to share them
+between projects.
+
+It's common in our monorepo to use similar tools across many projects, and with npm scripts we'd
+often need to redeclare identical tasks across several projects.
+
+Like in every single web application, we'd have identical tasks for `npm run dev` and
+`npm run build`, etc.
+
+With `moon` you can optionally declare more "generic" tasks in the `.moon/` directory in the
+monorepo root. And then in one of your packages, you can add some configuration to inherit those
+tasks.
+
+Further, `moon` provides
+[common tasks for popular tools](https://github.com/moonrepo/moon-configs/blob/master/javascript/next/README.md),
+some of which we pull in.
+
+These shared tasks are inherited in one of two primary ways.
+
+We can add "platform" level tasks, that go in the `.moon/tasks/node.yml` file. Or we can add task
+"tags", like `.moon/task/tag-vitest.yml`.
+
+The tasks in the `node.yml` platform level file get applied to all projects that use `node.js`. And
+the tasks in a given "tag" file get applied to any project with a `tags: ['tagname']` configuration.
+
+So if you want to add the default vitest tasks to your new vite application, then add
+`tags: ['vitest']` to your `moon.yml` file in your project. You can add multiple tags if you want.
+
+### Shared Monorepo Tooling
+
+One of the primary goals of a monorepo is to provide strong package isolation, while still enabling
+the fastest approach for sharing code between projects.
+
+For that reason, you should almost _never_ add tooling to the monorepo root. It's almost always more
+appropriate to add to individual packages. If you need something across multiple packages, it
+implies that you might want to create a new package that's depended on by them.
+
+**THAT SAID**
+
+There are a few **non-runtime** developer tools that we choose to run at the monorepo root.
+
+These are:
+
+- eslint
+- prettier
+- vitest
+- typescript
+
+We do this because we value the tradeoffs of configuring these things once for our entire codebase
+on every project. It means each project doesn't need to reinvent the world. It helps maintain
+maximum compatibility across projects, and helps force use to use a single version and configuration
+of these tools.
+
+These tools also all happen to be overridable in each project by their nature.
+
+In the case of typescript, we also gain a lot by running a single typescript instance, rather than
+running and building a ton of independent processes.
+
+If you think a tool should go at the root of the monorepo, definitely discuss it with the crew
+first.
+
+## Adding a dependency
+
+To add a dependency to your project, you'll want to modify the `package.json` file for your specific
+project. In VSCode, if you open a `package.json` file, and begin adding a package, the editor will
+automatically suggest the latest version to you.
+
+It can be nice to edit this file directly because you can me more certain of exactly what's getting
+installed and where.
+
+```js
+  "@some/package": "|    // <-- your cursor there and wait
+```
+
+You can also still use `pnpm add mypackage` or `pnpm add -D mypackage` inside of the project folder.
+Or you can use `pnpm --filter myproject add mypackage` from the monorepo root.
+
+## Importing another package in the monorepo
+
+This is the heart of what a monorepo provides. The ability to import your other packages in your
+`package.json` file, and receive updates in real time as you make changes.
+
+You can do this by adding "workspace dependency" to your `package.json`, just like any other
+dependency.
+
+You will import the package by its name in its own `package.json` file. We tend to follow the
+pattern `@pierre/project-name` - but always good to double check. And instead of a version number,
+you will always just use `workspace:`.
+
+So if I wanted to add a _workspace dependency_ on a theoretical design system package to my app in a
+different part of the monorepo I'd add it like this:
+
+```json
+{
+  "dependencies": {
+    "…": "…",
+    "@pierre/design-system": "workspace:"
+  }
+}
+```
+
+First I would want to wire up typescript, if the project required it (instructions immediately
+below). Then I would then want to run `pnpm install` or restart my task, to make sure that this gets
+wired up.
+
+### Using pnpm catalog dependencies
+
+We use [pnpm catalog dependencies](https://pnpm.io/catalogs) to try to make it easier to use
+dependencies across the monorepo. In general, you should default to using a catalog dependency.
+However, during upgrades, it may be necessary to use a regular versioned dependency if you aren't
+able to upgrade other packages that are using the same dependency.
+
+To add a catalog dependency to your project, you can use the 'catalog:' version specifier.
+
+```json
+{
+  "dependencies": {
+    "…": "…",
+    "some-dependency": "catalog:"
+  }
+}
+```
+
+This means that it will use the dependency as described in the `pnpm-workspace.yaml` file. When the
+`pnpm-workspace.yaml` file is updated, the catalog dependency will be updated to the new version in
+your app.
+
+### Wiring up TypeScript across workspace dependencies
+
+Unfortunately TypeScript maintains its own references to projects outside of the `pnpm` dependency
+ecosystem. If you add a workspace dependency to your project (see above), and you also want the
+types from that project (almost always do), then you'll want to head to the `tsconfig.json` of the
+project that you're adding the dependency to (you don't need to touch the dependency itself).
+
+Then you'll want to provide a reference to the dependent package. You should check out something
+like `apps/web/tsconfig.json` to see this happening in practice, but it'd look something like this:
+
+```json
+{
+  "files": [],
+  "references": [
+    {
+      "path": "../../packages/design-system"
+    }
+  ]
+}
+```
+
+Sorry that this is necessary.
+
+## Code Editor
+
+It's not mandatory, but most of us use `Visual Studio Code`. We have a `.vscode/` directory in the
+monorepo root that will help automatically configure your editor environment to work with our
+tooling.
+
+**IT IS RECOMMENDED TO OPEN VSCODE AT THE MONOREPO ROOT**
+
+Since some of the shared infrastructure for our apps is installed at the monorepo root, it's only
+fully supported to open our workspace at the monorepo root.
+
+If you have the `code` command in your cli, then it'd look like this:
+
+```bash
+code ~/pierre/monorepo
+```
+
+### Navigating files
+
+TODO: look into how to make this experience better.
+
+One downside of opening the monorepo at the root is that the amount of files in your workspace is
+larger than you might enjoy.
+
+For the most part you can use VSCode's fuzzy search with `cmd + p` and type your
+`<project-name> <filename>` and it'll be the first result. As you use VSCode more and more, it'll
+suggest to you the files you open most.
+
+## Other tools you might like
+
+You probably want [Homebrew](https://brew.sh/) if you wanna install these.
+
+### Z
+
+Working in a monorepo in the cli can sometimes mean `cd`-ing to the same few spots a bunch. `z`
+works like a fuzzy `cd`. It checks out ur command history and sends you to the most likely place you
+wanna go.
+
+```bash
+brew install z
+
+# Good chance you need to add this to your .zshrc (or whatever shell u use)
+. /opt/homebrew/etc/profile.d/z.sh
+
+# Restart your terminal
+cd ~/pierre/monorepo
+cd ~
+z mono # Takes you to the monorepo now
+```
+
+Once you install it, you probably need to use `cd` for a little longer so it can learn where you
+like to go.
+
+### Ripgrep
+
+Ripgrep is probably the fastest way to search our whole codebase.
+
+```bash
+brew install rg
+```
+
+Then to search through all of our files in the command line, you can do something like:
+
+```bash
+rg "function Foo"
+```
+
+And it'll be super duper quick about it.
+
+## Bundle analyzer
+
+On `apps/web` we have a bundle analyzer in place if you ever wanna see information about how big our
+production bundles are and what they contain.
+
+To generate this output, run:
+
+```bash
+ANALYZE=true moon web:build
+```
+
+This will run the moon build for `apps/web` and as the bundles are built 3 different browser windows
+will pop up to show you bundle information for node, edge, and client bundles. Client is the most
+important for page performance, but all of them matter for dev/build performance.
+
+## Debugging Environment Problems
+
+Gonna try to keep solutions to common problems here.
+
+### Advanced: Proto and PNPM shims
+
+If you have `pnpm` installed globally via something like `nodenv` or `nvm` then you might need to
+mess with your path so the proto one wins in our directories.
+
+If you have one of those things, they usually only resolve their shim if you've installed it, so you
+might have some luck just running:
+
+```bash
+# Uninstall the pnpm you might have installed with npm
+npm uninstall -g pnpm
+
+# !! Close your terminal and reopen it !!
+
+# Get back to the monorepo
+cd ~/pierre/monorepo
+
+# Check that the global pnpm resolves to proto now
+which pnpm
+# Ideally should say something like
+> /Users/you/.proto/shims/pnpm
+```
+
+If you succeed in getting the proto shim working, you can safely use `pnpm` inside of the monorepo
+and it will continue to update as we update it. If you choose to give up, or you like your setup
+better, you can always invoke the correct `pnpm` through `proto`.
+
+```bash
+# Everything after the -- get sent to pnpm
+proto run pnpm -- install
+```
+
+If you run a weird shell or something, this is what theoretically is added to make the proto shims
+work to your `.zhsrc` file.
+
+If you want this to win over anything else, make sure it's earlier in the path.
+
+```bash
+# proto
+export PROTO_HOME="$HOME/.proto"
+export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
+```
+
+Thanks!
+

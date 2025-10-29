@@ -1,0 +1,487 @@
+import {
+  isNoNewlineNode,
+  type LineNodeType,
+} from '@pierre/diff-parser/DiffParser';
+import { IconNoNewLine } from '@pierre/icons';
+import {
+  memo,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react';
+import { useDiffRenderContext } from '@/contexts/DiffRenderContext';
+import { createMultipleRanges } from '@/lib/selection_utils/createMultipleRanges';
+import { createSingleRange } from '@/lib/selection_utils/createSingleRange';
+import { supportsMultipleRanges } from '@/lib/selection_utils/supportsMultipleRanges';
+import { css } from '@/style/css';
+import { styled } from '@/style/jsx';
+import { emptyLinePatternBG } from '@/style/recipes';
+import { useChangeSurfaceSettings } from '../ChangeSurface/ChangeSurfaceSettingsContext';
+import { HunkIndicator } from './HunkIndicator';
+import { RawTagPile, useTagPileData } from './TagPile';
+import type { DiffPositionMap } from './types';
+
+// FIXME(amadeus): Figure out how to re-work this...
+// const finalRowStyles = css.raw({
+// 	'&:last-child > td': {
+// 		paddingBottom: 'calc(12px - var(--scrollbar-mini-height))',
+// 	},
+// });
+
+const isNotEOFStyles = css({
+  position: 'sticky',
+  left: 0,
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'flex-start',
+  alignItems: 'center',
+  gap: 8,
+  paddingLeft: 16,
+  width: 'fit-content',
+  color: 'var(--color-fg3)',
+});
+
+const rawTagLayoutStyles = css.raw({
+  position: 'absolute',
+  top: 3,
+  left: 16,
+  zIndex: 2,
+  cursor: 'pointer',
+});
+
+const fullWidthColumn = css.raw({ gridColumn: 'span 2' });
+
+const codeWrapStyles = css.raw({
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+});
+
+const codeNoWrapStyles = css.raw({
+  whiteSpace: 'pre',
+});
+
+const deletionStyles = css.raw({
+  color: 'var(--diff-deleted-text)',
+});
+
+const diffContentStyles = css.raw({
+  position: 'relative',
+  width: '100%',
+  paddingLeft: 8,
+  paddingRight: 20,
+  userSelect: 'text',
+
+  '.highlighted &': {
+    color: 'var(--ui-theme-warning-text)',
+    backgroundColor:
+      'color-mix(in srgb, var(--color-yellow) 10%, transparent) !important',
+  },
+});
+
+const diffContentDeletionSelectStyles = css.raw({
+  '[data-selection="additions"] &': {
+    userSelect: 'none',
+  },
+});
+
+const diffContentAdditionSelectStyles = css.raw({
+  '[data-selection="deletions"] &': {
+    userSelect: 'none',
+  },
+});
+
+const diffGutterColumn = css.raw({
+  position: 'sticky',
+  left: 0,
+  paddingLeft: 40,
+  zIndex: 4,
+  userSelect: 'none',
+  paddingRight: 18,
+  gap: 8,
+  textAlign: 'right',
+  flexShrink: 0,
+  boxShadow: '1px 0 0 var(--separator-color, var(--color-bg))',
+  color: 'var(--local-color-text)',
+  backgroundColor: 'var(--local-color-bg, var(--color-bg))',
+});
+
+const deletionNumberColumn = css.raw({ gridColumn: 1 });
+const deletionContentColumn = css.raw({ gridColumn: 2 });
+const additionNumberColumn = css.raw({ gridColumn: 3 });
+const additionContentColumn = css.raw({ gridColumn: 4 });
+
+const diffGutterColumnSeparator = css.raw({
+  borderLeftWidth: 3,
+  borderLeftColor: 'var(--color-bg)',
+});
+
+interface RowProps {
+  children: ReactNode;
+  commentable?: boolean;
+  groupEnd?: boolean;
+  groupStart?: boolean;
+  gutterAccent?: ReactNode;
+  hardEnd?: boolean;
+  hardStart?: boolean;
+  isChange?: boolean;
+  lineNumber: number | null;
+  node: LineNodeType;
+  onHunkPress?(): void;
+  posMap?: DiffPositionMap;
+}
+
+export function DiffRow({
+  children,
+  commentable = true,
+  groupEnd = false,
+  groupStart = false,
+  gutterAccent,
+  hardEnd = false,
+  hardStart = false,
+  isChange = false,
+  lineNumber,
+  node,
+  onHunkPress,
+  posMap,
+}: RowProps) {
+  const diffRenderType = useDiffRenderContext();
+  const {
+    diffSettings: { showDiffBackgroundColors, lineWrap, diffStyle },
+  } = useChangeSurfaceSettings();
+  const type = isChange ? 'change' : node.meta.type;
+  const noNewlineNode = isNoNewlineNode(node);
+  const startPos = posMap?.get(node.firstLeaf()) ?? 0;
+  const lastLeaf = node.lastLeaf();
+  const lastPos = posMap?.get(lastLeaf);
+  const endPos = lastPos ? lastPos + lastLeaf.text.length : 0;
+  const { willRender, ...tagPileData } = useTagPileData({
+    diffRenderType,
+    skip: noNewlineNode,
+    lineNumber,
+    startPos,
+    endPos,
+    isContext: type === 'context',
+  });
+
+  const bgColorsEnabled = showDiffBackgroundColors || diffStyle === 'split';
+  const enableBGStyles =
+    (type !== 'context' && bgColorsEnabled) ||
+    (type === 'context' && !commentable);
+
+  if (noNewlineNode) {
+    // FIXME(amadeus): Check to make sure this isn't broken
+    return (
+      <styled.div
+        css={css.raw(fullWidthColumn, getRowBGStyles(enableBGStyles, type))}
+      >
+        <span className={isNotEOFStyles}>
+          <IconNoNewLine color="fg3" />
+          <span>No newline at end of file</span>
+        </span>
+      </styled.div>
+    );
+  }
+
+  const splitDiff = diffStyle !== 'blended';
+
+  return (
+    <>
+      <styled.div
+        data-type={type}
+        data-diff-style={diffStyle}
+        data-diff-type={diffRenderType}
+        data-linenumber={lineNumber}
+        // NOTE(amadeus): Using empty strings means we get the attribute
+        // without a `true` value which is a bit cleaner
+        data-column-number=""
+        css={css.raw(
+          diffGutterColumn,
+          diffRenderType === 'additions' && diffGutterColumnSeparator,
+          getColorStyles(type),
+          getRowBGStyles(enableBGStyles, type),
+          lineWrap && diffRenderType === 'deletions' && deletionNumberColumn,
+          lineWrap && diffRenderType === 'additions' && additionNumberColumn
+        )}
+      >
+        {willRender ? (
+          <RawTagPile
+            {...tagPileData}
+            css={rawTagLayoutStyles}
+            willRender={willRender}
+          />
+        ) : (
+          !splitDiff && gutterAccent
+        )}
+        <button
+          className={lineNumberButtonStyles}
+          onMouseDown={handleMouseDown}
+        >
+          {lineNumber}
+        </button>
+        {((diffStyle === 'blended' && type !== 'context') ||
+          (diffStyle === 'split' && diffRenderType === 'additions') ||
+          (diffStyle === 'split' && type !== 'context')) && (
+          <HunkIndicator
+            isStandalone={
+              type !== 'context' &&
+              !(showDiffBackgroundColors || diffStyle === 'split')
+            }
+            type={type}
+            groupStart={groupStart}
+            groupEnd={groupEnd}
+            hardStart={hardStart}
+            hardEnd={hardEnd}
+            onPress={onHunkPress}
+          />
+        )}
+      </styled.div>
+      <styled.div
+        data-type={type}
+        data-diff-style={diffStyle}
+        data-diff-type={diffRenderType}
+        data-linenumber={lineNumber}
+        // NOTE(amadeus): Using empty strings means we get the attribute
+        // without a `true` value which is a bit cleaner
+        data-column-content=""
+        data-commentable={commentable ? '' : undefined}
+        css={css.raw(
+          diffContentStyles,
+          diffRenderType === 'deletions' && diffContentDeletionSelectStyles,
+          diffRenderType === 'additions' && diffContentAdditionSelectStyles,
+          getRowBGStyles(enableBGStyles, type),
+          lineWrap ? codeWrapStyles : codeNoWrapStyles,
+          !bgColorsEnabled && node.meta.type === 'deletion' && deletionStyles,
+          lineWrap && diffRenderType === 'deletions' && deletionContentColumn,
+          lineWrap && diffRenderType === 'additions' && additionContentColumn
+        )}
+      >
+        {children}
+      </styled.div>
+    </>
+  );
+}
+
+const defaultColor = css.raw({ '--local-color-text': 'var(--color-fg3)' });
+const deletionColor = css.raw({
+  '--local-color-text': 'var(--diff-deleted-text)',
+});
+const additionColor = css.raw({
+  '--local-color-text': 'var(--diff-added-text)',
+});
+const changeColor = css.raw({
+  '--local-color-text': 'var(--diff-changed-text)',
+});
+
+function getColorStyles(type: 'context' | 'addition' | 'change' | 'deletion') {
+  switch (type) {
+    case 'addition':
+      return additionColor;
+    case 'change':
+      return changeColor;
+    case 'deletion':
+      return deletionColor;
+    default:
+      return defaultColor;
+  }
+}
+
+const lineNumberButtonStyles = css({
+  cursor: 'pointer',
+  border: 'none',
+  outline: 'none',
+  padding: 0,
+  margin: 0,
+
+  // TODO(amadeus): Figure out hover styles...
+  _hover: {
+    opacity: 0.7,
+  },
+
+  '&:before': {
+    content: '""',
+    display: 'block',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
+});
+
+const rowBGAddedStyles = css.raw({
+  backgroundColor: 'var(--ui-theme-success-subtle)',
+});
+
+const rowBGDeletionStyles = css.raw({
+  backgroundColor: 'var(--ui-theme-danger-subtle)',
+});
+
+const rowBGChangedStyles = css.raw({
+  backgroundColor: 'var(--ui-theme-primary-subtle)',
+});
+
+const rowBGContextStyles = css.raw({
+  backgroundColor: 'var(--diff-context-bg)',
+});
+
+function getRowBGStyles(
+  enabled: boolean,
+  type: 'context' | 'addition' | 'change' | 'deletion'
+) {
+  if (!enabled) return undefined;
+  switch (type) {
+    case 'addition':
+      return rowBGAddedStyles;
+    case 'deletion':
+      return rowBGDeletionStyles;
+    case 'change':
+      return rowBGChangedStyles;
+    case 'context':
+      return rowBGContextStyles;
+    default:
+      return undefined;
+  }
+}
+
+function handleMouseDown(event: ReactMouseEvent<HTMLButtonElement>) {
+  const mouseDownNode = getAnchorElement(event.target);
+  const fileWrapperNode = mouseDownNode?.closest('[data-filename]');
+  const selection = window.getSelection();
+  const diffStyle = mouseDownNode?.dataset.diffStyle;
+  const diffType = mouseDownNode?.dataset.diffType;
+  if (
+    selection == null ||
+    mouseDownNode == null ||
+    !(fileWrapperNode instanceof HTMLElement) ||
+    diffStyle == null ||
+    diffType == null
+  ) {
+    console.warn('Invalid selection target');
+    return;
+  }
+  // If there's an existing selection and shift was held
+  const anchorNode = (() => {
+    if (!selection.isCollapsed && event.shiftKey) {
+      return getAnchorElement(selection.anchorNode) ?? mouseDownNode;
+    }
+    return mouseDownNode;
+  })();
+
+  updateSelection({ focusNode: mouseDownNode, anchorNode, selection });
+
+  let lastTarget: Element | null = mouseDownNode;
+  const handleMouseMove = (event: MouseEvent) => {
+    const selection = window.getSelection();
+    const target = getElement(
+      document.elementFromPoint(event.clientX, event.clientY)
+    );
+    if (target === lastTarget || selection == null) {
+      return;
+    }
+    lastTarget = target;
+    const focusNode = getAnchorElement(target);
+    // Lets make sure we are in the same file hunk block
+    const parent = focusNode?.closest('[data-filename]');
+    if (focusNode == null || parent !== fileWrapperNode) {
+      return;
+    }
+
+    updateSelection({ focusNode, anchorNode, selection });
+  };
+
+  const handleMouseUp = () => {
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  window.addEventListener('mousemove', handleMouseMove);
+  window.addEventListener('mouseup', handleMouseUp);
+}
+
+interface UpdateSelectionProps {
+  focusNode: HTMLElement;
+  anchorNode: HTMLElement;
+  selection: Selection;
+}
+
+function updateSelection({
+  focusNode,
+  anchorNode,
+  selection,
+}: UpdateSelectionProps) {
+  selection.removeAllRanges();
+  if (supportsMultipleRanges()) {
+    for (const range of createMultipleRanges(focusNode, anchorNode)) {
+      selection.addRange(range);
+    }
+  } else {
+    selection.addRange(createSingleRange(focusNode, anchorNode));
+  }
+}
+
+function getElement(target: Node | null | undefined): HTMLElement | null {
+  while (target != null && !(target instanceof HTMLElement)) {
+    target = target.parentElement;
+  }
+  return target instanceof HTMLElement ? target : null;
+}
+
+function getAnchorElement(node: unknown): HTMLElement | null {
+  if (!(node instanceof Node)) return null;
+  const element = getElement(node);
+  if (element == null) return null;
+  let anchorElement = element.closest(
+    '[data-column-number], [data-column-content]'
+  );
+  if (anchorElement == null || !(anchorElement instanceof HTMLElement))
+    return null;
+  if (typeof anchorElement.dataset.columnNumber === 'string') {
+    anchorElement = anchorElement.nextElementSibling;
+  }
+  return anchorElement instanceof HTMLElement ? anchorElement : null;
+}
+
+const emptyGutter = css.raw({
+  minHeight: 22,
+  boxShadow: '1px 0 0 var(--separator-color, transparent)',
+  left: 0,
+  zIndex: 4,
+  gridColumn: 'span 2',
+  backgroundPosition: '0 0',
+  backgroundAttachment: 'fixed',
+  display: 'flex',
+  alignItems: 'stretch',
+});
+
+const emptyGutterEdge = css.raw({
+  _before: {
+    content: '""',
+    position: 'sticky',
+    left: 0,
+    borderLeftWidth: 3,
+    borderLeftColor: 'var(--color-bg)',
+    borderRightWidth: 6,
+    borderRightColor: 'color-mix(in srgb, #000 3%, transparent)',
+  },
+});
+
+const emptyDeletion = css.raw({ gridColumn: '1 / 3' });
+const emptyAddition = css.raw({ gridColumn: '3 / 5' });
+
+export const EmptyRow = memo(function EmptyRow() {
+  const diffRenderType = useDiffRenderContext();
+  const {
+    diffSettings: { lineWrap },
+  } = useChangeSurfaceSettings();
+  return (
+    <styled.div
+      css={css.raw(
+        emptyGutter,
+        diffRenderType === 'additions' && emptyGutterEdge,
+        lineWrap && diffRenderType === 'deletions' && emptyDeletion,
+        lineWrap && diffRenderType === 'additions' && emptyAddition
+      )}
+      className={emptyLinePatternBG()}
+    />
+  );
+});

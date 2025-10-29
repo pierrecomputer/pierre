@@ -7,7 +7,7 @@
     "build": "bun run build:diffs && vite build",
     "build:diffs": "(cd ../../packages/precision-diffs && bun run build)",
     "build-types": "tsc --build",
-    "dev": "bun run build:diffs && concurrently \"bun run dev:diffs\" \"bun run dev:vite\" --names \"diffs,vite\" --prefix-colors \"blue,green\"",
+    "dev": "concurrently \"bun run dev:diffs\" \"bun run dev:vite\" --names \"diffs,vite\" --prefix-colors \"blue,green\"",
     "dev:diffs": "(cd ../../packages/precision-diffs && bun run dev)",
     "dev:vite": "vite",
     "preview": "bun run preview",

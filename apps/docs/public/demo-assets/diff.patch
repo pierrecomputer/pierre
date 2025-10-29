@@ -1,0 +1,1361 @@
+commit e4c066d37a38889612d8e3d18089729e4109fd09 (from 2103046f14fe9047609b3921f44c4f406f86d89f)
+Merge: 2103046 7210630
+Author: Amadeus Demarzi <amadeusdemarzi@gmail.com>
+Date:   Mon Sep 15 11:25:22 2025 -0700
+
+    Merge branch 'react-tests'
+
+diff --git a/eslint.config.js b/eslint.config.js
+index c52c9ca..f3b592b 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -2,6 +2,7 @@ import js from '@eslint/js';
+ import tseslint from 'typescript-eslint';
+ 
+ export default tseslint.config(
++  { ignores: ['dist/**'] },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
+@@ -10,7 +11,6 @@ export default tseslint.config(
+         'error',
+         { argsIgnorePattern: '^_' },
+       ],
+-      '@typescript-eslint/no-explicit-any': 'warn',
+     },
+   }
+ );
+diff --git a/index-react.html b/index-react.html
+new file mode 100644
+index 0000000..91440ae
+--- /dev/null
++++ b/index-react.html
+@@ -0,0 +1,17 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
++    <meta
++      name="viewport"
++      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"
++    />
++    <title>PierreJS R&amp;D (React)</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/main.tsx"></script>
++  </body>
++</html>
+diff --git a/index.html b/index.html
+index 4ad10b6..48f4e47 100644
+--- a/index.html
++++ b/index.html
+@@ -3,15 +3,21 @@
+   <head>
+     <meta charset="UTF-8" />
+     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
++    <meta
++      name="viewport"
++      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"
++    />
+     <title>PierreJS R&amp;D</title>
+   </head>
+   <body>
+-    <div class="tools">
+-      <button id="toggle-theme">Toggle Theme</button>
+-      <button id="stream-code">Stream Code</button>
++    <div id="root">
++      <div class="tools">
++        <button id="toggle-theme">Toggle Theme</button>
++        <button id="stream-code">Stream Code</button>
++        <div>[<strong>RAW</strong> / <a href="/react">REACT</a>]</div>
++      </div>
++      <div id="content" class="content" />
+     </div>
+-    <div id="content" class="content"></div>
+     <script type="module" src="/src/main.ts"></script>
+   </body>
+ </html>
+diff --git a/package.json b/package.json
+index 49c608e..fea24f1 100644
+--- a/package.json
++++ b/package.json
+@@ -5,6 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "dev": "vite",
++    "prod": "bun run build && bun run preview",
+     "build": "bun run tsc && vite build",
+     "preview": "vite preview",
+     "tsc": "tsc",
+@@ -16,6 +17,9 @@
+   "devDependencies": {
+     "@eslint/js": "9.33.0",
+     "@types/node": "24.3.1",
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "@vitejs/plugin-react": "^4.3.0",
+     "eslint": "9.33.0",
+     "prettier": "3.6.2",
+     "typescript": "5.9.2",
+@@ -24,6 +28,8 @@
+   },
+   "dependencies": {
+     "@shikijs/core": "3.12.2",
++    "react": "^18.3.0",
++    "react-dom": "^18.3.0",
+     "shiki": "3.12.2"
+   }
+ }
+diff --git a/src/SharedHighlighter.ts b/src/SharedHighlighter.ts
+deleted file mode 100644
+index 0adc39b..0000000
+--- a/src/SharedHighlighter.ts
++++ /dev/null
+@@ -1,78 +0,0 @@
+-import {
+-  type BundledLanguage,
+-  type BundledTheme,
+-  createHighlighter,
+-  createOnigurumaEngine,
+-  createJavaScriptRegexEngine,
+-  type HighlighterGeneric,
+-  loadWasm,
+-} from 'shiki';
+-
+-let highlighter:
+-  | Promise<HighlighterGeneric<BundledLanguage, BundledTheme>>
+-  | undefined;
+-
+-const loadedThemes = new Set<BundledTheme>();
+-const loadedLanguages = new Set<BundledLanguage>();
+-
+-interface HighlighterOptions {
+-  themes: BundledTheme[];
+-  langs: BundledLanguage[];
+-  preferWasmHighlighter?: boolean;
+-}
+-
+-export async function getSharedHighlighter({
+-  themes,
+-  langs,
+-  preferWasmHighlighter = false,
+-}: HighlighterOptions) {
+-  if (highlighter == null) {
+-    // NOTE(amadeus): We should probably build in some logic for rejection
+-    // handling...
+-    highlighter = new Promise((resolve) => {
+-      (preferWasmHighlighter
+-        ? loadWasm(import('shiki/wasm'))
+-        : Promise.resolve()
+-      )
+-        .then(() => {
+-          return createHighlighter({
+-            themes,
+-            langs,
+-            engine: preferWasmHighlighter
+-              ? createOnigurumaEngine()
+-              : createJavaScriptRegexEngine(),
+-          });
+-        })
+-        .then((instance) => {
+-          for (const theme of themes) {
+-            loadedThemes.add(theme);
+-          }
+-          for (const language of langs) {
+-            loadedLanguages.add(language);
+-          }
+-          resolve(instance);
+-        });
+-    });
+-    return highlighter;
+-  }
+-  const loaders: Promise<void>[] = [];
+-  for (const language of langs) {
+-    if (!loadedLanguages.has(language)) {
+-      loadedLanguages.add(language);
+-      loaders.push(highlighter.then((h) => h.loadLanguage(language)));
+-    }
+-  }
+-  for (const theme of themes) {
+-    if (!loadedThemes.has(theme)) {
+-      loadedThemes.add(theme);
+-      loaders.push(highlighter.then((h) => h.loadTheme(theme)));
+-    }
+-  }
+-  return (await Promise.all([highlighter, ...loaders] as const))[0];
+-}
+-
+-export async function disposeHighlighter() {
+-  if (highlighter == null) return;
+-  (await highlighter).dispose();
+-  highlighter = undefined;
+-}
+diff --git a/src/components/App.tsx b/src/components/App.tsx
+new file mode 100644
+index 0000000..35973da
+--- /dev/null
++++ b/src/components/App.tsx
+@@ -0,0 +1,56 @@
++import { useCallback, useState } from 'react';
++import '../style.css';
++import { CodeConfigs, toggleTheme } from '../test_files/';
++import { CodeRenderer, type CodeRendererProps } from './CodeRenderer';
++import { createFakeContentStream } from '../utils/createFakeContentStream';
++import type { BundledLanguage, BundledTheme } from 'shiki';
++import { isHighlighterNull, preloadHighlighter } from 'pierrejs';
++
++export function App() {
++  const [codez, setCodez] = useState<CodeRendererProps[]>([]);
++
++  const handleStartStreaming = useCallback(() => {
++    setCodez(
++      CodeConfigs.map(({ content, letterByLetter, options }) => ({
++        stream: createFakeContentStream(content, letterByLetter),
++        options,
++      }))
++    );
++  }, []);
++
++  const handlePreload = useCallback(() => {
++    if (isHighlighterNull()) {
++      const langs: BundledLanguage[] = [];
++      const themes: BundledTheme[] = [];
++      for (const item of CodeConfigs) {
++        langs.push(item.options.lang);
++        if ('themes' in item.options) {
++          themes.push(item.options.themes.dark);
++          themes.push(item.options.themes.light);
++        } else if ('theme' in item.options) {
++          themes.push(item.options.theme);
++        }
++      }
++      preloadHighlighter({ langs, themes });
++    }
++  }, []);
++
++  return (
++    <>
++      <div className="tools">
++        <button onClick={toggleTheme}>Toggle Theme</button>
++        <button onClick={handleStartStreaming} onMouseEnter={handlePreload}>
++          Stream Code
++        </button>
++        <div>
++          [<a href="/">RAW</a> / <strong>REACT</strong>]
++        </div>
++      </div>
++      <div id="content" className="content">
++        {codez.map((props, index) => (
++          <CodeRenderer {...props} key={index} />
++        ))}
++      </div>
++    </>
++  );
++}
+diff --git a/src/components/CodeRenderer.tsx b/src/components/CodeRenderer.tsx
+new file mode 100644
+index 0000000..92d347f
+--- /dev/null
++++ b/src/components/CodeRenderer.tsx
+@@ -0,0 +1,23 @@
++import {
++  CodeRenderer as CodeRendererClass,
++  type CodeRendererOptions,
++} from 'pierrejs';
++import { useEffect, useRef, useState } from 'react';
++
++export type { CodeRendererOptions };
++
++export interface CodeRendererProps {
++  stream: ReadableStream<string>;
++  options: CodeRendererOptions;
++}
++
++export function CodeRenderer({ stream, options }: CodeRendererProps) {
++  const [codeRenderer] = useState(() => new CodeRendererClass(options));
++  const ref = useRef<HTMLPreElement>(null);
++  useEffect(() => {
++    if (ref.current != null) {
++      codeRenderer.setup(stream, ref.current);
++    }
++  }, []);
++  return <pre ref={ref} />;
++}
+diff --git a/src/main.ts b/src/main.ts
+index 05040be..86be2f5 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -1,59 +1,44 @@
++import type { BundledLanguage, BundledTheme } from 'shiki';
+ import './style.css';
+-import testContent from './tests/example.txt?raw';
+-import testContent2 from './tests/example2.txt?raw';
+-import { createFakeContentStream } from './utils/fakeContentStream';
+-import { CodeRenderer } from './CodeRenderer';
+-import { createScrollFixer } from './utils/createScrollFixer';
+-import { createHighlighterCleanup } from './utils/createHighlighterCleanup';
+-
+-const CODE = [
+-  {
+-    content: testContent,
+-    letterByLetter: false,
+-    options: {
+-      lang: 'typescript',
+-      themes: { dark: 'tokyo-night', light: 'vitesse-light' },
+-      defaultColor: false,
+-      ...createScrollFixer(),
+-      ...createHighlighterCleanup(),
+-    } as const,
+-  },
+-  {
+-    content: testContent2,
+-    letterByLetter: true,
+-    options: {
+-      lang: 'markdown',
+-      themes: { dark: 'solarized-dark', light: 'solarized-light' },
+-      defaultColor: false,
+-      ...createScrollFixer(),
+-      ...createHighlighterCleanup(),
+-    } as const,
+-  },
+-] as const;
++import { CodeConfigs, toggleTheme } from './test_files/';
++import { createFakeContentStream } from './utils/createFakeContentStream';
++import { CodeRenderer, isHighlighterNull, preloadHighlighter } from 'pierrejs';
+ 
+ async function startStreaming(event: MouseEvent) {
+-  const wrapper = document.getElementById('content');
+-  if (wrapper == null) return;
++  const container = document.getElementById('content');
++  if (container == null) return;
+   if (event.currentTarget instanceof HTMLElement) {
+     event.currentTarget.parentNode?.removeChild(event.currentTarget);
+   }
+-  for (const { content, letterByLetter, options } of CODE) {
+-    const instance = new CodeRenderer(
+-      createFakeContentStream(content, letterByLetter),
+-      options
+-    );
+-    instance.setup(wrapper);
++  for (const { content, letterByLetter, options } of CodeConfigs) {
++    const pre = document.createElement('pre');
++    container.appendChild(pre);
++    const instance = new CodeRenderer(options);
++    instance.setup(createFakeContentStream(content, letterByLetter), pre);
+   }
+ }
+ 
+-document.getElementById('toggle-theme')?.addEventListener('click', () => {
+-  const codes = document.querySelectorAll('[data-theme]');
+-  for (const code of codes) {
+-    if (!(code instanceof HTMLElement)) return;
+-    code.dataset.theme = code.dataset.theme === 'light' ? 'dark' : 'light';
++function handlePreload() {
++  if (isHighlighterNull()) {
++    const langs: BundledLanguage[] = [];
++    const themes: BundledTheme[] = [];
++    for (const item of CodeConfigs) {
++      langs.push(item.options.lang);
++      if ('themes' in item.options) {
++        themes.push(item.options.themes.dark);
++        themes.push(item.options.themes.light);
++      } else if ('theme' in item.options) {
++        themes.push(item.options.theme);
++      }
++    }
++    preloadHighlighter({ langs, themes });
+   }
+-});
++}
+ 
+-document
+-  .getElementById('stream-code')
+-  ?.addEventListener('click', startStreaming);
++document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);
++
++const streamCode = document.getElementById('stream-code');
++if (streamCode != null) {
++  streamCode.addEventListener('click', startStreaming);
++  streamCode.addEventListener('mouseenter', handlePreload);
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..2371561
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,6 @@
++import React from 'react';
++import ReactDOM from 'react-dom/client';
++import './style.css';
++import { App } from './components/App';
++
++ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+diff --git a/src/CodeRenderer.ts b/src/pierre-js/CodeRenderer.ts
+similarity index 76%
+rename from src/CodeRenderer.ts
+rename to src/pierre-js/CodeRenderer.ts
+index 068fab5..74c0500 100644
+--- a/src/CodeRenderer.ts
++++ b/src/pierre-js/CodeRenderer.ts
+@@ -7,7 +7,7 @@ import type {
+ import {
+   createRow,
+   createSpanFromToken,
+-  createWrapperNodes,
++  setupWrapperNodes,
+ } from './utils/html_render_utils';
+ import type { BundledLanguage, BundledTheme } from 'shiki';
+ import { queueRender } from './UnversialRenderer';
+@@ -39,7 +39,7 @@ interface CodeTokenOptionsMultiThemes extends CodeTokenOptionsBase {
+   themes: { dark: BundledTheme; light: BundledTheme };
+ }
+ 
+-type CodeRendererOptions =
++export type CodeRendererOptions =
+   | CodeTokenOptionsSingleTheme
+   | CodeTokenOptionsMultiThemes;
+ 
+@@ -50,12 +50,11 @@ type CodeRendererOptions =
+ export class CodeRenderer {
+   highlighter: HighlighterGeneric<BundledLanguage, BundledTheme> | undefined;
+   options: CodeRendererOptions;
+-  stream: ReadableStream<string>;
+-  pre: HTMLPreElement = document.createElement('pre');
+-  code: HTMLElement = document.createElement('code');
++  stream: ReadableStream<string> | undefined;
++  pre: HTMLPreElement | undefined;
++  code: HTMLElement | undefined;
+ 
+-  constructor(stream: ReadableStream<string>, options: CodeRendererOptions) {
+-    this.stream = stream;
++  constructor(options: CodeRendererOptions) {
+     this.options = options;
+     this.currentLineIndex = this.options.startingLineIndex ?? 1;
+   }
+@@ -65,15 +64,44 @@ export class CodeRenderer {
+     return this.highlighter;
+   }
+ 
+-  async setup(wrapper: HTMLElement) {
+-    const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
++  private queuedSetupArgs: [ReadableStream<string>, HTMLPreElement] | undefined;
++  async setup(_stream: ReadableStream<string>, _wrapper: HTMLPreElement) {
++    const isSettingUp = this.queuedSetupArgs != null;
++    this.queuedSetupArgs = [_stream, _wrapper];
++    if (isSettingUp) {
++      // TODO(amadeus): Make it so that this function can be properly
++      // awaitable, maybe?
++      return;
++    }
+     if (this.highlighter == null) {
+       this.highlighter = await this.initializeHighlighter();
+     }
+-    const { pre, code } = createWrapperNodes(this.highlighter);
++
++    const [stream, wrapper] = this.queuedSetupArgs;
++    const { onStreamStart, onStreamClose, onStreamAbort, themes, theme } =
++      this.options;
++    const { pre, code } = setupWrapperNodes(
++      themes != null
++        ? {
++            pre: wrapper,
++            themes,
++            highlighter: this.highlighter,
++          }
++        : {
++            pre: wrapper,
++            theme,
++            highlighter: this.highlighter,
++          }
++    );
++
++    this.queuedSetupArgs = undefined;
+     this.pre = pre;
+-    wrapper.appendChild(this.pre);
+     this.code = code;
++    if (this.stream != null) {
++      // Should we be doing this?
++      this.stream.cancel();
++    }
++    this.stream = stream;
+     this.stream
+       .pipeThrough(
+         new CodeToTokenTransformStream({
+@@ -115,6 +143,7 @@ export class CodeRenderer {
+   private currentLineElement: HTMLElement | undefined;
+   render = () => {
+     this.options.onPreRender?.(this);
++    const linesToAppend: HTMLElement[] = [];
+     for (const token of this.queuedTokens) {
+       if ('recall' in token) {
+         if (this.currentLineElement == null) {
+@@ -133,23 +162,26 @@ export class CodeRenderer {
+       } else {
+         const span = createSpanFromToken(token);
+         if (this.currentLineElement == null) {
+-          this.createLine();
++          linesToAppend.push(this.createLine());
+         }
+         this.currentLineElement?.appendChild(span);
+         if (token.content === '\n') {
+           this.currentLineIndex++;
+-          this.createLine();
++          linesToAppend.push(this.createLine());
+         }
+       }
+     }
++    for (const line of linesToAppend) {
++      this.code?.appendChild(line);
++    }
+     this.queuedTokens.length = 0;
+     this.options.onPostRender?.(this);
+   };
+ 
+   private createLine() {
+     const { row, content } = createRow(this.currentLineIndex);
+-    this.code.appendChild(row);
+     this.currentLineElement = content;
++    return row;
+   }
+ 
+   private getHighlighterOptions() {
+diff --git a/src/pierre-js/SharedHighlighter.ts b/src/pierre-js/SharedHighlighter.ts
+new file mode 100644
+index 0000000..3884765
+--- /dev/null
++++ b/src/pierre-js/SharedHighlighter.ts
+@@ -0,0 +1,138 @@
++import {
++  type BundledLanguage,
++  type BundledTheme,
++  createHighlighter,
++  createOnigurumaEngine,
++  createJavaScriptRegexEngine,
++  type HighlighterGeneric,
++  loadWasm,
++} from 'shiki';
++
++type PierreHighlighter = HighlighterGeneric<BundledLanguage, BundledTheme>;
++
++type CachedOrLoadingHighlighterType =
++  | Promise<PierreHighlighter>
++  | PierreHighlighter
++  | undefined;
++
++let highlighter: CachedOrLoadingHighlighterType;
++
++const loadedThemes = new Map<BundledTheme, true | Promise<void>>();
++const loadedLanguages = new Map<BundledLanguage, true | Promise<void>>();
++
++interface HighlighterOptions {
++  themes: BundledTheme[];
++  langs: BundledLanguage[];
++  preferWasmHighlighter?: boolean;
++}
++
++export async function getSharedHighlighter({
++  themes,
++  langs,
++  preferWasmHighlighter = false,
++}: HighlighterOptions) {
++  if (isHighlighterNull(highlighter)) {
++    // NOTE(amadeus): We should probably build in some logic for rejection
++    // handling...
++    highlighter = new Promise((resolve) => {
++      (preferWasmHighlighter
++        ? loadWasm(import('shiki/wasm'))
++        : Promise.resolve()
++      )
++        .then(() => {
++          // Since we are loading the languages and themes along with the
++          // highlighter, we can just go ahead and mark them as loaded since
++          // they'll be ready when the highlighter is ready which any calls to
++          // getSharedHighlighter will resolve automatically for us
++          for (const theme of themes) {
++            loadedThemes.set(theme, true);
++          }
++          for (const language of langs) {
++            loadedLanguages.set(language, true);
++          }
++          return createHighlighter({
++            themes,
++            langs,
++            engine: preferWasmHighlighter
++              ? createOnigurumaEngine()
++              : createJavaScriptRegexEngine(),
++          });
++        })
++        .then((instance) => {
++          highlighter = instance;
++          resolve(instance);
++        });
++    });
++    return highlighter;
++  }
++  const instance = isHighlighterLoading(highlighter)
++    ? await highlighter
++    : highlighter;
++  const loaders: Promise<void>[] = [];
++  for (const language of langs) {
++    const loadedOrLoading = loadedLanguages.get(language);
++    // We haven't loaded this language yet, so lets queue it up
++    if (loadedOrLoading == null) {
++      const promise = instance
++        .loadLanguage(language)
++        .then(() => void loadedLanguages.set(language, true));
++      loadedLanguages.set(language, promise);
++      loaders.push(promise);
++    }
++    // We are currently loading the language,
++    // so lets queue the existing promise
++    else if (loadedOrLoading !== true) {
++      loaders.push(loadedOrLoading);
++    }
++  }
++  for (const theme of themes) {
++    const loadedOrLoading = loadedThemes.get(theme);
++    // We haven't loaded this theme yet, so lets queue it up
++    if (loadedOrLoading == null) {
++      const promise = instance
++        .loadTheme(theme)
++        .then(() => void loadedThemes.set(theme, true));
++      loadedThemes.set(theme, promise);
++      loaders.push(promise);
++    }
++    // We are currently loading the theme,
++    // so lets queue the existing promise
++    else if (loadedOrLoading !== true) {
++      loaders.push(loadedOrLoading);
++    }
++  }
++  if (loaders.length > 0) {
++    await Promise.all(loaders);
++  }
++  return instance;
++}
++
++export function isHighlighterLoaded(
++  h: CachedOrLoadingHighlighterType = highlighter
++): h is PierreHighlighter {
++  return h != null && !('then' in h);
++}
++
++export function isHighlighterLoading(
++  h: CachedOrLoadingHighlighterType = highlighter
++): h is Promise<PierreHighlighter> {
++  return h != null && 'then' in h;
++}
++
++export function isHighlighterNull(
++  h: CachedOrLoadingHighlighterType = highlighter
++): h is undefined {
++  return h == null;
++}
++
++export async function preloadHighlighter(options: HighlighterOptions) {
++  return void (await getSharedHighlighter(options));
++}
++
++export async function disposeHighlighter() {
++  if (highlighter == null) return;
++  (await highlighter).dispose();
++  loadedThemes.clear();
++  loadedLanguages.clear();
++  highlighter = undefined;
++}
+diff --git a/src/UnversialRenderer.ts b/src/pierre-js/UnversialRenderer.ts
+similarity index 100%
+rename from src/UnversialRenderer.ts
+rename to src/pierre-js/UnversialRenderer.ts
+diff --git a/src/createStreamingHighlighter.ts b/src/pierre-js/createStreamingHighlighter.ts
+similarity index 100%
+rename from src/createStreamingHighlighter.ts
+rename to src/pierre-js/createStreamingHighlighter.ts
+diff --git a/src/pierre-js/index.ts b/src/pierre-js/index.ts
+new file mode 100644
+index 0000000..3fff122
+--- /dev/null
++++ b/src/pierre-js/index.ts
+@@ -0,0 +1,7 @@
++export * from './CodeRenderer';
++export * from './SharedHighlighter';
++export * from './UnversialRenderer';
++export * from './createStreamingHighlighter';
++export * from './shiki-stream';
++export * from './utils/html_render_utils';
++export type * from './types';
+diff --git a/src/shiki-stream/index.ts b/src/pierre-js/shiki-stream/index.ts
+similarity index 100%
+rename from src/shiki-stream/index.ts
+rename to src/pierre-js/shiki-stream/index.ts
+diff --git a/src/shiki-stream/stream.ts b/src/pierre-js/shiki-stream/stream.ts
+similarity index 100%
+rename from src/shiki-stream/stream.ts
+rename to src/pierre-js/shiki-stream/stream.ts
+diff --git a/src/shiki-stream/tokenizer.ts b/src/pierre-js/shiki-stream/tokenizer.ts
+similarity index 100%
+rename from src/shiki-stream/tokenizer.ts
+rename to src/pierre-js/shiki-stream/tokenizer.ts
+diff --git a/src/shiki-stream/types.ts b/src/pierre-js/shiki-stream/types.ts
+similarity index 100%
+rename from src/shiki-stream/types.ts
+rename to src/pierre-js/shiki-stream/types.ts
+diff --git a/src/pierre-js/types.ts b/src/pierre-js/types.ts
+new file mode 100644
+index 0000000..e25b059
+--- /dev/null
++++ b/src/pierre-js/types.ts
+@@ -0,0 +1,6 @@
++import type { BundledTheme } from 'shiki';
++
++export interface ThemesType {
++  dark: BundledTheme;
++  light: BundledTheme;
++}
+diff --git a/src/pierre-js/utils/html_render_utils.ts b/src/pierre-js/utils/html_render_utils.ts
+new file mode 100644
+index 0000000..dfcb5ae
+--- /dev/null
++++ b/src/pierre-js/utils/html_render_utils.ts
+@@ -0,0 +1,90 @@
++import type { BundledLanguage, BundledTheme, HighlighterGeneric } from 'shiki';
++import {
++  getTokenStyleObject,
++  stringifyTokenStyle,
++  type ThemedToken,
++} from 'shiki';
++import type { ThemesType } from 'pierrejs';
++
++interface ThemeVariant {
++  themes?: never;
++  theme: BundledTheme;
++}
++
++interface ThemesVariant {
++  themes: ThemesType;
++  theme?: never;
++}
++
++export function createSpanFromToken(token: ThemedToken) {
++  const element = document.createElement('span');
++  const style = token.htmlStyle ?? getTokenStyleObject(token);
++  element.style = stringifyTokenStyle(style);
++  element.textContent = token.content;
++  return element;
++}
++
++export function createRow(line: number) {
++  const row = document.createElement('div');
++  row.dataset.line = `${line}`;
++
++  const lineColumn = document.createElement('div');
++  lineColumn.dataset.columnNumber = '';
++  lineColumn.textContent = `${line}`;
++
++  const content = document.createElement('div');
++  content.dataset.columnContent = '';
++
++  row.appendChild(lineColumn);
++  row.appendChild(content);
++  return { row, content };
++}
++
++interface SetupWrapperBase {
++  pre: HTMLPreElement;
++  highlighter: HighlighterGeneric<BundledLanguage, BundledTheme>;
++}
++
++interface SetupWrapperTheme extends ThemeVariant, SetupWrapperBase {}
++
++interface SetupWrapperThemes extends ThemesVariant, SetupWrapperBase {}
++
++type SetupWrapperNodesProps = SetupWrapperTheme | SetupWrapperThemes;
++
++export function setupWrapperNodes(props: SetupWrapperNodesProps) {
++  const { pre } = props;
++  // Clean out container
++  pre.innerHTML = '';
++  pre.tabIndex = 0;
++  pre.dataset.pierrejs = '';
++  setWrapperProps(props);
++  const code = document.createElement('code');
++  code.dataset.code = '';
++  pre.appendChild(code);
++  return { pre, code };
++}
++
++function setWrapperProps(
++  { pre, highlighter, theme, themes }: SetupWrapperNodesProps,
++  prefix = 'pjs' // probably should make this our own theme-ing variables
++) {
++  let styles = '';
++  if (theme != null) {
++    const themeData = highlighter.getTheme(theme);
++    styles += `color:${themeData.fg};`;
++    styles += `background-color:${themeData.bg};`;
++    styles += `--${prefix}-fg:${themeData.fg};`;
++    styles += `--${prefix}-bg:${themeData.bg};`;
++    pre.dataset.theme = themeData.type;
++  } else {
++    let themeData = highlighter.getTheme(themes.dark);
++    styles += `--${prefix}-dark:${themeData.fg};`;
++    styles += `--${prefix}-dark-bg:${themeData.bg};`;
++
++    themeData = highlighter.getTheme(themes.light);
++    styles += `--${prefix}-light:${themeData.fg};`;
++    styles += `--${prefix}-light-bg:${themeData.bg};`;
++    pre.dataset.themed = '';
++  }
++  pre.style = styles;
++}
+diff --git a/src/style.css b/src/style.css
+index d096b05..953e276 100644
+--- a/src/style.css
++++ b/src/style.css
+@@ -18,8 +18,16 @@
+   box-sizing: border-box;
+ }
+ 
++@media (prefers-color-scheme: dark) {
++  :root {
++    color: #ffffff;
++    background-color: #242424;
++  }
++}
++
+ html,
+-body {
++body,
++#root {
+   display: block;
+   margin: 0;
+   padding: 0;
+@@ -35,7 +43,7 @@ body {
+   -ms-text-size-adjust: 100%;
+ }
+ 
+-body {
++#root {
+   margin: 0;
+   min-width: 320px;
+   display: grid;
+@@ -47,9 +55,10 @@ a {
+   font-weight: 500;
+   color: #646cff;
+   text-decoration: inherit;
+-}
+-a:hover {
+-  color: #747bff;
++
++  &:hover {
++    color: #747bff;
++  }
+ }
+ 
+ button {
+@@ -61,10 +70,18 @@ button {
+   font-family: inherit;
+   background-color: #f9f9f9;
+   cursor: pointer;
++
++  &:hover {
++    border-color: #646cff;
++  }
+ }
+-button:hover {
+-  border-color: #646cff;
++
++@media (prefers-color-scheme: dark) {
++  button {
++    background-color: #1a1a1a;
++  }
+ }
++
+ button:focus,
+ button:focus-visible {
+   outline: 4px auto -webkit-focus-ring-color;
+@@ -85,6 +102,14 @@ code {
+   max-width: 100%;
+   box-sizing: border-box;
+   z-index: 2;
++  display: flex;
++  gap: 12px;
++}
++
++@media (prefers-color-scheme: dark) {
++  .tools {
++    background-color: rgba(36, 36, 36, 0.8);
++  }
+ }
+ 
+ .content {
+@@ -95,7 +120,7 @@ code {
+   width: 100%;
+ }
+ 
+-[data-pre] {
++[data-pierrejs] {
+   overflow-y: auto;
+   scrollbar-width: none;
+   min-height: 0;
+@@ -124,12 +149,40 @@ code {
+ 
+ [data-line]:hover [data-column-number],
+ [data-line]:hover [data-column-content] {
+-  background-color: color-mix(in srgb, var(--shiki-dark-bg) 95%, white);
++  background-color: color-mix(
++    in srgb,
++    var(--pjs-light-bg, var(--pjs-bg)) 95%,
++    black
++  );
++}
++
++@media (prefers-color-scheme: dark) {
++  [data-line]:hover [data-column-number],
++  [data-line]:hover [data-column-content] {
++    background-color: color-mix(
++      in srgb,
++      var(--pjs-dark-bg, var(--pjs-bg)) 95%,
++      white
++    );
++  }
+ }
+ 
+ [data-theme='light'] [data-line]:hover [data-column-number],
+ [data-theme='light'] [data-line]:hover [data-column-content] {
+-  background-color: color-mix(in srgb, var(--shiki-light-bg) 95%, black);
++  background-color: color-mix(
++    in srgb,
++    var(--pjs-light-bg, var(--pjs-bg)) 95%,
++    black
++  );
++}
++
++[data-theme='dark'] [data-line]:hover [data-column-number],
++[data-theme='dark'] [data-line]:hover [data-column-content] {
++  background-color: color-mix(
++    in srgb,
++    var(--pjs-dark-bg, var(--pjs-bg)) 95%,
++    white
++  );
+ }
+ 
+ [data-column-number] {
+@@ -140,7 +193,13 @@ code {
+   padding-inline: 8px;
+   user-select: none;
+   min-width: 32px;
+-  color: color-mix(in srgb, currentColor 50%, #000);
++  color: color-mix(in srgb, currentColor 50%, #fff);
++}
++
++@media (prefers-color-scheme: dark) {
++  [data-column-number] {
++    color: color-mix(in srgb, currentColor 50%, #000);
++  }
+ }
+ 
+ [data-theme='light'] [data-column-number] {
+@@ -152,28 +211,56 @@ code {
+   min-height: 22px;
+ }
+ 
+-[data-theme='light'] {
+-  background-color: var(--shiki-light-bg);
+-  color: var(--shiki-light);
++[data-pierrejs] {
++  background-color: var(--pjs-light-bg);
++  color: var(--pjs-light);
+ 
+   & span {
+-    color: var(--shiki-light);
++    color: var(--pjs-light);
+   }
+ 
+   & [data-column-number] {
+-    background-color: var(--shiki-light-bg);
++    background-color: var(--pjs-light-bg);
++  }
++}
++
++@media (prefers-color-scheme: dark) {
++  [data-pierrejs] {
++    background-color: var(--pjs-dark-bg);
++    color: var(--pjs-dark);
++
++    & span {
++      color: var(--pjs-dark);
++    }
++
++    & [data-column-number] {
++      background-color: var(--pjs-dark-bg);
++    }
++  }
++}
++
++[data-theme='light'] {
++  background-color: var(--pjs-light-bg);
++  color: var(--pjs-light);
++
++  & span {
++    color: var(--pjs-light);
++  }
++
++  & [data-column-number] {
++    background-color: var(--pjs-light-bg);
+   }
+ }
+ 
+ [data-theme='dark'] {
+-  background-color: var(--shiki-dark-bg);
+-  color: var(--shiki-dark);
++  background-color: var(--pjs-dark-bg);
++  color: var(--pjs-dark);
+ 
+   & span {
+-    color: var(--shiki-dark);
++    color: var(--pjs-dark);
+   }
+ 
+   & [data-column-number] {
+-    background-color: var(--shiki-dark-bg);
++    background-color: var(--pjs-dark-bg);
+   }
+ }
+diff --git a/src/tests/example2.txt b/src/test_files/example_md.txt
+similarity index 100%
+rename from src/tests/example2.txt
+rename to src/test_files/example_md.txt
+diff --git a/src/tests/example.txt b/src/test_files/example_ts.txt
+similarity index 100%
+rename from src/tests/example.txt
+rename to src/test_files/example_ts.txt
+diff --git a/src/test_files/index.ts b/src/test_files/index.ts
+new file mode 100644
+index 0000000..d2c1176
+--- /dev/null
++++ b/src/test_files/index.ts
+@@ -0,0 +1,50 @@
++import { createScrollFixer } from '../utils/createScrollFixer';
++import mdContent from './example_md.txt?raw';
++import tsContent from './example_ts.txt?raw';
++import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
++
++export { mdContent, tsContent };
++
++export const CodeConfigs = [
++  {
++    content: tsContent,
++    letterByLetter: false,
++    options: {
++      lang: 'typescript',
++      theme: 'tokyo-night',
++      defaultColor: false,
++      ...createScrollFixer(),
++      ...createHighlighterCleanup(),
++    } as const,
++  },
++  {
++    content: mdContent,
++    letterByLetter: true,
++    options: {
++      lang: 'markdown',
++      themes: { dark: 'solarized-dark', light: 'solarized-light' },
++      defaultColor: false,
++      ...createScrollFixer(),
++      ...createHighlighterCleanup(),
++    } as const,
++  },
++] as const;
++
++export function toggleTheme() {
++  for (const pre of document.querySelectorAll('[data-themed]')) {
++    if (!(pre instanceof HTMLElement)) return;
++
++    const currentTheme = pre.dataset.theme;
++    const systemDark = window.matchMedia(
++      '(prefers-color-scheme: dark)'
++    ).matches;
++
++    if (currentTheme === 'light') {
++      pre.dataset.theme = 'dark';
++    } else if (currentTheme === 'dark') {
++      delete pre.dataset.theme;
++    } else {
++      pre.dataset.theme = systemDark ? 'light' : 'dark';
++    }
++  }
++}
+diff --git a/src/utils/fakeContentStream.ts b/src/utils/createFakeContentStream.ts
+similarity index 93%
+rename from src/utils/fakeContentStream.ts
+rename to src/utils/createFakeContentStream.ts
+index 1ea6fb8..b347f34 100644
+--- a/src/utils/fakeContentStream.ts
++++ b/src/utils/createFakeContentStream.ts
+@@ -1,4 +1,4 @@
+-import { queueRender } from '../UnversialRenderer';
++import { queueRender } from '../pierre-js/UnversialRenderer';
+ 
+ export function createFakeContentStream(data: string, letterByLetter = false) {
+   return new ReadableStream<string>({
+diff --git a/src/utils/createHighlighterCleanup.ts b/src/utils/createHighlighterCleanup.ts
+index 49441f1..7afd0e4 100644
+--- a/src/utils/createHighlighterCleanup.ts
++++ b/src/utils/createHighlighterCleanup.ts
+@@ -1,4 +1,4 @@
+-import { disposeHighlighter } from '../SharedHighlighter';
++import { disposeHighlighter } from 'pierrejs';
+ 
+ let totalInstances = 0;
+ let completed = 0;
+diff --git a/src/utils/createScrollFixer.ts b/src/utils/createScrollFixer.ts
+index deae807..43002be 100644
+--- a/src/utils/createScrollFixer.ts
++++ b/src/utils/createScrollFixer.ts
+@@ -1,16 +1,23 @@
+-import type { CodeRenderer } from '../CodeRenderer';
++import type { CodeRenderer } from 'pierrejs';
+ 
+ export function createScrollFixer() {
+   let isScrolledToBottom = false;
+   return {
+     onPreRender(instance: CodeRenderer) {
++      const { pre } = instance;
++      if (pre == null) {
++        throw new Error('onPostRender: pre wrapper does not exist');
++      }
+       isScrolledToBottom =
+-        instance.pre.scrollTop + instance.pre.clientHeight >=
+-        instance.pre.scrollHeight - 1;
++        pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 1;
+     },
+     onPostRender(instance: CodeRenderer) {
++      const { pre } = instance;
++      if (pre == null) {
++        throw new Error('onPostRender: pre wrapper does not exist');
++      }
+       if (isScrolledToBottom) {
+-        instance.pre.scrollTop = instance.pre.scrollHeight;
++        pre.scrollTop = pre.scrollHeight;
+       }
+     },
+   };
+diff --git a/src/utils/html_render_utils.ts b/src/utils/html_render_utils.ts
+deleted file mode 100644
+index 6bb9c34..0000000
+--- a/src/utils/html_render_utils.ts
++++ /dev/null
+@@ -1,58 +0,0 @@
+-import type { HighlighterGeneric } from 'shiki';
+-import {
+-  getTokenStyleObject,
+-  stringifyTokenStyle,
+-  type ThemedToken,
+-} from 'shiki';
+-
+-export function createSpanFromToken(token: ThemedToken) {
+-  const element = document.createElement('span');
+-  const style = token.htmlStyle ?? getTokenStyleObject(token);
+-  element.style = stringifyTokenStyle(style);
+-  element.textContent = token.content;
+-  return element;
+-}
+-
+-export function createRow(line: number) {
+-  const row = document.createElement('div');
+-  row.dataset.line = `${line}`;
+-
+-  const lineColumn = document.createElement('div');
+-  lineColumn.dataset.columnNumber = '';
+-  lineColumn.textContent = `${line}`;
+-
+-  const content = document.createElement('div');
+-  content.dataset.columnContent = '';
+-
+-  row.appendChild(lineColumn);
+-  row.appendChild(content);
+-  return { row, content };
+-}
+-
+-export function createWrapperNodes(
+-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+-  highlighter: HighlighterGeneric<any, any>
+-) {
+-  const pre = document.createElement('pre');
+-  pre.tabIndex = 0;
+-  pre.dataset.theme = 'dark';
+-  pre.dataset.pre = '';
+-  pre.style = getEditorStyles(highlighter);
+-  const code = document.createElement('code');
+-  code.dataset.code = '';
+-  pre.appendChild(code);
+-  return { pre, code };
+-}
+-
+-export function getEditorStyles(
+-  highlighter: HighlighterGeneric<any, any>,
+-  prefix: string = 'shiki'
+-) {
+-  let styles = '';
+-  for (const themeKey of highlighter.getLoadedThemes()) {
+-    const theme = highlighter.getTheme(themeKey);
+-    styles += `--${prefix}-${theme.type}:${theme.fg};`;
+-    styles += `--${prefix}-${theme.type}-bg:${theme.bg};`;
+-  }
+-  return styles;
+-}
+diff --git a/tsconfig.json b/tsconfig.json
+index 7a670d7..b96ccff 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -2,10 +2,17 @@
+   "compilerOptions": {
+     "target": "ES2022",
+     "useDefineForClassFields": true,
++    "jsx": "react-jsx",
+     "module": "ESNext",
+     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+     "skipLibCheck": true,
+ 
++    /* Path aliases */
++    "baseUrl": ".",
++    "paths": {
++      "pierrejs": ["src/pierre-js"]
++    },
++
+     /* Bundler mode */
+     "moduleResolution": "bundler",
+     "allowImportingTsExtensions": true,
+diff --git a/vercel.json b/vercel.json
+new file mode 100644
+index 0000000..070cc0d
+--- /dev/null
++++ b/vercel.json
+@@ -0,0 +1,13 @@
++{
++  "rewrites": [
++    {
++      "source": "/react",
++      "destination": "/index-react.html"
++    },
++    {
++      "source": "/react/",
++      "destination": "/index-react.html"
++    }
++  ]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..ff38bc0
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,105 @@
++import { defineConfig } from 'vite';
++import type { ViteDevServer, PreviewServer, Plugin } from 'vite';
++import react from '@vitejs/plugin-react';
++import path, { resolve } from 'path';
++import fs from 'fs';
++import type { IncomingMessage, ServerResponse } from 'http';
++
++export default defineConfig(() => {
++  const htmlPlugin = (): Plugin => ({
++    name: 'html-fallback',
++    configureServer(server: ViteDevServer) {
++      const handleRoutes = async (
++        req: IncomingMessage,
++        res: ServerResponse,
++        next: () => void
++      ) => {
++        // Handle root path - serve vanilla version
++        if (req.url === '/' || req.url === '/index.html') {
++          const htmlPath = resolve(__dirname, 'index.html');
++          try {
++            const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
++            const html = await server.transformIndexHtml('/', htmlContent);
++            res.setHeader('Content-Type', 'text/html');
++            res.end(html);
++            return;
++          } catch (e) {
++            console.error('Error transforming HTML:', e);
++          }
++        }
++
++        // Handle /react path - serve React version
++        if (req.url === '/react' || req.url === '/react/') {
++          const htmlPath = resolve(__dirname, 'index-react.html');
++          try {
++            const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
++            const html = await server.transformIndexHtml('/react', htmlContent);
++            res.setHeader('Content-Type', 'text/html');
++            res.end(html);
++            return;
++          } catch (e) {
++            console.error('Error transforming React HTML:', e);
++          }
++        }
++
++        next();
++      };
++
++      server.middlewares.use('/', handleRoutes);
++    },
++    configurePreviewServer(server: PreviewServer) {
++      const handleRoutes = async (
++        req: IncomingMessage,
++        res: ServerResponse,
++        next: () => void
++      ) => {
++        // Handle root path - serve vanilla version
++        if (req.url === '/' || req.url === '/index.html') {
++          const htmlPath = resolve(__dirname, 'dist/index.html');
++          try {
++            const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
++            res.setHeader('Content-Type', 'text/html');
++            res.end(htmlContent);
++            return;
++          } catch (e) {
++            console.error('Error serving HTML:', e);
++          }
++        }
++
++        // Handle /react path - serve React version
++        if (req.url === '/react' || req.url === '/react/') {
++          const htmlPath = resolve(__dirname, 'dist/index-react.html');
++          try {
++            const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
++            res.setHeader('Content-Type', 'text/html');
++            res.end(htmlContent);
++            return;
++          } catch (e) {
++            console.error('Error serving React HTML:', e);
++          }
++        }
++
++        next();
++      };
++
++      server.middlewares.use('/', handleRoutes);
++    },
++  });
++
++  return {
++    plugins: [react(), htmlPlugin()],
++    build: {
++      rollupOptions: {
++        input: {
++          main: resolve(__dirname, 'index.html'),
++          react: resolve(__dirname, 'index-react.html'),
++        },
++      },
++    },
++    resolve: {
++      alias: {
++        pierrejs: path.resolve(__dirname, './src/pierre-js/index.ts'),
++      },
++    },
++  };
++});
