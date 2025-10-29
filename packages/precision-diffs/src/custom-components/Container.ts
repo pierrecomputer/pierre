@@ -32,3 +32,5 @@ if (
 
   customElements.define('file-diff', PJSContainer);
 }
+
+export const PJSContainerLoaded = true;

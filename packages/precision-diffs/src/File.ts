@@ -10,6 +10,7 @@ import {
 } from './FileRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
 import { HEADER_METADATA_SLOT_ID } from './constants';
+import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
   FileContents,
@@ -72,7 +73,12 @@ export type FileOptions<LAnnotation> =
   | FileThemeOptions<LAnnotation>
   | FileThemesOptions<LAnnotation>;
 
+let instanceId = -1;
+
 export class File<LAnnotation = undefined> {
+  static LoadedCustomComponent: boolean = PJSContainerLoaded;
+
+  readonly __id: number = ++instanceId;
   private fileRenderer: FileRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
   private fileContainer: HTMLElement | undefined;

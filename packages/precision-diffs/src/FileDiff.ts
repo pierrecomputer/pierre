@@ -8,7 +8,7 @@ import {
 } from './FileHeaderRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
 import { HEADER_METADATA_SLOT_ID } from './constants';
-import './custom-components/Container';
+import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
   AnnotationSide,
@@ -106,7 +106,14 @@ export type DiffFileRendererOptions<LAnnotation> =
   | DiffFileThemeRendererOptions<LAnnotation>
   | DiffFileThemesRendererOptions<LAnnotation>;
 
+let instanceId = -1;
+
 export class FileDiff<LAnnotation = undefined> {
+  // NOTE(amadeus): We sorta need this to ensure the web-component file is
+  // properly loaded
+  static LoadedCustomComponent: boolean = PJSContainerLoaded;
+
+  readonly __id: number = ++instanceId;
   options: DiffFileRendererOptions<LAnnotation>;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
