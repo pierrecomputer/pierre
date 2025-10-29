@@ -76,39 +76,45 @@ code {
   padding: 10px;
   font-weight: 700;
   color: var(--fg);
-  background-color: color-mix(in srgb, var(--bg) 98%, var(--fg));
-  border-block: 1px solid color-mix(in srgb, var(--bg) 95%, var(--fg));
+  /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
+   * and vscode use an older build of chrome that appears to have a bug with
+   * color-mix and 'in oklch', so use 'in lab' instead */
+  background-color: color-mix(in lab, var(--bg) 98%, var(--fg));
+  border-block: 1px solid color-mix(in lab, var(--bg) 95%, var(--fg));
 }
 
 [data-pjs-header],
 [data-pjs] {
   --pjs-bg: light-dark(var(--pjs-light-bg), var(--pjs-dark-bg));
+  /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
+   * and vscode use an older build of chrome that appears to have a bug with
+   * color-mix and 'in oklch', so use 'in lab' instead */
   --pjs-bg-buffer: var(
     --pjs-bg-buffer-override,
     light-dark(
-      color-mix(in srgb, var(--pjs-bg) 92%, var(--pjs-mixer)),
-      color-mix(in srgb, var(--pjs-bg) 92%, var(--pjs-mixer))
+      color-mix(in lab, var(--pjs-bg) 92%, var(--pjs-mixer)),
+      color-mix(in lab, var(--pjs-bg) 92%, var(--pjs-mixer))
     )
   );
   --pjs-bg-hover: var(
     --pjs-bg-hover-override,
     light-dark(
-      color-mix(in srgb, var(--pjs-bg) 97%, var(--pjs-mixer)),
-      color-mix(in srgb, var(--pjs-bg) 91%, var(--pjs-mixer))
+      color-mix(in lab, var(--pjs-bg) 97%, var(--pjs-mixer)),
+      color-mix(in lab, var(--pjs-bg) 91%, var(--pjs-mixer))
     )
   );
   --pjs-bg-context: var(
     --pjs-bg-context-override,
     light-dark(
-      color-mix(in srgb, var(--pjs-bg) 98.5%, var(--pjs-mixer)),
-      color-mix(in srgb, var(--pjs-bg) 92.5%, var(--pjs-mixer))
+      color-mix(in lab, var(--pjs-bg) 98.5%, var(--pjs-mixer)),
+      color-mix(in lab, var(--pjs-bg) 92.5%, var(--pjs-mixer))
     )
   );
   --pjs-bg-separator: var(
     --pjs-bg-separator-override,
     light-dark(
-      color-mix(in srgb, var(--pjs-bg) 96%, var(--pjs-mixer)),
-      color-mix(in srgb, var(--pjs-bg) 85%, var(--pjs-mixer))
+      color-mix(in lab, var(--pjs-bg) 96%, var(--pjs-mixer)),
+      color-mix(in lab, var(--pjs-bg) 85%, var(--pjs-mixer))
     )
   );
 
@@ -116,8 +122,8 @@ code {
   --pjs-fg-number: var(
     --pjs-fg-number-override,
     light-dark(
-      color-mix(in srgb, var(--pjs-fg) 65%, var(--pjs-bg)),
-      color-mix(in srgb, var(--pjs-fg) 65%, var(--pjs-bg))
+      color-mix(in lab, var(--pjs-fg) 65%, var(--pjs-bg)),
+      color-mix(in lab, var(--pjs-fg) 65%, var(--pjs-bg))
     )
   );
 
@@ -152,25 +158,28 @@ code {
     )
   );
 
+  /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
+   * and vscode use an older build of chrome that appears to have a bug with
+   * color-mix and 'in oklch', so use 'in lab' instead */
   --pjs-bg-deletion: var(
     --pjs-bg-deletion-override,
     light-dark(
-      color-mix(in oklch, var(--pjs-bg) 88%, var(--pjs-deletion-base)),
-      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-deletion-base))
+      color-mix(in lab, var(--pjs-bg) 88%, var(--pjs-deletion-base)),
+      color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-deletion-base))
     )
   );
   --pjs-bg-deletion-number: var(
     --pjs-bg-deletion-number-override,
     light-dark(
-      color-mix(in oklch, var(--pjs-bg) 91%, var(--pjs-deletion-base)),
-      color-mix(in oklch, var(--pjs-bg) 85%, var(--pjs-deletion-base))
+      color-mix(in lab, var(--pjs-bg) 91%, var(--pjs-deletion-base)),
+      color-mix(in lab, var(--pjs-bg) 85%, var(--pjs-deletion-base))
     )
   );
   --pjs-bg-deletion-hover: var(
     --pjs-bg-deletion-hover-override,
     light-dark(
-      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-deletion-base)),
-      color-mix(in oklch, var(--pjs-bg) 75%, var(--pjs-deletion-base))
+      color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-deletion-base)),
+      color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-deletion-base))
     )
   );
   --pjs-bg-deletion-emphasis: var(
@@ -184,22 +193,22 @@ code {
   --pjs-bg-addition: var(
     --pjs-bg-addition-override,
     light-dark(
-      color-mix(in oklch, var(--pjs-bg) 88%, var(--pjs-addition-base)),
-      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-addition-base))
+      color-mix(in lab, var(--pjs-bg) 88%, var(--pjs-addition-base)),
+      color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-addition-base))
     )
   );
   --pjs-bg-addition-number: var(
     --pjs-bg-addition-number-override,
     light-dark(
-      color-mix(in oklch, var(--pjs-bg) 91%, var(--pjs-addition-base)),
-      color-mix(in oklch, var(--pjs-bg) 85%, var(--pjs-addition-base))
+      color-mix(in lab, var(--pjs-bg) 91%, var(--pjs-addition-base)),
+      color-mix(in lab, var(--pjs-bg) 85%, var(--pjs-addition-base))
     )
   );
   --pjs-bg-addition-hover: var(
     --pjs-bg-addition-hover-override,
     light-dark(
-      color-mix(in oklch, var(--pjs-bg) 80%, var(--pjs-addition-base)),
-      color-mix(in oklch, var(--pjs-bg) 70%, var(--pjs-addition-base))
+      color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-addition-base)),
+      color-mix(in lab, var(--pjs-bg) 70%, var(--pjs-addition-base))
     )
   );
   --pjs-bg-addition-emphasis: var(
