@@ -6,7 +6,7 @@ import {
   hasLoadedLanguage,
   hasLoadedThemes,
 } from './SharedHighlighter';
-import { SPLIT_WITH_NEWLINES } from './constants';
+import { DEFAULT_THEMES, SPLIT_WITH_NEWLINES } from './constants';
 import type {
   CodeToHastOptions,
   DecorationItem,
@@ -24,7 +24,9 @@ import type {
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
+import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { getThemes } from './utils/getThemes';
 import {
   createHastElement,
   createPreWrapperProperties,
@@ -124,7 +126,7 @@ export class FileRenderer<LAnnotation = undefined> {
         this.options.lang ?? getFiletypeFromFileName(file.name);
       if (
         !hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(this.getThemes())
+        !hasLoadedThemes(getThemes(this.options))
       ) {
         this.highlighter = undefined;
       }
@@ -289,7 +291,7 @@ export class FileRenderer<LAnnotation = undefined> {
       };
     }
     return {
-      themes: this.options.themes,
+      themes: this.options.themes ?? DEFAULT_THEMES,
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,
@@ -299,40 +301,9 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   async initializeHighlighter(): Promise<PJSHighlighter> {
-    this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
+    this.highlighter = await getSharedHighlighter(
+      getHighlighterOptions(this.computedLang, this.options)
+    );
     return this.highlighter;
-  }
-
-  private getHighlighterOptions(): {
-    langs: SupportedLanguages[];
-    themes: PJSThemeNames[];
-    preferWasmHighlighter?: boolean;
-  } {
-    const { themes: _themes, theme, preferWasmHighlighter } = this.options;
-    const themes: PJSThemeNames[] = [];
-    if (theme != null) {
-      themes.push(theme);
-    } else if (themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return {
-      langs: [this.computedLang],
-      themes,
-      preferWasmHighlighter,
-    };
-  }
-
-  private getThemes(): PJSThemeNames[] {
-    const themes: PJSThemeNames[] = [];
-    const { theme, themes: _themes } = this.options;
-    if (theme != null) {
-      themes.push(theme);
-    }
-    if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return themes;
   }
 }

@@ -1,4 +1,3 @@
-import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -7,9 +6,12 @@ import {
   hasLoadedLanguage,
   hasLoadedThemes,
 } from './SharedHighlighter';
+import { DEFAULT_THEMES } from './constants';
 import type {
+  AnnotationLineMap,
   AnnotationSpan,
   BaseDiffProps,
+  ChangeHunk,
   CodeToHastOptions,
   DecorationItem,
   DiffLineAnnotation,
@@ -18,7 +20,6 @@ import type {
   HunkData,
   HunkLineType,
   LineInfo,
-  LineSpans,
   PJSHighlighter,
   PJSThemeNames,
   SharedRenderState,
@@ -28,30 +29,22 @@ import type {
   ThemeTypes,
   ThemesRendererOptions,
 } from './types';
+import { createMirroredAnnotationSpan } from './utils/createMirroredAnnotationSpan';
+import { createSingleAnnotationSpan } from './utils/createSingleAnnotationSpan';
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
+import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from './utils/getHunkSeparatorSlotName';
-import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { getThemes } from './utils/getThemes';
 import {
   createHastElement,
   createPreWrapperProperties,
   createSeparator,
 } from './utils/hast_utils';
+import { parseDecorations } from './utils/parseDiffDecorations';
 import { parseLineType } from './utils/parseLineType';
-
-type AnnotationLineMap<LAnnotation> = Record<
-  number,
-  DiffLineAnnotation<LAnnotation>[] | undefined
->;
-
-interface ChangeHunk {
-  diffGroupStartIndex: number;
-  deletionStartIndex: number;
-  additionStartIndex: number;
-  deletionLines: string[];
-  additionLines: string[];
-}
+import { pushOrMergeSpan } from './utils/pushOrMergeSpan';
 
 interface RenderHunkProps {
   hunk: Hunk;
@@ -88,11 +81,15 @@ interface ProcessLinesReturn {
 
 interface DiffHunkRendererThemeOptions
   extends BaseDiffProps,
-    ThemeRendererOptions {}
+    ThemeRendererOptions {
+  useCSSClasses?: boolean;
+}
 
 interface DiffHunkRendererThemesOptions
   extends BaseDiffProps,
-    ThemesRendererOptions {}
+    ThemesRendererOptions {
+  useCSSClasses?: boolean;
+}
 
 export type DiffHunksRendererOptions =
   | DiffHunkRendererThemeOptions
@@ -112,10 +109,18 @@ export interface HunksRenderResult {
 }
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
-  highlighter: PJSHighlighter | undefined;
-  options: DiffHunksRendererOptions;
-  diff: FileDiffMetadata | undefined;
-  expandedHunks: Set<number> = new Set();
+  private highlighter: PJSHighlighter | undefined;
+  private options: DiffHunksRendererOptions;
+  private diff: FileDiffMetadata | undefined;
+
+  private expandedHunks = new Set<number>();
+
+  private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
+
+  private queuedDiff: FileDiffMetadata | undefined;
+  private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
+  private computedLang: SupportedLanguages = 'text';
 
   constructor(
     options: DiffHunksRendererOptions = {
@@ -159,13 +164,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.mergeOptions({ themeType });
   }
 
-  private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
-  private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
   setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     for (const annotation of lineAnnotations) {
-      const map = (() => {
+      const map = ((): AnnotationLineMap<LAnnotation> => {
         switch (annotation.side) {
           case 'deletions':
             return this.deletionAnnotations;
@@ -181,11 +184,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   getOptionsWithDefaults(): OptionsWithDefaults {
     const {
-      diffStyle = 'split',
       diffIndicators = 'bars',
-      expandUnchanged = false,
+      diffStyle = 'split',
       disableBackground = false,
       disableLineNumbers = false,
+      expandUnchanged = false,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
@@ -193,52 +196,51 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       overflow = 'scroll',
       theme,
       themeType = 'system',
-      themes,
+      themes = DEFAULT_THEMES,
+      useCSSClasses = false,
     } = this.options;
-    if (themes != null) {
+    if (theme != null) {
       return {
         diffIndicators,
         diffStyle,
-        expandUnchanged,
         disableBackground,
         disableLineNumbers,
+        expandUnchanged,
         hunkSeparators,
         lineDiffType,
         maxLineDiffLength,
         maxLineLengthForHighlighting,
         overflow,
+        theme,
         themeType,
-        themes,
-      } as Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>;
+        useCSSClasses,
+      } as Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
     }
     return {
       diffIndicators,
       diffStyle,
-      expandUnchanged,
       disableBackground,
       disableLineNumbers,
+      expandUnchanged,
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
       maxLineLengthForHighlighting,
       overflow,
       themeType,
-      theme,
-    } as Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
+      themes,
+      useCSSClasses,
+    } as Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>;
   }
 
   async initializeHighlighter(): Promise<PJSHighlighter> {
-    this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
+    this.highlighter = await getSharedHighlighter(
+      getHighlighterOptions(this.computedLang, this.options)
+    );
     return this.highlighter;
   }
 
-  private queuedDiff: FileDiffMetadata | undefined;
-  private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
-  private computedLang: SupportedLanguages = 'text';
-  async render(
-    diff: FileDiffMetadata,
-    shouldUseClasses: boolean = false
-  ): Promise<HunksRenderResult | undefined> {
+  async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
     this.queuedDiff = diff;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -251,7 +253,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // themes
       if (
         !hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(this.getThemes())
+        !hasLoadedThemes(getThemes(this.options))
       ) {
         this.highlighter = undefined;
       }
@@ -262,11 +264,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         // should just return early with empty result
         return undefined;
       }
-      return this.renderDiff(
-        this.queuedDiff,
-        this.highlighter,
-        shouldUseClasses
-      );
+      return this.renderDiff(this.queuedDiff, this.highlighter);
     })();
     const result = await this.queuedRender;
     this.queuedDiff = undefined;
@@ -276,8 +274,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private renderDiff(
     fileDiff: FileDiffMetadata,
-    highlighter: PJSHighlighter,
-    useCSSClasses: boolean = false
+    highlighter: PJSHighlighter
   ): HunksRenderResult {
     const options = this.getOptionsWithDefaults();
     const {
@@ -288,7 +285,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableBackground,
       diffIndicators,
       expandUnchanged,
-    } = options;
+      useCSSClasses,
+    } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
     const additionsAST: ElementContent[] = [];
@@ -454,7 +452,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
     return {
-      themes: this.options.themes,
+      themes: this.options.themes ?? DEFAULT_THEMES,
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,
@@ -532,7 +530,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           linesAST.push(createSeparator({ type: 'simple' }));
         }
       }
-      for (const line of this.getLineNodes(nodes)) {
+      for (const line of getLineNodes(nodes)) {
         linesAST.push(line);
       }
       if (
@@ -578,8 +576,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     prevHunk: Hunk | undefined,
     isLastHunk: boolean
   ): ProcessLinesReturn {
-    const { maxLineLengthForHighlighting, diffStyle, expandUnchanged } =
-      this.getOptionsWithDefaults();
+    const {
+      maxLineLengthForHighlighting,
+      diffStyle,
+      expandUnchanged,
+      lineDiffType,
+      maxLineDiffLength,
+    } = this.getOptionsWithDefaults();
     const { deletionAnnotations, additionAnnotations } = this;
     // NOTE(amadeus): We will probably need to rectify this
     // for full additions/deletions
@@ -651,7 +654,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       type: 'addition' | 'deletion',
       line: string,
       span: AnnotationSpan | undefined
-    ) {
+    ): ChangeHunk {
       if (currentChangeGroup == null) {
         currentChangeGroup = {
           // In unified layout, deletionLineIndex and additionLineIndex won't
@@ -932,7 +935,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     resolveUnresolvedSpans();
 
     const { unifiedDecorations, deletionDecorations, additionDecorations } =
-      this.parseDecorations(diffGroups);
+      parseDecorations({
+        diffGroups,
+        lineDiffType,
+        diffStyle,
+        maxLineDiffLength,
+      });
     return {
       hasLongLines,
       additions: {
@@ -952,391 +960,26 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       },
     };
   }
-
-  private parseDecorations(
-    diffGroups: ChangeHunk[],
-    disableDecorations = false
-  ) {
-    const { lineDiffType, maxLineDiffLength, diffStyle } =
-      this.getOptionsWithDefaults();
-    const unified = diffStyle === 'unified';
-    const unifiedDecorations: DecorationItem[] = [];
-    const additionDecorations: DecorationItem[] = [];
-    const deletionDecorations: DecorationItem[] = [];
-    if (disableDecorations || lineDiffType === 'none') {
-      return { unifiedDecorations, deletionDecorations, additionDecorations };
-    }
-    for (const group of diffGroups) {
-      const len = Math.min(
-        group.additionLines.length,
-        group.deletionLines.length
-      );
-      for (let i = 0; i < len; i++) {
-        const deletionLine = group.deletionLines[i];
-        const additionLine = group.additionLines[i];
-        if (deletionLine == null || additionLine == null) {
-          break;
-        }
-        // Lets skep running diffs on super long lines because it's probably
-        // expensive and hard to follow
-        if (
-          deletionLine.length > maxLineDiffLength ||
-          additionLine.length > maxLineDiffLength
-        ) {
-          continue;
-        }
-        const lineDiff =
-          lineDiffType === 'char'
-            ? diffChars(deletionLine, additionLine)
-            : diffWordsWithSpace(deletionLine, additionLine);
-        const deletionSpans: [0 | 1, string][] = [];
-        const additionSpans: [0 | 1, string][] = [];
-        const enableJoin = lineDiffType === 'word-alt';
-        for (const item of lineDiff) {
-          if (!item.added && !item.removed) {
-            pushOrJoinSpan({
-              item,
-              arr: deletionSpans,
-              enableJoin,
-              isNeutral: true,
-            });
-            pushOrJoinSpan({
-              item,
-              arr: additionSpans,
-              enableJoin,
-              isNeutral: true,
-            });
-          } else if (item.removed) {
-            pushOrJoinSpan({ item, arr: deletionSpans, enableJoin });
-          } else {
-            pushOrJoinSpan({ item, arr: additionSpans, enableJoin });
-          }
-        }
-        let spanIndex = 0;
-        for (const span of additionSpans) {
-          if (span[0] === 1) {
-            (unified ? unifiedDecorations : additionDecorations).push(
-              createDiffSpanDecoration({
-                line: group.additionStartIndex + i,
-                spanStart: spanIndex,
-                spanLength: span[1].length,
-              })
-            );
-          }
-          spanIndex += span[1].length;
-        }
-        spanIndex = 0;
-        for (const span of deletionSpans) {
-          if (span[0] === 1) {
-            (unified ? unifiedDecorations : deletionDecorations).push(
-              createDiffSpanDecoration({
-                line: group.deletionStartIndex + i,
-                spanStart: spanIndex,
-                spanLength: span[1].length,
-              })
-            );
-          }
-          spanIndex += span[1].length;
-        }
-      }
-    }
-    return { unifiedDecorations, deletionDecorations, additionDecorations };
-  }
-
-  private getLineNodes(nodes: Root): ElementContent[] {
-    let firstChild: RootContent | Element | Root | null = nodes.children[0];
-    while (firstChild != null) {
-      if (firstChild.type === 'element' && firstChild.tagName === 'code') {
-        return firstChild.children;
-      }
-      if ('children' in firstChild) {
-        firstChild = firstChild.children[0];
-      } else {
-        firstChild = null;
-      }
-    }
-    console.error(nodes);
-    throw new Error(
-      'DiffHunksRenderer.getNodesToRender: Unable to find children'
-    );
-  }
-
-  private getHighlighterOptions() {
-    const { themes: _themes, theme, preferWasmHighlighter } = this.options;
-    const themes: PJSThemeNames[] = [];
-    if (theme != null) {
-      themes.push(theme);
-    } else if (themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return {
-      langs: [this.computedLang],
-      themes,
-      preferWasmHighlighter,
-    };
-  }
-
-  private getThemes(): PJSThemeNames[] {
-    const themes: PJSThemeNames[] = [];
-    const { theme, themes: _themes } = this.options;
-    if (theme != null) {
-      themes.push(theme);
-    }
-    if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return themes;
-  }
 }
 
-interface CreateDiffSpanDecorationProps {
-  line: number;
-  spanStart: number;
-  spanLength: number;
-}
-
-function createDiffSpanDecoration({
-  line,
-  spanStart,
-  spanLength,
-}: CreateDiffSpanDecorationProps): DecorationItem {
-  return {
-    start: { line, character: spanStart },
-    end: { line, character: spanStart + spanLength },
-    properties: { 'data-diff-span': '' },
-    alwaysWrap: true,
-  };
-}
-
-interface CreateSingleAnnotationProps<LAnnotation> {
-  hunkIndex: number;
-  lineIndex: number;
-  rowNumber: number;
-  annotationMap: AnnotationLineMap<LAnnotation>;
-}
-
-function createSingleAnnotationSpan<LAnnotation>({
-  rowNumber,
-  hunkIndex,
-  lineIndex,
-  annotationMap,
-}: CreateSingleAnnotationProps<LAnnotation>): AnnotationSpan | undefined {
-  const span: AnnotationSpan = {
-    type: 'annotation',
-    hunkIndex,
-    lineIndex,
-    annotations: [],
-  };
-  for (const anno of annotationMap[rowNumber] ?? []) {
-    span.annotations.push(getLineAnnotationName(anno));
-  }
-  return span.annotations.length > 0 ? span : undefined;
-}
-
-interface CreateMirroredAnnotationSpanProps<LAnnotation> {
-  deletionLineNumber: number;
-  additionLineNumber: number;
-  hunkIndex: number;
-  lineIndex: number;
-  deletionAnnotations: AnnotationLineMap<LAnnotation>;
-  additionAnnotations: AnnotationLineMap<LAnnotation>;
-}
-
-function createMirroredAnnotationSpan<LAnnotation>(
-  props: CreateMirroredAnnotationSpanProps<LAnnotation> & { unified: true }
-): AnnotationSpan | undefined;
-function createMirroredAnnotationSpan<LAnnotation>(
-  props: CreateMirroredAnnotationSpanProps<LAnnotation> & { unified: false }
-): [AnnotationSpan, AnnotationSpan] | [undefined, undefined];
-function createMirroredAnnotationSpan<LAnnotation>({
-  deletionLineNumber,
-  additionLineNumber,
-  hunkIndex,
-  lineIndex,
-  deletionAnnotations,
-  additionAnnotations,
-  unified,
-}: CreateMirroredAnnotationSpanProps<LAnnotation> & { unified: boolean }):
-  | [AnnotationSpan, AnnotationSpan]
-  | [undefined, undefined]
-  | AnnotationSpan
-  | undefined {
-  const dAnnotations: string[] = [];
-  for (const anno of deletionAnnotations[deletionLineNumber] ?? []) {
-    dAnnotations.push(getLineAnnotationName(anno));
-  }
-  const aAnnotations: string[] = [];
-  for (const anno of additionAnnotations[additionLineNumber] ?? []) {
-    (unified ? dAnnotations : aAnnotations).push(getLineAnnotationName(anno));
-  }
-  if (aAnnotations.length === 0 && dAnnotations.length === 0) {
-    if (unified) {
-      return undefined;
+function getLineNodes(nodes: Root): ElementContent[] {
+  let firstChild: RootContent | Element | Root | null = nodes.children[0];
+  while (firstChild != null) {
+    if (firstChild.type === 'element' && firstChild.tagName === 'code') {
+      return firstChild.children;
     }
-    return [undefined, undefined];
-  }
-  if (unified) {
-    return {
-      type: 'annotation',
-      hunkIndex,
-      lineIndex,
-      annotations: dAnnotations,
-    };
-  }
-  return [
-    {
-      type: 'annotation',
-      hunkIndex,
-      lineIndex,
-      annotations: dAnnotations,
-    },
-    {
-      type: 'annotation',
-      hunkIndex,
-      lineIndex,
-      annotations: aAnnotations,
-    },
-  ];
-}
-
-function pushOrMergeSpan(
-  span: LineSpans | undefined,
-  index: number,
-  spanMap: Record<number, LineInfo | undefined>
-) {
-  if (span == null) {
-    return;
-  }
-  let lineInfo = spanMap[index];
-  // If we need to inject a gap at the top of a column, then we'll make a
-  // `fake` lineInfo for it.
-  if (lineInfo == null && index === 0 && span.type === 'gap') {
-    lineInfo = {
-      type: 'context',
-      lineNumber: -1,
-      lineIndex: -1,
-      spans: [],
-    };
-    spanMap[0] = lineInfo;
-  } else if (lineInfo == null) {
-    console.error('pushOrMergeSpan: Attempting to apply an invalid span', {
-      span,
-      index,
-      spanMap,
-    });
-    return;
-  }
-  const spans = lineInfo.spans ?? [];
-  lineInfo.spans = spans;
-  if (spans.length === 0) {
-    spans.push(span);
-  }
-  // If we get in here, we may need to split up some gaps to split up some gaps
-  else {
-    let gapSize = span.type === 'gap' ? span.rows : 0;
-    const annotations: AnnotationSpan[] = [];
-    let merged = false;
-    for (const item of spans) {
-      if (item.type === 'annotation') {
-        if (span.type === 'annotation' && span.lineIndex === item.lineIndex) {
-          merged = true;
-          item.annotations = mergeAnnotations(
-            item.annotations,
-            span.annotations
-          );
-        }
-        annotations.push(item);
-      } else {
-        gapSize += item.rows;
-      }
+    if ('children' in firstChild) {
+      firstChild = firstChild.children[0];
+    } else {
+      firstChild = null;
     }
-    if (span.type === 'annotation' && !merged) {
-      annotations.push(span);
-    }
-    const spanMarkers: (AnnotationSpan | 0)[] = new Array(gapSize).fill(0);
-    for (const annotation of annotations) {
-      const annotationIndex = annotation.lineIndex - lineInfo.lineIndex;
-      const currentItem = spanMarkers[annotationIndex];
-      if (currentItem === 0 || currentItem == null) {
-        spanMarkers.splice(annotationIndex, 0, annotation);
-      } else {
-        // NOTE(amadeus): Hopefully we never get in here, but theoretically
-        // it's possible... so we'll merge the annotations together
-        currentItem.annotations = mergeAnnotations(
-          currentItem.annotations,
-          annotation.annotations
-        );
-      }
-    }
-    const newSpans: LineSpans[] = [];
-    let spanSize = 0;
-    for (const item of spanMarkers) {
-      if (item === 0) {
-        spanSize++;
-      } else {
-        if (spanSize > 0) {
-          newSpans.push({ type: 'gap', rows: spanSize });
-          spanSize = 0;
-        }
-        newSpans.push(item);
-      }
-    }
-    if (spanSize > 0) {
-      newSpans.push({ type: 'gap', rows: spanSize });
-    }
-    lineInfo.spans = newSpans;
   }
-}
-
-function mergeAnnotations(base: string[], newAnnotations: string[]): string[] {
-  if (newAnnotations.length === 0) {
-    return base;
-  }
-  const baseSet = new Set(base);
-  for (const item of newAnnotations) {
-    baseSet.add(item);
-  }
-  return Array.from(baseSet);
+  console.error(nodes);
+  throw new Error(
+    'DiffHunksRenderer.getNodesToRender: Unable to find children'
+  );
 }
 
 function getModifiedLinesString(lines: number) {
   return `${lines} unmodified line${lines > 1 ? 's' : ''}`;
-}
-
-interface PushOrJoinSpanProps {
-  item: ChangeObject<string>;
-  arr: [0 | 1, string][];
-  enableJoin: boolean;
-  isNeutral?: boolean;
-}
-
-// For diff decoration spans, we want to be sure that if there is a single
-// white-space gap between diffs that we join them together into a longer diff span.
-// Spans are basically just a tuple - 1 means the content should be
-// highlighted, 0 means it should not, we still need to the span data to figure
-// out span positions
-function pushOrJoinSpan({
-  item,
-  arr,
-  enableJoin,
-  isNeutral = false,
-}: PushOrJoinSpanProps) {
-  const lastItem = arr[arr.length - 1];
-  if (lastItem == null || item.value === '\n' || !enableJoin) {
-    arr.push([isNeutral ? 0 : 1, item.value]);
-    return;
-  }
-  const isLastItemNeutral = lastItem[0] === 0;
-  if (
-    isNeutral === isLastItemNeutral ||
-    // If we have a single space neutral item, lets join it to a previously
-    // space non-neutral item to avoid single space gaps
-    (isNeutral && item.value.length === 1 && !isLastItemNeutral)
-  ) {
-    lastItem[1] += item.value;
-    return;
-  }
-  arr.push([isNeutral ? 0 : 1, item.value]);
 }

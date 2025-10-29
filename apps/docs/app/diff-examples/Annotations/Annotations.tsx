@@ -152,7 +152,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         <MultiFileDiff
           {...prerenderedDiff}
           className="overflow-hidden rounded-lg border"
-          // @ts-expect-error lol
           options={{
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
@@ -447,7 +446,6 @@ export function AcceptRejectExample({
         title="Accept/Reject Changes"
         description="Annotations can also be used to build interactive code review interfaces. This example demonstrates accept/reject style buttons attached to each change, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
       />
-      {/*  @ts-expect-error lol */}
       <MultiFileDiff
         {...fileDiffProps}
         className="overflow-hidden rounded-lg border"

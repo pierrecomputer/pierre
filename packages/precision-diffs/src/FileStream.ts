@@ -5,12 +5,12 @@ import type {
   BaseCodeProps,
   PJSHighlighter,
   PJSThemeNames,
-  SupportedLanguages,
   ThemeTypes,
   ThemedToken,
   ThemesType,
 } from './types';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
+import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import {
   createCodeNode,
   createRow,
@@ -82,7 +82,9 @@ export class FileStream {
   }
 
   private async initializeHighlighter(): Promise<PJSHighlighter> {
-    this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
+    this.highlighter = await getSharedHighlighter(
+      getHighlighterOptions(this.options.lang, this.options)
+    );
     return this.highlighter;
   }
 
@@ -230,31 +232,6 @@ export class FileStream {
     const { row, content } = createRow(this.currentLineIndex);
     this.currentLineElement = content;
     return row;
-  }
-
-  private getHighlighterOptions(): {
-    langs: SupportedLanguages[];
-    themes: PJSThemeNames[];
-    preferWasmHighlighter?: boolean;
-  } {
-    const {
-      lang,
-      themes: _themes,
-      theme,
-      preferWasmHighlighter,
-    } = this.options;
-    const langs: SupportedLanguages[] = [];
-    if (lang != null) {
-      langs.push(lang);
-    }
-    const themes: PJSThemeNames[] = [];
-    if (theme != null) {
-      themes.push(theme);
-    } else if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return { langs, themes, preferWasmHighlighter };
   }
 
   private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {

@@ -1,3 +1,5 @@
+import type { ThemesType } from './types';
+
 // Misc patch/content parsing regexes
 export const COMMIT_METADATA_SPLIT: RegExp = /(?=^From [a-f0-9]+ .+$)/m;
 export const GIT_DIFF_FILE_BREAK_REGEX: RegExp = /(?=^diff --git)/gm;
@@ -15,3 +17,8 @@ export const FILE_MODE_FROM_INDEX: RegExp =
   /^index (?:[0-9a-f]+)\.\.(?:[0-9a-f]+)(?: (\d+))?/;
 
 export const HEADER_METADATA_SLOT_ID = 'header-metadata';
+
+export const DEFAULT_THEMES: ThemesType = {
+  dark: 'pierre-dark',
+  light: 'pierre-light',
+};

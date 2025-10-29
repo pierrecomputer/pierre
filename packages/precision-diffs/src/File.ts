@@ -18,11 +18,11 @@ import type {
   LineEventBaseProps,
   ObservedGridNodes,
   PJSHighlighter,
-  PJSThemeNames,
   RenderFileMetadata,
   ThemeTypes,
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { getThemes } from './utils/getThemes';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 
 export interface OnLineClickProps extends LineEventBaseProps {
@@ -79,18 +79,25 @@ export class File<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = PJSContainerLoaded;
 
   readonly __id: number = ++instanceId;
-  private fileRenderer: FileRenderer<LAnnotation>;
-  private headerRenderer: FileHeaderRenderer;
+
   private fileContainer: HTMLElement | undefined;
+  private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
-  private spriteSVG: SVGElement | undefined;
+
+  private headerElement: HTMLElement | undefined;
+  private headerMetadata: HTMLElement | undefined;
+
+  private fileRenderer: FileRenderer<LAnnotation>;
+  private headerRenderer: FileHeaderRenderer;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
 
   private observedNodes = new Map<HTMLElement, ObservedGridNodes>();
   private resizeObserver: ResizeObserver | undefined;
+
+  private file: FileContents | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = {
@@ -118,7 +125,16 @@ export class File<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
+    this.headerRenderer.setThemeType(themeType);
     this.fileRenderer.setThemeType(themeType);
+
+    if (this.headerElement != null) {
+      if (themeType === 'system') {
+        delete this.headerElement.dataset.themeType;
+      } else {
+        this.headerElement.dataset.themeType = themeType;
+      }
+    }
 
     // Update pre element theme mode
     if (this.pre != null) {
@@ -132,16 +148,6 @@ export class File<LAnnotation = undefined> {
           break;
       }
     }
-
-    // Don't currently have a header renderer for files yet...
-    // but i need to add it
-    // if (this.headerElement != null) {
-    //   if (themeType === 'system') {
-    //     delete this.headerElement.dataset.themeType;
-    //   } else {
-    //     this.headerElement.dataset.themeType = themeType;
-    //   }
-    // }
   }
 
   setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
@@ -160,7 +166,7 @@ export class File<LAnnotation = undefined> {
     this.fileContainer = undefined;
   }
 
-  hydrate(props: FileRenderProps<LAnnotation>): void {
+  async hydrate(props: FileRenderProps<LAnnotation>): Promise<void> {
     if (props.fileContainer == null) {
       throw new Error(
         'FileDiff: you must provide a fileContainer on hydration'
@@ -187,7 +193,7 @@ export class File<LAnnotation = undefined> {
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      void this.render(props);
+      await this.render(props);
     }
     // Otherwise orchestrate our setup
     else {
@@ -204,7 +210,6 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private file: FileContents | undefined;
   async render({
     file,
     fileContainer,
@@ -213,7 +218,7 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
   }: FileRenderProps<LAnnotation>): Promise<void> {
     if (!forceRender && deepEquals(this.file, file)) {
-      return undefined;
+      return;
     }
 
     this.file = file;
@@ -237,7 +242,7 @@ export class File<LAnnotation = undefined> {
     }
 
     const [highlighter, headerResult, fileResult] = await Promise.all([
-      getSharedHighlighter({ themes: this.getThemes(), langs: [] }),
+      getSharedHighlighter({ themes: getThemes(this.options), langs: [] }),
       !disableFileHeader ? this.headerRenderer.render(file) : undefined,
       this.fileRenderer.render(file),
     ]);
@@ -248,7 +253,7 @@ export class File<LAnnotation = undefined> {
 
     fileContainer = this.getOrCreateFileContainer(fileContainer);
     if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer, file);
+      this.applyHeaderToDOM(headerResult, fileContainer);
     }
 
     if (fileResult != null) {
@@ -262,7 +267,7 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  renderAnnotations(): void {
+  private renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       return;
     }
@@ -300,15 +305,11 @@ export class File<LAnnotation = undefined> {
     pre.appendChild(this.code);
   }
 
-  private headerElement: HTMLElement | undefined;
-  private headerMetadata: HTMLElement | undefined;
-  private applyHeaderToDOM(
-    headerHTML: Element,
-    container: HTMLElement,
-    file: FileContents
-  ): void {
+  private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
+    const { file } = this;
+    if (file == null) return;
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerHTML);
+    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
     const newHeader = tempDiv.firstElementChild;
     if (!(newHeader instanceof HTMLElement)) {
       return;
@@ -358,7 +359,7 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
+  private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
@@ -395,9 +396,11 @@ export class File<LAnnotation = undefined> {
   };
 
   hoveredRow: LineEventBaseProps | undefined;
+
   handleMouseMove = (event: MouseEvent): void => {
     this.handleMouseEvent({ eventType: 'move', event });
   };
+
   handleMouseLeave = (): void => {
     if (this.hoveredRow == null || this.file == null) return;
     this.options.onLineLeave?.(this.hoveredRow, this.file);
@@ -491,19 +494,6 @@ export class File<LAnnotation = undefined> {
       diffIndicators: 'none',
       disableBackground: true,
     });
-  }
-
-  private getThemes(): PJSThemeNames[] {
-    const themes: PJSThemeNames[] = [];
-    const { theme, themes: _themes } = this.options;
-    if (theme != null) {
-      themes.push(theme);
-    }
-    if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return themes;
   }
 
   private setupResizeObserver() {

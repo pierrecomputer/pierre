@@ -4,7 +4,7 @@ import Footer from '@/components/Footer';
 import { IconBell } from '@/components/icons';
 import { Header } from '@/components/ui/header';
 import type { DiffLineAnnotation } from '@pierre/precision-diffs';
-import { FileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import '@pierre/precision-diffs/ssr';
 import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
@@ -114,9 +114,8 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
               Toggle Diff Style
             </button>
           </div>
-          <FileDiff<AnnotationMetadata>
+          <MultiFileDiff<AnnotationMetadata>
             {...preloadedFileDiff}
-            // @ts-expect-error lol
             options={{
               ...preloadedFileDiff.options,
               diffStyle,

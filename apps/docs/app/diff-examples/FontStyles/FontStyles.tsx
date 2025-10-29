@@ -139,8 +139,6 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
       </div>
       <MultiFileDiff
         {...prerenderedDiff}
-        // @ts-expect-error lol
-        options={{ ...prerenderedDiff.options, hunkSeparators: 'line-info' }}
         className="overflow-hidden rounded-lg border"
         style={
           {
