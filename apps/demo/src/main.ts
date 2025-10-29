@@ -173,22 +173,13 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
           console.info('onLineNumberClick', props);
         },
         // Super noisy, but for debuggin
-        // onLineEnter(props, diff) {
-        //   console.log(
-        //     diff.name,
-        //     'onLineEnter',
-        //     props.annotationSide,
-        //     props.lineNumber
-        //   );
+        // onLineEnter(props) {
+        //   console.log('onLineEnter', props.annotationSide, props.lineNumber);
         // },
-        // onLineLeave(props, diff) {
-        //   console.log(
-        //     diff.name,
-        //     'onLineLeave',
-        //     props.annotationSide,
-        //     props.lineNumber
-        //   );
+        // onLineLeave(props) {
+        //   console.log('onLineLeave', props.annotationSide, props.lineNumber);
         // },
+        // __debugMouseEvents: 'none',
       });
 
       const fileContainer = document.createElement('file-diff');

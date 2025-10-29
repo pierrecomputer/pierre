@@ -32,6 +32,8 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
+type LogTypes = 'click' | 'move' | 'both' | 'none';
+
 interface ScrollSyncState {
   isDeletionsScrolling: boolean;
   isAdditionsScrolling: boolean;
@@ -89,12 +91,16 @@ interface DiffFileBaseOptions<LAnnotation> {
 interface DiffFileThemeRendererOptions<LAnnotation>
   extends Omit<BaseDiffProps, 'hunkSeparators'>,
     ThemeRendererOptions,
-    DiffFileBaseOptions<LAnnotation> {}
+    DiffFileBaseOptions<LAnnotation> {
+  __debugMouseEvents?: LogTypes;
+}
 
 interface DiffFileThemesRendererOptions<LAnnotation>
   extends Omit<BaseDiffProps, 'hunkSeparators'>,
     ThemesRendererOptions,
-    DiffFileBaseOptions<LAnnotation> {}
+    DiffFileBaseOptions<LAnnotation> {
+  __debugMouseEvents?: LogTypes;
+}
 
 export type DiffFileRendererOptions<LAnnotation> =
   | DiffFileThemeRendererOptions<LAnnotation>
@@ -454,6 +460,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private attachEventListeners(pre: HTMLPreElement) {
+    const { __debugMouseEvents } = this.options;
     // Remove old event listeners if they exist, probably don't
     pre.removeEventListener('click', this.handleMouseClick);
     pre.removeEventListener('mousemove', this.handleMouseMove);
@@ -474,11 +481,44 @@ export class FileDiff<LAnnotation = undefined> {
       typeof hunkSeparators === 'function'
     ) {
       pre.addEventListener('click', this.handleMouseClick);
+      debugLogIfEnabled(
+        __debugMouseEvents,
+        'click',
+        'FileDiff.DEBUG.attachEventListeners: Attaching click events for:',
+        (() => {
+          const reasons: string[] = [];
+          if (__debugMouseEvents === 'both' || __debugMouseEvents === 'click') {
+            if (onLineClick != null) {
+              reasons.push('onLineClick');
+            }
+            if (onLineNumberClick != null) {
+              reasons.push('onLineNumberClick');
+            }
+            if (hunkSeparators === 'line-info') {
+              reasons.push('line-info separators');
+            }
+            if (typeof hunkSeparators === 'function') {
+              reasons.push('custom hunk separators');
+            }
+          }
+          return reasons;
+        })()
+      );
     }
     if (onLineEnter != null || onLineLeave != null) {
       pre.addEventListener('mousemove', this.handleMouseMove);
+      debugLogIfEnabled(
+        __debugMouseEvents,
+        'move',
+        'FileDiff.DEBUG.attachEventListeners: Attaching mouse move event'
+      );
       if (onLineLeave != null) {
         pre.addEventListener('mouseleave', this.handleMouseLeave);
+        debugLogIfEnabled(
+          __debugMouseEvents,
+          'move',
+          'FileDiff.DEBUG.attachEventListeners: Attaching mouse leave event'
+        );
       }
     }
   }
@@ -505,15 +545,40 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   handleMouseClick = (event: PointerEvent) => {
+    debugLogIfEnabled(
+      this.options.__debugMouseEvents,
+      'click',
+      'FileDiff.DEBUG.handleMouseClick:',
+      event
+    );
     this.handleMouseEvent({ eventType: 'click', event });
   };
 
   hoveredRow: DiffLineEventBaseProps | undefined;
   handleMouseMove = (event: MouseEvent) => {
+    debugLogIfEnabled(
+      this.options.__debugMouseEvents,
+      'move',
+      'FileDiff.DEBUG.handleMouseMove:',
+      event
+    );
     this.handleMouseEvent({ eventType: 'move', event });
   };
   handleMouseLeave = () => {
-    if (this.hoveredRow == null) return;
+    const { __debugMouseEvents } = this.options;
+    debugLogIfEnabled(
+      __debugMouseEvents,
+      'move',
+      'FileDiff.DEBUG.handleMouseLeave: no event'
+    );
+    if (this.hoveredRow == null) {
+      debugLogIfEnabled(
+        __debugMouseEvents,
+        'move',
+        'FileDiff.DEBUG.handleMouseLeave: returned early, no .hoveredRow'
+      );
+      return;
+    }
     this.options.onLineLeave?.(this.hoveredRow);
     this.hoveredRow = undefined;
   };
@@ -575,7 +640,21 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
-    const data = this.getLineData(event.composedPath());
+    const { __debugMouseEvents } = this.options;
+    const composedPath = event.composedPath();
+    debugLogIfEnabled(
+      __debugMouseEvents,
+      eventType,
+      'FileDiff.DEBUG.handleMouseEvent:',
+      { eventType, composedPath }
+    );
+    const data = this.getLineData(composedPath);
+    debugLogIfEnabled(
+      __debugMouseEvents,
+      eventType,
+      'FileDiff.DEBUG.handleMouseEvent: getLineData result:',
+      data
+    );
     const { onLineClick, onLineNumberClick, onLineEnter, onLineLeave } =
       this.options;
     switch (eventType) {
@@ -584,30 +663,72 @@ export class FileDiff<LAnnotation = undefined> {
           data?.type === 'line' &&
           this.hoveredRow?.lineElement === data.lineElement
         ) {
+          debugLogIfEnabled(
+            __debugMouseEvents,
+            'move',
+            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', returned early because same line"
+          );
           break;
         }
         if (this.hoveredRow != null) {
+          debugLogIfEnabled(
+            __debugMouseEvents,
+            'move',
+            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', clearing an existing hovered row and firing onLineLeave"
+          );
           onLineLeave?.(this.hoveredRow);
           this.hoveredRow = undefined;
         }
         if (data?.type === 'line') {
+          debugLogIfEnabled(
+            __debugMouseEvents,
+            'move',
+            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', setting up a new hoveredRow and firing onLineEnter"
+          );
           this.hoveredRow = data;
           onLineEnter?.(this.hoveredRow);
         }
         break;
       }
       case 'click':
+        debugLogIfEnabled(
+          __debugMouseEvents,
+          'click',
+          "FileDiff.DEBUG.handleMouseEvent: switch, 'click', with data:",
+          data
+        );
         if (data == null) break;
         if (data.type === 'line-info') {
+          debugLogIfEnabled(
+            __debugMouseEvents,
+            'click',
+            "FileDiff.DEBUG.handleMouseEvent: switch, 'click', expanding a hunk"
+          );
           this.hunksRenderer.expandHunk(data.hunkIndex);
           void this.rerender();
           break;
         }
         if (data.type === 'line') {
           if (onLineNumberClick != null && data.numberColumn) {
+            debugLogIfEnabled(
+              __debugMouseEvents,
+              'click',
+              "FileDiff.DEBUG.handleMouseEvent: switch, 'click', firing 'onLineNumberClick'"
+            );
             onLineNumberClick({ ...data, event });
+          } else if (onLineClick != null) {
+            debugLogIfEnabled(
+              __debugMouseEvents,
+              'click',
+              "FileDiff.DEBUG.handleMouseEvent: switch, 'click', firing 'onLineClick'"
+            );
+            onLineClick({ ...data, event });
           } else {
-            onLineClick?.({ ...data, event });
+            debugLogIfEnabled(
+              __debugMouseEvents,
+              'click',
+              "FileDiff.DEBUG.handleMouseEvent: switch, 'click', fell through, no event to fire"
+            );
           }
         }
         break;
@@ -1013,4 +1134,28 @@ export class FileDiff<LAnnotation = undefined> {
     }
     return themes;
   }
+}
+
+function debugLogIfEnabled(
+  debugLogType: LogTypes | undefined = 'none',
+  logIfType: 'move' | 'click',
+  ...args: unknown[]
+) {
+  switch (debugLogType) {
+    case 'none':
+      return;
+    case 'both':
+      break;
+    case 'click':
+      if (logIfType !== 'click') {
+        return;
+      }
+      break;
+    case 'move':
+      if (logIfType !== 'move') {
+        return;
+      }
+      break;
+  }
+  console.log(...args);
 }
