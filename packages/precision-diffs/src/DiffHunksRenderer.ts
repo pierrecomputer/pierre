@@ -142,7 +142,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private isHunkExpanded(index: number): boolean {
     return (
-      (this.getOptionsWithDefaults().expandUnchanged ?? false) ||
+      this.getOptionsWithDefaults().expandUnchanged ||
       this.expandedHunks.has(index)
     );
   }
@@ -295,7 +295,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const deletionsAST: ElementContent[] = [];
     const unifiedAST: ElementContent[] = [];
     const { state, transformers, toClass } = createTransformerWithState({
-      disableLineNumbers: disableLineNumbers ?? false,
+      disableLineNumbers: disableLineNumbers,
       useCSSClasses,
     });
     let hunkIndex = 0;
@@ -307,7 +307,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         return fileDiff.hunks;
       }
       if (
-        (expandUnchanged ?? false) &&
+        expandUnchanged &&
         this.diff?.newLines != null &&
         this.diff.newLines.length > 0
       ) {
