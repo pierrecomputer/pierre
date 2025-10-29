@@ -18,11 +18,11 @@ import type {
   LineEventBaseProps,
   ObservedGridNodes,
   PJSHighlighter,
-  PJSThemeNames,
   RenderFileMetadata,
   ThemeTypes,
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { getThemes } from './utils/getThemes';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 
 export interface OnLineClickProps extends LineEventBaseProps {
@@ -241,7 +241,7 @@ export class File<LAnnotation = undefined> {
     }
 
     const [highlighter, headerResult, fileResult] = await Promise.all([
-      getSharedHighlighter({ themes: this.getThemes(), langs: [] }),
+      getSharedHighlighter({ themes: getThemes(this.options), langs: [] }),
       !disableFileHeader ? this.headerRenderer.render(file) : undefined,
       this.fileRenderer.render(file),
     ]);
@@ -493,19 +493,6 @@ export class File<LAnnotation = undefined> {
       diffIndicators: 'none',
       disableBackground: true,
     });
-  }
-
-  private getThemes(): PJSThemeNames[] {
-    const themes: PJSThemeNames[] = [];
-    const { theme, themes: _themes } = this.options;
-    if (theme != null) {
-      themes.push(theme);
-    }
-    if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return themes;
   }
 
   private setupResizeObserver() {

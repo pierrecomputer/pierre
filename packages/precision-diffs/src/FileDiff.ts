@@ -22,13 +22,13 @@ import type {
   ObservedAnnotationNodes,
   ObservedGridNodes,
   PJSHighlighter,
-  PJSThemeNames,
   RenderHeaderMetadataCallback,
   ThemeRendererOptions,
   ThemeTypes,
   ThemesRendererOptions,
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { getThemes } from './utils/getThemes';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
@@ -392,7 +392,10 @@ export class FileDiff<LAnnotation = undefined> {
     }
 
     const [highlighter, headerResult, hunksResult] = await Promise.all([
-      getSharedHighlighter({ themes: this.getThemes(), langs: [] }),
+      getSharedHighlighter({
+        themes: getThemes(this.options),
+        langs: [],
+      }),
       !disableFileHeader
         ? this.headerRenderer.render(this.fileDiff)
         : undefined,
@@ -1132,19 +1135,6 @@ export class FileDiff<LAnnotation = undefined> {
       }
     }
   };
-
-  private getThemes(): PJSThemeNames[] {
-    const themes: PJSThemeNames[] = [];
-    const { theme, themes: _themes } = this.options;
-    if (theme != null) {
-      themes.push(theme);
-    }
-    if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return themes;
-  }
 }
 
 function debugLogIfEnabled(

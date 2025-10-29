@@ -6,11 +6,12 @@ import type {
   FileContents,
   FileDiffMetadata,
   PJSHighlighter,
-  PJSThemeNames,
   ThemeRendererOptions,
   ThemeTypes,
   ThemesRendererOptions,
 } from './types';
+import { getHighlighterOptions } from './utils/getHighlighterOptions';
+import { getThemes } from './utils/getThemes';
 import { createFileHeaderElement } from './utils/hast_utils';
 
 interface BaseProps {
@@ -61,20 +62,10 @@ export class FileHeaderRenderer {
   }
 
   private async initializeHighlighter(): Promise<PJSHighlighter> {
-    this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
+    this.highlighter = await getSharedHighlighter(
+      getHighlighterOptions(undefined, this.options)
+    );
     return this.highlighter;
-  }
-
-  private getHighlighterOptions(): { themes: PJSThemeNames[]; langs: [] } {
-    const themes: PJSThemeNames[] = [];
-    if (this.options.theme != null) {
-      themes.push(this.options.theme);
-    }
-    if (this.options.themes != null) {
-      themes.push(this.options.themes.dark);
-      themes.push(this.options.themes.light);
-    }
-    return { themes, langs: [] };
   }
 
   fileOrDiff: FileDiffMetadata | FileContents | undefined;
@@ -88,7 +79,7 @@ export class FileHeaderRenderer {
       return this.queuedRender;
     }
     this.queuedRender = (async () => {
-      if (!hasLoadedThemes(this.getThemes())) {
+      if (!hasLoadedThemes(getThemes(this.options))) {
         this.highlighter = undefined;
       }
       this.highlighter ??= await this.initializeHighlighter();
@@ -119,18 +110,5 @@ export class FileHeaderRenderer {
 
   renderResultToHTML(element: Element): string {
     return toHtml(element);
-  }
-
-  private getThemes(): PJSThemeNames[] {
-    const themes: PJSThemeNames[] = [];
-    const { theme, themes: _themes } = this.options;
-    if (theme != null) {
-      themes.push(theme);
-    }
-    if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return themes;
   }
 }

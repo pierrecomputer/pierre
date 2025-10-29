@@ -2,7 +2,8 @@ import type {
   DiffLineAnnotation,
   LineAnnotation,
 } from '@pierre/precision-diffs';
-import type { LineCommentMetadata } from 'src/mocks';
+
+import type { LineCommentMetadata } from '../mocks';
 
 function renderDOM(metadata: LineCommentMetadata) {
   const wrapper = document.createElement('div');

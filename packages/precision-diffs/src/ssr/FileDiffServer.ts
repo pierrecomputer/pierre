@@ -1,7 +1,7 @@
 import { toHtml } from 'hast-util-to-html';
-import type { FileOptions } from 'src/File';
-import type { DiffFileRendererOptions } from 'src/FileDiff';
 
+import type { FileOptions } from '../../src/File';
+import type { DiffFileRendererOptions } from '../../src/FileDiff';
 import { DiffHunksRenderer } from '../DiffHunksRenderer';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import { FileRenderer } from '../FileRenderer';

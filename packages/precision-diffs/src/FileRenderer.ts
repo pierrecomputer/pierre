@@ -24,7 +24,9 @@ import type {
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
+import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { getThemes } from './utils/getThemes';
 import {
   createHastElement,
   createPreWrapperProperties,
@@ -124,7 +126,7 @@ export class FileRenderer<LAnnotation = undefined> {
         this.options.lang ?? getFiletypeFromFileName(file.name);
       if (
         !hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(this.getThemes())
+        !hasLoadedThemes(getThemes(this.options))
       ) {
         this.highlighter = undefined;
       }
@@ -299,44 +301,9 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   async initializeHighlighter(): Promise<PJSHighlighter> {
-    this.highlighter = await getSharedHighlighter(this.getHighlighterOptions());
+    this.highlighter = await getSharedHighlighter(
+      getHighlighterOptions(this.computedLang, this.options)
+    );
     return this.highlighter;
-  }
-
-  private getHighlighterOptions(): {
-    langs: SupportedLanguages[];
-    themes: PJSThemeNames[];
-    preferWasmHighlighter?: boolean;
-  } {
-    const {
-      themes: _themes = DEFAULT_THEMES,
-      theme,
-      preferWasmHighlighter,
-    } = this.options;
-    const themes: PJSThemeNames[] = [];
-    if (theme != null) {
-      themes.push(theme);
-    } else {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return {
-      langs: [this.computedLang],
-      themes,
-      preferWasmHighlighter,
-    };
-  }
-
-  private getThemes(): PJSThemeNames[] {
-    const themes: PJSThemeNames[] = [];
-    const { theme, themes: _themes } = this.options;
-    if (theme != null) {
-      themes.push(theme);
-    }
-    if (_themes != null) {
-      themes.push(_themes.dark);
-      themes.push(_themes.light);
-    }
-    return themes;
   }
 }

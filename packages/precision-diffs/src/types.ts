@@ -107,6 +107,8 @@ export interface BaseCodeProps {
 
 export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
 
+export type LineDifftypes = 'word-alt' | 'word' | 'char' | 'none';
+
 export interface BaseDiffProps extends BaseCodeProps {
   diffStyle?: 'unified' | 'split'; // split is default
   diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
@@ -115,7 +117,7 @@ export interface BaseDiffProps extends BaseCodeProps {
   expandUnchanged?: boolean; // false is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'; // 'word-alt' is default
+  lineDiffType?: LineDifftypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
   maxLineLengthForHighlighting?: number; // 1000 is default
 }
@@ -229,3 +231,16 @@ export interface HunkData {
   type: 'additions' | 'deletions' | 'unified';
   expandable: boolean;
 }
+
+export interface ChangeHunk {
+  diffGroupStartIndex: number;
+  deletionStartIndex: number;
+  additionStartIndex: number;
+  deletionLines: string[];
+  additionLines: string[];
+}
+
+export type AnnotationLineMap<LAnnotation> = Record<
+  number,
+  DiffLineAnnotation<LAnnotation>[] | undefined
+>;
