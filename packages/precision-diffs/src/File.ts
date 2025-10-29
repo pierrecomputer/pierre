@@ -55,6 +55,7 @@ interface BaseOptions<LAnnotation> {
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
   onLineClick?(props: OnLineClickProps, file: FileContents): unknown;
+  onLineNumberClick?(props: OnLineClickProps, file: FileContents): unknown;
   onLineEnter?(props: LineEventBaseProps, file: FileContents): unknown;
   onLineLeave?(props: LineEventBaseProps, file: FileContents): unknown;
 }
@@ -398,11 +399,14 @@ export class File<LAnnotation = undefined> {
   };
 
   private getLineData(path: EventTarget[]): LineEventBaseProps | undefined {
-    const lineElement = path.find(
-      (element) =>
-        element instanceof HTMLElement &&
-        ('line' in element.dataset || 'expandIndex' in element.dataset)
-    );
+    let numberColumn = false;
+    const lineElement = path.find((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      numberColumn = numberColumn || 'columnNumber' in element.dataset;
+      return 'line' in element.dataset || 'expandIndex' in element.dataset;
+    });
     if (!(lineElement instanceof HTMLElement)) return undefined;
     const lineNumber = parseInt(lineElement.dataset.line ?? '');
     if (isNaN(lineNumber)) return;
@@ -419,12 +423,15 @@ export class File<LAnnotation = undefined> {
       type: 'line',
       lineElement,
       lineNumber,
+      numberColumn,
     };
   }
 
   private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
     if (this.file == null) return;
     const data = this.getLineData(event.composedPath());
+    const { onLineClick, onLineNumberClick, onLineEnter, onLineLeave } =
+      this.options;
     switch (eventType) {
       case 'move': {
         if (
@@ -434,19 +441,23 @@ export class File<LAnnotation = undefined> {
           break;
         }
         if (this.hoveredRow != null) {
-          this.options.onLineLeave?.(this.hoveredRow, this.file);
+          onLineLeave?.(this.hoveredRow, this.file);
           this.hoveredRow = undefined;
         }
         if (data?.type === 'line') {
           this.hoveredRow = data;
-          this.options.onLineEnter?.(this.hoveredRow, this.file);
+          onLineEnter?.(this.hoveredRow, this.file);
         }
         break;
       }
       case 'click':
         if (data == null) break;
         if (data.type === 'line') {
-          this.options.onLineClick?.({ ...data, event }, this.file);
+          if (onLineNumberClick != null && data.numberColumn) {
+            onLineNumberClick({ ...data, event }, this.file);
+          } else {
+            onLineClick?.({ ...data, event }, this.file);
+          }
         }
         break;
     }

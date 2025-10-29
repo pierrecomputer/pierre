@@ -81,6 +81,7 @@ interface DiffFileBaseOptions<LAnnotation> {
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
   onLineClick?(props: OnDiffLineClickProps): unknown;
+  onLineNumberClick?(props: OnDiffLineClickProps): unknown;
   onLineEnter?(props: DiffLineEventBaseProps): unknown;
   onLineLeave?(props: DiffLineEventBaseProps): unknown;
 }
@@ -460,6 +461,7 @@ export class FileDiff<LAnnotation = undefined> {
 
     const {
       onLineClick,
+      onLineNumberClick,
       onLineEnter,
       onLineLeave,
       hunkSeparators = 'line-info',
@@ -467,6 +469,7 @@ export class FileDiff<LAnnotation = undefined> {
 
     if (
       onLineClick != null ||
+      onLineNumberClick != null ||
       hunkSeparators === 'line-info' ||
       typeof hunkSeparators === 'function'
     ) {
@@ -518,11 +521,14 @@ export class FileDiff<LAnnotation = undefined> {
   private getLineData(
     path: EventTarget[]
   ): DiffLineEventBaseProps | ExpandoEventProps | undefined {
-    const lineElement = path.find(
-      (element) =>
-        element instanceof HTMLElement &&
-        ('line' in element.dataset || 'expandIndex' in element.dataset)
-    );
+    let numberColumn = false;
+    const lineElement = path.find((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      numberColumn = numberColumn || 'columnNumber' in element.dataset;
+      return 'line' in element.dataset || 'expandIndex' in element.dataset;
+    });
     if (!(lineElement instanceof HTMLElement)) return undefined;
     if (lineElement.dataset.expandIndex != null) {
       const hunkIndex = parseInt(lineElement.dataset.expandIndex);
@@ -564,11 +570,14 @@ export class FileDiff<LAnnotation = undefined> {
       lineType,
       lineElement,
       lineNumber,
+      numberColumn,
     };
   }
 
   private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
     const data = this.getLineData(event.composedPath());
+    const { onLineClick, onLineNumberClick, onLineEnter, onLineLeave } =
+      this.options;
     switch (eventType) {
       case 'move': {
         if (
@@ -578,12 +587,12 @@ export class FileDiff<LAnnotation = undefined> {
           break;
         }
         if (this.hoveredRow != null) {
-          this.options.onLineLeave?.(this.hoveredRow);
+          onLineLeave?.(this.hoveredRow);
           this.hoveredRow = undefined;
         }
         if (data?.type === 'line') {
           this.hoveredRow = data;
-          this.options.onLineEnter?.(this.hoveredRow);
+          onLineEnter?.(this.hoveredRow);
         }
         break;
       }
@@ -595,7 +604,11 @@ export class FileDiff<LAnnotation = undefined> {
           break;
         }
         if (data.type === 'line') {
-          this.options.onLineClick?.({ ...data, event });
+          if (onLineNumberClick != null && data.numberColumn) {
+            onLineNumberClick({ ...data, event });
+          } else {
+            onLineClick?.({ ...data, event });
+          }
         }
         break;
     }

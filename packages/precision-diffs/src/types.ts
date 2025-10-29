@@ -192,6 +192,7 @@ export interface LineEventBaseProps {
   type: 'line';
   lineNumber: number;
   lineElement: HTMLElement;
+  numberColumn: boolean;
 }
 
 export interface DiffLineEventBaseProps extends LineEventBaseProps {
