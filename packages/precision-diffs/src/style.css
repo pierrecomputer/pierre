@@ -503,7 +503,6 @@ code {
 
 [data-indicators='bars'] {
   [data-line-type='change-deletion'] [data-column-number]::before {
-    background-attachment: fixed;
     background-image: linear-gradient(
       0deg,
       var(--pjs-bg-deletion) 50%,
