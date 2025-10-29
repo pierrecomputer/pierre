@@ -77,6 +77,8 @@ export interface FileDiffMetadata {
   type: ChangeTypes;
   hunks: Hunk[];
   lines: number;
+  oldMode?: string;
+  mode?: string;
   oldLines?: string[];
   newLines?: string[];
 }

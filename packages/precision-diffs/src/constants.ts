@@ -8,5 +8,9 @@ export const HUNK_HEADER =
 export const SPLIT_WITH_NEWLINES = /(?<=\n)/;
 export const FILENAME_HEADER_REGEX = /^(---|\+\+\+)\s+([^\t\n]+)/;
 export const FILENAME_HEADER_REGEX_GIT = /^(---|\+\+\+)\s+[ab]\/([^\t\n]+)/;
+export const ALTERNATE_FILE_NAMES_GIT =
+  /^diff --git (?:"a\/(.+?)"|a\/(.+?)) (?:"b\/(.+?)"|b\/(.+?))$/;
+export const FILE_MODE_FROM_INDEX =
+  /^index (?:[0-9a-f]+)\.\.(?:[0-9a-f]+)(?: (\d+))?/;
 
 export const HEADER_METADATA_SLOT_ID = 'header-metadata';

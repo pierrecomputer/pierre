@@ -235,11 +235,12 @@ if (streamCode != null) {
 
 const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
-  loadDiff.addEventListener('click', () => {
+  function handleClick() {
     void (async () => {
       renderDiff(parsedPatches ?? parsePatchFiles(await loadPatchContent()));
     })();
-  });
+  }
+  loadDiff.addEventListener('click', handleClick);
   loadDiff.addEventListener('mouseenter', () => void handlePreloadDiff);
 }
 

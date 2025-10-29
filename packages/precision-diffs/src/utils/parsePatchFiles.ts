@@ -1,8 +1,10 @@
 import {
+  ALTERNATE_FILE_NAMES_GIT,
   COMMIT_METADATA_SPLIT,
   FILENAME_HEADER_REGEX,
   FILENAME_HEADER_REGEX_GIT,
   FILE_CONTEXT_BLOB,
+  FILE_MODE_FROM_INDEX,
   GIT_DIFF_FILE_BREAK_REGEX,
   HUNK_HEADER,
   SPLIT_WITH_NEWLINES,
@@ -65,7 +67,14 @@ function processPatch(data: string): ParsedPatch {
           const filenameMatch = line.match(
             isGitDiff ? FILENAME_HEADER_REGEX_GIT : FILENAME_HEADER_REGEX
           );
-          if (filenameMatch != null) {
+          if (line.startsWith('diff --git')) {
+            const [, , prevName, , name] =
+              line.trim().match(ALTERNATE_FILE_NAMES_GIT) ?? [];
+            currentFile.name = name;
+            if (prevName !== name) {
+              currentFile.prevName = prevName;
+            }
+          } else if (filenameMatch != null) {
             const [, type, fileName] = filenameMatch;
             if (type === '---' && fileName !== '/dev/null') {
               currentFile.prevName = fileName;
@@ -76,17 +85,31 @@ function processPatch(data: string): ParsedPatch {
           }
           // Git diffs have a bunch of additional metadata we can pull from
           else if (isGitDiff) {
+            if (line.startsWith('new mode ')) {
+              currentFile.mode = line.replace('new mode', '').trim();
+            }
+            if (line.startsWith('old mode ')) {
+              currentFile.oldMode = line.replace('old mode', '').trim();
+            }
             if (line.startsWith('new file mode')) {
               currentFile.type = 'new';
+              currentFile.mode = line.replace('new file mode', '').trim();
             }
             if (line.startsWith('deleted file mode')) {
               currentFile.type = 'deleted';
+              currentFile.mode = line.replace('deleted file mode', '').trim();
             }
             if (line.startsWith('similarity index')) {
               if (line.startsWith('similarity index 100%')) {
                 currentFile.type = 'rename-pure';
               } else {
                 currentFile.type = 'rename-changed';
+              }
+            }
+            if (line.startsWith('index ')) {
+              const [, mode] = line.trim().match(FILE_MODE_FROM_INDEX) ?? [];
+              if (mode != null) {
+                currentFile.mode = mode;
               }
             }
             // We have to handle these for pure renames because there won't be
