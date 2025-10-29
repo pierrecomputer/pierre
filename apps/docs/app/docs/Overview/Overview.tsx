@@ -2,7 +2,7 @@
 
 import { IconCiWarningFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import { FileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type {
   PreloadedFileDiffResult,
   PreloadedFileResult,
@@ -64,7 +64,7 @@ export function Overview({
         </Link>{' '}
         which provides a lot of great theme and language support.
       </p>
-      <FileDiff
+      <MultiFileDiff
         {...initialDiffProps}
         // @ts-expect-error lol
         options={{ ...initialDiffProps.options, hunkSeparators: 'line-info' }}
