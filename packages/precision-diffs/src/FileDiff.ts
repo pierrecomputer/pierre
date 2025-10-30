@@ -4,6 +4,7 @@ import type { Element } from 'hast';
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
 import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { ResizeManager } from './ResizeManager';
+import { ScrollSyncManager } from './ScrollSyncManager';
 import { getSharedHighlighter } from './SharedHighlighter';
 import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
@@ -27,14 +28,6 @@ import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
 type LogTypes = 'click' | 'move' | 'both' | 'none';
-
-interface ScrollSyncState {
-  isDeletionsScrolling: boolean;
-  isAdditionsScrolling: boolean;
-  timeoutId: NodeJS.Timeout;
-  codeDeletions: HTMLElement | undefined;
-  codeAdditions: HTMLElement | undefined;
-}
 
 interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -104,6 +97,7 @@ export class FileDiff<LAnnotation = undefined> {
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
+  private scrollSyncManager: ScrollSyncManager;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
@@ -111,14 +105,6 @@ export class FileDiff<LAnnotation = undefined> {
   private oldFile: FileContents | undefined;
   private newFile: FileContents | undefined;
   private fileDiff: FileDiffMetadata | undefined;
-
-  private scrollSyncState: ScrollSyncState = {
-    isDeletionsScrolling: false,
-    isAdditionsScrolling: false,
-    timeoutId: -1 as unknown as NodeJS.Timeout,
-    codeDeletions: undefined,
-    codeAdditions: undefined,
-  };
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -134,6 +120,7 @@ export class FileDiff<LAnnotation = undefined> {
     });
     this.headerRenderer = new FileHeaderRenderer(options);
     this.resizeManager = new ResizeManager();
+    this.scrollSyncManager = new ScrollSyncManager();
   }
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
@@ -197,20 +184,11 @@ export class FileDiff<LAnnotation = undefined> {
     this.hunksRenderer.cleanUp();
     this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
-    this.scrollSyncState.codeDeletions?.removeEventListener(
-      'scroll',
-      this.handleDeletionsScroll
-    );
-    this.scrollSyncState.codeAdditions?.removeEventListener(
-      'scroll',
-      this.handleAdditionsScroll
-    );
-    clearTimeout(this.scrollSyncState.timeoutId);
+    this.scrollSyncManager.cleanUp();
+
     this.fileDiff = undefined;
     this.oldFile = undefined;
     this.newFile = undefined;
-    this.scrollSyncState.codeDeletions = undefined;
-    this.scrollSyncState.codeAdditions = undefined;
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
@@ -265,7 +243,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderAnnotations();
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
-        this.setupScrollSync();
+        this.scrollSyncManager.setup(this.pre);
       }
     }
   }
@@ -377,11 +355,6 @@ export class FileDiff<LAnnotation = undefined> {
       }
       const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(hunksResult, pre, highlighter);
-      if ((this.options.overflow ?? 'scroll') === 'scroll') {
-        this.resizeManager.setup(pre);
-      } else {
-        this.resizeManager.cleanUp();
-      }
       this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
     }
@@ -839,81 +812,14 @@ export class FileDiff<LAnnotation = undefined> {
       }
     }
 
-    if (
-      codeAdditions != null &&
-      codeDeletions != null &&
-      (this.options.overflow ?? 'scroll') === 'scroll'
-    ) {
-      this.setupScrollSync(codeDeletions, codeAdditions);
+    if ((this.options.overflow ?? 'scroll') === 'scroll') {
+      this.resizeManager.setup(pre);
+      this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
+    } else {
+      this.resizeManager.cleanUp();
+      this.scrollSyncManager.cleanUp();
     }
   }
-
-  private setupScrollSync(
-    codeDeletions?: HTMLElement,
-    codeAdditions?: HTMLElement
-  ): void {
-    // If no code elements were provided, lets try to find them in
-    // the pre element
-    if (codeDeletions == null || codeAdditions == null) {
-      for (const element of this.pre?.children ?? []) {
-        if (!(element instanceof HTMLElement)) {
-          continue;
-        }
-        if ('deletions' in element.dataset) {
-          codeDeletions = element;
-        } else if ('additions' in element.dataset) {
-          codeAdditions = element;
-        }
-      }
-    }
-    if (codeAdditions == null || codeDeletions == null) {
-      return;
-    }
-    this.scrollSyncState.codeDeletions?.removeEventListener(
-      'scroll',
-      this.handleDeletionsScroll
-    );
-    this.scrollSyncState.codeAdditions?.removeEventListener(
-      'scroll',
-      this.handleAdditionsScroll
-    );
-    this.scrollSyncState.codeDeletions = codeDeletions;
-    this.scrollSyncState.codeAdditions = codeAdditions;
-    codeDeletions.addEventListener('scroll', this.handleDeletionsScroll, {
-      passive: true,
-    });
-    codeAdditions.addEventListener('scroll', this.handleAdditionsScroll, {
-      passive: true,
-    });
-  }
-
-  private handleDeletionsScroll = () => {
-    if (this.scrollSyncState.isAdditionsScrolling) {
-      return;
-    }
-    this.scrollSyncState.isDeletionsScrolling = true;
-    clearTimeout(this.scrollSyncState.timeoutId);
-    this.scrollSyncState.timeoutId = setTimeout(() => {
-      this.scrollSyncState.isDeletionsScrolling = false;
-    }, 300);
-    this.scrollSyncState.codeAdditions?.scrollTo({
-      left: this.scrollSyncState.codeDeletions?.scrollLeft,
-    });
-  };
-
-  private handleAdditionsScroll = () => {
-    if (this.scrollSyncState.isDeletionsScrolling) {
-      return;
-    }
-    this.scrollSyncState.isAdditionsScrolling = true;
-    clearTimeout(this.scrollSyncState.timeoutId);
-    this.scrollSyncState.timeoutId = setTimeout(() => {
-      this.scrollSyncState.isAdditionsScrolling = false;
-    }, 300);
-    this.scrollSyncState.codeDeletions?.scrollTo({
-      left: this.scrollSyncState.codeAdditions?.scrollLeft,
-    });
-  };
 }
 
 function debugLogIfEnabled(
