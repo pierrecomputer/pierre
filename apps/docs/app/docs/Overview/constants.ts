@@ -4,7 +4,7 @@ import type {
 } from '@pierre/precision-diffs/ssr';
 
 const options = {
-  themes: { dark: 'pierre-dark', light: 'pierre-light' },
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
 } as const;
 
 export const OVERVIEW_INITIAL_EXAMPLE: PreloadFileDiffOptions<undefined> = {

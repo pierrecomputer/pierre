@@ -17,7 +17,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { preloadHighlighter } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type {
+  PreloadedFileDiffResult,
+  ThemesType,
+} from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -114,10 +117,16 @@ export function ShikiThemes({
 
   const [selectedLightTheme, setSelectedLightTheme] = useState<
     (typeof LIGHT_THEMES)[number]
-  >((options?.themes?.light as 'pierre-light') ?? 'pierre-light');
+  >(
+    ((options?.theme as ThemesType | undefined)?.light as 'pierre-light') ??
+      'pierre-light'
+  );
   const [selectedDarkTheme, setSelectedDarkTheme] = useState<
     (typeof DARK_THEMES)[number]
-  >((options?.themes?.dark as 'pierre-dark') ?? 'pierre-dark');
+  >(
+    ((options?.theme as ThemesType | undefined)?.dark as 'pierre-dark') ??
+      'pierre-dark'
+  );
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');
@@ -222,10 +231,7 @@ export function ShikiThemes({
         options={{
           diffStyle: 'split',
           themeType: selectedColorMode,
-          themes: {
-            dark: selectedDarkTheme,
-            light: selectedLightTheme,
-          },
+          theme: { dark: selectedDarkTheme, light: selectedLightTheme },
         }}
       />
       <div className="flex gap-1">

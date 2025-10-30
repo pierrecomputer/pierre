@@ -36,6 +36,6 @@ export default function Home() {
   },
   options: {
     diffStyle: 'split',
-    themes: { dark: 'pierre-dark', light: 'pierre-light' },
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
   },
 };

@@ -1,7 +1,7 @@
 import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
 
 const options = {
-  themes: { dark: 'pierre-dark', light: 'pierre-light' },
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
 } as const;
 
 export const VANILLA_API_FILE_DIFF: PreloadFileOptions<undefined> = {

@@ -6,6 +6,6 @@ export const INSTALLATION_EXAMPLE: PreloadFileOptions<undefined> = {
     contents: 'bun add @pierre/precision-diffs',
   },
   options: {
-    themes: { dark: 'pierre-dark', light: 'pierre-light' },
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
   },
 };
