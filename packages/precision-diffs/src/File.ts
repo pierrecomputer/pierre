@@ -3,6 +3,7 @@ import type { Element } from 'hast';
 
 import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { type FileRenderResult, FileRenderer } from './FileRenderer';
+import { ResizeManager } from './ResizeManager';
 import { getSharedHighlighter } from './SharedHighlighter';
 import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
@@ -12,7 +13,6 @@ import type {
   FileContents,
   LineAnnotation,
   LineEventBaseProps,
-  ObservedGridNodes,
   PJSHighlighter,
   RenderFileMetadata,
   ThemeTypes,
@@ -73,12 +73,10 @@ export class File<LAnnotation = undefined> {
 
   private fileRenderer: FileRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
+  private resizeManager: ResizeManager;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
-
-  private observedNodes = new Map<HTMLElement, ObservedGridNodes>();
-  private resizeObserver: ResizeObserver | undefined;
 
   private file: FileContents | undefined;
 
@@ -88,6 +86,7 @@ export class File<LAnnotation = undefined> {
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(options);
     this.headerRenderer = new FileHeaderRenderer(options);
+    this.resizeManager = new ResizeManager();
   }
 
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
@@ -137,6 +136,7 @@ export class File<LAnnotation = undefined> {
   cleanUp(): void {
     this.fileRenderer.cleanUp();
     this.headerRenderer.cleanUp();
+    this.resizeManager.cleanUp();
     this.pre = undefined;
     this.headerElement?.parentNode?.removeChild(this.headerElement);
     this.headerElement = undefined;
@@ -187,6 +187,9 @@ export class File<LAnnotation = undefined> {
       void this.fileRenderer.initializeHighlighter();
       this.attachEventListeners(this.pre);
       this.renderAnnotations();
+      if ((this.options.overflow ?? 'scroll') === 'scroll') {
+        this.resizeManager.setup(this.pre);
+      }
     }
   }
 
@@ -245,7 +248,11 @@ export class File<LAnnotation = undefined> {
       }
       const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(fileResult, pre, highlighter);
-      this.setupResizeObserver();
+      if ((this.options.overflow ?? 'scroll') === 'scroll') {
+        this.resizeManager.setup(pre);
+      } else {
+        this.resizeManager.cleanUp();
+      }
       this.renderAnnotations();
     }
   }
@@ -476,85 +483,4 @@ export class File<LAnnotation = undefined> {
       disableBackground: true,
     });
   }
-
-  private setupResizeObserver() {
-    // Disconnect any existing observer
-    this.resizeObserver?.disconnect();
-    this.observedNodes.clear();
-
-    if (this.options.overflow === 'wrap' || this.code == null) {
-      return;
-    }
-
-    this.resizeObserver ??= new ResizeObserver(this.handleResizeObserver);
-
-    let numberElement = this.code.querySelector('[data-column-number]');
-    if (!(numberElement instanceof HTMLElement)) {
-      numberElement = null;
-    }
-    const item: ObservedGridNodes = {
-      type: 'code',
-      codeElement: this.code,
-      numberElement,
-      codeWidth: 'auto',
-      numberWidth: 0,
-    };
-    this.observedNodes.set(this.code, item);
-    this.resizeObserver.observe(this.code);
-    if (numberElement != null) {
-      this.observedNodes.set(numberElement, item);
-      this.resizeObserver.observe(numberElement);
-    }
-  }
-
-  private handleResizeObserver = (entries: ResizeObserverEntry[]) => {
-    for (const entry of entries) {
-      const { target, borderBoxSize } = entry;
-      if (!(target instanceof HTMLElement)) {
-        console.error(
-          'File.handleResizeObserver: Invalid element for ResizeObserver',
-          entry
-        );
-        continue;
-      }
-      const item = this.observedNodes.get(target);
-      if (item == null) {
-        console.error(
-          'File.handleResizeObserver: Not a valid observed node',
-          entry
-        );
-        continue;
-      }
-      const specs = borderBoxSize[0];
-      if (target === item.codeElement) {
-        if (specs.inlineSize !== item.codeWidth) {
-          item.codeWidth = specs.inlineSize;
-          item.codeElement.style.setProperty(
-            '--pjs-column-content-width',
-            `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
-          );
-          item.codeElement.style.setProperty(
-            '--pjs-column-width',
-            `${item.codeWidth}px`
-          );
-        }
-      } else if (target === item.numberElement) {
-        if (specs.inlineSize !== item.numberWidth) {
-          item.numberWidth = specs.inlineSize;
-          item.codeElement.style.setProperty(
-            '--pjs-column-number-width',
-            `${item.numberWidth}px`
-          );
-          // We probably need to update code width variable if
-          // `numberWidth` changed
-          if (item.codeWidth !== 'auto') {
-            item.codeElement.style.setProperty(
-              '--pjs-column-content-width',
-              `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
-            );
-          }
-        }
-      }
-    }
-  };
 }
