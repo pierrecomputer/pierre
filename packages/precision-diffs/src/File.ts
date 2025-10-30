@@ -3,6 +3,11 @@ import type { Element } from 'hast';
 
 import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { type FileRenderResult, FileRenderer } from './FileRenderer';
+import {
+  MouseEventManager,
+  type MouseEventManagerBaseOptions,
+  getMouseEventOptions,
+} from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
 import { getSharedHighlighter } from './SharedHighlighter';
 import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
@@ -12,7 +17,6 @@ import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
-  LineEventBaseProps,
   PJSHighlighter,
   RenderFileMetadata,
   ThemeTypes,
@@ -20,22 +24,6 @@ import type {
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
-
-export interface OnLineClickProps extends LineEventBaseProps {
-  event: PointerEvent;
-}
-
-export interface OnLineEnterProps extends LineEventBaseProps {
-  event: MouseEvent;
-}
-
-export interface OnLineLeaveProps extends LineEventBaseProps {
-  event: MouseEvent;
-}
-
-type HandleMouseEventProps =
-  | { eventType: 'click'; event: PointerEvent }
-  | { eventType: 'move'; event: MouseEvent };
 
 interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -45,16 +33,14 @@ interface FileRenderProps<LAnnotation> {
   lineAnnotations?: LineAnnotation<LAnnotation>[];
 }
 
-export interface FileOptions<LAnnotation> extends BaseCodeOptions {
+export interface FileOptions<LAnnotation>
+  extends BaseCodeOptions,
+    MouseEventManagerBaseOptions {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
-  onLineClick?(props: OnLineClickProps, file: FileContents): unknown;
-  onLineNumberClick?(props: OnLineClickProps, file: FileContents): unknown;
-  onLineEnter?(props: LineEventBaseProps, file: FileContents): unknown;
-  onLineLeave?(props: LineEventBaseProps, file: FileContents): unknown;
 }
 
 let instanceId = -1;
@@ -74,6 +60,7 @@ export class File<LAnnotation = undefined> {
   private fileRenderer: FileRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
+  private mouseEventManager: MouseEventManager;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
@@ -87,11 +74,15 @@ export class File<LAnnotation = undefined> {
     this.fileRenderer = new FileRenderer<LAnnotation>(options);
     this.headerRenderer = new FileHeaderRenderer(options);
     this.resizeManager = new ResizeManager();
+    this.mouseEventManager = new MouseEventManager(
+      getMouseEventOptions(options)
+    );
   }
 
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
+    this.mouseEventManager.setOptions(getMouseEventOptions(options));
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
@@ -137,13 +128,18 @@ export class File<LAnnotation = undefined> {
     this.fileRenderer.cleanUp();
     this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
-    this.pre = undefined;
-    this.headerElement?.parentNode?.removeChild(this.headerElement);
-    this.headerElement = undefined;
+    this.mouseEventManager.cleanUp();
+
+    // Clean up the data
+    this.file = undefined;
+
+    // Clean up the elements
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
     this.fileContainer = undefined;
+    this.pre = undefined;
+    this.headerElement = undefined;
   }
 
   async hydrate(props: FileRenderProps<LAnnotation>): Promise<void> {
@@ -180,13 +176,11 @@ export class File<LAnnotation = undefined> {
       this.fileContainer = props.fileContainer;
       delete this.pre.dataset.dehydrated;
 
-      this.attachEventListeners(this.pre);
-
       this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
       this.file = props.file;
       void this.fileRenderer.initializeHighlighter();
-      this.attachEventListeners(this.pre);
       this.renderAnnotations();
+      this.mouseEventManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
       }
@@ -248,11 +242,6 @@ export class File<LAnnotation = undefined> {
       }
       const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(fileResult, pre, highlighter);
-      if ((this.options.overflow ?? 'scroll') === 'scroll') {
-        this.resizeManager.setup(pre);
-      } else {
-        this.resizeManager.cleanUp();
-      }
       this.renderAnnotations();
     }
   }
@@ -293,6 +282,12 @@ export class File<LAnnotation = undefined> {
     this.code = createCodeNode();
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
     pre.appendChild(this.code);
+    this.mouseEventManager.setup(pre);
+    if ((this.options.overflow ?? 'scroll') === 'scroll') {
+      this.resizeManager.setup(pre);
+    } else {
+      this.resizeManager.cleanUp();
+    }
   }
 
   private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
@@ -330,29 +325,6 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private attachEventListeners(pre: HTMLPreElement): void {
-    // Remove old event listeners if they exist, probably don't
-    pre.removeEventListener('click', this.handleMouseClick);
-    pre.removeEventListener('mousemove', this.handleMouseMove);
-    pre.removeEventListener('mouseout', this.handleMouseLeave);
-    delete pre.dataset.interactiveLines;
-
-    const { onLineClick, onLineEnter, onLineLeave } = this.options;
-
-    if (onLineClick != null) {
-      if (onLineClick != null) {
-        pre.dataset.interactiveLines = '';
-      }
-      pre.addEventListener('click', this.handleMouseClick);
-    }
-    if (onLineEnter != null || onLineLeave != null) {
-      pre.addEventListener('mousemove', this.handleMouseMove);
-      if (onLineLeave != null) {
-        pre.addEventListener('mouseleave', this.handleMouseLeave);
-      }
-    }
-  }
-
   private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     this.fileContainer =
       fileContainer ??
@@ -374,7 +346,6 @@ export class File<LAnnotation = undefined> {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
-      this.attachEventListeners(this.pre);
       container.shadowRoot?.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
@@ -383,87 +354,6 @@ export class File<LAnnotation = undefined> {
       container.shadowRoot?.appendChild(this.pre);
     }
     return this.pre;
-  }
-
-  handleMouseClick = (event: PointerEvent): void => {
-    this.handleMouseEvent({ eventType: 'click', event });
-  };
-
-  hoveredRow: LineEventBaseProps | undefined;
-
-  handleMouseMove = (event: MouseEvent): void => {
-    this.handleMouseEvent({ eventType: 'move', event });
-  };
-
-  handleMouseLeave = (): void => {
-    if (this.hoveredRow == null || this.file == null) return;
-    this.options.onLineLeave?.(this.hoveredRow, this.file);
-    this.hoveredRow = undefined;
-  };
-
-  private getLineData(path: EventTarget[]): LineEventBaseProps | undefined {
-    let numberColumn = false;
-    const lineElement = path.find((element) => {
-      if (!(element instanceof HTMLElement)) {
-        return false;
-      }
-      numberColumn = numberColumn || 'columnNumber' in element.dataset;
-      return 'line' in element.dataset || 'expandIndex' in element.dataset;
-    });
-    if (!(lineElement instanceof HTMLElement)) return undefined;
-    const lineNumber = parseInt(lineElement.dataset.line ?? '');
-    if (isNaN(lineNumber)) return;
-    const lineType = lineElement.dataset.lineType;
-    if (
-      lineType !== 'context' &&
-      lineType !== 'context-expanded' &&
-      lineType !== 'change-deletion' &&
-      lineType !== 'change-addition'
-    ) {
-      return undefined;
-    }
-    return {
-      type: 'line',
-      lineElement,
-      lineNumber,
-      numberColumn,
-    };
-  }
-
-  private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
-    if (this.file == null) return;
-    const data = this.getLineData(event.composedPath());
-    const { onLineClick, onLineNumberClick, onLineEnter, onLineLeave } =
-      this.options;
-    switch (eventType) {
-      case 'move': {
-        if (
-          data?.type === 'line' &&
-          this.hoveredRow?.lineElement === data.lineElement
-        ) {
-          break;
-        }
-        if (this.hoveredRow != null) {
-          onLineLeave?.(this.hoveredRow, this.file);
-          this.hoveredRow = undefined;
-        }
-        if (data?.type === 'line') {
-          this.hoveredRow = data;
-          onLineEnter?.(this.hoveredRow, this.file);
-        }
-        break;
-      }
-      case 'click':
-        if (data == null) break;
-        if (data.type === 'line') {
-          if (onLineNumberClick != null && data.numberColumn) {
-            onLineNumberClick({ ...data, event }, this.file);
-          } else {
-            onLineClick?.({ ...data, event }, this.file);
-          }
-        }
-        break;
-    }
   }
 
   private setPreAttributes(

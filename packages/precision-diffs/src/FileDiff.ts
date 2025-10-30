@@ -3,6 +3,11 @@ import type { Element } from 'hast';
 
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
 import { FileHeaderRenderer } from './FileHeaderRenderer';
+import {
+  MouseEventManager,
+  type MouseEventManagerBaseOptions,
+  getMouseEventOptions,
+} from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
 import { ScrollSyncManager } from './ScrollSyncManager';
 import { getSharedHighlighter } from './SharedHighlighter';
@@ -10,10 +15,8 @@ import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
-  AnnotationSide,
   BaseDiffOptions,
   DiffLineAnnotation,
-  DiffLineEventBaseProps,
   FileContents,
   FileDiffMetadata,
   HunkData,
@@ -27,8 +30,6 @@ import { getThemes } from './utils/getThemes';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
-type LogTypes = 'click' | 'move' | 'both' | 'none';
-
 interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
@@ -39,29 +40,9 @@ interface FileDiffRenderProps<LAnnotation> {
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
-interface ExpandoEventProps {
-  type: 'line-info';
-  hunkIndex: number;
-}
-
-export interface OnDiffLineClickProps extends DiffLineEventBaseProps {
-  event: PointerEvent;
-}
-
-export interface OnDiffLineEnterProps extends DiffLineEventBaseProps {
-  event: MouseEvent;
-}
-
-export interface OnDiffLineLeaveProps extends DiffLineEventBaseProps {
-  event: MouseEvent;
-}
-
-type HandleMouseEventProps =
-  | { eventType: 'click'; event: PointerEvent }
-  | { eventType: 'move'; event: MouseEvent };
-
 export interface FileDiffOptions<LAnnotation>
-  extends Omit<BaseDiffOptions, 'hunkSeparators'> {
+  extends Omit<BaseDiffOptions, 'hunkSeparators'>,
+    MouseEventManagerBaseOptions {
   hunkSeparators?:
     | Exclude<HunkSeparators, 'custom'>
     | ((hunk: HunkData) => HTMLElement | DocumentFragment);
@@ -70,11 +51,6 @@ export interface FileDiffOptions<LAnnotation>
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
-  onLineClick?(props: OnDiffLineClickProps): unknown;
-  onLineNumberClick?(props: OnDiffLineClickProps): unknown;
-  onLineEnter?(props: DiffLineEventBaseProps): unknown;
-  onLineLeave?(props: DiffLineEventBaseProps): unknown;
-  __debugMouseEvents?: LogTypes;
 }
 
 let instanceId = -1;
@@ -98,6 +74,7 @@ export class FileDiff<LAnnotation = undefined> {
   private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
   private scrollSyncManager: ScrollSyncManager;
+  private mouseEventManager: MouseEventManager;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
@@ -121,6 +98,15 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerRenderer = new FileHeaderRenderer(options);
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
+    this.mouseEventManager = new MouseEventManager(
+      getMouseEventOptions(
+        options,
+        typeof options.hunkSeparators === 'function' ||
+          (options.hunkSeparators ?? 'line-info') === 'line-info'
+          ? this.handleExpandHunk
+          : undefined
+      )
+    );
   }
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
@@ -140,6 +126,15 @@ export class FileDiff<LAnnotation = undefined> {
           ? 'custom'
           : options.hunkSeparators,
     });
+    this.mouseEventManager.setOptions(
+      getMouseEventOptions(
+        options,
+        typeof options.hunkSeparators === 'function' ||
+          (options.hunkSeparators ?? 'line-info') === 'line-info'
+          ? this.handleExpandHunk
+          : undefined
+      )
+    );
   }
 
   private mergeOptions(options: Partial<FileDiffOptions<LAnnotation>>): void {
@@ -184,11 +179,15 @@ export class FileDiff<LAnnotation = undefined> {
     this.hunksRenderer.cleanUp();
     this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
+    this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
 
+    // Clean up the data
     this.fileDiff = undefined;
     this.oldFile = undefined;
     this.newFile = undefined;
+
+    // Clean up the elements
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
@@ -237,10 +236,10 @@ export class FileDiff<LAnnotation = undefined> {
       this.fileDiff = props.fileDiff;
 
       void this.hunksRenderer.initializeHighlighter();
-      this.attachEventListeners(this.pre);
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();
+      this.mouseEventManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
         this.scrollSyncManager.setup(this.pre);
@@ -256,6 +255,11 @@ export class FileDiff<LAnnotation = undefined> {
       forceRender: true,
     });
   }
+
+  handleExpandHunk = (hunkIndex: number): void => {
+    this.hunksRenderer.expandHunk(hunkIndex);
+    void this.rerender();
+  };
 
   async render({
     oldFile,
@@ -408,77 +412,6 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private attachEventListeners(pre: HTMLPreElement): void {
-    const { __debugMouseEvents } = this.options;
-    // Remove old event listeners if they exist, probably don't
-    pre.removeEventListener('click', this.handleMouseClick);
-    pre.removeEventListener('mousemove', this.handleMouseMove);
-    pre.removeEventListener('mouseout', this.handleMouseLeave);
-    delete pre.dataset.interactiveLines;
-    delete pre.dataset.interactiveLineNumbers;
-
-    const {
-      onLineClick,
-      onLineNumberClick,
-      onLineEnter,
-      onLineLeave,
-      hunkSeparators = 'line-info',
-    } = this.options;
-
-    if (
-      onLineClick != null ||
-      onLineNumberClick != null ||
-      hunkSeparators === 'line-info' ||
-      typeof hunkSeparators === 'function'
-    ) {
-      pre.addEventListener('click', this.handleMouseClick);
-      if (onLineClick != null) {
-        pre.dataset.interactiveLines = '';
-      } else if (onLineNumberClick != null) {
-        pre.dataset.interactiveLineNumbers = '';
-      }
-      debugLogIfEnabled(
-        __debugMouseEvents,
-        'click',
-        'FileDiff.DEBUG.attachEventListeners: Attaching click events for:',
-        (() => {
-          const reasons: string[] = [];
-          if (__debugMouseEvents === 'both' || __debugMouseEvents === 'click') {
-            if (onLineClick != null) {
-              reasons.push('onLineClick');
-            }
-            if (onLineNumberClick != null) {
-              reasons.push('onLineNumberClick');
-            }
-            if (hunkSeparators === 'line-info') {
-              reasons.push('line-info separators');
-            }
-            if (typeof hunkSeparators === 'function') {
-              reasons.push('custom hunk separators');
-            }
-          }
-          return reasons;
-        })()
-      );
-    }
-    if (onLineEnter != null || onLineLeave != null) {
-      pre.addEventListener('mousemove', this.handleMouseMove);
-      debugLogIfEnabled(
-        __debugMouseEvents,
-        'move',
-        'FileDiff.DEBUG.attachEventListeners: Attaching mouse move event'
-      );
-      if (onLineLeave != null) {
-        pre.addEventListener('mouseleave', this.handleMouseLeave);
-        debugLogIfEnabled(
-          __debugMouseEvents,
-          'move',
-          'FileDiff.DEBUG.attachEventListeners: Attaching mouse leave event'
-        );
-      }
-    }
-  }
-
   private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     this.fileContainer =
       fileContainer ??
@@ -500,204 +433,10 @@ export class FileDiff<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  handleMouseClick = (event: PointerEvent): void => {
-    debugLogIfEnabled(
-      this.options.__debugMouseEvents,
-      'click',
-      'FileDiff.DEBUG.handleMouseClick:',
-      event
-    );
-    this.handleMouseEvent({ eventType: 'click', event });
-  };
-
-  hoveredRow: DiffLineEventBaseProps | undefined;
-
-  handleMouseMove = (event: MouseEvent): void => {
-    debugLogIfEnabled(
-      this.options.__debugMouseEvents,
-      'move',
-      'FileDiff.DEBUG.handleMouseMove:',
-      event
-    );
-    this.handleMouseEvent({ eventType: 'move', event });
-  };
-
-  handleMouseLeave = (): void => {
-    const { __debugMouseEvents } = this.options;
-    debugLogIfEnabled(
-      __debugMouseEvents,
-      'move',
-      'FileDiff.DEBUG.handleMouseLeave: no event'
-    );
-    if (this.hoveredRow == null) {
-      debugLogIfEnabled(
-        __debugMouseEvents,
-        'move',
-        'FileDiff.DEBUG.handleMouseLeave: returned early, no .hoveredRow'
-      );
-      return;
-    }
-    this.options.onLineLeave?.(this.hoveredRow);
-    this.hoveredRow = undefined;
-  };
-
-  private getLineData(
-    path: EventTarget[]
-  ): DiffLineEventBaseProps | ExpandoEventProps | undefined {
-    let numberColumn = false;
-    const lineElement = path.find((element) => {
-      if (!(element instanceof HTMLElement)) {
-        return false;
-      }
-      numberColumn = numberColumn || 'columnNumber' in element.dataset;
-      return 'line' in element.dataset || 'expandIndex' in element.dataset;
-    });
-    if (!(lineElement instanceof HTMLElement)) return undefined;
-    if (lineElement.dataset.expandIndex != null) {
-      const hunkIndex = parseInt(lineElement.dataset.expandIndex);
-      if (isNaN(hunkIndex)) {
-        return undefined;
-      }
-      return {
-        type: 'line-info',
-        hunkIndex,
-      };
-    }
-    const lineNumber = parseInt(lineElement.dataset.line ?? '');
-    if (isNaN(lineNumber)) return;
-    const lineType = lineElement.dataset.lineType;
-    if (
-      lineType !== 'context' &&
-      lineType !== 'context-expanded' &&
-      lineType !== 'change-deletion' &&
-      lineType !== 'change-addition'
-    ) {
-      return undefined;
-    }
-    const annotationSide: AnnotationSide = (() => {
-      if (lineType === 'change-deletion') {
-        return 'deletions';
-      }
-      if (lineType === 'change-addition') {
-        return 'additions';
-      }
-      const parent = lineElement.closest('[data-code]');
-      if (!(parent instanceof HTMLElement)) {
-        return 'additions';
-      }
-      return 'deletions' in parent.dataset ? 'deletions' : 'additions';
-    })();
-    return {
-      type: 'line',
-      annotationSide,
-      lineType,
-      lineElement,
-      lineNumber,
-      numberColumn,
-    };
-  }
-
-  private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
-    const { __debugMouseEvents } = this.options;
-    const composedPath = event.composedPath();
-    debugLogIfEnabled(
-      __debugMouseEvents,
-      eventType,
-      'FileDiff.DEBUG.handleMouseEvent:',
-      { eventType, composedPath }
-    );
-    const data = this.getLineData(composedPath);
-    debugLogIfEnabled(
-      __debugMouseEvents,
-      eventType,
-      'FileDiff.DEBUG.handleMouseEvent: getLineData result:',
-      data
-    );
-    const { onLineClick, onLineNumberClick, onLineEnter, onLineLeave } =
-      this.options;
-    switch (eventType) {
-      case 'move': {
-        if (
-          data?.type === 'line' &&
-          this.hoveredRow?.lineElement === data.lineElement
-        ) {
-          debugLogIfEnabled(
-            __debugMouseEvents,
-            'move',
-            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', returned early because same line"
-          );
-          break;
-        }
-        if (this.hoveredRow != null) {
-          debugLogIfEnabled(
-            __debugMouseEvents,
-            'move',
-            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', clearing an existing hovered row and firing onLineLeave"
-          );
-          onLineLeave?.(this.hoveredRow);
-          this.hoveredRow = undefined;
-        }
-        if (data?.type === 'line') {
-          debugLogIfEnabled(
-            __debugMouseEvents,
-            'move',
-            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', setting up a new hoveredRow and firing onLineEnter"
-          );
-          this.hoveredRow = data;
-          onLineEnter?.(this.hoveredRow);
-        }
-        break;
-      }
-      case 'click':
-        debugLogIfEnabled(
-          __debugMouseEvents,
-          'click',
-          "FileDiff.DEBUG.handleMouseEvent: switch, 'click', with data:",
-          data
-        );
-        if (data == null) break;
-        if (data.type === 'line-info') {
-          debugLogIfEnabled(
-            __debugMouseEvents,
-            'click',
-            "FileDiff.DEBUG.handleMouseEvent: switch, 'click', expanding a hunk"
-          );
-          this.hunksRenderer.expandHunk(data.hunkIndex);
-          void this.rerender();
-          break;
-        }
-        if (data.type === 'line') {
-          if (onLineNumberClick != null && data.numberColumn) {
-            debugLogIfEnabled(
-              __debugMouseEvents,
-              'click',
-              "FileDiff.DEBUG.handleMouseEvent: switch, 'click', firing 'onLineNumberClick'"
-            );
-            onLineNumberClick({ ...data, event });
-          } else if (onLineClick != null) {
-            debugLogIfEnabled(
-              __debugMouseEvents,
-              'click',
-              "FileDiff.DEBUG.handleMouseEvent: switch, 'click', firing 'onLineClick'"
-            );
-            onLineClick({ ...data, event });
-          } else {
-            debugLogIfEnabled(
-              __debugMouseEvents,
-              'click',
-              "FileDiff.DEBUG.handleMouseEvent: switch, 'click', fell through, no event to fire"
-            );
-          }
-        }
-        break;
-    }
-  }
-
   private getOrCreatePre(container: HTMLElement): HTMLPreElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
-      this.attachEventListeners(this.pre);
       container.shadowRoot?.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
@@ -812,6 +551,7 @@ export class FileDiff<LAnnotation = undefined> {
       }
     }
 
+    this.mouseEventManager.setup(pre);
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);
       this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
@@ -820,28 +560,4 @@ export class FileDiff<LAnnotation = undefined> {
       this.scrollSyncManager.cleanUp();
     }
   }
-}
-
-function debugLogIfEnabled(
-  debugLogType: LogTypes | undefined = 'none',
-  logIfType: 'move' | 'click',
-  ...args: unknown[]
-) {
-  switch (debugLogType) {
-    case 'none':
-      return;
-    case 'both':
-      break;
-    case 'click':
-      if (logIfType !== 'click') {
-        return;
-      }
-      break;
-    case 'move':
-      if (logIfType !== 'move') {
-        return;
-      }
-      break;
-  }
-  console.log(...args);
 }

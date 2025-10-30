@@ -179,7 +179,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         // onLineLeave(props) {
         //   console.log('onLineLeave', props.annotationSide, props.lineNumber);
         // },
-        // __debugMouseEvents: 'none',
+        // __debugMouseEvents: 'click',
       });
 
       const fileContainer = document.createElement('file-diff');
@@ -395,6 +395,12 @@ if (renderFileButton != null) {
     const instance = new File<LineCommentMetadata>({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       renderAnnotation,
+      onLineClick(props) {
+        console.log('onLineClick', props);
+      },
+      onLineNumberClick(props) {
+        console.info('onLineNumberClick', props);
+      },
     });
     void instance.render({
       file: { name: 'main.tsx', contents: FILE_NEW },
