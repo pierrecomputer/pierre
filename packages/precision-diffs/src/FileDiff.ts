@@ -450,6 +450,8 @@ export class FileDiff<LAnnotation = undefined> {
     pre.removeEventListener('click', this.handleMouseClick);
     pre.removeEventListener('mousemove', this.handleMouseMove);
     pre.removeEventListener('mouseout', this.handleMouseLeave);
+    delete pre.dataset.interactiveLines;
+    delete pre.dataset.interactiveLineNumbers;
 
     const {
       onLineClick,
@@ -466,6 +468,11 @@ export class FileDiff<LAnnotation = undefined> {
       typeof hunkSeparators === 'function'
     ) {
       pre.addEventListener('click', this.handleMouseClick);
+      if (onLineClick != null) {
+        pre.dataset.interactiveLines = '';
+      } else if (onLineNumberClick != null) {
+        pre.dataset.interactiveLineNumbers = '';
+      }
       debugLogIfEnabled(
         __debugMouseEvents,
         'click',

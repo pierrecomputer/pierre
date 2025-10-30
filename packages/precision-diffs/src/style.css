@@ -315,6 +315,10 @@ code {
   grid-column: 1 / 3;
 }
 
+[data-interactive-lines] [data-line] {
+  cursor: pointer;
+}
+
 [data-type='split'][data-overflow='wrap'] [data-additions] [data-line],
 [data-type='split'][data-overflow='wrap'] [data-additions] [data-separator],
 [data-type='split'][data-overflow='wrap']
@@ -548,6 +552,10 @@ code {
   min-width: 32px;
   padding-left: 2ch;
   border-right: 1px solid var(--pjs-bg);
+}
+
+[data-interactive-line-numbers] [data-column-number] {
+  cursor: pointer;
 }
 
 [data-diff-span] {

@@ -328,10 +328,14 @@ export class File<LAnnotation = undefined> {
     pre.removeEventListener('click', this.handleMouseClick);
     pre.removeEventListener('mousemove', this.handleMouseMove);
     pre.removeEventListener('mouseout', this.handleMouseLeave);
+    delete pre.dataset.interactiveLines;
 
     const { onLineClick, onLineEnter, onLineLeave } = this.options;
 
     if (onLineClick != null) {
+      if (onLineClick != null) {
+        pre.dataset.interactiveLines = '';
+      }
       pre.addEventListener('click', this.handleMouseClick);
     }
     if (onLineEnter != null || onLineLeave != null) {
