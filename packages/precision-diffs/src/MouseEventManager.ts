@@ -1,14 +1,26 @@
-import type { AnnotationSide, DiffLineEventBaseProps } from './types';
+import type {
+  AnnotationSide,
+  DiffLineEventBaseProps,
+  LineEventBaseProps,
+} from './types';
+
+export type LogTypes = 'click' | 'move' | 'both' | 'none';
+
+export type MouseEventManagerMode = 'file' | 'diff';
+
+export interface OnLineClickProps extends LineEventBaseProps {
+  event: PointerEvent;
+}
+
+export interface OnLineEnterLeaveProps extends LineEventBaseProps {
+  event: MouseEvent;
+}
 
 export interface OnDiffLineClickProps extends DiffLineEventBaseProps {
   event: PointerEvent;
 }
 
-export interface OnDiffLineEnterProps extends DiffLineEventBaseProps {
-  event: MouseEvent;
-}
-
-export interface OnDiffLineLeaveProps extends DiffLineEventBaseProps {
+export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
   event: MouseEvent;
 }
 
@@ -16,32 +28,78 @@ type HandleMouseEventProps =
   | { eventType: 'click'; event: PointerEvent }
   | { eventType: 'move'; event: MouseEvent };
 
-export type LogTypes = 'click' | 'move' | 'both' | 'none';
+type EventClickProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
+  ? OnLineClickProps
+  : OnDiffLineClickProps;
+
+type EventEnterLeaveProps<TMode extends MouseEventManagerMode> =
+  TMode extends 'file' ? OnLineEnterLeaveProps : OnDiffLineEnterLeaveProps;
+
+type EventBaseProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
+  ? LineEventBaseProps
+  : DiffLineEventBaseProps;
 
 interface ExpandoEventProps {
   type: 'line-info';
   hunkIndex: number;
 }
 
-export interface MouseEventManagerBaseOptions {
-  onLineClick?(props: OnDiffLineClickProps): unknown;
-  onLineNumberClick?(props: OnDiffLineClickProps): unknown;
-  onLineEnter?(props: DiffLineEventBaseProps): unknown;
-  onLineLeave?(props: DiffLineEventBaseProps): unknown;
+type GetLineDataResult<TMode extends MouseEventManagerMode> =
+  TMode extends 'file'
+    ? LineEventBaseProps | ExpandoEventProps | undefined
+    : DiffLineEventBaseProps | ExpandoEventProps | undefined;
+
+type LineEventData<TMode extends MouseEventManagerMode> = TMode extends 'file'
+  ? LineEventBaseProps
+  : DiffLineEventBaseProps;
+
+function isLineEventData<TMode extends MouseEventManagerMode>(
+  data: GetLineDataResult<TMode>,
+  mode: TMode
+): data is LineEventData<TMode> {
+  if (data == null) return false;
+  if (mode === 'file') {
+    return data.type === 'line';
+  } else {
+    return data.type === 'diff-line';
+  }
+}
+
+function isExpandoEventData(
+  data:
+    | LineEventBaseProps
+    | DiffLineEventBaseProps
+    | ExpandoEventProps
+    | undefined
+): data is ExpandoEventProps {
+  return data?.type === 'line-info';
+}
+
+export interface MouseEventManagerBaseOptions<
+  TMode extends MouseEventManagerMode,
+> {
+  onLineClick?(props: EventClickProps<TMode>): unknown;
+  onLineNumberClick?(props: EventClickProps<TMode>): unknown;
+  onLineEnter?(props: EventEnterLeaveProps<TMode>): unknown;
+  onLineLeave?(props: EventEnterLeaveProps<TMode>): unknown;
   __debugMouseEvents?: LogTypes;
 }
 
-export interface MouseEventManagerOptions extends MouseEventManagerBaseOptions {
+export interface MouseEventManagerOptions<TMode extends MouseEventManagerMode>
+  extends MouseEventManagerBaseOptions<TMode> {
   onHunkExpand?(hunkIndex: number): unknown;
 }
 
-export class MouseEventManager {
-  hoveredRow: DiffLineEventBaseProps | undefined;
+export class MouseEventManager<TMode extends MouseEventManagerMode> {
+  private hoveredRow: EventBaseProps<TMode> | undefined;
   private pre: HTMLPreElement | undefined;
 
-  constructor(private options: MouseEventManagerOptions) {}
+  constructor(
+    private mode: TMode,
+    private options: MouseEventManagerOptions<TMode>
+  ) {}
 
-  setOptions(options: MouseEventManagerOptions): void {
+  setOptions(options: MouseEventManagerOptions<TMode>): void {
     this.options = options;
   }
 
@@ -137,7 +195,7 @@ export class MouseEventManager {
     this.handleMouseEvent({ eventType: 'move', event });
   };
 
-  handleMouseLeave = (): void => {
+  handleMouseLeave = (event: MouseEvent): void => {
     const { __debugMouseEvents } = this.options;
     debugLogIfEnabled(
       __debugMouseEvents,
@@ -152,7 +210,10 @@ export class MouseEventManager {
       );
       return;
     }
-    this.options.onLineLeave?.(this.hoveredRow);
+    this.options.onLineLeave?.({
+      ...this.hoveredRow,
+      event,
+    } as EventEnterLeaveProps<TMode>);
     this.hoveredRow = undefined;
   };
 
@@ -182,7 +243,7 @@ export class MouseEventManager {
     switch (eventType) {
       case 'move': {
         if (
-          data?.type === 'line' &&
+          isLineEventData(data, this.mode) &&
           this.hoveredRow?.lineElement === data.lineElement
         ) {
           debugLogIfEnabled(
@@ -198,17 +259,23 @@ export class MouseEventManager {
             'move',
             "FileDiff.DEBUG.handleMouseEvent: switch, 'move', clearing an existing hovered row and firing onLineLeave"
           );
-          onLineLeave?.(this.hoveredRow);
+          onLineLeave?.({
+            ...this.hoveredRow,
+            event,
+          } as EventEnterLeaveProps<TMode>);
           this.hoveredRow = undefined;
         }
-        if (data?.type === 'line') {
+        if (isLineEventData(data, this.mode)) {
           debugLogIfEnabled(
             __debugMouseEvents,
             'move',
             "FileDiff.DEBUG.handleMouseEvent: switch, 'move', setting up a new hoveredRow and firing onLineEnter"
           );
           this.hoveredRow = data;
-          onLineEnter?.(this.hoveredRow);
+          onLineEnter?.({
+            ...this.hoveredRow,
+            event,
+          } as EventEnterLeaveProps<TMode>);
         }
         break;
       }
@@ -220,7 +287,7 @@ export class MouseEventManager {
           data
         );
         if (data == null) break;
-        if (data.type === 'line-info' && onHunkExpand != null) {
+        if (isExpandoEventData(data) && onHunkExpand != null) {
           debugLogIfEnabled(
             __debugMouseEvents,
             'click',
@@ -229,21 +296,21 @@ export class MouseEventManager {
           onHunkExpand(data.hunkIndex);
           break;
         }
-        if (data.type === 'line') {
+        if (isLineEventData(data, this.mode)) {
           if (onLineNumberClick != null && data.numberColumn) {
             debugLogIfEnabled(
               __debugMouseEvents,
               'click',
               "FileDiff.DEBUG.handleMouseEvent: switch, 'click', firing 'onLineNumberClick'"
             );
-            onLineNumberClick({ ...data, event });
+            onLineNumberClick({ ...data, event } as EventClickProps<TMode>);
           } else if (onLineClick != null) {
             debugLogIfEnabled(
               __debugMouseEvents,
               'click',
               "FileDiff.DEBUG.handleMouseEvent: switch, 'click', firing 'onLineClick'"
             );
-            onLineClick({ ...data, event });
+            onLineClick({ ...data, event } as EventClickProps<TMode>);
           } else {
             debugLogIfEnabled(
               __debugMouseEvents,
@@ -256,9 +323,7 @@ export class MouseEventManager {
     }
   }
 
-  private getLineData(
-    path: EventTarget[]
-  ): DiffLineEventBaseProps | ExpandoEventProps | undefined {
+  private getLineData(path: EventTarget[]): GetLineDataResult<TMode> {
     let numberColumn = false;
     const lineElement = path.find((element) => {
       if (!(element instanceof HTMLElement)) {
@@ -289,6 +354,16 @@ export class MouseEventManager {
     ) {
       return undefined;
     }
+
+    if (this.mode === 'file') {
+      return {
+        type: 'line',
+        lineElement,
+        lineNumber,
+        numberColumn,
+      } as GetLineDataResult<TMode>;
+    }
+
     const annotationSide: AnnotationSide = (() => {
       if (lineType === 'change-deletion') {
         return 'deletions';
@@ -302,14 +377,15 @@ export class MouseEventManager {
       }
       return 'deletions' in parent.dataset ? 'deletions' : 'additions';
     })();
+
     return {
-      type: 'line',
+      type: 'diff-line',
       annotationSide,
       lineType,
       lineElement,
       lineNumber,
       numberColumn,
-    };
+    } as GetLineDataResult<TMode>;
   }
 }
 
@@ -337,16 +413,22 @@ function debugLogIfEnabled(
   console.log(...args);
 }
 
-export function getMouseEventOptions(
-  options: MouseEventManagerBaseOptions,
+export function getMouseEventOptions<TMode extends MouseEventManagerMode>(
+  {
+    onLineClick,
+    onLineNumberClick,
+    onLineEnter,
+    onLineLeave,
+    __debugMouseEvents,
+  }: MouseEventManagerBaseOptions<TMode>,
   onHunkExpand?: (hunkIndex: number) => unknown
-): MouseEventManagerOptions {
+): MouseEventManagerOptions<TMode> {
   return {
-    onLineClick: options.onLineClick,
-    onLineNumberClick: options.onLineNumberClick,
-    onLineEnter: options.onLineEnter,
-    onLineLeave: options.onLineLeave,
-    __debugMouseEvents: options.__debugMouseEvents,
+    onLineClick,
+    onLineNumberClick,
+    onLineEnter,
+    onLineLeave,
+    __debugMouseEvents,
     onHunkExpand,
   };
 }

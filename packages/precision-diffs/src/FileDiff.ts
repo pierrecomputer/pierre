@@ -42,7 +42,7 @@ interface FileDiffRenderProps<LAnnotation> {
 
 export interface FileDiffOptions<LAnnotation>
   extends Omit<BaseDiffOptions, 'hunkSeparators'>,
-    MouseEventManagerBaseOptions {
+    MouseEventManagerBaseOptions<'diff'> {
   hunkSeparators?:
     | Exclude<HunkSeparators, 'custom'>
     | ((hunk: HunkData) => HTMLElement | DocumentFragment);
@@ -74,7 +74,7 @@ export class FileDiff<LAnnotation = undefined> {
   private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
   private scrollSyncManager: ScrollSyncManager;
-  private mouseEventManager: MouseEventManager;
+  private mouseEventManager: MouseEventManager<'diff'>;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
@@ -99,6 +99,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
     this.mouseEventManager = new MouseEventManager(
+      'diff',
       getMouseEventOptions(
         options,
         typeof options.hunkSeparators === 'function' ||

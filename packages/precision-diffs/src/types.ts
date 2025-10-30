@@ -189,7 +189,9 @@ export interface LineEventBaseProps {
   numberColumn: boolean;
 }
 
-export interface DiffLineEventBaseProps extends LineEventBaseProps {
+export interface DiffLineEventBaseProps
+  extends Omit<LineEventBaseProps, 'type'> {
+  type: 'diff-line';
   annotationSide: AnnotationSide;
   lineType: LineTypes;
 }

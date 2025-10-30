@@ -35,7 +35,7 @@ interface FileRenderProps<LAnnotation> {
 
 export interface FileOptions<LAnnotation>
   extends BaseCodeOptions,
-    MouseEventManagerBaseOptions {
+    MouseEventManagerBaseOptions<'file'> {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
   renderAnnotation?(
@@ -60,7 +60,7 @@ export class File<LAnnotation = undefined> {
   private fileRenderer: FileRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
-  private mouseEventManager: MouseEventManager;
+  private mouseEventManager: MouseEventManager<'file'>;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
@@ -75,6 +75,7 @@ export class File<LAnnotation = undefined> {
     this.headerRenderer = new FileHeaderRenderer(options);
     this.resizeManager = new ResizeManager();
     this.mouseEventManager = new MouseEventManager(
+      'file',
       getMouseEventOptions(options)
     );
   }
