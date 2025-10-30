@@ -1,11 +1,16 @@
-import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import type { FileContents } from '@pierre/precision-diffs';
 
-const CODE = `options={{
-  onLineClick: (props, fileDiff) => {
-    console.log('Clicked line:', props.lineNumber);
-    console.log('Side:', props.annotationSide);
-  }
-}}`;
+import { DocsCodeExample } from './DocsCodeExample';
+
+const CODE: FileContents = {
+  name: 'file.tsx',
+  contents: `options={{
+onLineClick: (props, fileDiff) => {
+console.log('Clicked line:', props.lineNumber);
+console.log('Side:', props.annotationSide);
+}
+}}`,
+};
 
 export function EventHandlers() {
   return (
@@ -26,12 +31,7 @@ export function EventHandlers() {
             </code>
           </p>
           <p>Called when a line is clicked.</p>
-          <SimpleCodeBlock
-            code={CODE}
-            language="typescript"
-            className="mt-2 text-sm"
-            lineNumbers={false}
-          />
+          <DocsCodeExample file={CODE} options={{ disableLineNumbers: true }} />
         </div>
 
         <div className="rounded-lg border p-4">

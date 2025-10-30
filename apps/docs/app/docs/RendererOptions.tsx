@@ -1,11 +1,16 @@
-import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import type { FileContents } from '@pierre/precision-diffs';
 
-const CODE_THEMES = `options={{
-  themes: {
-    light: 'github-light',
-    dark: 'github-dark'
-  }
-}}`;
+import { DocsCodeExample } from './DocsCodeExample';
+
+const CODE_THEMES: FileContents = {
+  name: 'file.tsx',
+  contents: `options={{
+themes: {
+light: 'github-light',
+dark: 'github-dark'
+}
+}}`,
+};
 
 export function RendererOptions() {
   return (
@@ -28,11 +33,12 @@ export function RendererOptions() {
             &apos;pierre-dark&apos;, &apos;github-light&apos;, &apos;nord&apos;,
             etc.)
           </p>
-          <SimpleCodeBlock
-            code="options={{ theme: 'pierre-dark' }}"
-            language="typescript"
-            className="mt-2 text-sm"
-            lineNumbers={false}
+          <DocsCodeExample
+            file={{
+              name: 'example.tsx',
+              contents: "options={{ theme: 'pierre-dark' }}",
+            }}
+            options={{ disableLineNumbers: true }}
           />
         </div>
 
@@ -44,11 +50,9 @@ export function RendererOptions() {
           <p>
             Dual theme configuration for automatic light/dark mode switching.
           </p>
-          <SimpleCodeBlock
-            code={CODE_THEMES}
-            language="typescript"
-            className="mt-2 text-sm"
-            lineNumbers={false}
+          <DocsCodeExample
+            file={CODE_THEMES}
+            options={{ disableLineNumbers: true }}
           />
         </div>
 

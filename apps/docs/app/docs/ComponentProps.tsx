@@ -1,10 +1,15 @@
-import { SimpleCodeBlock } from '@/components/SimpleCodeBlock';
+import type { FileContents } from '@pierre/precision-diffs';
 
-const CODE = `[{
-  side: 'additions' | 'deletions',
-  lineNumber: number,
-  metadata?: T // When you instantiate a component or class that consumes DiffLineAnnotations
-}]`;
+import { DocsCodeExample } from './DocsCodeExample';
+
+const CODE: FileContents = {
+  name: 'example.ts',
+  contents: `[{
+side: 'additions' | 'deletions',
+lineNumber: number,
+metadata?: T // When you instantiate a component or class that consumes DiffLineAnnotations
+}]`,
+};
 
 export function ComponentProps() {
   return (
@@ -71,12 +76,7 @@ export function ComponentProps() {
           <p>
             Array of line annotations to display inline comments or decorations.
           </p>
-          <SimpleCodeBlock
-            code={CODE}
-            language="typescript"
-            className="mt-2 text-sm"
-            lineNumbers={false}
-          />
+          <DocsCodeExample file={CODE} options={{ disableLineNumbers: true }} />
         </div>
 
         <div className="rounded-lg border p-4">
