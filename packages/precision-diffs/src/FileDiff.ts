@@ -2,17 +2,14 @@ import deepEquals from 'fast-deep-equal';
 import type { Element } from 'hast';
 
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
-import {
-  FileHeaderRenderer,
-  type FileHeaderRendererOptions,
-} from './FileHeaderRenderer';
+import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
-import { HEADER_METADATA_SLOT_ID } from './constants';
+import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
   AnnotationSide,
-  BaseDiffProps,
+  BaseDiffOptions,
   DiffLineAnnotation,
   DiffLineEventBaseProps,
   FileContents,
@@ -23,9 +20,7 @@ import type {
   ObservedGridNodes,
   PJSHighlighter,
   RenderHeaderMetadataCallback,
-  ThemeRendererOptions,
   ThemeTypes,
-  ThemesRendererOptions,
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
@@ -73,7 +68,8 @@ type HandleMouseEventProps =
   | { eventType: 'click'; event: PointerEvent }
   | { eventType: 'move'; event: MouseEvent };
 
-interface DiffFileBaseOptions<LAnnotation> {
+export interface FileDiffOptions<LAnnotation>
+  extends Omit<BaseDiffOptions, 'hunkSeparators'> {
   hunkSeparators?:
     | Exclude<HunkSeparators, 'custom'>
     | ((hunk: HunkData) => HTMLElement | DocumentFragment);
@@ -86,25 +82,8 @@ interface DiffFileBaseOptions<LAnnotation> {
   onLineNumberClick?(props: OnDiffLineClickProps): unknown;
   onLineEnter?(props: DiffLineEventBaseProps): unknown;
   onLineLeave?(props: DiffLineEventBaseProps): unknown;
-}
-
-interface DiffFileThemeRendererOptions<LAnnotation>
-  extends Omit<BaseDiffProps, 'hunkSeparators'>,
-    ThemeRendererOptions,
-    DiffFileBaseOptions<LAnnotation> {
   __debugMouseEvents?: LogTypes;
 }
-
-interface DiffFileThemesRendererOptions<LAnnotation>
-  extends Omit<BaseDiffProps, 'hunkSeparators'>,
-    ThemesRendererOptions,
-    DiffFileBaseOptions<LAnnotation> {
-  __debugMouseEvents?: LogTypes;
-}
-
-export type DiffFileRendererOptions<LAnnotation> =
-  | DiffFileThemeRendererOptions<LAnnotation>
-  | DiffFileThemesRendererOptions<LAnnotation>;
 
 let instanceId = -1;
 
@@ -148,9 +127,7 @@ export class FileDiff<LAnnotation = undefined> {
   };
 
   constructor(
-    public options: DiffFileRendererOptions<LAnnotation> = {
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
-    },
+    public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
     // NOTE(amadeus): Temp hack while we use this component in a react context
     private isContainerManaged = false
   ) {
@@ -171,7 +148,7 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(options: DiffFileRendererOptions<LAnnotation> | undefined): void {
+  setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
     this.hunksRenderer.setOptions({
@@ -183,10 +160,7 @@ export class FileDiff<LAnnotation = undefined> {
     });
   }
 
-  private mergeOptions(
-    options: Partial<DiffFileRendererOptions<LAnnotation>>
-  ): void {
-    // @ts-expect-error FIXME
+  private mergeOptions(options: Partial<FileDiffOptions<LAnnotation>>): void {
     this.options = { ...this.options, ...options };
   }
 
@@ -386,15 +360,13 @@ export class FileDiff<LAnnotation = undefined> {
         this.headerElement = undefined;
       }
     } else {
-      const { theme, themes, themeType } = this.options;
-      const options: FileHeaderRendererOptions =
-        theme != null ? { theme, themeType } : { themes, themeType };
-      this.headerRenderer.setOptions(options);
+      const { theme, themeType } = this.options;
+      this.headerRenderer.setOptions({ theme, themeType });
     }
 
     const [highlighter, headerResult, hunksResult] = await Promise.all([
       getSharedHighlighter({
-        themes: getThemes(this.options),
+        themes: getThemes(this.options.theme),
         langs: [],
       }),
       !disableFileHeader
@@ -811,7 +783,6 @@ export class FileDiff<LAnnotation = undefined> {
       diffStyle = 'split',
       overflow = 'scroll',
       theme,
-      themes,
       themeType = 'system',
       diffIndicators = 'bars',
       disableBackground = false,
@@ -825,7 +796,6 @@ export class FileDiff<LAnnotation = undefined> {
     setWrapperProps({
       pre,
       theme,
-      themes,
       highlighter,
       split,
       wrap,

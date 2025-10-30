@@ -2,41 +2,29 @@ import type { Element } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import { getSharedHighlighter, hasLoadedThemes } from './SharedHighlighter';
+import { DEFAULT_THEMES } from './constants';
 import type {
   FileContents,
   FileDiffMetadata,
   PJSHighlighter,
-  ThemeRendererOptions,
+  PJSThemeNames,
   ThemeTypes,
-  ThemesRendererOptions,
+  ThemesType,
 } from './types';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getThemes } from './utils/getThemes';
 import { createFileHeaderElement } from './utils/hast_utils';
 
-interface BaseProps {
+export interface FileHeaderRendererOptions {
+  theme?: PJSThemeNames | ThemesType;
   themeType?: ThemeTypes;
 }
-
-interface FileHeaderRendererThemeOptions
-  extends ThemeRendererOptions,
-    BaseProps {}
-
-interface FileHeaderRendererThemesOptions
-  extends ThemesRendererOptions,
-    BaseProps {}
-
-export type FileHeaderRendererOptions =
-  | FileHeaderRendererThemeOptions
-  | FileHeaderRendererThemesOptions;
 
 export class FileHeaderRenderer {
   private highlighter: PJSHighlighter | undefined;
 
   constructor(
-    public options: FileHeaderRendererOptions = {
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
-    }
+    public options: FileHeaderRendererOptions = { theme: DEFAULT_THEMES }
   ) {}
 
   cleanUp(): void {
@@ -46,7 +34,6 @@ export class FileHeaderRenderer {
   }
 
   private mergeOptions(options: Partial<FileHeaderRendererOptions>): void {
-    // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
@@ -79,7 +66,7 @@ export class FileHeaderRenderer {
       return this.queuedRender;
     }
     this.queuedRender = (async () => {
-      if (!hasLoadedThemes(getThemes(this.options))) {
+      if (!hasLoadedThemes(getThemes(this.options.theme))) {
         this.highlighter = undefined;
       }
       this.highlighter ??= await this.initializeHighlighter();

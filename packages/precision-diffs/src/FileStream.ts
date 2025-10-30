@@ -1,13 +1,12 @@
 import { getSharedHighlighter } from './SharedHighlighter';
 import { queueRender } from './UniversalRenderer';
+import { DEFAULT_THEMES } from './constants';
 import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
 import type {
-  BaseCodeProps,
+  BaseCodeOptions,
   PJSHighlighter,
-  PJSThemeNames,
   ThemeTypes,
   ThemedToken,
-  ThemesType,
 } from './types';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
@@ -18,7 +17,7 @@ import {
   setWrapperProps,
 } from './utils/html_render_utils';
 
-interface CodeTokenOptionsBase extends BaseCodeProps {
+export interface FileStreamOptions extends BaseCodeOptions {
   startingLineIndex?: number;
 
   onPreRender?(instance: FileStream): unknown;
@@ -30,30 +29,14 @@ interface CodeTokenOptionsBase extends BaseCodeProps {
   onStreamAbort?(reason: unknown): unknown;
 }
 
-interface CodeTokenOptionsSingleTheme extends CodeTokenOptionsBase {
-  theme: PJSThemeNames;
-  themes?: never;
-}
-
-interface CodeTokenOptionsMultiThemes extends CodeTokenOptionsBase {
-  theme?: never;
-  themes: ThemesType;
-}
-
-export type FileStreamOptions =
-  | CodeTokenOptionsSingleTheme
-  | CodeTokenOptionsMultiThemes;
-
 export class FileStream {
   private highlighter: PJSHighlighter | undefined;
-  options: FileStreamOptions;
   private stream: ReadableStream<string> | undefined;
   private fileContainer: HTMLElement | undefined;
   pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
 
-  constructor(options: FileStreamOptions) {
-    this.options = options;
+  constructor(public options: FileStreamOptions = { theme: DEFAULT_THEMES }) {
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
   }
 
@@ -116,8 +99,7 @@ export class FileStream {
     highlighter: PJSHighlighter
   ): void {
     const {
-      themes,
-      theme,
+      theme = DEFAULT_THEMES,
       overflow = 'scroll',
       themeType = 'system',
     } = this.options;
@@ -133,7 +115,6 @@ export class FileStream {
       pre: this.pre,
       split: false,
       theme,
-      themes,
       highlighter,
       wrap: overflow === 'wrap',
       themeType,
@@ -152,13 +133,23 @@ export class FileStream {
     this.stream = stream;
     void this.stream
       .pipeThrough(
-        new CodeToTokenTransformStream({
-          ...this.options,
-          highlighter,
-          allowRecalls: true,
-          defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix(),
-        })
+        typeof theme === 'string'
+          ? new CodeToTokenTransformStream({
+              ...this.options,
+              theme,
+              highlighter,
+              allowRecalls: true,
+              defaultColor: false,
+              cssVariablePrefix: formatCSSVariablePrefix(),
+            })
+          : new CodeToTokenTransformStream({
+              ...this.options,
+              themes: theme,
+              highlighter,
+              allowRecalls: true,
+              defaultColor: false,
+              cssVariablePrefix: formatCSSVariablePrefix(),
+            })
       )
       .pipeTo(
         new WritableStream({

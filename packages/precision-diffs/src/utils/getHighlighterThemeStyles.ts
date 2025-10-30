@@ -1,3 +1,5 @@
+import { DEFAULT_THEMES } from 'src/constants';
+
 import type {
   PJSHighlighter,
   PJSThemeNames,
@@ -7,8 +9,7 @@ import type {
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 
 interface GetHighlighterThemeStylesProps {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
+  theme?: PJSThemeNames | ThemesType;
   highlighter: PJSHighlighter;
   prefix?: string;
 }
@@ -17,26 +18,25 @@ interface GetHighlighterThemeStylesProps {
 // re-think this when it comes to removing inline
 // styles
 export function getHighlighterThemeStyles({
-  theme,
-  themes,
+  theme = DEFAULT_THEMES,
   highlighter,
   prefix,
 }: GetHighlighterThemeStylesProps): string {
   let styles = '';
-  if (theme != null) {
+  if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
     styles += `color:${themeData.fg};`;
     styles += `background-color:${themeData.bg};`;
     styles += `${formatCSSVariablePrefix(prefix)}fg:${themeData.fg};`;
     styles += `${formatCSSVariablePrefix(prefix)}bg:${themeData.bg};`;
     styles += getThemeVariables(themeData, prefix);
-  } else if (themes != null) {
-    let themeData = highlighter.getTheme(themes.dark);
+  } else {
+    let themeData = highlighter.getTheme(theme.dark);
     styles += `${formatCSSVariablePrefix(prefix)}dark:${themeData.fg};`;
     styles += `${formatCSSVariablePrefix(prefix)}dark-bg:${themeData.bg};`;
     styles += getThemeVariables(themeData, prefix, 'dark');
 
-    themeData = highlighter.getTheme(themes.light);
+    themeData = highlighter.getTheme(theme.light);
     styles += `${formatCSSVariablePrefix(prefix)}light:${themeData.fg};`;
     styles += `${formatCSSVariablePrefix(prefix)}light-bg:${themeData.bg};`;
     styles += getThemeVariables(themeData, prefix, 'light');

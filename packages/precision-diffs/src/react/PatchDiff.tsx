@@ -4,13 +4,13 @@ import { useMemo } from 'react';
 
 import type { FileDiffMetadata } from '../types';
 import { parsePatchFiles } from '../utils/parsePatchFiles';
-import type { DiffBaseReactProps } from './types';
+import type { DiffBasePropsReact } from './types';
 import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export interface PatchDiffProps<LAnnotation>
-  extends DiffBaseReactProps<LAnnotation> {
+  extends DiffBasePropsReact<LAnnotation> {
   patch: string;
 }
 

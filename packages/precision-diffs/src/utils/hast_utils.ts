@@ -7,10 +7,10 @@ import type {
   Text,
 } from 'hast';
 
-import { HEADER_METADATA_SLOT_ID } from '../constants';
+import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from '../constants';
 import type {
   AnnotationSpan,
-  BaseDiffProps,
+  BaseDiffOptions,
   ChangeTypes,
   FileContents,
   FileDiffMetadata,
@@ -231,11 +231,9 @@ export function convertLine(
 
 interface CreatePreWrapperPropertiesProps
   extends Pick<
-    BaseDiffProps,
-    'overflow' | 'themeType' | 'diffIndicators' | 'disableBackground'
+    BaseDiffOptions,
+    'overflow' | 'themeType' | 'diffIndicators' | 'disableBackground' | 'theme'
   > {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
   split: boolean;
   highlighter: PJSHighlighter;
 }
@@ -246,9 +244,8 @@ export function createPreWrapperProperties({
   highlighter,
   overflow = 'scroll',
   split,
-  theme,
+  theme = DEFAULT_THEMES,
   themeType = 'system',
-  themes,
 }: CreatePreWrapperPropertiesProps): Properties {
   const properties: Properties = {
     'data-pjs': '',
@@ -256,13 +253,13 @@ export function createPreWrapperProperties({
     'data-overflow': overflow,
     // NOTE(amadeus): Alex, here we would probably set a class property
     // instead, when that's working and supported
-    style: getHighlighterThemeStyles({ theme, themes, highlighter }),
+    style: getHighlighterThemeStyles({ theme, highlighter }),
     tabIndex: 0,
   };
 
-  if (theme != null && themeType !== 'system') {
+  if (typeof theme === 'string' && themeType !== 'system') {
     properties['data-theme-type'] = themeType;
-  } else if (theme != null) {
+  } else if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
     properties['data-theme-type'] = themeData.type;
   }
@@ -283,8 +280,7 @@ export function createPreWrapperProperties({
 
 interface CreateFileHeaderProps {
   fileOrDiff: FileDiffMetadata | FileContents;
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
+  theme?: PJSThemeNames | ThemesType;
   highlighter: PJSHighlighter;
   prefix?: string;
   themeType?: ThemeTypes;
@@ -293,7 +289,6 @@ interface CreateFileHeaderProps {
 export function createFileHeaderElement({
   fileOrDiff,
   theme,
-  themes,
   highlighter,
   prefix,
   themeType = 'system',
@@ -301,12 +296,7 @@ export function createFileHeaderElement({
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-pjs-header': '',
-    style: getHighlighterThemeStyles({
-      theme,
-      themes,
-      highlighter,
-      prefix,
-    }),
+    style: getHighlighterThemeStyles({ theme, highlighter, prefix }),
   };
 
   if (fileDiff != null) {
@@ -315,7 +305,7 @@ export function createFileHeaderElement({
 
   // If a theme is specified, then we should just override the themeType and
   // ignore whatever might be passed in
-  if (theme != null) {
+  if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
     properties['data-theme-type'] = themeData.type;
   } else if (themeType !== 'system') {

@@ -2,17 +2,13 @@ import deepEquals from 'fast-deep-equal';
 import type { Element } from 'hast';
 
 import { FileHeaderRenderer } from './FileHeaderRenderer';
-import {
-  type FileRenderResult,
-  FileRenderer,
-  type FileRendererThemeOptions,
-  type FileRendererThemesOptions,
-} from './FileRenderer';
+import { type FileRenderResult, FileRenderer } from './FileRenderer';
 import { getSharedHighlighter } from './SharedHighlighter';
-import { HEADER_METADATA_SLOT_ID } from './constants';
+import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
+  BaseCodeOptions,
   FileContents,
   LineAnnotation,
   LineEventBaseProps,
@@ -49,7 +45,7 @@ interface FileRenderProps<LAnnotation> {
   lineAnnotations?: LineAnnotation<LAnnotation>[];
 }
 
-interface BaseOptions<LAnnotation> {
+export interface FileOptions<LAnnotation> extends BaseCodeOptions {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
   renderAnnotation?(
@@ -61,25 +57,12 @@ interface BaseOptions<LAnnotation> {
   onLineLeave?(props: LineEventBaseProps, file: FileContents): unknown;
 }
 
-interface FileThemeOptions<LAnnotation>
-  extends FileRendererThemeOptions,
-    BaseOptions<LAnnotation> {}
-
-interface FileThemesOptions<LAnnotation>
-  extends FileRendererThemesOptions,
-    BaseOptions<LAnnotation> {}
-
-export type FileOptions<LAnnotation> =
-  | FileThemeOptions<LAnnotation>
-  | FileThemesOptions<LAnnotation>;
-
 let instanceId = -1;
 
 export class File<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = PJSContainerLoaded;
 
   readonly __id: number = ++instanceId;
-
   private fileContainer: HTMLElement | undefined;
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
@@ -100,9 +83,7 @@ export class File<LAnnotation = undefined> {
   private file: FileContents | undefined;
 
   constructor(
-    public options: FileOptions<LAnnotation> = {
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
-    },
+    public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
     private isContainerManaged = false
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(options);
@@ -115,7 +96,6 @@ export class File<LAnnotation = undefined> {
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
-    // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
@@ -242,7 +222,10 @@ export class File<LAnnotation = undefined> {
     }
 
     const [highlighter, headerResult, fileResult] = await Promise.all([
-      getSharedHighlighter({ themes: getThemes(this.options), langs: [] }),
+      getSharedHighlighter({
+        themes: getThemes(this.options.theme),
+        langs: [],
+      }),
       !disableFileHeader ? this.headerRenderer.render(file) : undefined,
       this.fileRenderer.render(file),
     ]);
@@ -476,17 +459,11 @@ export class File<LAnnotation = undefined> {
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ): void {
-    const {
-      overflow = 'scroll',
-      theme,
-      themes,
-      themeType = 'system',
-    } = this.options;
+    const { overflow = 'scroll', theme, themeType = 'system' } = this.options;
     const wrap = overflow === 'wrap';
     setWrapperProps({
       pre,
       theme,
-      themes,
       highlighter,
       split: false,
       wrap,

@@ -2,8 +2,7 @@ import type { PJSThemeNames, SupportedLanguages, ThemesType } from '../types';
 import { getThemes } from './getThemes';
 
 interface HighlighterOptionsShape {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
+  theme?: PJSThemeNames | ThemesType;
   preferWasmHighlighter?: boolean;
 }
 
@@ -19,7 +18,7 @@ export function getHighlighterOptions(
 ): GetHighlighterOptionsReturn {
   return {
     langs: [lang ?? 'text'],
-    themes: getThemes(options),
+    themes: getThemes(options.theme),
     preferWasmHighlighter: options.preferWasmHighlighter,
   };
 }

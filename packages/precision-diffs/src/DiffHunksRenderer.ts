@@ -10,7 +10,7 @@ import { DEFAULT_THEMES } from './constants';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
-  BaseDiffProps,
+  BaseDiffOptions,
   ChangeHunk,
   CodeToHastOptions,
   DecorationItem,
@@ -25,9 +25,7 @@ import type {
   SharedRenderState,
   ShikiTransformer,
   SupportedLanguages,
-  ThemeRendererOptions,
   ThemeTypes,
-  ThemesRendererOptions,
 } from './types';
 import { createMirroredAnnotationSpan } from './utils/createMirroredAnnotationSpan';
 import { createSingleAnnotationSpan } from './utils/createSingleAnnotationSpan';
@@ -79,25 +77,9 @@ interface ProcessLinesReturn {
   unified: ComputedContent;
 }
 
-interface DiffHunkRendererThemeOptions
-  extends BaseDiffProps,
-    ThemeRendererOptions {
-  useCSSClasses?: boolean;
-}
-
-interface DiffHunkRendererThemesOptions
-  extends BaseDiffProps,
-    ThemesRendererOptions {
-  useCSSClasses?: boolean;
-}
-
-export type DiffHunksRendererOptions =
-  | DiffHunkRendererThemeOptions
-  | DiffHunkRendererThemesOptions;
-
-type OptionsWithDefaults =
-  | Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>
-  | Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
+type OptionsWithDefaults = Required<
+  Omit<BaseDiffOptions, 'lang' | 'preferWasmHighlighter'>
+>;
 
 export interface HunksRenderResult {
   additionsAST: ElementContent[] | undefined;
@@ -110,7 +92,7 @@ export interface HunksRenderResult {
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
   private highlighter: PJSHighlighter | undefined;
-  private options: DiffHunksRendererOptions;
+  private options: BaseDiffOptions;
   private diff: FileDiffMetadata | undefined;
 
   private expandedHunks = new Set<number>();
@@ -122,11 +104,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
   private computedLang: SupportedLanguages = 'text';
 
-  constructor(
-    options: DiffHunksRendererOptions = {
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
-    }
-  ) {
+  constructor(options: BaseDiffOptions = { theme: DEFAULT_THEMES }) {
     this.options = options;
   }
 
@@ -137,7 +115,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.queuedRender = undefined;
   }
 
-  setOptions(options: DiffHunksRendererOptions): void {
+  setOptions(options: BaseDiffOptions): void {
     this.options = options;
   }
 
@@ -152,8 +130,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
   }
 
-  private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
-    // @ts-expect-error FIXME
+  private mergeOptions(options: Partial<BaseDiffOptions>) {
     this.options = { ...this.options, ...options };
   }
 
@@ -194,28 +171,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength = 1000,
       maxLineLengthForHighlighting = 1000,
       overflow = 'scroll',
-      theme,
+      theme = DEFAULT_THEMES,
       themeType = 'system',
-      themes = DEFAULT_THEMES,
       useCSSClasses = false,
     } = this.options;
-    if (theme != null) {
-      return {
-        diffIndicators,
-        diffStyle,
-        disableBackground,
-        disableLineNumbers,
-        expandUnchanged,
-        hunkSeparators,
-        lineDiffType,
-        maxLineDiffLength,
-        maxLineLengthForHighlighting,
-        overflow,
-        theme,
-        themeType,
-        useCSSClasses,
-      } as Required<Omit<DiffHunkRendererThemesOptions, 'themes'>>;
-    }
     return {
       diffIndicators,
       diffStyle,
@@ -227,10 +186,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength,
       maxLineLengthForHighlighting,
       overflow,
+      theme,
       themeType,
-      themes,
       useCSSClasses,
-    } as Required<Omit<DiffHunkRendererThemeOptions, 'theme'>>;
+    };
   }
 
   async initializeHighlighter(): Promise<PJSHighlighter> {
@@ -253,7 +212,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // themes
       if (
         !hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(getThemes(this.options))
+        !hasLoadedThemes(getThemes(this.options.theme))
       ) {
         this.highlighter = undefined;
       }
@@ -276,7 +235,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     fileDiff: FileDiffMetadata,
     highlighter: PJSHighlighter
   ): HunksRenderResult {
-    const options = this.getOptionsWithDefaults();
     const {
       disableLineNumbers,
       diffStyle,
@@ -286,6 +244,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diffIndicators,
       expandUnchanged,
       useCSSClasses,
+      theme,
     } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
@@ -359,9 +318,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             diffStyle === 'unified'
               ? false
               : additionsAST.length > 0 && additionsAST.length > 0,
-          theme: 'theme' in options ? options.theme : undefined,
+          theme,
           themeType,
-          themes: 'themes' in options ? options.themes : undefined,
         }),
       }),
     };
@@ -441,9 +399,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     decorations?: DecorationItem[],
     forceTextLang: boolean = false
   ): CodeToHastOptions<PJSThemeNames> {
-    if (this.options.theme != null) {
+    const { theme } = this.getOptionsWithDefaults();
+    if (typeof theme === 'string') {
       return {
-        theme: this.options.theme,
+        theme,
         cssVariablePrefix: formatCSSVariablePrefix(),
         lang: forceTextLang ? 'text' : this.computedLang,
         defaultColor: false,
@@ -452,7 +411,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
     return {
-      themes: this.options.themes ?? DEFAULT_THEMES,
+      themes: theme,
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,

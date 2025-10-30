@@ -34,16 +34,6 @@ export type PJSThemeNames =
 
 export type ThemesType = Record<'dark' | 'light', PJSThemeNames>;
 
-export interface ThemeRendererOptions {
-  theme: PJSThemeNames;
-  themes?: never;
-}
-
-export interface ThemesRendererOptions {
-  theme?: never;
-  themes?: ThemesType;
-}
-
 export type PJSHighlighter = HighlighterGeneric<
   SupportedLanguages,
   PJSThemeNames
@@ -95,7 +85,12 @@ export type HunkLineType =
 
 export type ThemeTypes = 'system' | 'light' | 'dark';
 
-export interface BaseCodeProps {
+export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
+
+export type LineDifftypes = 'word-alt' | 'word' | 'char' | 'none';
+
+export interface BaseCodeOptions {
+  theme?: PJSThemeNames | ThemesType;
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
@@ -103,13 +98,10 @@ export interface BaseCodeProps {
   // Shiki config options
   lang?: SupportedLanguages;
   preferWasmHighlighter?: boolean;
+  useCSSClasses?: boolean;
 }
 
-export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
-
-export type LineDifftypes = 'word-alt' | 'word' | 'char' | 'none';
-
-export interface BaseDiffProps extends BaseCodeProps {
+export interface BaseDiffOptions extends BaseCodeOptions {
   diffStyle?: 'unified' | 'split'; // split is default
   diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
   disableBackground?: boolean;

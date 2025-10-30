@@ -1,7 +1,7 @@
 import { toHtml } from 'hast-util-to-html';
 
 import type { FileOptions } from '../../src/File';
-import type { DiffFileRendererOptions } from '../../src/FileDiff';
+import type { FileDiffOptions } from '../../src/FileDiff';
 import { DiffHunksRenderer } from '../DiffHunksRenderer';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import { FileRenderer } from '../FileRenderer';
@@ -30,14 +30,14 @@ export interface PreloadedFileResult<LAnnotation> {
 export type PreloadFileDiffOptions<LAnnotation> = {
   oldFile: FileContents;
   newFile: FileContents;
-  options?: DiffFileRendererOptions<LAnnotation>;
+  options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 };
 
 export interface PreloadedFileDiffResult<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
-  options?: DiffFileRendererOptions<LAnnotation>;
+  options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
   prerenderedHTML: string;
 }

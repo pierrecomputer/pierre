@@ -3,15 +3,15 @@ import type { ReactNode } from 'react';
 import { HEADER_METADATA_SLOT_ID } from '../../constants';
 import type { FileContents, FileDiffMetadata } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
-import type { DiffBaseReactProps } from '../types';
+import type { DiffBasePropsReact } from '../types';
 
 interface RenderDiffChildrenProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
   newFile?: FileContents;
-  renderHeaderMetadata: DiffBaseReactProps<LAnnotation>['renderHeaderMetadata'];
-  renderAnnotation: DiffBaseReactProps<LAnnotation>['renderAnnotation'];
-  lineAnnotations: DiffBaseReactProps<LAnnotation>['lineAnnotations'];
+  renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
+  renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
+  lineAnnotations: DiffBasePropsReact<LAnnotation>['lineAnnotations'];
 }
 
 export function renderAnnotationChildren<LAnnotation>({

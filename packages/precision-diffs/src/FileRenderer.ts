@@ -8,6 +8,7 @@ import {
 } from './SharedHighlighter';
 import { DEFAULT_THEMES, SPLIT_WITH_NEWLINES } from './constants';
 import type {
+  BaseCodeOptions,
   CodeToHastOptions,
   DecorationItem,
   FileContents,
@@ -17,9 +18,7 @@ import type {
   PJSThemeNames,
   ShikiTransformer,
   SupportedLanguages,
-  ThemeRendererOptions,
   ThemeTypes,
-  ThemesRendererOptions,
 } from './types';
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
@@ -43,38 +42,17 @@ export interface FileRenderResult {
   css: string;
 }
 
-interface BaseOptions {
-  disableLineNumbers?: boolean;
-  overflow?: 'scroll' | 'wrap'; // 'scroll' is default
-  themeType?: ThemeTypes; // 'system' is default
+interface FileRendererOptions extends BaseCodeOptions {
   startingLineNumber?: number;
   maxLineLengthForHighlighting?: number; // 1000 is default
-
-  // Shiki config options
-  lang?: SupportedLanguages;
-  preferWasmHighlighter?: boolean;
 }
-
-export interface FileRendererThemeOptions
-  extends BaseOptions,
-    ThemeRendererOptions {}
-
-export interface FileRendererThemesOptions
-  extends BaseOptions,
-    ThemesRendererOptions {}
-
-export type FileRendererOptions =
-  | FileRendererThemeOptions
-  | FileRendererThemesOptions;
 
 export class FileRenderer<LAnnotation = undefined> {
   highlighter: PJSHighlighter | undefined;
   fileContent: string | undefined;
 
   constructor(
-    public options: FileRendererOptions = {
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
-    }
+    public options: FileRendererOptions = { theme: DEFAULT_THEMES }
   ) {}
 
   setOptions(options: FileRendererOptions): void {
@@ -82,7 +60,6 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private mergeOptions(options: Partial<FileRendererOptions>): void {
-    // @ts-expect-error FIXME
     this.options = { ...this.options, ...options };
   }
 
@@ -126,7 +103,7 @@ export class FileRenderer<LAnnotation = undefined> {
         this.options.lang ?? getFiletypeFromFileName(file.name);
       if (
         !hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(getThemes(this.options))
+        !hasLoadedThemes(getThemes(this.options.theme))
       ) {
         this.highlighter = undefined;
       }
@@ -147,12 +124,7 @@ export class FileRenderer<LAnnotation = undefined> {
     highlighter: PJSHighlighter,
     useCSSClasses: boolean
   ): FileRenderResult {
-    const {
-      theme,
-      themes,
-      themeType,
-      disableLineNumbers = false,
-    } = this.options;
+    const { theme, themeType, disableLineNumbers = false } = this.options;
     const { state, transformers, toClass } = createTransformerWithState({
       disableLineNumbers,
       useCSSClasses,
@@ -178,7 +150,6 @@ export class FileRenderer<LAnnotation = undefined> {
           overflow: this.options.overflow,
           split: false,
           theme,
-          themes,
           themeType,
         }),
       }),
@@ -280,9 +251,10 @@ export class FileRenderer<LAnnotation = undefined> {
     decorations?: DecorationItem[],
     forceTextLang: boolean = false
   ): CodeToHastOptions<PJSThemeNames> {
-    if (this.options.theme != null) {
+    const { theme = DEFAULT_THEMES } = this.options;
+    if (typeof theme === 'string') {
       return {
-        theme: this.options.theme,
+        theme,
         cssVariablePrefix: formatCSSVariablePrefix(),
         lang: forceTextLang ? 'text' : this.computedLang,
         defaultColor: false,
@@ -291,7 +263,7 @@ export class FileRenderer<LAnnotation = undefined> {
       };
     }
     return {
-      themes: this.options.themes ?? DEFAULT_THEMES,
+      themes: theme,
       cssVariablePrefix: formatCSSVariablePrefix(),
       lang: forceTextLang ? 'text' : this.computedLang,
       defaultColor: false,

@@ -1,7 +1,7 @@
 import deepEqual from 'fast-deep-equal';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-import { type DiffFileRendererOptions, FileDiff } from '../../FileDiff';
+import { FileDiff, type FileDiffOptions } from '../../FileDiff';
 import type {
   DiffLineAnnotation,
   FileContents,
@@ -16,7 +16,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   oldFile?: FileContents;
   newFile?: FileContents;
   fileDiff?: FileDiffMetadata;
-  options?: DiffFileRendererOptions<LAnnotation>;
+  options?: FileDiffOptions<LAnnotation>;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
@@ -40,7 +40,7 @@ export function useFileDiffInstance<LAnnotation>({
       // FIXME: Ideally we don't use FileDiffUI here, and instead amalgamate
       // the renderers manually
       instanceRef.current = new FileDiff(options, true);
-      instanceRef.current.hydrate({
+      void instanceRef.current.hydrate({
         fileDiff,
         oldFile,
         newFile,

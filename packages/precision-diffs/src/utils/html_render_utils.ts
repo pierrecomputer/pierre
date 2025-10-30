@@ -1,4 +1,5 @@
 import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
+import { DEFAULT_THEMES } from 'src/constants';
 
 import type {
   PJSHighlighter,
@@ -37,8 +38,7 @@ export function createRow(line: number): {
 }
 
 interface SetupWrapperNodesProps {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
+  theme?: PJSThemeNames | ThemesType;
   pre: HTMLPreElement;
   highlighter: PJSHighlighter;
   split: boolean;
@@ -69,21 +69,20 @@ export function createCodeNode({
 export function setWrapperProps({
   pre,
   highlighter,
-  theme,
-  themes,
+  theme = DEFAULT_THEMES,
   split,
   wrap,
   themeType,
   diffIndicators,
   disableBackground,
 }: SetupWrapperNodesProps): HTMLPreElement {
-  const styles = getHighlighterThemeStyles({ theme, themes, highlighter });
+  const styles = getHighlighterThemeStyles({ theme, highlighter });
   if (themeType === 'system') {
     delete pre.dataset.themeType;
   } else {
     pre.dataset.themeType = themeType;
   }
-  if (theme != null) {
+  if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
     pre.dataset.themeType = themeData.type;
   }

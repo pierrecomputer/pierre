@@ -1,21 +1,15 @@
 import { DEFAULT_THEMES } from '../constants';
 import type { PJSThemeNames, ThemesType } from '../types';
 
-interface ThemesShape {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
-}
-
-export function getThemes({
-  theme,
-  themes = DEFAULT_THEMES,
-}: ThemesShape): PJSThemeNames[] {
+export function getThemes(
+  theme: PJSThemeNames | ThemesType = DEFAULT_THEMES
+): PJSThemeNames[] {
   const themesArr: PJSThemeNames[] = [];
-  if (theme != null) {
+  if (typeof theme === 'string') {
     themesArr.push(theme);
   } else {
-    themesArr.push(themes.dark);
-    themesArr.push(themes.light);
+    themesArr.push(theme.dark);
+    themesArr.push(theme.light);
   }
   return themesArr;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { FileContents } from '../types';
-import type { DiffBaseReactProps } from './types';
+import type { DiffBasePropsReact } from './types';
 import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
@@ -9,7 +9,7 @@ import { useFileDiffInstance } from './utils/useFileDiffInstance';
 export type { FileContents };
 
 export interface MultiFileDiffProps<LAnnotation>
-  extends DiffBaseReactProps<LAnnotation> {
+  extends DiffBasePropsReact<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
 }
