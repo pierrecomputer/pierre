@@ -233,6 +233,26 @@ code {
   }
 }
 
+[data-column-number] {
+  grid-column: 1 / 2;
+}
+
+[data-column-content] {
+  grid-column: 2 / 3;
+}
+
+[data-type='split'][data-overflow='wrap']
+  [data-additions]
+  [data-column-content] {
+  grid-column: 5 / 6;
+}
+
+[data-type='split'][data-overflow='wrap']
+  [data-additions]
+  [data-column-number] {
+  grid-column: 4 / 5;
+}
+
 [data-pjs][data-dehydrated] {
   --pjs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
 }
