@@ -28,7 +28,7 @@ export const CODE_STREAM_CONFIGS: readonly CodeStreamConfig[] = [
     letterByLetter: false,
     options: {
       lang: 'tsx',
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
       ...createHighlighterCleanup(),
     },
   },
@@ -37,7 +37,7 @@ export const CODE_STREAM_CONFIGS: readonly CodeStreamConfig[] = [
     letterByLetter: true,
     options: {
       lang: 'markdown',
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
       ...createHighlighterCleanup(),
     },
   },
