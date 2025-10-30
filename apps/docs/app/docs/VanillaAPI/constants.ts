@@ -31,7 +31,7 @@ interface ThreadMetadata {
 const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   {
     side: 'additions',
-    // The line number specified for an annotation is the visual line 
+    // The line number specified for an annotation is the visual line
     // number you see in the number column of a diff
     lineNumber: 16,
     metadata: { threadId: '68b329da9893e34099c7d8ad5cb9c940' },
@@ -45,15 +45,20 @@ const instance = new FileDiff<ThreadMetadata>({
   //
   // 'pierre-dark' and 'pierre-light
   //
-  // For the rest of the  available shiki themes, check out:
+  // You can also pass an object with 'dark' and 'light' keys
+  // to theme based on OS or 'themeType' setting below.
+  //
+  // By default we initialize with our custom pierre themes
+  // for dark and light theme
+  //
+  // For the rest of the available shiki themes, either check
+  // typescript autocomplete or visit:
   // https://shiki.style/themes
-  theme: 'none',
-  // Or can also provide a 'themes' prop, which allows the code to 
-  // adapt to your OS light or dark theme
-  // themes: { dark: 'pierre-dark', light: 'pierre-light' },
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
 
-  // When using the 'themes' prop, 'themeType' allows you to force 
-  // 'dark' or 'light' theme, or inherit from the OS ('system') theme.
+  // When using the 'theme' prop that specifies dark and light
+  // themes, 'themeType' allows you to force 'dark' or 'light'
+  // theme, or inherit from the OS ('system') theme.
   themeType: 'system',
 
   // Disable the line numbers for your diffs, generally not recommended
@@ -64,7 +69,7 @@ const instance = new FileDiff<ThreadMetadata>({
 
   // Normally you shouldn't need this prop, but if you don't provide a
   // valid filename or your file doesn't have an extension you may want
-  // to override the automatic detection. You can specify that 
+  // to override the automatic detection. You can specify that
   // language here:
   // https://shiki.style/languages
   // lang?: SupportedLanguages;
@@ -73,7 +78,7 @@ const instance = new FileDiff<ThreadMetadata>({
   // in a unified (single column) view
   diffStyle: 'split',
 
-  // Unchanged context regions are collapsed by default, set this 
+  // Unchanged context regions are collapsed by default, set this
   // to true to force them to always render.  This depends on using
   // the oldFile/newFile API or FileDiffMetadata including newLines.
   expandUnchanged: false,
@@ -107,13 +112,13 @@ const instance = new FileDiff<ThreadMetadata>({
   // can pass a custom function to generate dom nodes to render.
   // 'hunkData' will include the number of lines collapsed as well as
   // the 'type' of column you are rendering into.  Bear in the elements
-  // you return will be subject to the css grid of the document, and 
-  // if you want to prevent the elements from scrolling with content 
-  // you will need to use a few tricks. See a code example below this 
+  // you return will be subject to the css grid of the document, and
+  // if you want to prevent the elements from scrolling with content
+  // you will need to use a few tricks. See a code example below this
   // file example.  Click to expand will happen automatically.
   //
   // 'metadata':
-  // Shows the content you'd see in a normal patch file, usually in 
+  // Shows the content you'd see in a normal patch file, usually in
   // some format like '@@ -60,6 +60,22 @@'. You cannot use these to
   // expand hidden content
   //
@@ -169,7 +174,6 @@ const instance = new FileDiff<ThreadMetadata>({
 instance.setOptions({
   ...instance.options,
   theme: 'pierre-dark',
-  themes: undefined,
 });
 
 // When ready to render, simply call .render with old/new file, optional
@@ -197,7 +201,7 @@ export const VANILLA_API_CUSTOM_HUNK_FILE: PreloadFileOptions<undefined> = {
     name: 'hunks_example.ts',
     contents: `import { FileDiff } from '@pierre/precision-diffs';
 
-// A hunk separator that utilizes the existing grid to have 
+// A hunk separator that utilizes the existing grid to have
 // a number column and a content column where neither will
 // scroll with the code
 const instance = new FileDiff({
@@ -393,8 +397,8 @@ await preloadHighlighter({
   langs: ['typescript', 'python', 'rust']
 });
 
-// Register custom themes (make sure the name you pass 
-// for your theme and the name in your shiki json theme 
+// Register custom themes (make sure the name you pass
+// for your theme and the name in your shiki json theme
 // are identical)
 registerCustomTheme('my-custom-theme', () => import('./theme.json'));
 

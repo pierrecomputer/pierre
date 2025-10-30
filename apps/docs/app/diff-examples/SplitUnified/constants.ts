@@ -41,8 +41,7 @@ export function createRow(line: number) {
 }
 
 interface SetupWrapperNodesProps {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
+  theme?: PJSThemeNames | ThemesType;
   pre: HTMLElement;
   highlighter: PJSHighlighter;
   split: boolean;
@@ -110,8 +109,7 @@ export function createRow(line: number) {
 }
 
 interface SetupWrapperNodesProps {
-  theme?: PJSThemeNames;
-  themes?: ThemesType;
+  theme?: PJSThemeNames | ThemesType;
   pre: HTMLElement;
   highlighter: PJSHighlighter;
   split: boolean;

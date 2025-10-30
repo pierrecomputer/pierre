@@ -56,8 +56,7 @@ export function SingleDiff() {
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
       // Here's every property you can pass to options, with their
-      // default values if not specified. However its generally a
-      // good idea to pass a 'theme' or 'themes' property
+      // default values if not specified.
       options={{
         // You can provide a 'theme' prop that maps to any
         // built in shiki theme or you can register a custom
@@ -65,37 +64,41 @@ export function SingleDiff() {
         //
         // 'pierre-dark' and 'pierre-light
         //
-        // For the rest of the  available shiki themes, check out:
+        // You can also pass an object with 'dark' and 'light' keys
+        // to theme based on OS or 'themeType' setting below.
+        //
+        // By default we initialize with our custom pierre themes
+        // for dark and light theme
+        //
+        // For the rest of the available shiki themes, either check
+        // typescript autocomplete or visit:
         // https://shiki.style/themes
-        theme: 'none',
-        // Or can also provide a 'themes' prop, which allows the code
-        // to adapt to your OS light or dark theme
-        // themes: { dark: 'pierre-dark', light: 'pierre-light' },
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
 
-        // When using the 'themes' prop, 'themeType' allows you to
-        // force 'dark' or 'light' theme, or inherit from the
-        // OS ('system') theme.
+        // When using the 'theme' prop that specifies dark and light
+        // themes, 'themeType' allows you to force 'dark' or 'light'
+        // theme, or inherit from the OS ('system') theme.
         themeType: 'system',
 
-        // Disable the line numbers for your diffs, generally 
+        // Disable the line numbers for your diffs, generally
         // not recommended
         disableLineNumbers: false,
 
         // Whether code should 'wrap' with long lines or 'scroll'.
         overflow: 'scroll',
 
-        // Normally you shouldn't need this prop, but if you don't 
-        // provide a valid filename or your file doesn't have an 
+        // Normally you shouldn't need this prop, but if you don't
+        // provide a valid filename or your file doesn't have an
         // extension you may want to override the automatic detection
         // You can specify that language here:
         // https://shiki.style/languages
         // lang?: SupportedLanguages;
 
-        // 'diffStyle' controls whether the diff is presented side by 
+        // 'diffStyle' controls whether the diff is presented side by
         // side or in a unified (single column) view
         diffStyle: 'split',
 
-        // Unchanged context regions are collapsed by default, set this 
+        // Unchanged context regions are collapsed by default, set this
         // to true to force them to always render.  This depends on using
         // the oldFile/newFile API or FileDiffMetadata including newLines.
         expandUnchanged: false,
@@ -117,11 +120,11 @@ export function SingleDiff() {
         // and deleted lines respectively. Disable that feature here
         disableBackground: false,
 
-        // Diffs are split up into hunks, this setting customizes what 
+        // Diffs are split up into hunks, this setting customizes what
         // to show between each hunk.
         //
         // 'line-info' (default):
-        // Shows a bar that tells you how many lines are collapsed. If 
+        // Shows a bar that tells you how many lines are collapsed. If
         // you are using the oldFile/newFile API then you can click those
         // bars to expand the content between them
         //
@@ -154,11 +157,11 @@ export function SingleDiff() {
         // the line lineDiffType check
         maxLineDiffLength: 1000,
 
-        // If any line in the diff exceeds this value then we won't 
+        // If any line in the diff exceeds this value then we won't
         // attempt to syntax highlight the diff
         maxLineLengthForHighlighting: 1000,
 
-        // Enabling this property will hide the file header with file 
+        // Enabling this property will hide the file header with file
         // name and diff stats.
         disableFileHeader: false,
       }}
@@ -211,8 +214,7 @@ export function SingleDiff() {
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
       // Here's every property you can pass to options, with their
-      // default values if not specified. However its generally a
-      // good idea to pass a 'theme' or 'themes' property
+      // default values if not specified.
       options={{
         // You can provide a 'theme' prop that maps to any
         // built in shiki theme or you can register a custom
@@ -220,37 +222,41 @@ export function SingleDiff() {
         //
         // 'pierre-dark' and 'pierre-light
         //
-        // For the rest of the  available shiki themes, check out:
+        // You can also pass an object with 'dark' and 'light' keys
+        // to theme based on OS or 'themeType' setting below.
+        //
+        // By default we initialize with our custom pierre themes
+        // for dark and light theme
+        //
+        // For the rest of the available shiki themes, either check
+        // typescript autocomplete or visit:
         // https://shiki.style/themes
-        theme: 'none',
-        // Or can also provide a 'themes' prop, which allows the code
-        // to adapt to your OS light or dark theme
-        // themes: { dark: 'pierre-dark', light: 'pierre-light' },
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
 
-        // When using the 'themes' prop, 'themeType' allows you to
-        // force 'dark' or 'light' theme, or inherit from the
-        // OS ('system') theme.
+        // When using the 'theme' prop that specifies dark and light
+        // themes, 'themeType' allows you to force 'dark' or 'light'
+        // theme, or inherit from the OS ('system') theme.
         themeType: 'system',
 
-        // Disable the line numbers for your diffs, generally 
+        // Disable the line numbers for your diffs, generally
         // not recommended
         disableLineNumbers: false,
 
         // Whether code should 'wrap' with long lines or 'scroll'.
         overflow: 'scroll',
 
-        // Normally you shouldn't need this prop, but if you don't 
-        // provide a valid filename or your file doesn't have an 
+        // Normally you shouldn't need this prop, but if you don't
+        // provide a valid filename or your file doesn't have an
         // extension you may want to override the automatic detection
         // You can specify that language here:
         // https://shiki.style/languages
         // lang?: SupportedLanguages;
 
-        // 'diffStyle' controls whether the diff is presented side by 
+        // 'diffStyle' controls whether the diff is presented side by
         // side or in a unified (single column) view
         diffStyle: 'split',
 
-        // Unchanged context regions are collapsed by default, set this 
+        // Unchanged context regions are collapsed by default, set this
         // to true to force them to always render.  This depends on using
         // the oldFile/newFile API or FileDiffMetadata including newLines.
         expandUnchanged: false,
@@ -272,11 +278,11 @@ export function SingleDiff() {
         // and deleted lines respectively. Disable that feature here
         disableBackground: false,
 
-        // Diffs are split up into hunks, this setting customizes what 
+        // Diffs are split up into hunks, this setting customizes what
         // to show between each hunk.
         //
         // 'line-info' (default):
-        // Shows a bar that tells you how many lines are collapsed. If 
+        // Shows a bar that tells you how many lines are collapsed. If
         // you are using the oldFile/newFile API then you can click those
         // bars to expand the content between them
         //
@@ -309,11 +315,11 @@ export function SingleDiff() {
         // the line lineDiffType check
         maxLineDiffLength: 1000,
 
-        // If any line in the diff exceeds this value then we won't 
+        // If any line in the diff exceeds this value then we won't
         // attempt to syntax highlight the diff
         maxLineLengthForHighlighting: 1000,
 
-        // Enabling this property will hide the file header with file 
+        // Enabling this property will hide the file header with file
         // name and diff stats.
         disableFileHeader: false,
       }}
