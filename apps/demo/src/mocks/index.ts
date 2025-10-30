@@ -18,7 +18,7 @@ export const CodeConfigs = [
     letterByLetter: false,
     options: {
       lang: 'tsx',
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
       ...createHighlighterCleanup(),
     } satisfies FileStreamOptions,
   },
@@ -27,7 +27,7 @@ export const CodeConfigs = [
     letterByLetter: true,
     options: {
       lang: 'markdown',
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
       ...createHighlighterCleanup(),
     } satisfies FileStreamOptions,
   },

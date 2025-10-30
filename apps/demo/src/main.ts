@@ -123,7 +123,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
       const instance = new FileDiff<LineCommentMetadata>({
-        themes: { dark: 'pierre-dark', light: 'pierre-light' },
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
         diffStyle: unified ? 'unified' : 'split',
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
@@ -212,8 +212,8 @@ function handlePreload() {
       langs.push(item.options.lang);
     }
     if ('themes' in item.options) {
-      themes.push(item.options.themes.dark);
-      themes.push(item.options.themes.light);
+      themes.push(item.options.theme.dark);
+      themes.push(item.options.theme.light);
     }
   }
   void preloadHighlighter({ langs, themes });
@@ -393,7 +393,7 @@ if (renderFileButton != null) {
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) return;
     const instance = new File<LineCommentMetadata>({
-      themes: { dark: 'pierre-dark', light: 'pierre-light' },
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
       renderAnnotation,
     });
     void instance.render({

@@ -33,8 +33,8 @@ export function App() {
           langs.push(item.options.lang);
         }
         if ('themes' in item.options) {
-          themes.push(item.options.themes.dark);
-          themes.push(item.options.themes.light);
+          themes.push(item.options.theme.dark);
+          themes.push(item.options.theme.light);
         }
         // else if ('theme' in item.options) {
         //   themes.push(item.options.theme);
