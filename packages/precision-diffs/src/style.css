@@ -233,6 +233,14 @@ code {
   }
 }
 
+[data-column-number] {
+  grid-column: 1 / 2;
+}
+
+[data-column-content] {
+  grid-column: 2 / 3;
+}
+
 [data-pjs][data-dehydrated] {
   --pjs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
 }
@@ -294,7 +302,7 @@ code {
   padding-block: var(--pjs-gap-block, var(--pjs-gap-fallback));
 }
 
-[data-pjs][data-overflow='wrap'] {
+[data-pjs][data-type='split'][data-overflow='wrap'] {
   padding-block: var(--pjs-gap-block, var(--pjs-gap-fallback));
 }
 
