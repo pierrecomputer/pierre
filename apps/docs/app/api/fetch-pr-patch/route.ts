@@ -1,4 +1,6 @@
+import { readFile } from 'fs/promises';
 import { type NextRequest, NextResponse } from 'next/server';
+import { join } from 'path';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -9,6 +11,29 @@ export async function GET(request: NextRequest) {
       { error: 'Path parameter is required' },
       { status: 400 }
     );
+  }
+
+  // Dev override to fetch the monster patch without required GitHub
+  if (path === '/nodejs/node/pull/59805') {
+    try {
+      const localPatchPath = join(
+        process.cwd(),
+        'app/api/fetch-pr-patch',
+        '59805.patch'
+      );
+      const patchContent = await readFile(localPatchPath, 'utf-8');
+      return NextResponse.json({
+        content: patchContent,
+        url: 'local',
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: `Failed to read local patch: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        },
+        { status: 500 }
+      );
+    }
   }
 
   try {
