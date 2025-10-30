@@ -4,8 +4,8 @@
   "type": "module",
   "license": "apache-2.0",
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsdown --clean",
+    "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "tsc": "tsc --noEmit --pretty",
     "prepublishOnly": "bun run build"
   },
