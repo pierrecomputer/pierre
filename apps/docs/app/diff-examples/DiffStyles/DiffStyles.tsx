@@ -5,6 +5,7 @@ import {
   IconCodeStyleBars,
   IconCodeStyleBg,
   IconCodeStyleInline,
+  IconListOrdered,
   IconParagraph,
   IconSymbolDiffstat,
   IconWordWrap,
@@ -63,6 +64,9 @@ export function DiffStyles({
   const [disableBackground, setDisableBackground] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>(
     options?.overflow ?? 'wrap'
+  );
+  const [disableLineNumbers, setDisableLineNumbers] = useState(
+    options?.disableLineNumbers ?? false
   );
 
   return (
@@ -178,18 +182,42 @@ export function DiffStyles({
               className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>
+          <div className="hidden">
+            <div className="bg-secondary gridstack rounded-lg p-[2px]">
+              <Button
+                variant="outline"
+                className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
+                onClick={() => setDisableLineNumbers(!disableLineNumbers)}
+              >
+                <div className="flex items-center gap-2">
+                  <IconListOrdered />
+                  Line Numbers
+                </div>
+              </Button>
+              <Switch
+                checked={!disableLineNumbers}
+                onCheckedChange={(checked: boolean) =>
+                  setDisableLineNumbers(!checked)
+                }
+                onClick={(e) => e.stopPropagation()}
+                className="pointer-events-none mr-3 place-self-center justify-self-end"
+              />
+            </div>
+          </div>
         </div>
       </div>
       <MultiFileDiff
         {...props}
         className="overflow-hidden rounded-lg border"
         options={{
+          ...options,
           theme: 'pierre-dark',
           diffStyle: 'split',
           diffIndicators,
           disableBackground,
           overflow: overflow,
           lineDiffType: lineDiffStyle,
+          disableLineNumbers,
         }}
       />
     </div>

@@ -36,5 +36,10 @@ pub fn main() !void {
 }
 `,
   },
-  options: { theme: 'pierre-dark', diffStyle: 'split', overflow: 'wrap' },
+  options: {
+    theme: 'pierre-dark',
+    diffStyle: 'split',
+    overflow: 'wrap',
+    disableLineNumbers: false,
+  },
 };
