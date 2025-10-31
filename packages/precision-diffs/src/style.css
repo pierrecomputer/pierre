@@ -768,6 +768,9 @@ code {
   gap: var(--pjs-gap-inline, var(--pjs-gap-fallback));
   min-height: calc(1lh + (var(--pjs-gap-block, var(--pjs-gap-fallback)) * 3));
   padding-inline: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 [data-header-content] {
