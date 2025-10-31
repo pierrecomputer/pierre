@@ -9,19 +9,20 @@ export function IconClockArrow({
   ...props
 }: IconProps) {
   const height = size;
-  const width = size === '1em' ? '1em' : Math.round(Number(size) * 1);
+  const width =
+    size === '1em' ? '1em' : Math.round(Number(size) * 0.9444444444444444);
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       fill={Colors[color] ?? color}
-      viewBox="0 0 17 17"
+      viewBox="0 0 17 18"
       width={width}
       height={height}
       style={style}
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M1.759 0a.75.75 0 0 1 .75.75v1.51A8 8 0 1 1 .027 8.054a.75.75 0 1 1 1.5 0 6.5 6.5 0 1 0 1.826-4.517h1.941a.75.75 0 1 1 0 1.5H1.76a.75.75 0 0 1-.75-.75V.75A.75.75 0 0 1 1.76 0M8 3.027a.75.75 0 0 1 .75.75v4.08l2.893 1.78a.75.75 0 0 1-.786 1.278l-3.25-2a.75.75 0 0 1-.357-.638v-4.5a.75.75 0 0 1 .75-.75" />
+      <path d="M1.759.973a.75.75 0 0 1 .75.75v1.511A8 8 0 1 1 .027 9.027a.75.75 0 0 1 1.5 0 6.5 6.5 0 1 0 1.826-4.518h1.941a.75.75 0 1 1 0 1.5H1.76a.75.75 0 0 1-.75-.75V1.723a.75.75 0 0 1 .75-.75M8 4a.75.75 0 0 1 .75.75v4.08l2.893 1.781a.75.75 0 0 1-.786 1.278l-3.25-2a.75.75 0 0 1-.357-.639v-4.5A.75.75 0 0 1 8 4" />
     </svg>
   );
 }

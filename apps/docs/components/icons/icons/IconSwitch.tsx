@@ -21,7 +21,11 @@ export function IconSwitch({
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M5 3a5 5 0 0 0 0 10h6a5 5 0 0 0 0-10zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7" />
+      <path
+        fillRule="evenodd"
+        d="M5 3a5 5 0 0 0 0 10h6a5 5 0 0 0 0-10zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7"
+        clipRule="evenodd"
+      />
     </svg>
   );
 }

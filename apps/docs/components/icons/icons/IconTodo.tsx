@@ -21,7 +21,11 @@ export function IconTodo({
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
+      <path
+        fillRule="evenodd"
+        d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8"
+        clipRule="evenodd"
+      />
     </svg>
   );
 }

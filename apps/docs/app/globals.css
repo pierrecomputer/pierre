@@ -117,6 +117,7 @@
 :root {
   --pjs-font-family: var(--font-berkeley-mono);
   color-scheme: light;
+  -webkit-font-smoothing: antialiased;
 }
 .light {
   color-scheme: light;
@@ -134,6 +135,12 @@
   }
   textarea {
     @apply outline-offset-1;
+  }
+  code {
+    font-size: 90%;
+    font-weight: 600;
+    color: var(--color-primary);
+    letter-spacing: -0.02em;
   }
 }
 

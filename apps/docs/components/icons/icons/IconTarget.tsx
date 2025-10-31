@@ -14,15 +14,23 @@ export function IconTarget({
     <svg
       xmlns="http://www.w3.org/2000/svg"
       fill={Colors[color] ?? color}
-      viewBox="0 0 17 17"
+      viewBox="0 0 18 18"
       width={width}
       height={height}
       style={style}
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M5.15 8.15a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3" />
-      <path d="M8.9.75a.75.75 0 0 0-1.5 0v.44A7 7 0 0 0 1.19 7.4H.75a.75.75 0 1 0 0 1.5h.44a7 7 0 0 0 6.21 6.21v.439a.75.75 0 0 0 1.5 0v-.44a7 7 0 0 0 6.21-6.21h.439a.75.75 0 0 0 0-1.5h-.44A7 7 0 0 0 8.9 1.19zm-.75 1.9a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11" />
+      <path
+        fillRule="evenodd"
+        d="M6 9a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3"
+        clipRule="evenodd"
+      />
+      <path
+        fillRule="evenodd"
+        d="M9.75 1.6a.75.75 0 0 0-1.5 0v.44a7 7 0 0 0-6.21 6.21H1.6a.75.75 0 1 0 0 1.5h.44a7 7 0 0 0 6.21 6.21v.44a.75.75 0 0 0 1.5 0v-.44a7 7 0 0 0 6.21-6.21h.44a.75.75 0 0 0 0-1.5h-.44a7 7 0 0 0-6.21-6.21zM9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11"
+        clipRule="evenodd"
+      />
     </svg>
   );
 }

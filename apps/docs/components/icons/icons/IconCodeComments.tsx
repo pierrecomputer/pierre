@@ -21,7 +21,7 @@ export function IconCodeComments({
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M10.059 15H8.136l3.941-14H14zm-6.136 0H2L5.941 1h1.923z" />
+      <path d="M10.059 15H8.136l3.941-14H14zM3.923 15H2L5.941 1h1.923z" />
     </svg>
   );
 }

@@ -36,14 +36,22 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
   const [selectedFont, setSelectedFont] = useState('Berkeley Mono');
   const [selectedFontSize, setSelectedFontSize] = useState('14px');
   const [selectedLineHeight, setSelectedLineHeight] = useState('20px');
-  const [fontFeatureSettings, setFontFeatureSettings] = useState('normal');
+  const [fontFeatureSettings, setFontFeatureSettings] = useState('"aalt" 1');
 
   return (
     <div className="space-y-5">
       <div className="space-y-4">
         <FeatureHeader
           title="Bring your own fonts"
-          description="Precision Diffs is adaptable to any font, font-size, line-height, and even font-feature-settings you may have set. Configure font options with your preferred CSS method globally or on a per-component basis."
+          description={
+            <>
+              Precision Diffs adapts to any <code>font</code>,{' '}
+              <code>font-size</code>, <code>line-height</code>, and even{' '}
+              <code>font-feature-settings</code> you may have set. Configure
+              font options with your preferred CSS method globally or on a
+              per-component basis.
+            </>
+          }
         />
         <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
           <div className="flex flex-wrap gap-3">
@@ -56,14 +64,21 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                   >
                     <IconType className="h-4 w-4" />
                     {selectedFont}
-                    <ChevronDown className="ml-auto h-4 w-4" />
+                    <ChevronDown className="text-muted-foreground ml-auto" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-40">
                   {Object.keys(fontMap).map((font) => (
                     <DropdownMenuItem
                       key={font}
-                      onClick={() => setSelectedFont(font)}
+                      onClick={() => {
+                        setSelectedFont(font);
+                        if (font === 'Berkeley Mono') {
+                          setFontFeatureSettings('"aalt" 1');
+                        } else {
+                          setFontFeatureSettings('');
+                        }
+                      }}
                     >
                       {font}
                       {selectedFont === font && (
@@ -80,7 +95,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="min-w-[80px]">
                     {selectedFontSize}
-                    <ChevronDown className="ml-auto h-4 w-4" />
+                    <ChevronDown className="text-muted-foreground ml-auto" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -104,7 +119,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="min-w-[80px]">
                     {selectedLineHeight}
-                    <ChevronDown className="ml-auto h-4 w-4" />
+                    <ChevronDown className="text-muted-foreground ml-auto" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">

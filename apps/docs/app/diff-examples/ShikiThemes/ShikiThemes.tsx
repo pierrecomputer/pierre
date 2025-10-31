@@ -154,7 +154,10 @@ export function ShikiThemes({
               {LIGHT_THEMES.map((theme) => (
                 <DropdownMenuItem
                   key={theme}
-                  onClick={() => setSelectedLightTheme(theme)}
+                  onClick={() => {
+                    setSelectedLightTheme(theme);
+                    setSelectedColorMode('light');
+                  }}
                   className={
                     selectedLightTheme === theme ? 'bg-accent' : undefined
                   }
@@ -188,7 +191,10 @@ export function ShikiThemes({
               {DARK_THEMES.map((theme) => (
                 <DropdownMenuItem
                   key={theme}
-                  onClick={() => setSelectedDarkTheme(theme)}
+                  onClick={() => {
+                    setSelectedDarkTheme(theme);
+                    setSelectedColorMode('dark');
+                  }}
                   className={
                     selectedDarkTheme === theme ? 'bg-accent' : undefined
                   }

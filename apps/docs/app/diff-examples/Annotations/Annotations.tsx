@@ -1,5 +1,6 @@
 'use client';
 
+import { IconArrowDownRight, IconPlus } from '@/components/icons/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import type {
@@ -8,7 +9,6 @@ import type {
 } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
-import { CornerDownRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -123,11 +123,11 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     <div className="space-y-5">
       <FeatureHeader
         title="Comments & Annotations"
-        description="Precision Diffs provide a flexible annotation framework for injecting additional content and context into your diffs. Use it to render line comments, annotations from CI jobs, and other third party content."
+        description="Precision Diffs provide a flexible annotation framework for injecting additional content and context. Use it to render your own line comments, annotations from CI jobs, and other third-party content."
       />
       <div
         ref={containerRef}
-        style={{ position: 'relative' }}
+        className="relative flex flex-col gap-3"
         onMouseLeave={handleContainerMouseLeave}
       >
         {buttonPosition != null && (
@@ -146,7 +146,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
               cursor: 'pointer',
             }}
           >
-            <Plus className="h-4 w-4" />
+            <IconPlus />
           </Button>
         )}
         <MultiFileDiff
@@ -359,7 +359,7 @@ export function CommentThread({
           onClick={onAddReply}
           className="flex items-center gap-1.5 text-sm text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
         >
-          <CornerDownRight className="h-4 w-4" />
+          <IconArrowDownRight />
           Add reply...
         </button>
         <button
@@ -444,7 +444,7 @@ export function AcceptRejectExample({
     <div className="space-y-5">
       <FeatureHeader
         title="Accept/Reject Changes"
-        description="Annotations can also be used to build interactive code review interfaces. This example demonstrates reviewing changes with accept and reject buttons, similar to AI-assisted coding tools like Cursor. The annotation system allows you to track the state of each change and provide immediate visual feedback."
+        description="Annotations can also be used to build interactive code review interfaces similar to AI-assisted coding tools like Cursor. Use it to track the state of each change, inject custom UI like accept/reject buttons, and provide immediate visual feedback."
       />
       <MultiFileDiff
         {...fileDiffProps}
