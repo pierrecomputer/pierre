@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
       const localPatchPath = join(
         process.cwd(),
         'app/api/fetch-pr-patch',
-        '59805.patch'
+        // 'larg.patch',
+        'smol.patch'
       );
       const patchContent = await readFile(localPatchPath, 'utf-8');
       return NextResponse.json({
