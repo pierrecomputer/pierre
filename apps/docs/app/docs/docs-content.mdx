@@ -1,0 +1,107 @@
+## Installation
+
+Install the Precision Diffs package using bun, pnpm, npm, or yarn:
+
+<InstallationExample />
+
+## Overview
+
+<OverviewWarning />
+
+**Precision Diffs** is a library for rendering code and diffs on the web. This includes both high-level, easy-to-use components, as well as exposing many of the internals if you want to selectively use specific pieces. We've built syntax highlighting on top of [Shiki](https://shiki.dev) which provides a lot of great theme and language support.
+
+<OverviewInitialDiff />
+
+We have an opinionated stance in our architecture: **browsers are rather efficient at rendering raw HTML**. We lean into this by having all the lower level APIs purely rendering strings (the raw HTML) that are then consumed by higher-order components and utilities. This gives us great performance and flexibility to support popular libraries like React as well as provide great tools if you want to stick to vanilla JavaScript and HTML. The higher-order components render all this out into Shadow DOM and CSS grid layout.
+
+Generally speaking, you're probably going to want to use the higher level components since they provide an easy-to-use API that you can get started with rather quickly. We currently only have components for vanilla JavaScript and React, but will add more if there's demand.
+
+For this overview, we'll talk about the vanilla JavaScript components for now but there are React equivalents for all of these.
+
+### Rendering Diffs
+
+It's in the name, it's probably why you're here. Our goal with visualizing diffs was to provide some flexible and approachable APIs for _how_ you may want to render diffs. For this, we provide a component called `FileDiff` (available in both JavaScript and React versions).
+
+There are two ways to render diffs with `FileDiff`:
+
+1. Provide two versions of a file or code snippet to compare
+2. Consume a patch file
+
+You can see examples of these approaches below, in both JavaScript and React.
+
+<OverviewExamples />
+
+## React API
+
+Right now, the React API exposes two main components, `FileDiff` (for rendering diffs for a specific file) and `File` for rendering just a single code file. We plan to add more components like a file picker and tools for virtualization of longer diffs in the future.
+
+You can import the React components from `@pierre/precision-diffs/react`
+
+<ReactAPIExample />
+
+## Vanilla JS API
+
+The vanilla JavaScript API for Precision Diffs exposes a mix of components and raw classes. The components and the React API are built on many of these foundation classes. The goal has been to abstract away a lot of the heavy lifting when working with Shiki directly and provide a set of standardized APIs that can be used with any framework and even server rendered if necessary.
+
+You can import all of this via the core package `@pierre/precision-diffs`
+
+### Components
+
+There are two core components in the vanilla JavaScript API, `FileDiff` and `File`
+
+<VanillaAPIComponents />
+
+## Options Reference
+
+Both the React and Vanilla JS APIs share the same core options. Whether you're using React components or vanilla JavaScript classes, you can customize the appearance and behavior of your diffs with the following options:
+
+<OptionsTable />
+
+### API-Specific Differences
+
+While all the options above work identically in both APIs, there are a few differences in how you provide custom rendering functions:
+
+**React API:**
+
+- Uses `renderLineAnnotation` prop that returns JSX components
+- Example: `renderLineAnnotation={(annotation) => <CommentThread {...annotation} />}`
+
+**Vanilla JS API:**
+
+- Uses `renderAnnotation` option that returns DOM elements
+- Example: `renderAnnotation: (annotation) => { const el = document.createElement('div'); return el; }`
+- Additionally supports custom `hunkSeparators` as a function: `(hunk: HunkData) => HTMLElement | DocumentFragment`
+
+### Advanced Vanilla JS Features
+
+#### Hunk Separators
+
+If you want to render custom hunk separators that won't scroll with the content, there are a few tricks you will need to employ. See the following code snippet:
+
+<VanillaAPICustomHunk />
+
+### Classes
+
+These core classes can be thought of as the building blocks for the different components and APIs in Precision Diffs. Most of them should be usable in a variety of environments (server and browser).
+
+#### DiffHunksRenderer
+
+Essentially a class that takes `FileDiffMetadata` data structure and can render out the raw [hast](https://github.com/syntax-tree/hast) elements of the code which can be subsequently rendered as HTML strings or transformed further. You can generate `FileDiffMetadata` via `parseDiffFromFile` or `parsePatchFiles` utility functions.
+
+<VanillaAPIHunksRenderer />
+
+### Shared Highlighter Utilities
+
+Because it's important to re-use your highlighter instance when using Shiki, we've ensured that all the classes and components you use with Precision Diffs will automatically use a shared highlighter instance and also automatically load languages and themes on demand as necessary.
+
+We provide APIs to preload the highlighter, themes, and languages if you want to have that ready before rendering. Also there are some cleanup utilities if you want to be memory conscious.
+
+Shiki comes with a lot of built-in [themes](https://shiki.style/themes), but if you would like to use your own custom or modified theme, you simply have to register it and then it'll just work as any other built-in theme.
+
+<VanillaAPICodeUtilities />
+
+## Styling
+
+Diff and code are rendered using shadow DOM APIs. This means that the styles applied to the diffs will be well isolated from your page's existing CSS. However, it also means if you want to customize the built-in styles, you'll have to utilize some custom CSS variables. These can be done either in your global CSS, as style props on parent components, or on the `FileDiff` component directly.
+
+<StylingExample />

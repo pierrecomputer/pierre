@@ -8,34 +8,23 @@ import { DocsCodeExample } from '../DocsCodeExample';
 
 type ExampleTypes = 'multi-file-diff' | 'patch-diff' | 'file-diff' | 'file';
 
-interface ReactAPIProps {
+interface ReactAPIExampleProps {
   reactAPIMultiFileDiff: PreloadedFileResult<undefined>;
   reactAPIFileDiff: PreloadedFileResult<undefined>;
   reactAPIPatch: PreloadedFileResult<undefined>;
   reactAPIFile: PreloadedFileResult<undefined>;
 }
 
-export function ReactAPI({
+export function ReactAPIExample({
   reactAPIMultiFileDiff,
   reactAPIFileDiff,
   reactAPIFile,
   reactAPIPatch,
-}: ReactAPIProps) {
+}: ReactAPIExampleProps) {
   const [example, setExample] = useState<ExampleTypes>('multi-file-diff');
+
   return (
-    <section className="space-y-4">
-      <h2>React API</h2>
-      <p>
-        Right now, the React API exposes two main components,{' '}
-        <code>FileDiff</code> (for rendering diffs for a specific file) and{' '}
-        <code>File</code> for rendering just a single code file. We plan to add
-        more components like a file picker and tools for virtualization of
-        longer diffs in the future.
-      </p>
-      <p>
-        You can import the React components from{' '}
-        <code>@pierre/precision-diffs/react</code>
-      </p>
+    <>
       <ButtonGroup
         value={example}
         onValueChange={(value) => setExample(value as ExampleTypes)}
@@ -57,6 +46,6 @@ export function ReactAPI({
             return <DocsCodeExample {...reactAPIFile} />;
         }
       })()}
-    </section>
+    </>
   );
 }
