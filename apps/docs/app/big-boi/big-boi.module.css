@@ -1,4 +1,18 @@
+.wrapper {
+  position: relative;
+  margin-inline: 8px;
+  margin-top: 8px;
+}
+
 .wrapper file-diff {
-  content-visibility: auto;
-  margin-top: 2px;
+  position: absolute;
+  width: 100%;
+  overflow: clip;
+  border-radius: 8px;
+  /* Need to percolate on this because
+   * it will cause cause things to register
+   * 0 height until the browser is scrolled close to them scrollability-wise. But
+   * it's also super effective as a way to optimized the browser, we we probably
+   * want it on at some point. */
+  /* content-visibility: auto; */
 }
