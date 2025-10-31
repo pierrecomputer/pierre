@@ -26,7 +26,6 @@ import { FontStyles } from './diff-examples/FontStyles/FontStyles';
 import { FONT_STYLES } from './diff-examples/FontStyles/constants';
 import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
 import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
-import { SimpleFileDiff } from './diff-examples/SimpleFileDiff';
 import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
 import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
 
@@ -35,9 +34,7 @@ export default function Home() {
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <HeaderWrapper />
       <Hero />
-      {/* <hr className="mt-2 mb-8 w-[120px]" /> */}
       <section className="space-y-12 pb-8">
-        {/* <FileDiffSection /> */}
         <SplitUnifiedSection />
         <ShikiThemesSection />
         <DiffStylesSection />
@@ -97,12 +94,6 @@ export default function Home() {
       </section>
       <Footer />
     </div>
-  );
-}
-
-async function FileDiffSection() {
-  return (
-    <SimpleFileDiff prerenderedDiff={await preloadFileDiff(DIFF_STYLES)} />
   );
 }
 
