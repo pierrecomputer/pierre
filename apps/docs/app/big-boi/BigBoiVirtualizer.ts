@@ -2,6 +2,7 @@ import {
   FileDiff,
   type FileDiffMetadata,
   type ParsedPatch,
+  queueRender,
 } from '@pierre/precision-diffs';
 
 const DIFF_OPTIONS = {
@@ -23,55 +24,68 @@ interface RenderedItems {
 export interface VirtualizedFileMetadata extends FileDiffMetadata {
   unifiedTop: number;
   splitTop: number;
+  unifiedHeight: number;
+  splitHeight: number;
 }
 
 export class BigBoiVirtualizer {
   private files: VirtualizedFileMetadata[] = [];
   private totalHeightUnified = 0;
   private totalHeightSplit = 0;
-  private instances: Map<VirtualizedFileMetadata, RenderedItems> = new Map();
+  private rendered: Map<VirtualizedFileMetadata, RenderedItems> = new Map();
 
-  constructor(private container: HTMLElement) {}
+  private containerOffset = 0;
+  private scrollY: number = 0;
+  private height: number = 0;
+  private scrollHeight: number = 0;
+  private initialized = false;
+
+  constructor(private container: HTMLElement) {
+    this.handleScroll();
+    this.handleResize();
+    this.containerOffset =
+      this.container.getBoundingClientRect().top + this.scrollY;
+  }
 
   reset() {
     this.files.length = 0;
     this.totalHeightSplit = 0;
     this.totalHeightUnified = 0;
-    for (const [, { instance }] of Array.from(this.instances)) {
-      instance.cleanUp();
+    for (const [, item] of Array.from(this.rendered)) {
+      cleanupRenderedItem(item);
     }
-    this.instances.clear();
+    this.rendered.clear();
     this.container.innerHTML = '';
+    this.initialized = false;
+    this.container.style.height = '';
+    this.scrollHeight = 0;
+    window.removeEventListener('scroll', this.handleScroll);
+    window.removeEventListener('resize', this.handleResize);
   }
 
   addFiles(parsedPatches: ParsedPatch[]) {
-    // Hacks to make the big boi smaller...
-    // parsedPatches.length = 1;
-    // parsedPatches[0].files.length = 40;
-    // console.log('ZZZZ - before trim', parsedPatches[0].files.length);
-    // const file = parsedPatches[0].files[7];
-    // parsedPatches[0].files.length = 0;
-    // parsedPatches[0].files.push(file);
-
     for (const patch of parsedPatches) {
       for (const file of patch.files) {
-        if (this.files.length > 0) {
-          this.totalHeightUnified += FILE_GAP;
-          this.totalHeightSplit += FILE_GAP;
-        }
-        // It would be about twice as fast to just straight ts-ignore and
-        // manipulate this, mb we do that?
-        this.files.push({
+        // It would be nearly twice as fast to just straight ts-ignore and
+        // manipulate this file objext... mb we do that?  But maybe also won't
+        // matter in a streaming environment
+        const vFile: VirtualizedFileMetadata = {
           ...file,
           unifiedTop: this.totalHeightUnified,
           splitTop: this.totalHeightSplit,
-        });
+          splitHeight: 0,
+          unifiedHeight: 0,
+        };
 
-        this.totalHeightUnified += LINE_HEADER_HEIGHT;
-        this.totalHeightSplit += LINE_HEADER_HEIGHT;
-        this.totalHeightUnified += file.unifiedLineCount * LINE_HEIGHT;
-        this.totalHeightSplit += file.splitLineCount * LINE_HEIGHT;
+        // Add header height
+        vFile.unifiedHeight += LINE_HEADER_HEIGHT;
+        vFile.splitHeight += LINE_HEADER_HEIGHT;
 
+        // Add hunk lines height
+        vFile.unifiedHeight += file.unifiedLineCount * LINE_HEIGHT;
+        vFile.splitHeight += file.splitLineCount * LINE_HEIGHT;
+
+        // Add hunk separators height
         const hunkCount = file.hunks.length;
         const [firstHunk] = file.hunks;
         if (firstHunk != null) {
@@ -79,19 +93,29 @@ export class BigBoiVirtualizer {
             let hunkSize =
               (HUNK_SEPARATOR_HEIGHT + FILE_GAP * 2) * (hunkCount - 1);
             hunkSize += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
-            this.totalHeightSplit += hunkSize;
-            this.totalHeightUnified += hunkSize;
+            vFile.unifiedHeight += hunkSize;
+            vFile.splitHeight += hunkSize;
           } else {
             const hunkSize =
               (HUNK_SEPARATOR_HEIGHT + FILE_GAP * 2) * (hunkCount - 1);
-            this.totalHeightSplit += hunkSize;
-            this.totalHeightUnified += hunkSize;
+            vFile.unifiedHeight += hunkSize;
+            vFile.splitHeight += hunkSize;
           }
         }
+
+        // If there are hunks of code, then we gotta render some bottom padding
         if (hunkCount > 0) {
-          this.totalHeightUnified += FILE_BOTTOM_PADDING;
-          this.totalHeightSplit += FILE_BOTTOM_PADDING;
+          vFile.unifiedHeight += FILE_BOTTOM_PADDING;
+          vFile.splitHeight += FILE_BOTTOM_PADDING;
         }
+
+        // Add some spacing below
+        vFile.unifiedHeight += FILE_GAP;
+        vFile.splitHeight += FILE_GAP;
+
+        this.files.push(vFile);
+        this.totalHeightUnified += vFile.unifiedHeight;
+        this.totalHeightSplit += vFile.splitHeight;
       }
     }
   }
@@ -99,19 +123,131 @@ export class BigBoiVirtualizer {
   render() {
     this.setupContainer();
     if (!ENABLE_RENDERING) return;
+    queueRender(this._render);
+  }
+
+  _render = () => {
+    if (this.files.length === 0) {
+      return;
+    }
+    const { scrollY, height, scrollHeight, containerOffset } = this;
+    const { top, bottom } = createWindowFromScrollPosition({
+      scrollY,
+      height,
+      scrollHeight,
+    });
+    const removeQueue = new Set<VirtualizedFileMetadata>();
+    for (const [fileDiff, item] of Array.from(this.rendered)) {
+      // If not visible, we should unmount it
+      if (
+        !(
+          fileDiff.splitTop + containerOffset > top - fileDiff.splitHeight &&
+          fileDiff.splitTop + containerOffset <= bottom
+        )
+      ) {
+        removeQueue.add(fileDiff);
+        cleanupRenderedItem(item);
+      }
+    }
+    for (const diff of Array.from(removeQueue)) {
+      this.rendered.delete(diff);
+    }
+    removeQueue.clear();
     for (const fileDiff of this.files) {
+      // We can stop iterating when we get to elements after the window
+      if (fileDiff.splitTop + containerOffset > bottom) {
+        break;
+      }
+      if (
+        this.rendered.has(fileDiff) ||
+        fileDiff.splitTop + containerOffset < top - fileDiff.splitHeight
+      ) {
+        continue;
+      }
       const instance = new FileDiff(DIFF_OPTIONS, true);
       const fileContainer = document.createElement('file-diff');
-      this.instances.set(fileDiff, { element: fileContainer, instance });
+      this.rendered.set(fileDiff, { element: fileContainer, instance });
       fileContainer.style.top = `${fileDiff.splitTop}px`;
-      // NOTE(amadeus): We gotta append first to ensure file ordering is
-      // correct... but i guess maybe doesn't matter because we are positioning shit
+      console.log(fileContainer);
+      // // NOTE(amadeus): We gotta append first to ensure file ordering is
+      // // correct... but i guess maybe doesn't matter because we are positioning shit
       this.container.appendChild(fileContainer);
       void instance.render({ fileDiff, fileContainer });
     }
-  }
+  };
 
   private setupContainer() {
-    this.container.style.height = `${this.totalHeightSplit + FILE_GAP}px`;
+    this.container.style.height = `${this.totalHeightSplit}px`;
+    this.scrollHeight = document.documentElement.scrollHeight;
+    if (!this.initialized) {
+      window.addEventListener('scroll', this.handleScroll, { passive: true });
+      window.addEventListener('resize', this.handleResize, { passive: true });
+      this.initialized = true;
+    }
   }
+
+  handleScroll = () => {
+    let { scrollY } = window;
+    scrollY = Math.max(scrollY, 0);
+    if (this.scrollY === scrollY) return;
+    this.scrollY = scrollY;
+    if (this.files.length > 0) {
+      queueRender(this._render);
+    }
+  };
+
+  handleResize = () => {
+    const { innerHeight: height } = window;
+    const { scrollHeight } = document.documentElement;
+    if (this.height === height && this.scrollHeight === scrollHeight) {
+      return;
+    }
+    this.height = height;
+    this.scrollHeight = scrollHeight;
+    if (this.files.length > 0) {
+      queueRender(this._render);
+    }
+  };
+}
+
+function cleanupRenderedItem(item: RenderedItems) {
+  item.instance.cleanUp();
+  item.element.parentNode?.removeChild(item.element);
+  item.element.innerHTML = '';
+  if (item.element.shadowRoot != null) {
+    item.element.shadowRoot.innerHTML = '';
+  }
+}
+
+interface WindowFromScrollPositionProps {
+  scrollY: number;
+  height: number;
+  scrollHeight: number;
+}
+
+interface VirtualWindowSpecs {
+  top: number;
+  bottom: number;
+}
+
+function createWindowFromScrollPosition({
+  scrollY,
+  scrollHeight,
+  height,
+}: WindowFromScrollPositionProps): VirtualWindowSpecs {
+  const windowHeight = height * 3;
+  if (windowHeight > scrollHeight) {
+    return { top: 0, bottom: scrollHeight };
+  }
+  let top = scrollY + height / 2 - windowHeight / 2;
+  let bottom = top + windowHeight;
+  if (top < 0) {
+    top = 0;
+    bottom = windowHeight;
+  } else if (top + windowHeight > scrollHeight) {
+    bottom = scrollHeight;
+    top = bottom - windowHeight;
+  }
+
+  return { top: Math.max(top, 0), bottom: Math.min(bottom, scrollHeight) };
 }
