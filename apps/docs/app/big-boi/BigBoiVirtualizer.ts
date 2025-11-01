@@ -8,7 +8,7 @@ import {
 const DIFF_OPTIONS = {
   theme: 'pierre-dark',
   // diffStyle: 'unified',
-};
+} as const;
 const LINE_HEIGHT = 20;
 const LINE_HEADER_HEIGHT = 44;
 const HUNK_SEPARATOR_HEIGHT = 30;
@@ -168,11 +168,21 @@ export class BigBoiVirtualizer {
       const fileContainer = document.createElement('file-diff');
       this.rendered.set(fileDiff, { element: fileContainer, instance });
       fileContainer.style.top = `${fileDiff.splitTop}px`;
-      console.log(fileContainer);
-      // // NOTE(amadeus): We gotta append first to ensure file ordering is
-      // // correct... but i guess maybe doesn't matter because we are positioning shit
+      // NOTE(amadeus): We gotta append first to ensure file ordering is
+      // correct... but i guess maybe doesn't matter because we are positioning shit
       this.container.appendChild(fileContainer);
-      void instance.render({ fileDiff, fileContainer });
+      const start = Date.now();
+      void instance
+        .render({ fileDiff, fileContainer })
+        .then(() =>
+          console.log(
+            'ZZZZZ - rendering',
+            fileDiff.name,
+            'with',
+            fileDiff.splitLineCount,
+            `lines, took: ${Date.now() - start}ms`
+          )
+        );
     }
   };
 
