@@ -272,3 +272,8 @@ export type AnnotationLineMap<LAnnotation> = Record<
 >;
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
+
+export interface RenderRange {
+  startingLine: number;
+  endingLine: number;
+}

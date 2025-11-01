@@ -23,6 +23,7 @@ import type {
   LineInfo,
   PJSHighlighter,
   PJSThemeNames,
+  RenderRange,
   SharedRenderState,
   ShikiTransformer,
   SupportedLanguages,
@@ -51,6 +52,11 @@ const FULLY_EXPANDED = {
   fromEnd: Infinity,
 };
 
+const DEFAULT_RENDER_RANGE: RenderRange = {
+  startingLine: 0,
+  endingLine: Infinity,
+};
+
 interface RenderHunkProps {
   hunk: Hunk;
   prevHunk: Hunk | undefined;
@@ -65,6 +71,8 @@ interface RenderHunkProps {
   unifiedAST: ElementContent[];
   hunkData: HunkData[];
   lineIndex: number;
+  lineCount: number;
+  renderRange: RenderRange;
 }
 
 interface UnresolvedAnnotationSpan {
@@ -77,6 +85,15 @@ interface ComputedContent {
   content: string[];
   lineInfo: Record<number, LineInfo | undefined>;
   decorations: DecorationItem[];
+}
+
+interface ProcessLinesProps {
+  hunk: Hunk;
+  hunkIndex: number;
+  prevHunk: Hunk | undefined;
+  lineCount: number;
+  renderRange: RenderRange;
+  lineIndex: number;
 }
 
 interface ProcessLinesReturn {
@@ -116,6 +133,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
 
   private queuedDiff: FileDiffMetadata | undefined;
+  private queuedRenderRange: RenderRange | undefined;
   private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
   private computedLang: SupportedLanguages = 'text';
 
@@ -220,8 +238,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  async render(diff: FileDiffMetadata): Promise<HunksRenderResult | undefined> {
+  async render(
+    diff: FileDiffMetadata,
+    partialRender?: RenderRange
+  ): Promise<HunksRenderResult | undefined> {
     this.queuedDiff = diff;
+    this.queuedRenderRange = partialRender;
     if (this.queuedRender != null) {
       return this.queuedRender;
     }
@@ -244,17 +266,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         // should just return early with empty result
         return undefined;
       }
-      return this.renderDiff(this.queuedDiff, this.highlighter);
+      return this.renderDiff(
+        this.queuedDiff,
+        this.highlighter,
+        this.queuedRenderRange
+      );
     })();
     const result = await this.queuedRender;
     this.queuedDiff = undefined;
+    this.queuedRenderRange = undefined;
     this.queuedRender = undefined;
     return result;
   }
 
   private renderDiff(
     fileDiff: FileDiffMetadata,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): HunksRenderResult {
     const {
       disableLineNumbers,
@@ -312,25 +340,38 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return [];
     })();
     let lineIndex = -1;
+    let lineCount = 0;
     for (const hunk of hunks) {
-      this.renderHunks({
-        hunk,
-        prevHunk,
-        hunkIndex,
-        highlighter,
-        state,
-        transformers,
-        isFirstHunk: hunkIndex === 0,
-        isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
-        additionsAST,
-        deletionsAST,
-        unifiedAST,
-        hunkData,
-        lineIndex,
-      });
+      if (lineCount > renderRange.endingLine) {
+        break;
+      }
+      // FIXME(amadeus): we need to use the proper count here...
+      // but i'll worry about this later
+      if (lineCount + hunk.unifiedLineCount >= renderRange.startingLine) {
+        this.renderHunks({
+          hunk,
+          prevHunk,
+          hunkIndex,
+          highlighter,
+          state,
+          transformers,
+          isFirstHunk: hunkIndex === 0,
+          isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
+          additionsAST,
+          deletionsAST,
+          unifiedAST,
+          hunkData,
+          lineIndex,
+          lineCount,
+          renderRange,
+        });
+      }
       hunkIndex++;
       lineIndex += Math.max(hunk.additionCount, hunk.deletionCount);
       prevHunk = hunk;
+      // FIXME(amadeus): we need to use the proper count here...
+      // but i'll worry about this later
+      lineCount += hunk.unifiedLineCount;
     }
 
     const totalLines = Math.max(
@@ -474,15 +515,29 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     unifiedAST,
     hunkData,
     lineIndex,
+    lineCount,
+    renderRange,
   }: RenderHunkProps) {
+    if (
+      hunk.hunkContent.length === 0 ||
+      lineCount > renderRange.endingLine ||
+      // FIXME(amadeus): we need to use the proper count here...
+      // but i'll worry about this later
+      lineCount + hunk.unifiedLineCount < renderRange.startingLine
+    ) {
+      return;
+    }
+
     const { hunkSeparators, expansionLineCount, expandUnchanged } =
       this.getOptionsWithDefaults();
-    const { additions, deletions, unified, hasLongLines } = this.processLines(
+    const { additions, deletions, unified, hasLongLines } = this.processLines({
       hunk,
       hunkIndex,
       prevHunk,
-      lineIndex
-    );
+      lineIndex,
+      lineCount,
+      renderRange,
+    });
     const expandable = this.diff?.newLines != null;
 
     const generateLinesAST = (
@@ -607,12 +662,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  private processLines(
-    hunk: Hunk,
-    hunkIndex: number,
-    prevHunk: Hunk | undefined,
-    lineIndex: number
-  ): ProcessLinesReturn {
+  private processLines({
+    hunk,
+    hunkIndex,
+    prevHunk,
+    lineCount,
+    renderRange,
+    lineIndex,
+  }: ProcessLinesProps): ProcessLinesReturn {
     const {
       maxLineLengthForHighlighting,
       diffStyle,
@@ -923,10 +980,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
 
       lastType = type;
+      lineCount++;
     };
 
     function processRawLines(lines: string[]) {
       for (const rawLine of lines) {
+        if (lineCount > renderRange.endingLine) {
+          break;
+        }
+        if (lineCount < renderRange.startingLine) {
+          lineCount++;
+          continue;
+        }
         const { line, type, longLine } = parseLineType(
           rawLine,
           maxLineLengthForHighlighting
@@ -966,6 +1031,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         additionLineNumber = expandAdditionStart;
         deletionLineNumber = expandDeletionStart;
         for (let i = additionLineNumber; i < hunk.additionStart - 1; i++) {
+          if (lineCount > renderRange.endingLine) {
+            break;
+          }
+          if (lineCount < renderRange.startingLine) {
+            lineCount++;
+            continue;
+          }
           const line = this.diff.newLines[i];
           if (line == null) {
             console.error({
@@ -1009,6 +1081,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.diff.newLines.length - 1
       );
       for (let i = additionLineNumber; i < len; i++) {
+        if (lineCount > renderRange.endingLine) {
+          break;
+        }
+        if (lineCount < renderRange.startingLine) {
+          lineCount++;
+          continue;
+        }
         const line = this.diff.newLines[i];
         if (line == null) {
           console.error({ i, len, lines: this.diff.newLines });
