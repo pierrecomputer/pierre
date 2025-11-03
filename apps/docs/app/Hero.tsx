@@ -35,14 +35,13 @@ export function Hero() {
         className="mb-2"
       >
         <path
-          className="text-emerald-500 dark:text-emerald-400"
           fill="currentcolor"
           d="M15.5 16H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3h12.5v16ZM8 4a1 1 0 0 0-1 1v2H5a1 1 0 0 0 0 2h2v2a1 1 0 1 0 2 0V9h2a1 1 0 1 0 0-2H9V5a1 1 0 0 0-1-1Z"
         />
         <path
-          className="text-red-500 dark:text-red-400"
           fill="currentcolor"
           d="M29 0a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16.5V0H29Zm-9 8a1 1 0 0 0 1 1h6a1 1 0 1 0 0-2h-6a1 1 0 0 0-1 1Z"
+          opacity=".4"
         />
       </svg>
 
