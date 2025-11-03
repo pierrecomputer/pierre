@@ -151,7 +151,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         )}
         <MultiFileDiff
           {...prerenderedDiff}
-          className="overflow-hidden rounded-lg border"
+          className="diff-container"
           options={{
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
@@ -448,7 +448,7 @@ export function AcceptRejectExample({
       />
       <MultiFileDiff
         {...fileDiffProps}
-        className="overflow-hidden rounded-lg border"
+        className="diff-container"
         lineAnnotations={activeAnnotations}
         renderAnnotation={() => {
           return (
