@@ -154,7 +154,10 @@ export function ShikiThemes({
               {LIGHT_THEMES.map((theme) => (
                 <DropdownMenuItem
                   key={theme}
-                  onClick={() => setSelectedLightTheme(theme)}
+                  onClick={() => {
+                    setSelectedLightTheme(theme);
+                    setSelectedColorMode('light');
+                  }}
                   className={
                     selectedLightTheme === theme ? 'bg-accent' : undefined
                   }
@@ -188,7 +191,10 @@ export function ShikiThemes({
               {DARK_THEMES.map((theme) => (
                 <DropdownMenuItem
                   key={theme}
-                  onClick={() => setSelectedDarkTheme(theme)}
+                  onClick={() => {
+                    setSelectedDarkTheme(theme);
+                    setSelectedColorMode('dark');
+                  }}
                   className={
                     selectedDarkTheme === theme ? 'bg-accent' : undefined
                   }
@@ -241,7 +247,7 @@ export function ShikiThemes({
           <Link
             href="https://marketplace.visualstudio.com/items?itemName=pierre-computer-co.pierre-vscode-theme"
             target="_blank"
-            className="text-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+            className="text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-colors"
           >
             Install our Pierre VS Code Theme pack
           </Link>{' '}

@@ -21,7 +21,7 @@ export function IconEllipsis({
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M4 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0m6 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0m6 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0" />
+      <path d="M4 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0M10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0M16 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0" />
     </svg>
   );
 }

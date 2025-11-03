@@ -21,7 +21,12 @@ export function IconLaptop({
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M3.25 2A2.25 2.25 0 0 0 1 4.25v8.25h14V4.25A2.25 2.25 0 0 0 12.75 2zM2.5 4.25a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 .75.75V11h-11zM16 13H0a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13" />
+      <path
+        fillRule="evenodd"
+        d="M3.25 2A2.25 2.25 0 0 0 1 4.25v8.25h14V4.25A2.25 2.25 0 0 0 12.75 2zM2.5 4.25a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 .75.75V11h-11z"
+        clipRule="evenodd"
+      />
+      <path d="M16 13H0a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13" />
     </svg>
   );
 }

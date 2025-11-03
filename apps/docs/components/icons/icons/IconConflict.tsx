@@ -22,7 +22,11 @@ export function IconConflict({
       {...props}
     >
       <path d="M5 8c0-2.47.53-3 3-3s3 .53 3 3-.53 3-3 3-3-.53-3-3" />
-      <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0" />
+      <path
+        fillRule="evenodd"
+        d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0"
+        clipRule="evenodd"
+      />
     </svg>
   );
 }

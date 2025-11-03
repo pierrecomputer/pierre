@@ -77,7 +77,7 @@ function ButtonGroupItem({
   return (
     <Button
       className={cn(
-        'text-muted-foreground border-transparent bg-transparent hover:cursor-pointer',
+        'text-muted-foreground border-transparent bg-transparent select-none hover:cursor-pointer',
         isSelected &&
           'bg-background border-border text-accent-foreground hover:bg-background hover:border-border',
         className

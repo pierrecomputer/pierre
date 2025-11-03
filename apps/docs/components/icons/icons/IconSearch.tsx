@@ -21,7 +21,11 @@ export function IconSearch({
       className={`pi${className != null ? ` ${className}` : ''}`}
       {...props}
     >
-      <path d="M10.775 12.896a7 7 0 1 1 2.121-2.121l2.665 2.664a1.5 1.5 0 0 1-2.122 2.122zM7 1.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11" />
+      <path
+        fillRule="evenodd"
+        d="M10.775 12.896a7 7 0 1 1 2.121-2.121l2.665 2.664a1.5 1.5 0 0 1-2.122 2.122zM7 1.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11"
+        clipRule="evenodd"
+      />
     </svg>
   );
 }

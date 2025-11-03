@@ -49,11 +49,11 @@ export function Overview({
   return (
     <section className="space-y-4">
       <h2>Overview</h2>
-      <p className="text-md flex gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 text-cyan-600 dark:text-cyan-300">
+      <div className="text-md flex gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 text-cyan-600 dark:text-cyan-300">
         <IconCiWarningFill className="mt-[6px]" />
         Precision Diffs is in early active development—APIs are subject to
         change.
-      </p>
+      </div>
       <p>
         <strong>Precision Diffs</strong> is a library for rendering code and
         diffs on the web. This includes both high-level, easy-to-use components,
