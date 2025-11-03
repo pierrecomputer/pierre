@@ -86,7 +86,7 @@ export default async function DocsPage() {
       <DocsHeader />
       <div className="gap-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
         <SidebarWrapper />
-        <div className="prose dark:prose-invert w-full max-w-full min-w-0 pt-12">
+        <div className="prose dark:prose-invert w-full max-w-full min-w-0 space-y-4 pt-12">
           <DocsContent
             components={{
               InstallationExample: () => (

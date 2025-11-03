@@ -51,29 +51,6 @@ There are two core components in the vanilla JavaScript API, `FileDiff` and `Fil
 
 <VanillaAPIComponents />
 
-## Options Reference
-
-Both the React and Vanilla JS APIs share the same core options. Whether you're using React components or vanilla JavaScript classes, you can customize the appearance and behavior of your diffs with the following options:
-
-<OptionsTable />
-
-### API-Specific Differences
-
-While all the options above work identically in both APIs, there are a few differences in how you provide custom rendering functions:
-
-**React API:**
-
-- Uses `renderLineAnnotation` prop that returns JSX components
-- Example: `renderLineAnnotation={(annotation) => <CommentThread {...annotation} />}`
-
-**Vanilla JS API:**
-
-- Uses `renderAnnotation` option that returns DOM elements
-- Example: `renderAnnotation: (annotation) => { const el = document.createElement('div'); return el; }`
-- Additionally supports custom `hunkSeparators` as a function: `(hunk: HunkData) => HTMLElement | DocumentFragment`
-
-### Advanced Vanilla JS Features
-
 #### Hunk Separators
 
 If you want to render custom hunk separators that won't scroll with the content, there are a few tricks you will need to employ. See the following code snippet:
