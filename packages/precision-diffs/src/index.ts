@@ -1,3 +1,4 @@
+export * from './BigBoiVirtualizer';
 export * from './DiffHunksRenderer';
 export * from './File';
 export * from './FileDiff';
@@ -9,7 +10,9 @@ export * from './ResizeManager';
 export * from './ScrollSyncManager';
 export * from './SharedHighlighter';
 export * from './UniversalRenderer';
+export * from './VirtulizedFileDiff';
 export * from './constants';
+export * from './custom-components/Container';
 export * from './shiki-stream';
 export * from './utils/getFiletypeFromFileName';
 export * from './utils/getLineAnnotationName';

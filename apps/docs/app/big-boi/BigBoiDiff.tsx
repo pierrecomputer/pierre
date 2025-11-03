@@ -1,11 +1,10 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { parsePatchFiles } from '@pierre/precision-diffs';
+import { BigBoiVirtualizer, parsePatchFiles } from '@pierre/precision-diffs';
 import { useStableCallback } from '@pierre/precision-diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
 
-import { BigBoiVirtualizer } from './BigBoiVirtualizer';
 import styles from './big-boi.module.css';
 
 interface SubmitButtonProps {

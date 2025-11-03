@@ -31,6 +31,7 @@ import type {
   HunkSeparators,
   PJSHighlighter,
   RenderHeaderMetadataCallback,
+  RenderRange,
   ThemeTypes,
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
@@ -47,6 +48,7 @@ interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
   newFile?: FileContents;
+  renderRange?: RenderRange;
   forceRender?: boolean;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
@@ -366,7 +368,32 @@ export class FileDiff<LAnnotation = undefined> {
     fileContainer,
     lineAnnotations,
     containerWrapper,
+    renderRange,
   }: FileDiffRenderProps<LAnnotation>): Promise<void> {
+    const annotationsChanged =
+      lineAnnotations != null &&
+      // Ideally this would just a quick === check because
+      // lineAnnotations is technically unbounded
+      !deepEquals(lineAnnotations, this.lineAnnotations);
+    if (
+      renderRange == null &&
+      oldFile != null &&
+      newFile != null &&
+      !annotationsChanged &&
+      deepEquals(oldFile, this.oldFile) &&
+      deepEquals(newFile, this.newFile)
+    ) {
+      return;
+    }
+    if (
+      renderRange == null &&
+      fileDiff != null &&
+      fileDiff === this.fileDiff &&
+      !annotationsChanged
+    ) {
+      return;
+    }
+
     this.oldFile = oldFile;
     this.newFile = newFile;
     if (fileDiff != null) {
@@ -414,7 +441,7 @@ export class FileDiff<LAnnotation = undefined> {
       !disableFileHeader
         ? this.headerRenderer.render(this.fileDiff)
         : undefined,
-      this.hunksRenderer.render(this.fileDiff),
+      this.hunksRenderer.render(this.fileDiff, renderRange),
     ]);
 
     // If both are null, most likely a cleanup, lets abort
