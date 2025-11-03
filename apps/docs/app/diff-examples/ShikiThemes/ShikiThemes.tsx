@@ -233,7 +233,7 @@ export function ShikiThemes({
       </div>
       <MultiFileDiff
         {...props}
-        className="overflow-hidden rounded-lg border"
+        className="overflow-hidden rounded-lg border dark:border-neutral-800"
         options={{
           diffStyle: 'split',
           themeType: selectedColorMode,

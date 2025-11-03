@@ -64,10 +64,7 @@ export function Overview({
         </Link>{' '}
         which provides a lot of great theme and language support.
       </p>
-      <MultiFileDiff
-        {...initialDiffProps}
-        className="overflow-hidden rounded-lg border"
-      />
+      <MultiFileDiff {...initialDiffProps} className="diff-container" />
       <p>
         We have an opinionated stance in our architecture:{' '}
         <strong>browsers are rather efficient at rendering raw HTML</strong>. We

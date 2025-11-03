@@ -154,7 +154,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
       </div>
       <MultiFileDiff
         {...prerenderedDiff}
-        className="overflow-hidden rounded-lg border"
+        className="diff-container"
         style={
           {
             '--pjs-font-family': `var(${fontMap[selectedFont]})`,

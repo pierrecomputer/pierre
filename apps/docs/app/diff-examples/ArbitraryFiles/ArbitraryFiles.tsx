@@ -45,7 +45,7 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
         {...prerenderedDiff}
         oldFile={oldFile}
         newFile={newFile}
-        className="overflow-hidden rounded-lg border"
+        className="diff-container"
       />
     </div>
   );

@@ -153,3 +153,7 @@
     grid-row-start: 1;
   }
 }
+
+.diff-container {
+  @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
+}

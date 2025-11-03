@@ -208,7 +208,7 @@ export function DiffStyles({
       </div>
       <MultiFileDiff
         {...props}
-        className="overflow-hidden rounded-lg border"
+        className="diff-container"
         options={{
           ...options,
           theme: 'pierre-dark',
