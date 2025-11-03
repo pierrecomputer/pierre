@@ -37,17 +37,12 @@ export function Hero() {
         <path
           className="text-emerald-500 dark:text-emerald-400"
           fill="currentcolor"
-          fill-rule="evenodd"
           d="M15.5 16H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3h12.5v16ZM8 4a1 1 0 0 0-1 1v2H5a1 1 0 0 0 0 2h2v2a1 1 0 1 0 2 0V9h2a1 1 0 1 0 0-2H9V5a1 1 0 0 0-1-1Z"
-          clip-rule="evenodd"
         />
         <path
           className="text-red-500 dark:text-red-400"
           fill="currentcolor"
-          fill-rule="evenodd"
           d="M29 0a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16.5V0H29Zm-9 8a1 1 0 0 0 1 1h6a1 1 0 1 0 0-2h-6a1 1 0 0 0-1 1Z"
-          clip-rule="evenodd"
-          // opacity=".3"
         />
       </svg>
 
@@ -61,7 +56,7 @@ export function Hero() {
         <Link
           target="_blank"
           href="https://pierre.computer"
-          className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[.5px] underline-offset-4 transition-colors hover:decoration-[1px]"
+          className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
         >
           The Pierre Computer Company
         </Link>
@@ -73,9 +68,9 @@ export function Hero() {
           <TooltipTrigger asChild>
             <button
               onClick={() => void copyToClipboard()}
-              className="inline-flex items-center gap-4 rounded-lg bg-gray-900 px-5 py-4 font-mono text-sm text-white transition-colors hover:bg-gray-800 dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
+              className="inline-flex items-center gap-4 rounded-lg bg-gray-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-gray-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
             >
-              <span>bun i @pierre/precision-diffs</span>
+              <span className="text-[95%]">bun i @pierre/precision-diffs</span>
               {copied ? (
                 <IconCheck className="ml-auto" />
               ) : (
@@ -91,7 +86,7 @@ export function Hero() {
           variant="secondary"
           asChild
           size="xl"
-          className="h-13 rounded-lg"
+          className="h-11 rounded-lg text-sm md:h-12 md:text-base"
         >
           <Link href="/docs">
             <IconBook />

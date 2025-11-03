@@ -247,7 +247,7 @@ export function ShikiThemes({
           <Link
             href="https://marketplace.visualstudio.com/items?itemName=pierre-computer-co.pierre-vscode-theme"
             target="_blank"
-            className="text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline underline-offset-2 transition-colors"
+            className="text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-colors"
           >
             Install our Pierre VS Code Theme pack
           </Link>{' '}
