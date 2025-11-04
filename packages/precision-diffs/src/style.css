@@ -557,7 +557,8 @@ code {
   background-color: var(--pjs-bg);
   color: var(--pjs-fg-number);
   z-index: 1;
-  min-width: 32px;
+  /* Allow line numbers up to 4 letters by default */
+  min-width: var(--pjs-min-number-column-width, 7ch);
   padding-left: 2ch;
   border-right: 1px solid var(--pjs-bg);
 }
