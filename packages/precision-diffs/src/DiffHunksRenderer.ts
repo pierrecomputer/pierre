@@ -59,6 +59,7 @@ const DEFAULT_RENDER_RANGE: RenderRange = {
 
 interface RenderHunkProps {
   hunk: Hunk;
+  hunkLineCount: number;
   prevHunk: Hunk | undefined;
   isLastHunk: boolean;
   isFirstHunk: boolean;
@@ -345,11 +346,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (lineCount > renderRange.endingLine) {
         break;
       }
-      // FIXME(amadeus): we need to use the proper count here...
-      // but i'll worry about this later
-      if (lineCount + hunk.unifiedLineCount >= renderRange.startingLine) {
+      const hunkLineCount =
+        diffStyle === 'split' ? hunk.splitLineCount : hunk.unifiedLineCount;
+      if (lineCount + hunkLineCount >= renderRange.startingLine) {
         this.renderHunks({
           hunk,
+          hunkLineCount,
           prevHunk,
           hunkIndex,
           highlighter,
@@ -369,9 +371,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkIndex++;
       lineIndex += Math.max(hunk.additionCount, hunk.deletionCount);
       prevHunk = hunk;
-      // FIXME(amadeus): we need to use the proper count here...
-      // but i'll worry about this later
-      lineCount += hunk.unifiedLineCount;
+      lineCount += hunkLineCount;
     }
 
     const totalLines = Math.max(
@@ -503,6 +503,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private renderHunks({
     hunk,
+    hunkLineCount,
     hunkIndex,
     highlighter,
     state,
@@ -521,9 +522,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (
       hunk.hunkContent.length === 0 ||
       lineCount > renderRange.endingLine ||
-      // FIXME(amadeus): we need to use the proper count here...
-      // but i'll worry about this later
-      lineCount + hunk.unifiedLineCount < renderRange.startingLine
+      lineCount + hunkLineCount < renderRange.startingLine
     ) {
       return;
     }

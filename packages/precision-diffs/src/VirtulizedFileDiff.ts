@@ -12,6 +12,8 @@ import type { FileDiffMetadata, PJSHighlighter, RenderRange } from './types';
 import { getThemes } from './utils/getThemes';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 
+export type { FileDiffOptions };
+
 let instanceId = -1;
 
 const LINE_HUNK_COUNT = 50;
@@ -144,7 +146,6 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
   private lastOffset: number | undefined;
 
   async render({ renderWindow, fileContainer }: RenderProps): Promise<void> {
-    // console.log('ZZZZ - renderWindow', this.fileDiff.name, renderWindow);
     const { disableFileHeader = false, diffStyle = 'split' } = this.options;
     this.hunksRenderer ??= new DiffHunksRenderer({
       ...this.options,
@@ -167,7 +168,6 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     ) {
       return;
     }
-    console.log('ZZZZZZ - renderRange', this.fileDiff.name, renderRange);
     this.lastRenderRange = renderRange;
     this.lastOffset = containerOffset;
 
@@ -215,21 +215,21 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     const fileHeight =
       diffStyle === 'split' ? this.splitHeight : this.unifiedHeight;
 
-    // We should never hit this theoretically, but if so, gtfo
+    // We should never hit this theoretically, but if so, gtfo and yell loudly,
+    // so we can fix
     if (fileTop < top - fileHeight || fileTop > bottom) {
-      // console.log('ZZZZZ - yeeting early', this.fileDiff.name, 1);
+      console.error(
+        'VirtulizedFileDiff.computeRenderRangeFromWindow: invalid render',
+        this.fileDiff.name
+      );
       return {
         renderRange: { startingLine: -1, endingLine: -1 },
         containerOffset: 0,
       };
     }
 
-    // Whole file is in range or under 100 lines, just render it all
-    if (
-      fileTop >= top - fileHeight &&
-      fileTop + fileHeight <= bottom &&
-      lineCount <= LINE_HUNK_COUNT
-    ) {
+    // Whole file is under LINE_HUNK_COUNT, just render it all
+    if (lineCount <= LINE_HUNK_COUNT) {
       return {
         renderRange: { startingLine: 0, endingLine: Infinity },
         containerOffset: 0,
@@ -275,7 +275,6 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     }
 
     if (startingLine == null) {
-      // console.log('ZZZZZ - yeeting early', this.fileDiff.name, 2);
       return {
         renderRange: { startingLine: -1, endingLine: -1 },
         containerOffset: 0,
@@ -288,11 +287,6 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
         ? Math.ceil(endingLine / LINE_HUNK_COUNT) * LINE_HUNK_COUNT
         : startingLine + LINE_HUNK_COUNT;
 
-    // console.log(
-    //   'ZZZZZ - containerOffsets',
-    //   this.fileDiff.name,
-    //   containerOffsets
-    // );
     return {
       renderRange: { startingLine, endingLine },
       containerOffset: containerOffsets[startingLine / LINE_HUNK_COUNT] ?? 0,
