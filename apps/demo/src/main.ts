@@ -44,12 +44,11 @@ const streamingInstances: FileStream[] = [];
 function startStreaming() {
   const container = document.getElementById('wrapper');
   if (container == null) return;
-  if (loadDiff != null) {
-    loadDiff.parentElement?.removeChild(loadDiff);
+  for (const instance of streamingInstances) {
+    instance.cleanUp();
   }
-  if (streamCode != null) {
-    streamCode.parentElement?.removeChild(streamCode);
-  }
+  streamingInstances.length = 0;
+  container.innerHTML = '';
   for (const { content, letterByLetter, options } of CodeConfigs) {
     const instance = new FileStream(options);
     void instance.setup(
@@ -85,13 +84,6 @@ const diffInstances: FileDiff<LineCommentMetadata>[] = [];
 function renderDiff(parsedPatches: ParsedPatch[]) {
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;
-  if (loadDiff != null) {
-    loadDiff.parentElement?.removeChild(loadDiff);
-  }
-  if (streamCode != null) {
-    streamCode.parentElement?.removeChild(streamCode);
-  }
-  wrapper.innerHTML = '';
   window.scrollTo({ top: 0 });
   for (const instance of diffInstances) {
     instance.cleanUp();
@@ -184,11 +176,20 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
 
       const fileContainer = document.createElement('file-diff');
       wrapper.appendChild(fileContainer);
-      void instance.render({
-        fileDiff,
-        lineAnnotations: fileAnnotations,
-        fileContainer,
-      });
+      const start = Date.now();
+      void instance
+        .render({
+          fileDiff,
+          lineAnnotations: fileAnnotations,
+          fileContainer,
+        })
+        .then(() =>
+          console.log(
+            'Time To Render',
+            fileDiff.name.trim(),
+            Date.now() - start
+          )
+        );
       diffInstances.push(instance);
       hunkIndex++;
     }
