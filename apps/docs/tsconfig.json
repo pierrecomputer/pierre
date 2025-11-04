@@ -11,6 +11,9 @@
   "exclude": ["node_modules"],
   "references": [
     {
+      "path": "../../packages/file-tree"
+    },
+    {
       "path": "../../packages/precision-diffs"
     },
     {

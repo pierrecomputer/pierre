@@ -9,6 +9,9 @@
       "path": "apps/docs"
     },
     {
+      "path": "packages/file-tree"
+    },
+    {
       "path": "packages/precision-diffs"
     },
     {

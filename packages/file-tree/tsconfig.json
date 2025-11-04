@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*.ts", "src/**/*.json", "tsdown.config.ts"],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "isolatedDeclarations": true,
+    "allowJs": false,
+    "checkJs": false,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "rootDir": "."
+  }
+}
