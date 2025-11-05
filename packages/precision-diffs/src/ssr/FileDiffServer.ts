@@ -63,12 +63,15 @@ export async function preloadFile<LAnnotation = undefined>({
   if (fileResult == null) {
     throw new Error('Failed to render file diff');
   }
-  const cssText = `@layer base, theme;
+  const cssText = `@layer base, theme, unsafe;
     @layer base {
       ${rawStyles}
     }
     @layer theme {
       ${fileResult.css}
+    }
+    @layer unsafe {
+      ${options?.unsafeCSS ?? ''}
     }`;
 
   const children = [
@@ -123,12 +126,15 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   if (hunkResult == null) {
     throw new Error('Failed to render file diff');
   }
-  const cssText = `@layer base, theme;
+  const cssText = `@layer base, theme, unsafe;
     @layer base {
       ${rawStyles}
     }
     @layer theme {
       ${hunkResult.css}
+    }
+    @layer unsafe {
+      ${options?.unsafeCSS ?? ''}
     }`;
 
   const children = [

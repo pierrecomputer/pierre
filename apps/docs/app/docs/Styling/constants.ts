@@ -55,3 +55,25 @@ export const STYLING_CODE_INLINE: PreloadFileOptions<undefined> = {
   },
   options,
 };
+
+export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'unsafe-css.tsx',
+    contents: `<FileDiff
+  options={{
+    unsafeCSS: \`[data-pjs] {
+      border: 2px solid #C635E4;
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px; }\`
+  }}
+  // ... other props
+/>`,
+  },
+  options: {
+    ...options,
+    unsafeCSS: `[data-pjs] {
+      border: 2px solid #C635E4;
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px; }`,
+  },
+};

@@ -80,7 +80,7 @@ interface ProcessLinesReturn {
 }
 
 type OptionsWithDefaults = Required<
-  Omit<BaseDiffOptions, 'lang' | 'preferWasmHighlighter'>
+  Omit<BaseDiffOptions, 'lang' | 'preferWasmHighlighter' | 'unsafeCSS'>
 >;
 
 export interface HunksRenderResult {

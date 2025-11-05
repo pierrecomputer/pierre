@@ -1,5 +1,6 @@
 import Footer from '@/components/Footer';
 import { preloadFile, preloadFileDiff } from '@pierre/precision-diffs/ssr';
+import { Suspense } from 'react';
 
 import { DocsHeader } from './DocsHeader';
 import { Installation } from './Installation/Installation';
@@ -27,7 +28,11 @@ import {
 } from './SSR/constants';
 import { SidebarWrapper } from './SidebarWrapper';
 import { Styling } from './Styling/Styling';
-import { STYLING_CODE_GLOBAL, STYLING_CODE_INLINE } from './Styling/constants';
+import {
+  STYLING_CODE_GLOBAL,
+  STYLING_CODE_INLINE,
+  STYLING_CODE_UNSAFE,
+} from './Styling/constants';
 import { VanillaAPI } from './VanillaAPI/VanillaAPI';
 import {
   VANILLA_API_CODE_UTILITIES,
@@ -51,6 +56,9 @@ export default function DocsPage() {
           <VanillaAPISection />
           <StylingSection />
           <SSRSection />
+          <Suspense fallback={null}>
+            <StylingSection />
+          </Suspense>
           {/* <ComponentProps /> */}
           {/* <RendererOptions /> */}
           {/* <EventHandlers /> */}
@@ -140,12 +148,17 @@ async function VanillaAPISection() {
 }
 
 async function StylingSection() {
-  const [stylingGlobal, stylingInline] = await Promise.all([
+  const [stylingGlobal, stylingInline, stylingUnsafe] = await Promise.all([
     preloadFile(STYLING_CODE_GLOBAL),
     preloadFile(STYLING_CODE_INLINE),
+    preloadFile(STYLING_CODE_UNSAFE),
   ]);
   return (
-    <Styling stylingGlobal={stylingGlobal} stylingInline={stylingInline} />
+    <Styling
+      stylingGlobal={stylingGlobal}
+      stylingInline={stylingInline}
+      stylingUnsafe={stylingUnsafe}
+    />
   );
 }
 

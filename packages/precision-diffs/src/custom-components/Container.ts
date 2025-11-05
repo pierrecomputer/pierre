@@ -19,9 +19,11 @@ if (
       const shadowRoot = this.attachShadow({ mode: 'open' });
       if (sheet == null) {
         sheet = new CSSStyleSheet();
-        sheet.replaceSync(styles);
+        // Declare layer order first, then wrap base styles in @layer to match SSR behavior
+        sheet.replaceSync(
+          `@layer base, theme, unsafe;\n@layer base {\n${styles}\n}`
+        );
       }
-      // TODO(amadeus): Figure out how to adapt user generated styles into here?
       shadowRoot.adoptedStyleSheets = [sheet];
     }
     // Not sure if we need to do anything here yet...

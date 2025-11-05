@@ -53,6 +53,7 @@ export class File<LAnnotation = undefined> {
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
+  private unsafeCSSStyle: HTMLStyleElement | undefined;
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
@@ -163,6 +164,10 @@ export class File<LAnnotation = undefined> {
         this.pre = element;
         continue;
       }
+      if (element instanceof HTMLStyleElement) {
+        this.unsafeCSSStyle = element;
+        continue;
+      }
       if ('pjsHeader' in element.dataset) {
         this.headerElement = element;
         continue;
@@ -181,6 +186,7 @@ export class File<LAnnotation = undefined> {
       this.file = props.file;
       void this.fileRenderer.initializeHighlighter();
       this.renderAnnotations();
+      this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
@@ -272,6 +278,28 @@ export class File<LAnnotation = undefined> {
     }
   }
 
+  private injectUnsafeCSS(): void {
+    if (this.fileContainer?.shadowRoot == null) {
+      return;
+    }
+    const { unsafeCSS } = this.options;
+
+    if (unsafeCSS == null || unsafeCSS === '') {
+      return;
+    }
+
+    // Create or update the style element
+    if (this.unsafeCSSStyle == null) {
+      this.unsafeCSSStyle = document.createElement('style');
+      this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
+    }
+    // Wrap in @layer unsafe to match SSR behavior
+    this.unsafeCSSStyle.insertAdjacentText(
+      'beforeend',
+      `@layer unsafe {\n${unsafeCSS}\n}`
+    );
+  }
+
   private applyHunksToDOM(
     result: FileRenderResult,
     pre: HTMLPreElement,
@@ -283,6 +311,7 @@ export class File<LAnnotation = undefined> {
     this.code = createCodeNode();
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
     pre.appendChild(this.code);
+    this.injectUnsafeCSS();
     this.mouseEventManager.setup(pre);
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);

@@ -99,6 +99,9 @@ export interface BaseCodeOptions {
   lang?: SupportedLanguages;
   preferWasmHighlighter?: boolean;
   useCSSClasses?: boolean;
+
+  // Custom CSS injection
+  unsafeCSS?: string;
 }
 
 export interface BaseDiffOptions extends BaseCodeOptions {

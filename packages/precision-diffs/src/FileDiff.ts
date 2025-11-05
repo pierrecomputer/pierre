@@ -65,6 +65,7 @@ export class FileDiff<LAnnotation = undefined> {
   private fileContainer: HTMLElement | undefined;
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
+  private unsafeCSSStyle: HTMLStyleElement | undefined;
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
@@ -221,6 +222,10 @@ export class FileDiff<LAnnotation = undefined> {
         this.headerElement = element;
         continue;
       }
+      if (element instanceof HTMLStyleElement) {
+        this.unsafeCSSStyle = element;
+        continue;
+      }
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
@@ -240,6 +245,7 @@ export class FileDiff<LAnnotation = undefined> {
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();
+      this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
@@ -517,6 +523,28 @@ export class FileDiff<LAnnotation = undefined> {
     });
   }
 
+  private injectUnsafeCSS(): void {
+    if (this.fileContainer?.shadowRoot == null) {
+      return;
+    }
+    const { unsafeCSS } = this.options;
+
+    if (unsafeCSS == null || unsafeCSS === '') {
+      return;
+    }
+
+    // Create or update the style element
+    if (this.unsafeCSSStyle == null) {
+      this.unsafeCSSStyle = document.createElement('style');
+      this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
+    }
+    // Wrap in @layer unsafe to match SSR behavior
+    this.unsafeCSSStyle.insertAdjacentText(
+      'beforeend',
+      `@layer unsafe {\n${unsafeCSS}\n}`
+    );
+  }
+
   private applyHunksToDOM(
     result: HunksRenderResult,
     pre: HTMLPreElement,
@@ -552,6 +580,8 @@ export class FileDiff<LAnnotation = undefined> {
         pre.appendChild(codeAdditions);
       }
     }
+
+    this.injectUnsafeCSS();
 
     this.mouseEventManager.setup(pre);
     if ((this.options.overflow ?? 'scroll') === 'scroll') {

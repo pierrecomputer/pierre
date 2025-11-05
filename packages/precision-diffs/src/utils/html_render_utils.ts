@@ -78,7 +78,9 @@ export function setWrapperProps({
   disableBackground,
   totalLines,
 }: SetupWrapperNodesProps): HTMLPreElement {
+  // Get theme color custom properties (e.g., --pjs-fg, --pjs-bg)
   const styles = getHighlighterThemeStyles({ theme, highlighter });
+
   if (themeType === 'system') {
     delete pre.dataset.themeType;
   } else {
@@ -106,7 +108,9 @@ export function setWrapperProps({
   pre.dataset.overflow = wrap ? 'wrap' : 'scroll';
   pre.dataset.pjs = '';
   pre.tabIndex = 0;
+  // Set theme color custom properties as inline styles on pre element
   pre.style = styles;
+  // Set CSS custom property for line number column width
   pre.style.setProperty(
     '--pjs-min-number-column-width-default',
     `${`${totalLines}`.length}ch`
