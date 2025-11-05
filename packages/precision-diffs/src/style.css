@@ -10,6 +10,7 @@
 
   --pjs-mixer: light-dark(black, white);
   --pjs-gap-fallback: 8px;
+  --pjs-gap-style: 1px solid var(--pjs-bg);
 
   /*
     // Available CSS Color Overrides
@@ -37,6 +38,7 @@
     // Available CSS Layout Overrides
     --pjs-gap-inline
     --pjs-gap-block
+    --pjs-gap-style
     --pjs-tab-size
   */
 
@@ -551,7 +553,7 @@ code {
   z-index: 1;
   min-width: 32px;
   padding-left: 2ch;
-  border-right: 1px solid var(--pjs-bg);
+  border-right: var(--pjs-gap-style, 1px solid var(--pjs-bg));
 }
 
 [data-interactive-line-numbers] [data-column-number] {
