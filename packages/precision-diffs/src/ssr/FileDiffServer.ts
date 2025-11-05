@@ -56,11 +56,11 @@ export async function preloadFile<LAnnotation = undefined>({
     fileRenderer.setLineAnnotations(annotations);
   }
 
-  const [hunkResult, headerResult] = await Promise.all([
+  const [fileResult, headerResult] = await Promise.all([
     fileRenderer.render(file, true),
     fileHeader.render(file),
   ]);
-  if (hunkResult == null) {
+  if (fileResult == null) {
     throw new Error('Failed to render file diff');
   }
   const cssText = `@layer base, theme;
@@ -68,7 +68,7 @@ export async function preloadFile<LAnnotation = undefined>({
       ${rawStyles}
     }
     @layer theme {
-      ${hunkResult.css}
+      ${fileResult.css}
     }`;
 
   const children = [
@@ -80,7 +80,7 @@ export async function preloadFile<LAnnotation = undefined>({
   if (headerResult != null) {
     children.push(headerResult);
   }
-  const code = fileRenderer.renderFullAST(hunkResult);
+  const code = fileRenderer.renderFullAST(fileResult);
   code.properties['data-dehydrated'] = '';
   children.push(code);
 
