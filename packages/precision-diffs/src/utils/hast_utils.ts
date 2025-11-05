@@ -236,6 +236,7 @@ interface CreatePreWrapperPropertiesProps
   > {
   split: boolean;
   highlighter: PJSHighlighter;
+  totalLines: number;
 }
 
 export function createPreWrapperProperties({
@@ -246,6 +247,7 @@ export function createPreWrapperProperties({
   split,
   theme = DEFAULT_THEMES,
   themeType = 'system',
+  totalLines,
 }: CreatePreWrapperPropertiesProps): Properties {
   const properties: Properties = {
     'data-pjs': '',
@@ -256,6 +258,7 @@ export function createPreWrapperProperties({
     style: getHighlighterThemeStyles({ theme, highlighter }),
     tabIndex: 0,
   };
+  properties.style += `--pjs-min-number-column-width-default:${`${totalLines}`.length}ch;`;
 
   if (typeof theme === 'string' && themeType !== 'system') {
     properties['data-theme-type'] = themeType;

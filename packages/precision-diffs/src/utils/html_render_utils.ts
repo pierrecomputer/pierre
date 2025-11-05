@@ -46,6 +46,7 @@ interface SetupWrapperNodesProps {
   themeType: ThemeTypes;
   diffIndicators: 'bars' | 'classic' | 'none';
   disableBackground: boolean;
+  totalLines: number;
 }
 
 interface CreateCodeNodeProps {
@@ -75,6 +76,7 @@ export function setWrapperProps({
   themeType,
   diffIndicators,
   disableBackground,
+  totalLines,
 }: SetupWrapperNodesProps): HTMLPreElement {
   const styles = getHighlighterThemeStyles({ theme, highlighter });
   if (themeType === 'system') {
@@ -105,5 +107,9 @@ export function setWrapperProps({
   pre.dataset.pjs = '';
   pre.tabIndex = 0;
   pre.style = styles;
+  pre.style.setProperty(
+    '--pjs-min-number-column-width-default',
+    `${`${totalLines}`.length}ch`
+  );
   return pre;
 }

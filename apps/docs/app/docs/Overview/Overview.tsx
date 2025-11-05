@@ -59,7 +59,7 @@ export function Overview({
         diffs on the web. This includes both high-level, easy-to-use components,
         as well as exposing many of the internals if you want to selectively use
         specific pieces. We‘ve built syntax highlighting on top of{' '}
-        <Link href="https://shiki.dev" target="_blank">
+        <Link href="https://shiki.style/" target="_blank">
           Shiki
         </Link>{' '}
         which provides a lot of great theme and language support.

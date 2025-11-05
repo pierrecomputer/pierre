@@ -27,7 +27,7 @@ export function HeaderWrapper() {
         <Header.NavLink href="https://discord.gg/pierre" external>
           Discord
         </Header.NavLink>
-        <Header.NavLink href="https://github.com/pierreco/" external>
+        <Header.NavLink href="https://github.com/pierredotco/" external>
           GitHub
         </Header.NavLink>
       </Header.Nav>

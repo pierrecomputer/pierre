@@ -120,6 +120,7 @@ export class FileStream {
       themeType,
       diffIndicators: 'none',
       disableBackground: true,
+      totalLines: 0,
     });
     pre.innerHTML = '';
 

@@ -488,7 +488,8 @@ export class FileDiff<LAnnotation = undefined> {
 
   private setPreAttributes(
     pre: HTMLPreElement,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    totalLines: number
   ): void {
     const {
       diffStyle = 'split',
@@ -513,6 +514,7 @@ export class FileDiff<LAnnotation = undefined> {
       themeType,
       diffIndicators,
       disableBackground,
+      totalLines,
     });
   }
 
@@ -521,7 +523,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ): void {
-    this.setPreAttributes(pre, highlighter);
+    this.setPreAttributes(pre, highlighter, result.totalLines ?? 0);
 
     // Clear existing content
     pre.innerHTML = '';
