@@ -377,12 +377,16 @@ code {
   padding: 4px 1ch;
 }
 
-[data-separator='line-info']:not(:first-child) {
-  margin-top: var(--pjs-gap-block, var(--pjs-gap-fallback));
+[data-separator='line-info'] {
+  margin-block: var(--pjs-gap-block, var(--pjs-gap-fallback));
 }
 
-[data-separator='line-info']:not(:last-child) {
-  margin-bottom: var(--pjs-gap-block, var(--pjs-gap-fallback));
+[data-separator='line-info'][data-separator-first] {
+  margin-top: 0;
+}
+
+[data-separator='line-info'][data-separator-last] {
+  margin-bottom: 0;
 }
 
 [data-separator='line-info'] [data-separator-content] {

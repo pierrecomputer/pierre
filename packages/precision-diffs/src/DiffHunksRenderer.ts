@@ -49,6 +49,7 @@ interface RenderHunkProps {
   hunk: Hunk;
   prevHunk: Hunk | undefined;
   isLastHunk: boolean;
+  isFirstHunk: boolean;
   hunkIndex: number;
   highlighter: PJSHighlighter;
   state: SharedRenderState;
@@ -293,6 +294,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         highlighter,
         state,
         transformers,
+        isFirstHunk: hunkIndex === 0,
         isLastHunk: hunkIndex === fileDiff.hunks.length - 1,
         additionsAST,
         deletionsAST,
@@ -437,6 +439,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     state,
     transformers,
     prevHunk,
+    isFirstHunk,
     isLastHunk,
     additionsAST,
     deletionsAST,
@@ -487,16 +490,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 content: getModifiedLinesString(lines),
                 expandIndex: expandable ? hunkIndex : undefined,
                 slotName,
+                isFirstHunk,
+                isLastHunk: false,
               })
             );
             hunkData.push({ slotName, lines, type, expandable });
           }
         } else if (hunkSeparators === 'metadata' && hunk.hunkSpecs != null) {
           linesAST.push(
-            createSeparator({ type: 'metadata', content: hunk.hunkSpecs })
+            createSeparator({
+              type: 'metadata',
+              content: hunk.hunkSpecs,
+              isFirstHunk,
+              isLastHunk: false,
+            })
           );
         } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
-          linesAST.push(createSeparator({ type: 'simple' }));
+          linesAST.push(
+            createSeparator({ type: 'simple', isFirstHunk, isLastHunk: false })
+          );
         }
       }
       for (const line of getLineNodes(nodes)) {
@@ -519,6 +531,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               content: getModifiedLinesString(lines),
               expandIndex: expandable ? hunkIndex + 1 : undefined,
               slotName,
+              isFirstHunk: false,
+              isLastHunk,
             })
           );
           hunkData.push({ slotName, lines, type, expandable });

@@ -61,6 +61,8 @@ interface CreateSeparatorProps {
   content?: string;
   expandIndex?: number;
   slotName?: string;
+  isFirstHunk: boolean;
+  isLastHunk: boolean;
 }
 
 export function createSeparator({
@@ -68,6 +70,8 @@ export function createSeparator({
   content,
   expandIndex,
   slotName,
+  isFirstHunk,
+  isLastHunk,
 }: CreateSeparatorProps): Element {
   const children = [];
   if (type === 'metadata' && content != null) {
@@ -106,6 +110,8 @@ export function createSeparator({
     properties: {
       'data-separator': children.length === 0 ? '' : type,
       'data-expand-index': expandIndex,
+      'data-separator-first': isFirstHunk ? '' : undefined,
+      'data-separator-last': isLastHunk ? '' : undefined,
     },
   });
 }
