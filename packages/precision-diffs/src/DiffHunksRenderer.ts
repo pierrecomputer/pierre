@@ -35,6 +35,7 @@ import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from './utils/getHunkSeparatorSlotName';
 import { getThemes } from './utils/getThemes';
+import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import {
   createHastElement,
   createPreWrapperProperties,
@@ -88,6 +89,7 @@ export interface HunksRenderResult {
   hunkData: HunkData[];
   css: string;
   preNode: Element;
+  totalLines: number;
 }
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
@@ -301,6 +303,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       prevHunk = hunk;
     }
 
+    const totalLines = Math.max(
+      getTotalLineCountFromHunks(fileDiff.hunks),
+      fileDiff.newLines?.length ?? 0,
+      fileDiff.oldLines?.length ?? 0
+    );
+
     return {
       additionsAST: additionsAST.length > 0 ? additionsAST : undefined,
       deletionsAST: deletionsAST.length > 0 ? deletionsAST : undefined,
@@ -320,8 +328,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               : additionsAST.length > 0 && additionsAST.length > 0,
           theme,
           themeType,
+          totalLines,
         }),
       }),
+      totalLines,
     };
   }
 

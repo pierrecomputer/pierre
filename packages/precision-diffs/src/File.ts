@@ -277,7 +277,7 @@ export class File<LAnnotation = undefined> {
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ): void {
-    this.setPreAttributes(pre, highlighter);
+    this.setPreAttributes(pre, highlighter, result.totalLines);
     pre.innerHTML = '';
     // Create code elements and insert HTML content
     this.code = createCodeNode();
@@ -359,7 +359,8 @@ export class File<LAnnotation = undefined> {
 
   private setPreAttributes(
     pre: HTMLPreElement,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    totalLines: number
   ): void {
     const { overflow = 'scroll', theme, themeType = 'system' } = this.options;
     const wrap = overflow === 'wrap';
@@ -372,6 +373,7 @@ export class File<LAnnotation = undefined> {
       themeType,
       diffIndicators: 'none',
       disableBackground: true,
+      totalLines,
     });
   }
 }

@@ -40,6 +40,7 @@ export interface FileRenderResult {
   codeAST: ElementContent[];
   preNode: Element;
   css: string;
+  totalLines: number;
 }
 
 interface FileRendererOptions extends BaseCodeOptions {
@@ -151,8 +152,10 @@ export class FileRenderer<LAnnotation = undefined> {
           split: false,
           theme,
           themeType,
+          totalLines: codeAST.length,
         }),
       }),
+      totalLines: codeAST.length,
       css: toClass.getCSS(),
     };
   }

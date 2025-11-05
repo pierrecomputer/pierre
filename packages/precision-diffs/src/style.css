@@ -550,6 +550,7 @@ code {
 }
 
 [data-column-number] {
+  box-sizing: content-box;
   text-align: right;
   position: sticky;
   left: 0;
@@ -557,8 +558,10 @@ code {
   background-color: var(--pjs-bg);
   color: var(--pjs-fg-number);
   z-index: 1;
-  /* Allow line numbers up to 4 letters by default */
-  min-width: var(--pjs-min-number-column-width, 7ch);
+  min-width: var(
+    --pjs-min-number-column-width,
+    var(--pjs-min-number-column-width-default, 3ch)
+  );
   padding-left: 2ch;
   border-right: 1px solid var(--pjs-bg);
 }
