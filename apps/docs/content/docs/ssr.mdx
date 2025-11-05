@@ -1,0 +1,265 @@
+---
+title: Server-Side Rendering
+---
+
+## Overview
+
+Precision Diffs supports Server-Side Rendering (SSR) for improved performance and SEO. The SSR API allows you to pre-render file diffs on the server with syntax highlighting, then hydrate them on the client for full interactivity.
+
+## Benefits
+
+- **Faster Initial Render**: Users see syntax-highlighted diffs immediately without waiting for client-side processing
+- **Better SEO**: Search engines can index the fully-rendered diff content
+- **Reduced Client Bundle**: Syntax highlighting happens on the server, reducing JavaScript execution time
+- **Progressive Enhancement**: Diffs are visible even before JavaScript loads
+
+## Installation
+
+The SSR functionality is available from the `@pierre/precision-diffs/ssr` module:
+
+```tsx
+import { preloadFileDiff, FileDiffSsr } from '@pierre/precision-diffs/ssr';
+import '@pierre/precision-diffs/ssr'; // Import side effects for custom elements
+```
+
+## API Reference
+
+### `preloadFileDiff`
+
+Pre-renders a file diff on the server with full syntax highlighting.
+
+```tsx
+async function preloadFileDiff<LAnnotation = undefined>(
+  options: PreloadFileDiffOptions<LAnnotation>
+): Promise<PreloadedFileDiffResult<LAnnotation>>
+```
+
+#### Parameters
+
+```tsx
+type PreloadFileDiffOptions<LAnnotation> = {
+  oldFile: FileContents;
+  newFile: FileContents;
+  options?: FileDiffOptions<LAnnotation>;
+  annotations?: DiffLineAnnotation<LAnnotation>[];
+};
+```
+
+#### Returns
+
+```tsx
+interface PreloadedFileDiffResult<LAnnotation> {
+  oldFile: FileContents;
+  newFile: FileContents;
+  options?: FileDiffOptions<LAnnotation>;
+  annotations?: DiffLineAnnotation<LAnnotation>[];
+  prerenderedHTML: string;
+}
+```
+
+### `preloadFile`
+
+Pre-renders a single file on the server with syntax highlighting.
+
+```tsx
+async function preloadFile<LAnnotation = undefined>(
+  options: PreloadFileOptions<LAnnotation>
+): Promise<PreloadedFileResult<LAnnotation>>
+```
+
+#### Parameters
+
+```tsx
+type PreloadFileOptions<LAnnotation> = {
+  file: FileContents;
+  options?: FileOptions<LAnnotation>;
+  annotations?: LineAnnotation<LAnnotation>[];
+};
+```
+
+### `FileDiffSsr`
+
+React component for hydrating server-rendered diffs on the client.
+
+```tsx
+<FileDiffSsr<LAnnotation>
+  prerenderedHTML={string}
+  annotations={DiffLineAnnotation<LAnnotation>[]}
+  renderAnnotation={(annotation) => ReactNode}
+  className={string}
+/>
+```
+
+## Usage with Next.js
+
+### Server Component
+
+Create a server component that pre-renders the diff:
+
+```tsx
+// app/diff/page.tsx
+import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
+import { DiffPage } from './DiffPage';
+
+const OLD_FILE = {
+  name: 'main.zig',
+  contents: `const std = @import("std");
+const allocator = std.heap.page_allocator;
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hello, {s}!\\n", .{"World"});
+}`,
+};
+
+const NEW_FILE = {
+  name: 'main.zig',
+  contents: `const std = @import("std");
+const GeneralPurposeAllocator = std.heap.GeneralPurposeAllocator;
+
+pub fn main() !void {
+    var gpa = GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hello, {s}!\\n", .{"Zig"});
+}`,
+};
+
+export default async function DiffRoute() {
+  const preloadedFileDiff = await preloadFileDiff({
+    oldFile: OLD_FILE,
+    newFile: NEW_FILE,
+    options: {
+      theme: 'pierre-dark',
+      diffStyle: 'split',
+      diffIndicators: 'bars',
+      overflow: 'scroll',
+    },
+  });
+
+  return <DiffPage preloadedFileDiff={preloadedFileDiff} />;
+}
+```
+
+### Client Component
+
+Create a client component that hydrates and adds interactivity:
+
+```tsx
+// app/diff/DiffPage.tsx
+'use client';
+
+import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
+import '@pierre/precision-diffs/ssr';
+import type { PreloadedFileDiffResult, DiffLineAnnotation } from '@pierre/precision-diffs/ssr';
+
+interface DiffPageProps {
+  preloadedFileDiff: PreloadedFileDiffResult;
+}
+
+export function DiffPage({ preloadedFileDiff }: DiffPageProps) {
+  return (
+    <FileDiffSsr
+      prerenderedHTML={preloadedFileDiff.prerenderedHTML}
+      className="overflow-hidden rounded-lg border"
+    />
+  );
+}
+```
+
+## Adding Interactivity
+
+For fully interactive diffs with client-side state management, use the `MultiFileDiff` component:
+
+```tsx
+'use client';
+
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import { useState } from 'react';
+
+export function InteractiveDiff({ preloadedFileDiff }: { preloadedFileDiff: PreloadedFileDiffResult }) {
+  const [diffStyle, setDiffStyle] = useState(preloadedFileDiff.options?.diffStyle ?? 'split');
+
+  return (
+    <div>
+      <button onClick={() => setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')}>
+        Toggle Style
+      </button>
+      <MultiFileDiff
+        {...preloadedFileDiff}
+        options={{
+          ...preloadedFileDiff.options,
+          diffStyle,
+        }}
+      />
+    </div>
+  );
+}
+```
+
+## Working with Annotations
+
+You can define annotations on the server and render them with interactive components on the client:
+
+```tsx
+// Server Component
+const annotations = [
+  {
+    side: 'additions',
+    lineNumber: 8,
+    metadata: {
+      message: 'Error detected on this line',
+      severity: 'error',
+    },
+  },
+];
+
+const preloadedFileDiff = await preloadFileDiff({
+  oldFile: OLD_FILE,
+  newFile: NEW_FILE,
+  options: { theme: 'pierre-dark' },
+  annotations,
+});
+```
+
+```tsx
+// Client Component
+function ErrorAnnotation({ message, severity }: { message: string; severity: string }) {
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+
+  return (
+    <div className={`annotation annotation-${severity}`}>
+      {message}
+      <button onClick={() => setDismissed(true)}>Dismiss</button>
+    </div>
+  );
+}
+
+<FileDiffSsr
+  prerenderedHTML={preloadedFileDiff.prerenderedHTML}
+  annotations={preloadedFileDiff.annotations}
+  renderAnnotation={(annotation) => (
+    <ErrorAnnotation
+      message={annotation.metadata.message}
+      severity={annotation.metadata.severity}
+    />
+  )}
+/>
+```
+
+## Performance Considerations
+
+- Pre-rendering happens at build time or request time on the server
+- Syntax highlighting is CPU-intensive, so consider caching prerendered results
+- The `prerenderedHTML` includes inline styles for the theme, eliminating FOUC (Flash of Unstyled Content)
+- Client-side hydration is lightweight and only adds interactivity handlers
+
+## See Also
+
+- [Diffs](/docs/diffs) - Core diff component documentation
+- [Live Demo](/ssr) - View SSR in action
