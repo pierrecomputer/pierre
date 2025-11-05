@@ -489,7 +489,7 @@ export class FileDiff<LAnnotation = undefined> {
   private setPreAttributes(
     pre: HTMLPreElement,
     highlighter: PJSHighlighter,
-    totalLines: number
+    result: HunksRenderResult
   ): void {
     const {
       diffStyle = 'split',
@@ -502,8 +502,7 @@ export class FileDiff<LAnnotation = undefined> {
     const unified = diffStyle === 'unified';
     const split = unified
       ? false
-      : this.fileDiff?.type === 'change' ||
-        this.fileDiff?.type === 'rename-changed';
+      : result.additionsAST != null && result.deletionsAST != null;
     const wrap = overflow === 'wrap';
     setWrapperProps({
       pre,
@@ -514,16 +513,16 @@ export class FileDiff<LAnnotation = undefined> {
       themeType,
       diffIndicators,
       disableBackground,
-      totalLines,
+      totalLines: result.totalLines,
     });
   }
 
   private applyHunksToDOM(
-    result: Partial<HunksRenderResult>,
+    result: HunksRenderResult,
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ): void {
-    this.setPreAttributes(pre, highlighter, result.totalLines ?? 0);
+    this.setPreAttributes(pre, highlighter, result);
 
     // Clear existing content
     pre.innerHTML = '';
