@@ -25,7 +25,7 @@ export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
 }
 
 type HandleMouseEventProps =
-  | { eventType: 'click'; event: PointerEvent }
+  | { eventType: 'click'; event: MouseEvent }
   | { eventType: 'move'; event: MouseEvent };
 
 type EventClickProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
@@ -42,6 +42,7 @@ type EventBaseProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
 interface ExpandoEventProps {
   type: 'line-info';
   hunkIndex: number;
+  direction: 'up' | 'down';
 }
 
 type GetLineDataResult<TMode extends MouseEventManagerMode> =
@@ -87,7 +88,7 @@ export interface MouseEventManagerBaseOptions<
 
 export interface MouseEventManagerOptions<TMode extends MouseEventManagerMode>
   extends MouseEventManagerBaseOptions<TMode> {
-  onHunkExpand?(hunkIndex: number): unknown;
+  onHunkExpand?(hunkIndex: number, direction: 'up' | 'down'): unknown;
 }
 
 export class MouseEventManager<TMode extends MouseEventManagerMode> {
@@ -175,7 +176,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     }
   }
 
-  handleMouseClick = (event: PointerEvent): void => {
+  handleMouseClick = (event: MouseEvent): void => {
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
       'click',
@@ -226,7 +227,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       'FileDiff.DEBUG.handleMouseEvent:',
       { eventType, composedPath }
     );
-    const data = this.getLineData(composedPath);
+    const data = this.getLineData(composedPath, event.shiftKey);
     debugLogIfEnabled(
       __debugMouseEvents,
       eventType,
@@ -293,7 +294,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
             'click',
             "FileDiff.DEBUG.handleMouseEvent: switch, 'click', expanding a hunk"
           );
-          onHunkExpand(data.hunkIndex);
+          onHunkExpand(data.hunkIndex, data.direction);
           break;
         }
         if (isLineEventData(data, this.mode)) {
@@ -323,7 +324,12 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     }
   }
 
-  private getLineData(path: EventTarget[]): GetLineDataResult<TMode> {
+  private getLineData(
+    path: (EventTarget | undefined)[],
+    // FIXME(amadeus): Shift key is a temp hack until I can use some
+    // better UI here
+    shiftClick: boolean
+  ): GetLineDataResult<TMode> {
     let numberColumn = false;
     const lineElement = path.find((element) => {
       if (!(element instanceof HTMLElement)) {
@@ -338,10 +344,16 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       if (isNaN(hunkIndex)) {
         return undefined;
       }
-      return {
-        type: 'line-info',
-        hunkIndex,
-      };
+      const direction = (() => {
+        if ('separatorFirst' in lineElement.dataset) {
+          return 'down';
+        }
+        if ('separatorLast' in lineElement.dataset) {
+          return 'up';
+        }
+        return shiftClick ? 'up' : 'down';
+      })();
+      return { type: 'line-info', hunkIndex, direction };
     }
     const lineNumber = parseInt(lineElement.dataset.line ?? '');
     if (isNaN(lineNumber)) return;
@@ -421,7 +433,7 @@ export function getMouseEventOptions<TMode extends MouseEventManagerMode>(
     onLineLeave,
     __debugMouseEvents,
   }: MouseEventManagerBaseOptions<TMode>,
-  onHunkExpand?: (hunkIndex: number) => unknown
+  onHunkExpand?: (hunkIndex: number, direction: 'up' | 'down') => unknown
 ): MouseEventManagerOptions<TMode> {
   return {
     onLineClick,

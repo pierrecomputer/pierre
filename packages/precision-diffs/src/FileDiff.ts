@@ -263,8 +263,8 @@ export class FileDiff<LAnnotation = undefined> {
     });
   }
 
-  handleExpandHunk = (hunkIndex: number): void => {
-    this.hunksRenderer.expandHunk(hunkIndex);
+  handleExpandHunk = (hunkIndex: number, direction: 'up' | 'down'): void => {
+    this.hunksRenderer.expandHunk(hunkIndex, direction);
     void this.rerender();
   };
 

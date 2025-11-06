@@ -116,6 +116,9 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   lineDiffType?: LineDifftypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
   maxLineLengthForHighlighting?: number; // 1000 is default
+
+  // How many lines to expand per click
+  expansionLineCount?: number;
 }
 
 export interface RenderHeaderMetadataProps {
