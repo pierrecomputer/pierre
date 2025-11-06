@@ -2,7 +2,7 @@ import {
   type DiffLineAnnotation,
   type FileContents,
 } from '@pierre/precision-diffs';
-import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 
 import { SsrPage } from './SsrPage';
 import type { AnnotationMetadata } from './ssr_types';
@@ -56,7 +56,7 @@ const annotations: DiffLineAnnotation<AnnotationMetadata>[] = [
 ];
 
 export default async function Ssr() {
-  const preloadedFileDiff = await preloadFileDiff<AnnotationMetadata>({
+  const preloadedFileDiff = await preloadMultiFileDiff<AnnotationMetadata>({
     oldFile: OLD_FILE,
     newFile: NEW_FILE,
     options: {

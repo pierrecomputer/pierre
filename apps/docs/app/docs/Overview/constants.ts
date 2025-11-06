@@ -1,41 +1,42 @@
 import type {
-  PreloadFileDiffOptions,
   PreloadFileOptions,
+  PreloadMultiFileDiffOptions,
 } from '@pierre/precision-diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
 } as const;
 
-export const OVERVIEW_INITIAL_EXAMPLE: PreloadFileDiffOptions<undefined> = {
-  oldFile: {
-    name: 'main.zig',
-    contents: `const std = @import("std");
+export const OVERVIEW_INITIAL_EXAMPLE: PreloadMultiFileDiffOptions<undefined> =
+  {
+    oldFile: {
+      name: 'main.zig',
+      contents: `const std = @import("std");
 
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     try stdout.print("Hi you, {s}!\\n", .{"world"});
 }
 `,
-  },
-  newFile: {
-    name: 'main.zig',
-    contents: `const std = @import("std");
+    },
+    newFile: {
+      name: 'main.zig',
+      contents: `const std = @import("std");
 
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     try stdout.print("Hello there, {s}!\\n", .{"zig"});
 }
 `,
-  },
-  options: {
-    theme: 'pierre-dark',
-    diffStyle: 'unified',
-    diffIndicators: 'bars',
-    overflow: 'wrap',
-    lineDiffType: 'word-alt',
-  },
-};
+    },
+    options: {
+      theme: 'pierre-dark',
+      diffStyle: 'unified',
+      diffIndicators: 'bars',
+      overflow: 'wrap',
+      lineDiffType: 'word-alt',
+    },
+  };
 
 export const OVERVIEW_REACT_SINGLE_FILE: PreloadFileOptions<undefined> = {
   file: {

@@ -1,6 +1,6 @@
-import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
-export const SHIKI_THEMES: PreloadFileDiffOptions<undefined> = {
+export const SHIKI_THEMES: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {
     name: 'file.tsx',
     contents: `import * as 'react';

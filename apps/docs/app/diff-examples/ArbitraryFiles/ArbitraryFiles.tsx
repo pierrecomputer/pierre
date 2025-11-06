@@ -1,13 +1,13 @@
 'use client';
 
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
 
 interface ArbitraryFilesProps {
-  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
 
 export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {

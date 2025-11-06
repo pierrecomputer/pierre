@@ -1,6 +1,6 @@
-import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
-export const SPLIT_UNIFIED: PreloadFileDiffOptions<undefined> = {
+export const SPLIT_UNIFIED: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {
     name: 'example_old.tsx',
     contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';

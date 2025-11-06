@@ -8,7 +8,7 @@ export const SSR_SERVER_COMPONENT: PreloadFileOptions<undefined> = {
   file: {
     name: 'page.tsx',
     contents: `// app/diff/page.tsx (Server Component)
-import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 import { DiffPage } from './DiffPage';
 
 const OLD_FILE = {
@@ -26,7 +26,7 @@ const NEW_FILE = {
 };
 
 export default async function DiffRoute() {
-  const preloadedFileDiff = await preloadFileDiff({
+  const preloadedFileDiff = await preloadMultiFileDiff({
     oldFile: OLD_FILE,
     newFile: NEW_FILE,
     options: {
@@ -48,16 +48,16 @@ export const SSR_CLIENT_COMPONENT: PreloadFileOptions<undefined> = {
     contents: `// app/diff/DiffPage.tsx (Client Component)
 'use client';
 
-import { FileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 
 interface DiffPageProps {
-  preloadedFileDiff: PreloadedFileDiffResult;
+  preloadedFileDiff: PreloadMultiFileDiffResult;
 }
 
 export function DiffPage({ preloadedFileDiff }: DiffPageProps) {
   return (
-    <FileDiff
+    <MultiFileDiff
       {...preloadedFileDiff}
       className="overflow-hidden rounded-lg border"
     />
@@ -70,7 +70,13 @@ export function DiffPage({ preloadedFileDiff }: DiffPageProps) {
 export const SSR_INSTALLATION: PreloadFileOptions<undefined> = {
   file: {
     name: 'example.tsx',
-    contents: `import { preloadFileDiff } from '@pierre/precision-diffs/ssr';`,
+    contents: `import {
+  // There are matching preload functions for each react component
+  preloadMultiFileDiff,
+  preloadFileDiff,
+  preloadPatchDiff,
+  preloadFile,
+} from '@pierre/precision-diffs/ssr';`,
   },
   options,
 };

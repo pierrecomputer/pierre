@@ -1,0 +1,20 @@
+import type { FileDiffMetadata } from '../types';
+import { parsePatchFiles } from './parsePatchFiles';
+
+export function getSingularPatch(patch: string): FileDiffMetadata {
+  const parsedPatches = parsePatchFiles(patch);
+  if (parsedPatches.length !== 1) {
+    console.error(parsedPatches);
+    throw new Error(
+      'PatchDiff: Provided patch must include only 1 patch, with 1 diff'
+    );
+  }
+  const { files } = parsedPatches[0];
+  if (files.length !== 1) {
+    console.error(files);
+    throw new Error(
+      'FileDiff: Provided patch must contain exactly 1 file diff'
+    );
+  }
+  return files[0];
+}

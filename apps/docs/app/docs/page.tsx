@@ -1,5 +1,5 @@
 import Footer from '@/components/Footer';
-import { preloadFile, preloadFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 
 import { DocsHeader } from './DocsHeader';
 import { Installation } from './Installation/Installation';
@@ -80,7 +80,7 @@ async function OverviewSection() {
     vanillaSingleFile,
     vanillaPatchFile,
   ] = await Promise.all([
-    preloadFileDiff(OVERVIEW_INITIAL_EXAMPLE),
+    preloadMultiFileDiff(OVERVIEW_INITIAL_EXAMPLE),
     preloadFile(OVERVIEW_REACT_SINGLE_FILE),
     preloadFile(OVERVIEW_REACT_PATCH_FILE),
     preloadFile(OVERVIEW_VANILLA_SINGLE_FILE),

@@ -7,7 +7,7 @@ import type { DiffLineAnnotation } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import '@pierre/precision-diffs/ssr';
 import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
 import type { AnnotationMetadata } from './ssr_types';
@@ -35,7 +35,7 @@ function ErrorAnnotation({ message }: { message: string }) {
 }
 
 interface SsrPageProps {
-  preloadedFileDiff: PreloadedFileDiffResult<AnnotationMetadata>;
+  preloadedFileDiff: PreloadMultiFileDiffResult<AnnotationMetadata>;
 }
 
 export function SsrPage({ preloadedFileDiff }: SsrPageProps) {

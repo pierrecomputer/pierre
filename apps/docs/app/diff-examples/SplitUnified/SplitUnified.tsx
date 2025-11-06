@@ -3,13 +3,13 @@
 import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
 
 interface SplitUnifiedProps {
-  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
 
 export function SplitUnified({
