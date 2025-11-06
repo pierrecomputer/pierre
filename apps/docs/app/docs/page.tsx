@@ -19,6 +19,12 @@ import {
   REACT_API_MULTI_FILE_DIFF,
   REACT_API_PATCH_DIFF,
 } from './ReactAPI/constants';
+import { SSR } from './SSR/SSR';
+import {
+  SSR_CLIENT_COMPONENT,
+  SSR_INSTALLATION,
+  SSR_SERVER_COMPONENT,
+} from './SSR/constants';
 import { SidebarWrapper } from './SidebarWrapper';
 import { Styling } from './Styling/Styling';
 import { STYLING_CODE_GLOBAL, STYLING_CODE_INLINE } from './Styling/constants';
@@ -44,6 +50,7 @@ export default function DocsPage() {
           <ReactAPISection />
           <VanillaAPISection />
           <StylingSection />
+          <SSRSection />
           {/* <ComponentProps /> */}
           {/* <RendererOptions /> */}
           {/* <EventHandlers /> */}
@@ -139,5 +146,21 @@ async function StylingSection() {
   ]);
   return (
     <Styling stylingGlobal={stylingGlobal} stylingInline={stylingInline} />
+  );
+}
+
+async function SSRSection() {
+  const [serverComponent, clientComponent, installationComponent] =
+    await Promise.all([
+      preloadFile(SSR_SERVER_COMPONENT),
+      preloadFile(SSR_CLIENT_COMPONENT),
+      preloadFile(SSR_INSTALLATION),
+    ]);
+  return (
+    <SSR
+      serverComponent={serverComponent}
+      clientComponent={clientComponent}
+      installationComponent={installationComponent}
+    />
   );
 }
