@@ -19,6 +19,8 @@
     --pjs-bg-separator-override
 
     --pjs-fg-number-override
+    --pjs-fg-number-addition-override
+    --pjs-fg-number-deletion-override
 
     --pjs-deletion-color-override
     --pjs-addition-color-override
@@ -583,7 +585,7 @@ code {
 
 [data-line-type='change-addition'] {
   [data-column-number] {
-    color: var(--pjs-addition-base);
+    color: var(--pjs-fg-number-addition-override, var(--pjs-addition-base));
   }
 
   [data-diff-span] {
@@ -593,7 +595,7 @@ code {
 
 [data-line-type='change-deletion'] {
   [data-column-number] {
-    color: var(--pjs-deletion-base);
+    color: var(--pjs-fg-number-deletion-override, var(--pjs-deletion-base));
   }
 
   [data-diff-span] {
