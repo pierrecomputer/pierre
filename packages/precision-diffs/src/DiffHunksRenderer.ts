@@ -636,7 +636,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     function addToChangeGroup(
       type: 'addition' | 'deletion',
       line: string,
-      span: AnnotationSpan | undefined
+      span?: AnnotationSpan
     ): ChangeHunk {
       if (currentChangeGroup == null) {
         currentChangeGroup = {
@@ -808,10 +808,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (lastType === 'context' || lastType === 'deletion') {
             deletionContent.push('\n');
             deletionLineInfo[deletionContent.length] = lineInfo;
+            addToChangeGroup('deletion', '\n');
           }
           if (lastType === 'context' || lastType === 'addition') {
             additionContent.push('\n');
             additionLineInfo[additionContent.length] = lineInfo;
+            addToChangeGroup('addition', '\n');
           }
         }
       } else if (type === 'deletion') {

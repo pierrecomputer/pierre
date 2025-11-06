@@ -191,6 +191,7 @@ export function convertLine(
 ): ElementContent {
   const lineInfo = state.lineInfo[line];
   if (lineInfo == null) {
+    console.error({ node, line, state });
     throw new Error(`convertLine: line ${line}, contains no state.lineInfo`);
   }
   // We need to convert the current line to a div but keep all the decorations
