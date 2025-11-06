@@ -4,7 +4,7 @@ import { IconCiWarningFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type {
-  PreloadedFileDiffResult,
+  PreloadMultiFileDiffResult,
   PreloadedFileResult,
 } from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
@@ -14,7 +14,7 @@ import { DocsCodeExample } from '../DocsCodeExample';
 import type { DocsExampleTypes } from '../types';
 
 interface OverviewProps {
-  initialDiffProps: PreloadedFileDiffResult<undefined>;
+  initialDiffProps: PreloadMultiFileDiffResult<undefined>;
   reactSingleFile: PreloadedFileResult<undefined>;
   reactPatchFile: PreloadedFileResult<undefined>;
   vanillaSingleFile: PreloadedFileResult<undefined>;

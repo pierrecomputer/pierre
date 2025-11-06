@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { InputWithIcon } from '@/components/ui/input-group';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
@@ -29,7 +29,7 @@ const fontSizes = ['10px', '12px', '13px', '14px', '18px'];
 const lineHeights = ['16px', '20px', '24px', '28px'];
 
 interface FontStylesProps {
-  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
 
 export function FontStyles({ prerenderedDiff }: FontStylesProps) {

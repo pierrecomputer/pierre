@@ -1,15 +1,16 @@
 import type { DiffLineAnnotation, FileContents } from '@pierre/precision-diffs';
-import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export interface AnnotationMetadata {
   key: string;
   isThread: boolean;
 }
 
-export const ANNOTATION_EXAMPLE: PreloadFileDiffOptions<AnnotationMetadata> = {
-  oldFile: {
-    name: 'file.tsx',
-    contents: `import * as 'react';
+export const ANNOTATION_EXAMPLE: PreloadMultiFileDiffOptions<AnnotationMetadata> =
+  {
+    oldFile: {
+      name: 'file.tsx',
+      contents: `import * as 'react';
 import IconSprite from './IconSprite';
 import Header from './Header';
 
@@ -22,10 +23,10 @@ export default function Home() {
   );
 }
 `,
-  },
-  newFile: {
-    name: 'file.tsx',
-    contents: `import IconSprite from './IconSprite';
+    },
+    newFile: {
+      name: 'file.tsx',
+      contents: `import IconSprite from './IconSprite';
 import HeaderSimple from '../components/HeaderSimple';
 import Hero from '../components/Hero';
 
@@ -39,19 +40,19 @@ export default function Home() {
   );
 }
 `,
-  },
-  options: { theme: 'pierre-dark', diffStyle: 'unified' },
-  annotations: [
-    {
-      side: 'additions',
-      lineNumber: 8,
-      metadata: {
-        key: 'additions-8',
-        isThread: true,
-      },
     },
-  ],
-};
+    options: { theme: 'pierre-dark', diffStyle: 'unified' },
+    annotations: [
+      {
+        side: 'additions',
+        lineNumber: 8,
+        metadata: {
+          key: 'additions-8',
+          isThread: true,
+        },
+      },
+    ],
+  };
 
 export interface AcceptRejectMetadata {
   key: string;
@@ -104,7 +105,7 @@ export default function Home() {
 export const ACCEPT_REJECT_ANNOTATIONS: DiffLineAnnotation<AcceptRejectMetadata>[] =
   [{ side: 'additions', lineNumber: 9, metadata: { key: 'del-1' } }];
 
-export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<AcceptRejectMetadata> =
+export const ACCEPT_REJECT_EXAMPLE: PreloadMultiFileDiffOptions<AcceptRejectMetadata> =
   {
     oldFile: ACCEPT_REJECT_OLD_FILE,
     newFile: ACCEPT_REJECT_NEW_FILE,

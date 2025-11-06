@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
@@ -50,7 +50,7 @@ const diffStyleOptions = [
 ] as const;
 
 interface DiffStylesProps {
-  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
 export function DiffStyles({
   prerenderedDiff: { options, ...props },

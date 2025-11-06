@@ -1,6 +1,6 @@
-import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
-export const ARBITRARY_DIFF_EXAMPLE: PreloadFileDiffOptions<undefined> = {
+export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {
     name: 'example.css',
     contents: `.pizza {

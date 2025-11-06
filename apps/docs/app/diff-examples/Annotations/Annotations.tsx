@@ -8,7 +8,7 @@ import type {
   DiffLineAnnotation,
 } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadedFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -22,7 +22,7 @@ import {
 } from './constants';
 
 interface AnnotationsProps {
-  prerenderedDiff: PreloadedFileDiffResult<AnnotationMetadata>;
+  prerenderedDiff: PreloadMultiFileDiffResult<AnnotationMetadata>;
 }
 
 export function Annotations({ prerenderedDiff }: AnnotationsProps) {
@@ -374,7 +374,7 @@ export function CommentThread({
 }
 
 interface AcceptRejectExampleProps {
-  prerenderedDiff: PreloadedFileDiffResult<AcceptRejectMetadata>;
+  prerenderedDiff: PreloadMultiFileDiffResult<AcceptRejectMetadata>;
 }
 
 export function AcceptRejectExample({

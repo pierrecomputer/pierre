@@ -1,6 +1,6 @@
-import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
-export const FONT_STYLES: PreloadFileDiffOptions<undefined> = {
+export const FONT_STYLES: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {
     name: 'hello.ts',
     contents: `function greet(name) {

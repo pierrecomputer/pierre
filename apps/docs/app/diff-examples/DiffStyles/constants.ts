@@ -1,6 +1,6 @@
-import type { PreloadFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
-export const DIFF_STYLES: PreloadFileDiffOptions<undefined> = {
+export const DIFF_STYLES: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {
     name: 'main.zig',
     contents: `const std = @import("std");

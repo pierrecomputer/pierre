@@ -18,7 +18,7 @@ import {
 import { preloadHighlighter } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type {
-  PreloadedFileDiffResult,
+  PreloadMultiFileDiffResult,
   ThemesType,
 } from '@pierre/precision-diffs/ssr';
 import { ChevronDown } from 'lucide-react';
@@ -96,7 +96,7 @@ const DARK_THEMES = [
 ] as const;
 
 interface ShikiThemesProps {
-  prerenderedDiff: PreloadedFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
 
 export function ShikiThemes({

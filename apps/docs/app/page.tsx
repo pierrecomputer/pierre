@@ -5,7 +5,7 @@ import {
   IconBrandGithub,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
@@ -99,32 +99,40 @@ export default function Home() {
 
 async function SplitUnifiedSection() {
   return (
-    <SplitUnified prerenderedDiff={await preloadFileDiff(SPLIT_UNIFIED)} />
+    <SplitUnified prerenderedDiff={await preloadMultiFileDiff(SPLIT_UNIFIED)} />
   );
 }
 
 async function ShikiThemesSection() {
-  return <ShikiThemes prerenderedDiff={await preloadFileDiff(SHIKI_THEMES)} />;
+  return (
+    <ShikiThemes prerenderedDiff={await preloadMultiFileDiff(SHIKI_THEMES)} />
+  );
 }
 
 async function DiffStylesSection() {
-  return <DiffStyles prerenderedDiff={await preloadFileDiff(DIFF_STYLES)} />;
+  return (
+    <DiffStyles prerenderedDiff={await preloadMultiFileDiff(DIFF_STYLES)} />
+  );
 }
 
 async function FontStylesSection() {
-  return <FontStyles prerenderedDiff={await preloadFileDiff(FONT_STYLES)} />;
+  return (
+    <FontStyles prerenderedDiff={await preloadMultiFileDiff(FONT_STYLES)} />
+  );
 }
 
 async function AnnotationsSection() {
   return (
-    <Annotations prerenderedDiff={await preloadFileDiff(ANNOTATION_EXAMPLE)} />
+    <Annotations
+      prerenderedDiff={await preloadMultiFileDiff(ANNOTATION_EXAMPLE)}
+    />
   );
 }
 
 async function ArbitraryFilesSection() {
   return (
     <ArbitraryFiles
-      prerenderedDiff={await preloadFileDiff(ARBITRARY_DIFF_EXAMPLE)}
+      prerenderedDiff={await preloadMultiFileDiff(ARBITRARY_DIFF_EXAMPLE)}
     />
   );
 }
@@ -132,7 +140,7 @@ async function ArbitraryFilesSection() {
 async function AcceptRejectSection() {
   return (
     <AcceptRejectExample
-      prerenderedDiff={await preloadFileDiff(ACCEPT_REJECT_EXAMPLE)}
+      prerenderedDiff={await preloadMultiFileDiff(ACCEPT_REJECT_EXAMPLE)}
     />
   );
 }
