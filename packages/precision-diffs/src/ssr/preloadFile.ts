@@ -1,12 +1,11 @@
-import { toHtml } from 'hast-util-to-html';
-import { SVGSpriteSheet } from 'src/sprite';
-import { createHastElement, createTextNode } from 'src/utils/hast_utils';
+import { createStyleElement } from 'src/utils/hast_utils';
 
 import type { FileOptions } from '../../src/File';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import { FileRenderer } from '../FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import { renderCSS } from './renderCSS';
+import { renderHTML } from './renderHTML';
 
 export type PreloadFileOptions<LAnnotation> = {
   file: FileContents;
@@ -43,10 +42,7 @@ export async function preloadFile<LAnnotation = undefined>({
     throw new Error('Failed to render file diff');
   }
   const children = [
-    createHastElement({
-      tagName: 'style',
-      children: [createTextNode(renderCSS(fileResult.css, options?.unsafeCSS))],
-    }),
+    createStyleElement(renderCSS(fileResult.css, options?.unsafeCSS)),
   ];
   if (headerResult != null) {
     children.push(headerResult);
@@ -59,6 +55,6 @@ export async function preloadFile<LAnnotation = undefined>({
     file,
     options,
     annotations,
-    prerenderedHTML: `${SVGSpriteSheet}${toHtml(children)}`,
+    prerenderedHTML: renderHTML(children),
   };
 }

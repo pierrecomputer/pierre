@@ -441,3 +441,10 @@ function createMetadataElement(
     properties: { 'data-metadata': '' },
   });
 }
+
+export function createStyleElement(content: string): Element {
+  return createHastElement({
+    tagName: 'style',
+    children: [createTextNode(content)],
+  });
+}

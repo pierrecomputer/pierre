@@ -1,18 +1,16 @@
-import { toHtml } from 'hast-util-to-html';
-
 import type { FileDiffOptions } from '../../src/FileDiff';
 import { DiffHunksRenderer } from '../DiffHunksRenderer';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
-import { SVGSpriteSheet } from '../sprite';
 import type {
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
 } from '../types';
 import { getSingularPatch } from '../utils/getSingularPatch';
-import { createHastElement, createTextNode } from '../utils/hast_utils';
+import { createStyleElement } from '../utils/hast_utils';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { renderCSS } from './renderCSS';
+import { renderHTML } from './renderHTML';
 
 export interface PreloadDiffOptions<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -22,7 +20,7 @@ export interface PreloadDiffOptions<LAnnotation> {
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
-async function preloadDiff<LAnnotation = undefined>({
+export async function preloadDiffHTML<LAnnotation = undefined>({
   fileDiff,
   oldFile,
   newFile,
@@ -62,10 +60,7 @@ async function preloadDiff<LAnnotation = undefined>({
   }
 
   const children = [
-    createHastElement({
-      tagName: 'style',
-      children: [createTextNode(renderCSS(hunkResult.css, options?.unsafeCSS))],
-    }),
+    createStyleElement(renderCSS(hunkResult.css, options?.unsafeCSS)),
   ];
   if (headerResult != null) {
     children.push(headerResult);
@@ -74,7 +69,7 @@ async function preloadDiff<LAnnotation = undefined>({
   code.properties['data-dehydrated'] = '';
   children.push(code);
 
-  return `${SVGSpriteSheet}${toHtml(children)}`;
+  return renderHTML(children);
 }
 
 export interface PreloadMultiFileDiffOptions<LAnnotation> {
@@ -105,7 +100,7 @@ export async function preloadMultiFileDiff<LAnnotation = undefined>({
     oldFile,
     options,
     annotations,
-    prerenderedHTML: await preloadDiff({
+    prerenderedHTML: await preloadDiffHTML({
       oldFile,
       newFile,
       options,
@@ -138,7 +133,7 @@ export async function preloadFileDiff<LAnnotation = undefined>({
     fileDiff,
     options,
     annotations,
-    prerenderedHTML: await preloadDiff({
+    prerenderedHTML: await preloadDiffHTML({
       fileDiff,
       options,
       annotations,
@@ -171,7 +166,7 @@ export async function preloadPatchDiff<LAnnotation = undefined>({
     patch,
     options,
     annotations,
-    prerenderedHTML: await preloadDiff({
+    prerenderedHTML: await preloadDiffHTML({
       fileDiff,
       options,
       annotations,
