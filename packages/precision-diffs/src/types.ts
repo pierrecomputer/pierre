@@ -52,6 +52,7 @@ export interface ParsedPatch {
 }
 
 export interface Hunk {
+  collapsedBefore: number;
   additionCount: number;
   additionStart: number;
   deletedCount: number;

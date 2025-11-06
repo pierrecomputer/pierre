@@ -38,6 +38,7 @@ function processPatch(data: string): ParsedPatch {
       }
       continue;
     }
+    let lastHunkEnd = 0;
     const hunks = file.split(FILE_CONTEXT_BLOB);
     currentFile = undefined;
     for (const hunk of hunks) {
@@ -125,6 +126,7 @@ function processPatch(data: string): ParsedPatch {
         continue;
       }
       const hunkData: Hunk = {
+        collapsedBefore: 0,
         additionCount: parseInt(match[4] ?? '1'),
         additionStart: parseInt(match[3]),
         deletedCount: parseInt(match[2] ?? '1'),
@@ -142,6 +144,7 @@ function processPatch(data: string): ParsedPatch {
         console.error('parsePatchContent: invalid hunk metadata', hunkData);
         continue;
       }
+      hunkData.collapsedBefore = hunkData.additionStart - 1 - lastHunkEnd;
       // If the final line is an empty newline, lets yeet it, that's usually a
       // separator between multiple patches in a single file.  Unclear if
       // safe... but probably
@@ -150,6 +153,7 @@ function processPatch(data: string): ParsedPatch {
       }
       currentFile.hunks.push(hunkData);
       currentFile.lines += hunkData.hunkContent?.length ?? 0;
+      lastHunkEnd = hunkData.additionStart + hunkData.additionCount - 1;
     }
     if (currentFile != null) {
       if (

@@ -274,6 +274,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const lineCount = this.diff.newLines.length + 1;
         return [
           {
+            collapsedBefore: 0,
             additionCount: 0,
             additionStart: lineCount,
             deletedCount: 0,
@@ -281,7 +282,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             hunkContent: [],
             hunkContext: undefined,
             hunkSpecs: undefined,
-          },
+          } satisfies Hunk,
         ];
       }
       return [];
