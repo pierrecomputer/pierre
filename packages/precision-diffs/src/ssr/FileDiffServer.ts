@@ -48,6 +48,7 @@ export async function preloadFile<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
+  const { disableFileHeader = false } = options ?? {};
   const fileRenderer = new FileRenderer<LAnnotation>(options);
   const fileHeader = new FileHeaderRenderer(options);
 
@@ -56,9 +57,9 @@ export async function preloadFile<LAnnotation = undefined>({
     fileRenderer.setLineAnnotations(annotations);
   }
 
-  const [fileResult, headerResult] = await Promise.all([
+  const [headerResult, fileResult] = await Promise.all([
+    !disableFileHeader ? fileHeader.render(file) : undefined,
     fileRenderer.render(file, true),
-    fileHeader.render(file),
   ]);
   if (fileResult == null) {
     throw new Error('Failed to render file diff');
@@ -103,6 +104,7 @@ export async function preloadFileDiff<LAnnotation = undefined>({
 }: PreloadFileDiffOptions<LAnnotation>): Promise<
   PreloadedFileDiffResult<LAnnotation>
 > {
+  const { disableFileHeader = false } = options ?? {};
   const fileDiff = parseDiffFromFile(oldFile, newFile);
   const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>({
     ...options,
@@ -119,9 +121,9 @@ export async function preloadFileDiff<LAnnotation = undefined>({
     diffHunksRenderer.setLineAnnotations(annotations);
   }
 
-  const [hunkResult, headerResult] = await Promise.all([
+  const [headerResult, hunkResult] = await Promise.all([
+    !disableFileHeader ? fileHeader.render(fileDiff) : undefined,
     diffHunksRenderer.render(fileDiff),
-    fileHeader.render(fileDiff),
   ]);
   if (hunkResult == null) {
     throw new Error('Failed to render file diff');
