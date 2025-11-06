@@ -1,6 +1,5 @@
 import Footer from '@/components/Footer';
 import { preloadFile, preloadFileDiff } from '@pierre/precision-diffs/ssr';
-import { Suspense } from 'react';
 
 import { DocsHeader } from './DocsHeader';
 import { Installation } from './Installation/Installation';
@@ -56,9 +55,6 @@ export default function DocsPage() {
           <VanillaAPISection />
           <StylingSection />
           <SSRSection />
-          <Suspense fallback={null}>
-            <StylingSection />
-          </Suspense>
           {/* <ComponentProps /> */}
           {/* <RendererOptions /> */}
           {/* <EventHandlers /> */}
