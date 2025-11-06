@@ -10,6 +10,7 @@ import rawStyles from '../style.css';
 import type {
   DiffLineAnnotation,
   FileContents,
+  FileDiffMetadata,
   LineAnnotation,
 } from '../types';
 import { createHastElement, createTextNode } from '../utils/hast_utils';
@@ -29,15 +30,17 @@ export interface PreloadedFileResult<LAnnotation> {
 }
 
 export type PreloadFileDiffOptions<LAnnotation> = {
-  oldFile: FileContents;
-  newFile: FileContents;
+  fileDiff?: FileDiffMetadata;
+  oldFile?: FileContents;
+  newFile?: FileContents;
   options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 };
 
 export interface PreloadedFileDiffResult<LAnnotation> {
-  oldFile: FileContents;
-  newFile: FileContents;
+  fileDiff: FileDiffMetadata;
+  oldFile?: FileContents;
+  newFile?: FileContents;
   options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
   prerenderedHTML: string;
@@ -97,6 +100,7 @@ export async function preloadFile<LAnnotation = undefined>({
 }
 
 export async function preloadFileDiff<LAnnotation = undefined>({
+  fileDiff,
   oldFile,
   newFile,
   options,
@@ -105,7 +109,14 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   PreloadedFileDiffResult<LAnnotation>
 > {
   const { disableFileHeader = false } = options ?? {};
-  const fileDiff = parseDiffFromFile(oldFile, newFile);
+  if (fileDiff == null && oldFile != null && newFile != null) {
+    fileDiff = parseDiffFromFile(oldFile, newFile);
+  }
+  if (fileDiff == null) {
+    throw new Error(
+      'preloadFileDiff: You must pass at least a fileDiff prop or oldFile/newFile props'
+    );
+  }
   const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>({
     ...options,
     hunkSeparators:
@@ -153,6 +164,7 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   children.push(code);
 
   return {
+    fileDiff,
     oldFile,
     newFile,
     options,
