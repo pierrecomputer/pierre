@@ -147,12 +147,12 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         ref={containerRef}
         className="relative flex flex-col gap-3"
         onMouseLeave={handleContainerMouseLeave}
+        onMouseUp={handleAddComment}
       >
         {buttonPosition != null && (
           <Button
             size="icon-sm"
             variant="default"
-            onMouseUp={handleAddComment}
             style={{
               position: 'absolute',
               top: buttonPosition.top,
@@ -162,6 +162,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
               backgroundColor: '#1a76d4',
               transition: 'none',
               cursor: 'pointer',
+              pointerEvents: 'none',
             }}
           >
             <IconPlus />
@@ -175,6 +176,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
             onLineEnter: handleLineEnter,
           }}
           lineAnnotations={annotations}
+          enableLineSelection={true}
           renderAnnotation={(annotation) =>
             annotation.metadata.isThread ? (
               <Thread />
