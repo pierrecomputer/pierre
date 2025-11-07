@@ -5,7 +5,7 @@ import {
   IconBrandGithub,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
@@ -134,7 +134,9 @@ async function AnnotationsSection() {
 
 async function LineSelectionSection() {
   return (
-    <LineSelection prerenderedDiff={await preloadFile(LINE_SELECTION_EXAMPLE)} />
+    <LineSelection
+      prerenderedDiff={await preloadMultiFileDiff(LINE_SELECTION_EXAMPLE)}
+    />
   );
 }
 

@@ -12,6 +12,7 @@ export interface FileDiffProps<LAnnotation>
   extends DiffBasePropsReact<LAnnotation> {
   fileDiff: FileDiffMetadata;
   enableLineSelection?: boolean;
+  selectedLines?: { first: number; last: number } | null;
   onLineSelected?(range: { first: number; last: number } | null): void;
 }
 
@@ -25,6 +26,7 @@ export function FileDiff<LAnnotation = undefined>({
   renderAnnotation,
   renderHeaderMetadata,
   enableLineSelection,
+  selectedLines,
   onLineSelected,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
   const ref = useFileDiffInstance({
@@ -35,6 +37,7 @@ export function FileDiff<LAnnotation = undefined>({
       onLineSelected,
     },
     lineAnnotations,
+    selectedLines,
   });
   const children = renderAnnotationChildren({
     fileDiff,

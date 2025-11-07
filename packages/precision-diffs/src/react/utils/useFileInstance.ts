@@ -12,11 +12,13 @@ interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+  selectedLines?: { first: number; last: number } | null;
 }
 export function useFileInstance<LAnnotation>({
   file,
   options,
   lineAnnotations,
+  selectedLines,
 }: UseFileInstanceProps<LAnnotation>): (node: HTMLElement | null) => void {
   const instanceRef = useRef<File<LAnnotation> | null>(null);
   const ref = useStableCallback((node: HTMLElement | null) => {
@@ -53,5 +55,11 @@ export function useFileInstance<LAnnotation>({
       forceRender,
     });
   });
+
+  useIsometricEffect(() => {
+    if (instanceRef.current == null) return;
+    instanceRef.current.setSelectedLines(selectedLines ?? null);
+  }, [selectedLines]);
+
   return ref;
 }

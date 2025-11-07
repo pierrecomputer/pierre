@@ -191,6 +191,10 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
+  setSelectedLines(range: { first: number; last: number } | null): void {
+    this.lineSelectionManager.setSelection(range);
+  }
+
   cleanUp(): void {
     this.hunksRenderer.cleanUp();
     this.headerRenderer.cleanUp();
