@@ -37,7 +37,130 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     side: AnnotationSide;
     lineNumber: number;
   } | null>(null);
+  const [selectedLines, setSelectedLines] = useState<{
+    first: number;
+    last: number;
+    side?: AnnotationSide | 'both';
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const selectedLinesRef = useRef<typeof selectedLines>(null);
+  const isSelectingRef = useRef(false);
+  const selectionAnchorRef = useRef<{
+    side: AnnotationSide;
+    lineNumber: number;
+  } | null>(null);
+  const selectionEndRef = useRef<{
+    side: AnnotationSide;
+    lineNumber: number;
+  } | null>(null);
+  const hasSelectionRangeRef = useRef(false);
+
+  const updateSelectedLines = useCallback(
+    (
+      range:
+        | { first: number; last: number; side?: AnnotationSide | 'both' }
+        | null
+    ) => {
+      selectedLinesRef.current = range;
+      setSelectedLines(range);
+    },
+    []
+  );
+
+  const addCommentAtLine = useCallback(
+    (side: AnnotationSide, lineNumber: number) => {
+      let added = false;
+      setAnnotations((prev) => {
+        const hasAnnotation = prev.some(
+          (ann) => ann.side === side && ann.lineNumber === lineNumber
+        );
+
+        if (hasAnnotation) return prev;
+
+        added = true;
+        return [
+          ...prev,
+          {
+            side,
+            lineNumber,
+            metadata: {
+              key: `${side}-${lineNumber}`,
+              isThread: false,
+            },
+          },
+        ];
+      });
+
+      if (added) {
+        setButtonPosition(null);
+        setHoveredLine(null);
+
+        const currentSelection = selectedLinesRef.current;
+        if (currentSelection != null) {
+          updateSelectedLines({
+            first: currentSelection.first,
+            last: currentSelection.last,
+            side: currentSelection.side,
+          });
+        }
+      }
+    },
+    [updateSelectedLines]
+  );
+
+  const handleSelectionMouseUp = useCallback(() => {
+    if (!isSelectingRef.current) return;
+
+    window.removeEventListener('mouseup', handleSelectionMouseUp);
+    isSelectingRef.current = false;
+
+    const hadSelection = hasSelectionRangeRef.current;
+    hasSelectionRangeRef.current = false;
+
+    const anchor = selectionAnchorRef.current;
+    const end = selectionEndRef.current;
+
+    selectionAnchorRef.current = null;
+    selectionEndRef.current = null;
+
+    if (!hadSelection) {
+      updateSelectedLines(null);
+      return;
+    }
+
+    const range = selectedLinesRef.current;
+    if (range == null) {
+      updateSelectedLines(null);
+      return;
+    }
+
+    const bottomLineNumber = range.last;
+    let bottomSide: AnnotationSide | undefined;
+
+    if (end?.lineNumber === bottomLineNumber) {
+      bottomSide = end.side;
+    } else if (anchor?.lineNumber === bottomLineNumber) {
+      bottomSide = anchor.side;
+    } else if (end != null) {
+      bottomSide = end.side;
+    } else if (anchor != null) {
+      bottomSide = anchor.side;
+    }
+
+    if (bottomSide == null && range.side != null && range.side !== 'both') {
+      bottomSide = range.side;
+    }
+
+    if (bottomSide == null) return;
+
+    addCommentAtLine(bottomSide, bottomLineNumber);
+  }, [addCommentAtLine, updateSelectedLines]);
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('mouseup', handleSelectionMouseUp);
+    };
+  }, [handleSelectionMouseUp]);
 
   const handleLineEnter = useCallback(
     (props: {
@@ -45,6 +168,21 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
       annotationSide: AnnotationSide;
       lineNumber: number;
     }) => {
+      if (isSelectingRef.current) {
+        const anchor = selectionAnchorRef.current;
+        if (anchor == null) return;
+
+        const { annotationSide, lineNumber } = props;
+        hasSelectionRangeRef.current = true;
+        selectionEndRef.current = { side: annotationSide, lineNumber };
+
+        const first = Math.min(anchor.lineNumber, lineNumber);
+        const last = Math.max(anchor.lineNumber, lineNumber);
+
+        updateSelectedLines({ first, last, side: anchor.side });
+        return;
+      }
+
       const lineElement = props.lineElement;
       const container = containerRef.current;
 
@@ -74,31 +212,40 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
 
       setHoveredLine({ side: annotationSide, lineNumber });
     },
-    [annotations]
+    [annotations, updateSelectedLines]
   );
 
   const handleContainerMouseLeave = useCallback(() => {
+    if (isSelectingRef.current) return;
     setButtonPosition(null);
     setHoveredLine(null);
   }, []);
 
   const handleAddComment = useCallback(() => {
     if (hoveredLine != null) {
-      setAnnotations((prev) => [
-        ...prev,
-        {
-          side: hoveredLine.side,
-          lineNumber: hoveredLine.lineNumber,
-          metadata: {
-            key: `${hoveredLine.side}-${hoveredLine.lineNumber}`,
-            isThread: false, // Start as a form, not a thread yet
-          },
-        },
-      ]);
-      setButtonPosition(null);
-      setHoveredLine(null);
+      addCommentAtLine(hoveredLine.side, hoveredLine.lineNumber);
     }
-  }, [hoveredLine]);
+  }, [hoveredLine, addCommentAtLine]);
+
+  const handlePlusMouseDown = useCallback(() => {
+    if (hoveredLine == null || isSelectingRef.current) return;
+
+    isSelectingRef.current = true;
+    hasSelectionRangeRef.current = false;
+    const anchor = {
+      side: hoveredLine.side,
+      lineNumber: hoveredLine.lineNumber,
+    };
+    selectionAnchorRef.current = anchor;
+    selectionEndRef.current = anchor;
+
+    window.addEventListener('mouseup', handleSelectionMouseUp);
+    updateSelectedLines({
+      first: anchor.lineNumber,
+      last: anchor.lineNumber,
+      side: anchor.side,
+    });
+  }, [handleSelectionMouseUp, hoveredLine]);
 
   const handleSubmitComment = useCallback(
     (side: AnnotationSide, lineNumber: number) => {
@@ -119,6 +266,8 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     []
   );
 
+  console.log('selectedLines', selectedLines);
+
   return (
     <div className="space-y-5">
       <FeatureHeader
@@ -135,6 +284,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
             size="icon-sm"
             variant="default"
             onClick={handleAddComment}
+            onMouseDown={handlePlusMouseDown}
             style={{
               position: 'absolute',
               top: buttonPosition.top,
@@ -152,6 +302,9 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         <MultiFileDiff
           {...prerenderedDiff}
           className="diff-container"
+          enableLineSelection={true}
+          selectedLines={selectedLines}
+          onLineSelected={updateSelectedLines}
           options={{
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,

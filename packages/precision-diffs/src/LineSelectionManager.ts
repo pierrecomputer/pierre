@@ -1,6 +1,13 @@
+import type { AnnotationSide } from './types';
+
+export type SelectionSide = AnnotationSide | 'both';
+
 export interface SelectedLineRange {
   first: number;
   last: number;
+  side?: SelectionSide;
+  rowStart?: number;
+  rowEnd?: number;
 }
 
 export interface LineSelectionOptions {
@@ -27,7 +34,15 @@ export class LineSelectionManager {
   private pre: HTMLPreElement | undefined;
   private selectedRange: SelectedLineRange | undefined;
   private anchorLine: number | undefined;
+  private anchorLineIndex: number | undefined;
   private isDragging = false;
+  private selectionSide: SelectionSide | undefined;
+  private selectedRowRange:
+    | {
+        first: number;
+        last: number;
+      }
+    | undefined;
 
   constructor(private options: LineSelectionOptions = {}) {}
 
@@ -56,14 +71,31 @@ export class LineSelectionManager {
   /**
    * Programmatically set the selected line range
    */
-  setSelection(range: SelectedLineRange | null): void {
+  setSelection(
+    range: SelectedLineRange | null,
+    options: { silent?: boolean } = {}
+  ): void {
+    const { silent = false } = options;
     if (range == null) {
       this.clearSelection();
     } else {
-      this.selectedRange = range;
+      const side = range.side ?? this.selectionSide ?? 'both';
+      this.selectionSide = side;
+      this.selectedRange = { ...range, side };
+      this.anchorLine = range.first;
+      this.anchorLineIndex = range.rowStart;
+      const rowRange =
+        this.getRowRangeFromSelection(range) ??
+        this.deriveRowRangeFromDOM({ ...range, side });
+      this.setRowRange(rowRange);
+      if (rowRange != null && this.anchorLineIndex == null) {
+        this.anchorLineIndex = rowRange.first;
+      }
       this.applySelectionToDOM();
     }
-    this.notifySelectionChange();
+    if (!silent) {
+      this.notifySelectionChange();
+    }
   }
 
   /**
@@ -89,8 +121,12 @@ export class LineSelectionManager {
     // Only handle left mouse button
     if (event.button !== 0) return;
 
-    const lineNumber = this.getLineNumberFromEvent(event);
-    if (lineNumber == null) return;
+    const lineElement = this.getLineElementFromEvent(event);
+    if (lineElement == null) return;
+
+    const lineNumber = this.getLineNumber(lineElement);
+    const lineIndex = this.getLineIndex(lineElement);
+    if (lineIndex == null) return;
 
     // Check if click was on a line number column
     const target = event.target as HTMLElement;
@@ -100,17 +136,26 @@ export class LineSelectionManager {
     event.preventDefault();
 
     const isShiftKey = event.shiftKey;
+    const clickedSide = this.getLineSideFromElement(lineElement);
 
-    if (isShiftKey && this.selectedRange != null) {
-      // Extend existing selection to include the clicked line
+    if (isShiftKey && this.selectedRange != null && this.selectedRowRange != null) {
       const oldFirst = this.selectedRange.first;
       const oldLast = this.selectedRange.last;
-      const first = Math.min(oldFirst, lineNumber);
-      const last = Math.max(oldLast, lineNumber);
-      this.selectedRange = { first, last };
-      // Set anchor to the opposite end from where we clicked
-      this.anchorLine = lineNumber < oldFirst ? last : first;
-      this.applySelectionToDOM();
+      const side =
+        this.selectionSide == null
+          ? clickedSide
+          : this.selectionSide === clickedSide
+            ? this.selectionSide
+            : 'both';
+      this.selectionSide = side;
+
+      // Anchor to the opposite end of the existing selection
+      const useStart = lineNumber >= oldFirst;
+      this.anchorLine = useStart ? oldFirst : oldLast;
+      this.anchorLineIndex = useStart
+        ? this.selectedRowRange.first
+        : this.selectedRowRange.last;
+      this.updateSelection(lineNumber, lineIndex);
     } else {
       // Check if clicking on already selected single line (to unselect)
       if (
@@ -123,11 +168,12 @@ export class LineSelectionManager {
         return;
       }
 
-      // Start new selection
+      // Start new selection anchored to this line
       this.clearSelection();
-      this.anchorLine = lineNumber; // Set anchor AFTER clearing
-      this.selectedRange = { first: lineNumber, last: lineNumber };
-      this.applySelectionToDOM();
+      this.anchorLine = lineNumber;
+      this.anchorLineIndex = lineIndex;
+      this.selectionSide = clickedSide;
+      this.updateSelection(lineNumber, lineIndex);
     }
 
     this.isDragging = true;
@@ -138,10 +184,14 @@ export class LineSelectionManager {
   private handleMouseMove = (event: MouseEvent): void => {
     if (!this.isDragging || this.anchorLine == null) return;
 
-    const lineNumber = this.getLineNumberFromEvent(event);
-    if (lineNumber == null) return;
+    const lineElement = this.getLineElementFromEvent(event);
+    if (lineElement == null) return;
 
-    this.updateSelection(lineNumber, true);
+    const lineNumber = this.getLineNumber(lineElement);
+    const lineIndex = this.getLineIndex(lineElement);
+    if (lineIndex == null) return;
+
+    this.updateSelection(lineNumber, lineIndex);
   };
 
   private handleMouseUp = (): void => {
@@ -152,17 +202,21 @@ export class LineSelectionManager {
     this.notifySelectionChange();
   };
 
-  private updateSelection(currentLine: number, expandExisting: boolean): void {
-    if (this.anchorLine == null) return;
+  private updateSelection(currentLine: number, currentIndex: number): void {
+    if (this.anchorLine == null || this.anchorLineIndex == null) return;
 
-    if (expandExisting && this.selectedRange != null) {
-      // Expand based on anchor
-      const first = Math.min(this.anchorLine, currentLine);
-      const last = Math.max(this.anchorLine, currentLine);
-      this.selectedRange = { first, last };
-    } else {
-      this.selectedRange = { first: currentLine, last: currentLine };
-    }
+    const firstLine = Math.min(this.anchorLine, currentLine);
+    const lastLine = Math.max(this.anchorLine, currentLine);
+
+    this.selectedRange = {
+      first: firstLine,
+      last: lastLine,
+      side: this.selectionSide ?? 'both',
+    };
+
+    const firstIndex = Math.min(this.anchorLineIndex, currentIndex);
+    const lastIndex = Math.max(this.anchorLineIndex, currentIndex);
+    this.setRowRange({ first: firstIndex, last: lastIndex });
 
     this.applySelectionToDOM();
   }
@@ -177,6 +231,9 @@ export class LineSelectionManager {
 
     this.selectedRange = undefined;
     this.anchorLine = undefined;
+    this.anchorLineIndex = undefined;
+    this.selectionSide = undefined;
+    this.selectedRowRange = undefined;
   }
 
   private applySelectionToDOM(): void {
@@ -188,32 +245,99 @@ export class LineSelectionManager {
       element.removeAttribute('data-selected-line');
     }
 
-    const { first, last } = this.selectedRange;
+    const rowRange =
+      this.selectedRowRange ??
+      this.deriveRowRangeFromDOM(this.selectedRange);
+    if (rowRange == null) return;
+    this.setRowRange(rowRange);
+
     const allLines = this.getAllLineElements();
+    const isSingle = rowRange.first === rowRange.last;
 
-    if (first === last) {
-      // Single line selection - select all lines with this number (for split diffs)
-      const elements = allLines.filter((el) => this.getLineNumber(el) === first);
-      for (const element of elements) {
+    for (const element of allLines) {
+      const lineIndex = this.getLineIndex(element);
+      if (lineIndex == null) continue;
+      if (lineIndex < rowRange.first || lineIndex > rowRange.last) continue;
+
+      if (isSingle) {
         element.setAttribute('data-selected-line', 'single');
-      }
-    } else {
-      // Multi-line selection
-      for (let i = first; i <= last; i++) {
-        // Select all lines with this number (for split diffs)
-        const elements = allLines.filter((el) => this.getLineNumber(el) === i);
-
-        for (const element of elements) {
-          if (i === first) {
-            element.setAttribute('data-selected-line', 'first');
-          } else if (i === last) {
-            element.setAttribute('data-selected-line', 'last');
-          } else {
-            element.setAttribute('data-selected-line', '');
-          }
-        }
+      } else if (lineIndex === rowRange.first) {
+        element.setAttribute('data-selected-line', 'first');
+      } else if (lineIndex === rowRange.last) {
+        element.setAttribute('data-selected-line', 'last');
+      } else {
+        element.setAttribute('data-selected-line', '');
       }
     }
+  }
+
+  private setRowRange(range?: { first: number; last: number }): void {
+    this.selectedRowRange = range;
+    if (this.selectedRange == null) return;
+    if (range == null) {
+      this.selectedRange.rowStart = undefined;
+      this.selectedRange.rowEnd = undefined;
+    } else {
+      this.selectedRange.rowStart = range.first;
+      this.selectedRange.rowEnd = range.last;
+    }
+  }
+
+  private getRowRangeFromSelection(
+    range: SelectedLineRange | null
+  ): { first: number; last: number } | undefined {
+    if (range?.rowStart == null || range.rowEnd == null) return undefined;
+    return {
+      first: Math.min(range.rowStart, range.rowEnd),
+      last: Math.max(range.rowStart, range.rowEnd),
+    };
+  }
+
+  private deriveRowRangeFromDOM(
+    range: SelectedLineRange | undefined
+  ): { first: number; last: number } | undefined {
+    if (range == null) return undefined;
+    const startIndex = this.findRowIndexForLineNumber(range.first, range.side);
+    const endIndex =
+      range.last === range.first
+        ? startIndex
+        : this.findRowIndexForLineNumber(range.last, range.side);
+    if (startIndex == null || endIndex == null) return undefined;
+    return {
+      first: Math.min(startIndex, endIndex),
+      last: Math.max(startIndex, endIndex),
+    };
+  }
+
+  private findRowIndexForLineNumber(
+    lineNumber: number,
+    preferredSide: SelectionSide | undefined
+  ): number | undefined {
+    if (this.pre == null) return undefined;
+    const selector = `[data-line="${lineNumber}"]`;
+    const elements = Array.from(
+      this.pre.querySelectorAll<HTMLElement>(selector)
+    );
+    if (elements.length === 0) return undefined;
+
+    const filtered =
+      preferredSide == null || preferredSide === 'both'
+        ? elements
+        : elements.filter(
+            (element) => this.getLineSideFromElement(element) === preferredSide
+          );
+
+    const pool = filtered.length > 0 ? filtered : elements;
+
+    let best: number | undefined;
+    for (const element of pool) {
+      const idx = this.getLineIndex(element);
+      if (idx == null) continue;
+      if (best == null || idx < best) {
+        best = idx;
+      }
+    }
+    return best;
   }
 
   private notifySelectionChange(): void {
@@ -223,13 +347,11 @@ export class LineSelectionManager {
     onLineSelected(this.selectedRange ?? null);
   }
 
-  private getLineNumberFromEvent(event: MouseEvent): number | undefined {
-    // Use composedPath to properly handle Shadow DOM
+  private getLineElementFromEvent(event: MouseEvent): HTMLElement | undefined {
     const path = event.composedPath();
     for (const element of path) {
-      if (!(element instanceof HTMLElement)) continue;
-      if (element.hasAttribute('data-line')) {
-        return this.getLineNumber(element);
+      if (element instanceof HTMLElement && element.hasAttribute('data-line')) {
+        return element;
       }
     }
     return undefined;
@@ -238,6 +360,13 @@ export class LineSelectionManager {
   private getLineNumber(element: HTMLElement): number {
     const lineStr = element.dataset.line ?? '0';
     return parseInt(lineStr, 10);
+  }
+
+  private getLineIndex(element: HTMLElement): number | undefined {
+    const indexStr = element.dataset.lineIndex;
+    if (indexStr == null) return undefined;
+    const value = parseInt(indexStr, 10);
+    return Number.isNaN(value) ? undefined : value;
   }
 
   private isLineNumberColumn(target: HTMLElement, event: MouseEvent): boolean {
@@ -258,5 +387,15 @@ export class LineSelectionManager {
     return Array.from(elements).filter(
       (el): el is HTMLElement => el instanceof HTMLElement
     );
+  }
+
+  private getLineSideFromElement(element: HTMLElement): SelectionSide {
+    const parent = element.closest('[data-code]');
+    if (!(parent instanceof HTMLElement)) {
+      return 'both';
+    }
+    if ('additions' in parent.dataset) return 'additions';
+    if ('deletions' in parent.dataset) return 'deletions';
+    return 'both';
   }
 }
