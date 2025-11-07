@@ -103,7 +103,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         top: lineRect.top - containerRect.top + lineRect.height / 2,
         left: 16,
       });
-
     },
     [annotations]
   );
@@ -115,8 +114,9 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   const handleLineSelectionEnd = useCallback(
     (range: SelectedLineRange | null) => {
       if (range == null) return;
+      const derivedSide = range.lastSide ?? range.side;
       const side: AnnotationSide =
-        range.side === 'deletions' ? 'deletions' : 'additions';
+        derivedSide === 'deletions' ? 'deletions' : 'additions';
       addCommentAtLine(side, range.last);
     },
     [addCommentAtLine]
