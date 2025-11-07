@@ -43,7 +43,7 @@ async function loadPatchContent() {
 
 // Create worker API - helper handles worker creation automatically!
 const workerAPI = createWorkerAPI({
-  poolSize: 5,
+  poolSize: 8,
   initOptions: {
     themes: ['pierre-dark', 'pierre-light'],
   },
@@ -53,8 +53,14 @@ const workerAPI = createWorkerAPI({
 window.__POOL = workerAPI;
 
 // Initialize the worker pool
+const workerInitializedStart = Date.now();
 void workerAPI.ensureInitialized().then(() => {
-  console.log('Worker pool initialized!', workerAPI.getStats());
+  console.log(
+    'Worker pool initialized!',
+    workerAPI.getStats(),
+    'in',
+    Date.now() - workerInitializedStart
+  );
 });
 
 const streamingInstances: FileStream[] = [];
@@ -275,6 +281,46 @@ function createFileMetadata(patchMetadata: string) {
   metadata.dataset.commitMetadata = '';
   metadata.innerText = patchMetadata.replace(/\n+$/, '');
   return metadata;
+}
+
+const workerInstances: Promise<unknown>[] = [];
+function workerRenderDiff(parsedPatches: ParsedPatch[]) {
+  workerInstances.length = 0;
+
+  console.log('Worker Render: Starting to server render patch');
+  const start = Date.now();
+  const firstFour: Promise<unknown>[] = [];
+  for (const parsedPatch of parsedPatches) {
+    for (const fileDiff of parsedPatch.files) {
+      const start = Date.now();
+      const prom = workerAPI
+        .renderDiffMetadataToHast(fileDiff, {
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        })
+        .then((result) =>
+          console.log(
+            'Worker Render: rendered file:',
+            fileDiff.name,
+            'lines:',
+            result.newLines.length + result.oldLines.length,
+            'time:',
+            Date.now() - start
+          )
+        );
+      workerInstances.push(prom);
+      if (firstFour.length < 4) {
+        firstFour.push(prom);
+      }
+    }
+  }
+  let firstFourTime = 0;
+  void Promise.all(firstFour).then(() => {
+    firstFourTime = Date.now() - start;
+  });
+  void Promise.all(workerInstances).then(() => {
+    console.log('Worker Render: total time', Date.now() - start);
+    console.log('Worker Render: first four files', firstFourTime);
+  });
 }
 
 function handlePreload() {
@@ -509,3 +555,11 @@ if (renderFileButton != null) {
     fileInstances.push(instance);
   });
 }
+
+const workerRenderButton = document.getElementById('worker-load-diff');
+workerRenderButton?.addEventListener('click', () => {
+  void (async () => {
+    const patches = parsePatchFiles(await loadPatchContent());
+    workerRenderDiff(patches);
+  })();
+});

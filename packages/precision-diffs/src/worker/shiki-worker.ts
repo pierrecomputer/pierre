@@ -125,10 +125,12 @@ async function handleRenderDiffMetadata({
     contents: '',
   };
 
+  let hasLongLine = false;
   for (const hunk of diff.hunks) {
     for (const rawLine of hunk.hunkContent ?? []) {
       // TODO(amadeus): Add support for `maxLineLength`
-      const { line, type } = parseLineType(rawLine);
+      const { line, type, longLine } = parseLineType(rawLine, 1000);
+      hasLongLine = hasLongLine || longLine;
       switch (type) {
         case 'context':
           oldFile.contents += line;
@@ -145,6 +147,10 @@ async function handleRenderDiffMetadata({
           break;
       }
     }
+  }
+  if (hasLongLine) {
+    options ??= {};
+    options.lang = 'text';
   }
   sendDiffMetadataSuccess(id, await renderTwoFiles(oldFile, newFile, options));
 }
