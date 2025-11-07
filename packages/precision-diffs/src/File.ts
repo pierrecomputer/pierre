@@ -140,6 +140,10 @@ export class File<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
+  setSelectedLines(range: { first: number; last: number } | null): void {
+    this.lineSelectionManager.setSelection(range);
+  }
+
   cleanUp(): void {
     this.fileRenderer.cleanUp();
     this.headerRenderer.cleanUp();

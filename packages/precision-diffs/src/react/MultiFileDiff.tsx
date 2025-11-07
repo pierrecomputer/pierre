@@ -12,6 +12,9 @@ export interface MultiFileDiffProps<LAnnotation>
   extends DiffBasePropsReact<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
+  enableLineSelection?: boolean;
+  selectedLines?: { first: number; last: number } | null;
+  onLineSelected?(range: { first: number; last: number } | null): void;
 }
 
 export function MultiFileDiff<LAnnotation = undefined>({
@@ -24,12 +27,20 @@ export function MultiFileDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
+  enableLineSelection,
+  selectedLines,
+  onLineSelected,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const ref = useFileDiffInstance({
     oldFile,
     newFile,
-    options,
+    options: {
+      ...options,
+      enableLineSelection,
+      onLineSelected,
+    },
     lineAnnotations,
+    selectedLines,
   });
   const children = renderAnnotationChildren({
     oldFile,

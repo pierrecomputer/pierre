@@ -21,6 +21,7 @@ export interface FileProps<LAnnotation> {
   style?: CSSProperties;
   prerenderedHTML?: string;
   enableLineSelection?: boolean;
+  selectedLines?: { first: number; last: number } | null;
   onLineSelected?(range: { first: number; last: number } | null): void;
 }
 
@@ -34,6 +35,7 @@ export function File<LAnnotation = undefined>({
   renderHeaderMetadata,
   prerenderedHTML,
   enableLineSelection,
+  selectedLines,
   onLineSelected,
 }: FileProps<LAnnotation>): React.JSX.Element {
   const ref = useFileInstance({
@@ -44,6 +46,7 @@ export function File<LAnnotation = undefined>({
       onLineSelected,
     },
     lineAnnotations,
+    selectedLines,
   });
   const metadata = renderHeaderMetadata?.(file);
   const children = (
