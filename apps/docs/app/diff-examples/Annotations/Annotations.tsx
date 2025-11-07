@@ -118,7 +118,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     }
   }, [hoveredLine, addCommentAtLine]);
 
-
   const handleSubmitComment = useCallback(
     (side: AnnotationSide, lineNumber: number) => {
       // TODO: Implement
@@ -153,7 +152,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           <Button
             size="icon-sm"
             variant="default"
-            onClick={handleAddComment}
+            onMouseUp={handleAddComment}
             style={{
               position: 'absolute',
               top: buttonPosition.top,
