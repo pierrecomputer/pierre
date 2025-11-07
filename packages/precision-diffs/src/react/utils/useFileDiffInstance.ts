@@ -18,6 +18,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   options?: FileDiffOptions<LAnnotation>;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  selectedLines?: { first: number; last: number } | null;
 }
 
 export function useFileDiffInstance<LAnnotation>({
@@ -26,6 +27,7 @@ export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
   lineAnnotations,
+  selectedLines,
 }: UseFileDiffInstanceProps<LAnnotation>): (
   fileContainer: HTMLElement | null
 ) => void {
@@ -70,5 +72,11 @@ export function useFileDiffInstance<LAnnotation>({
       lineAnnotations: lineAnnotations,
     });
   });
+
+  useIsometricEffect(() => {
+    if (instanceRef.current == null) return;
+    instanceRef.current.setSelectedLines(selectedLines ?? null);
+  }, [selectedLines]);
+
   return ref;
 }
