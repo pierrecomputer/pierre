@@ -1,3 +1,6 @@
+import type { SupportedLanguages } from 'src/types';
+import { getFiletypeFromFileName } from 'src/utils/getFiletypeFromFileName';
+
 import type {
   AllWorkerTasks,
   InitializeWorkerTask,
@@ -24,6 +27,7 @@ interface ManagedWorker {
   worker: Worker;
   busy: boolean;
   initialized: boolean;
+  langs: Set<SupportedLanguages>;
 }
 
 export class WorkerPool {
@@ -60,6 +64,7 @@ export class WorkerPool {
         worker,
         busy: false,
         initialized: false,
+        langs: new Set(['text', ...(this.options.initOptions?.langs ?? [])]),
       };
       worker.addEventListener(
         'message',
@@ -140,8 +145,9 @@ export class WorkerPool {
 
       this.pendingTasks.set(requestId, task);
 
-      // Try to execute immediately if a worker is available
-      const availableWorker = this.getAvailableWorker();
+      // Try to execute immediately if a worker is available -- Should we wait
+      // a tick for a pool of workers to build before trying again?
+      const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
       if (availableWorker != null) {
         this.executeTask(availableWorker, task);
       } else {
@@ -232,14 +238,68 @@ export class WorkerPool {
     task: AllWorkerTasks
   ): void {
     managedWorker.busy = true;
+    for (const lang of getLangsFromTask(task)) {
+      managedWorker.langs.add(lang);
+    }
     managedWorker.worker.postMessage(task.request);
   }
 
-  private getAvailableWorker(): ManagedWorker | undefined {
-    return this.workers.find((worker) => worker.initialized && !worker.busy);
+  private getAvailableWorker(
+    langs: SupportedLanguages[]
+  ): ManagedWorker | undefined {
+    let worker: ManagedWorker | undefined;
+    for (const managedWorker of this.workers) {
+      if (managedWorker.busy || !managedWorker.initialized) {
+        continue;
+      }
+      worker = managedWorker;
+      if (langs.length === 0) {
+        break;
+      }
+      let hasEveryLang = true;
+      for (const lang of langs) {
+        if (!managedWorker.langs.has(lang)) {
+          hasEveryLang = false;
+          break;
+        }
+      }
+      if (hasEveryLang) {
+        break;
+      }
+    }
+    return worker;
   }
 
   private generateRequestId(): WorkerRequestId {
     return `req_${++this.nextRequestId}`;
   }
+}
+
+function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
+  const langs = new Set<SupportedLanguages>();
+  const options = task.request.options ?? {};
+  if ('lang' in options && options.lang != null) {
+    langs.add(options.lang);
+  } else {
+    switch (task.type) {
+      case 'file': {
+        langs.add(getFiletypeFromFileName(task.request.file.name));
+        break;
+      }
+      case 'diff-files': {
+        langs.add(getFiletypeFromFileName(task.request.newFile.name));
+        langs.add(getFiletypeFromFileName(task.request.oldFile.name));
+        break;
+      }
+      case 'diff-metadata': {
+        langs.add(getFiletypeFromFileName(task.request.diff.name));
+        langs.add(getFiletypeFromFileName(task.request.diff.prevName ?? '-'));
+        break;
+      }
+    }
+  }
+  // We can always assume text is available, so lets not bother with the
+  // lookups for it
+  langs.delete('text');
+  return Array.from(langs);
 }
