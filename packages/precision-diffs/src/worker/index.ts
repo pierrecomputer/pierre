@@ -35,13 +35,6 @@
  *
  */
 
-export { WorkerPool } from './worker-pool';
-export { createShikiWorkerAPI } from './worker-api';
-export type { ShikiWorkerAPI } from './worker-api';
-export type {
-  RenderDiffResult,
-  RenderFileResult,
-  RenderOptions,
-  WorkerInitOptions,
-  WorkerPoolOptions,
-} from './types';
+export * from './ShikiPoolManager';
+export * from './WorkerPool';
+export * from './types';

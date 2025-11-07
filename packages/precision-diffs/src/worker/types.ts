@@ -166,3 +166,10 @@ export type AllWorkerTasks =
   | RenderFileTask
   | RenderDiffTask
   | RenderDiffMetadataTask;
+
+export interface WorkerStats {
+  totalWorkers: number;
+  busyWorkers: number;
+  queuedTasks: number;
+  pendingTasks: number;
+}

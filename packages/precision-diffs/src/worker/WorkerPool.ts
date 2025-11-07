@@ -10,6 +10,7 @@ import type {
   WorkerPoolOptions,
   WorkerRequestId,
   WorkerResponse,
+  WorkerStats,
 } from './types';
 
 /**
@@ -44,7 +45,14 @@ export class WorkerPool {
     };
   }
 
+  private initialized: Promise<void> | true | undefined;
+
   async initialize(): Promise<void> {
+    if (this.initialized === true) {
+      return;
+    } else if (this.initialized != null) {
+      return this.initialized;
+    }
     const initPromises: Promise<unknown>[] = [];
     for (let i = 0; i < this.options.poolSize; i++) {
       const worker = this.workerFactory();
@@ -87,7 +95,9 @@ export class WorkerPool {
       );
     }
 
-    await Promise.all(initPromises);
+    this.initialized = Promise.all(initPromises).then(() => undefined);
+    await this.initialized;
+    this.initialized = true;
   }
 
   submitTask<T extends RenderFileResult | RenderDiffResult>(
@@ -150,12 +160,7 @@ export class WorkerPool {
     this.pendingTasks.clear();
   }
 
-  getStats(): {
-    totalWorkers: number;
-    busyWorkers: number;
-    queuedTasks: number;
-    pendingTasks: number;
-  } {
+  getStats(): WorkerStats {
     return {
       totalWorkers: this.workers.length,
       busyWorkers: this.workers.filter((w) => w.busy).length,
