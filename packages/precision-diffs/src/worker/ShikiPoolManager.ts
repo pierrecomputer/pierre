@@ -15,7 +15,7 @@ export class ShikiPoolManager {
   private workerFactory: () => Worker;
   private options: WorkerPoolOptions | undefined;
 
-  constructor(workerFactory: () => Worker, options: WorkerPoolOptions) {
+  constructor(workerFactory: () => Worker, options?: WorkerPoolOptions) {
     this.workerFactory = workerFactory;
     this.options = options;
   }

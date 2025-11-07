@@ -12,7 +12,6 @@ import {
   parsePatchFiles,
   preloadHighlighter,
 } from '@pierre/precision-diffs';
-import { createShikiWorkerAPI } from '@pierre/precision-diffs/worker';
 
 import {
   CodeConfigs,
@@ -24,6 +23,7 @@ import {
 } from './mocks/';
 import './style.css';
 import { createFakeContentStream } from './utils/createFakeContentStream';
+import { createWorkerAPI } from './utils/createWorkerAPI';
 import {
   renderAnnotation,
   renderDiffAnnotation,
@@ -41,29 +41,20 @@ async function loadPatchContent() {
   return loadingPatch;
 }
 
-// Create worker API with properly resolved URL for Vite
-const workerAPI = createShikiWorkerAPI(
-  new URL('@pierre/precision-diffs/worker/shiki-worker.js', import.meta.url),
-  {
-    poolSize: 4,
-    initOptions: {
-      themes: ['pierre-dark', 'pierre-light'],
-    },
-  }
-);
+// Create worker API - helper handles worker creation automatically!
+const workerAPI = createWorkerAPI({
+  poolSize: 5,
+  initOptions: {
+    themes: ['pierre-dark', 'pierre-light'],
+  },
+});
+
+// @ts-expect-error bcuz
+window.__POOL = workerAPI;
 
 // Initialize the worker pool
-void workerAPI.initialize().then(() => {
+void workerAPI.ensureInitialized().then(() => {
   console.log('Worker pool initialized!', workerAPI.getStats());
-  const start = Date.now();
-  void workerAPI
-    .renderFileToHast(
-      { name: 'file.tsx', contents: FILE_NEW },
-      { theme: 'pierre-dark' }
-    )
-    .then((wow) => {
-      console.log('ZZZZZ - WOW', Date.now() - start, wow);
-    });
 });
 
 const streamingInstances: FileStream[] = [];
