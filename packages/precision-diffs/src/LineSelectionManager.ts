@@ -192,23 +192,25 @@ export class LineSelectionManager {
     const allLines = this.getAllLineElements();
 
     if (first === last) {
-      // Single line selection
-      const element = allLines.find((el) => this.getLineNumber(el) === first);
-      if (element != null) {
+      // Single line selection - select all lines with this number (for split diffs)
+      const elements = allLines.filter((el) => this.getLineNumber(el) === first);
+      for (const element of elements) {
         element.setAttribute('data-selected-line', 'single');
       }
     } else {
       // Multi-line selection
       for (let i = first; i <= last; i++) {
-        const element = allLines.find((el) => this.getLineNumber(el) === i);
-        if (element == null) continue;
+        // Select all lines with this number (for split diffs)
+        const elements = allLines.filter((el) => this.getLineNumber(el) === i);
 
-        if (i === first) {
-          element.setAttribute('data-selected-line', 'first');
-        } else if (i === last) {
-          element.setAttribute('data-selected-line', 'last');
-        } else {
-          element.setAttribute('data-selected-line', '');
+        for (const element of elements) {
+          if (i === first) {
+            element.setAttribute('data-selected-line', 'first');
+          } else if (i === last) {
+            element.setAttribute('data-selected-line', 'last');
+          } else {
+            element.setAttribute('data-selected-line', '');
+          }
         }
       }
     }
