@@ -5,176 +5,313 @@ This module provides infrastructure for offloading Shiki's syntax highlighting t
 ## Architecture
 
 ```
-┌─────────────────┐
-│   Main Thread   │
-│                 │
-│  worker-api.ts  │ ← Public API
-│       ↓         │
-│  worker-pool.ts │ ← Pool Manager
-│       ↓         │
-└────────┬────────┘
-         │ postMessage
-         ↓
-┌────────────────────────────────┐
-│      Worker Threads (4x)       │
-│                                │
-│  shiki-worker.ts               │
-│    - Initializes Shiki         │
-│    - Calls codeToHast()        │
-│    - Returns HAST              │
-└────────────────────────────────┘
+┌───────────────────┐
+│    Main Thread    │
+│                   │
+│  ShikiPoolManager │ ← Public API
+│         ↓         │
+│   WorkerPool.ts   │ ← Pool Manager
+│         ↓         │
+└─────────┬─────────┘
+          │  postMessage
+          ↓
+┌──────────────────────────┐
+│  Worker Threads (4x)     │
+│                          │
+│  shiki-worker.ts         │
+│    - Initializes Shiki   │
+│    - Calls codeToHast()  │
+│    - Returns HAST        │
+└──────────────────────────┘
 ```
 
 ## Files
 
 - **types.ts** - Message protocol types for worker communication
 - **shiki-worker.ts** - Worker script (runs in worker thread)
-- **worker-pool.ts** - Pool manager (creates/manages workers)
-- **worker-api.ts** - Public API (clean interface)
+- **WorkerPool.ts** - Pool manager (creates/manages workers)
+- **ShikiPoolManager.ts** - Public API (clean interface)
 - **index.ts** - Module exports
 
 ## Usage
 
-### Basic Example
+### Recommended Pattern
+
+The recommended approach is to create a small helper in your application that
+uses your bundler's worker syntax:
 
 ```typescript
-import { createShikiWorkerAPI } from '@pierre/precision-diffs/worker';
+// utils/createWorkerAPI.ts
+import {
+  ShikiPoolManager,
+  type WorkerPoolOptions,
+} from '@pierre/precision-diffs/worker';
+import ShikiWorkerUrl from '@pierre/precision-diffs/worker/shiki-worker.js?worker&url';
 
-// Create a worker API instance
-const workerAPI = createShikiWorkerAPI('/path/to/shiki-worker.js', {
-  poolSize: 4, // Number of worker threads
+export function createWorkerAPI(
+  poolOptions?: WorkerPoolOptions
+): ShikiPoolManager {
+  return new ShikiPoolManager(
+    () => new Worker(ShikiWorkerUrl, { type: 'module' }),
+    poolOptions
+  );
+}
+```
+
+Then use it in your app:
+
+```typescript
+import { createWorkerAPI } from './utils/createWorkerAPI';
+
+// Create worker pool with 5 workers
+const workerAPI = createWorkerAPI({
+  poolSize: 5,
   initOptions: {
-    themes: ['github-dark', 'github-light'],
-    langs: ['typescript', 'javascript', 'python'],
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript', 'javascript'],
   },
 });
+
+// Initialize the pool (optional - auto-initializes on first use)
+await workerAPI.ensureInitialized();
 
 // Render a single file
 const file = {
   name: 'example.ts',
-  contents: `
-    function greet(name: string) {
-      console.log(\`Hello, \${name}!\`);
-    }
-  `,
+  contents: 'const x = 42;',
 };
 
-const hast = await workerAPI.renderFileToHast(file, {
-  theme: 'github-dark',
-  lang: 'typescript',
+const result = await workerAPI.renderFileToHast(file, {
+  theme: 'pierre-dark',
 });
 
-// Render a diff
-const oldFile = {
-  name: 'example.ts',
-  contents: 'const x = 1;',
-};
+console.log(result.lines); // Array of ElementContent
 
-const newFile = {
-  name: 'example.ts',
-  contents: 'const x = 2;',
-};
+// Render a diff from two files
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
 
-const diffHast = await workerAPI.renderDiffToHast(oldFile, newFile, {
-  theme: 'github-dark',
+const diffResult = await workerAPI.renderDiffToHast(oldFile, newFile, {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+});
+console.log(diffResult.oldLines, diffResult.newLines);
+
+// Render a diff from metadata (FileDiffMetadata from parsed patch)
+const diffMetadata = {
+  /* FileDiffMetadata object */
+};
+const metadataResult = await workerAPI.renderDiffMetadataToHast(diffMetadata, {
+  theme: 'pierre-dark',
 });
 
 // Check pool status
 console.log(workerAPI.getStats());
-// { totalWorkers: 4, busyWorkers: 0, queuedTasks: 0, pendingTasks: 0 }
+// { totalWorkers: 5, busyWorkers: 0, queuedTasks: 0, pendingTasks: 0 }
 
 // Clean up when done
 workerAPI.terminate();
 ```
 
-### Integration with Bundlers
+### Integration with Different Bundlers
 
-The worker script needs to be bundled separately as a worker entry point.
+Create a helper specific to your bundler that handles worker creation.
 
 #### Vite
 
 ```typescript
-// Usage
-import ShikiWorkerUrl from './worker/shiki-worker?worker&url';
+// utils/createWorkerAPI.ts
+import {
+  ShikiPoolManager,
+  type WorkerPoolOptions,
+} from '@pierre/precision-diffs/worker';
+import ShikiWorkerUrl from '@pierre/precision-diffs/worker/shiki-worker.js?worker&url';
 
-// In your vite.config.ts
-export default {
-  worker: {
-    format: 'es',
-  },
-};
-
-const workerAPI = createShikiWorkerAPI(ShikiWorkerUrl);
+export function createWorkerAPI(
+  poolOptions?: WorkerPoolOptions
+): ShikiPoolManager {
+  return new ShikiPoolManager(
+    () => new Worker(ShikiWorkerUrl, { type: 'module' }),
+    poolOptions
+  );
+}
 ```
 
-#### Webpack
+#### Next.js
 
 ```typescript
-// Usage with webpack 5
-const workerAPI = createShikiWorkerAPI(
-  new URL('./worker/shiki-worker.ts', import.meta.url)
-);
+// utils/createWorkerAPI.ts
+'use client';
+
+// Workers only work on the client side
+import {
+  ShikiPoolManager,
+  type WorkerPoolOptions,
+} from '@pierre/precision-diffs/worker';
+
+// utils/createWorkerAPI.ts
+
+export function createWorkerAPI(
+  poolOptions?: WorkerPoolOptions
+): ShikiPoolManager {
+  return new ShikiPoolManager(
+    () =>
+      new Worker(
+        new URL(
+          '@pierre/precision-diffs/worker/shiki-worker.js',
+          import.meta.url
+        ),
+        { type: 'module' }
+      ),
+    poolOptions
+  );
+}
 ```
 
-#### Manual Setup
-
-If your bundler doesn't have special worker support, you'll need to:
-
-1. Build the worker separately
-2. Serve it as a static file
-3. Reference it by URL
+Then use it in a client component:
 
 ```typescript
-const workerAPI = createShikiWorkerAPI('/static/workers/shiki-worker.js');
+'use client';
+
+import { createWorkerAPI } from '@/utils/createWorkerAPI';
+import { useEffect, useState } from 'react';
+
+export function CodeViewer() {
+  const [workerAPI] = useState(() =>
+    createWorkerAPI({
+      poolSize: 4,
+      initOptions: {
+        themes: ['github-dark', 'github-light'],
+      },
+    })
+  );
+
+  useEffect(() => {
+    return () => workerAPI.terminate();
+  }, [workerAPI]);
+
+  // Use workerAPI.renderFileToHast() etc.
+}
+```
+
+**Important**: Workers only work in client components. Make sure your component has the `'use client'` directive if using App Router.
+
+#### Webpack 5
+
+```typescript
+// utils/createWorkerAPI.ts
+import {
+  ShikiPoolManager,
+  type WorkerPoolOptions,
+} from '@pierre/precision-diffs/worker';
+
+export function createWorkerAPI(
+  poolOptions?: WorkerPoolOptions
+): ShikiPoolManager {
+  return new ShikiPoolManager(
+    () =>
+      new Worker(
+        new URL(
+          '@pierre/precision-diffs/worker/shiki-worker.js',
+          import.meta.url
+        ),
+        { type: 'module' }
+      ),
+    poolOptions
+  );
+}
+```
+
+#### Rollup / Other Bundlers
+
+If your bundler doesn't have special worker support:
+
+1. Build and serve the worker file statically
+2. Reference it by URL
+
+```typescript
+// utils/createWorkerAPI.ts
+import {
+  ShikiPoolManager,
+  type WorkerPoolOptions,
+} from '@pierre/precision-diffs/worker';
+
+export function createWorkerAPI(
+  poolOptions?: WorkerPoolOptions
+): ShikiPoolManager {
+  return new ShikiPoolManager(
+    () => new Worker('/static/workers/shiki-worker.js', { type: 'module' }),
+    poolOptions
+  );
+}
 ```
 
 ## API Reference
 
-### `createShikiWorkerAPI(workerUrl, poolOptions?)`
+### `new ShikiPoolManager(workerFactory, poolOptions?)`
 
-Creates a new worker API instance.
+Creates a new worker pool manager.
 
 **Parameters:**
 
-- `workerUrl` - URL or path to the worker script
+- `workerFactory` - Function that creates a Worker instance
 - `poolOptions` - Optional pool configuration
   - `poolSize` - Number of workers (default: 4)
   - `initOptions` - Initial themes/langs to load
+    - `themes` - Array of theme names to preload
+    - `langs` - Array of languages to preload (optional)
+    - `preferWasmHighlighter` - Use WASM highlighter if available (optional)
 
-**Returns:** `ShikiWorkerAPI`
+**Returns:** `ShikiPoolManager`
 
-### `ShikiWorkerAPI.renderFileToHast(file, options?)`
+### `ShikiPoolManager.renderFileToHast(file, options?)`
 
 Render a single file to HAST.
 
 **Parameters:**
 
 - `file` - FileContents object with `name` and `contents`
-- `options` - Render options (theme, lang, etc.)
+- `options` - Optional render options
+  - `theme` - Theme name or `{ dark: string, light: string }`
+  - `lang` - Language override (auto-detected from filename if not provided)
+  - `preferWasmHighlighter` - Use WASM highlighter (optional)
+  - `hastOptions` - Additional CodeToHast options (optional)
 
-**Returns:** `Promise<Root>` - HAST tree
+**Returns:** `Promise<RenderFileResult>` - Object with `lines: ElementContent[]`
 
-### `ShikiWorkerAPI.renderDiffToHast(oldFile, newFile, options?)`
+### `ShikiPoolManager.renderDiffToHast(oldFile, newFile, options?)`
 
-Render a diff to HAST.
+Render a diff from two file contents.
 
 **Parameters:**
 
 - `oldFile` - Old FileContents
 - `newFile` - New FileContents
-- `options` - Render options
+- `options` - Optional render options (same as above)
 
-**Returns:** `Promise<Root>` - Composite HAST tree with both sides
+**Returns:** `Promise<RenderDiffResult>` - Object with `oldLines` and `newLines` arrays
 
-### `ShikiWorkerAPI.initialize()`
+### `ShikiPoolManager.renderDiffMetadataToHast(diff, options?)`
 
-Explicitly initialize the worker pool (optional - auto-initializes on first use).
+Render a diff from parsed diff metadata (FileDiffMetadata).
 
-### `ShikiWorkerAPI.terminate()`
+**Parameters:**
+
+- `diff` - FileDiffMetadata object from parsed patch
+- `options` - Optional render options (same as above)
+
+**Returns:** `Promise<RenderDiffResult>` - Object with `oldLines` and `newLines` arrays
+
+### `ShikiPoolManager.ensureInitialized()`
+
+Explicitly initialize the worker pool. Optional - the pool auto-initializes on first use.
+
+**Returns:** `Promise<void>`
+
+### `ShikiPoolManager.terminate()`
 
 Terminate all workers and clean up resources.
 
-### `ShikiWorkerAPI.getStats()`
+### `ShikiPoolManager.getStats()`
 
 Get pool statistics.
 
@@ -182,10 +319,10 @@ Get pool statistics.
 
 ```typescript
 {
-  totalWorkers: number;
-  busyWorkers: number;
-  queuedTasks: number;
-  pendingTasks: number;
+  totalWorkers: number; // Total workers in pool
+  busyWorkers: number; // Workers currently processing tasks
+  queuedTasks: number; // Tasks waiting for available worker
+  pendingTasks: number; // Tasks sent to workers, awaiting response
 }
 ```
 
@@ -214,7 +351,5 @@ Make sure to call `terminate()` when done to free worker resources.
 
 - [ ] Automatic worker restart on failure
 - [ ] Better error recovery
-- [ ] Support for streaming/incremental rendering
-- [ ] Worker warmup strategies
 - [ ] Smarter work distribution (load balancing)
 - [ ] Worker-side caching of parsed grammars
