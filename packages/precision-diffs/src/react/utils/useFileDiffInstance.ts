@@ -65,6 +65,7 @@ export function useFileDiffInstance<LAnnotation>({
     if (instanceRef.current == null) return;
     const instance = instanceRef.current;
     const forceRender = !deepEqual(instance.options, options);
+    const hasControlledSelection = selectedLines !== undefined;
     const currentSelection = selectedLines ?? null;
     instance.setOptions(options);
     void instance
@@ -77,13 +78,15 @@ export function useFileDiffInstance<LAnnotation>({
       })
       .then(() => {
         if (instanceRef.current !== instance) return;
-        instance.setSelectedLines(currentSelection);
+        if (hasControlledSelection) {
+          instance.setSelectedLines(currentSelection);
+        }
       });
   });
 
   useIsometricEffect(() => {
-    if (instanceRef.current == null) return;
-    instanceRef.current.setSelectedLines(selectedLines ?? null);
+    if (instanceRef.current == null || selectedLines === undefined) return;
+    instanceRef.current.setSelectedLines(selectedLines);
   }, [selectedLines]);
 
   return ref;

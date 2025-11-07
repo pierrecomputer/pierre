@@ -16,6 +16,8 @@ export interface MultiFileDiffProps<LAnnotation>
   enableLineSelection?: boolean;
   selectedLines?: SelectedLineRange | null;
   onLineSelected?(range: SelectedLineRange | null): void;
+  onLineSelectionStart?(range: SelectedLineRange | null): void;
+  onLineSelectionEnd?(range: SelectedLineRange | null): void;
 }
 
 export function MultiFileDiff<LAnnotation = undefined>({
@@ -31,6 +33,8 @@ export function MultiFileDiff<LAnnotation = undefined>({
   enableLineSelection,
   selectedLines,
   onLineSelected,
+  onLineSelectionStart,
+  onLineSelectionEnd,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const ref = useFileDiffInstance({
     oldFile,
@@ -39,6 +43,8 @@ export function MultiFileDiff<LAnnotation = undefined>({
       ...options,
       enableLineSelection,
       onLineSelected,
+      onLineSelectionStart,
+      onLineSelectionEnd,
     },
     lineAnnotations,
     selectedLines,
