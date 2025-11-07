@@ -119,6 +119,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineSelectionManager = new LineSelectionManager({
       enableLineSelection: options.enableLineSelection,
       onLineSelected: options.onLineSelected,
+      onLineSelectionStart: options.onLineSelectionStart,
+      onLineSelectionEnd: options.onLineSelectionEnd,
     });
   }
 
@@ -151,6 +153,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineSelectionManager.setOptions({
       enableLineSelection: options.enableLineSelection,
       onLineSelected: options.onLineSelected,
+      onLineSelectionStart: options.onLineSelectionStart,
+      onLineSelectionEnd: options.onLineSelectionEnd,
     });
   }
 
@@ -571,6 +575,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ): void {
+    const previousSelection = this.lineSelectionManager.getSelection();
     this.setPreAttributes(pre, highlighter, result);
 
     // Clear existing content
@@ -606,6 +611,11 @@ export class FileDiff<LAnnotation = undefined> {
 
     this.mouseEventManager.setup(pre);
     this.lineSelectionManager.setup(pre);
+    if (previousSelection != null) {
+      this.lineSelectionManager.setSelection(previousSelection, {
+        silent: true,
+      });
+    }
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);
       this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);

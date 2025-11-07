@@ -15,6 +15,8 @@ export interface FileDiffProps<LAnnotation>
   enableLineSelection?: boolean;
   selectedLines?: SelectedLineRange | null;
   onLineSelected?(range: SelectedLineRange | null): void;
+  onLineSelectionStart?(range: SelectedLineRange | null): void;
+  onLineSelectionEnd?(range: SelectedLineRange | null): void;
 }
 
 export function FileDiff<LAnnotation = undefined>({
@@ -29,6 +31,8 @@ export function FileDiff<LAnnotation = undefined>({
   enableLineSelection,
   selectedLines,
   onLineSelected,
+  onLineSelectionStart,
+  onLineSelectionEnd,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
   const ref = useFileDiffInstance({
     fileDiff,
@@ -36,6 +40,8 @@ export function FileDiff<LAnnotation = undefined>({
       ...options,
       enableLineSelection,
       onLineSelected,
+      onLineSelectionStart,
+      onLineSelectionEnd,
     },
     lineAnnotations,
     selectedLines,

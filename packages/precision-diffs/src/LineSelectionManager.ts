@@ -21,6 +21,16 @@ export interface LineSelectionOptions {
    * Callback fired when line selection changes
    */
   onLineSelected?: (range: SelectedLineRange | null) => void;
+
+  /**
+   * Callback fired when user begins a line selection interaction
+   */
+  onLineSelectionStart?: (range: SelectedLineRange | null) => void;
+
+  /**
+   * Callback fired when user completes a line selection interaction
+   */
+  onLineSelectionEnd?: (range: SelectedLineRange | null) => void;
 }
 
 /**
@@ -156,6 +166,7 @@ export class LineSelectionManager {
         ? this.selectedRowRange.first
         : this.selectedRowRange.last;
       this.updateSelection(lineNumber, lineIndex);
+      this.notifySelectionStart(this.selectedRange ?? null);
     } else {
       // Check if clicking on already selected single line (to unselect)
       if (
@@ -164,6 +175,7 @@ export class LineSelectionManager {
         this.selectedRange.last === lineNumber
       ) {
         this.clearSelection();
+        this.notifySelectionEnd(null);
         this.notifySelectionChange();
         return;
       }
@@ -174,6 +186,7 @@ export class LineSelectionManager {
       this.anchorLineIndex = lineIndex;
       this.selectionSide = clickedSide;
       this.updateSelection(lineNumber, lineIndex);
+      this.notifySelectionStart(this.selectedRange ?? null);
     }
 
     this.isDragging = true;
@@ -199,6 +212,7 @@ export class LineSelectionManager {
     document.removeEventListener('mousemove', this.handleMouseMove);
     document.removeEventListener('mouseup', this.handleMouseUp);
 
+    this.notifySelectionEnd(this.selectedRange ?? null);
     this.notifySelectionChange();
   };
 
@@ -345,6 +359,18 @@ export class LineSelectionManager {
     if (onLineSelected == null) return;
 
     onLineSelected(this.selectedRange ?? null);
+  }
+
+  private notifySelectionStart(range: SelectedLineRange | null): void {
+    const { onLineSelectionStart } = this.options;
+    if (onLineSelectionStart == null) return;
+    onLineSelectionStart(range);
+  }
+
+  private notifySelectionEnd(range: SelectedLineRange | null): void {
+    const { onLineSelectionEnd } = this.options;
+    if (onLineSelectionEnd == null) return;
+    onLineSelectionEnd(range);
   }
 
   private getLineElementFromEvent(event: MouseEvent): HTMLElement | undefined {

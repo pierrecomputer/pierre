@@ -89,6 +89,8 @@ export class File<LAnnotation = undefined> {
     this.lineSelectionManager = new LineSelectionManager({
       enableLineSelection: options.enableLineSelection,
       onLineSelected: options.onLineSelected,
+      onLineSelectionStart: options.onLineSelectionStart,
+      onLineSelectionEnd: options.onLineSelectionEnd,
     });
   }
 
@@ -99,6 +101,8 @@ export class File<LAnnotation = undefined> {
     this.lineSelectionManager.setOptions({
       enableLineSelection: options.enableLineSelection,
       onLineSelected: options.onLineSelected,
+      onLineSelectionStart: options.onLineSelectionStart,
+      onLineSelectionEnd: options.onLineSelectionEnd,
     });
   }
 

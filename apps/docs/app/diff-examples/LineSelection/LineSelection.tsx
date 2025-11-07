@@ -15,6 +15,9 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
     first: number;
     last: number;
   } | null>(null);
+  const [selectionState, setSelectionState] = useState<'idle' | 'selecting'>(
+    'idle'
+  );
 
   return (
     <div className="space-y-5">
@@ -23,36 +26,53 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         description="Click line numbers to select individual lines or ranges. Click and drag to select multiple lines, or hold Shift and click to extend your selection. You can also control the selection programmatically."
       />
 
-      <div className="bg-muted rounded-lg border p-4 font-mono text-sm">
-        {selectedRange ? (
-          <>
-            <span className="text-muted-foreground">Selected lines: </span>
-            <span className="font-semibold">
-              {selectedRange.first === selectedRange.last
-                ? `Line ${selectedRange.first}`
-                : `Lines ${selectedRange.first}–${selectedRange.last}`}
-            </span>
-          </>
-        ) : (
-          <span className="text-muted-foreground">No lines selected</span>
-        )}
+      <div className="bg-muted rounded-lg border p-4 font-mono text-sm space-y-2">
+        <div>
+          {selectedRange ? (
+            <>
+              <span className="text-muted-foreground">Selected lines: </span>
+              <span className="font-semibold">
+                {selectedRange.first === selectedRange.last
+                  ? `Line ${selectedRange.first}`
+                  : `Lines ${selectedRange.first}–${selectedRange.last}`}
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">No lines selected</span>
+          )}
+        </div>
+        <div className="text-muted-foreground">
+          Selection status:{' '}
+          <span className="font-semibold text-foreground">
+            {selectionState === 'selecting' ? 'Selecting…' : 'Idle'}
+          </span>
+        </div>
       </div>
 
       <div className="flex gap-2">
         <button
-          onClick={() => setSelectedRange({ first: 6, last: 6 })}
+          onClick={() => {
+            setSelectedRange({ first: 6, last: 6 });
+            setSelectionState('idle');
+          }}
           className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
           Select line 6
         </button>
         <button
-          onClick={() => setSelectedRange({ first: 15, last: 20 })}
+          onClick={() => {
+            setSelectedRange({ first: 15, last: 20 });
+            setSelectionState('idle');
+          }}
           className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
           Select lines 15-20
         </button>
         <button
-          onClick={() => setSelectedRange(null)}
+          onClick={() => {
+            setSelectedRange(null);
+            setSelectionState('idle');
+          }}
           className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
           Clear selection
@@ -66,6 +86,12 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         selectedLines={selectedRange}
         onLineSelected={(range) => {
           setSelectedRange(range);
+        }}
+        onLineSelectionStart={() => {
+          setSelectionState('selecting');
+        }}
+        onLineSelectionEnd={() => {
+          setSelectionState('idle');
         }}
       />
     </div>
