@@ -76,12 +76,13 @@ export function DiffStyles({
           title="Choose how changes are styled"
           description="Your diffs, your choice. Render changed lines with classic diff indicators (+/–), full-width background colors, or vertical bars. You can even highlight inline changes—character or word based—and toggle line wrapping, hide numbers, and more."
         />
-        <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
+        <div className="grid grid-cols-2 gap-3 md:flex md:flex-wrap md:items-center">
           <ButtonGroup
             value={diffIndicators}
             onValueChange={(value) =>
               setDiffStyle(value as 'bars' | 'classic' | 'none')
             }
+            className="col-span-full"
           >
             {['bars', 'classic', 'none'].map((value) => (
               <ButtonGroupItem
