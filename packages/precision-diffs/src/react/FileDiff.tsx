@@ -1,5 +1,6 @@
 'use client';
 
+import type { SelectedLineRange } from '../LineSelectionManager';
 import type { FileDiffMetadata } from '../types';
 import type { DiffBasePropsReact } from './types';
 import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
@@ -12,8 +13,8 @@ export interface FileDiffProps<LAnnotation>
   extends DiffBasePropsReact<LAnnotation> {
   fileDiff: FileDiffMetadata;
   enableLineSelection?: boolean;
-  selectedLines?: { first: number; last: number } | null;
-  onLineSelected?(range: { first: number; last: number } | null): void;
+  selectedLines?: SelectedLineRange | null;
+  onLineSelected?(range: SelectedLineRange | null): void;
 }
 
 export function FileDiff<LAnnotation = undefined>({

@@ -2,6 +2,7 @@ import deepEqual from 'fast-deep-equal';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { File, type FileOptions } from '../../File';
+import type { SelectedLineRange } from '../../LineSelectionManager';
 import type { FileContents, LineAnnotation } from '../../types';
 import { useStableCallback } from './useStableCallback';
 
@@ -12,7 +13,7 @@ interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
-  selectedLines?: { first: number; last: number } | null;
+  selectedLines?: SelectedLineRange | null;
 }
 export function useFileInstance<LAnnotation>({
   file,

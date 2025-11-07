@@ -1,5 +1,6 @@
 'use client';
 
+import type { SelectedLineRange } from '../LineSelectionManager';
 import type { FileContents } from '../types';
 import type { DiffBasePropsReact } from './types';
 import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
@@ -13,8 +14,8 @@ export interface MultiFileDiffProps<LAnnotation>
   oldFile: FileContents;
   newFile: FileContents;
   enableLineSelection?: boolean;
-  selectedLines?: { first: number; last: number } | null;
-  onLineSelected?(range: { first: number; last: number } | null): void;
+  selectedLines?: SelectedLineRange | null;
+  onLineSelected?(range: SelectedLineRange | null): void;
 }
 
 export function MultiFileDiff<LAnnotation = undefined>({
