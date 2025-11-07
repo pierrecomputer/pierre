@@ -41,7 +41,10 @@ export default function Home() {
 }
 `,
     },
-    options: { theme: 'pierre-dark', diffStyle: 'unified' },
+    options: {
+      theme: 'pierre-dark',
+      diffStyle: 'unified',
+    },
     annotations: [
       {
         side: 'additions',

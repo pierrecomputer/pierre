@@ -6,6 +6,8 @@ export interface SelectedLineRange {
   first: number;
   last: number;
   side?: SelectionSide;
+  firstSide?: SelectionSide;
+  lastSide?: SelectionSide;
   rowStart?: number;
   rowEnd?: number;
 }
@@ -267,6 +269,8 @@ export class LineSelectionManager {
 
     const allLines = this.getAllLineElements();
     const isSingle = rowRange.first === rowRange.last;
+    let firstSide: SelectionSide | undefined;
+    let lastSide: SelectionSide | undefined;
 
     for (const element of allLines) {
       const lineIndex = this.getLineIndex(element);
@@ -275,13 +279,23 @@ export class LineSelectionManager {
 
       if (isSingle) {
         element.setAttribute('data-selected-line', 'single');
+        const side = this.getLineSideFromElement(element);
+        firstSide = side;
+        lastSide = side;
       } else if (lineIndex === rowRange.first) {
         element.setAttribute('data-selected-line', 'first');
+        firstSide = this.getLineSideFromElement(element);
       } else if (lineIndex === rowRange.last) {
         element.setAttribute('data-selected-line', 'last');
+        lastSide = this.getLineSideFromElement(element);
       } else {
         element.setAttribute('data-selected-line', '');
       }
+    }
+
+    if (this.selectedRange != null) {
+      this.selectedRange.firstSide = firstSide;
+      this.selectedRange.lastSide = lastSide ?? firstSide;
     }
   }
 
@@ -418,10 +432,17 @@ export class LineSelectionManager {
   private getLineSideFromElement(element: HTMLElement): SelectionSide {
     const parent = element.closest('[data-code]');
     if (!(parent instanceof HTMLElement)) {
-      return 'both';
+      return this.getSideFromLineType(element);
     }
     if ('additions' in parent.dataset) return 'additions';
     if ('deletions' in parent.dataset) return 'deletions';
+    return this.getSideFromLineType(element);
+  }
+
+  private getSideFromLineType(element: HTMLElement): SelectionSide {
+    const lineType = element.dataset.lineType;
+    if (lineType === 'change-addition') return 'additions';
+    if (lineType === 'change-deletion') return 'deletions';
     return 'both';
   }
 }
