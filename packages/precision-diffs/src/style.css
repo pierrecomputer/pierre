@@ -742,3 +742,51 @@ code {
 [data-change-icon='file'] {
   opacity: 0.6;
 }
+
+/* Line selection highlighting */
+[data-selected-line] {
+  [data-column-number] {
+    color: light-dark(
+      rgb(from var(--pjs-addition-base) r g b / 0.9),
+      rgb(from var(--pjs-addition-base) r g b / 0.9)
+    );
+    background-color: light-dark(
+      rgb(from var(--pjs-addition-base) r g b / 0.12),
+      rgb(from var(--pjs-addition-base) r g b / 0.15)
+    );
+  }
+
+  [data-column-content] {
+    background-color: light-dark(
+      rgb(from var(--pjs-addition-base) r g b / 0.08),
+      rgb(from var(--pjs-addition-base) r g b / 0.12)
+    );
+  }
+}
+
+[data-selected-line='single'] [data-column-content]::before,
+[data-selected-line='single'] [data-column-content]::after,
+[data-selected-line='first'] [data-column-content]::before,
+[data-selected-line='last'] [data-column-content]::after {
+  content: '';
+  position: absolute;
+  display: block;
+  left: 0;
+  right: 0;
+  border-top: 1px solid
+    light-dark(
+      rgb(from var(--pjs-addition-base) r g b / 0.25),
+      rgb(from var(--pjs-addition-base) r g b / 0.3)
+    );
+  pointer-events: none;
+}
+
+[data-selected-line='single'] [data-column-content]::before,
+[data-selected-line='first'] [data-column-content]::before {
+  top: 0;
+}
+
+[data-selected-line='single'] [data-column-content]::after,
+[data-selected-line='last'] [data-column-content]::after {
+  bottom: 0;
+}

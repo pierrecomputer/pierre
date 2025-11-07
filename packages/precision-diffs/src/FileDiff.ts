@@ -4,6 +4,10 @@ import type { Element } from 'hast';
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
 import { FileHeaderRenderer } from './FileHeaderRenderer';
 import {
+  LineSelectionManager,
+  type LineSelectionOptions,
+} from './LineSelectionManager';
+import {
   MouseEventManager,
   type MouseEventManagerBaseOptions,
   getMouseEventOptions,
@@ -42,7 +46,8 @@ interface FileDiffRenderProps<LAnnotation> {
 
 export interface FileDiffOptions<LAnnotation>
   extends Omit<BaseDiffOptions, 'hunkSeparators'>,
-    MouseEventManagerBaseOptions<'diff'> {
+    MouseEventManagerBaseOptions<'diff'>,
+    LineSelectionOptions {
   hunkSeparators?:
     | Exclude<HunkSeparators, 'custom'>
     | ((hunk: HunkData) => HTMLElement | DocumentFragment);
@@ -76,6 +81,7 @@ export class FileDiff<LAnnotation = undefined> {
   private resizeManager: ResizeManager;
   private scrollSyncManager: ScrollSyncManager;
   private mouseEventManager: MouseEventManager<'diff'>;
+  private lineSelectionManager: LineSelectionManager;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
@@ -109,6 +115,10 @@ export class FileDiff<LAnnotation = undefined> {
           : undefined
       )
     );
+    this.lineSelectionManager = new LineSelectionManager({
+      enableLineSelection: options.enableLineSelection,
+      onLineSelected: options.onLineSelected,
+    });
   }
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
@@ -137,6 +147,10 @@ export class FileDiff<LAnnotation = undefined> {
           : undefined
       )
     );
+    this.lineSelectionManager.setOptions({
+      enableLineSelection: options.enableLineSelection,
+      onLineSelected: options.onLineSelected,
+    });
   }
 
   private mergeOptions(options: Partial<FileDiffOptions<LAnnotation>>): void {
@@ -183,6 +197,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
+    this.lineSelectionManager.cleanUp();
 
     // Clean up the data
     this.fileDiff = undefined;
@@ -247,6 +262,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderAnnotations();
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
+      this.lineSelectionManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
         this.scrollSyncManager.setup(this.pre);
@@ -584,6 +600,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.injectUnsafeCSS();
 
     this.mouseEventManager.setup(pre);
+    this.lineSelectionManager.setup(pre);
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);
       this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
