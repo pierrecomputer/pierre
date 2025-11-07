@@ -3,45 +3,52 @@ import type { ElementContent } from 'hast';
 import type {
   CodeToHastOptions,
   FileContents,
+  FileDiffMetadata,
   PJSThemeNames,
   SupportedLanguages,
 } from '../types';
 
-/**
- * Message types for communication between main thread and worker threads
- */
-
-export type WorkerRequestId = string | number;
-
-// Request messages sent from main thread to worker
+export type WorkerRequestId = string;
 
 export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  options: RenderOptions;
+  options?: RenderOptions;
 }
 
-export interface RenderDiffRequest {
-  type: 'diff';
+export interface RenderDiffFileRequest {
+  type: 'diff-files';
   id: WorkerRequestId;
   oldFile: FileContents;
   newFile: FileContents;
-  options: RenderOptions;
+  options?: RenderOptions;
+}
+
+export interface RenderDiffMetadataRequest {
+  type: 'diff-metadata';
+  id: WorkerRequestId;
+  diff: FileDiffMetadata;
+  options?: RenderOptions;
 }
 
 export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
-  options: WorkerInitOptions;
+  options?: WorkerInitOptions;
 }
+
+export type SubmitRequest =
+  | Omit<RenderFileRequest, 'id'>
+  | Omit<RenderDiffFileRequest, 'id'>
+  | Omit<RenderDiffMetadataRequest, 'id'>;
 
 export type WorkerRequest =
   | RenderFileRequest
-  | RenderDiffRequest
+  | RenderDiffFileRequest
+  | RenderDiffMetadataRequest
   | InitializeWorkerRequest;
 
-// Result types for different operations
 export interface RenderFileResult {
   lines: ElementContent[];
 }
@@ -53,21 +60,34 @@ export interface RenderDiffResult {
 
 export interface RenderFileSuccessResponse {
   type: 'success';
-  requestType: 'render-file';
+  requestType: 'file';
   id: WorkerRequestId;
   result: RenderFileResult;
+  sentAt: number;
 }
 
 export interface RenderDiffSuccessResponse {
   type: 'success';
-  requestType: 'render-diff';
+  requestType: 'diff-files';
   id: WorkerRequestId;
   result: RenderDiffResult;
+  sentAt: number;
 }
 
-export type RenderSuccessResponse =
-  | RenderFileSuccessResponse
-  | RenderDiffSuccessResponse;
+export interface RenderDiffMetadataSuccessResponse {
+  type: 'success';
+  requestType: 'diff-metadata';
+  id: WorkerRequestId;
+  result: RenderDiffResult;
+  sentAt: number;
+}
+
+export interface InitializeSuccessResponse {
+  type: 'success';
+  requestType: 'initialize';
+  id: WorkerRequestId;
+  sentAt: number;
+}
 
 export interface RenderErrorResponse {
   type: 'error';
@@ -76,68 +96,73 @@ export interface RenderErrorResponse {
   stack?: string;
 }
 
-export interface InitializeSuccessResponse {
-  type: 'initialized';
-  id: WorkerRequestId;
-  result: void;
-}
+export type RenderSuccessResponse =
+  | RenderFileSuccessResponse
+  | RenderDiffSuccessResponse
+  | RenderDiffMetadataSuccessResponse;
 
 export type WorkerResponse =
   | RenderSuccessResponse
   | RenderErrorResponse
   | InitializeSuccessResponse;
 
-// Options types
-
+// FIXME(amadeus): We may have to do more work here...
 export interface RenderOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   preferWasmHighlighter?: boolean;
-  // Pass through any additional CodeToHastOptions
   hastOptions?: Partial<CodeToHastOptions<PJSThemeNames>>;
 }
 
 export interface WorkerInitOptions {
   themes: PJSThemeNames[];
-  // Pre-load specific languages
   langs?: SupportedLanguages[];
   preferWasmHighlighter?: boolean;
 }
 
-// Worker pool types
-
 export interface WorkerPoolOptions {
-  /**
-   * Number of worker threads to create
-   * @default 4
-   */
   poolSize?: number;
   initOptions?: WorkerInitOptions;
 }
 
-// Discriminated WorkerTask types - each task type maps to its result type
 export interface InitializeWorkerTask {
   type: 'initialize';
   id: WorkerRequestId;
   request: InitializeWorkerRequest;
-  resolve: (value: void) => void;
-  reject: (error: Error) => void;
+  resolve(value?: undefined): void;
+  reject(error: Error): void;
+  requestStart: number;
 }
 
 export interface RenderFileTask {
   type: 'file';
   id: WorkerRequestId;
   request: RenderFileRequest;
-  resolve: (value: RenderFileResult) => void;
-  reject: (error: Error) => void;
+  resolve(value: RenderFileResult): void;
+  reject(error: Error): void;
+  requestStart: number;
 }
 
 export interface RenderDiffTask {
-  type: 'diff';
+  type: 'diff-files';
   id: WorkerRequestId;
-  request: RenderDiffRequest;
-  resolve: (value: RenderDiffResult) => void;
-  reject: (error: Error) => void;
+  request: RenderDiffFileRequest;
+  resolve(value: RenderDiffResult): void;
+  reject(error: Error): void;
+  requestStart: number;
 }
 
-export type WorkerTask = InitializeWorkerTask | RenderFileTask | RenderDiffTask;
+export interface RenderDiffMetadataTask {
+  type: 'diff-metadata';
+  id: WorkerRequestId;
+  request: RenderDiffFileRequest;
+  resolve(value: RenderDiffResult): void;
+  reject(error: Error): void;
+  requestStart: number;
+}
+
+export type AllWorkerTasks =
+  | InitializeWorkerTask
+  | RenderFileTask
+  | RenderDiffTask
+  | RenderDiffMetadataTask;

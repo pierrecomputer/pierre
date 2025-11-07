@@ -1,12 +1,11 @@
 import type { ElementContent } from 'hast';
 
-import type { FileContents } from '../types';
+import type { FileContents, FileDiffMetadata } from '../types';
 import type {
   RenderDiffResult,
   RenderFileResult,
   RenderOptions,
   WorkerPoolOptions,
-  WorkerRequest,
 } from './types';
 import { WorkerPool } from './worker-pool';
 
@@ -37,6 +36,11 @@ export interface ShikiWorkerAPI {
     options?: RenderOptions
   ): Promise<RenderDiffResult>;
 
+  renderDiffMetadataToHast(
+    diff: FileDiffMetadata,
+    options?: RenderOptions
+  ): Promise<RenderDiffResult>;
+
   /**
    * Initialize the worker pool explicitly
    * (optional - pool is auto-initialized on first use)
@@ -57,20 +61,52 @@ export interface ShikiWorkerAPI {
 /**
  * Create a new Shiki Worker API instance
  *
- * @param workerUrl - URL or path to the worker script
+ * The worker script is automatically inlined and created from a Blob URL,
+ * so no external worker files are needed.
+ *
+ * @param workerFactory - Optional factory function to create workers (for advanced use cases)
  * @param poolOptions - Options for configuring the worker pool
  */
 export function createShikiWorkerAPI(
-  workerUrl: string | URL,
+  workerFactory?: () => Worker,
   poolOptions?: WorkerPoolOptions
+): ShikiWorkerAPI;
+
+/**
+ * Create a new Shiki Worker API instance
+ *
+ * @param poolOptions - Options for configuring the worker pool
+ */
+export function createShikiWorkerAPI(
+  poolOptions?: WorkerPoolOptions
+): ShikiWorkerAPI;
+
+export function createShikiWorkerAPI(
+  workerFactoryOrOptions?: (() => Worker) | WorkerPoolOptions,
+  poolOptionsArg?: WorkerPoolOptions
 ): ShikiWorkerAPI {
+  // Parse overloaded arguments
+  const workerFactory =
+    typeof workerFactoryOrOptions === 'function'
+      ? workerFactoryOrOptions
+      : undefined;
+  const poolOptions =
+    typeof workerFactoryOrOptions === 'object'
+      ? workerFactoryOrOptions
+      : poolOptionsArg;
+
   let pool: WorkerPool | undefined;
   let initPromise: Promise<void> | undefined;
 
   async function ensureInitialized() {
     if (pool == null) {
       pool = new WorkerPool(
-        () => new Worker(workerUrl, { type: 'module' }),
+        workerFactory ??
+          (() => {
+            throw new Error(
+              'Worker creation not yet implemented. Please provide a workerFactory or use the workerFactory helper from your bundler.'
+            );
+          }),
         poolOptions
       );
       initPromise = pool.initialize();
@@ -82,7 +118,7 @@ export function createShikiWorkerAPI(
   }
 
   return {
-    async renderFileToHast(file: FileContents, options: RenderOptions = {}) {
+    async renderFileToHast(file: FileContents, options?: RenderOptions) {
       await ensureInitialized();
       if (pool == null) throw new Error('Worker pool not initialized');
 
@@ -90,7 +126,7 @@ export function createShikiWorkerAPI(
         type: 'file',
         file,
         options,
-      } as Omit<WorkerRequest, 'id'>);
+      });
 
       return result.lines;
     },
@@ -98,17 +134,31 @@ export function createShikiWorkerAPI(
     async renderDiffToHast(
       oldFile: FileContents,
       newFile: FileContents,
-      options: RenderOptions = {}
+      options?: RenderOptions
     ) {
       await ensureInitialized();
       if (pool == null) throw new Error('Worker pool not initialized');
 
       return pool.submitTask<RenderDiffResult>({
-        type: 'diff',
+        type: 'diff-files',
         oldFile,
         newFile,
         options,
-      } as Omit<WorkerRequest, 'id'>);
+      });
+    },
+
+    async renderDiffMetadataToHast(
+      diff: FileDiffMetadata,
+      options?: RenderOptions
+    ) {
+      await ensureInitialized();
+      if (pool == null) throw new Error('Worker pool not initialized');
+
+      return pool.submitTask<RenderDiffResult>({
+        type: 'diff-metadata',
+        diff,
+        options,
+      });
     },
 
     async initialize() {

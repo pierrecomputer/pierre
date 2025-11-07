@@ -2,13 +2,13 @@ import type { HunkLineType } from '../types';
 
 export interface ParseLineTypeReturn {
   line: string;
-  type: HunkLineType;
+  type: Exclude<HunkLineType, 'expanded'>;
   longLine: boolean;
 }
 
 export function parseLineType(
   line: string,
-  maxLineLength: number
+  maxLineLength: number = 1000
 ): ParseLineTypeReturn {
   const firstChar = line[0];
   if (

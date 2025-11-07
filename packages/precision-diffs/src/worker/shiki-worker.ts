@@ -1,32 +1,37 @@
-import { DEFAULT_THEMES } from 'src/constants';
-import { getLineNodes } from 'src/utils/getLineNodes';
-import { getThemes } from 'src/utils/getThemes';
+import { parseLineType } from 'src/utils/parseLineType';
 
 import { getSharedHighlighter } from '../SharedHighlighter';
+import { DEFAULT_THEMES } from '../constants';
 import type {
   CodeToHastOptions,
+  FileContents,
   PJSHighlighter,
   PJSThemeNames,
   SupportedLanguages,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
+import { getLineNodes } from '../utils/getLineNodes';
+import { getThemes } from '../utils/getThemes';
 import type {
+  InitializeSuccessResponse,
   InitializeWorkerRequest,
-  RenderDiffRequest,
+  RenderDiffFileRequest,
+  RenderDiffMetadataRequest,
+  RenderDiffMetadataSuccessResponse,
   RenderDiffResult,
+  RenderDiffSuccessResponse,
   RenderErrorResponse,
   RenderFileRequest,
   RenderFileResult,
+  RenderFileSuccessResponse,
+  RenderOptions,
   WorkerRequest,
   WorkerRequestId,
 } from './types';
 
-/**
- * Shiki Web Worker
- *
- * This worker runs in a separate thread and handles Shiki rendering
- * to avoid blocking the main thread during syntax highlighting.
- */
+self.addEventListener('error', (event) => {
+  console.error('[Shiki Worker] Unhandled error:', event.error);
+});
 
 // Handle incoming messages from the main thread
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -41,8 +46,11 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
       case 'file':
         await handleRenderFile(request);
         break;
-      case 'diff':
+      case 'diff-files':
         await handleRenderDiff(request);
+        break;
+      case 'diff-metadata':
+        await handleRenderDiffMetadata(request);
         break;
       default:
         throw new Error(
@@ -50,6 +58,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
         );
     }
   } catch (error) {
+    console.error('Worker error:', error);
     sendError(request.id, error);
   }
 });
@@ -57,89 +66,135 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
 async function handleInitialize(
   request: InitializeWorkerRequest
 ): Promise<void> {
-  const { themes, preferWasmHighlighter } = request.options;
-  const langs = new Set(request.options.langs);
+  const { themes = ['pierre-dark', 'pierre-light'], preferWasmHighlighter } =
+    request.options ?? {};
+  const langs = new Set(request.options?.langs);
   langs.add('text');
-  // Initialize the highlighter with the requested themes and languages
   await getSharedHighlighter({
     themes,
     langs: Array.from(langs),
     preferWasmHighlighter,
   });
 
-  postMessage({ type: 'initialized', id: request.id });
+  postMessage({
+    type: 'success',
+    id: request.id,
+    requestType: 'initialize',
+    sentAt: Date.now(),
+  } satisfies InitializeSuccessResponse);
 }
 
-async function handleRenderFile(request: RenderFileRequest): Promise<void> {
-  const { file, options } = request;
-  const { theme = DEFAULT_THEMES } = options;
-
-  const highlighter = await getHighlighter(
-    options.lang ?? getFiletypeFromFileName(file.name),
-    theme
-  );
-
-  // Determine language
-  const lang = options.lang ?? getFiletypeFromFileName(file.name);
-
-  // Render code to HAST
-  const hastOptions: CodeToHastOptions<PJSThemeNames> = (() => {
+async function handleRenderFile({
+  id,
+  file,
+  options: {
+    theme = DEFAULT_THEMES,
+    lang = getFiletypeFromFileName(file.name),
+    preferWasmHighlighter,
+    hastOptions,
+  } = {},
+}: RenderFileRequest): Promise<void> {
+  const highlighter = await getHighlighter(lang, theme, preferWasmHighlighter);
+  const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
     if (typeof theme === 'string') {
-      return { lang, ...options.hastOptions, theme };
+      return { lang, ...hastOptions, theme };
     }
-    return { lang, ...options.hastOptions, themes: theme };
+    return { lang, ...hastOptions, themes: theme };
   })();
-
-  const lines = getLineNodes(
-    highlighter.codeToHast(file.contents, hastOptions)
-  );
-
-  sendFileSuccess(request.id, { lines });
-}
-
-async function handleRenderDiff(request: RenderDiffRequest): Promise<void> {
-  const { oldFile, newFile, options } = request;
-  const { theme = DEFAULT_THEMES } = options;
-
-  // Determine language from the new file (or old file as fallback)
-  const lang =
-    options.lang ??
-    getFiletypeFromFileName(newFile.name) ??
-    getFiletypeFromFileName(oldFile.name);
-
-  const highlighter = await getHighlighter(lang, theme);
-
-  // For diffs, we'll render both files separately
-  // The consumer can then use these results to build the diff view
-  const hastOptions: CodeToHastOptions<PJSThemeNames> = (() => {
-    if (typeof theme === 'string') {
-      return { lang, ...options.hastOptions, theme };
-    }
-    return { lang, ...options.hastOptions, themes: theme };
-  })();
-
-  const oldLines = getLineNodes(
-    highlighter.codeToHast(oldFile.contents, hastOptions)
-  );
-  const newLines = getLineNodes(
-    highlighter.codeToHast(newFile.contents, hastOptions)
-  );
-
-  // Return both results as a composite structure
-  sendDiffSuccess(request.id, {
-    oldLines,
-    newLines,
+  sendFileSuccess(id, {
+    lines: getLineNodes(highlighter.codeToHast(file.contents, hastConfig)),
   });
 }
 
+async function handleRenderDiff(request: RenderDiffFileRequest): Promise<void> {
+  const { oldFile, newFile, options } = request;
+  sendDiffSuccess(request.id, await renderTwoFiles(oldFile, newFile, options));
+}
+
+async function handleRenderDiffMetadata({
+  id,
+  options,
+  diff,
+}: RenderDiffMetadataRequest) {
+  const oldFile: FileContents = {
+    name: diff.prevName ?? diff.name,
+    contents: '',
+  };
+  const newFile: FileContents = {
+    name: diff.name,
+    contents: '',
+  };
+
+  for (const hunk of diff.hunks) {
+    for (const rawLine of hunk.hunkContent ?? []) {
+      // TODO(amadeus): Add support for `maxLineLength`
+      const { line, type } = parseLineType(rawLine);
+      switch (type) {
+        case 'context':
+          oldFile.contents += line;
+          newFile.contents += line;
+          break;
+        case 'addition':
+          newFile.contents += line;
+          break;
+        case 'deletion':
+          oldFile.contents += line;
+          break;
+        case 'metadata':
+          // Unsure what to do about this...
+          break;
+      }
+    }
+  }
+  sendDiffMetadataSuccess(id, await renderTwoFiles(oldFile, newFile, options));
+}
+
+async function renderTwoFiles(
+  oldFile: FileContents,
+  newFile: FileContents,
+  {
+    theme = DEFAULT_THEMES,
+    lang,
+    preferWasmHighlighter,
+    hastOptions,
+  }: RenderOptions = {}
+) {
+  const oldLang = lang ?? getFiletypeFromFileName(oldFile.name);
+  const newLang = lang ?? getFiletypeFromFileName(newFile.name);
+  const highlighter = await getHighlighter(
+    [oldLang, newLang],
+    theme,
+    preferWasmHighlighter
+  );
+  const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
+    if (typeof theme === 'string') {
+      return { lang: 'text', ...hastOptions, theme };
+    }
+    return { lang: 'text', ...hastOptions, themes: theme };
+  })();
+
+  hastConfig.lang = oldLang;
+  const oldLines = getLineNodes(
+    highlighter.codeToHast(oldFile.contents, hastConfig)
+  );
+  hastConfig.lang = newLang;
+  const newLines = getLineNodes(
+    highlighter.codeToHast(newFile.contents, hastConfig)
+  );
+
+  return { oldLines, newLines };
+}
+
 async function getHighlighter(
-  lang: SupportedLanguages,
+  lang: SupportedLanguages | SupportedLanguages[],
   theme: string | Record<'dark' | 'light', string> = DEFAULT_THEMES,
   preferWasmHighlighter = false
 ): Promise<PJSHighlighter> {
+  const filteredLangs = new Set(!Array.isArray(lang) ? [lang] : lang);
+  filteredLangs.add('text');
   return await getSharedHighlighter({
     themes: getThemes(theme),
-    langs: [lang],
+    langs: Array.from(filteredLangs),
     preferWasmHighlighter,
   });
 }
@@ -147,19 +202,34 @@ async function getHighlighter(
 function sendFileSuccess(id: WorkerRequestId, result: RenderFileResult): void {
   postMessage({
     type: 'success',
-    requestType: 'render-file',
+    requestType: 'file',
     id,
     result,
-  });
+    sentAt: Date.now(),
+  } satisfies RenderFileSuccessResponse);
 }
 
 function sendDiffSuccess(id: WorkerRequestId, result: RenderDiffResult): void {
   postMessage({
     type: 'success',
-    requestType: 'render-diff',
+    requestType: 'diff-files',
     id,
     result,
-  });
+    sentAt: Date.now(),
+  } satisfies RenderDiffSuccessResponse);
+}
+
+function sendDiffMetadataSuccess(
+  id: WorkerRequestId,
+  result: RenderDiffResult
+): void {
+  postMessage({
+    type: 'success',
+    requestType: 'diff-metadata',
+    id,
+    result,
+    sentAt: Date.now(),
+  } satisfies RenderDiffMetadataSuccessResponse);
 }
 
 function sendError(id: WorkerRequestId, error: unknown): void {

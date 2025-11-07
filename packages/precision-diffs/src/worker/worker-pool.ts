@@ -1,11 +1,15 @@
 import type {
+  AllWorkerTasks,
+  InitializeWorkerTask,
+  RenderDiffMetadataTask,
   RenderDiffResult,
+  RenderDiffTask,
   RenderFileResult,
+  RenderFileTask,
+  SubmitRequest,
   WorkerPoolOptions,
-  WorkerRequest,
   WorkerRequestId,
   WorkerResponse,
-  WorkerTask,
 } from './types';
 
 /**
@@ -23,8 +27,8 @@ interface ManagedWorker {
 
 export class WorkerPool {
   private workers: ManagedWorker[] = [];
-  private taskQueue: WorkerTask[] = [];
-  private pendingTasks = new Map<WorkerRequestId, WorkerTask>();
+  private taskQueue: AllWorkerTasks[] = [];
+  private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
   private nextRequestId = 0;
   private options: Required<WorkerPoolOptions>;
 
@@ -40,11 +44,8 @@ export class WorkerPool {
     };
   }
 
-  /**
-   * Initialize the worker pool
-   */
   async initialize(): Promise<void> {
-    // Create workers
+    const initPromises: Promise<unknown>[] = [];
     for (let i = 0; i < this.options.poolSize; i++) {
       const worker = this.workerFactory();
       const managedWorker: ManagedWorker = {
@@ -52,61 +53,49 @@ export class WorkerPool {
         busy: false,
         initialized: false,
       };
-
-      // Set up message handler
       worker.addEventListener(
         'message',
         (event: MessageEvent<WorkerResponse>) => {
           this.handleWorkerMessage(managedWorker, event.data);
         }
       );
-
-      // Set up error handler
-      worker.addEventListener('error', (error) => {
-        console.error('Worker error:', error);
-        // TODO: Implement worker restart logic
-      });
-
+      worker.addEventListener('error', (error) =>
+        console.error('Worker error:', error)
+      );
       this.workers.push(managedWorker);
-    }
-
-    // Initialize all workers
-    const initPromises = this.workers.map((managedWorker) => {
-      return new Promise<void>((resolve, reject) => {
-        const requestId = this.generateRequestId();
-
-        const task: WorkerTask = {
-          type: 'initialize',
-          id: requestId,
-          request: {
+      initPromises.push(
+        new Promise<void>((resolve, reject) => {
+          const requestId = this.generateRequestId();
+          const task: InitializeWorkerTask = {
             type: 'initialize',
             id: requestId,
-            options: this.options.initOptions,
-          },
-          resolve: () => {
-            managedWorker.initialized = true;
-            resolve();
-          },
-          reject,
-        };
-
-        this.pendingTasks.set(requestId, task);
-        managedWorker.worker.postMessage(task.request);
-      });
-    });
+            request: {
+              type: 'initialize',
+              id: requestId,
+              options: this.options.initOptions,
+            },
+            resolve() {
+              managedWorker.initialized = true;
+              resolve();
+            },
+            reject,
+            requestStart: Date.now(),
+          };
+          this.pendingTasks.set(requestId, task);
+          this.executeTask(managedWorker, task);
+        })
+      );
+    }
 
     await Promise.all(initPromises);
   }
 
-  /**
-   * Submit a task to the worker pool
-   */
-  submitTask<T extends RenderFileResult | RenderDiffResult | void>(
-    request: Omit<WorkerRequest, 'id'>
+  submitTask<T extends RenderFileResult | RenderDiffResult>(
+    request: SubmitRequest
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const requestId = this.generateRequestId();
-
+      const requestStart = Date.now();
       const task = (() => {
         switch (request.type) {
           case 'file':
@@ -116,25 +105,28 @@ export class WorkerPool {
               request: { ...request, id: requestId },
               resolve,
               reject,
+              requestStart,
             };
-          case 'diff':
+          case 'diff-files':
             return {
-              type: 'diff',
+              type: 'diff-files',
               id: requestId,
               request: { ...request, id: requestId },
               resolve,
               reject,
+              requestStart,
             };
-          case 'initialize':
+          case 'diff-metadata':
             return {
-              type: 'initialize',
+              type: 'diff-metadata',
               id: requestId,
               request: { ...request, id: requestId },
               resolve,
               reject,
+              requestStart,
             };
         }
-      })() as WorkerTask;
+      })() as RenderFileTask | RenderDiffTask | RenderDiffMetadataTask;
 
       this.pendingTasks.set(requestId, task);
 
@@ -149,9 +141,6 @@ export class WorkerPool {
     });
   }
 
-  /**
-   * Terminate all workers in the pool
-   */
   terminate(): void {
     for (const managedWorker of this.workers) {
       managedWorker.worker.terminate();
@@ -161,9 +150,6 @@ export class WorkerPool {
     this.pendingTasks.clear();
   }
 
-  /**
-   * Get pool statistics
-   */
   getStats(): {
     totalWorkers: number;
     busyWorkers: number;
@@ -185,46 +171,61 @@ export class WorkerPool {
     const task = this.pendingTasks.get(response.id);
 
     if (task == null) {
-      console.warn('Received response for unknown task:', response.id);
-      return;
-    }
-
-    // Remove from pending tasks
-    this.pendingTasks.delete(response.id);
-
-    // Handle response using discriminated unions - no casts needed!
-    if (response.type === 'error') {
+      console.error(
+        'handleWorkerMessage: Received response for unknown task:',
+        response
+      );
+    } else if (response.type === 'error') {
       const error = new Error(response.error);
       if (response.stack) {
         error.stack = response.stack;
       }
       task.reject(error);
-    } else if (response.type === 'initialized') {
-      if (task.type === 'initialize') {
-        task.resolve();
-      }
-    } else if (response.type === 'success') {
-      if (task.type === 'file' && response.requestType === 'render-file') {
-        task.resolve(response.result);
-      } else if (
-        task.type === 'diff' &&
-        response.requestType === 'render-diff'
-      ) {
-        task.resolve(response.result);
+    } else {
+      try {
+        switch (response.requestType) {
+          case 'initialize':
+            if (task.type !== 'initialize') {
+              throw new Error('handleWorkerMessage: task/response dont match');
+            }
+            task.resolve();
+            break;
+          case 'file':
+            if (task.type !== 'file') {
+              throw new Error('handleWorkerMessage: task/response dont match');
+            }
+            task.resolve(response.result);
+            break;
+          case 'diff-files':
+            if (task.type !== 'diff-files') {
+              throw new Error('handleWorkerMessage: task/response dont match');
+            }
+            task.resolve(response.result);
+            break;
+          case 'diff-metadata':
+            if (task.type !== 'diff-metadata') {
+              throw new Error('handleWorkerMessage: task/response dont match');
+            }
+            task.resolve(response.result);
+            break;
+        }
+      } catch (e) {
+        console.error(e, task, response);
       }
     }
 
-    // Mark worker as available
+    this.pendingTasks.delete(response.id);
     managedWorker.busy = false;
-
-    // Process next task in queue if any
     const nextTask = this.taskQueue.shift();
     if (nextTask != null) {
       this.executeTask(managedWorker, nextTask);
     }
   }
 
-  private executeTask(managedWorker: ManagedWorker, task: WorkerTask): void {
+  private executeTask(
+    managedWorker: ManagedWorker,
+    task: AllWorkerTasks
+  ): void {
     managedWorker.busy = true;
     managedWorker.worker.postMessage(task.request);
   }
