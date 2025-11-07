@@ -81,17 +81,17 @@ function processPatch(data: string): ParsedPatch {
           if (line.startsWith('diff --git')) {
             const [, , prevName, , name] =
               line.trim().match(ALTERNATE_FILE_NAMES_GIT) ?? [];
-            currentFile.name = name;
+            currentFile.name = name.trim();
             if (prevName !== name) {
-              currentFile.prevName = prevName;
+              currentFile.prevName = prevName.trim();
             }
           } else if (filenameMatch != null) {
             const [, type, fileName] = filenameMatch;
             if (type === '---' && fileName !== '/dev/null') {
-              currentFile.prevName = fileName;
-              currentFile.name = fileName;
+              currentFile.prevName = fileName.trim();
+              currentFile.name = fileName.trim();
             } else if (type === '+++' && fileName !== '/dev/null') {
-              currentFile.name = fileName;
+              currentFile.name = fileName.trim();
             }
           }
           // Git diffs have a bunch of additional metadata we can pull from
@@ -129,7 +129,7 @@ function processPatch(data: string): ParsedPatch {
               currentFile.prevName = line.replace('rename from ', '');
             }
             if (line.startsWith('rename to ')) {
-              currentFile.name = line.replace('rename to ', '');
+              currentFile.name = line.replace('rename to ', '').trim();
             }
           }
         }
