@@ -155,7 +155,7 @@ export interface RenderDiffTask {
 export interface RenderDiffMetadataTask {
   type: 'diff-metadata';
   id: WorkerRequestId;
-  request: RenderDiffFileRequest;
+  request: RenderDiffMetadataRequest;
   resolve(value: RenderDiffResult): void;
   reject(error: Error): void;
   requestStart: number;
