@@ -3,6 +3,7 @@ export * from './File';
 export * from './FileDiff';
 export * from './FileHeaderRenderer';
 export * from './FileStream';
+export * from './LineSelectionManager';
 export * from './MouseEventManager';
 export * from './ResizeManager';
 export * from './ScrollSyncManager';
