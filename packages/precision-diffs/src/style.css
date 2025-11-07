@@ -746,47 +746,17 @@ code {
 /* Line selection highlighting */
 [data-selected-line] {
   [data-column-number] {
-    color: light-dark(
-      rgb(from var(--pjs-addition-base) r g b / 0.9),
-      rgb(from var(--pjs-addition-base) r g b / 0.9)
-    );
+    color: light-dark(rgb(59, 130, 246), rgb(96, 165, 250));
     background-color: light-dark(
-      rgb(from var(--pjs-addition-base) r g b / 0.12),
-      rgb(from var(--pjs-addition-base) r g b / 0.15)
+      rgb(59, 130, 246, 0.25),
+      rgb(59, 130, 246, 0.3)
     );
   }
 
   [data-column-content] {
     background-color: light-dark(
-      rgb(from var(--pjs-addition-base) r g b / 0.08),
-      rgb(from var(--pjs-addition-base) r g b / 0.12)
+      rgb(59, 130, 246, 0.08),
+      rgb(59, 130, 246, 0.12)
     );
   }
-}
-
-[data-selected-line='single'] [data-column-content]::before,
-[data-selected-line='single'] [data-column-content]::after,
-[data-selected-line='first'] [data-column-content]::before,
-[data-selected-line='last'] [data-column-content]::after {
-  content: '';
-  position: absolute;
-  display: block;
-  left: 0;
-  right: 0;
-  border-top: 1px solid
-    light-dark(
-      rgb(from var(--pjs-addition-base) r g b / 0.25),
-      rgb(from var(--pjs-addition-base) r g b / 0.3)
-    );
-  pointer-events: none;
-}
-
-[data-selected-line='single'] [data-column-content]::before,
-[data-selected-line='first'] [data-column-content]::before {
-  top: 0;
-}
-
-[data-selected-line='single'] [data-column-content]::after,
-[data-selected-line='last'] [data-column-content]::after {
-  bottom: 0;
 }

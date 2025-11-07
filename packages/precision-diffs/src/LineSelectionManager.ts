@@ -94,17 +94,23 @@ export class LineSelectionManager {
 
     // Check if click was on a line number column
     const target = event.target as HTMLElement;
-    const isNumberColumn = this.isLineNumberColumn(target);
+    const isNumberColumn = this.isLineNumberColumn(target, event);
     if (!isNumberColumn) return;
 
     event.preventDefault();
 
     const isShiftKey = event.shiftKey;
-    this.anchorLine = lineNumber;
 
     if (isShiftKey && this.selectedRange != null) {
-      // Extend existing selection
-      this.updateSelection(lineNumber, true);
+      // Extend existing selection to include the clicked line
+      const oldFirst = this.selectedRange.first;
+      const oldLast = this.selectedRange.last;
+      const first = Math.min(oldFirst, lineNumber);
+      const last = Math.max(oldLast, lineNumber);
+      this.selectedRange = { first, last };
+      // Set anchor to the opposite end from where we clicked
+      this.anchorLine = lineNumber < oldFirst ? last : first;
+      this.applySelectionToDOM();
     } else {
       // Check if clicking on already selected single line (to unselect)
       if (
@@ -119,6 +125,7 @@ export class LineSelectionManager {
 
       // Start new selection
       this.clearSelection();
+      this.anchorLine = lineNumber; // Set anchor AFTER clearing
       this.selectedRange = { first: lineNumber, last: lineNumber };
       this.applySelectionToDOM();
     }
@@ -215,10 +222,15 @@ export class LineSelectionManager {
   }
 
   private getLineNumberFromEvent(event: MouseEvent): number | undefined {
-    const target = event.target as HTMLElement;
-    const lineElement = target.closest('[data-line]');
-    if (!(lineElement instanceof HTMLElement)) return undefined;
-    return this.getLineNumber(lineElement);
+    // Use composedPath to properly handle Shadow DOM
+    const path = event.composedPath();
+    for (const element of path) {
+      if (!(element instanceof HTMLElement)) continue;
+      if (element.hasAttribute('data-line')) {
+        return this.getLineNumber(element);
+      }
+    }
+    return undefined;
   }
 
   private getLineNumber(element: HTMLElement): number {
@@ -226,11 +238,16 @@ export class LineSelectionManager {
     return parseInt(lineStr, 10);
   }
 
-  private isLineNumberColumn(element: HTMLElement): boolean {
-    return (
-      element.closest('[data-column-number]') != null ||
-      element.hasAttribute('data-column-number')
-    );
+  private isLineNumberColumn(target: HTMLElement, event: MouseEvent): boolean {
+    // Use composedPath to properly handle Shadow DOM
+    const path = event.composedPath();
+    for (const element of path) {
+      if (!(element instanceof HTMLElement)) continue;
+      if (element.hasAttribute('data-column-number')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private getAllLineElements(): HTMLElement[] {
