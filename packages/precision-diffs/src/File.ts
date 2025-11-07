@@ -4,6 +4,10 @@ import type { Element } from 'hast';
 import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { type FileRenderResult, FileRenderer } from './FileRenderer';
 import {
+  LineSelectionManager,
+  type LineSelectionOptions,
+} from './LineSelectionManager';
+import {
   MouseEventManager,
   type MouseEventManagerBaseOptions,
   getMouseEventOptions,
@@ -35,7 +39,8 @@ interface FileRenderProps<LAnnotation> {
 
 export interface FileOptions<LAnnotation>
   extends BaseCodeOptions,
-    MouseEventManagerBaseOptions<'file'> {
+    MouseEventManagerBaseOptions<'file'>,
+    LineSelectionOptions {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
   renderAnnotation?(
@@ -62,6 +67,7 @@ export class File<LAnnotation = undefined> {
   private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
   private mouseEventManager: MouseEventManager<'file'>;
+  private lineSelectionManager: LineSelectionManager;
 
   private annotationElements: HTMLElement[] = [];
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
@@ -79,12 +85,20 @@ export class File<LAnnotation = undefined> {
       'file',
       getMouseEventOptions(options)
     );
+    this.lineSelectionManager = new LineSelectionManager({
+      enableLineSelection: options.enableLineSelection,
+      onLineSelected: options.onLineSelected,
+    });
   }
 
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
     this.mouseEventManager.setOptions(getMouseEventOptions(options));
+    this.lineSelectionManager.setOptions({
+      enableLineSelection: options.enableLineSelection,
+      onLineSelected: options.onLineSelected,
+    });
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
@@ -131,6 +145,7 @@ export class File<LAnnotation = undefined> {
     this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
+    this.lineSelectionManager.cleanUp();
 
     // Clean up the data
     this.file = undefined;
@@ -188,6 +203,7 @@ export class File<LAnnotation = undefined> {
       this.renderAnnotations();
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
+      this.lineSelectionManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
       }
@@ -313,6 +329,7 @@ export class File<LAnnotation = undefined> {
     pre.appendChild(this.code);
     this.injectUnsafeCSS();
     this.mouseEventManager.setup(pre);
+    this.lineSelectionManager.setup(pre);
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);
     } else {
