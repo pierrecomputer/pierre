@@ -724,10 +724,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (currentChangeGroup != null) {
           lineIndex =
             currentChangeGroup.diffGroupStartIndex +
-            Math.max(
-              currentChangeGroup.additionLines.length,
-              currentChangeGroup.deletionLines.length
-            );
+            (unified
+              ? currentChangeGroup.additionLines.length +
+                currentChangeGroup.deletionLines.length
+              : Math.max(
+                  currentChangeGroup.additionLines.length,
+                  currentChangeGroup.deletionLines.length
+                ));
         }
         currentChangeGroup = undefined;
         if (unified) {
