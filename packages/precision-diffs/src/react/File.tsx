@@ -24,6 +24,8 @@ export interface FileProps<LAnnotation> {
   enableLineSelection?: boolean;
   selectedLines?: SelectedLineRange | null;
   onLineSelected?(range: SelectedLineRange | null): void;
+  onLineSelectionStart?(range: SelectedLineRange | null): void;
+  onLineSelectionEnd?(range: SelectedLineRange | null): void;
 }
 
 export function File<LAnnotation = undefined>({
@@ -38,6 +40,8 @@ export function File<LAnnotation = undefined>({
   enableLineSelection,
   selectedLines,
   onLineSelected,
+  onLineSelectionStart,
+  onLineSelectionEnd,
 }: FileProps<LAnnotation>): React.JSX.Element {
   const ref = useFileInstance({
     file,
@@ -45,6 +49,8 @@ export function File<LAnnotation = undefined>({
       ...options,
       enableLineSelection,
       onLineSelected,
+      onLineSelectionStart,
+      onLineSelectionEnd,
     },
     lineAnnotations,
     selectedLines,

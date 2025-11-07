@@ -37,7 +37,14 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     side: AnnotationSide;
     lineNumber: number;
   } | null>(null);
+  const [clearSelectionRequested, setClearSelectionRequested] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!clearSelectionRequested) return;
+    const id = requestAnimationFrame(() => setClearSelectionRequested(false));
+    return () => cancelAnimationFrame(id);
+  }, [clearSelectionRequested]);
 
   const addCommentAtLine = useCallback(
     (side: AnnotationSide, lineNumber: number) => {
@@ -112,11 +119,15 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     setHoveredLine(null);
   }, []);
 
-  const handleAddComment = useCallback(() => {
-    if (hoveredLine != null) {
-      addCommentAtLine(hoveredLine.side, hoveredLine.lineNumber);
-    }
-  }, [hoveredLine, addCommentAtLine]);
+  const handleAddComment = useCallback(
+    (e) => {
+      debugger;
+      if (hoveredLine != null) {
+        addCommentAtLine(hoveredLine.side, hoveredLine.lineNumber);
+      }
+    },
+    [hoveredLine, addCommentAtLine]
+  );
 
   const handleSubmitComment = useCallback(
     (side: AnnotationSide, lineNumber: number) => {
@@ -133,6 +144,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           (ann) => !(ann.side === side && ann.lineNumber === lineNumber)
         )
       );
+      setClearSelectionRequested(true);
     },
     []
   );
@@ -177,6 +189,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           }}
           lineAnnotations={annotations}
           enableLineSelection={true}
+          selectedLines={clearSelectionRequested ? null : undefined}
           renderAnnotation={(annotation) =>
             annotation.metadata.isThread ? (
               <Thread />
