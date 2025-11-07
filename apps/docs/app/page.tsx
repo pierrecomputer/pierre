@@ -5,7 +5,7 @@ import {
   IconBrandGithub,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
@@ -22,6 +22,8 @@ import { ArbitraryFiles } from './diff-examples/ArbitraryFiles/ArbitraryFiles';
 import { ARBITRARY_DIFF_EXAMPLE } from './diff-examples/ArbitraryFiles/constants';
 import { DiffStyles } from './diff-examples/DiffStyles/DiffStyles';
 import { DIFF_STYLES } from './diff-examples/DiffStyles/constants';
+import { LineSelection } from './diff-examples/LineSelection/LineSelection';
+import { LINE_SELECTION_EXAMPLE } from './diff-examples/LineSelection/constants';
 import { FontStyles } from './diff-examples/FontStyles/FontStyles';
 import { FONT_STYLES } from './diff-examples/FontStyles/constants';
 import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
@@ -42,6 +44,7 @@ export default function Home() {
         {/* <PrebuiltReact /> */}
         <AnnotationsSection />
         <AcceptRejectSection />
+        <LineSelectionSection />
         <ArbitraryFilesSection />
       </section>
 
@@ -126,6 +129,12 @@ async function AnnotationsSection() {
     <Annotations
       prerenderedDiff={await preloadMultiFileDiff(ANNOTATION_EXAMPLE)}
     />
+  );
+}
+
+async function LineSelectionSection() {
+  return (
+    <LineSelection prerenderedDiff={await preloadFile(LINE_SELECTION_EXAMPLE)} />
   );
 }
 
