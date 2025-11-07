@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import type {
   AnnotationSide,
   DiffLineAnnotation,
+  SelectedLineRange,
 } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
@@ -32,10 +33,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   const [buttonPosition, setButtonPosition] = useState<{
     top: number;
     left: number;
-  } | null>(null);
-  const [hoveredLine, setHoveredLine] = useState<{
-    side: AnnotationSide;
-    lineNumber: number;
   } | null>(null);
   const [clearSelectionRequested, setClearSelectionRequested] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,7 +69,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
 
       if (added) {
         setButtonPosition(null);
-        setHoveredLine(null);
       }
     },
     []
@@ -97,7 +93,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
 
       if (hasAnnotation) {
         setButtonPosition(null);
-        setHoveredLine(null);
         return;
       }
 
@@ -109,24 +104,22 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         left: 16,
       });
 
-      setHoveredLine({ side: annotationSide, lineNumber });
     },
     [annotations]
   );
 
   const handleContainerMouseLeave = useCallback(() => {
     setButtonPosition(null);
-    setHoveredLine(null);
   }, []);
 
-  const handleAddComment = useCallback(
-    (e) => {
-      debugger;
-      if (hoveredLine != null) {
-        addCommentAtLine(hoveredLine.side, hoveredLine.lineNumber);
-      }
+  const handleLineSelectionEnd = useCallback(
+    (range: SelectedLineRange | null) => {
+      if (range == null) return;
+      const side: AnnotationSide =
+        range.side === 'deletions' ? 'deletions' : 'additions';
+      addCommentAtLine(side, range.last);
     },
-    [hoveredLine, addCommentAtLine]
+    [addCommentAtLine]
   );
 
   const handleSubmitComment = useCallback(
@@ -159,7 +152,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         ref={containerRef}
         className="relative flex flex-col gap-3"
         onMouseLeave={handleContainerMouseLeave}
-        onMouseUp={handleAddComment}
       >
         {buttonPosition != null && (
           <Button
@@ -190,6 +182,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           lineAnnotations={annotations}
           enableLineSelection={true}
           selectedLines={clearSelectionRequested ? null : undefined}
+          onLineSelectionEnd={handleLineSelectionEnd}
           renderAnnotation={(annotation) =>
             annotation.metadata.isThread ? (
               <Thread />
