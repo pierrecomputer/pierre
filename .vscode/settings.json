@@ -13,6 +13,7 @@
   "typescript.suggest.autoImports": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit",
+    "source.fixAll.stylelint": "explicit",
     "source.fixAll.prettier": "explicit"
   },
 
@@ -28,6 +29,9 @@
   "files.associations": {
     "*.css": "tailwindcss"
   },
+  "stylelint.validate": ["css"],
+  "css.validate": false,
+  "stylelint.snippet": ["css"],
   "[yaml]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
@@ -56,6 +60,9 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }
