@@ -12,6 +12,7 @@ import {
   parsePatchFiles,
   preloadHighlighter,
 } from '@pierre/precision-diffs';
+import { createShikiWorkerAPI } from '@pierre/precision-diffs/worker';
 
 import {
   CodeConfigs,
@@ -39,6 +40,31 @@ async function loadPatchContent() {
     });
   return loadingPatch;
 }
+
+// Create worker API with properly resolved URL for Vite
+const workerAPI = createShikiWorkerAPI(
+  new URL('@pierre/precision-diffs/worker/shiki-worker.js', import.meta.url),
+  {
+    poolSize: 4,
+    initOptions: {
+      themes: ['pierre-dark', 'pierre-light'],
+    },
+  }
+);
+
+// Initialize the worker pool
+void workerAPI.initialize().then(() => {
+  console.log('Worker pool initialized!', workerAPI.getStats());
+  const start = Date.now();
+  void workerAPI
+    .renderFileToHast(
+      { name: 'file.tsx', contents: FILE_NEW },
+      { theme: 'pierre-dark' }
+    )
+    .then((wow) => {
+      console.log('ZZZZZ - WOW', Date.now() - start, wow);
+    });
+});
 
 const streamingInstances: FileStream[] = [];
 function startStreaming() {

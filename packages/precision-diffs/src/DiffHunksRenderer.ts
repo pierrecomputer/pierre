@@ -1,4 +1,4 @@
-import type { Element, ElementContent, Root, RootContent } from 'hast';
+import type { Element, ElementContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -35,6 +35,7 @@ import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from './utils/getHunkSeparatorSlotName';
+import { getLineNodes } from './utils/getLineNodes';
 import { getThemes } from './utils/getThemes';
 import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import {
@@ -1054,24 +1055,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       },
     };
   }
-}
-
-function getLineNodes(nodes: Root): ElementContent[] {
-  let firstChild: RootContent | Element | Root | null = nodes.children[0];
-  while (firstChild != null) {
-    if (firstChild.type === 'element' && firstChild.tagName === 'code') {
-      return firstChild.children;
-    }
-    if ('children' in firstChild) {
-      firstChild = firstChild.children[0];
-    } else {
-      firstChild = null;
-    }
-  }
-  console.error(nodes);
-  throw new Error(
-    'DiffHunksRenderer.getNodesToRender: Unable to find children'
-  );
 }
 
 function getModifiedLinesString(lines: number) {

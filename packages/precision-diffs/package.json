@@ -24,6 +24,14 @@
     "./ssr": {
       "import": "./dist/ssr/index.js",
       "types": "./dist/ssr/index.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker/index.js",
+      "types": "./dist/worker/index.d.ts"
+    },
+    "./worker/shiki-worker.js": {
+      "import": "./dist/worker/shiki-worker.js",
+      "types": "./dist/worker/shiki-worker.d.ts"
     }
   },
   "files": [
