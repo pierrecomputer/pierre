@@ -232,6 +232,8 @@ export function convertLine(
       'data-line':
         lineInfo.metadataContent == null ? `${lineInfo.lineNumber}` : '',
       'data-line-type': lineInfo.type,
+      'data-line-index':
+        lineInfo.lineIndex >= 0 ? `${lineInfo.lineIndex}` : undefined,
     },
   });
 }

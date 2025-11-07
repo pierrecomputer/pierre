@@ -2,6 +2,7 @@
 
 import { type CSSProperties, type ReactNode } from 'react';
 
+import type { SelectedLineRange } from '../LineSelectionManager';
 import { type FileOptions } from '../File';
 import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type { FileContents, LineAnnotation } from '../types';
@@ -21,8 +22,8 @@ export interface FileProps<LAnnotation> {
   style?: CSSProperties;
   prerenderedHTML?: string;
   enableLineSelection?: boolean;
-  selectedLines?: { first: number; last: number } | null;
-  onLineSelected?(range: { first: number; last: number } | null): void;
+  selectedLines?: SelectedLineRange | null;
+  onLineSelected?(range: SelectedLineRange | null): void;
 }
 
 export function File<LAnnotation = undefined>({

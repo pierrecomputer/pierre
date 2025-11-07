@@ -6,6 +6,7 @@ import { FileHeaderRenderer } from './FileHeaderRenderer';
 import {
   LineSelectionManager,
   type LineSelectionOptions,
+  type SelectedLineRange,
 } from './LineSelectionManager';
 import {
   MouseEventManager,
@@ -191,8 +192,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
-  setSelectedLines(range: { first: number; last: number } | null): void {
-    this.lineSelectionManager.setSelection(range);
+  setSelectedLines(range: SelectedLineRange | null): void {
+    this.lineSelectionManager.setSelection(range, { silent: true });
   }
 
   cleanUp(): void {

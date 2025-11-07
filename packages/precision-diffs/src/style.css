@@ -760,3 +760,19 @@ code {
     );
   }
 }
+
+[data-background] [data-selected-line] {
+  [data-column-number] {
+    background-color: light-dark(
+      rgb(59, 130, 246, 0.4),
+      rgb(59, 130, 246, 0.45)
+    );
+  }
+
+  [data-column-content] {
+    background-color: light-dark(
+      rgb(59, 130, 246, 0.3),
+      rgb(59, 130, 246, 0.35)
+    );
+  }
+}
