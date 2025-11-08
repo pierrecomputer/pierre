@@ -28,7 +28,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
       {/* Display current selection state */}
       <div className="bg-muted space-y-2 rounded-lg border p-4 font-mono text-sm">
         <div>
-          {selectedRange ? (
+          {selectedRange != null ? (
             <>
               <span className="text-muted-foreground">Selected lines: </span>
               <span className="font-semibold">
