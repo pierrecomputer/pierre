@@ -57,6 +57,7 @@ export interface FileDiffOptions<LAnnotation>
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
+  selectedLines?: SelectedLineRange | null;
 }
 
 let instanceId = -1;
@@ -546,6 +547,7 @@ export class FileDiff<LAnnotation = undefined> {
       disableBackground,
       totalLines: result.totalLines,
     });
+
   }
 
   private injectUnsafeCSS(): void {

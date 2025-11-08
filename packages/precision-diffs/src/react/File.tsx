@@ -2,7 +2,6 @@
 
 import { type CSSProperties, type ReactNode } from 'react';
 
-import type { SelectedLineRange } from '../LineSelectionManager';
 import { type FileOptions } from '../File';
 import { HEADER_METADATA_SLOT_ID } from '../constants';
 import type { FileContents, LineAnnotation } from '../types';
@@ -21,11 +20,6 @@ export interface FileProps<LAnnotation> {
   className?: string;
   style?: CSSProperties;
   prerenderedHTML?: string;
-  enableLineSelection?: boolean;
-  selectedLines?: SelectedLineRange | null;
-  onLineSelected?(range: SelectedLineRange | null): void;
-  onLineSelectionStart?(range: SelectedLineRange | null): void;
-  onLineSelectionEnd?(range: SelectedLineRange | null): void;
 }
 
 export function File<LAnnotation = undefined>({
@@ -37,23 +31,11 @@ export function File<LAnnotation = undefined>({
   renderAnnotation,
   renderHeaderMetadata,
   prerenderedHTML,
-  enableLineSelection,
-  selectedLines,
-  onLineSelected,
-  onLineSelectionStart,
-  onLineSelectionEnd,
 }: FileProps<LAnnotation>): React.JSX.Element {
   const ref = useFileInstance({
     file,
-    options: {
-      ...options,
-      enableLineSelection,
-      onLineSelected,
-      onLineSelectionStart,
-      onLineSelectionEnd,
-    },
+    options,
     lineAnnotations,
-    selectedLines,
   });
   const metadata = renderHeaderMetadata?.(file);
   const children = (

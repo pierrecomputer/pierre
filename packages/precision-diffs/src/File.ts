@@ -47,6 +47,7 @@ export interface FileOptions<LAnnotation>
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
+  selectedLines?: SelectedLineRange | null;
 }
 
 let instanceId = -1;

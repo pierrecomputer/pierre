@@ -178,11 +178,11 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           options={{
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
+            enableLineSelection: true,
+            onLineSelectionEnd: handleLineSelectionEnd,
+            ...(clearSelectionRequested ? { selectedLines: null } : {}),
           }}
           lineAnnotations={annotations}
-          enableLineSelection={true}
-          selectedLines={clearSelectionRequested ? null : undefined}
-          onLineSelectionEnd={handleLineSelectionEnd}
           renderAnnotation={(annotation) =>
             annotation.metadata.isThread ? (
               <Thread />

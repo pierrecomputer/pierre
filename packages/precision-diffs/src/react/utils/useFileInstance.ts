@@ -2,7 +2,6 @@ import deepEqual from 'fast-deep-equal';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { File, type FileOptions } from '../../File';
-import type { SelectedLineRange } from '../../LineSelectionManager';
 import type { FileContents, LineAnnotation } from '../../types';
 import { useStableCallback } from './useStableCallback';
 
@@ -13,13 +12,11 @@ interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
-  selectedLines?: SelectedLineRange | null;
 }
 export function useFileInstance<LAnnotation>({
   file,
   options,
   lineAnnotations,
-  selectedLines,
 }: UseFileInstanceProps<LAnnotation>): (node: HTMLElement | null) => void {
   const instanceRef = useRef<File<LAnnotation> | null>(null);
   const ref = useStableCallback((node: HTMLElement | null) => {
@@ -59,8 +56,10 @@ export function useFileInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
-    instanceRef.current.setSelectedLines(selectedLines ?? null);
-  }, [selectedLines]);
+    const selectedLines = options?.selectedLines;
+    if (selectedLines === undefined) return;
+    instanceRef.current.setSelectedLines(selectedLines);
+  }, [options?.selectedLines]);
 
   return ref;
 }
