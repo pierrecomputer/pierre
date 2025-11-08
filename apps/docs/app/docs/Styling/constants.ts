@@ -33,6 +33,15 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
   --pjs-addition-color-override: yellow;
   --pjs-modified-color-override: purple;
 
+  /* Line selection colors - customize the highlighting when users
+   * select lines via enableLineSelection. These support light-dark()
+   * for automatic theme adaptation. */
+  --pjs-selection-color-override: rgb(37, 99, 235);
+  --pjs-bg-selection-override: rgba(147, 197, 253, 0.28);
+  --pjs-bg-selection-number-override: rgba(96, 165, 250, 0.55);
+  --pjs-bg-selection-background-override: rgba(96, 165, 250, 0.2);
+  --pjs-bg-selection-number-background-override: rgba(59, 130, 246, 0.4);
+
   /* Some basic variables for tweaking the layouts of some of the built in
    * components */
   --pjs-gap-inline: 8px;
