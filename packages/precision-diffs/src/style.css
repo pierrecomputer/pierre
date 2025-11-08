@@ -34,6 +34,12 @@
     --pjs-bg-addition-hover-override
     --pjs-bg-addition-emphasis-override
 
+    --pjs-selection-color-override
+    --pjs-bg-selection-override
+    --pjs-bg-selection-number-override
+    --pjs-bg-selection-background-override
+    --pjs-bg-selection-number-background-override
+
     // Available CSS Layout Overrides
     --pjs-gap-inline
     --pjs-gap-block
@@ -218,6 +224,27 @@ code {
       rgb(from var(--pjs-addition-base) r g b / 0.15),
       rgb(from var(--pjs-addition-base) r g b / 0.2)
     )
+  );
+
+  --pjs-selection-base: var(
+    --pjs-selection-color-override,
+    light-dark(rgb(37, 99, 235), rgb(147, 197, 253))
+  );
+  --pjs-bg-selection: var(
+    --pjs-bg-selection-override,
+    light-dark(rgb(147, 197, 253, 0.28), rgb(96, 165, 250, 0.32))
+  );
+  --pjs-bg-selection-number: var(
+    --pjs-bg-selection-number-override,
+    light-dark(rgb(96, 165, 250, 0.55), rgb(59, 130, 246, 0.6))
+  );
+  --pjs-bg-selection-background: var(
+    --pjs-bg-selection-background-override,
+    light-dark(rgb(96, 165, 250, 0.2), rgb(59, 130, 246, 0.26))
+  );
+  --pjs-bg-selection-number-background: var(
+    --pjs-bg-selection-number-background-override,
+    light-dark(rgb(59, 130, 246, 0.4), rgb(37, 99, 235, 0.45))
   );
 
   background-color: var(--pjs-bg);
@@ -746,33 +773,21 @@ code {
 /* Line selection highlighting */
 [data-selected-line] {
   [data-column-number] {
-    color: light-dark(rgb(37, 99, 235), rgb(147, 197, 253));
-    background-color: light-dark(
-      rgb(96, 165, 250, 0.55),
-      rgb(59, 130, 246, 0.6)
-    );
+    color: var(--pjs-selection-base);
+    background-color: var(--pjs-bg-selection-number);
   }
 
   [data-column-content] {
-    background-color: light-dark(
-      rgb(147, 197, 253, 0.28),
-      rgb(96, 165, 250, 0.32)
-    );
+    background-color: var(--pjs-bg-selection);
   }
 }
 
 [data-background] [data-selected-line] {
   [data-column-number] {
-    background-color: light-dark(
-      rgb(59, 130, 246, 0.4),
-      rgb(37, 99, 235, 0.45)
-    );
+    background-color: var(--pjs-bg-selection-number-background);
   }
 
   [data-column-content] {
-    background-color: light-dark(
-      rgb(96, 165, 250, 0.2),
-      rgb(59, 130, 246, 0.26)
-    );
+    background-color: var(--pjs-bg-selection-background);
   }
 }
