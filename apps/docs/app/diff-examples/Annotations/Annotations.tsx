@@ -111,6 +111,8 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     setButtonPosition(null);
   }, []);
 
+  const hasOpenCommentForm = annotations.some((ann) => !ann.metadata.isThread);
+
   const handleLineSelectionEnd = useCallback(
     (range: SelectedLineRange | null) => {
       if (range == null) return;
@@ -153,7 +155,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         className="relative flex flex-col gap-3"
         onMouseLeave={handleContainerMouseLeave}
       >
-        {buttonPosition != null && (
+        {buttonPosition != null && !hasOpenCommentForm && (
           <Button
             size="icon-sm"
             variant="default"
@@ -178,7 +180,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           options={{
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
-            enableLineSelection: true,
+            enableLineSelection: !hasOpenCommentForm,
             onLineSelectionEnd: handleLineSelectionEnd,
             ...(clearSelectionRequested ? { selectedLines: null } : {}),
           }}
