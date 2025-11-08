@@ -813,17 +813,17 @@ code {
 /* Line selection highlighting */
 [data-selected-line] {
   [data-column-number] {
-    color: light-dark(rgb(59, 130, 246), rgb(96, 165, 250));
+    color: light-dark(rgb(37, 99, 235), rgb(147, 197, 253));
     background-color: light-dark(
-      rgb(59, 130, 246, 0.25),
-      rgb(59, 130, 246, 0.3)
+      rgb(96, 165, 250, 0.55),
+      rgb(59, 130, 246, 0.6)
     );
   }
 
   [data-column-content] {
     background-color: light-dark(
-      rgb(59, 130, 246, 0.08),
-      rgb(59, 130, 246, 0.12)
+      rgb(147, 197, 253, 0.28),
+      rgb(96, 165, 250, 0.32)
     );
   }
 }
@@ -832,14 +832,14 @@ code {
   [data-column-number] {
     background-color: light-dark(
       rgb(59, 130, 246, 0.4),
-      rgb(59, 130, 246, 0.45)
+      rgb(37, 99, 235, 0.45)
     );
   }
 
   [data-column-content] {
     background-color: light-dark(
-      rgb(59, 130, 246, 0.3),
-      rgb(59, 130, 246, 0.35)
+      rgb(96, 165, 250, 0.2),
+      rgb(59, 130, 246, 0.26)
     );
   }
 }
