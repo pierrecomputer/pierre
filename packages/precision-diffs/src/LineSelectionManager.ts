@@ -65,6 +65,9 @@ export class LineSelectionManager {
   cleanUp(): void {
     this.removeEventListeners();
     this.clearSelection();
+    if (this.pre != null) {
+      delete this.pre.dataset.interactiveLineNumbers;
+    }
     this.pre = undefined;
   }
 
@@ -73,7 +76,10 @@ export class LineSelectionManager {
     this.pre = pre;
 
     const { enableLineSelection = false } = this.options;
-    if (!enableLineSelection) {
+    if (enableLineSelection) {
+      this.pre.dataset.interactiveLineNumbers = '';
+    } else if (this.pre != null) {
+      delete this.pre.dataset.interactiveLineNumbers;
       return;
     }
 
