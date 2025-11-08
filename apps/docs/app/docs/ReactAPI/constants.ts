@@ -165,9 +165,38 @@ export function SingleDiff() {
         // name and diff stats.
         disableFileHeader: false,
 
-        // For the collapsed code between diff hunks, this controls the 
+        // For the collapsed code between diff hunks, this controls the
         // maximum code revealed per click
         expansionLineCount: 100,
+
+        // Enable interactive line selection - users can click line
+        // numbers to select lines. Click to select a single line,
+        // click and drag to select a range, or hold Shift and click
+        // to extend the selection.
+        enableLineSelection: false,
+
+        // Programmatically control which lines are selected. This
+        // allows two-way binding with state.
+        // selectedLines: { first: 10, last: 15 },
+
+        // Callback fired when the selection changes (continuously
+        // during drag operations).
+        // onLineSelected: (range: SelectedLineRange | null) => {
+        //   console.log('Selection changed:', range);
+        // },
+
+        // Callback fired when user begins a selection interaction
+        // (mouse down on a line number).
+        // onLineSelectionStart: (range: SelectedLineRange | null) => {
+        //   console.log('Selection started:', range);
+        // },
+
+        // Callback fired when user completes a selection interaction
+        // (mouse up). This is useful for triggering actions like
+        // adding comment annotations or saving the selection.
+        // onLineSelectionEnd: (range: SelectedLineRange | null) => {
+        //   console.log('Selection completed:', range);
+        // },
       }}
     />
   );
@@ -326,6 +355,35 @@ export function SingleDiff() {
         // Enabling this property will hide the file header with file
         // name and diff stats.
         disableFileHeader: false,
+
+        // Enable interactive line selection - users can click line
+        // numbers to select lines. Click to select a single line,
+        // click and drag to select a range, or hold Shift and click
+        // to extend the selection.
+        enableLineSelection: false,
+
+        // Programmatically control which lines are selected. This
+        // allows two-way binding with state.
+        // selectedLines: { first: 10, last: 15 },
+
+        // Callback fired when the selection changes (continuously
+        // during drag operations).
+        // onLineSelected: (range: SelectedLineRange | null) => {
+        //   console.log('Selection changed:', range);
+        // },
+
+        // Callback fired when user begins a selection interaction
+        // (mouse down on a line number).
+        // onLineSelectionStart: (range: SelectedLineRange | null) => {
+        //   console.log('Selection started:', range);
+        // },
+
+        // Callback fired when user completes a selection interaction
+        // (mouse up). This is useful for triggering actions like
+        // adding comment annotations or saving the selection.
+        // onLineSelectionEnd: (range: SelectedLineRange | null) => {
+        //   console.log('Selection completed:', range);
+        // },
       }}
     />
   );

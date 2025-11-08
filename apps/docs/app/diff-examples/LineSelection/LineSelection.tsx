@@ -22,7 +22,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
     <div className="space-y-5">
       <FeatureHeader
         title="Line selection"
-        description="Enable interactive line selection by clicking line numbers. Click to select a single line, click and drag to select a range, or hold Shift and click to extend your selection. Control selection programmatically via the selectedLines prop, and respond to changes with onLineSelected, onLineSelectionStart, and onLineSelectionEnd callbacks. Customize selection colors using CSS variables like --pjs-selection-color-override and --pjs-bg-selection-override."
+        description="Click line numbers to select individual lines or ranges. Click and drag to select multiple lines, or hold Shift and click to - extend your selection. You can also control the selection programmatically."
       />
 
       {/* Display current selection state */}
