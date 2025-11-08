@@ -17,6 +17,9 @@ import Header from './Header';
 export default function Home() {
   return (
     <div>
+      <h1>
+        Code Storage is a fully managed version control system built to meet the highest standards of speed, scale, and reliability.
+      </h1>
       <Header />
       <IconSprite />
     </div>
@@ -33,6 +36,9 @@ import Hero from '../components/Hero';
 export default function Home() {
   return (
     <div>
+      <h1>
+        Code Storage is a fully managed version control system built to meet the highest standards of speed, scale, and reliability.
+      </h1>
       <HeaderSimple />
       <IconSprite />
       <h1>Hello!</h1>
@@ -48,7 +54,7 @@ export default function Home() {
     annotations: [
       {
         side: 'additions',
-        lineNumber: 8,
+        lineNumber: 12,
         metadata: {
           key: 'additions-8',
           isThread: true,
