@@ -230,44 +230,76 @@ function CommentForm({
 
   return (
     <div
-      className="max-w-[95%] sm:max-w-[70%]"
       style={{
-        whiteSpace: 'normal',
-        margin: 20,
-        fontFamily: 'Geist',
+        marginLeft: -43,
+        overflow: 'hidden',
+        backgroundColor: 'var(--pjs-bg)',
+        display: 'flex',
+        flexDirection: 'row',
+        gap: 1,
+        width: 'calc(100% + 43px)',
       }}
     >
-      <div className="bg-card rounded-lg border p-5 shadow-sm">
-        <div className="flex gap-2">
-          <div className="relative -mt-0.5 flex-shrink-0">
-            <Avatar className="h-6 w-6">
-              <AvatarImage
-                src="https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg"
-                alt="You"
-              />
-              <AvatarFallback>Y</AvatarFallback>
-            </Avatar>
-          </div>
-          <div className="flex-1">
-            <textarea
-              ref={textareaRef}
-              placeholder="Leave a comment"
-              className="text-foreground bg-background focus:ring-ring min-h-[60px] w-full resize-none rounded-md border p-2 text-sm focus:ring-2 focus:outline-none"
-            />
-            <div className="mt-3 flex items-center gap-2">
-              <Button
-                size="sm"
-                className="cursor-pointer"
-                onClick={handleSubmit}
-              >
-                Comment
-              </Button>
-              <button
-                onClick={handleCancel}
-                className="text-muted-foreground hover:text-foreground cursor-pointer px-3 py-1 text-sm transition-colors"
-              >
-                Cancel
-              </button>
+      <div
+        style={{
+          backgroundColor: `light-dark(
+      rgb(59, 130, 246, 0.4),
+      rgb(37, 99, 235, 0.45)
+    )`,
+          width: 43,
+          display: 'flex',
+        }}
+      />
+      <div
+        style={{
+          width: '100%',
+          backgroundColor: `light-dark(
+        rgb(96, 165, 250, 0.2),
+        rgb(59, 130, 246, 0.26)
+      )`,
+        }}
+      >
+        <div
+          className="max-w-[95%] sm:max-w-[70%]"
+          style={{
+            whiteSpace: 'normal',
+            margin: 20,
+            fontFamily: 'Geist',
+          }}
+        >
+          <div className="bg-card rounded-lg border p-5 shadow-sm">
+            <div className="flex gap-2">
+              <div className="relative -mt-0.5 flex-shrink-0">
+                <Avatar className="h-6 w-6">
+                  <AvatarImage
+                    src="https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg"
+                    alt="You"
+                  />
+                  <AvatarFallback>Y</AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="flex-1">
+                <textarea
+                  ref={textareaRef}
+                  placeholder="Leave a comment"
+                  className="text-foreground bg-background focus:ring-ring min-h-[60px] w-full resize-none rounded-md border p-2 text-sm focus:ring-2 focus:outline-none"
+                />
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="cursor-pointer"
+                    onClick={handleSubmit}
+                  >
+                    Comment
+                  </Button>
+                  <button
+                    onClick={handleCancel}
+                    className="text-muted-foreground hover:text-foreground cursor-pointer px-3 py-1 text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
