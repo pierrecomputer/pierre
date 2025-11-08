@@ -244,10 +244,7 @@ function CommentForm({
     >
       <div
         style={{
-          backgroundColor: `light-dark(
-      rgb(59, 130, 246, 0.4),
-      rgb(37, 99, 235, 0.45)
-    )`,
+          backgroundColor: 'var(--pjs-bg-selection-number-background)',
           width: 43,
           display: 'flex',
         }}
@@ -255,10 +252,7 @@ function CommentForm({
       <div
         style={{
           width: '100%',
-          backgroundColor: `light-dark(
-        rgb(96, 165, 250, 0.2),
-        rgb(59, 130, 246, 0.26)
-      )`,
+          backgroundColor: 'var(--pjs-bg-selection-background)',
         }}
       >
         <div
