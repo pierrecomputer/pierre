@@ -2,7 +2,6 @@ import deepEqual from 'fast-deep-equal';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { FileDiff, type FileDiffOptions } from '../../FileDiff';
-import type { SelectedLineRange } from '../../LineSelectionManager';
 import type {
   DiffLineAnnotation,
   FileContents,
@@ -19,7 +18,6 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   options?: FileDiffOptions<LAnnotation>;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
-  selectedLines?: SelectedLineRange | null;
 }
 
 export function useFileDiffInstance<LAnnotation>({
@@ -28,7 +26,6 @@ export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
   lineAnnotations,
-  selectedLines,
 }: UseFileDiffInstanceProps<LAnnotation>): (
   fileContainer: HTMLElement | null
 ) => void {
@@ -65,6 +62,7 @@ export function useFileDiffInstance<LAnnotation>({
     if (instanceRef.current == null) return;
     const instance = instanceRef.current;
     const forceRender = !deepEqual(instance.options, options);
+    const selectedLines = options?.selectedLines;
     const hasControlledSelection = selectedLines !== undefined;
     const currentSelection = selectedLines ?? null;
     instance.setOptions(options);
@@ -85,9 +83,11 @@ export function useFileDiffInstance<LAnnotation>({
   });
 
   useIsometricEffect(() => {
-    if (instanceRef.current == null || selectedLines === undefined) return;
+    if (instanceRef.current == null) return;
+    const selectedLines = options?.selectedLines;
+    if (selectedLines === undefined) return;
     instanceRef.current.setSelectedLines(selectedLines);
-  }, [selectedLines]);
+  }, [options?.selectedLines]);
 
   return ref;
 }

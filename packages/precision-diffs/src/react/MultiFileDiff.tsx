@@ -1,6 +1,5 @@
 'use client';
 
-import type { SelectedLineRange } from '../LineSelectionManager';
 import type { FileContents } from '../types';
 import type { DiffBasePropsReact } from './types';
 import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
@@ -13,11 +12,6 @@ export interface MultiFileDiffProps<LAnnotation>
   extends DiffBasePropsReact<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
-  enableLineSelection?: boolean;
-  selectedLines?: SelectedLineRange | null;
-  onLineSelected?(range: SelectedLineRange | null): void;
-  onLineSelectionStart?(range: SelectedLineRange | null): void;
-  onLineSelectionEnd?(range: SelectedLineRange | null): void;
 }
 
 export function MultiFileDiff<LAnnotation = undefined>({
@@ -30,24 +24,12 @@ export function MultiFileDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
-  enableLineSelection,
-  selectedLines,
-  onLineSelected,
-  onLineSelectionStart,
-  onLineSelectionEnd,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const ref = useFileDiffInstance({
     oldFile,
     newFile,
-    options: {
-      ...options,
-      enableLineSelection,
-      onLineSelected,
-      onLineSelectionStart,
-      onLineSelectionEnd,
-    },
+    options,
     lineAnnotations,
-    selectedLines,
   });
   const children = renderAnnotationChildren({
     oldFile,

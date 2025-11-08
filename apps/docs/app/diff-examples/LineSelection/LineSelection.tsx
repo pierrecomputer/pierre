@@ -82,16 +82,19 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
       <MultiFileDiff
         {...prerenderedDiff}
         className="diff-container"
-        enableLineSelection={true}
-        selectedLines={selectedRange}
-        onLineSelected={(range) => {
-          setSelectedRange(range);
-        }}
-        onLineSelectionStart={() => {
-          setSelectionState('selecting');
-        }}
-        onLineSelectionEnd={() => {
-          setSelectionState('idle');
+        options={{
+          ...prerenderedDiff.options,
+          enableLineSelection: true,
+          selectedLines: selectedRange,
+          onLineSelected: (range) => {
+            setSelectedRange(range);
+          },
+          onLineSelectionStart: () => {
+            setSelectionState('selecting');
+          },
+          onLineSelectionEnd: () => {
+            setSelectionState('idle');
+          },
         }}
       />
     </div>
