@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
@@ -22,7 +23,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
     <div className="space-y-5">
       <FeatureHeader
         title="Line selection"
-        description="Click line numbers to select individual lines or ranges. Click and drag to select multiple lines, or hold Shift and click to - extend your selection. You can also control the selection programmatically."
+        description="You can optionally turn on line selection support. When on, clicking line numbers will select the line. Click and drag to select multiple lines, or hold Shift and click to - extend your selection. You can also control the selection programmatically."
       />
 
       {/* Display current selection state */}
@@ -45,30 +46,30 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
 
       {/* Demonstrate programmatic control via selectedLines prop */}
       <div className="flex gap-2">
-        <button
+        <Button
+          variant="outline"
           onClick={() => {
             setSelectedRange({ first: 6, last: 6 });
           }}
-          className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
           Select line 6
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => {
             setSelectedRange({ first: 15, last: 20 });
           }}
-          className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
           Select lines 15-20
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => {
             setSelectedRange(null);
           }}
-          className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
           Clear selection
-        </button>
+        </Button>
       </div>
 
       <MultiFileDiff
