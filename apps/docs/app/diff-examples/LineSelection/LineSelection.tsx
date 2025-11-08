@@ -15,9 +15,6 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
     first: number;
     last: number;
   } | null>(null);
-  const [selectionState, setSelectionState] = useState<'idle' | 'selecting'>(
-    'idle'
-  );
 
   return (
     <div className="space-y-5">
@@ -26,7 +23,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         description="Click line numbers to select individual lines or ranges. Click and drag to select multiple lines, or hold Shift and click to extend your selection. You can also control the selection programmatically."
       />
 
-      <div className="bg-muted rounded-lg border p-4 font-mono text-sm space-y-2">
+      <div className="bg-muted space-y-2 rounded-lg border p-4 font-mono text-sm">
         <div>
           {selectedRange ? (
             <>
@@ -41,19 +38,12 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             <span className="text-muted-foreground">No lines selected</span>
           )}
         </div>
-        <div className="text-muted-foreground">
-          Selection status:{' '}
-          <span className="font-semibold text-foreground">
-            {selectionState === 'selecting' ? 'Selecting…' : 'Idle'}
-          </span>
-        </div>
       </div>
 
       <div className="flex gap-2">
         <button
           onClick={() => {
             setSelectedRange({ first: 6, last: 6 });
-            setSelectionState('idle');
           }}
           className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
@@ -62,7 +52,6 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         <button
           onClick={() => {
             setSelectedRange({ first: 15, last: 20 });
-            setSelectionState('idle');
           }}
           className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
@@ -71,7 +60,6 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         <button
           onClick={() => {
             setSelectedRange(null);
-            setSelectionState('idle');
           }}
           className="bg-muted hover:bg-accent rounded-md px-3 py-2 text-sm font-medium transition-colors"
         >
@@ -88,12 +76,6 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           selectedLines: selectedRange,
           onLineSelected: (range) => {
             setSelectedRange(range);
-          },
-          onLineSelectionStart: () => {
-            setSelectionState('selecting');
-          },
-          onLineSelectionEnd: () => {
-            setSelectionState('idle');
           },
         }}
       />
