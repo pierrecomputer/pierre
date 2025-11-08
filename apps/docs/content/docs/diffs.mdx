@@ -17,3 +17,126 @@ Just run the dang thang.
 ```tsx
 <DiffStream gogogo />
 ```
+
+## Line Selection
+
+Enable interactive line selection to let users select and highlight specific lines or ranges within your diffs.
+
+### Basic Usage
+
+```tsx
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
+import { useState } from 'react';
+
+function MyDiff() {
+  const [selectedRange, setSelectedRange] = useState(null);
+
+  return (
+    <MultiFileDiff
+      oldFile={oldFile}
+      newFile={newFile}
+      options={{
+        enableLineSelection: true,
+        selectedLines: selectedRange,
+        onLineSelected: (range) => {
+          setSelectedRange(range);
+        },
+      }}
+    />
+  );
+}
+```
+
+### User Interactions
+
+When `enableLineSelection` is true, users can:
+
+- **Click a line number** to select a single line
+- **Click and drag** across line numbers to select a range
+- **Shift + Click** to extend the current selection
+- **Click a selected line** to deselect it
+
+### API Reference
+
+#### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `enableLineSelection` | `boolean` | Enable line selection interactions. Default: `false` |
+| `selectedLines` | `SelectedLineRange \| null` | Programmatically control which lines are selected |
+| `onLineSelected` | `(range: SelectedLineRange \| null) => void` | Callback fired when the selection changes |
+| `onLineSelectionStart` | `(range: SelectedLineRange \| null) => void` | Callback fired when user begins a selection interaction |
+| `onLineSelectionEnd` | `(range: SelectedLineRange \| null) => void` | Callback fired when user completes a selection interaction |
+
+#### SelectedLineRange Type
+
+```tsx
+interface SelectedLineRange {
+  first: number;           // First selected line number
+  last: number;            // Last selected line number
+  side?: 'additions' | 'deletions' | 'both';  // Which side(s) are selected
+  firstSide?: 'additions' | 'deletions' | 'both';
+  lastSide?: 'additions' | 'deletions' | 'both';
+  rowStart?: number;       // Internal row index (optional)
+  rowEnd?: number;         // Internal row index (optional)
+}
+```
+
+### Event Lifecycle
+
+1. **onLineSelectionStart** - Fires when user clicks a line number (mouse down)
+2. **onLineSelected** - Fires continuously as selection changes
+3. **onLineSelectionEnd** - Fires when user releases mouse (mouse up)
+
+This allows you to differentiate between in-progress selection and final selection:
+
+```tsx
+<MultiFileDiff
+  options={{
+    enableLineSelection: true,
+    onLineSelectionStart: (range) => {
+      console.log('Selection started:', range);
+    },
+    onLineSelected: (range) => {
+      console.log('Selection changed:', range);
+    },
+    onLineSelectionEnd: (range) => {
+      console.log('Selection completed:', range);
+      // Save to state, trigger API calls, etc.
+    },
+  }}
+/>
+```
+
+### Styling
+
+Customize selection colors using CSS variables:
+
+```css
+precision-diff {
+  /* Text color for selected line numbers */
+  --pjs-selection-color-override: rgb(37, 99, 235);
+
+  /* Background color for selected line content */
+  --pjs-bg-selection-override: rgba(147, 197, 253, 0.28);
+
+  /* Background color for selected line numbers */
+  --pjs-bg-selection-number-override: rgba(96, 165, 250, 0.55);
+
+  /* Background variants for lines with existing backgrounds (additions/deletions) */
+  --pjs-bg-selection-background-override: rgba(96, 165, 250, 0.2);
+  --pjs-bg-selection-number-background-override: rgba(59, 130, 246, 0.4);
+}
+```
+
+All selection variables support the `light-dark()` function for automatic theme adaptation:
+
+```css
+precision-diff {
+  --pjs-selection-color-override: light-dark(rgb(37, 99, 235), rgb(147, 197, 253));
+  --pjs-bg-selection-override: light-dark(
+    rgba(147, 197, 253, 0.28),
+    rgba(96, 165, 250, 0.32)
+  );
+}
+```

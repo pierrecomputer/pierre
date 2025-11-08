@@ -245,7 +245,7 @@ function CommentForm({
       <div
         style={{
           backgroundColor: 'var(--pjs-bg-selection-number-background)',
-          width: 43,
+          width: 43.5,
           display: 'flex',
         }}
       />
