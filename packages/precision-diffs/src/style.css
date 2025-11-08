@@ -34,6 +34,7 @@
     --pjs-bg-addition-hover-override
     --pjs-bg-addition-emphasis-override
 
+    // Line Selection Color Overrides (for enableLineSelection)
     --pjs-selection-color-override
     --pjs-bg-selection-override
     --pjs-bg-selection-number-override
