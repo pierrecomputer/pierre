@@ -129,8 +129,8 @@ jobs:
       - name: Type check - demo
         run: bun run demo:tsc
 
-      - name: Type check - docs
-        run: bun run docs:tsc
+      - name: Build and type check - docs
+        run: bun run docs:build
 
       - name: Type check - storage-elements
         run: bun run tsc
