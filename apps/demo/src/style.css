@@ -45,7 +45,6 @@ body,
   display: block;
   margin: 0;
   padding: 0;
-  min-height: 100vh;
   min-width: 100dvw;
   min-height: 100dvh;
   overscroll-behavior: none;
@@ -61,7 +60,7 @@ textarea {
   appearance: none;
   border-radius: 0;
   border: 1px solid var(--fg);
-  padding: 4px 4px;
+  padding: 4px;
   outline: none;
   resize: none;
   margin: 0;
@@ -163,7 +162,7 @@ code {
 .files-input {
   position: fixed;
   z-index: 20;
-  inset: 50px 0 0 0;
+  inset: 50px 0 0;
   padding: 10px;
   display: grid;
   grid-template-columns: 1fr 1fr;
