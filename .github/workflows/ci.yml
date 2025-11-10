@@ -175,7 +175,8 @@ jobs:
         run: bun run demo:tsc
 
       - name: Type check - docs
-        run: cd apps/docs && bun run tsc --noEmit
+        run: bun run tsc --noEmit
+        working-directory: apps/docs
 
       - name: Type check - storage-elements
         run: bun run tsc
