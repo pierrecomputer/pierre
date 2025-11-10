@@ -32,6 +32,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify config files
+        run: |
+          echo "Checking for config files..."
+          ls -la eslint.config.js prettier.config.mjs stylelint.config.js
+          echo "Current directory: $(pwd)"
+
       - name: Run ESLint
         run: bun run lint
 
@@ -110,6 +116,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build precision-diffs (required for docs)
+        run: bun run diffs:build
+
+      - name: Build storage-elements-next (required for docs)
+        run: bun run tsc
+        working-directory: packages/storage-elements-next
+
       - name: Type check - precision-diffs
         run: bun run diffs:tsc
 
@@ -120,7 +133,5 @@ jobs:
         run: bun run docs:tsc
 
       - name: Type check - storage-elements
-        run: cd packages/storage-elements && bun run tsc
-
-      - name: Type check - storage-elements-next
-        run: cd packages/storage-elements-next && bun run tsc
+        run: bun run tsc
+        working-directory: packages/storage-elements
