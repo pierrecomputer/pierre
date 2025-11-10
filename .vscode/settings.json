@@ -29,8 +29,9 @@
   "files.associations": {
     "*.css": "tailwindcss"
   },
-  "stylelint.validate": ["css"],
+  "stylelint.validate": ["css", "postcss"],
   "css.validate": false,
+  "postcss.validate": false,
   "stylelint.snippet": ["css"],
   "[yaml]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"

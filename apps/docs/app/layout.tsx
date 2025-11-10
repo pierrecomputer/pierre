@@ -12,7 +12,6 @@ import {
 import localFont from 'next/font/local';
 
 import './globals.css';
-// import '../styles/tokens.css';
 
 import { Toaster } from '@/components/ui/sonner';
 
