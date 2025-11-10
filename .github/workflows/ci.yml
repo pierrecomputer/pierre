@@ -36,8 +36,7 @@ jobs:
         run: bun run diffs:build
 
       - name: Build storage-elements-next
-        run: bun run tsc
-        working-directory: packages/storage-elements-next
+        run: bun run storage-elements-next:build
 
       - name: Build docs (generates .source)
         run: bun run docs:build
@@ -175,9 +174,7 @@ jobs:
         run: bun run demo:tsc
 
       - name: Type check - docs
-        run: bun run tsc --noEmit
-        working-directory: apps/docs
+        run: bun run docs:tsc
 
       - name: Type check - storage-elements
-        run: bun run tsc
-        working-directory: packages/storage-elements
+        run: bun run storage-elements:tsc
