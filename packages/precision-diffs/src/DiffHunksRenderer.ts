@@ -909,7 +909,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         for (let i = additionLineNumber; i < hunk.additionStart - 1; i++) {
           const line = this.diff.newLines[i];
           if (line == null) {
-            throw new Error('PRE LINE COUNT IS OFF!');
+            console.error({
+              i,
+              len: hunk.additionStart,
+              lines: this.diff.newLines,
+            });
+            throw new Error(
+              'DiffHunksRenderer.processLines: Pre hunk expansion line count was invalid'
+            );
           }
           hasLongLines =
             hasLongLines || line.length > maxLineLengthForHighlighting;
@@ -942,9 +949,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
       for (let i = additionLineNumber; i < len; i++) {
         const line = this.diff.newLines[i];
-        // FIXME(amadeus): Do some proper tests with this
         if (line == null) {
-          throw new Error(`LINE COUNT IS OFF!`);
+          console.error({ i, len, lines: this.diff.newLines });
+          throw new Error(
+            'DiffHunksRenderer.processLines: Post hunk expansion line count was invalid'
+          );
         }
         hasLongLines =
           hasLongLines || line.length > maxLineLengthForHighlighting;
