@@ -1,3 +1,6 @@
+# Demo app
+apps/demo/src/styles.css
+
 # Dependencies
 node_modules/
 **/node_modules/

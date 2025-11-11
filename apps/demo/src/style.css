@@ -46,6 +46,7 @@ body,
   margin: 0;
   padding: 0;
   min-width: 100dvw;
+  min-height: 100vh;
   min-height: 100dvh;
   overscroll-behavior: none;
   touch-action: manipulation;
