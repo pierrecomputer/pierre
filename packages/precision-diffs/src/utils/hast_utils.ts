@@ -8,7 +8,7 @@ import type {
 } from 'hast';
 
 import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from '../constants';
-import { type SVGSpriteNames } from '../sprite';
+import type { SVGSpriteNames } from '../sprite';
 import type {
   AnnotationSpan,
   BaseDiffOptions,
