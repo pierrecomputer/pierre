@@ -1,6 +1,16 @@
+import type { SVGSpriteNames } from '../sprite';
 import type { ChangeTypes } from '../types';
 
-export function getIconForType(type: ChangeTypes | 'file'): string {
+export function getIconForType(
+  type: ChangeTypes | 'file'
+): Extract<
+  SVGSpriteNames,
+  | 'pjs-icon-file-code'
+  | 'pjs-icon-symbol-modified'
+  | 'pjs-icon-symbol-deleted'
+  | 'pjs-icon-symbol-added'
+  | 'pjs-icon-symbol-moved'
+> {
   switch (type) {
     case 'file':
       return 'pjs-icon-file-code';

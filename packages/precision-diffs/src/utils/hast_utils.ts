@@ -8,6 +8,7 @@ import type {
 } from 'hast';
 
 import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from '../constants';
+import { type SVGSpriteNames } from '../sprite';
 import type {
   AnnotationSpan,
   BaseDiffOptions,
@@ -86,7 +87,7 @@ export function createSeparator({
   if (type === 'line-info' && content != null) {
     const contentChildren: ElementContent[] = [createTextNode(content)];
     if (expandIndex != null) {
-      contentChildren.unshift(createIcon({ name: 'pjs-icon-chevrons-narrow' }));
+      contentChildren.unshift(createIcon({ name: 'pjs-icon-expand-all' }));
     }
     children.push(
       createHastElement({
@@ -117,7 +118,7 @@ export function createSeparator({
 }
 
 interface CreateIconProps {
-  name: string;
+  name: SVGSpriteNames;
   width?: number;
   height?: number;
   properties?: Properties;
@@ -365,7 +366,7 @@ function createHeaderElement({
     );
     children.push(
       createIcon({
-        name: 'pjs-icon-arrow',
+        name: 'pjs-icon-arrow-right-short',
         properties: {
           'data-rename-icon': '',
         },

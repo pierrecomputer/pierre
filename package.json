@@ -19,6 +19,7 @@
     "update-themes": "node update-themes.js",
     "icons:build": "node scripts/build-icons.js && bun run format",
     "icons:sprite": "node scripts/build-sprite.js && bun run format",
+    "icons": "bun run icons:build && bun run icons:sprite",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:css": "stylelint \"**/*.css\"",

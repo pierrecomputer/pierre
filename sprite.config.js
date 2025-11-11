@@ -1,10 +1,13 @@
 export const spriteConfig = {
   icons: [
-    'IconArrow',
+    'IconArrowRightShort',
     'IconBrandGithub',
     'IconChevronsNarrow',
+    'IconChevron',
     'IconDiffSplit',
     'IconDiffUnified',
+    'IconExpand',
+    'IconExpandAll',
     'IconFileCode',
     'IconSymbolDiffstat',
     'IconSymbolAdded',

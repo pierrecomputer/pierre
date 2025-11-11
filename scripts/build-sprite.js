@@ -68,7 +68,9 @@ ${symbol.content
     )
     .join('\n');
 
-  return `export const SVGSpriteSheet = \`<svg data-icon-sprite aria-hidden="true" width="0" height="0">
+  return `export type SVGSpriteNames = ${symbols.map(({ id }) => `'${id}'`).join('|')};
+
+export const SVGSpriteSheet = \`<svg data-icon-sprite aria-hidden="true" width="0" height="0">
 ${symbolsHtml}
 </svg>\`;`;
 }

@@ -133,6 +133,8 @@ export { IconEmojiSmileFill } from './IconEmojiSmileFill';
 export { IconEnvelope } from './IconEnvelope';
 export { IconEnvelopeFill } from './IconEnvelopeFill';
 export { IconEnvelopeOpenFill } from './IconEnvelopeOpenFill';
+export { IconExpand } from './IconExpand';
+export { IconExpandAll } from './IconExpandAll';
 export { IconExpandRow } from './IconExpandRow';
 export { IconExtensions } from './IconExtensions';
 export { IconEye } from './IconEye';
