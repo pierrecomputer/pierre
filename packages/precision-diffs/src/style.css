@@ -441,9 +441,6 @@ code {
   cursor: pointer;
   width: 32px;
   height: 32px;
-}
-
-[data-expand-button] {
   opacity: 0.65;
 }
 
