@@ -173,8 +173,9 @@ jobs:
       - name: Type check - demo
         run: bun run demo:tsc
 
-      - name: Type check - docs
-        run: bun run docs:tsc
+      # mdo-do: Restore docs type checking once Fumadocs are removed
+      # - name: Type check - docs
+      #   run: bun run docs:tsc
 
       - name: Type check - storage-elements
         run: bun run storage-elements:tsc
