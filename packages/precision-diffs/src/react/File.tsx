@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, type ReactNode } from 'react';
+import type { SelectedLineRange } from 'src/LineSelectionManager';
 
 import { type FileOptions } from '../File';
 import { HEADER_METADATA_SLOT_ID } from '../constants';
@@ -15,6 +16,7 @@ export interface FileProps<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+  selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
   className?: string;
@@ -25,6 +27,7 @@ export interface FileProps<LAnnotation> {
 export function File<LAnnotation = undefined>({
   file,
   lineAnnotations,
+  selectedLines,
   options,
   className,
   style,
@@ -36,6 +39,7 @@ export function File<LAnnotation = undefined>({
     file,
     options,
     lineAnnotations,
+    selectedLines,
   });
   const metadata = renderHeaderMetadata?.(file);
   const children = (

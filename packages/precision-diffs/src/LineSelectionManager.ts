@@ -1,3 +1,5 @@
+import deepEquals from 'fast-deep-equal';
+
 import type { AnnotationSide } from './types';
 
 export type SelectionSide = AnnotationSide | 'both';
@@ -44,22 +46,22 @@ export interface LineSelectionOptions {
  */
 export class LineSelectionManager {
   private pre: HTMLPreElement | undefined;
-  private selectedRange: SelectedLineRange | undefined;
+  private selectedRange: SelectedLineRange | null = null;
   private anchorLine: number | undefined;
   private anchorLineIndex: number | undefined;
   private isDragging = false;
   private selectionSide: SelectionSide | undefined;
-  private selectedRowRange:
-    | {
-        first: number;
-        last: number;
-      }
-    | undefined;
+  private selectedRowRange: { first: number; last: number } | undefined;
+  private dirty = true;
 
   constructor(private options: LineSelectionOptions = {}) {}
 
   setOptions(options: LineSelectionOptions): void {
     this.options = { ...this.options, ...options };
+    this.removeEventListeners();
+    if (this.options.enableLineSelection === true) {
+      this.attachEventListeners();
+    }
   }
 
   cleanUp(): void {
@@ -72,28 +74,29 @@ export class LineSelectionManager {
   }
 
   setup(pre: HTMLPreElement): void {
+    if (this.pre === pre) return;
     this.cleanUp();
     this.pre = pre;
-
     const { enableLineSelection = false } = this.options;
     if (enableLineSelection) {
       this.pre.dataset.interactiveLineNumbers = '';
-    } else if (this.pre != null) {
+      this.attachEventListeners();
+    } else {
       delete this.pre.dataset.interactiveLineNumbers;
-      return;
     }
-
-    this.attachEventListeners();
+    this.setDirty();
   }
 
-  /**
-   * Programmatically set the selected line range
-   */
-  setSelection(
-    range: SelectedLineRange | null,
-    options: { silent?: boolean } = {}
-  ): void {
-    const { silent = false } = options;
+  setDirty(): void {
+    this.dirty = true;
+  }
+
+  setSelection(range: SelectedLineRange | null): void {
+    const isRangeChange = !(
+      range === this.selectedRange || deepEquals(range, this.selectedRange)
+    );
+    if (!this.dirty && !isRangeChange) return;
+    this.selectedRange = range;
     if (range == null) {
       this.clearSelection();
     } else {
@@ -111,7 +114,7 @@ export class LineSelectionManager {
       }
       this.applySelectionToDOM();
     }
-    if (!silent) {
+    if (isRangeChange) {
       this.notifySelectionChange();
     }
   }
@@ -125,6 +128,8 @@ export class LineSelectionManager {
 
   private attachEventListeners(): void {
     if (this.pre == null) return;
+    // Lets run a cleanup, just in case
+    this.removeEventListeners();
     this.pre.addEventListener('mousedown', this.handleMouseDown);
   }
 
@@ -248,6 +253,7 @@ export class LineSelectionManager {
   }
 
   private clearSelection(): void {
+    this.dirty = false;
     if (this.pre == null) return;
 
     const selectedElements = this.pre.querySelectorAll('[data-selected-line]');
@@ -255,7 +261,7 @@ export class LineSelectionManager {
       element.removeAttribute('data-selected-line');
     }
 
-    this.selectedRange = undefined;
+    this.selectedRange = null;
     this.anchorLine = undefined;
     this.anchorLineIndex = undefined;
     this.selectionSide = undefined;
@@ -306,6 +312,7 @@ export class LineSelectionManager {
       this.selectedRange.firstSide = firstSide;
       this.selectedRange.lastSide = lastSide ?? firstSide;
     }
+    this.dirty = false;
   }
 
   private setRowRange(range?: { first: number; last: number }): void {
@@ -397,6 +404,8 @@ export class LineSelectionManager {
   }
 
   private getLineElementFromEvent(event: MouseEvent): HTMLElement | undefined {
+    // FIXME(amadeus): Lets pull out this composedPath so it only happens once
+    // per event
     const path = event.composedPath();
     for (const element of path) {
       if (element instanceof HTMLElement && element.hasAttribute('data-line')) {
@@ -418,7 +427,9 @@ export class LineSelectionManager {
     return Number.isNaN(value) ? undefined : value;
   }
 
-  private isLineNumberColumn(target: HTMLElement, event: MouseEvent): boolean {
+  private isLineNumberColumn(_target: HTMLElement, event: MouseEvent): boolean {
+    // FIXME(amadeus): Lets pull out this composedPath so it only happens once
+    // per event
     // Use composedPath to properly handle Shadow DOM
     const path = event.composedPath();
     for (const element of path) {
@@ -454,4 +465,18 @@ export class LineSelectionManager {
     if (lineType === 'change-deletion') return 'deletions';
     return 'both';
   }
+}
+
+export function pluckLineSelectionOptions({
+  enableLineSelection,
+  onLineSelected,
+  onLineSelectionStart,
+  onLineSelectionEnd,
+}: LineSelectionOptions): LineSelectionOptions {
+  return {
+    enableLineSelection,
+    onLineSelected,
+    onLineSelectionStart,
+    onLineSelectionEnd,
+  };
 }

@@ -111,6 +111,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
       <MultiFileDiff
         {...prerenderedDiff}
         className="overflow-hidden rounded-lg border dark:border-neutral-800"
+        // Control selection programmatically (two-way binding with state)
+        selectedLines={selectedRange}
         options={{
           ...prerenderedDiff.options,
           // Use the dynamic theme from state
@@ -119,10 +121,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           disableBackground: disableBackground,
           // Enable interactive line selection
           enableLineSelection: true,
-          // Control selection programmatically (two-way binding with state)
-          selectedLines: selectedRange,
           // Listen to selection changes from user interactions
-          onLineSelected: (range) => {
+          onLineSelected(range) {
             setSelectedRange(range);
           },
           // Optional: Use onLineSelectionStart and onLineSelectionEnd to

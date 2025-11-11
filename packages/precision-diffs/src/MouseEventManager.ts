@@ -430,7 +430,7 @@ function debugLogIfEnabled(
   console.log(...args);
 }
 
-export function getMouseEventOptions<TMode extends MouseEventManagerMode>(
+export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
   {
     onLineClick,
     onLineNumberClick,
