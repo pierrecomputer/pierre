@@ -443,6 +443,16 @@ code {
   height: 32px;
 }
 
+[data-expand-button] {
+  opacity: 0.65;
+}
+
+@media (pointer: fine) {
+  [data-expand-button]:hover {
+    opacity: 1;
+  }
+}
+
 [data-expand-up] [data-icon] {
   transform: scaleY(-1);
 }
