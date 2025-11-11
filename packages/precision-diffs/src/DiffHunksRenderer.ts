@@ -497,7 +497,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 type: hunkSeparators,
                 content: getModifiedLinesString(lines),
                 expandIndex: expandable ? hunkIndex : undefined,
-                isLargeExpand: hunk.collapsedBefore > expansionLineCount,
+                isChunkedExpansion:
+                  expandable && hunk.collapsedBefore > expansionLineCount,
                 slotName,
                 isFirstHunk,
                 isLastHunk: false,
@@ -541,7 +542,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               type: hunkSeparators,
               content: getModifiedLinesString(lines),
               expandIndex: expandable ? hunkIndex + 1 : undefined,
-              isLargeExpand: fileEnd - hunkEnd > expansionLineCount,
+              isChunkedExpansion:
+                expandable && fileEnd - hunkEnd > expansionLineCount,
               slotName,
               isFirstHunk: false,
               isLastHunk,
