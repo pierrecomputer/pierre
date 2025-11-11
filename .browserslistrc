@@ -1,0 +1,11 @@
+# Browser support targets for the entire monorepo
+# Targets browsers with native light-dark() support (May 2024+)
+#
+# Used by:
+# - apps/docs (Next.js + Tailwind CSS v4)
+# - packages/precision-diffs (tsdown + lightningcss)
+
+chrome >= 123
+edge >= 123
+safari >= 17.5
+firefox >= 120

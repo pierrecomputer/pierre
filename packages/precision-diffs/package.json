@@ -37,6 +37,8 @@
     "@types/hast": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
     "react": "catalog:",
     "react-dom": "catalog:",
     "tsdown": "catalog:",

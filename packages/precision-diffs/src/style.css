@@ -338,7 +338,6 @@ code {
   position: sticky;
   left: 0;
   grid-column: 1 / 3;
-  -webkit-user-select: none;
   user-select: none;
   /* We multiply by 1.414 (√2) to better approximate the diagonal repeat distance */
   background-image: repeating-linear-gradient(
@@ -365,7 +364,6 @@ code {
 }
 
 [data-separator-wrapper] {
-  -webkit-user-select: none;
   user-select: none;
   fill: currentColor;
   overflow: hidden;
@@ -565,7 +563,6 @@ code {
     position: absolute;
     top: 0;
     left: 0;
-    -webkit-user-select: none;
     user-select: none;
   }
 
@@ -590,7 +587,6 @@ code {
     position: absolute;
     top: 0;
     left: 0;
-    -webkit-user-select: none;
     user-select: none;
   }
 
@@ -627,7 +623,6 @@ code {
   text-align: right;
   position: sticky;
   left: 0;
-  -webkit-user-select: none;
   user-select: none;
   background-color: var(--pjs-bg);
   color: var(--pjs-fg-number);
@@ -647,7 +642,6 @@ code {
 [data-diff-span] {
   border-radius: 3px;
   box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
 }
 
 [data-line-type='change-addition'] {
@@ -773,7 +767,6 @@ code {
 }
 
 [data-no-newline] {
-  -webkit-user-select: none;
   user-select: none;
   opacity: 0.6;
 }
