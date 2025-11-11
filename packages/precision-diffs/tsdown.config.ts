@@ -1,6 +1,6 @@
 import autoprefixer from 'autoprefixer';
 import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import postcss from 'postcss';
 import { type UserConfig, defineConfig } from 'tsdown';
 
@@ -31,7 +31,10 @@ const config: UserConfig = defineConfig([
 
           // Also write the processed CSS to dist/style.css for inspection
           if (id.endsWith('src/style.css')) {
-            writeFileSync(join(process.cwd(), 'dist/style.css'), result.css);
+            // Get the package root from the id path (go up from src/style.css)
+            const packageRoot = dirname(dirname(id));
+            const distPath = join(packageRoot, 'dist/style.css');
+            writeFileSync(distPath, result.css);
           }
 
           return {

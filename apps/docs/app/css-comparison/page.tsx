@@ -3,6 +3,8 @@ import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
+export const dynamic = 'force-dynamic';
+
 export default async function CSSComparisonPage() {
   const originalPath = join(
     process.cwd(),
