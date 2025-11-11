@@ -2,6 +2,7 @@
 
 import {
   IconCheckLg,
+  IconChevronSm,
   IconCodeStyleBars,
   IconCodeStyleBg,
   IconCodeStyleInline,
@@ -21,7 +22,6 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
-import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -113,7 +113,7 @@ export function DiffStyles({
                   {}
                   {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
                     ?.label ?? lineDiffStyle}
-                  <ChevronDown className="text-muted-foreground ml-auto" />
+                  <IconChevronSm className="text-muted-foreground ml-auto" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-82">

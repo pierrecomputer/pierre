@@ -1,6 +1,11 @@
 'use client';
 
-import { IconCheck, IconFunction, IconType } from '@/components/icons';
+import {
+  IconCheck,
+  IconChevronSm,
+  IconFunction,
+  IconType,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,7 +16,6 @@ import {
 import { InputWithIcon } from '@/components/ui/input-group';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
-import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -64,7 +68,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                   >
                     <IconType className="h-4 w-4" />
                     {selectedFont}
-                    <ChevronDown className="text-muted-foreground ml-auto" />
+                    <IconChevronSm className="text-muted-foreground ml-auto" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-40">
@@ -95,7 +99,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="min-w-[80px]">
                     {selectedFontSize}
-                    <ChevronDown className="text-muted-foreground ml-auto" />
+                    <IconChevronSm className="text-muted-foreground ml-auto" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -119,7 +123,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="min-w-[80px]">
                     {selectedLineHeight}
-                    <ChevronDown className="text-muted-foreground ml-auto" />
+                    <IconChevronSm className="text-muted-foreground ml-auto" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">

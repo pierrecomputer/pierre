@@ -3,6 +3,7 @@
 import {
   IconArrowDownRight,
   IconCheck,
+  IconChevronSm,
   IconColorAuto,
   IconColorDark,
   IconColorLight,
@@ -21,7 +22,6 @@ import type {
   PreloadMultiFileDiffResult,
   ThemesType,
 } from '@pierre/precision-diffs/ssr';
-import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -147,7 +147,7 @@ export function ShikiThemes({
               >
                 <IconColorLight />
                 {selectedLightTheme}
-                <ChevronDown className="ml-auto h-4 w-4" />
+                <IconChevronSm className="text-muted-foreground ml-auto" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -181,7 +181,7 @@ export function ShikiThemes({
               >
                 <IconColorDark />
                 {selectedDarkTheme}
-                <ChevronDown className="ml-auto h-4 w-4" />
+                <IconChevronSm className="text-muted-foreground ml-auto" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
