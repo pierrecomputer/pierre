@@ -17,6 +17,7 @@ import { SVGSpriteSheet } from './sprite';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
+  ExpansionDirections,
   FileContents,
   FileDiffMetadata,
   HunkData,
@@ -263,7 +264,10 @@ export class FileDiff<LAnnotation = undefined> {
     });
   }
 
-  handleExpandHunk = (hunkIndex: number, direction: 'up' | 'down'): void => {
+  handleExpandHunk = (
+    hunkIndex: number,
+    direction: ExpansionDirections
+  ): void => {
     this.hunksRenderer.expandHunk(hunkIndex, direction);
     void this.rerender();
   };

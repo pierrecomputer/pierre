@@ -1,6 +1,7 @@
 import type {
   AnnotationSide,
   DiffLineEventBaseProps,
+  ExpansionDirections,
   LineEventBaseProps,
 } from './types';
 
@@ -42,7 +43,7 @@ type EventBaseProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
 interface ExpandoEventProps {
   type: 'line-info';
   hunkIndex: number;
-  direction: 'up' | 'down';
+  direction: ExpansionDirections;
 }
 
 type GetLineDataResult<TMode extends MouseEventManagerMode> =
@@ -88,7 +89,7 @@ export interface MouseEventManagerBaseOptions<
 
 export interface MouseEventManagerOptions<TMode extends MouseEventManagerMode>
   extends MouseEventManagerBaseOptions<TMode> {
-  onHunkExpand?(hunkIndex: number, direction: 'up' | 'down'): unknown;
+  onHunkExpand?(hunkIndex: number, direction: ExpansionDirections): unknown;
 }
 
 export class MouseEventManager<TMode extends MouseEventManagerMode> {
@@ -227,7 +228,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       'FileDiff.DEBUG.handleMouseEvent:',
       { eventType, composedPath }
     );
-    const data = this.getLineData(composedPath, event.shiftKey);
+    const data = this.getLineData(composedPath);
     debugLogIfEnabled(
       __debugMouseEvents,
       eventType,
@@ -325,10 +326,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   }
 
   private getLineData(
-    path: (EventTarget | undefined)[],
-    // FIXME(amadeus): Shift key is a temp hack until I can use some
-    // better UI here
-    shiftClick: boolean
+    path: (EventTarget | undefined)[]
   ): GetLineDataResult<TMode> {
     let numberColumn = false;
     const lineElement = path.find((element) => {
@@ -344,16 +342,23 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       if (isNaN(hunkIndex)) {
         return undefined;
       }
-      const direction = (() => {
-        if ('separatorFirst' in lineElement.dataset) {
-          return 'down';
+      let direction: ExpansionDirections | undefined;
+      for (const element of path) {
+        if (element === lineElement) break;
+        if (element instanceof HTMLElement) {
+          direction =
+            direction ??
+            ('expandUp' in element.dataset ? 'up' : undefined) ??
+            ('expandDown' in element.dataset ? 'down' : undefined) ??
+            ('expandBoth' in element.dataset ? 'both' : undefined);
+          if (direction != null) {
+            break;
+          }
         }
-        if ('separatorLast' in lineElement.dataset) {
-          return 'up';
-        }
-        return shiftClick ? 'up' : 'down';
-      })();
-      return { type: 'line-info', hunkIndex, direction };
+      }
+      return direction != null
+        ? { type: 'line-info', hunkIndex, direction }
+        : undefined;
     }
     const lineNumber = parseInt(lineElement.dataset.line ?? '');
     if (isNaN(lineNumber)) return;
@@ -433,7 +438,7 @@ export function getMouseEventOptions<TMode extends MouseEventManagerMode>(
     onLineLeave,
     __debugMouseEvents,
   }: MouseEventManagerBaseOptions<TMode>,
-  onHunkExpand?: (hunkIndex: number, direction: 'up' | 'down') => unknown
+  onHunkExpand?: (hunkIndex: number, direction: ExpansionDirections) => unknown
 ): MouseEventManagerOptions<TMode> {
   return {
     onLineClick,

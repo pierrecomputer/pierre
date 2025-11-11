@@ -245,3 +245,5 @@ export type AnnotationLineMap<LAnnotation> = Record<
   number,
   DiffLineAnnotation<LAnnotation>[] | undefined
 >;
+
+export type ExpansionDirections = 'up' | 'down' | 'both';

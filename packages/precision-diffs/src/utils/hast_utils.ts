@@ -13,6 +13,7 @@ import type {
   AnnotationSpan,
   BaseDiffOptions,
   ChangeTypes,
+  ExpansionDirections,
   FileContents,
   FileDiffMetadata,
   HunkSeparators,
@@ -67,7 +68,7 @@ interface CreateSeparatorProps {
   isLastHunk: boolean;
 }
 
-function createExpandButton(type: 'up' | 'down' | 'both') {
+function createExpandButton(type: ExpansionDirections) {
   return createHastElement({
     tagName: 'div',
     children: [

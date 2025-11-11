@@ -15,6 +15,7 @@ import type {
   CodeToHastOptions,
   DecorationItem,
   DiffLineAnnotation,
+  ExpansionDirections,
   FileDiffMetadata,
   Hunk,
   HunkData,
@@ -127,15 +128,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.options = options;
   }
 
-  expandHunk(index: number, direction: 'up' | 'down'): void {
+  expandHunk(index: number, direction: ExpansionDirections): void {
     const { expansionLineCount } = this.getOptionsWithDefaults();
     const region = this.expandedHunks.get(index) ?? {
       fromStart: 0,
       fromEnd: 0,
     };
-    if (direction === 'up') {
+    if (direction === 'up' || direction === 'both') {
       region.fromStart += expansionLineCount;
-    } else {
+    }
+    if (direction === 'down' || direction === 'both') {
       region.fromEnd += expansionLineCount;
     }
     this.expandedHunks.set(index, region);
