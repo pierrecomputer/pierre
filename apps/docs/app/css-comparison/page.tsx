@@ -6,6 +6,20 @@ import { join } from 'path';
 export const dynamic = 'force-dynamic';
 
 export default async function CSSComparisonPage() {
+  // Only available in development
+  if (process.env.NODE_ENV === 'production') {
+    return (
+      <div className="container py-12">
+        <div className="mx-auto max-w-2xl space-y-4 text-center">
+          <h1 className="text-3xl font-bold">Development Only</h1>
+          <p className="text-muted-foreground">
+            This page is only available in development mode.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const originalPath = join(
     process.cwd(),
     '../../packages/precision-diffs/src/style.css'
@@ -15,14 +29,18 @@ export default async function CSSComparisonPage() {
     '../../packages/precision-diffs/dist/style.css'
   );
 
-  if (!existsSync(processedPath)) {
+  // Check if files exist and handle errors gracefully
+  if (!existsSync(processedPath) || !existsSync(originalPath)) {
     return (
       <div className="container py-12">
         <div className="mx-auto max-w-2xl space-y-4 text-center">
-          <h1 className="text-3xl font-bold">Processed CSS not found</h1>
+          <h1 className="text-3xl font-bold">CSS files not found</h1>
           <p className="text-muted-foreground">
-            Please run <code className="text-sm">bun run build</code> in
-            packages/precision-diffs first.
+            The CSS comparison files are not available yet.
+          </p>
+          <p className="text-muted-foreground text-sm">
+            Missing: {!existsSync(originalPath) && 'src/style.css '}
+            {!existsSync(processedPath) && 'dist/style.css'}
           </p>
           <pre className="bg-muted rounded-lg p-4 text-left text-sm">
             bun run diffs:build
@@ -32,8 +50,24 @@ export default async function CSSComparisonPage() {
     );
   }
 
-  const originalCSS = readFileSync(originalPath, 'utf-8');
-  const processedCSS = readFileSync(processedPath, 'utf-8');
+  let originalCSS: string;
+  let processedCSS: string;
+
+  try {
+    originalCSS = readFileSync(originalPath, 'utf-8');
+    processedCSS = readFileSync(processedPath, 'utf-8');
+  } catch (error) {
+    return (
+      <div className="container py-12">
+        <div className="mx-auto max-w-2xl space-y-4 text-center">
+          <h1 className="text-3xl font-bold">Error reading CSS files</h1>
+          <p className="text-muted-foreground">
+            {error instanceof Error ? error.message : 'Unknown error'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const prerenderedDiff = await preloadMultiFileDiff({
     oldFile: {
