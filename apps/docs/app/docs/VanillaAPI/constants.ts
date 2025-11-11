@@ -154,6 +154,10 @@ const instance = new FileDiff<ThreadMetadata>({
   // diff stats.
   disableFileHeader: false,
 
+  // For the collapsed code between diff hunks, this controls the 
+  // maximum code revealed per click
+  expansionLineCount: 100,
+
   // You can optionally pass a render function for rendering out line
   // annotations.  Just return the dom node to render
   renderAnnotation(
@@ -191,7 +195,8 @@ await instance.render({
 export const VANILLA_API_FILE_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'coming_soon.ts',
-    contents: '// coming soon',
+    contents:
+      '// documentation coming soon, check typescript types for more info',
   },
   options,
 };

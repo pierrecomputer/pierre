@@ -164,6 +164,10 @@ export function SingleDiff() {
         // Enabling this property will hide the file header with file
         // name and diff stats.
         disableFileHeader: false,
+
+        // For the collapsed code between diff hunks, this controls the 
+        // maximum code revealed per click
+        expansionLineCount: 100,
       }}
     />
   );
@@ -333,7 +337,8 @@ export function SingleDiff() {
 export const REACT_API_FILE_DIFF: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_diff.tsx',
-    contents: '// coming soon',
+    contents:
+      '// documentation coming soon, check typescript types for more info',
   },
   options,
 };
@@ -341,7 +346,8 @@ export const REACT_API_FILE_DIFF: PreloadFileOptions<undefined> = {
 export const REACT_API_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'file.tsx',
-    contents: '// coming soon',
+    contents:
+      '// documentation coming soon, check typescript types for more info',
   },
   options,
 };

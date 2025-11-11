@@ -118,7 +118,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   maxLineLengthForHighlighting?: number; // 1000 is default
 
   // How many lines to expand per click
-  expansionLineCount?: number;
+  expansionLineCount?: number; // 100 is default
 }
 
 export interface RenderHeaderMetadataProps {
