@@ -142,7 +142,8 @@ export function createSeparator({
         children: contentChildren,
         properties: {
           'data-separator-wrapper': '',
-          'data-multi-button': contentChildren.length > 2 ? '' : undefined,
+          'data-separator-multi-button':
+            contentChildren.length > 2 ? '' : undefined,
         },
       })
     );

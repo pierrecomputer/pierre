@@ -403,7 +403,7 @@ code {
 }
 
 @media (pointer: fine) {
-  [data-separator-wrapper][data-multi-button] {
+  [data-separator-wrapper][data-separator-multi-button] {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: 15px 15px;
@@ -415,7 +415,7 @@ code {
 
   [data-type='split']
     [data-additions]
-    [data-separator-wrapper][data-multi-button] {
+    [data-separator-wrapper][data-separator-multi-button] {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
