@@ -245,7 +245,7 @@ code {
   );
   --pjs-bg-selection-number-background: var(
     --pjs-bg-selection-number-background-override,
-    light-dark(rgb(59, 130, 246, 0.4), rgb(37, 99, 235, 0.45))
+    light-dark(rgb(59, 130, 246, 0.25), rgb(37, 99, 235, 0.45))
   );
 
   background-color: var(--pjs-bg);
