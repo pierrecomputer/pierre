@@ -61,15 +61,35 @@ interface CreateSeparatorProps {
   type: HunkSeparators;
   content?: string;
   expandIndex?: number;
+  isLargeExpand?: boolean;
   slotName?: string;
   isFirstHunk: boolean;
   isLastHunk: boolean;
+}
+
+function createExpandButton(type: 'up' | 'down' | 'both') {
+  return createHastElement({
+    tagName: 'div',
+    children: [
+      createIcon({
+        name: type === 'both' ? 'pjs-icon-expand-all' : 'pjs-icon-expand',
+        properties: { 'data-icon': '' },
+      }),
+    ],
+    properties: {
+      'data-expand-button': '',
+      'data-expand-both': type === 'both' ? '' : undefined,
+      'data-expand-up': type === 'up' ? '' : undefined,
+      'data-expand-down': type === 'down' ? '' : undefined,
+    },
+  });
 }
 
 export function createSeparator({
   type,
   content,
   expandIndex,
+  isLargeExpand = false,
   slotName,
   isFirstHunk,
   isLastHunk,
@@ -80,20 +100,49 @@ export function createSeparator({
       createHastElement({
         tagName: 'div',
         children: [createTextNode(content)],
-        properties: { 'data-separator-content': '' },
+        properties: { 'data-separator-wrapper': '' },
       })
     );
   }
   if (type === 'line-info' && content != null) {
-    const contentChildren: ElementContent[] = [createTextNode(content)];
+    const contentChildren: ElementContent[] = [];
     if (expandIndex != null) {
-      contentChildren.unshift(createIcon({ name: 'pjs-icon-expand-all' }));
+      if (!isLargeExpand) {
+        contentChildren.push(
+          createExpandButton(
+            !isFirstHunk && !isLastHunk ? 'both' : isFirstHunk ? 'down' : 'up'
+          )
+        );
+      } else {
+        if (!isFirstHunk) {
+          contentChildren.push(createExpandButton('up'));
+        }
+        if (!isLastHunk) {
+          contentChildren.push(createExpandButton('down'));
+        }
+      }
     }
+    contentChildren.push(
+      createHastElement({
+        tagName: 'div',
+        children: [
+          createHastElement({
+            tagName: 'span',
+            children: [createTextNode(content)],
+            properties: { 'data-unmodified-lines': '' },
+          }),
+        ],
+        properties: { 'data-separator-content': '' },
+      })
+    );
     children.push(
       createHastElement({
         tagName: 'div',
         children: contentChildren,
-        properties: { 'data-separator-content': '' },
+        properties: {
+          'data-separator-wrapper': '',
+          'data-multi-button': contentChildren.length > 2 ? '' : undefined,
+        },
       })
     );
   }

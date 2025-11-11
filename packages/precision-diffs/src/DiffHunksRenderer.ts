@@ -461,7 +461,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const { hunkSeparators } = this.getOptionsWithDefaults();
+    const { hunkSeparators, expansionLineCount } =
+      this.getOptionsWithDefaults();
     const { additions, deletions, unified, hasLongLines } = this.processLines(
       hunk,
       hunkIndex,
@@ -494,6 +495,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 type: hunkSeparators,
                 content: getModifiedLinesString(lines),
                 expandIndex: expandable ? hunkIndex : undefined,
+                isLargeExpand: hunk.collapsedBefore > expansionLineCount,
                 slotName,
                 isFirstHunk,
                 isLastHunk: false,
@@ -527,9 +529,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const nextHunk = this.diff?.hunks[hunkIndex + 1];
         const expandedLines =
           this.expandedHunks.get(hunkIndex + 1)?.fromStart ?? 0;
-        const lines =
-          (nextHunk?.additionStart ?? this.diff.newLines.length) -
-          (hunk.additionStart + hunk.additionCount + expandedLines + 1);
+        const fileEnd = nextHunk?.additionStart ?? this.diff.newLines.length;
+        const hunkEnd = hunk.additionStart + hunk.additionCount;
+        const lines = fileEnd - (hunkEnd + expandedLines);
         if (lines > 0) {
           const slotName = getHunkSeparatorSlotName(type, hunkIndex + 1);
           linesAST.push(
@@ -537,6 +539,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               type: hunkSeparators,
               content: getModifiedLinesString(lines),
               expandIndex: expandable ? hunkIndex + 1 : undefined,
+              isLargeExpand: fileEnd - hunkEnd > expansionLineCount,
               slotName,
               isFirstHunk: false,
               isLastHunk,

@@ -364,13 +364,14 @@ code {
   grid-template-columns: subgrid;
 }
 
-[data-separator-content] {
+[data-separator-wrapper] {
   -webkit-user-select: none;
   user-select: none;
   fill: currentColor;
+  overflow: hidden;
 }
 
-[data-separator='metadata'] [data-separator-content] {
+[data-separator='metadata'] [data-separator-wrapper] {
   grid-column: 2 / 3;
   width: var(--pjs-column-content-width);
   position: sticky;
@@ -390,32 +391,91 @@ code {
   margin-bottom: 0;
 }
 
-[data-separator='line-info'] [data-separator-content] {
+[data-separator='line-info'] [data-separator-wrapper] {
   position: sticky;
   display: flex;
   align-items: center;
-  gap: calc(1ch / 2);
-  padding: calc(1lh / 4) 1ch;
-  border-radius: 6px;
-  background-color: var(--pjs-bg-separator);
+  gap: 2px;
   width: auto;
   width: calc(var(--pjs-column-width) - var(--pjs-gap-fallback));
-  opacity: 0.65;
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
+  border-radius: 6px;
 }
 
-[data-separator='line-info'][data-expand-index]:hover [data-separator-content] {
-  opacity: 1;
+@media (pointer: fine) {
+  [data-separator-wrapper][data-multi-button] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 15px 15px;
+
+    [data-expand-button] {
+      height: 15px;
+    }
+  }
+
+  [data-type='split']
+    [data-additions]
+    [data-separator-wrapper][data-multi-button] {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-type='split'] [data-additions] [data-expand-button] {
+    grid-column: 2;
+  }
+
+  [data-type='split'] [data-additions] [data-separator-content] {
+    grid-column: 1;
+  }
 }
 
-[data-separator][data-expand-index] {
+[data-expand-button],
+[data-separator-content] {
+  display: flex;
+  align-items: center;
+  background-color: var(--pjs-bg-separator);
+}
+
+[data-expand-button] {
+  justify-content: center;
+  flex-shrink: 0;
   cursor: pointer;
+  width: 32px;
+  height: 32px;
+}
+
+[data-expand-up] [data-icon] {
+  transform: scaleY(-1);
+}
+
+[data-separator-content] {
+  flex: 1 1 auto;
+  padding: 0 1ch;
+  height: 32px;
+  opacity: 0.65;
+  overflow: hidden;
+  justify-content: flex-start;
+
+  grid-column: 2;
+  grid-row: 1 / -1;
+}
+
+[data-unmodified-lines] {
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+
+[data-type='split'] [data-additions] [data-separator-content] {
+  justify-content: flex-end;
 }
 
 [data-type='file']
   [data-code]
   [data-separator='line-info']
-  [data-separator-content] {
+  [data-separator-wrapper] {
   left: var(--pjs-gap-inline, var(--pjs-gap-fallback));
   margin-left: var(--pjs-gap-inline, var(--pjs-gap-fallback));
   margin-right: var(--pjs-gap-inline, var(--pjs-gap-fallback));
@@ -428,7 +488,7 @@ code {
 [data-type='split']
   [data-deletions]
   [data-separator='line-info']
-  [data-separator-content] {
+  [data-separator-wrapper] {
   left: var(--pjs-gap-fallback);
   margin-left: var(--pjs-gap-fallback);
   border-top-right-radius: 0;
@@ -438,7 +498,7 @@ code {
 [data-type='split']
   [data-additions]
   [data-separator='line-info']
-  [data-separator-content] {
+  [data-separator-wrapper] {
   left: 0;
   margin-right: var(--pjs-gap-inline, var(--pjs-gap-fallback));
   border-top-left-radius: 0;
@@ -627,22 +687,26 @@ code {
   }
 }
 
-[data-line]:hover {
-  [data-column-number],
-  [data-column-content] {
-    background-color: var(--pjs-bg-hover);
-  }
-}
-
-[data-background] [data-line]:hover {
-  &[data-line-type='change-deletion'] [data-column-number],
-  &[data-line-type='change-deletion'] [data-column-content] {
-    background-color: var(--pjs-bg-deletion-hover);
+/* By wrapping hovers in a pointer: fine, we ensure that mobile devices don't
+*  require a double click */
+@media (pointer: fine) {
+  [data-line]:hover {
+    [data-column-number],
+    [data-column-content] {
+      background-color: var(--pjs-bg-hover);
+    }
   }
 
-  &[data-line-type='change-addition'] [data-column-number],
-  &[data-line-type='change-addition'] [data-column-content] {
-    background-color: var(--pjs-bg-addition-hover);
+  [data-background] [data-line]:hover {
+    &[data-line-type='change-deletion'] [data-column-number],
+    &[data-line-type='change-deletion'] [data-column-content] {
+      background-color: var(--pjs-bg-deletion-hover);
+    }
+
+    &[data-line-type='change-addition'] [data-column-number],
+    &[data-line-type='change-addition'] [data-column-content] {
+      background-color: var(--pjs-bg-addition-hover);
+    }
   }
 }
 
