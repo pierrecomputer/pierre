@@ -1,5 +1,6 @@
 'use client';
 
+import { IconXSquircle } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
@@ -31,15 +32,21 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
     <div className="space-y-5">
       <FeatureHeader
         title="Line selection"
-        description="You can optionally turn on line selection support. When on, clicking line numbers will select the line. Click and drag to select multiple lines, or hold Shift and click to - extend your selection. You can also control the selection programmatically."
+        description={
+          <>
+            Turn on line selection with <code>enableLineSelection: true</code>.
+            When enabled, clicking a line number will select that line. Click
+            and drag to select multiple lines, or hold Shift and click to extend
+            your selection. You can also control the selection programmatically.
+          </>
+        }
       />
 
-      {/* Display current selection state */}
-      <div className="bg-muted space-y-2 rounded-lg border p-4 font-mono text-sm">
-        <div>
+      <div className="bg-muted flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center sm:gap-0 sm:pl-5">
+        <div className="font-mono text-sm">
           {selectedRange != null ? (
             <>
-              <span className="text-muted-foreground">Selected lines: </span>
+              <span className="text-muted-foreground">Selected: </span>
               <span className="font-semibold">
                 {selectedRange.first === selectedRange.last
                   ? `Line ${selectedRange.first}`
@@ -47,55 +54,58 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
               </span>
             </>
           ) : (
-            <span className="text-muted-foreground">No lines selected</span>
+            <span className="text-muted-foreground">No selection</span>
           )}
         </div>
-      </div>
+        <div className="flex gap-2 sm:ml-auto">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSelectedRange({ first: 6, last: 6 });
+            }}
+          >
+            Select line 6
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSelectedRange({ first: 15, last: 29 });
+            }}
+          >
+            Select lines 15-29
+          </Button>
 
-      {/* Demonstrate programmatic control via selectedLines prop */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          onClick={() => {
-            setSelectedRange({ first: 6, last: 6 });
-          }}
-        >
-          Select line 6
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setSelectedRange({ first: 15, last: 29 });
-          }}
-        >
-          Select lines 15-29
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setSelectedRange(null);
-          }}
-        >
-          Clear selection
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setTheme((current) =>
-              current === 'pierre-dark' ? 'pierre-light' : 'pierre-dark'
-            );
-          }}
-        >
-          Toggle theme ({theme === 'pierre-dark' ? 'Dark' : 'Light'})
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setDisableBackground((current) => !current);
-          }}
-        >
-          Background: {disableBackground ? 'Off' : 'On'}
-        </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setTheme((current) =>
+                current === 'pierre-dark' ? 'pierre-light' : 'pierre-dark'
+              );
+            }}
+          >
+            Toggle theme ({theme === 'pierre-dark' ? 'Dark' : 'Light'})
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setDisableBackground((current) => !current);
+            }}
+          >
+            Background: {disableBackground ? 'Off' : 'On'}
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSelectedRange(null);
+            }}
+            className="gap-1"
+            disabled={selectedRange == null}
+          >
+            <IconXSquircle className="text-muted-foreground" />
+            Clear
+          </Button>
+        </div>
       </div>
 
       <MultiFileDiff
