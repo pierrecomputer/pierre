@@ -1,6 +1,7 @@
 // sort-imports-ignore
 import { ShikiPreloader } from '@/components/ShikiPreloader';
 import type { Metadata } from 'next';
+import { ThemeProvider } from 'next-themes';
 import {
   Fira_Code,
   Geist,
@@ -64,18 +65,20 @@ export default function RootLayout({
       className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable}`}
     >
       <body>
-        {children}
-        <Toaster />
-        <div
-          id="dark-mode-portal-container"
-          className="dark"
-          data-theme="dark"
-        ></div>
-        <div
-          id="light-mode-portal-container"
-          className="light"
-          data-theme="light"
-        ></div>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          {children}
+          <Toaster />
+          <div
+            id="dark-mode-portal-container"
+            className="dark"
+            data-theme="dark"
+          ></div>
+          <div
+            id="light-mode-portal-container"
+            className="light"
+            data-theme="light"
+          ></div>
+        </ThemeProvider>
         <ShikiPreloader />
       </body>
     </html>
