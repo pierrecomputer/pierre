@@ -156,7 +156,11 @@ export class LineSelectionManager {
     const isShiftKey = event.shiftKey;
     const clickedSide = this.getLineSideFromElement(lineElement);
 
-    if (isShiftKey && this.selectedRange != null && this.selectedRowRange != null) {
+    if (
+      isShiftKey &&
+      this.selectedRange != null &&
+      this.selectedRowRange != null
+    ) {
       const oldFirst = this.selectedRange.first;
       const oldLast = this.selectedRange.last;
       const side =
@@ -268,8 +272,7 @@ export class LineSelectionManager {
     }
 
     const rowRange =
-      this.selectedRowRange ??
-      this.deriveRowRangeFromDOM(this.selectedRange);
+      this.selectedRowRange ?? this.deriveRowRangeFromDOM(this.selectedRange);
     if (rowRange == null) return;
     this.setRowRange(rowRange);
 

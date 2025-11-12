@@ -24,6 +24,9 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
     'pierre-dark'
   );
 
+  // Store the background toggle state
+  const [disableBackground, setDisableBackground] = useState(false);
+
   return (
     <div className="space-y-5">
       <FeatureHeader
@@ -62,10 +65,10 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         <Button
           variant="outline"
           onClick={() => {
-            setSelectedRange({ first: 15, last: 20 });
+            setSelectedRange({ first: 15, last: 29 });
           }}
         >
-          Select lines 15-20
+          Select lines 15-29
         </Button>
         <Button
           variant="outline"
@@ -85,15 +88,25 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         >
           Toggle theme ({theme === 'pierre-dark' ? 'Dark' : 'Light'})
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setDisableBackground((current) => !current);
+          }}
+        >
+          Background: {disableBackground ? 'Off' : 'On'}
+        </Button>
       </div>
 
       <MultiFileDiff
         {...prerenderedDiff}
-        className="diff-container"
+        className="overflow-hidden rounded-lg border dark:border-neutral-800"
         options={{
           ...prerenderedDiff.options,
           // Use the dynamic theme from state
           theme: theme,
+          // Toggle background
+          disableBackground: disableBackground,
           // Enable interactive line selection
           enableLineSelection: true,
           // Control selection programmatically (two-way binding with state)
