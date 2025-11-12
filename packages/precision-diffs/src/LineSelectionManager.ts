@@ -144,16 +144,15 @@ export class LineSelectionManager {
     // Only handle left mouse button
     if (event.button !== 0) return;
 
-    const lineElement = this.getLineElementFromEvent(event);
+    const path = event.composedPath();
+    const lineElement = this.getLineElementFromEvent(path);
     if (lineElement == null) return;
 
     const lineNumber = this.getLineNumber(lineElement);
     const lineIndex = this.getLineIndex(lineElement);
     if (lineIndex == null) return;
 
-    // Check if click was on a line number column
-    const target = event.target as HTMLElement;
-    const isNumberColumn = this.isLineNumberColumn(target, event);
+    const isNumberColumn = this.isLineNumberColumn(path);
     if (!isNumberColumn) return;
 
     event.preventDefault();
@@ -214,7 +213,7 @@ export class LineSelectionManager {
   private handleMouseMove = (event: MouseEvent): void => {
     if (!this.isDragging || this.anchorLine == null) return;
 
-    const lineElement = this.getLineElementFromEvent(event);
+    const lineElement = this.getLineElementFromEvent(event.composedPath());
     if (lineElement == null) return;
 
     const lineNumber = this.getLineNumber(lineElement);
@@ -403,10 +402,9 @@ export class LineSelectionManager {
     onLineSelectionEnd(range);
   }
 
-  private getLineElementFromEvent(event: MouseEvent): HTMLElement | undefined {
-    // FIXME(amadeus): Lets pull out this composedPath so it only happens once
-    // per event
-    const path = event.composedPath();
+  private getLineElementFromEvent(
+    path: (EventTarget | undefined)[]
+  ): HTMLElement | undefined {
     for (const element of path) {
       if (element instanceof HTMLElement && element.hasAttribute('data-line')) {
         return element;
@@ -427,11 +425,7 @@ export class LineSelectionManager {
     return Number.isNaN(value) ? undefined : value;
   }
 
-  private isLineNumberColumn(_target: HTMLElement, event: MouseEvent): boolean {
-    // FIXME(amadeus): Lets pull out this composedPath so it only happens once
-    // per event
-    // Use composedPath to properly handle Shadow DOM
-    const path = event.composedPath();
+  private isLineNumberColumn(path: (EventTarget | undefined)[]): boolean {
     for (const element of path) {
       if (!(element instanceof HTMLElement)) continue;
       if (element.hasAttribute('data-column-number')) {
