@@ -102,7 +102,7 @@
     },
     "packages/precision-diffs": {
       "name": "@pierre/precision-diffs",
-      "version": "0.4.5",
+      "version": "0.4.6",
       "dependencies": {
         "@shikijs/core": "catalog:",
         "@shikijs/transformers": "catalog:",
@@ -117,8 +117,8 @@
         "@types/hast": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "autoprefixer": "^10.4.22",
-        "postcss": "^8.5.6",
+        "autoprefixer": "catalog:",
+        "postcss": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
         "tsdown": "catalog:",
@@ -220,6 +220,7 @@
     "@types/react": "19.1.13",
     "@types/react-dom": "19.1.9",
     "@vitejs/plugin-react": "5.0.3",
+    "autoprefixer": "10.4.22",
     "babel-plugin-react-compiler": "1.0.0",
     "chokidar": "3.6.0",
     "class-variance-authority": "0.7.1",
