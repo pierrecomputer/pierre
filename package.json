@@ -19,7 +19,7 @@
     "storage-elements-next:tsc": "(cd packages/storage-elements-next && bun run tsc)",
     "storage-elements-next:build": "(cd packages/storage-elements-next && bun run build)",
     "clean": "rm -rf {packages,apps}/*/dist && rm -rf {packages,apps}/*/tsconfig.tsbuildinfo && rm -rf {packages,apps}/demo/node_modules/.vite && rm -rf {packages,apps}/demo/node_modules/.vite-temp && rm -rf apps/docs/.next",
-    "update-themes": "node update-themes.js",
+    "update-themes": "node update-themes.js && bun run format",
     "icons:build": "node scripts/build-icons.js && bun run format",
     "icons:sprite": "node scripts/build-sprite.js && bun run format",
     "icons": "bun run icons:build && bun run icons:sprite",
