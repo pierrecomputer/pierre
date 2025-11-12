@@ -46,6 +46,11 @@ import { parseDecorations } from './utils/parseDiffDecorations';
 import { parseLineType } from './utils/parseLineType';
 import { pushOrMergeSpan } from './utils/pushOrMergeSpan';
 
+const FULLY_EXPANDED = {
+  fromStart: Infinity,
+  fromEnd: Infinity,
+};
+
 interface RenderHunkProps {
   hunk: Hunk;
   prevHunk: Hunk | undefined;
@@ -463,7 +468,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const { hunkSeparators, expansionLineCount } =
+    const { hunkSeparators, expansionLineCount, expandUnchanged } =
       this.getOptionsWithDefaults();
     const { additions, deletions, unified, hasLongLines } = this.processLines(
       hunk,
@@ -488,7 +493,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       const lines =
         hunk.collapsedBefore -
         ((preExpandedHunk?.fromEnd ?? 0) + (preExpandedHunk?.fromStart ?? 0));
-      if (preExpandedHunk == null || lines > 0) {
+      if (!expandUnchanged && (preExpandedHunk == null || lines > 0)) {
         if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
           if (lines > 0) {
             const slotName = getHunkSeparatorSlotName(type, hunkIndex);
@@ -526,6 +531,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
       if (
         isLastHunk &&
+        !expandUnchanged &&
         this.diff?.newLines != null &&
         (hunkSeparators === 'line-info' || hunkSeparators === 'custom')
       ) {
@@ -881,7 +887,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     let lineIndex = -1;
     let lastType: HunkLineType | undefined;
 
-    const preExpandedRegion = this.expandedHunks.get(hunkIndex);
+    const preExpandedRegion = expandUnchanged
+      ? FULLY_EXPANDED
+      : this.expandedHunks.get(hunkIndex);
     // Process hunk expanded content if expanded
     if (
       preExpandedRegion != null &&
@@ -939,12 +947,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const postExpandedRegion = this.expandedHunks.get(hunkIndex + 1);
     // Process final expansion hunk if necessary
     if (
-      postExpandedRegion != null &&
       this.diff?.newLines != null &&
-      postExpandedRegion.fromStart > 0
+      (expandUnchanged ||
+        (postExpandedRegion != null && postExpandedRegion.fromStart > 0))
     ) {
       const len = Math.min(
-        additionLineNumber + postExpandedRegion.fromStart,
+        postExpandedRegion != null
+          ? additionLineNumber + postExpandedRegion.fromStart
+          : this.diff.newLines.length - 1,
         this.diff.newLines.length - 1
       );
       for (let i = additionLineNumber; i < len; i++) {
