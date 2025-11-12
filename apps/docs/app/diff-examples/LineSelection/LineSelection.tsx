@@ -19,6 +19,11 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
     last: number;
   } | null>(null);
 
+  // Store the current theme
+  const [theme, setTheme] = useState<'pierre-dark' | 'pierre-light'>(
+    'pierre-dark'
+  );
+
   return (
     <div className="space-y-5">
       <FeatureHeader
@@ -45,7 +50,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
       </div>
 
       {/* Demonstrate programmatic control via selectedLines prop */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           onClick={() => {
@@ -70,6 +75,16 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         >
           Clear selection
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setTheme((current) =>
+              current === 'pierre-dark' ? 'pierre-light' : 'pierre-dark'
+            );
+          }}
+        >
+          Toggle theme ({theme === 'pierre-dark' ? 'Dark' : 'Light'})
+        </Button>
       </div>
 
       <MultiFileDiff
@@ -77,6 +92,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         className="diff-container"
         options={{
           ...prerenderedDiff.options,
+          // Use the dynamic theme from state
+          theme: theme,
           // Enable interactive line selection
           enableLineSelection: true,
           // Control selection programmatically (two-way binding with state)
