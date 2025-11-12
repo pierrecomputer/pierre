@@ -268,9 +268,13 @@ export class FileDiff<LAnnotation = undefined> {
     hunkIndex: number,
     direction: ExpansionDirections
   ): void => {
+    this.expandHunk(hunkIndex, direction);
+  };
+
+  expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
     this.hunksRenderer.expandHunk(hunkIndex, direction);
     void this.rerender();
-  };
+  }
 
   async render({
     oldFile,
