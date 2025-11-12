@@ -1,6 +1,5 @@
 // sort-imports-ignore
 import { ShikiPreloader } from '@/components/ShikiPreloader';
-import { RootProvider } from 'fumadocs-ui/provider';
 import type { Metadata } from 'next';
 import {
   Fira_Code,
@@ -65,20 +64,18 @@ export default function RootLayout({
       className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable}`}
     >
       <body>
-        <RootProvider>
-          {children}
-          <Toaster />
-          <div
-            id="dark-mode-portal-container"
-            className="dark"
-            data-theme="dark"
-          ></div>
-          <div
-            id="light-mode-portal-container"
-            className="light"
-            data-theme="light"
-          ></div>
-        </RootProvider>
+        {children}
+        <Toaster />
+        <div
+          id="dark-mode-portal-container"
+          className="dark"
+          data-theme="dark"
+        ></div>
+        <div
+          id="light-mode-portal-container"
+          className="light"
+          data-theme="light"
+        ></div>
         <ShikiPreloader />
       </body>
     </html>

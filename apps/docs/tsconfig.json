@@ -4,7 +4,6 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".source/**/*",
     ".next/types/**/*.ts",
     "types/**/*.d.ts"
   ],

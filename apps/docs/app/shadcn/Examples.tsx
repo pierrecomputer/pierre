@@ -9,7 +9,7 @@ import {
   type RepositoryData,
   type SyncedRepo,
 } from '@/registry/new-york/blocks/git-platform-sync/components/git-platform-sync';
-import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
+import { File } from '@pierre/precision-diffs/react';
 import { Lollipop, Menu } from 'lucide-react';
 import { Fragment, useState } from 'react';
 
@@ -218,16 +218,10 @@ const Example = ({
       </div>
       {code != null ? (
         <CodeExampleContainer>
-          <DynamicCodeBlock
-            lang="tsx"
-            code={code}
-            codeblock={{
-              style: {
-                borderTopLeftRadius: '0 !important',
-                borderTopRightRadius: '0 !important',
-                borderTopWidth: '0 !important',
-                paddingTop: '18px !important',
-              },
+          <File
+            file={{
+              name: 'Example.tsx',
+              contents: code,
             }}
           />
         </CodeExampleContainer>
@@ -484,10 +478,7 @@ export function Examples() {
         Git Platform Sync
       </h3>
 
-      <DynamicCodeBlock
-        lang="sh"
-        code={`npx shadcn@latest add @pierre/git-platform-sync`}
-      />
+      <code className="font-mono text-sm font-normal">{`npx shadcn@latest add @pierre/git-platform-sync`}</code>
 
       <ExampleDefaultUsage />
       <ExampleButtonVariants />

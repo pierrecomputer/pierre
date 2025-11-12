@@ -1,4 +1,4 @@
-import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
+import { File } from '@pierre/precision-diffs/react';
 
 import { Examples } from './Examples';
 
@@ -18,20 +18,19 @@ export default function Home() {
       <aside className="flex flex-col gap-4">
         <h2 className="text-2xl font-bold tracking-tight">Installation</h2>
         <h3>Add the pierre registry to your project</h3>
-        <DynamicCodeBlock
-          lang="text"
-          code={`https://pierrejs-docs.vercel.app/r/{name}.json`}
-        />
+        <code className="font-mono text-sm font-normal">{`https://pierrejs-docs.vercel.app/r/{name}.json`}</code>
         <h3>Add it to registries in your components.json file</h3>
-        <DynamicCodeBlock
-          lang="jsonc"
-          code={`{
+        <File
+          file={{
+            name: 'components.json',
+            contents: `{
   // Additional config
   "registries": {
-    "@pierre": "https://pierrejs-docs.vercel.app/r/{name}.json"
+    "@pierre": "https://pierrejs-docs.vercel.app/r/{name}.json",
     // Additional registries
   }
-}`}
+}`,
+          }}
         />
       </aside>
       <main
