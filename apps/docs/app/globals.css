@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@plugin '@tailwindcss/typography';
 
 @custom-variant light (&:is(.light *));
 @custom-variant dark (&:is(.dark *));
@@ -131,6 +132,7 @@
     @apply outline-offset-1;
   }
   code {
+    font-family: var(--pjs-font-family);
     font-size: 90%;
     font-weight: 600;
     color: var(--color-primary);

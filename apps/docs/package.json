@@ -35,6 +35,7 @@
     "@radix-ui/react-tooltip": "catalog:",
     "@radix-ui/react-use-controllable-state": "catalog:",
     "@shikijs/transformers": "catalog:",
+    "@tailwindcss/typography": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
