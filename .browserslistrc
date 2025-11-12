@@ -3,7 +3,7 @@
 #
 # Used by:
 # - apps/docs (Next.js + Tailwind CSS v4)
-# - packages/precision-diffs (tsdown + lightningcss)
+# - packages/precision-diffs (tsdown + postcss)
 
 chrome >= 123
 edge >= 123
