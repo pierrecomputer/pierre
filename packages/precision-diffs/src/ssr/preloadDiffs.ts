@@ -42,7 +42,6 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
       typeof options?.hunkSeparators === 'function'
         ? 'custom'
         : options?.hunkSeparators,
-    useCSSClasses: true,
   });
   const fileHeader = new FileHeaderRenderer(options);
 

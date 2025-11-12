@@ -340,7 +340,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           split:
             diffStyle === 'unified'
               ? false
-              : additionsAST.length > 0 && additionsAST.length > 0,
+              : deletionsAST.length > 0 && additionsAST.length > 0,
           theme,
           themeType,
           totalLines,
