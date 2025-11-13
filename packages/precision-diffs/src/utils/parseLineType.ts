@@ -10,7 +10,7 @@ export function parseLineType(
   line: string,
   maxLineLength: number
 ): ParseLineTypeReturn {
-  const firstChar = line.substring(0, 1);
+  const firstChar = line[0];
   if (
     firstChar !== '+' &&
     firstChar !== '-' &&
