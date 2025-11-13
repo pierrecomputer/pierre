@@ -17,7 +17,7 @@ export function SplitUnified({
 }: SplitUnifiedProps) {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   return (
-    <div className="space-y-5">
+    <div className="scroll-mt-[20px] space-y-5" id="layout">
       <FeatureHeader
         title="Diff layout styles"
         description="Choose from stacked (unified) or split (side-by-side). Both use CSS Grid and Shadow DOM under the hood, meaning fewer DOM nodes and faster rendering."

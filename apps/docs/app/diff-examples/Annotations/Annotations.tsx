@@ -120,7 +120,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="scroll-mt-[20px] space-y-5" id="annotations">
       <FeatureHeader
         title="Comments & Annotations"
         description="Precision Diffs provide a flexible annotation framework for injecting additional content and context. Use it to render your own line comments, annotations from CI jobs, and other third-party content."
@@ -441,7 +441,7 @@ export function AcceptRejectExample({
   }, []);
 
   return (
-    <div className="space-y-5">
+    <div className="scroll-mt-[20px] space-y-5" id="accept-reject">
       <FeatureHeader
         title="Accept/Reject Changes"
         description="Annotations can also be used to build interactive code review interfaces similar to AI-assisted coding tools like Cursor. Use it to track the state of each change, inject custom UI like accept/reject buttons, and provide immediate visual feedback."

@@ -43,7 +43,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
   const [fontFeatureSettings, setFontFeatureSettings] = useState('"aalt" 1');
 
   return (
-    <div className="space-y-5">
+    <div className="scroll-mt-[20px] space-y-5" id="fonts">
       <div className="space-y-4">
         <FeatureHeader
           title="Bring your own fonts"

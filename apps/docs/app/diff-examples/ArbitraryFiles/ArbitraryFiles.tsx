@@ -15,7 +15,7 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
   const [newFile, setNewFile] = useState(prerenderedDiff.newFile);
 
   return (
-    <div className="space-y-5">
+    <div className="scroll-mt-[20px] space-y-5" id="arbitrary">
       <FeatureHeader
         title="Diff arbitrary files"
         description="In addition to rendering standard Git diffs and patches, you can pass any two files in Precision Diffs and get a diff between them. This is especially useful when comparing across generative snapshots where linear history isn't always available. Edit the css below to see the diff."
