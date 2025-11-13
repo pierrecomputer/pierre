@@ -55,6 +55,17 @@ export function SingleDiff() {
         // for them
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
+
+      // Programmatically control which lines are selected. This
+      // allows two-way binding with state. Selections should be 
+      // stable across 'split' and 'unified' diff styles.
+      // 'start' and 'end' map to the visual line numbers you see in the
+      // number column. 'side' and 'endSide' are considered optional.
+      // 'side' will default to the 'additions' side, or line numbers 
+      // based on the new version of the file. 'endSide' will default 
+      // to whatever 'side' is unless you specify otherwise.
+      selectedLines={{ start: 3, side: 'additions', end: 4, endSide: 'deletions' }}
+
       // Here's every property you can pass to options, with their
       // default values if not specified.
       options={{
@@ -175,10 +186,6 @@ export function SingleDiff() {
         // to extend the selection.
         enableLineSelection: false,
 
-        // Programmatically control which lines are selected. This
-        // allows two-way binding with state.
-        // selectedLines: { first: 10, last: 15 },
-
         // Callback fired when the selection changes (continuously
         // during drag operations).
         // onLineSelected: (range: SelectedLineRange | null) => {
@@ -246,6 +253,17 @@ export function SingleDiff() {
         // for them
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
+
+      // Programmatically control which lines are selected. This
+      // allows two-way binding with state. Selections should be 
+      // stable across 'split' and 'unified' diff styles.
+      // 'start' and 'end' map to the visual line numbers you see in the
+      // number column. 'side' and 'endSide' are considered optional.
+      // 'side' will default to the 'additions' side, or line numbers 
+      // based on the new version of the file. 'endSide' will default 
+      // to whatever 'side' is unless you specify otherwise.
+      selectedLines={{ start: 3, side: 'additions', end: 4, endSide: 'deletions' }}
+
       // Here's every property you can pass to options, with their
       // default values if not specified.
       options={{
@@ -361,10 +379,6 @@ export function SingleDiff() {
         // click and drag to select a range, or hold Shift and click
         // to extend the selection.
         enableLineSelection: false,
-
-        // Programmatically control which lines are selected. This
-        // allows two-way binding with state.
-        // selectedLines: { first: 10, last: 15 },
 
         // Callback fired when the selection changes (continuously
         // during drag operations).
