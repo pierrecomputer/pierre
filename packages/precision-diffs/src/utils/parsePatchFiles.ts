@@ -128,9 +128,9 @@ function processPatch(data: string): ParsedPatch {
         continue;
       } else {
         for (const line of lines) {
-          if (line.startsWith('+')) {
+          if (line[0] === '+') {
             additionLines++;
-          } else if (line.startsWith('-')) {
+          } else if (line[0] === '-') {
             deletedLines++;
           }
         }
