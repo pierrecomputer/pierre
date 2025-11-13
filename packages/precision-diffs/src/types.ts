@@ -55,8 +55,10 @@ export interface Hunk {
   collapsedBefore: number;
   additionCount: number;
   additionStart: number;
+  additionLines: number;
   deletedCount: number;
   deletedStart: number;
+  deletedLines: number;
   hunkContent: string[] | undefined;
   hunkContext: string | undefined;
   hunkSpecs: string | undefined;

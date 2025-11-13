@@ -49,6 +49,8 @@ function processPatch(data: string): ParsedPatch {
         continue;
       }
       const match = firstLine.match(HUNK_HEADER);
+      let additionLines = 0;
+      let deletedLines = 0;
       if (match == null || currentFile == null) {
         if (currentFile != null) {
           console.error('parsePatchContent: Invalid hunk', hunk);
@@ -124,13 +126,23 @@ function processPatch(data: string): ParsedPatch {
           }
         }
         continue;
+      } else {
+        for (const line of lines) {
+          if (line.startsWith('+')) {
+            additionLines++;
+          } else if (line.startsWith('-')) {
+            deletedLines++;
+          }
+        }
       }
       const hunkData: Hunk = {
         collapsedBefore: 0,
         additionCount: parseInt(match[4] ?? '1'),
         additionStart: parseInt(match[3]),
+        additionLines,
         deletedCount: parseInt(match[2] ?? '1'),
         deletedStart: parseInt(match[1]),
+        deletedLines,
         hunkContent: lines.length > 0 ? lines : undefined,
         hunkContext: match[5],
         hunkSpecs: firstLine,
