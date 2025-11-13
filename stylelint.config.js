@@ -10,6 +10,7 @@ export default {
           'apply',
           'layer',
           'config',
+          'plugin',
           'variants',
           'responsive',
           'screen',
