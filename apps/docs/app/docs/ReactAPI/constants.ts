@@ -55,6 +55,16 @@ export function SingleDiff() {
         // for them
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
+
+      // Programmatically control which lines are selected. This
+      // allows two-way binding with state. Selections should be 
+      // stable across 'split' and 'unified' diff styles.
+      // 'start' and 'end' map to the visual line numbers you see in the
+      // number column. 'side' and 'endSide' are considered optional.
+      // 'side' will default to the 'additions' side. 'endSide' will
+      // default to whatever 'side' is unless you specify otherwise.
+      selectedLines={{ start: 3, side: 'additions', end: 4, endSide: 'deletions' }}
+
       // Here's every property you can pass to options, with their
       // default values if not specified.
       options={{
@@ -175,28 +185,24 @@ export function SingleDiff() {
         // to extend the selection.
         enableLineSelection: false,
 
-        // Programmatically control which lines are selected. This
-        // allows two-way binding with state.
-        // selectedLines: { first: 10, last: 15 },
-
         // Callback fired when the selection changes (continuously
         // during drag operations).
-        // onLineSelected: (range: SelectedLineRange | null) => {
-        //   console.log('Selection changed:', range);
-        // },
+        onLineSelected(range: SelectedLineRange | null) {
+          console.log('Selection changed:', range);
+        },
 
         // Callback fired when user begins a selection interaction
         // (mouse down on a line number).
-        // onLineSelectionStart: (range: SelectedLineRange | null) => {
-        //   console.log('Selection started:', range);
-        // },
+        onLineSelectionStart(range: SelectedLineRange | null) {
+          console.log('Selection started:', range);
+        },
 
         // Callback fired when user completes a selection interaction
         // (mouse up). This is useful for triggering actions like
         // adding comment annotations or saving the selection.
-        // onLineSelectionEnd: (range: SelectedLineRange | null) => {
-        //   console.log('Selection completed:', range);
-        // },
+        onLineSelectionEnd(range: SelectedLineRange | null) {
+          console.log('Selection completed:', range);
+        },
       }}
     />
   );
@@ -246,6 +252,16 @@ export function SingleDiff() {
         // for them
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
+
+      // Programmatically control which lines are selected. This
+      // allows two-way binding with state. Selections should be 
+      // stable across 'split' and 'unified' diff styles.
+      // 'start' and 'end' map to the visual line numbers you see in the
+      // number column. 'side' and 'endSide' are considered optional.
+      // 'side' will default to the 'additions' side. 'endSide' will
+      // default to whatever 'side' is unless you specify otherwise.
+      selectedLines={{ start: 3, side: 'additions', end: 4, endSide: 'deletions' }}
+
       // Here's every property you can pass to options, with their
       // default values if not specified.
       options={{
@@ -362,28 +378,24 @@ export function SingleDiff() {
         // to extend the selection.
         enableLineSelection: false,
 
-        // Programmatically control which lines are selected. This
-        // allows two-way binding with state.
-        // selectedLines: { first: 10, last: 15 },
-
         // Callback fired when the selection changes (continuously
         // during drag operations).
-        // onLineSelected: (range: SelectedLineRange | null) => {
-        //   console.log('Selection changed:', range);
-        // },
+        onLineSelected(range: SelectedLineRange | null) {
+          console.log('Selection changed:', range);
+        },
 
         // Callback fired when user begins a selection interaction
         // (mouse down on a line number).
-        // onLineSelectionStart: (range: SelectedLineRange | null) => {
-        //   console.log('Selection started:', range);
-        // },
+        onLineSelectionStart(range: SelectedLineRange | null) {
+          console.log('Selection started:', range);
+        },
 
         // Callback fired when user completes a selection interaction
         // (mouse up). This is useful for triggering actions like
         // adding comment annotations or saving the selection.
-        // onLineSelectionEnd: (range: SelectedLineRange | null) => {
-        //   console.log('Selection completed:', range);
-        // },
+        onLineSelectionEnd(range: SelectedLineRange | null) {
+          console.log('Selection completed:', range);
+        },
       }}
     />
   );
