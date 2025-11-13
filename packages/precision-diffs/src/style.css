@@ -52,33 +52,37 @@
 
   color-scheme: light dark;
   display: block;
+  font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
+  font-size: var(--pjs-font-size, 14px);
+  line-height: var(--pjs-line-height, 20px);
+  font-feature-settings: var(--pjs-font-features);
 }
 
+/* NOTE(mdo): Some semantic HTML elements (e.g. `pre`, `code`) have default
+ * user-agent styles. These must be overridden to use our custom styles. */
 pre,
 code {
   margin: 0;
   padding: 0;
   display: block;
   outline: none;
+  font-family: var(--pjs-font-family, var(--pjs-font-fallback));
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-  font-family: var(--pjs-font-family, var(--pjs-font-fallback));
-  font-size: var(--pjs-font-size, 14px);
-  line-height: var(--pjs-line-height, 20px);
-  font-feature-settings: var(--pjs-font-features);
 }
 
 [data-icon-sprite] {
   display: none;
 }
 
-[data-pjs-header] *,
-[data-pjs-header] *::before,
-[data-pjs-header] *::after {
+/* NOTE(mdo): Headers and separators are within pre/code, so we need to reset
+ * their font-family explicitly. */
+[data-pjs-header],
+[data-separator] {
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
 }
 
@@ -438,7 +442,6 @@ code {
   gap: 2px;
   width: auto;
   width: calc(var(--pjs-column-width) - var(--pjs-gap-fallback));
-  font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
   border-radius: 6px;
 }
 
