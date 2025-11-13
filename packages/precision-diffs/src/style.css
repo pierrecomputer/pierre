@@ -53,7 +53,7 @@
   color-scheme: light dark;
   display: block;
   font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
-  font-size: var(--pjs-font-size, 14px);
+  font-size: var(--pjs-font-size, 13px);
   line-height: var(--pjs-line-height, 20px);
   font-feature-settings: var(--pjs-font-features);
 }
