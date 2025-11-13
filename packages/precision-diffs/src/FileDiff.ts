@@ -555,7 +555,6 @@ export class FileDiff<LAnnotation = undefined> {
       disableBackground,
       totalLines: result.totalLines,
     });
-
   }
 
   private injectUnsafeCSS(): void {
