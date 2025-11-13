@@ -61,9 +61,8 @@ export function SingleDiff() {
       // stable across 'split' and 'unified' diff styles.
       // 'start' and 'end' map to the visual line numbers you see in the
       // number column. 'side' and 'endSide' are considered optional.
-      // 'side' will default to the 'additions' side, or line numbers 
-      // based on the new version of the file. 'endSide' will default 
-      // to whatever 'side' is unless you specify otherwise.
+      // 'side' will default to the 'additions' side. 'endSide' will
+      // default to whatever 'side' is unless you specify otherwise.
       selectedLines={{ start: 3, side: 'additions', end: 4, endSide: 'deletions' }}
 
       // Here's every property you can pass to options, with their
@@ -259,9 +258,8 @@ export function SingleDiff() {
       // stable across 'split' and 'unified' diff styles.
       // 'start' and 'end' map to the visual line numbers you see in the
       // number column. 'side' and 'endSide' are considered optional.
-      // 'side' will default to the 'additions' side, or line numbers 
-      // based on the new version of the file. 'endSide' will default 
-      // to whatever 'side' is unless you specify otherwise.
+      // 'side' will default to the 'additions' side. 'endSide' will
+      // default to whatever 'side' is unless you specify otherwise.
       selectedLines={{ start: 3, side: 'additions', end: 4, endSide: 'deletions' }}
 
       // Here's every property you can pass to options, with their
