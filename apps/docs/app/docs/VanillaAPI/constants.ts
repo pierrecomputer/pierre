@@ -170,6 +170,31 @@ const instance = new FileDiff<ThreadMetadata>({
     element.innerText = annotation.metadata.threadId;
     return element;
   },
+
+  // Enable interactive line selection - users can click line
+  // numbers to select lines. Click to select a single line,
+  // click and drag to select a range, or hold Shift and click
+  // to extend the selection.
+  enableLineSelection: false,
+
+  // Callback fired when the selection changes (continuously
+  // during drag operations).
+  onLineSelected(range: SelectedLineRange | null) {
+    console.log('Selection changed:', range);
+  },
+
+  // Callback fired when user begins a selection interaction
+  // (mouse down on a line number).
+  onLineSelectionStart(range: SelectedLineRange | null) {
+    console.log('Selection started:', range);
+  },
+
+  // Callback fired when user completes a selection interaction
+  // (mouse up). This is useful for triggering actions like
+  // adding comment annotations or saving the selection.
+  onLineSelectionEnd(range: SelectedLineRange | null) {
+    console.log('Selection completed:', range);
+  },
 });
 
 // If you ever want to update the options for an instance, simple call
@@ -187,6 +212,19 @@ await instance.render({
   newFile,
   lineAnnotations,
   containerWrapper: document.body,
+});
+
+// Programmatically control which lines are selected. Selections should
+// be stable across 'split' and 'unified' diff styles.
+// 'start' and 'end' map to the visual line numbers you see in the
+// number column. 'side' and 'endSide' are considered optional.
+// 'side' will default to the 'additions' side. 'endSide' will
+// default to whatever 'side' is unless you specify otherwise.
+instance.setSelectedLines({
+  start: 12,
+  side: 'additions',
+  end: 22,
+  endSide: 'deletions'
 });`,
   },
   options,

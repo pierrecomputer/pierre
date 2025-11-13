@@ -187,22 +187,22 @@ export function SingleDiff() {
 
         // Callback fired when the selection changes (continuously
         // during drag operations).
-        // onLineSelected: (range: SelectedLineRange | null) => {
-        //   console.log('Selection changed:', range);
-        // },
+        onLineSelected: (range: SelectedLineRange | null) => {
+          console.log('Selection changed:', range);
+        },
 
         // Callback fired when user begins a selection interaction
         // (mouse down on a line number).
-        // onLineSelectionStart: (range: SelectedLineRange | null) => {
-        //   console.log('Selection started:', range);
-        // },
+        onLineSelectionStart: (range: SelectedLineRange | null) => {
+          console.log('Selection started:', range);
+        },
 
         // Callback fired when user completes a selection interaction
         // (mouse up). This is useful for triggering actions like
         // adding comment annotations or saving the selection.
-        // onLineSelectionEnd: (range: SelectedLineRange | null) => {
-        //   console.log('Selection completed:', range);
-        // },
+        onLineSelectionEnd: (range: SelectedLineRange | null) => {
+          console.log('Selection completed:', range);
+        },
       }}
     />
   );
@@ -380,22 +380,22 @@ export function SingleDiff() {
 
         // Callback fired when the selection changes (continuously
         // during drag operations).
-        // onLineSelected: (range: SelectedLineRange | null) => {
-        //   console.log('Selection changed:', range);
-        // },
+        onLineSelected(range: SelectedLineRange | null) {
+          console.log('Selection changed:', range);
+        },
 
         // Callback fired when user begins a selection interaction
         // (mouse down on a line number).
-        // onLineSelectionStart: (range: SelectedLineRange | null) => {
-        //   console.log('Selection started:', range);
-        // },
+        onLineSelectionStart(range: SelectedLineRange | null) {
+          console.log('Selection started:', range);
+        },
 
         // Callback fired when user completes a selection interaction
         // (mouse up). This is useful for triggering actions like
         // adding comment annotations or saving the selection.
-        // onLineSelectionEnd: (range: SelectedLineRange | null) => {
-        //   console.log('Selection completed:', range);
-        // },
+        onLineSelectionEnd(range: SelectedLineRange | null) {
+          console.log('Selection completed:', range);
+        },
       }}
     />
   );
