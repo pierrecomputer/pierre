@@ -230,28 +230,13 @@ function CommentForm({
   return (
     <div
       style={{
-        marginLeft: -43,
         overflow: 'hidden',
-        backgroundColor: 'var(--pjs-bg)',
         display: 'flex',
         flexDirection: 'row',
         gap: 1,
-        width: 'calc(100% + 43px)',
       }}
     >
-      <div
-        style={{
-          backgroundColor: 'var(--pjs-bg-selection-number-background)',
-          width: 43.5,
-          display: 'flex',
-        }}
-      />
-      <div
-        style={{
-          width: '100%',
-          backgroundColor: 'var(--pjs-bg-selection-background)',
-        }}
-      >
+      <div style={{ width: '100%' }}>
         <div
           className="max-w-[95%] sm:max-w-[70%]"
           style={{

@@ -249,14 +249,38 @@ export class LineSelectionManager {
         const lineIndex = this.getLineIndex(element);
         if ((lineIndex ?? 0) > last) break;
         if (lineIndex == null || lineIndex < first) continue;
-        if (isSingle) {
-          element.setAttribute('data-selected-line', 'single');
-        } else if (lineIndex === first) {
-          element.setAttribute('data-selected-line', 'first');
-        } else if (lineIndex === last) {
-          element.setAttribute('data-selected-line', 'last');
-        } else {
-          element.setAttribute('data-selected-line', '');
+        let attributeValue = isSingle
+          ? 'single'
+          : lineIndex === first
+            ? 'first'
+            : lineIndex === last
+              ? 'last'
+              : '';
+        element.setAttribute('data-selected-line', attributeValue);
+        // If we have a line annotation following our selected line, we should
+        // mark it as selected as well
+        if (
+          element.nextSibling instanceof HTMLElement &&
+          element.nextSibling.hasAttribute('data-line-annotation')
+        ) {
+          // Depending on the line's attribute value, lets go ahead and correct
+          // it when adding in the annotation row
+          if (isSingle) {
+            // Single technically becomes 2 selected lines
+            attributeValue = 'last';
+            element.setAttribute('data-selected-line', 'first');
+          } else if (lineIndex === first) {
+            // We don't want apply 'first' to the line annotation
+            attributeValue = '';
+          } else if (lineIndex === last) {
+            // the annotation will become the last selected line and therefore
+            // our existing line should no longer be last
+            element.setAttribute('data-selected-line', '');
+          }
+          element.nextSibling.setAttribute(
+            'data-selected-line',
+            attributeValue
+          );
         }
       }
     }
