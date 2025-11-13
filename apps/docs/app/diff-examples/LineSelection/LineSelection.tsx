@@ -2,6 +2,7 @@
 
 import { IconXSquircle } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import type { SelectedLineRange } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
@@ -15,10 +16,9 @@ interface LineSelectionProps {
 export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
   // Store the selected line range in state
   // This can be a single line (first === last) or a range (first < last)
-  const [selectedRange, setSelectedRange] = useState<{
-    first: number;
-    last: number;
-  } | null>(null);
+  const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
+    null
+  );
 
   // Store the current theme
   const [theme, setTheme] = useState<'pierre-dark' | 'pierre-light'>(
@@ -48,9 +48,9 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             <>
               <span className="text-muted-foreground">Selected: </span>
               <span className="font-semibold">
-                {selectedRange.first === selectedRange.last
-                  ? `Line ${selectedRange.first}`
-                  : `Lines ${selectedRange.first}–${selectedRange.last}`}
+                {selectedRange.start === selectedRange.end
+                  ? `Line ${selectedRange.start}`
+                  : `Lines ${selectedRange.start}–${selectedRange.end}`}
               </span>
             </>
           ) : (
@@ -61,7 +61,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           <Button
             variant="outline"
             onClick={() => {
-              setSelectedRange({ first: 6, last: 6 });
+              setSelectedRange({ start: 6, end: 6 });
             }}
           >
             Select line 6
@@ -69,12 +69,11 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           <Button
             variant="outline"
             onClick={() => {
-              setSelectedRange({ first: 15, last: 29 });
+              setSelectedRange({ start: 15, end: 29 });
             }}
           >
             Select lines 15-29
           </Button>
-
           <Button
             variant="outline"
             onClick={() => {
@@ -93,7 +92,6 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           >
             Background: {disableBackground ? 'Off' : 'On'}
           </Button>
-
           <Button
             variant="outline"
             onClick={() => {

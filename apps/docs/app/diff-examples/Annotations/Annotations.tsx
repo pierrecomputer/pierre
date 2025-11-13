@@ -113,10 +113,10 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     (range: SelectedLineRange | null) => {
       setSelectedRange(range);
       if (range == null) return;
-      const derivedSide = range.lastSide ?? range.side;
+      const derivedSide = range.endSide ?? range.side;
       const side: AnnotationSide =
         derivedSide === 'deletions' ? 'deletions' : 'additions';
-      addCommentAtLine(side, range.last);
+      addCommentAtLine(side, Math.max(range.end, range.start));
     },
     [addCommentAtLine]
   );
