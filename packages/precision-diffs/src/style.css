@@ -349,6 +349,21 @@ code {
   grid-column: 1 / 3;
 }
 
+[data-line-annotation][data-selected-line] {
+  background-color: unset;
+
+  &::before {
+    content: '';
+    display: block;
+    border-right: var(--pjs-gap-style, 1px solid var(--pjs-bg));
+    background-color: var(--pjs-bg-selection-number);
+  }
+
+  [data-annotation-content] {
+    background-color: var(--pjs-bg-selection);
+  }
+}
+
 [data-interactive-lines] [data-line] {
   cursor: pointer;
 }
