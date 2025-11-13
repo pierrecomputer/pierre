@@ -17,6 +17,7 @@ export function FileDiff<LAnnotation = undefined>({
   fileDiff,
   options,
   lineAnnotations,
+  selectedLines,
   className,
   style,
   prerenderedHTML,
@@ -27,6 +28,7 @@ export function FileDiff<LAnnotation = undefined>({
     fileDiff,
     options,
     lineAnnotations,
+    selectedLines,
   });
   const children = renderAnnotationChildren({
     fileDiff,

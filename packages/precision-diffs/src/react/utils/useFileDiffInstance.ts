@@ -1,5 +1,6 @@
 import deepEqual from 'fast-deep-equal';
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import type { SelectedLineRange } from 'src/LineSelectionManager';
 
 import { FileDiff, type FileDiffOptions } from '../../FileDiff';
 import type {
@@ -16,8 +17,9 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   oldFile?: FileContents;
   newFile?: FileContents;
   fileDiff?: FileDiffMetadata;
-  options?: FileDiffOptions<LAnnotation>;
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  options: FileDiffOptions<LAnnotation> | undefined;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  selectedLines: SelectedLineRange | null | undefined;
 }
 
 export function useFileDiffInstance<LAnnotation>({
@@ -26,6 +28,7 @@ export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
   lineAnnotations,
+  selectedLines,
 }: UseFileDiffInstanceProps<LAnnotation>): (
   fileContainer: HTMLElement | null
 ) => void {
@@ -62,32 +65,18 @@ export function useFileDiffInstance<LAnnotation>({
     if (instanceRef.current == null) return;
     const instance = instanceRef.current;
     const forceRender = !deepEqual(instance.options, options);
-    const selectedLines = options?.selectedLines;
-    const hasControlledSelection = selectedLines !== undefined;
-    const currentSelection = selectedLines ?? null;
     instance.setOptions(options);
-    void instance
-      .render({
-        forceRender,
-        fileDiff,
-        oldFile,
-        newFile,
-        lineAnnotations: lineAnnotations,
-      })
-      .then(() => {
-        if (instanceRef.current !== instance) return;
-        if (hasControlledSelection) {
-          instance.setSelectedLines(currentSelection);
-        }
-      });
+    void instance.render({
+      forceRender,
+      fileDiff,
+      oldFile,
+      newFile,
+      lineAnnotations,
+    });
+    if (selectedLines !== undefined) {
+      instance.setSelectedLines(selectedLines);
+    }
   });
-
-  useIsometricEffect(() => {
-    if (instanceRef.current == null) return;
-    const selectedLines = options?.selectedLines;
-    if (selectedLines === undefined) return;
-    instanceRef.current.setSelectedLines(selectedLines);
-  }, [options?.selectedLines]);
 
   return ref;
 }

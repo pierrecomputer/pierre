@@ -18,6 +18,7 @@ export function PatchDiff<LAnnotation = undefined>({
   patch,
   options,
   lineAnnotations,
+  selectedLines,
   className,
   style,
   prerenderedHTML,
@@ -25,7 +26,12 @@ export function PatchDiff<LAnnotation = undefined>({
   renderHeaderMetadata,
 }: PatchDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = usePatch(patch);
-  const ref = useFileDiffInstance({ fileDiff, options, lineAnnotations });
+  const ref = useFileDiffInstance({
+    fileDiff,
+    options,
+    lineAnnotations,
+    selectedLines,
+  });
   const children = renderAnnotationChildren({
     fileDiff,
     renderHeaderMetadata,

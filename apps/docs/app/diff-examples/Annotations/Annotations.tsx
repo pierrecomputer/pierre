@@ -34,14 +34,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     top: number;
     left: number;
   } | null>(null);
-  const [clearSelectionRequested, setClearSelectionRequested] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!clearSelectionRequested) return;
-    const id = requestAnimationFrame(() => setClearSelectionRequested(false));
-    return () => cancelAnimationFrame(id);
-  }, [clearSelectionRequested]);
 
   const addCommentAtLine = useCallback(
     (side: AnnotationSide, lineNumber: number) => {
@@ -112,14 +105,18 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   }, []);
 
   const hasOpenCommentForm = annotations.some((ann) => !ann.metadata.isThread);
+  const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
+    null
+  );
 
   const handleLineSelectionEnd = useCallback(
     (range: SelectedLineRange | null) => {
+      setSelectedRange(range);
       if (range == null) return;
-      const derivedSide = range.lastSide ?? range.side;
+      const derivedSide = range.endSide ?? range.side;
       const side: AnnotationSide =
         derivedSide === 'deletions' ? 'deletions' : 'additions';
-      addCommentAtLine(side, range.last);
+      addCommentAtLine(side, Math.max(range.end, range.start));
     },
     [addCommentAtLine]
   );
@@ -139,7 +136,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           (ann) => !(ann.side === side && ann.lineNumber === lineNumber)
         )
       );
-      setClearSelectionRequested(true);
+      setSelectedRange(null);
     },
     []
   );
@@ -177,12 +174,12 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         <MultiFileDiff
           {...prerenderedDiff}
           className="diff-container"
+          selectedLines={selectedRange}
           options={{
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
             enableLineSelection: !hasOpenCommentForm,
             onLineSelectionEnd: handleLineSelectionEnd,
-            ...(clearSelectionRequested ? { selectedLines: null } : {}),
           }}
           lineAnnotations={annotations}
           renderAnnotation={(annotation) =>

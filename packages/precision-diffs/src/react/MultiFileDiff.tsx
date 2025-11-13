@@ -19,6 +19,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   newFile,
   options,
   lineAnnotations,
+  selectedLines,
   className,
   style,
   prerenderedHTML,
@@ -30,6 +31,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
     newFile,
     options,
     lineAnnotations,
+    selectedLines,
   });
   const children = renderAnnotationChildren({
     oldFile,

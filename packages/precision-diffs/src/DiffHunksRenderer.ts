@@ -759,6 +759,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           unifiedLineInfo[unifiedContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
             lineNumber: additionLineNumber + 1,
+            altLineNumber: deletionLineNumber + 1,
             lineIndex,
           };
           const span = createMirroredAnnotationSpan({
@@ -777,11 +778,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           deletionLineInfo[deletionContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
             lineNumber: deletionLineNumber + 1,
+            altLineNumber: additionLineNumber + 1,
             lineIndex,
           };
           additionLineInfo[additionContent.length] = {
             type: isExpandedContext ? 'context-expanded' : 'context',
             lineNumber: additionLineNumber + 1,
+            altLineNumber: deletionLineNumber + 1,
             lineIndex,
           };
           const [deletionSpan, additionSpan] = createMirroredAnnotationSpan({

@@ -173,6 +173,7 @@ export type LineTypes =
 export interface LineInfo {
   type: LineTypes;
   lineNumber: number;
+  altLineNumber?: number;
   lineIndex: number;
   metadataContent?: string;
   spans?: LineSpans[];
