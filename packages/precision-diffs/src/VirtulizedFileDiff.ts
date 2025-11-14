@@ -331,12 +331,12 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
   }
 
   private applyHunksToDOM(
-    result: Partial<HunksRenderResult>,
+    result: HunksRenderResult,
     pre: HTMLPreElement,
     highlighter: PJSHighlighter
   ): void {
     if (this.hunksRenderer == null) return;
-    this.setPreAttributes(pre, highlighter);
+    this.setPreAttributes(pre, highlighter, result);
 
     // Clear existing content
     pre.innerHTML = '';
@@ -379,7 +379,8 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
 
   private setPreAttributes(
     pre: HTMLPreElement,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    result: HunksRenderResult
   ): void {
     const {
       diffStyle = 'split',
@@ -404,6 +405,7 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
       themeType,
       diffIndicators,
       disableBackground,
+      totalLines: result.totalLines,
     });
   }
 
