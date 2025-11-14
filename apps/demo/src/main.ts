@@ -59,7 +59,7 @@ void workerAPI.ensureInitialized().then(() => {
     'Worker pool initialized!',
     workerAPI.getStats(),
     'in',
-    Date.now() - workerInitializedStart
+    `${Date.now() - workerInitializedStart}ms`
   );
 });
 
