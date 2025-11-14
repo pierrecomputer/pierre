@@ -43,17 +43,3 @@ This will run a full build of all the icons into
 `./apps/docs/components/icons/icons`
 
 Then make sure to check in any changes needed
-
-## Bun Cache Clearing Shenanigans
-
-It does appear that bun can get into a weird cached state when updating the
-react versions (or potentially any other dependency updates).
-
-If you need to start fresh, try the following fixes:
-
-```bash
-bun pm cache rm
-rm bun.lock
-rm -rf node_modules
-bun install
-```
