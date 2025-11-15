@@ -100,7 +100,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     [annotations]
   );
 
-  const handleContainerMouseLeave = useCallback(() => {
+  const handleLineLeave = useCallback(() => {
     setButtonPosition(null);
   }, []);
 
@@ -147,11 +147,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         title="Comments & Annotations"
         description="Precision Diffs provide a flexible annotation framework for injecting additional content and context. Use it to render your own line comments, annotations from CI jobs, and other third-party content."
       />
-      <div
-        ref={containerRef}
-        className="relative flex flex-col gap-3"
-        onMouseLeave={handleContainerMouseLeave}
-      >
+      <div ref={containerRef} className="relative flex flex-col gap-3">
         {buttonPosition != null && !hasOpenCommentForm && (
           <Button
             size="icon-sm"
@@ -178,6 +174,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           options={{
             ...prerenderedDiff.options,
             onLineEnter: handleLineEnter,
+            onLineLeave: handleLineLeave,
             enableLineSelection: !hasOpenCommentForm,
             onLineSelectionEnd: handleLineSelectionEnd,
           }}
