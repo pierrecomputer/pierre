@@ -10,7 +10,13 @@ import {
   SPLIT_WITH_NEWLINES,
   UNIFIED_DIFF_FILE_BREAK_REGEX,
 } from '../constants';
-import type { FileDiffMetadata, Hunk, ParsedPatch } from '../types';
+import type {
+  ChangeContent,
+  ContextContent,
+  FileDiffMetadata,
+  Hunk,
+  ParsedPatch,
+} from '../types';
 
 function processPatch(data: string): ParsedPatch {
   const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
@@ -49,6 +55,7 @@ function processPatch(data: string): ParsedPatch {
         continue;
       }
       const match = firstLine.match(HUNK_HEADER);
+      const hunkContent: (ContextContent | ChangeContent)[] = [];
       let additionLines = 0;
       let deletedLines = 0;
       if (match == null || currentFile == null) {
@@ -61,7 +68,8 @@ function processPatch(data: string): ParsedPatch {
           prevName: undefined,
           type: 'change',
           hunks: [],
-          lines: 0,
+          splitLineCount: 0,
+          unifiedLineCount: 0,
         };
         // Push that first line back into the group of lines so we can properly
         // parse it out
@@ -127,23 +135,44 @@ function processPatch(data: string): ParsedPatch {
         }
         continue;
       } else {
+        let currentContent: ContextContent | ChangeContent | undefined;
         for (const line of lines) {
           if (line[0] === '+') {
+            if (currentContent == null || currentContent.type !== 'change') {
+              currentContent = createContentGroup('change');
+              hunkContent.push(currentContent);
+            }
+            currentContent.additions.push(line);
             additionLines++;
           } else if (line[0] === '-') {
+            if (currentContent == null || currentContent.type !== 'change') {
+              currentContent = createContentGroup('change');
+              hunkContent.push(currentContent);
+            }
+            currentContent.deletions.push(line);
             deletedLines++;
+          } else {
+            if (currentContent == null || currentContent.type !== 'context') {
+              currentContent = createContentGroup('context');
+              hunkContent.push(currentContent);
+            }
+            currentContent.lines.push(line);
           }
         }
       }
       const hunkData: Hunk = {
         collapsedBefore: 0,
-        additionCount: parseInt(match[4] ?? '1'),
+        splitLineCount: 0,
+        splitLineStart: 0,
+        unifiedLineCount: lines.length,
+        unifiedLineStart: 0,
+        additionCount: parseInt(match[4] ?? '0'),
         additionStart: parseInt(match[3]),
         additionLines,
-        deletedCount: parseInt(match[2] ?? '1'),
+        deletedCount: parseInt(match[2] ?? '0'),
         deletedStart: parseInt(match[1]),
         deletedLines,
-        hunkContent: lines.length > 0 ? lines : undefined,
+        hunkContent,
         hunkContext: match[5],
         hunkSpecs: firstLine,
       };
@@ -157,15 +186,17 @@ function processPatch(data: string): ParsedPatch {
         continue;
       }
       hunkData.collapsedBefore = hunkData.additionStart - 1 - lastHunkEnd;
-      // If the final line is an empty newline, lets yeet it, that's usually a
-      // separator between multiple patches in a single file.  Unclear if
-      // safe... but probably
-      if (lines[lines.length - 1] === '\n') {
-        lines.pop();
-      }
       currentFile.hunks.push(hunkData);
-      currentFile.lines += hunkData.hunkContent?.length ?? 0;
       lastHunkEnd = hunkData.additionStart + hunkData.additionCount - 1;
+      hunkData.splitLineCount = Math.max(
+        hunkData.additionCount,
+        hunkData.deletedCount
+      );
+      hunkData.splitLineStart = currentFile.splitLineCount;
+      hunkData.unifiedLineStart = currentFile.unifiedLineCount;
+
+      currentFile.splitLineCount += hunkData.splitLineCount;
+      currentFile.unifiedLineCount += hunkData.unifiedLineCount;
     }
     if (currentFile != null) {
       if (
@@ -203,4 +234,15 @@ export function parsePatchFiles(data: string): ParsedPatch[] {
     }
   }
   return patches;
+}
+
+function createContentGroup(type: 'change'): ChangeContent;
+function createContentGroup(type: 'context'): ContextContent;
+function createContentGroup(
+  type: 'change' | 'context'
+): ChangeContent | ContextContent {
+  if (type === 'change') {
+    return { type: 'change', additions: [], deletions: [] };
+  }
+  return { type: 'context', lines: [] };
 }

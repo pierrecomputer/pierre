@@ -301,6 +301,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             hunkContent: [],
             hunkContext: undefined,
             hunkSpecs: undefined,
+            splitLineCount: 0,
+            splitLineStart: 0,
+            unifiedLineCount: 0,
+            unifiedLineStart: 0,
           } satisfies Hunk,
         ];
       }
@@ -466,7 +470,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     unifiedAST,
     hunkData,
   }: RenderHunkProps) {
-    if (hunk.hunkContent == null) {
+    if (hunk.hunkContent.length === 0) {
       return;
     }
 
@@ -892,6 +896,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lastType = type;
     };
 
+    function processRawLines(lines: string[]) {
+      for (const rawLine of lines) {
+        const { line, type, longLine } = parseLineType(
+          rawLine,
+          maxLineLengthForHighlighting
+        );
+        hasLongLines = hasLongLines || longLine;
+        processRawLine(line, type);
+      }
+    }
+
     let lineIndex = -1;
     let lastType: HunkLineType | undefined;
 
@@ -942,13 +957,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     // Process diff content
-    for (const rawLine of hunk.hunkContent ?? []) {
-      const { line, type, longLine } = parseLineType(
-        rawLine,
-        maxLineLengthForHighlighting
-      );
-      hasLongLines = hasLongLines || longLine;
-      processRawLine(line, type);
+    for (const content of hunk.hunkContent) {
+      if (content.type === 'context') {
+        processRawLines(content.lines);
+      } else {
+        processRawLines(content.deletions);
+        processRawLines(content.additions);
+      }
     }
     createGapSpanIfNecessary();
 
