@@ -470,10 +470,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     unifiedAST,
     hunkData,
   }: RenderHunkProps) {
-    if (hunk.hunkContent.length === 0) {
-      return;
-    }
-
     const { hunkSeparators, expansionLineCount, expandUnchanged } =
       this.getOptionsWithDefaults();
     const { additions, deletions, unified, hasLongLines } = this.processLines(
