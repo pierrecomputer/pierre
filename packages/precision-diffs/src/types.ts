@@ -71,9 +71,9 @@ export interface Hunk {
   additionCount: number;
   additionStart: number;
   additionLines: number;
-  deletedCount: number;
-  deletedStart: number;
-  deletedLines: number;
+  deletionCount: number;
+  deletionStart: number;
+  deletionLines: number;
   hunkContent: (ContextContent | ChangeContent)[];
   hunkContext: string | undefined;
   hunkSpecs: string | undefined;
