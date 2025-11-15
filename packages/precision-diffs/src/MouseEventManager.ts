@@ -166,14 +166,12 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
         'move',
         'FileDiff.DEBUG.attachEventListeners: Attaching mouse move event'
       );
-      if (onLineLeave != null) {
-        pre.addEventListener('mouseleave', this.handleMouseLeave);
-        debugLogIfEnabled(
-          __debugMouseEvents,
-          'move',
-          'FileDiff.DEBUG.attachEventListeners: Attaching mouse leave event'
-        );
-      }
+      pre.addEventListener('mouseleave', this.handleMouseLeave);
+      debugLogIfEnabled(
+        __debugMouseEvents,
+        'move',
+        'FileDiff.DEBUG.attachEventListeners: Attaching mouse leave event'
+      );
     }
   }
 
