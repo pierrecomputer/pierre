@@ -57,7 +57,7 @@ function processPatch(data: string): ParsedPatch {
       const match = firstLine.match(HUNK_HEADER);
       const hunkContent: (ContextContent | ChangeContent)[] = [];
       let additionLines = 0;
-      let deletedLines = 0;
+      let deletionLines = 0;
       if (match == null || currentFile == null) {
         if (currentFile != null) {
           console.error('parsePatchContent: Invalid hunk', hunk);
@@ -150,7 +150,7 @@ function processPatch(data: string): ParsedPatch {
               hunkContent.push(currentContent);
             }
             currentContent.deletions.push(line);
-            deletedLines++;
+            deletionLines++;
           } else {
             if (currentContent == null || currentContent.type !== 'context') {
               currentContent = createContentGroup('context');
@@ -169,18 +169,18 @@ function processPatch(data: string): ParsedPatch {
         additionCount: parseInt(match[4] ?? '0'),
         additionStart: parseInt(match[3]),
         additionLines,
-        deletedCount: parseInt(match[2] ?? '0'),
-        deletedStart: parseInt(match[1]),
-        deletedLines,
+        deletionCount: parseInt(match[2] ?? '0'),
+        deletionStart: parseInt(match[1]),
+        deletionLines,
         hunkContent,
         hunkContext: match[5],
         hunkSpecs: firstLine,
       };
       if (
         isNaN(hunkData.additionCount) ||
-        isNaN(hunkData.deletedCount) ||
+        isNaN(hunkData.deletionCount) ||
         isNaN(hunkData.additionStart) ||
-        isNaN(hunkData.deletedStart)
+        isNaN(hunkData.deletionStart)
       ) {
         console.error('parsePatchContent: invalid hunk metadata', hunkData);
         continue;
@@ -190,7 +190,7 @@ function processPatch(data: string): ParsedPatch {
       lastHunkEnd = hunkData.additionStart + hunkData.additionCount - 1;
       hunkData.splitLineCount = Math.max(
         hunkData.additionCount,
-        hunkData.deletedCount
+        hunkData.deletionCount
       );
       hunkData.splitLineStart = currentFile.splitLineCount;
       hunkData.unifiedLineStart = currentFile.unifiedLineCount;

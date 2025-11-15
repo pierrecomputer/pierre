@@ -7,6 +7,6 @@ export function getTotalLineCountFromHunks(hunks: Hunk[]): number {
   }
   return Math.max(
     lastHunk.additionStart + lastHunk.additionCount,
-    lastHunk.deletedStart + lastHunk.deletedCount
+    lastHunk.deletionStart + lastHunk.deletionCount
   );
 }

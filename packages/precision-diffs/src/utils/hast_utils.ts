@@ -449,7 +449,7 @@ function createMetadataElement(
     let deletions = 0;
     for (const hunk of fileDiff.hunks) {
       additions += hunk.additionLines;
-      deletions += hunk.deletedLines;
+      deletions += hunk.deletionLines;
     }
     if (deletions > 0) {
       children.push(
