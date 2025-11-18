@@ -15,6 +15,7 @@ export function parseLineType(
     firstChar !== '+' &&
     firstChar !== '-' &&
     firstChar !== ' ' &&
+    firstChar !== '\n' &&
     firstChar !== '\\'
   ) {
     throw new Error(
@@ -24,7 +25,9 @@ export function parseLineType(
   return {
     line: line.substring(1),
     type:
-      firstChar === ' '
+      // NOTE(amadeus): Don't love allowing this, but it's
+      // _probably_ generally safe
+      firstChar === ' ' || firstChar === '\n'
         ? 'context'
         : firstChar === '\\'
           ? 'metadata'
