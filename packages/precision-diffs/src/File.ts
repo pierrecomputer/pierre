@@ -37,7 +37,7 @@ import {
   setWrapperProps,
 } from './utils/html_render_utils';
 
-interface FileRenderProps<LAnnotation> {
+export interface FileRenderProps<LAnnotation> {
   file: FileContents;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;

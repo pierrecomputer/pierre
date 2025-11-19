@@ -139,6 +139,16 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expansionLineCount?: number; // 100 is default
 }
 
+export interface CreatePreWrapperPropertiesProps
+  extends Pick<
+    BaseDiffOptions,
+    'overflow' | 'themeType' | 'diffIndicators' | 'disableBackground' | 'theme'
+  > {
+  split: boolean;
+  highlighter: PJSHighlighter;
+  totalLines: number;
+}
+
 export interface RenderHeaderMetadataProps {
   oldFile?: FileContents;
   newFile?: FileContents;

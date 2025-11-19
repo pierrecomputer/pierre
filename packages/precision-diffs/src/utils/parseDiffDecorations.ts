@@ -113,7 +113,7 @@ interface CreateDiffSpanDecorationProps {
   spanLength: number;
 }
 
-function createDiffSpanDecoration({
+export function createDiffSpanDecoration({
   line,
   spanStart,
   spanLength,
@@ -138,12 +138,12 @@ interface PushOrJoinSpanProps {
 // Spans are basically just a tuple - 1 means the content should be
 // highlighted, 0 means it should not, we still need to the span data to figure
 // out span positions
-function pushOrJoinSpan({
+export function pushOrJoinSpan({
   item,
   arr,
   enableJoin,
   isNeutral = false,
-}: PushOrJoinSpanProps) {
+}: PushOrJoinSpanProps): void {
   const lastItem = arr[arr.length - 1];
   if (lastItem == null || item.value === '\n' || !enableJoin) {
     arr.push([isNeutral ? 0 : 1, item.value]);

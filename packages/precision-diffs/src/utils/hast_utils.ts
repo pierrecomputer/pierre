@@ -11,8 +11,8 @@ import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from '../constants';
 import type { SVGSpriteNames } from '../sprite';
 import type {
   AnnotationSpan,
-  BaseDiffOptions,
   ChangeTypes,
+  CreatePreWrapperPropertiesProps,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -288,16 +288,6 @@ export function convertLine(
         lineInfo.lineIndex >= 0 ? lineInfo.lineIndex : undefined,
     },
   });
-}
-
-interface CreatePreWrapperPropertiesProps
-  extends Pick<
-    BaseDiffOptions,
-    'overflow' | 'themeType' | 'diffIndicators' | 'disableBackground' | 'theme'
-  > {
-  split: boolean;
-  highlighter: PJSHighlighter;
-  totalLines: number;
 }
 
 export function createPreWrapperProperties({

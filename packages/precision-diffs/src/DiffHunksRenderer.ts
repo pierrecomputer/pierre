@@ -28,6 +28,7 @@ import type {
   SupportedLanguages,
   ThemeTypes,
 } from './types';
+import { cleanLastNewline } from './utils/cleanLastNewline';
 import { createMirroredAnnotationSpan } from './utils/createMirroredAnnotationSpan';
 import { createSingleAnnotationSpan } from './utils/createSingleAnnotationSpan';
 import { createTransformerWithState } from './utils/createTransformerWithState';
@@ -481,7 +482,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       linesAST: ElementContent[]
     ) => {
       // Remove trailing blank line
-      const content = computed.content.join('').replace(/\n$/, '');
+      const content = cleanLastNewline(computed.content.join(''));
       state.lineInfo = computed.lineInfo;
       const nodes = highlighter.codeToHast(
         content,

@@ -1,4 +1,4 @@
-import type { Element, ElementContent, Root, RootContent } from 'hast';
+import type { Element, ElementContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -20,11 +20,13 @@ import type {
   SupportedLanguages,
   ThemeTypes,
 } from './types';
+import { cleanLastNewline } from './utils/cleanLastNewline';
 import { createTransformerWithState } from './utils/createTransformerWithState';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { getLineNodes } from './utils/getLineNodes';
 import { getThemes } from './utils/getThemes';
 import {
   createHastElement,
@@ -43,7 +45,7 @@ export interface FileRenderResult {
   totalLines: number;
 }
 
-interface FileRendererOptions extends BaseCodeOptions {
+export interface FileRendererOptions extends BaseCodeOptions {
   startingLineNumber?: number;
   maxLineLengthForHighlighting?: number; // 1000 is default
 }
@@ -133,9 +135,9 @@ export class FileRenderer<LAnnotation = undefined> {
 
     const { lineInfoMap, hasLongLines } = this.computeLineInfo(file.contents);
     state.lineInfo = lineInfoMap;
-    const codeAST = this.getLineNodes(
+    const codeAST = getLineNodes(
       highlighter.codeToHast(
-        file.contents.replace(/\n$/, ''),
+        cleanLastNewline(file.contents),
         this.createHastOptions(transformers, undefined, hasLongLines)
       )
     );
@@ -191,24 +193,6 @@ export class FileRenderer<LAnnotation = undefined> {
         children,
         properties: { 'data-code': '' },
       })
-    );
-  }
-
-  private getLineNodes(nodes: Root): ElementContent[] {
-    let firstChild: RootContent | Element | Root | null = nodes.children[0];
-    while (firstChild != null) {
-      if (firstChild.type === 'element' && firstChild.tagName === 'code') {
-        return firstChild.children;
-      }
-      if ('children' in firstChild) {
-        firstChild = firstChild.children[0];
-      } else {
-        firstChild = null;
-      }
-    }
-    console.error(nodes);
-    throw new Error(
-      'DiffHunksRenderer.getNodesToRender: Unable to find children'
     );
   }
 
