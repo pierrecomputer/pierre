@@ -16,6 +16,7 @@ export function parseLineType(
     firstChar !== '-' &&
     firstChar !== ' ' &&
     firstChar !== '\n' &&
+    firstChar !== '\r' &&
     firstChar !== '\\'
   ) {
     throw new Error(
@@ -27,7 +28,7 @@ export function parseLineType(
     type:
       // NOTE(amadeus): Don't love allowing this, but it's
       // _probably_ generally safe
-      firstChar === ' ' || firstChar === '\n'
+      firstChar === ' ' || firstChar === '\n' || firstChar === '\r'
         ? 'context'
         : firstChar === '\\'
           ? 'metadata'
