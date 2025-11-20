@@ -1,5 +1,6 @@
 import {
   type BundledLanguage,
+  DEFAULT_THEMES,
   File,
   FileDiff,
   FileStream,
@@ -12,6 +13,7 @@ import {
   parsePatchFiles,
   preloadHighlighter,
 } from '@pierre/precision-diffs';
+import type { ShikiPoolManager } from '@pierre/precision-diffs/worker';
 
 import {
   CodeConfigs,
@@ -41,27 +43,26 @@ async function loadPatchContent() {
   return loadingPatch;
 }
 
+let poolManager: ShikiPoolManager | undefined;
 // Create worker API - helper handles worker creation automatically!
-const workerAPI = createWorkerAPI({
-  poolSize: 8,
-  initOptions: {
-    themes: ['pierre-dark', 'pierre-light'],
-  },
-});
-
-// @ts-expect-error bcuz
-window.__POOL = workerAPI;
-
-// Initialize the worker pool
-const workerInitializedStart = Date.now();
-void workerAPI.ensureInitialized().then(() => {
+const manager = (async () => {
+  const workerInitializedStart = Date.now();
+  const manager = await createWorkerAPI({
+    theme: DEFAULT_THEMES,
+    langs: ['typescript', 'tsx'],
+  });
   console.log(
     'Worker pool initialized!',
-    workerAPI.getStats(),
+    manager.getStats(),
     'in',
     `${Date.now() - workerInitializedStart}ms`
   );
-});
+
+  // @ts-expect-error bcuz
+  window.__POOL = manager;
+  poolManager = manager;
+  return manager;
+})();
 
 const streamingInstances: FileStream[] = [];
 function startStreaming() {
@@ -105,6 +106,7 @@ async function handlePreloadDiff() {
 
 const diffInstances: FileDiff<LineCommentMetadata>[] = [];
 function renderDiff(parsedPatches: ParsedPatch[]) {
+  console.log('ZZZZZ - rendering', parsedPatches);
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;
   window.scrollTo({ top: 0 });
@@ -284,7 +286,8 @@ function createFileMetadata(patchMetadata: string) {
 }
 
 const workerInstances: Promise<unknown>[] = [];
-function workerRenderDiff(parsedPatches: ParsedPatch[]) {
+// FIXME(amadeus): Don't export this, lawl
+export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
   workerInstances.length = 0;
 
   console.log('Worker Render: Starting to server render patch');
@@ -293,8 +296,8 @@ function workerRenderDiff(parsedPatches: ParsedPatch[]) {
   for (const parsedPatch of parsedPatches) {
     for (const fileDiff of parsedPatch.files) {
       const start = Date.now();
-      const prom = workerAPI
-        .renderDiffMetadataToHast(fileDiff, {
+      const prom = poolManager
+        ?.renderDiffMetadataToHast(fileDiff, {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
         })
         .then((result) =>
@@ -307,9 +310,11 @@ function workerRenderDiff(parsedPatches: ParsedPatch[]) {
             Date.now() - start
           )
         );
-      workerInstances.push(prom);
-      if (firstFour.length < 4) {
-        firstFour.push(prom);
+      if (prom != null) {
+        workerInstances.push(prom);
+        if (firstFour.length < 4) {
+          firstFour.push(prom);
+        }
       }
     }
   }
@@ -475,6 +480,44 @@ if (diff2Files != null) {
 //   renderDiff([{ files: [parsed] }]);
 // })();
 
+async function DoTheThing() {
+  // const oldFile = {
+  //   name: 'file_old.ts',
+  //   contents: FILE_OLD,
+  // };
+  const file = {
+    name: 'file_new.ts',
+    contents: FILE_NEW,
+  };
+  const wrapper = document.getElementById('wrapper');
+  if (wrapper == null) return;
+
+  const m = await manager;
+
+  console.time('sync render time');
+  const fileContainer = document.createElement('file-diff');
+  wrapper.appendChild(fileContainer);
+  const instance = new File(
+    {
+      theme: DEFAULT_THEMES,
+    },
+    m
+  );
+
+  instance.render({
+    file,
+    fileContainer,
+  });
+  console.timeEnd('sync render time');
+
+  // const m = await manager;
+  // console.time('rendertime');
+  // const result = await m.renderDiffToHast(oldFile, newFile);
+  // console.timeEnd('rendertime');
+  // console.log('result', result);
+  // console.log('==============================================================');
+}
+
 function toggleTheme() {
   const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
@@ -512,6 +555,8 @@ if (renderFileButton != null) {
   renderFileButton.addEventListener('click', () => {
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) return;
+    const fileContainer = document.createElement('file-diff');
+    wrapper.appendChild(fileContainer);
     const instance = new File<LineCommentMetadata>({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       renderAnnotation,
@@ -549,8 +594,8 @@ if (renderFileButton != null) {
 
     void instance.render({
       file: { name: 'main.tsx', contents: FILE_NEW },
-      containerWrapper: wrapper,
       lineAnnotations: FAKE_LINE_ANNOTATIONS,
+      fileContainer,
     });
     fileInstances.push(instance);
   });
@@ -558,8 +603,9 @@ if (renderFileButton != null) {
 
 const workerRenderButton = document.getElementById('worker-load-diff');
 workerRenderButton?.addEventListener('click', () => {
-  void (async () => {
-    const patches = parsePatchFiles(await loadPatchContent());
-    workerRenderDiff(patches);
-  })();
+  void DoTheThing();
+  // void (async () => {
+  //   const patches = parsePatchFiles(await loadPatchContent());
+  //   workerRenderDiff(patches);
+  // })();
 });
