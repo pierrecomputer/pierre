@@ -17,6 +17,7 @@ import type {
   Hunk,
   ParsedPatch,
 } from '../types';
+import { cleanLastNewline } from './cleanLastNewline';
 
 function processPatch(data: string): ParsedPatch {
   const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
@@ -228,7 +229,7 @@ export function parsePatchFiles(data: string): ParsedPatch[] {
   const patches: ParsedPatch[] = [];
   for (const patch of data.split(COMMIT_METADATA_SPLIT)) {
     try {
-      patches.push(processPatch(patch));
+      patches.push(processPatch(cleanLastNewline(patch)));
     } catch (error) {
       console.error(error);
     }
