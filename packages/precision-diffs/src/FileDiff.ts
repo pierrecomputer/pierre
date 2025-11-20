@@ -633,7 +633,6 @@ export class FileDiff<LAnnotation = undefined> {
 
     this.mouseEventManager.setup(pre);
     this.lineSelectionManager.setup(pre);
-    this.lineSelectionManager.setDirty();
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);
       this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);

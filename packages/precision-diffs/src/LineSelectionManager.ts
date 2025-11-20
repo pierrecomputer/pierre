@@ -50,7 +50,6 @@ export class LineSelectionManager {
 
   cleanUp(): void {
     this.removeEventListeners();
-    this.selectedRange = null;
     if (this._queuedRender != null) {
       cancelAnimationFrame(this._queuedRender);
       this._queuedRender = undefined;
@@ -62,17 +61,22 @@ export class LineSelectionManager {
   }
 
   setup(pre: HTMLPreElement): void {
-    if (this.pre === pre) return;
-    this.cleanUp();
+    // Assume we are always dirty after a setup...
+    this.setDirty();
+    if (this.pre !== pre) {
+      this.cleanUp();
+    }
     this.pre = pre;
     const { enableLineSelection = false } = this.options;
     if (enableLineSelection) {
       this.pre.dataset.interactiveLineNumbers = '';
       this.attachEventListeners();
     } else {
+      this.removeEventListeners();
       delete this.pre.dataset.interactiveLineNumbers;
     }
-    this.setDirty();
+
+    this.setSelection(this.selectedRange);
   }
 
   setDirty(): void {
