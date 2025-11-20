@@ -8,9 +8,9 @@ export const FILE_CONTEXT_BLOB: RegExp = /(?=^@@ )/gm;
 export const HUNK_HEADER: RegExp =
   /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: (.*))?/m;
 export const SPLIT_WITH_NEWLINES: RegExp = /(?<=\n)/;
-export const FILENAME_HEADER_REGEX: RegExp = /^(---|\+\+\+)\s+([^\t\n]+)/;
+export const FILENAME_HEADER_REGEX: RegExp = /^(---|\+\+\+)\s+([^\t\r\n]+)/;
 export const FILENAME_HEADER_REGEX_GIT: RegExp =
-  /^(---|\+\+\+)\s+[ab]\/([^\t\n]+)/;
+  /^(---|\+\+\+)\s+[ab]\/([^\t\r\n]+)/;
 export const ALTERNATE_FILE_NAMES_GIT: RegExp =
   /^diff --git (?:"a\/(.+?)"|a\/(.+?)) (?:"b\/(.+?)"|b\/(.+?))$/;
 export const FILE_MODE_FROM_INDEX: RegExp =
