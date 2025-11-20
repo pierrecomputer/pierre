@@ -64,6 +64,7 @@ interface RenderHunkProps {
   deletionsAST: ElementContent[];
   unifiedAST: ElementContent[];
   hunkData: HunkData[];
+  lineIndex: number;
 }
 
 interface UnresolvedAnnotationSpan {
@@ -310,6 +311,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
       return [];
     })();
+    let lineIndex = -1;
     for (const hunk of hunks) {
       this.renderHunks({
         hunk,
@@ -324,8 +326,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         deletionsAST,
         unifiedAST,
         hunkData,
+        lineIndex,
       });
       hunkIndex++;
+      lineIndex += Math.max(hunk.additionCount, hunk.deletionCount);
       prevHunk = hunk;
     }
 
@@ -469,13 +473,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     deletionsAST,
     unifiedAST,
     hunkData,
+    lineIndex,
   }: RenderHunkProps) {
     const { hunkSeparators, expansionLineCount, expandUnchanged } =
       this.getOptionsWithDefaults();
     const { additions, deletions, unified, hasLongLines } = this.processLines(
       hunk,
       hunkIndex,
-      prevHunk
+      prevHunk,
+      lineIndex
     );
     const expandable = this.diff?.newLines != null;
 
@@ -578,7 +584,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private processLines(
     hunk: Hunk,
     hunkIndex: number,
-    prevHunk: Hunk | undefined
+    prevHunk: Hunk | undefined,
+    lineIndex: number
   ): ProcessLinesReturn {
     const {
       maxLineLengthForHighlighting,
@@ -903,7 +910,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
 
-    let lineIndex = -1;
     let lastType: HunkLineType | undefined;
 
     const preExpandedRegion = expandUnchanged
