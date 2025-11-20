@@ -120,6 +120,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
         themeType,
+        enableLineSelection: true,
         // Custom Hunk Separators Tests
         // hunkSeparators(hunkData) {
         //   const fragment = document.createDocumentFragment();
