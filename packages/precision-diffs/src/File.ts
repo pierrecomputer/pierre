@@ -1,5 +1,4 @@
 import deepEquals from 'fast-deep-equal';
-import type { Element } from 'hast';
 
 import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { type FileRenderResult, FileRenderer } from './FileRenderer';
@@ -16,26 +15,23 @@ import {
   pluckMouseEventOptions,
 } from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
-import { getSharedHighlighter } from './SharedHighlighter';
-import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
+import { DEFAULT_THEMES } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
-  PJSHighlighter,
   RenderFileMetadata,
   ThemeTypes,
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getThemes } from './utils/getThemes';
 import {
   createAnnotationWrapper,
   createCodeNode,
   createHoverContent,
-  setWrapperProps,
 } from './utils/html_render_utils';
+import type { ShikiPoolManager } from './worker';
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -73,7 +69,8 @@ export class File<LAnnotation = undefined> {
   private hoverContent: HTMLElement | undefined;
 
   private headerElement: HTMLElement | undefined;
-  private headerMetadata: HTMLElement | undefined;
+  // FIXME(amadeus): header needs some work...
+  // private headerMetadata: HTMLElement | undefined;
 
   private fileRenderer: FileRenderer<LAnnotation>;
   private headerRenderer: FileHeaderRenderer;
@@ -88,9 +85,14 @@ export class File<LAnnotation = undefined> {
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    poolManager?: ShikiPoolManager | undefined,
     private isContainerManaged = false
   ) {
-    this.fileRenderer = new FileRenderer<LAnnotation>(options);
+    this.fileRenderer = new FileRenderer<LAnnotation>(
+      options,
+      this.handleHighlightRender,
+      poolManager
+    );
     this.headerRenderer = new FileHeaderRenderer(options);
     this.resizeManager = new ResizeManager();
     this.mouseEventManager = new MouseEventManager(
@@ -101,6 +103,11 @@ export class File<LAnnotation = undefined> {
       pluckLineSelectionOptions(options)
     );
   }
+
+  private handleHighlightRender = (): void => {
+    if (this.file == null) return;
+    void this.render({ file: this.file, forceRender: true });
+  };
 
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
@@ -152,14 +159,15 @@ export class File<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
+  // FIXME(amadeus): Figure this out in an async highlighting world...
   setSelectedLines(range: SelectedLineRange | null): void {
     // If we have a render in progress, we should wait for it to finish before
     // attempting the selection
-    if (this.queuedRender != null) {
-      void this.queuedRender.then(() => this.setSelectedLines(range));
-    } else {
-      this.lineSelectionManager.setSelection(range);
-    }
+    // if (this.queuedRender != null) {
+    //   void this.queuedRender.then(() => this.setSelectedLines(range));
+    // } else {
+    this.lineSelectionManager.setSelection(range);
+    // }
   }
 
   cleanUp(): void {
@@ -181,7 +189,7 @@ export class File<LAnnotation = undefined> {
     this.headerElement = undefined;
   }
 
-  async hydrate(props: FileRenderProps<LAnnotation>): Promise<void> {
+  hydrate(props: FileRenderProps<LAnnotation>): void {
     if (props.fileContainer == null) {
       throw new Error(
         'FileDiff: you must provide a fileContainer on hydration'
@@ -212,7 +220,7 @@ export class File<LAnnotation = undefined> {
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      await this.render(props);
+      this.render(props);
     }
     // Otherwise orchestrate our setup
     else {
@@ -233,28 +241,16 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private queuedRender: Promise<void> | undefined;
-  async render(props: FileRenderProps<LAnnotation>): Promise<void> {
-    const { file, forceRender = false } = props;
+  render({
+    file,
+    fileContainer,
+    forceRender = false,
+    containerWrapper,
+    lineAnnotations,
+  }: FileRenderProps<LAnnotation>): void {
     if (!forceRender && deepEquals(this.file, file)) {
       return;
     }
-    const currentRender = (this.queuedRender =
-      this.queuedRender != null
-        ? this.queuedRender.then(() => this._render(props))
-        : this._render(props));
-    await currentRender;
-    if (this.queuedRender === currentRender) {
-      this.queuedRender = undefined;
-    }
-  }
-
-  private async _render({
-    file,
-    fileContainer,
-    containerWrapper,
-    lineAnnotations,
-  }: FileRenderProps<LAnnotation>): Promise<void> {
     this.file = file;
 
     this.fileRenderer.setOptions(this.options);
@@ -275,30 +271,24 @@ export class File<LAnnotation = undefined> {
       this.headerRenderer.setOptions(this.options);
     }
 
-    const [highlighter, headerResult, fileResult] = await Promise.all([
-      getSharedHighlighter({
-        themes: getThemes(this.options.theme),
-        langs: [],
-      }),
-      !disableFileHeader ? this.headerRenderer.render(file) : undefined,
-      this.fileRenderer.render(file),
-    ]);
-
-    if (headerResult == null && fileResult == null) {
-      return;
-    }
+    // const headerResult = this.headerRenderer.render(file);
+    const fileResult = this.fileRenderer.render(file);
 
     fileContainer = this.getOrCreateFileContainer(fileContainer);
-    if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer);
+
+    if (fileResult == null) {
+      return;
     }
+    // if (headerResult != null) {
+    //   this.applyHeaderToDOM(headerResult, fileContainer);
+    // }
 
     if (fileResult != null) {
       if (containerWrapper != null) {
         containerWrapper.appendChild(fileContainer);
       }
       const pre = this.getOrCreatePre(fileContainer);
-      this.applyHunksToDOM(fileResult, pre, highlighter);
+      this.applyHunksToDOM(fileResult, pre);
       this.renderAnnotations();
       this.renderHoverUtility();
     }
@@ -363,12 +353,8 @@ export class File<LAnnotation = undefined> {
     );
   }
 
-  private applyHunksToDOM(
-    result: FileRenderResult,
-    pre: HTMLPreElement,
-    highlighter: PJSHighlighter
-  ): void {
-    this.setPreAttributes(pre, highlighter, result.totalLines);
+  private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
+    this.setPreAttributes(pre, result.totalLines);
     pre.innerHTML = '';
     // Create code elements and insert HTML content
     this.code = createCodeNode();
@@ -385,40 +371,41 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
-    const { file } = this;
-    if (file == null) return;
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
-    const newHeader = tempDiv.firstElementChild;
-    if (!(newHeader instanceof HTMLElement)) {
-      return;
-    }
-    if (this.headerElement != null) {
-      container.shadowRoot?.replaceChild(newHeader, this.headerElement);
-    } else {
-      container.shadowRoot?.prepend(newHeader);
-    }
-    this.headerElement = newHeader;
-
-    if (this.isContainerManaged) return;
-
-    const { renderCustomMetadata } = this.options;
-    if (this.headerMetadata != null) {
-      this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
-    }
-    const content = renderCustomMetadata?.(file) ?? undefined;
-    if (content != null) {
-      this.headerMetadata = document.createElement('div');
-      this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
-      if (content instanceof Element) {
-        this.headerMetadata.appendChild(content);
-      } else {
-        this.headerMetadata.innerText = `${content}`;
-      }
-      container.appendChild(this.headerMetadata);
-    }
-  }
+  // FIXME(amadeus): Get header shit sorted out...
+  // private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
+  //   const { file } = this;
+  //   if (file == null) return;
+  //   const tempDiv = document.createElement('div');
+  //   tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
+  //   const newHeader = tempDiv.firstElementChild;
+  //   if (!(newHeader instanceof HTMLElement)) {
+  //     return;
+  //   }
+  //   if (this.headerElement != null) {
+  //     container.shadowRoot?.replaceChild(newHeader, this.headerElement);
+  //   } else {
+  //     container.shadowRoot?.prepend(newHeader);
+  //   }
+  //   this.headerElement = newHeader;
+  //
+  //   if (this.isContainerManaged) return;
+  //
+  //   const { renderCustomMetadata } = this.options;
+  //   if (this.headerMetadata != null) {
+  //     this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+  //   }
+  //   const content = renderCustomMetadata?.(file) ?? undefined;
+  //   if (content != null) {
+  //     this.headerMetadata = document.createElement('div');
+  //     this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
+  //     if (content instanceof Element) {
+  //       this.headerMetadata.appendChild(content);
+  //     } else {
+  //       this.headerMetadata.innerText = `${content}`;
+  //     }
+  //     container.appendChild(this.headerMetadata);
+  //   }
+  // }
 
   private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
     this.fileContainer =
@@ -451,23 +438,7 @@ export class File<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private setPreAttributes(
-    pre: HTMLPreElement,
-    highlighter: PJSHighlighter,
-    totalLines: number
-  ): void {
-    const { overflow = 'scroll', theme, themeType = 'system' } = this.options;
-    const wrap = overflow === 'wrap';
-    setWrapperProps({
-      pre,
-      theme,
-      highlighter,
-      split: false,
-      wrap,
-      themeType,
-      diffIndicators: 'none',
-      disableBackground: true,
-      totalLines,
-    });
+  private setPreAttributes(pre: HTMLPreElement, totalLines: number): void {
+    this.fileRenderer.setupPreAttributes(pre, totalLines);
   }
 }

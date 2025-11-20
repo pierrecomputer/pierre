@@ -1,6 +1,5 @@
-import type { SupportedLanguages } from 'src/types';
-import { getFiletypeFromFileName } from 'src/utils/getFiletypeFromFileName';
-
+import type { SupportedLanguages } from '../types';
+import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import type {
   AllWorkerTasks,
   InitializeWorkerTask,
@@ -10,6 +9,7 @@ import type {
   RenderFileResult,
   RenderFileTask,
   SubmitRequest,
+  WorkerHighlighterOptions,
   WorkerPoolOptions,
   WorkerRequestId,
   WorkerResponse,
@@ -35,19 +35,11 @@ export class WorkerPool {
   private taskQueue: AllWorkerTasks[] = [];
   private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
   private nextRequestId = 0;
-  private options: Required<WorkerPoolOptions>;
 
   constructor(
-    private workerFactory: () => Worker,
-    options: WorkerPoolOptions = {}
-  ) {
-    this.options = {
-      poolSize: options.poolSize ?? 4,
-      initOptions: options.initOptions ?? {
-        themes: ['pierre-dark', 'pierre-light'],
-      },
-    };
-  }
+    private options: WorkerPoolOptions,
+    private highlighterOptions: WorkerHighlighterOptions
+  ) {}
 
   private initialized: Promise<void> | true | undefined;
 
@@ -58,13 +50,13 @@ export class WorkerPool {
       return this.initialized;
     }
     const initPromises: Promise<unknown>[] = [];
-    for (let i = 0; i < this.options.poolSize; i++) {
-      const worker = this.workerFactory();
+    for (let i = 0; i < (this.options.poolSize ?? 8); i++) {
+      const worker = this.options.workerFactory();
       const managedWorker: ManagedWorker = {
         worker,
         busy: false,
         initialized: false,
-        langs: new Set(['text', ...(this.options.initOptions?.langs ?? [])]),
+        langs: new Set(['text', ...(this.highlighterOptions.langs ?? [])]),
       };
       worker.addEventListener(
         'message',
@@ -85,7 +77,7 @@ export class WorkerPool {
             request: {
               type: 'initialize',
               id: requestId,
-              options: this.options.initOptions,
+              options: this.highlighterOptions,
             },
             resolve() {
               managedWorker.initialized = true;

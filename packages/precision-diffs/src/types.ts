@@ -1,3 +1,4 @@
+import type { ElementContent } from 'hast';
 import type {
   BundledLanguage,
   BundledTheme,
@@ -133,6 +134,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   // by a single character
   lineDiffType?: LineDifftypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
+  // FIXME(amadeus): Replace this with built in shiki hast option: `tokenizeMaxLineLength`
   maxLineLengthForHighlighting?: number; // 1000 is default
 
   // How many lines to expand per click
@@ -206,7 +208,9 @@ export interface LineInfo {
 }
 
 export interface SharedRenderState {
-  lineInfo: Record<number, LineInfo | undefined>;
+  lineInfo:
+    | Record<number, LineInfo | undefined>
+    | ((shikiLineNumber: number) => LineInfo);
   decorations: DecorationItem[];
   disableLineNumbers: boolean;
 }
@@ -282,3 +286,9 @@ export type AnnotationLineMap<LAnnotation> = Record<
 >;
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
+
+export interface RenderedFileASTCache {
+  file: FileContents;
+  highlighted: boolean;
+  ast: ElementContent[] | undefined;
+}

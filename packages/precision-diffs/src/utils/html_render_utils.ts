@@ -1,6 +1,6 @@
 import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
-import { DEFAULT_THEMES } from 'src/constants';
 
+import { DEFAULT_THEMES } from '../constants';
 import type {
   PJSHighlighter,
   PJSThemeNames,
@@ -37,7 +37,7 @@ export function createRow(line: number): {
   return { row, content };
 }
 
-interface SetupWrapperNodesProps {
+export interface SetupWrapperNodesProps {
   theme?: PJSThemeNames | ThemesType;
   pre: HTMLPreElement;
   highlighter: PJSHighlighter;

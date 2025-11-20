@@ -1,9 +1,8 @@
-import { createStyleElement } from 'src/utils/hast_utils';
-
 import type { FileOptions } from '../../src/File';
 import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import { FileRenderer } from '../FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
+import { createStyleElement } from '../utils/hast_utils';
 import { renderCSS } from './renderCSS';
 import { renderHTML } from './renderHTML';
 
@@ -36,7 +35,7 @@ export async function preloadFile<LAnnotation = undefined>({
 
   const [headerResult, fileResult] = await Promise.all([
     !disableFileHeader ? fileHeader.render(file) : undefined,
-    fileRenderer.render(file, true),
+    fileRenderer.asyncRender(file),
   ]);
   if (fileResult == null) {
     throw new Error('Failed to render file diff');

@@ -6,32 +6,25 @@ import {
   hasLoadedLanguage,
   hasLoadedThemes,
 } from './SharedHighlighter';
-import { DEFAULT_THEMES, SPLIT_WITH_NEWLINES } from './constants';
+import { DEFAULT_THEMES } from './constants';
 import type {
   BaseCodeOptions,
-  CodeToHastOptions,
-  DecorationItem,
   FileContents,
   LineAnnotation,
-  LineInfo,
   PJSHighlighter,
-  PJSThemeNames,
-  ShikiTransformer,
+  RenderedFileASTCache,
   SupportedLanguages,
   ThemeTypes,
 } from './types';
-import { cleanLastNewline } from './utils/cleanLastNewline';
-import { createTransformerWithState } from './utils/createTransformerWithState';
-import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
+import { createPreNode } from './utils/createPreNode';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getLineNodes } from './utils/getLineNodes';
 import { getThemes } from './utils/getThemes';
-import {
-  createHastElement,
-  createPreWrapperProperties,
-} from './utils/hast_utils';
+import { createAnnotationElement, createHastElement } from './utils/hast_utils';
+import { setWrapperProps } from './utils/html_render_utils';
+import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
+import type { ShikiPoolManager } from './worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -52,10 +45,13 @@ export interface FileRendererOptions extends BaseCodeOptions {
 
 export class FileRenderer<LAnnotation = undefined> {
   highlighter: PJSHighlighter | undefined;
-  fileContent: string | undefined;
+  private renderCache: RenderedFileASTCache | undefined;
+  private computedLang: SupportedLanguages = 'text';
 
   constructor(
-    public options: FileRendererOptions = { theme: DEFAULT_THEMES }
+    public options: FileRendererOptions = { theme: DEFAULT_THEMES },
+    private onRenderUpdate?: () => unknown,
+    private poolManager?: ShikiPoolManager | undefined
   ) {}
 
   setOptions(options: FileRendererOptions): void {
@@ -85,80 +81,145 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   cleanUp(): void {
-    this.highlighter = undefined;
-    this.fileContent = undefined;
-    this.queuedFile = undefined;
+    this.renderCache = undefined;
   }
 
-  private computedLang: SupportedLanguages = 'text';
-  private queuedFile: FileContents | undefined;
-  private queuedRender: Promise<FileRenderResult | undefined> | undefined;
-  async render(
-    file: FileContents,
-    useCSSClasses: boolean = false
-  ): Promise<FileRenderResult | undefined> {
-    this.queuedFile = file;
-    if (this.queuedRender != null) {
-      return this.queuedRender;
+  render(
+    file: FileContents | undefined = this.renderCache?.file
+  ): FileRenderResult | undefined {
+    if (file == null) {
+      return undefined;
     }
-    this.queuedRender = (async () => {
-      this.computedLang =
-        this.options.lang ?? getFiletypeFromFileName(file.name);
-      if (
-        !hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(getThemes(this.options.theme))
-      ) {
-        this.highlighter = undefined;
+    const ast = ((): ElementContent[] | undefined => {
+      let { renderCache } = this;
+      const ast = this.poolManager?.renderPlainFileToHast(
+        file,
+        this.options.startingLineNumber
+      );
+      renderCache ??= {
+        file,
+        highlighted: false,
+        ast,
+      };
+
+      if (this.poolManager != null) {
+        if (!renderCache.highlighted) {
+          const { lang, theme, disableLineNumbers } = this.options;
+          // TODO(amadeus): Figure out how to only fire this on a per file
+          // basis... (maybe the poolManager can figure it out based on file name
+          // and file contents probably?)
+          void this.poolManager
+            .renderFileToHast(file, { lang, theme, disableLineNumbers })
+            .then((results) => this.handleAsyncHighlight(file, results));
+        }
+      } else if (renderCache.ast == null) {
+        void this.asyncHighlight(file).then((ast) => {
+          this.handleAsyncHighlight(file, ast);
+        });
       }
-      this.highlighter ??= await this.initializeHighlighter();
-      if (this.queuedFile == null) {
-        return undefined;
-      }
-      return this.renderFile(this.queuedFile, this.highlighter, useCSSClasses);
+
+      this.renderCache = renderCache;
+      return renderCache.ast;
     })();
-    const result = await this.queuedRender;
-    this.queuedFile = undefined;
-    this.queuedRender = undefined;
-    return result;
+    const preNode = this.createPreNode(ast?.length ?? 0);
+    if (ast == null || preNode == null) {
+      return undefined;
+    }
+    return this.renderFile(ast, preNode);
+  }
+
+  private createPreNode(totalLines: number): Element | undefined {
+    if (this.poolManager != null) {
+      return this.poolManager.createPreNode({
+        diffIndicators: 'none',
+        disableBackground: true,
+        overflow: this.options.overflow,
+        split: false,
+        themeType: this.options.themeType,
+        totalLines,
+      });
+    }
+    if (this.highlighter != null) {
+      return createPreNode({
+        highlighter: this.highlighter,
+        diffIndicators: 'none',
+        disableBackground: true,
+        overflow: this.options.overflow,
+        split: false,
+        themeType: this.options.themeType,
+        totalLines,
+      });
+    }
+    return undefined;
+  }
+
+  async asyncRender(file: FileContents): Promise<FileRenderResult | undefined> {
+    const ast = await this.asyncHighlight(file);
+    const preNode = this.createPreNode(ast.length);
+    if (preNode == null) {
+      return undefined;
+    }
+    return this.renderFile(ast, preNode);
+  }
+
+  private async asyncHighlight(file: FileContents): Promise<ElementContent[]> {
+    this.computedLang = this.options.lang ?? getFiletypeFromFileName(file.name);
+    if (
+      !hasLoadedLanguage(this.computedLang) ||
+      !hasLoadedThemes(getThemes(this.options.theme))
+    ) {
+      this.highlighter = undefined;
+    }
+    // Lets not attempt to store a reference to highlighter when server rendering
+    const highlighter =
+      this.highlighter ?? (await this.initializeHighlighter());
+    const {
+      theme,
+      startingLineNumber,
+      lang,
+      maxLineLengthForHighlighting = 1000,
+    } = this.options;
+    return renderFileWithHighlighter(file, highlighter, {
+      theme,
+      startingLineNumber,
+      lang,
+      hastOptions: {
+        tokenizeMaxLineLength: maxLineLengthForHighlighting,
+      },
+    });
   }
 
   private renderFile(
-    file: FileContents,
-    highlighter: PJSHighlighter,
-    useCSSClasses: boolean
+    ast: ElementContent[],
+    preNode: Element
   ): FileRenderResult {
-    const { theme, themeType, disableLineNumbers = false } = this.options;
-    const { state, transformers, toClass } = createTransformerWithState({
-      disableLineNumbers,
-      useCSSClasses,
-    });
-
-    const { lineInfoMap, hasLongLines } = this.computeLineInfo(file.contents);
-    state.lineInfo = lineInfoMap;
-    const codeAST = getLineNodes(
-      highlighter.codeToHast(
-        cleanLastNewline(file.contents),
-        this.createHastOptions(transformers, undefined, hasLongLines)
-      )
-    );
+    const { startingLineNumber = 1 } = this.options;
+    const codeAST: ElementContent[] = [];
+    let lineIndex = startingLineNumber;
+    for (const line of ast) {
+      codeAST.push(line);
+      const annotations = this.lineAnnotations[lineIndex];
+      if (annotations != null) {
+        codeAST.push(
+          createAnnotationElement({
+            type: 'annotation',
+            hunkIndex: 0,
+            lineIndex,
+            annotations: annotations.map((annotation) =>
+              getLineAnnotationName(annotation)
+            ),
+          })
+        );
+      }
+      lineIndex++;
+    }
 
     return {
       codeAST,
-      preNode: createHastElement({
-        tagName: 'pre',
-        properties: createPreWrapperProperties({
-          diffIndicators: 'none',
-          disableBackground: true,
-          highlighter,
-          overflow: this.options.overflow,
-          split: false,
-          theme,
-          themeType,
-          totalLines: codeAST.length,
-        }),
-      }),
-      totalLines: codeAST.length,
-      css: toClass.getCSS(),
+      preNode,
+      totalLines: ast.length,
+      // FIXME(amadeus): Fix this
+      css: '',
     };
   }
 
@@ -196,73 +257,76 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  private computeLineInfo(contents: string): {
-    lineInfoMap: Record<number, LineInfo | undefined>;
-    hasLongLines: boolean;
-  } {
-    const { startingLineNumber = 1, maxLineLengthForHighlighting = 1000 } =
-      this.options;
-    const lineInfoMap: Record<number, LineInfo | undefined> = {};
-    let hasLongLines = false;
-
-    let lineIndex = 0;
-    for (const line of contents.split(SPLIT_WITH_NEWLINES)) {
-      hasLongLines = hasLongLines || line.length > maxLineLengthForHighlighting;
-
-      const lineInfo: LineInfo = {
-        type: 'context',
-        lineIndex,
-        lineNumber: startingLineNumber + lineIndex,
-      };
-      const annotations = this.lineAnnotations[startingLineNumber + lineIndex];
-      if (annotations != null) {
-        lineInfo.spans = [
-          {
-            type: 'annotation',
-            hunkIndex: 0,
-            lineIndex,
-            annotations: annotations.map((annotation) =>
-              getLineAnnotationName(annotation)
-            ),
-          },
-        ];
-      }
-      lineInfoMap[lineIndex + 1] = lineInfo;
-      lineIndex++;
-    }
-    return { lineInfoMap, hasLongLines };
-  }
-
-  private createHastOptions(
-    transformers: ShikiTransformer[],
-    decorations?: DecorationItem[],
-    forceTextLang: boolean = false
-  ): CodeToHastOptions<PJSThemeNames> {
-    const { theme = DEFAULT_THEMES } = this.options;
-    if (typeof theme === 'string') {
-      return {
-        theme,
-        cssVariablePrefix: formatCSSVariablePrefix(),
-        lang: forceTextLang ? 'text' : this.computedLang,
-        defaultColor: false,
-        transformers,
-        decorations,
-      };
-    }
-    return {
-      themes: theme,
-      cssVariablePrefix: formatCSSVariablePrefix(),
-      lang: forceTextLang ? 'text' : this.computedLang,
-      defaultColor: false,
-      transformers,
-      decorations,
-    };
-  }
+  // private createHastOptions(
+  //   transformers: ShikiTransformer[],
+  //   decorations?: DecorationItem[],
+  //   forceTextLang: boolean = false
+  // ): CodeToHastOptions<PJSThemeNames> {
+  //   const { theme = DEFAULT_THEMES } = this.options;
+  //   if (typeof theme === 'string') {
+  //     return {
+  //       theme,
+  //       cssVariablePrefix: formatCSSVariablePrefix(),
+  //       lang: forceTextLang ? 'text' : this.computedLang,
+  //       defaultColor: false,
+  //       transformers,
+  //       decorations,
+  //     };
+  //   }
+  //   return {
+  //     themes: theme,
+  //     cssVariablePrefix: formatCSSVariablePrefix(),
+  //     lang: forceTextLang ? 'text' : this.computedLang,
+  //     defaultColor: false,
+  //     transformers,
+  //     decorations,
+  //   };
+  // }
 
   async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );
     return this.highlighter;
+  }
+
+  handleAsyncHighlight(file: FileContents, results: ElementContent[]): void {
+    this.renderCache = {
+      file,
+      highlighted: true,
+      ast: results,
+    };
+    this.onRenderUpdate?.();
+  }
+
+  // NOTE(amadeus): This is really jank, figure out how to solve it...
+  setupPreAttributes(pre: HTMLPreElement, totalLines: number): void {
+    const { overflow = 'scroll', theme, themeType = 'system' } = this.options;
+    const wrap = overflow === 'wrap';
+    if (this.poolManager != null) {
+      this.poolManager.setPreAttributes({
+        pre,
+        theme,
+        split: false,
+        wrap,
+        themeType,
+        diffIndicators: 'none',
+        disableBackground: true,
+        totalLines,
+      });
+    }
+    if (this.highlighter != null) {
+      setWrapperProps({
+        pre,
+        highlighter: this.highlighter,
+        theme,
+        split: false,
+        wrap,
+        themeType,
+        diffIndicators: 'none',
+        disableBackground: true,
+        totalLines,
+      });
+    }
   }
 }

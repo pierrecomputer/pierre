@@ -1,15 +1,19 @@
 import {
-  ShikiPoolManager,
-  type WorkerPoolOptions,
+  type ShikiPoolManager,
+  type WorkerHighlighterOptions,
+  setupWorkerPoolSingleton,
 } from '@pierre/precision-diffs/worker';
-// Import worker using Vite's special syntax
 import ShikiWorkerUrl from '@pierre/precision-diffs/worker/shiki-worker.js?worker&url';
 
-export function createWorkerAPI(
-  poolOptions?: WorkerPoolOptions
-): ShikiPoolManager {
-  return new ShikiPoolManager(
-    () => new Worker(ShikiWorkerUrl, { type: 'module' }),
-    poolOptions
-  );
+export async function createWorkerAPI(
+  highlighterOptions: WorkerHighlighterOptions
+): Promise<ShikiPoolManager> {
+  return await setupWorkerPoolSingleton({
+    poolOptions: {
+      workerFactory() {
+        return new Worker(ShikiWorkerUrl, { type: 'module' });
+      },
+    },
+    highlighterOptions,
+  });
 }

@@ -241,7 +241,10 @@ export function convertLine(
   line: number,
   state: SharedRenderState
 ): ElementContent {
-  const lineInfo = state.lineInfo[line];
+  const lineInfo =
+    typeof state.lineInfo === 'function'
+      ? state.lineInfo(line)
+      : state.lineInfo[line];
   if (lineInfo == null) {
     console.error({ node, line, state });
     throw new Error(`convertLine: line ${line}, contains no state.lineInfo`);

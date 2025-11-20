@@ -1,6 +1,5 @@
-import { parsePatchFiles } from 'src/utils/parsePatchFiles';
-
-import type { FileDiffOptions } from '../../src/FileDiff';
+import type { FileDiffOptions } from '../FileDiff';
+import { parsePatchFiles } from '../utils/parsePatchFiles';
 import { type PreloadFileDiffResult, preloadFileDiff } from './preloadDiffs';
 
 export type PreloadPatchFileOptions<LAnnotation> = {

@@ -38,7 +38,7 @@ export function useFileInstance<LAnnotation>({
       }
       // FIXME: Ideally we don't use FileUI here, and instead amalgamate
       // the renderers manually
-      instanceRef.current = new File(options, true);
+      instanceRef.current = new File(options, undefined, true);
       void instanceRef.current.hydrate({
         file,
         fileContainer: node,
