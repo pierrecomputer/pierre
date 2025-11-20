@@ -42,8 +42,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
         }
       />
 
-      <div className="bg-muted flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center sm:gap-0 sm:pl-5">
-        <div className="font-mono text-sm">
+      <div className="bg-muted flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center sm:gap-0">
+        <div className="self-start p-2 font-mono text-sm text-nowrap">
           {selectedRange != null ? (
             <>
               <span className="text-muted-foreground">Selected: </span>
@@ -57,7 +57,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             <span className="text-muted-foreground">No selection</span>
           )}
         </div>
-        <div className="flex gap-2 sm:ml-auto">
+        <div className="flex min-w-0 flex-wrap gap-2 sm:ml-auto">
           <Button
             variant="outline"
             onClick={() => {
