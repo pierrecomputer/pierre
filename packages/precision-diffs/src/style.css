@@ -353,6 +353,10 @@ code {
   grid-column: 1 / 3;
 }
 
+[data-annotation-content] {
+  height: 100%;
+}
+
 [data-line-annotation][data-selected-line] {
   background-color: unset;
 

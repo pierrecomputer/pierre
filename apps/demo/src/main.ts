@@ -427,6 +427,8 @@ if (renderFileButton != null) {
         console.info('onLineNumberClick', props);
       },
 
+      enableLineSelection: true,
+
       // Hover Decoration Snippets
       // enableHoverDecoration: true,
       // renderHoverDecoration(getHoveredLine) {

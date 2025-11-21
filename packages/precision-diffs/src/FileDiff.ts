@@ -36,6 +36,7 @@ import type {
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
 import {
+  createAnnotationWrapper,
   createCodeNode,
   createHoverContent,
   setWrapperProps,
@@ -472,9 +473,7 @@ export class FileDiff<LAnnotation = undefined> {
       for (const annotation of this.lineAnnotations) {
         const content = renderAnnotation(annotation);
         if (content == null) continue;
-        const el = document.createElement('div');
-        el.dataset.annotationSlot = '';
-        el.slot = getLineAnnotationName(annotation);
+        const el = createAnnotationWrapper(getLineAnnotationName(annotation));
         el.appendChild(content);
         this.annotationElements.push(el);
         this.fileContainer.appendChild(el);

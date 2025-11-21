@@ -126,5 +126,14 @@ export function createHoverContent(): HTMLElement {
   hoverContent.style.right = '0';
   hoverContent.style.bottom = '0';
   hoverContent.style.textAlign = 'center';
+  hoverContent.style.whiteSpace = 'normal';
   return hoverContent;
+}
+
+export function createAnnotationWrapper(slot: string): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.dataset.annotationSlot = '';
+  wrapper.slot = slot;
+  wrapper.style.whiteSpace = 'normal';
+  return wrapper;
 }
