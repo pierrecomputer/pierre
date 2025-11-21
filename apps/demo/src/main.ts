@@ -144,22 +144,54 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         //   return el;
         // },
 
-        // Custom Hunk Separators Tests
-        // hunkSeparators(hunkData) {
+        // Custom Hunk Separators Tests with expansion properties
+        // expansionLineCount: 10,
+        // hunkSeparators(hunkData, instance) {
         //   const fragment = document.createDocumentFragment();
         //   const numCol = document.createElement('div');
         //   numCol.textContent = `${hunkData.lines}`;
         //   numCol.style.position = 'sticky';
         //   numCol.style.left = '0';
-        //   numCol.style.backgroundColor = 'var(--pjs-bg)';
+        //   numCol.style.backgroundColor = 'blue';
         //   numCol.style.zIndex = '2';
+        //   numCol.style.color = 'white';
         //   fragment.appendChild(numCol);
         //   const contentCol = document.createElement('div');
         //   contentCol.textContent = 'unmodified lines';
         //   contentCol.style.position = 'sticky';
         //   contentCol.style.width = 'var(--pjs-column-content-width)';
         //   contentCol.style.left = 'var(--pjs-column-number-width)';
+        //   contentCol.style.backgroundColor = 'blue';
+        //   contentCol.style.color = 'white';
         //   fragment.appendChild(contentCol);
+        //   const { expandable } = hunkData;
+        //   if (expandable != null) {
+        //     if (expandable.up && expandable.down && !expandable.chunked) {
+        //       const button = document.createElement('button');
+        //       button.innerText = 'both';
+        //       button.addEventListener('click', () => {
+        //         instance.expandHunk(hunkData.hunkIndex, 'both');
+        //       });
+        //       contentCol.appendChild(button);
+        //     } else {
+        //       if (expandable.up) {
+        //         const button = document.createElement('button');
+        //         button.innerText = '^';
+        //         button.addEventListener('click', () => {
+        //           instance.expandHunk(hunkData.hunkIndex, 'up');
+        //         });
+        //         contentCol.appendChild(button);
+        //       }
+        //       if (expandable.down) {
+        //         const button = document.createElement('button');
+        //         button.innerText = 'v';
+        //         button.addEventListener('click', () => {
+        //           instance.expandHunk(hunkData.hunkIndex, 'down');
+        //         });
+        //         contentCol.appendChild(button);
+        //       }
+        //     }
+        //   }
         //   return fragment;
         // },
         // hunkSeparators(hunkData) {
