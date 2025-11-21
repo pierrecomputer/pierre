@@ -1,15 +1,21 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "moduleDetection": "force",
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
     "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
-    "types": ["bun-types"]
+    "types": ["vite/client"],
+    "paths": {
+      "~/*": ["./src/*"]
+    }
   }
 }

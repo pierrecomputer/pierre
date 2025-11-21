@@ -1,20 +1,19 @@
-import { createSignal } from 'solid-js';
-import { render } from 'solid-js/web';
+import { Router } from "@solidjs/router";
+import { FileRoutes } from "@solidjs/start/router";
+import { Suspense } from "solid-js";
+import { MetaProvider } from "@solidjs/meta";
+import type { RouteSectionProps } from "@solidjs/router";
 
-function App() {
-  const [count, setCount] = createSignal(0);
-
+export default function App() {
   return (
-    <div>
-      <h1>Hello, World!</h1>
-      <p>This is a minimal SolidJS app running with Bun.</p>
-      <div>
-        <button onClick={() => setCount(count() + 1)}>
-          Count: {count()}
-        </button>
-      </div>
-    </div>
+    <Router
+      root={(props: RouteSectionProps) => (
+        <MetaProvider>
+          <Suspense>{props.children}</Suspense>
+        </MetaProvider>
+      )}
+    >
+      <FileRoutes />
+    </Router>
   );
 }
-
-render(() => <App />, document.getElementById('root')!);
