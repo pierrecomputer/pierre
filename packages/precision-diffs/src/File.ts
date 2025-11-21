@@ -54,7 +54,7 @@ export interface FileOptions<LAnnotation>
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
-  renderHoverDecoration?(
+  renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null;
 }
@@ -223,7 +223,7 @@ export class File<LAnnotation = undefined> {
       this.file = props.file;
       void this.fileRenderer.initializeHighlighter();
       this.renderAnnotations();
-      this.renderHoverDecoration();
+      this.renderHoverUtility();
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
@@ -300,7 +300,7 @@ export class File<LAnnotation = undefined> {
       const pre = this.getOrCreatePre(fileContainer);
       this.applyHunksToDOM(fileResult, pre, highlighter);
       this.renderAnnotations();
-      this.renderHoverDecoration();
+      this.renderHoverUtility();
     }
   }
 
@@ -327,16 +327,14 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private renderHoverDecoration() {
-    const { renderHoverDecoration } = this.options;
-    if (this.fileContainer == null || renderHoverDecoration == null) return;
+  private renderHoverUtility() {
+    const { renderHoverUtility } = this.options;
+    if (this.fileContainer == null || renderHoverUtility == null) return;
     if (this.hoverContent == null) {
       this.hoverContent = createHoverContent();
       this.fileContainer.appendChild(this.hoverContent);
     }
-    const element = renderHoverDecoration(
-      this.mouseEventManager.getHoveredLine
-    );
+    const element = renderHoverUtility(this.mouseEventManager.getHoveredLine);
     this.hoverContent.innerHTML = '';
     if (element != null) {
       this.hoverContent.appendChild(element);

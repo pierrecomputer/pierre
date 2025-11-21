@@ -85,7 +85,7 @@ function isExpandoEventData(
 export interface MouseEventManagerBaseOptions<
   TMode extends MouseEventManagerMode,
 > {
-  enableHoverDecoration?: boolean;
+  enableHoverUtility?: boolean;
   onLineClick?(props: EventClickProps<TMode>): unknown;
   onLineNumberClick?(props: EventClickProps<TMode>): unknown;
   onLineEnter?(props: MouseEventEnterLeaveProps<TMode>): unknown;
@@ -129,19 +129,19 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       onLineEnter,
       onLineLeave,
       onHunkExpand,
-      enableHoverDecoration = false,
+      enableHoverUtility = false,
     } = this.options;
 
     this.cleanUp();
     this.pre = pre;
 
-    if (enableHoverDecoration && this.hoverSlot == null) {
+    if (enableHoverUtility && this.hoverSlot == null) {
       this.hoverSlot = document.createElement('div');
       this.hoverSlot.dataset.hoverSlot = '';
       const slotElement = document.createElement('slot');
       slotElement.name = 'hover-slot';
       this.hoverSlot.appendChild(slotElement);
-    } else if (!enableHoverDecoration && this.hoverSlot != null) {
+    } else if (!enableHoverUtility && this.hoverSlot != null) {
       this.hoverSlot.parentNode?.removeChild(this.hoverSlot);
       this.hoverSlot = undefined;
     }
@@ -178,7 +178,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
         })()
       );
     }
-    if (onLineEnter != null || onLineLeave != null || enableHoverDecoration) {
+    if (onLineEnter != null || onLineLeave != null || enableHoverUtility) {
       pre.addEventListener('mousemove', this.handleMouseMove);
       debugLogIfEnabled(
         __debugMouseEvents,
@@ -485,7 +485,7 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
     onLineNumberClick,
     onLineEnter,
     onLineLeave,
-    enableHoverDecoration,
+    enableHoverUtility,
     __debugMouseEvents,
   }: MouseEventManagerBaseOptions<TMode>,
   onHunkExpand?: (hunkIndex: number, direction: ExpansionDirections) => unknown
@@ -495,7 +495,7 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
     onLineNumberClick,
     onLineEnter,
     onLineLeave,
-    enableHoverDecoration,
+    enableHoverUtility,
     __debugMouseEvents,
     onHunkExpand,
   };

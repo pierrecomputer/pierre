@@ -13,7 +13,7 @@ interface RenderDiffChildrenProps<LAnnotation> {
   newFile?: FileContents;
   renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
-  renderHoverDecoration: DiffBasePropsReact<LAnnotation>['renderHoverDecoration'];
+  renderHoverUtility: DiffBasePropsReact<LAnnotation>['renderHoverUtility'];
   lineAnnotations: DiffBasePropsReact<LAnnotation>['lineAnnotations'];
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
 }
@@ -24,7 +24,7 @@ export function renderDiffChildren<LAnnotation>({
   newFile,
   renderHeaderMetadata,
   renderAnnotation,
-  renderHoverDecoration,
+  renderHoverUtility,
   lineAnnotations,
   getHoveredLine,
 }: RenderDiffChildrenProps<LAnnotation>): ReactNode {
@@ -38,9 +38,9 @@ export function renderDiffChildren<LAnnotation>({
             {renderAnnotation(annotation)}
           </div>
         ))}
-      {renderHoverDecoration != null && (
+      {renderHoverUtility != null && (
         <div slot="hover-slot" style={HoverSlotStyles}>
-          {renderHoverDecoration(getHoveredLine)}
+          {renderHoverUtility(getHoveredLine)}
         </div>
       )}
     </>

@@ -123,8 +123,8 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         enableLineSelection: true,
 
         // Hover Decoration Snippets
-        // enableHoverDecoration: true,
-        // renderHoverDecoration(getHoveredLine) {
+        // enableHoverUtility: true,
+        // renderHoverUtility(getHoveredLine) {
         //   const el = document.createElement('div');
         //   el.style.width = '20px';
         //   el.style.height = '20px';
@@ -430,8 +430,8 @@ if (renderFileButton != null) {
       enableLineSelection: true,
 
       // Hover Decoration Snippets
-      // enableHoverDecoration: true,
-      // renderHoverDecoration(getHoveredLine) {
+      // enableHoverUtility: true,
+      // renderHoverUtility(getHoveredLine) {
       //   const el = document.createElement('div');
       //   el.style.width = '20px';
       //   el.style.height = '20px';

@@ -65,7 +65,7 @@ export interface FileDiffOptions<LAnnotation>
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
-  renderHoverDecoration?(
+  renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null;
 }
@@ -283,7 +283,7 @@ export class FileDiff<LAnnotation = undefined> {
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();
-      this.renderHoverDecoration();
+      this.renderHoverUtility();
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
@@ -431,7 +431,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.applyHunksToDOM(hunksResult, pre, highlighter);
       this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
-      this.renderHoverDecoration();
+      this.renderHoverUtility();
     }
   }
 
@@ -481,16 +481,14 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private renderHoverDecoration() {
-    const { renderHoverDecoration } = this.options;
-    if (this.fileContainer == null || renderHoverDecoration == null) return;
+  private renderHoverUtility() {
+    const { renderHoverUtility } = this.options;
+    if (this.fileContainer == null || renderHoverUtility == null) return;
     if (this.hoverContent == null) {
       this.hoverContent = createHoverContent();
       this.fileContainer.appendChild(this.hoverContent);
     }
-    const element = renderHoverDecoration(
-      this.mouseEventManager.getHoveredLine
-    );
+    const element = renderHoverUtility(this.mouseEventManager.getHoveredLine);
     this.hoverContent.innerHTML = '';
     if (element != null) {
       this.hoverContent.appendChild(element);

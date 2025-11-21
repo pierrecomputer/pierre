@@ -24,7 +24,7 @@ export function PatchDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
-  renderHoverDecoration,
+  renderHoverUtility,
 }: PatchDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = usePatch(patch);
   const { ref, getHoveredLine } = useFileDiffInstance({
@@ -38,7 +38,7 @@ export function PatchDiff<LAnnotation = undefined>({
     renderHeaderMetadata,
     renderAnnotation,
     lineAnnotations,
-    renderHoverDecoration,
+    renderHoverUtility,
     getHoveredLine,
   });
   return (

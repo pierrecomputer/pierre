@@ -17,7 +17,7 @@ export interface DiffBasePropsReact<LAnnotation> {
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
-  renderHoverDecoration?(
+  renderHoverUtility?(
     getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
   ): ReactNode;
   className?: string;
@@ -32,7 +32,7 @@ export interface FileProps<LAnnotation> {
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
-  renderHoverDecoration?(
+  renderHoverUtility?(
     getHoveredLine: () => GetHoveredLineResult<'file'> | undefined
   ): ReactNode;
   className?: string;

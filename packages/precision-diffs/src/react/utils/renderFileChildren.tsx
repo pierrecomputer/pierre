@@ -12,7 +12,7 @@ interface RenderFileChildrenProps<LAnnotation> {
   renderHeaderMetadata: FileProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: FileProps<LAnnotation>['renderAnnotation'];
   lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
-  renderHoverDecoration: FileProps<LAnnotation>['renderHoverDecoration'];
+  renderHoverUtility: FileProps<LAnnotation>['renderHoverUtility'];
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
 }
 
@@ -21,7 +21,7 @@ export function renderFileChildren<LAnnotation>({
   renderHeaderMetadata,
   renderAnnotation,
   lineAnnotations,
-  renderHoverDecoration,
+  renderHoverUtility,
   getHoveredLine,
 }: RenderFileChildrenProps<LAnnotation>): ReactNode {
   const metadata = renderHeaderMetadata?.(file);
@@ -34,9 +34,9 @@ export function renderFileChildren<LAnnotation>({
             {renderAnnotation(annotation)}
           </div>
         ))}
-      {renderHoverDecoration != null && (
+      {renderHoverUtility != null && (
         <div slot="hover-slot" style={HoverSlotStyles}>
-          {renderHoverDecoration(getHoveredLine)}
+          {renderHoverUtility(getHoveredLine)}
         </div>
       )}
     </>
