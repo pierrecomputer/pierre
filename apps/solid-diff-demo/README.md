@@ -1,6 +1,6 @@
 # Precision Diffs × SolidStart SSR Demo
 
-This demo proves that **`@pierre/precision-diffs`** works seamlessly with **SolidStart's server-side rendering (SSR)**, including support for interactive SolidJS components inside annotation slots within shadow DOM.
+This demo shows that **`@pierre/precision-diffs`** works seamlessly with **SolidStart's server-side rendering (SSR)**, including support for interactive SolidJS components inside annotation slots within shadow DOM.
 
 ## What This Demonstrates
 
