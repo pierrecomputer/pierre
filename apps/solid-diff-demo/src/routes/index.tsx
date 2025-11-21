@@ -5,7 +5,18 @@ import { Show, createSignal } from 'solid-js';
 import { FileDiffSSR } from '~/components/FileDiffSSR';
 import { getPreloadedDiff } from '~/lib/preload-diff';
 
-// Annotation component with SolidJS counter
+interface AnnotationMetadata {
+  message: string;
+}
+
+/**
+ * Sample annotation component demonstrating SolidJS reactivity in shadow DOM.
+ * This component uses createSignal() to manage a counter, proving that full
+ * SolidJS reactivity works inside precision-diffs annotation slots.
+ *
+ * IMPORTANT: Must use on:click (native events) instead of onClick (delegated events)
+ * because delegated events don't work with shadow DOM boundaries.
+ */
 function ErrorAnnotation({ message }: { message: string }) {
   const [clickCount, setClickCount] = createSignal(0);
 
@@ -48,7 +59,9 @@ export default function Home() {
   const [count, setCount] = createSignal(0);
   const preloadedDiff = createAsync(() => getPreloadedDiff());
 
-  const renderAnnotation = (annotation: DiffLineAnnotation<any>) => {
+  const renderAnnotation = (
+    annotation: DiffLineAnnotation<AnnotationMetadata>
+  ) => {
     return <ErrorAnnotation message={annotation.metadata.message} />;
   };
 
@@ -103,8 +116,9 @@ export default function Home() {
             oldFile={diff().oldFile}
             newFile={diff().newFile}
             options={diff().options}
-            annotations={diff().annotations}
-            renderAnnotation={renderAnnotation}
+            annotations={diff().annotations ?? []}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Type cast needed for generic compatibility
+            renderAnnotation={renderAnnotation as any}
           />
         )}
       </Show>

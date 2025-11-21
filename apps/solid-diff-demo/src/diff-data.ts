@@ -1,5 +1,10 @@
 import type { FileContents } from '@pierre/precision-diffs';
 
+/**
+ * Sample diff data for demonstration purposes.
+ * Replace these with your actual file contents when integrating into your app.
+ */
+
 export const OLD_FILE: FileContents = {
   name: 'main.zig',
   contents: `const std = @import("std");

@@ -13,6 +13,8 @@ export default [
       '{packages,apps}/*/build/**',
       '{packages,apps}/*/next-env.d.ts',
       '{packages,apps}/*/.source/**',
+      '{packages,apps}/*/.vinxi/**',
+      '{packages,apps}/*/.output/**',
       'packages/storage-elements/blocks/git-platform-sync/api/**/*',
       'packages/storage-elements/blocks/git-platform-sync/pages/**/*',
       'update-themes.js',
