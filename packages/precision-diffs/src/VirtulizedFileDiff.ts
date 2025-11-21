@@ -1,26 +1,38 @@
 import deepEquals from 'fast-deep-equal';
-import type { Element } from 'hast';
+import type { Element, ElementContent } from 'hast';
 
-import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
+import { DiffHunksRenderer } from './DiffHunksRenderer';
 import type { FileDiffOptions } from './FileDiff';
 import { FileHeaderRenderer } from './FileHeaderRenderer';
-import { getSharedHighlighter } from './SharedHighlighter';
 import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type { FileDiffMetadata, PJSHighlighter, RenderRange } from './types';
-import { getThemes } from './utils/getThemes';
+import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
 
 export type { FileDiffOptions };
 
 let instanceId = -1;
 
-const LINE_HUNK_COUNT = 50;
+const LINE_HUNK_COUNT = 200;
 const LINE_HEIGHT = 20;
 const LINE_HEADER_HEIGHT = 44;
 const HUNK_SEPARATOR_HEIGHT = 30;
 const FILE_GAP = 8;
+
+interface ComputeRenderRange {
+  renderRange: RenderRange;
+  containerOffset: number;
+}
+
+interface RenderCache {
+  chunk: number;
+  containerOffset: number;
+  additionsAST: ElementContent[] | undefined;
+  deletionsAST: ElementContent[] | undefined;
+  unifiedAST: ElementContent[] | undefined;
+}
 
 interface RenderWindow {
   top: number;
@@ -38,7 +50,7 @@ interface PositionProps {
   fileDiff: FileDiffMetadata;
 }
 
-export class VirtulizedFileDiff<LAnnotation = undefined> {
+export class VirtualizedFileDiff<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = PJSContainerLoaded;
 
   readonly __id: number = ++instanceId;
@@ -53,6 +65,9 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
   private fileContainer: HTMLElement | undefined;
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
+  private codeUnified: HTMLElement | undefined;
+  private codeAdditions: HTMLElement | undefined;
+  private codeDeletions: HTMLElement | undefined;
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
@@ -68,6 +83,31 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     this.unifiedTop = unifiedTop;
     this.splitTop = splitTop;
     this.computeSize();
+    void this.setup();
+  }
+
+  async setup(): Promise<PJSHighlighter> {
+    const { disableFileHeader = false } = this.options;
+    this.hunksRenderer ??= new DiffHunksRenderer({
+      ...this.options,
+      hunkSeparators:
+        typeof this.options.hunkSeparators === 'function'
+          ? 'custom'
+          : this.options.hunkSeparators,
+    });
+    this.hunksRenderer.setDiff(this.fileDiff);
+    this.headerRenderer ??= new FileHeaderRenderer(this.options);
+    if (this.highlighter == null) {
+      const [highligher, headerResult] = await Promise.all([
+        this.hunksRenderer.initializeHighlighter(),
+        !disableFileHeader
+          ? this.headerRenderer.render(this.fileDiff)
+          : undefined,
+      ]);
+      this.highlighter = highligher;
+      this.headerCache = headerResult;
+    }
+    return this.highlighter;
   }
 
   setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
@@ -85,6 +125,8 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
   cleanUp(): void {
     this.hunksRenderer?.cleanUp();
     this.headerRenderer?.cleanUp();
+    this.astCache.clear();
+    this.highlighter = undefined;
     this.spriteSVG = undefined;
     if (this.pre != null) {
       this.pre.innerHTML = '';
@@ -92,7 +134,7 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     this.pre = undefined;
     this.fileContainer = undefined;
     this.headerElement = undefined;
-    this.lastRenderRange = undefined;
+    this.lastRenderRanges = undefined;
     this.lastOffset = undefined;
   }
 
@@ -119,7 +161,7 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     const hunkCount = fileDiff.hunks.length;
     const [firstHunk] = fileDiff.hunks;
     if (firstHunk != null) {
-      if (firstHunk.additionStart > 1 || firstHunk.deletedStart > 1) {
+      if (firstHunk.additionStart > 1 || firstHunk.deletionStart > 1) {
         let hunkSize = (HUNK_SEPARATOR_HEIGHT + FILE_GAP * 2) * (hunkCount - 1);
         hunkSize += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
         this.unifiedHeight += hunkSize;
@@ -142,8 +184,13 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     this.splitHeight += FILE_GAP;
   }
 
-  private lastRenderRange: RenderRange | undefined;
+  private astCache: Map<number, RenderCache> = new Map();
+
+  private lastRenderRanges: ComputeRenderRange[] | undefined;
   private lastOffset: number | undefined;
+
+  private highlighter: PJSHighlighter | undefined;
+  private headerCache: Element | undefined;
 
   async render({ renderWindow, fileContainer }: RenderProps): Promise<void> {
     const { disableFileHeader = false, diffStyle = 'split' } = this.options;
@@ -154,66 +201,104 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
           ? 'custom'
           : this.options.hunkSeparators,
     });
+    this.hunksRenderer.setDiff(this.fileDiff);
     this.headerRenderer ??= new FileHeaderRenderer(this.options);
+    if (this.highlighter == null) {
+      const [highligher, headerResult] = await Promise.all([
+        this.hunksRenderer.initializeHighlighter(),
+        !disableFileHeader
+          ? this.headerRenderer.render(this.fileDiff)
+          : undefined,
+      ]);
+      this.highlighter = highligher;
+      this.headerCache = headerResult;
+    }
 
-    // TODO(amadeus): Figure out how to convert the renderWindow into the
-    // renderRange for DiffHunksRenderer
-    const { renderRange, containerOffset } =
-      this.computeRenderRangeFromWindow(renderWindow);
+    const renderRanges = this.computeRenderRangeFromWindow(renderWindow);
 
     if (
-      containerOffset === this.lastOffset &&
-      this.lastRenderRange != null &&
-      deepEquals(renderRange, this.lastRenderRange)
+      renderRanges[0].containerOffset === this.lastOffset &&
+      this.lastRenderRanges != null &&
+      deepEquals(renderRanges, this.lastRenderRanges)
     ) {
       return;
     }
-    this.lastRenderRange = renderRange;
-    this.lastOffset = containerOffset;
+    this.lastRenderRanges = renderRanges;
+    this.lastOffset = renderRanges[0].containerOffset;
 
-    const [highlighter, headerResult, hunksResult] = await Promise.all([
-      getSharedHighlighter({
-        themes: getThemes(this.options.theme),
-        langs: [],
-      }),
-      !disableFileHeader
-        ? this.headerRenderer.render(this.fileDiff)
-        : undefined,
-      this.hunksRenderer.render(this.fileDiff, renderRange),
-    ]);
+    const hunkResults = renderRanges.map(({ renderRange }) => {
+      if (this.astCache.has(renderRange.startingLine)) {
+        return undefined;
+      }
+      return this.hunksRenderer?.syncRender(this.fileDiff, renderRange);
+    });
 
-    if (headerResult == null && hunksResult == null) {
+    if (
+      this.headerCache == null &&
+      !hunkResults.some((result) => result != null)
+    ) {
       return;
     }
 
     fileContainer = this.getOrCreateFileContainer(fileContainer);
 
-    if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer);
+    if (this.headerCache != null) {
+      this.applyHeaderToDOM(this.headerCache, fileContainer);
     }
 
-    if (hunksResult != null) {
-      const pre = this.getOrCreatePre(fileContainer);
-      this.applyHunksToDOM(hunksResult, pre, highlighter);
+    for (const hunkResult of hunkResults) {
+      if (hunkResult == null) continue;
+      this.astCache.set(hunkResult.renderRange.startingLine, {
+        chunk: hunkResult.renderRange.startingLine,
+        containerOffset: 0,
+        additionsAST: hunkResult.additionsAST,
+        deletionsAST: hunkResult.deletionsAST,
+        unifiedAST: hunkResult.unifiedAST,
+      });
+    }
+
+    const pre = this.getOrCreatePre(fileContainer);
+    if (this.codeUnified != null) {
+      this.codeUnified.innerHTML = '';
+    }
+    if (this.codeDeletions != null) {
+      this.codeDeletions.innerHTML = '';
+    }
+    if (this.codeAdditions != null) {
+      this.codeAdditions.innerHTML = '';
+    }
+    for (const renderRange of renderRanges) {
+      const cachedData = this.astCache.get(
+        renderRange.renderRange.startingLine
+      );
+      if (cachedData == null) {
+        console.warn(
+          'ZZZZZ - render cache miss',
+          this.fileDiff.name,
+          this.astCache,
+          renderRange
+        );
+        continue;
+      }
+      this.appendCode(cachedData);
+
+      // FIXME(amadeus): Add support for these?
       // this.renderSeparators(hunksResult.hunkData);
       // this.renderAnnotations();
     }
 
-    fileContainer.style.top = `${(diffStyle === 'split' ? this.splitTop : this.unifiedTop) + containerOffset}px`;
+    const totalLines = getTotalLineCountFromHunks(this.fileDiff.hunks);
+    this.applyHunksToDOM(pre, this.highlighter, totalLines);
+    fileContainer.style.top = `${(diffStyle === 'split' ? this.splitTop : this.unifiedTop) + renderRanges[0].containerOffset}px`;
+    console.log('ZZZZZ .renderFinished', this.fileDiff.name);
   }
 
-  private computeRenderRangeFromWindow({ top, bottom }: RenderWindow): {
-    renderRange: RenderRange;
-    containerOffset: number;
-  } {
+  private computeRenderRangeFromWindow({
+    top,
+    bottom,
+  }: RenderWindow): ComputeRenderRange[] {
     const { diffStyle = 'split', disableFileHeader = false } = this.options;
-    const lineCount =
-      diffStyle === 'split'
-        ? this.fileDiff.splitLineCount
-        : this.fileDiff.unifiedLineCount;
-    const fileTop = diffStyle === 'split' ? this.splitTop : this.unifiedTop;
-    const fileHeight =
-      diffStyle === 'split' ? this.splitHeight : this.unifiedHeight;
+    const { lineCount, fileTop, fileHeight } = getSpecs(this, diffStyle);
 
     // We should never hit this theoretically, but if so, gtfo and yell loudly,
     // so we can fix
@@ -222,18 +307,22 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
         'VirtulizedFileDiff.computeRenderRangeFromWindow: invalid render',
         this.fileDiff.name
       );
-      return {
-        renderRange: { startingLine: -1, endingLine: -1 },
-        containerOffset: 0,
-      };
+      return [
+        {
+          renderRange: { startingLine: -1, endingLine: -1 },
+          containerOffset: 0,
+        },
+      ];
     }
 
     // Whole file is under LINE_HUNK_COUNT, just render it all
     if (lineCount <= LINE_HUNK_COUNT) {
-      return {
-        renderRange: { startingLine: 0, endingLine: Infinity },
-        containerOffset: 0,
-      };
+      return [
+        {
+          renderRange: { startingLine: 0, endingLine: Infinity },
+          containerOffset: 0,
+        },
+      ];
     }
 
     let currentLineTop =
@@ -244,8 +333,11 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     let endingLine: number | undefined;
     outerLoop: for (const hunk of this.fileDiff.hunks) {
       let hunkGap = 0;
-      if (hunk.additionStart > 1 || hunk.deletedStart > 1) {
-        hunkGap = HUNK_SEPARATOR_HEIGHT + FILE_GAP * 2;
+      if (hunk.additionStart > 1 || hunk.deletionStart > 1) {
+        hunkGap = HUNK_SEPARATOR_HEIGHT + FILE_GAP;
+        if (hunk !== this.fileDiff.hunks[0]) {
+          hunkGap += FILE_GAP;
+        }
         // FIXME(amadeus): I might need to apply a fix for for the first hunk
         // because i don't think it gaps on top and bottom...
         currentLineTop += hunkGap;
@@ -255,7 +347,8 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
       for (let l = 0; l < hunkLineCount; l++) {
         if (currentLine % LINE_HUNK_COUNT === 0) {
           containerOffsets.push(
-            currentLineTop - (fileTop + LINE_HEADER_HEIGHT + hunkGap)
+            currentLineTop -
+              (fileTop + LINE_HEADER_HEIGHT + (l === 0 ? hunkGap : 0))
           );
         }
         if (
@@ -275,10 +368,12 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     }
 
     if (startingLine == null) {
-      return {
-        renderRange: { startingLine: -1, endingLine: -1 },
-        containerOffset: 0,
-      };
+      return [
+        {
+          renderRange: { startingLine: -1, endingLine: -1 },
+          containerOffset: 0,
+        },
+      ];
     }
 
     startingLine = Math.floor(startingLine / LINE_HUNK_COUNT) * LINE_HUNK_COUNT;
@@ -287,10 +382,18 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
         ? Math.ceil(endingLine / LINE_HUNK_COUNT) * LINE_HUNK_COUNT
         : startingLine + LINE_HUNK_COUNT;
 
-    return {
-      renderRange: { startingLine, endingLine },
-      containerOffset: containerOffsets[startingLine / LINE_HUNK_COUNT] ?? 0,
-    };
+    const ranges: ComputeRenderRange[] = [];
+    for (let i = 0; i < (endingLine - startingLine) / LINE_HUNK_COUNT; i++) {
+      const _startingLine = startingLine + i * LINE_HUNK_COUNT;
+      ranges.push({
+        containerOffset: containerOffsets[_startingLine / LINE_HUNK_COUNT] ?? 0,
+        renderRange: {
+          startingLine: _startingLine,
+          endingLine: _startingLine + LINE_HUNK_COUNT,
+        },
+      });
+    }
+    return ranges;
   }
 
   private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
@@ -330,41 +433,54 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     }
   }
 
-  private applyHunksToDOM(
-    result: HunksRenderResult,
-    pre: HTMLPreElement,
-    highlighter: PJSHighlighter
-  ): void {
+  private appendCode(result: RenderCache) {
     if (this.hunksRenderer == null) return;
-    this.setPreAttributes(pre, highlighter, result);
-
-    // Clear existing content
-    pre.innerHTML = '';
-
-    let codeDeletions: HTMLElement | undefined;
-    let codeAdditions: HTMLElement | undefined;
-    // Create code elements and insert HTML content
     if (result.unifiedAST != null) {
-      const codeUnified = createCodeNode({ columnType: 'unified' });
-      codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
-        result.unifiedAST
+      this.codeUnified ??= createCodeNode({ columnType: 'unified' });
+      this.codeUnified.insertAdjacentHTML(
+        'beforeend',
+        this.hunksRenderer.renderPartialHTML(result.unifiedAST)
       );
-      pre.appendChild(codeUnified);
+      this.codeAdditions?.parentNode?.removeChild(this.codeAdditions);
+      this.codeAdditions = undefined;
+      this.codeDeletions?.parentNode?.removeChild(this.codeDeletions);
+      this.codeDeletions = undefined;
     } else {
       if (result.deletionsAST != null) {
-        codeDeletions = createCodeNode({ columnType: 'deletions' });
-        codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
-          result.deletionsAST
+        this.codeDeletions ??= createCodeNode({ columnType: 'deletions' });
+        this.codeDeletions.insertAdjacentHTML(
+          'beforeend',
+          this.hunksRenderer.renderPartialHTML(result.deletionsAST)
         );
-        pre.appendChild(codeDeletions);
       }
       if (result.additionsAST != null) {
-        codeAdditions = createCodeNode({ columnType: 'additions' });
-        codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
-          result.additionsAST
+        this.codeAdditions ??= createCodeNode({ columnType: 'additions' });
+        this.codeAdditions.insertAdjacentHTML(
+          'beforeend',
+          this.hunksRenderer.renderPartialHTML(result.additionsAST)
         );
-        pre.appendChild(codeAdditions);
       }
+      this.codeUnified?.parentNode?.removeChild(this.codeUnified);
+      this.codeUnified = undefined;
+    }
+  }
+
+  private applyHunksToDOM(
+    pre: HTMLPreElement,
+    highlighter: PJSHighlighter,
+    totalLines: number
+  ): void {
+    if (this.hunksRenderer == null) return;
+    this.setPreAttributes(pre, highlighter, totalLines);
+
+    if (this.codeUnified != null) {
+      pre.appendChild(this.codeUnified);
+    }
+    if (this.codeDeletions != null) {
+      pre.appendChild(this.codeDeletions);
+    }
+    if (this.codeAdditions != null) {
+      pre.appendChild(this.codeAdditions);
     }
 
     // this.mouseEventManager.setup(pre);
@@ -380,7 +496,7 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
   private setPreAttributes(
     pre: HTMLPreElement,
     highlighter: PJSHighlighter,
-    result: HunksRenderResult
+    totalLines: number
   ): void {
     const {
       diffStyle = 'split',
@@ -405,7 +521,7 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
       themeType,
       diffIndicators,
       disableBackground,
-      totalLines: result.totalLines,
+      totalLines,
     });
   }
 
@@ -439,4 +555,22 @@ export class VirtulizedFileDiff<LAnnotation = undefined> {
     }
     return this.pre;
   }
+}
+
+function getSpecs<LAnnotation>(
+  instance: VirtualizedFileDiff<LAnnotation>,
+  type: 'split' | 'unified' = 'split'
+) {
+  if (type === 'split') {
+    return {
+      lineCount: instance.fileDiff.splitLineCount,
+      fileTop: instance.splitTop,
+      fileHeight: instance.splitHeight,
+    };
+  }
+  return {
+    lineCount: instance.fileDiff.unifiedLineCount,
+    fileTop: instance.unifiedTop,
+    fileHeight: instance.unifiedHeight,
+  };
 }

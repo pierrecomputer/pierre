@@ -3,7 +3,13 @@
 import { cn } from '@/lib/utils';
 import { BigBoiVirtualizer, parsePatchFiles } from '@pierre/precision-diffs';
 import { useStableCallback } from '@pierre/precision-diffs/react';
-import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  type SyntheticEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import styles from './big-boi.module.css';
 
@@ -92,6 +98,17 @@ export function BigBoiDiff() {
       setFetching(false);
     }
   );
+
+  useEffect(() => {
+    const func = async () => {
+      // eslint-disable-next-line @typescript-eslint/await-thenable
+      await Promise.all([undefined, undefined]);
+      console.log('ZZZZZ - func - finished');
+    };
+    console.log('ZZZZ - START');
+    void func();
+    console.log('ZZZZ - END');
+  }, []);
   return (
     <>
       <div className="relative mx-auto w-5xl max-w-full px-5">

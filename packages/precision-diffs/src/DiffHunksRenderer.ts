@@ -121,7 +121,10 @@ export interface HunksRenderResult {
   css: string;
   preNode: Element;
   totalLines: number;
+  renderRange: RenderRange;
 }
+
+let instanceId = -1;
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
   private highlighter: PJSHighlighter | undefined;
@@ -137,6 +140,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private queuedRenderRange: RenderRange | undefined;
   private queuedRender: Promise<HunksRenderResult | undefined> | undefined;
   private computedLang: SupportedLanguages = 'text';
+
+  readonly __id: number = ++instanceId;
 
   constructor(options: BaseDiffOptions = { theme: DEFAULT_THEMES }) {
     this.options = options;
@@ -232,6 +237,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
+  setDiff(diff: FileDiffMetadata): void {
+    this.diff = diff;
+    this.computedLang = this.options.lang ?? getFiletypeFromFileName(diff.name);
+  }
+
   async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
@@ -241,10 +251,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   async render(
     diff: FileDiffMetadata,
-    partialRender?: RenderRange
+    renderRange?: RenderRange
   ): Promise<HunksRenderResult | undefined> {
     this.queuedDiff = diff;
-    this.queuedRenderRange = partialRender;
+    this.queuedRenderRange = renderRange;
     if (this.queuedRender != null) {
       return this.queuedRender;
     }
@@ -278,6 +288,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.queuedRenderRange = undefined;
     this.queuedRender = undefined;
     return result;
+  }
+
+  syncRender(
+    diff: FileDiffMetadata,
+    renderRange?: RenderRange
+  ): HunksRenderResult {
+    if (this.highlighter == null) {
+      throw new Error(
+        `DiffHunksRenderer.syncRender: Highlighter not initialized for ${diff.name}, use .render() instead`
+      );
+    }
+    return this.renderDiff(diff, this.highlighter, renderRange);
   }
 
   private renderDiff(
@@ -343,7 +365,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     let lineIndex = -1;
     let lineCount = 0;
     for (const hunk of hunks) {
-      if (lineCount > renderRange.endingLine) {
+      if (lineCount >= renderRange.endingLine) {
         break;
       }
       const hunkLineCount =
@@ -403,6 +425,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }),
       }),
       totalLines,
+      renderRange,
     };
   }
 
@@ -521,7 +544,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }: RenderHunkProps) {
     if (
       hunk.hunkContent.length === 0 ||
-      lineCount > renderRange.endingLine ||
+      lineCount >= renderRange.endingLine ||
       lineCount + hunkLineCount < renderRange.startingLine
     ) {
       return;
@@ -555,7 +578,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       const lines =
         hunk.collapsedBefore -
         ((preExpandedHunk?.fromEnd ?? 0) + (preExpandedHunk?.fromStart ?? 0));
-      if (!expandUnchanged && (preExpandedHunk == null || lines > 0)) {
+      const hunkStart =
+        type === 'unified' ? hunk.unifiedLineStart : hunk.splitLineStart;
+      if (
+        !expandUnchanged &&
+        hunkStart >= renderRange.startingLine &&
+        (preExpandedHunk == null || lines > 0)
+      ) {
         if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
           if (lines > 0) {
             const slotName = getHunkSeparatorSlotName(type, hunkIndex);
@@ -984,7 +1013,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     function processRawLines(lines: string[]) {
       for (const rawLine of lines) {
-        if (lineCount > renderRange.endingLine) {
+        if (lineCount >= renderRange.endingLine) {
           break;
         }
         if (lineCount < renderRange.startingLine) {
@@ -1030,7 +1059,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         additionLineNumber = expandAdditionStart;
         deletionLineNumber = expandDeletionStart;
         for (let i = additionLineNumber; i < hunk.additionStart - 1; i++) {
-          if (lineCount > renderRange.endingLine) {
+          if (lineCount >= renderRange.endingLine) {
             break;
           }
           if (lineCount < renderRange.startingLine) {
@@ -1080,7 +1109,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.diff.newLines.length - 1
       );
       for (let i = additionLineNumber; i < len; i++) {
-        if (lineCount > renderRange.endingLine) {
+        if (lineCount >= renderRange.endingLine) {
           break;
         }
         if (lineCount < renderRange.startingLine) {

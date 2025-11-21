@@ -1,29 +1,38 @@
+import { preloadHighlighter } from './SharedHighlighter';
 import { queueRender } from './UniversalRenderer';
-import { type FileDiffOptions, VirtulizedFileDiff } from './VirtulizedFileDiff';
-import type { ParsedPatch } from './types';
+import {
+  type FileDiffOptions,
+  VirtualizedFileDiff,
+} from './VirtulizedFileDiff';
+import type { ParsedPatch, SupportedLanguages } from './types';
+import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
+
+const OVERSCROLL_MULTIPLIER = 6;
 
 const DIFF_OPTIONS = {
   theme: 'pierre-dark',
   diffStyle: 'unified',
+  lang: 'text',
 } as const;
 const ENABLE_RENDERING = true;
 
 interface RenderedItems<LAnnotations> {
-  instance: VirtulizedFileDiff<LAnnotations>;
+  instance: VirtualizedFileDiff<LAnnotations>;
   element: HTMLElement;
 }
 
 export class BigBoiVirtualizer<LAnnotations = undefined> {
-  private files: VirtulizedFileDiff<LAnnotations>[] = [];
+  private files: VirtualizedFileDiff<LAnnotations>[] = [];
   private totalHeightUnified = 0;
   private totalHeightSplit = 0;
   private rendered: Map<
-    VirtulizedFileDiff<LAnnotations>,
+    VirtualizedFileDiff<LAnnotations>,
     RenderedItems<LAnnotations>
   > = new Map();
 
   private containerOffset = 0;
   private scrollY: number = 0;
+  private lastRenderedScrollY = -1;
   private height: number = 0;
   private scrollHeight: number = 0;
   private initialized = false;
@@ -55,9 +64,11 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
   }
 
   addFiles(parsedPatches: ParsedPatch[]): void {
+    const filetypes = new Set<SupportedLanguages>();
     for (const patch of parsedPatches) {
       for (const fileDiff of patch.files) {
-        const vFileDiff = new VirtulizedFileDiff<LAnnotations>(
+        filetypes.add(getFiletypeFromFileName(fileDiff.name));
+        const vFileDiff = new VirtualizedFileDiff<LAnnotations>(
           {
             unifiedTop: this.totalHeightUnified,
             splitTop: this.totalHeightSplit,
@@ -71,6 +82,16 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
         this.totalHeightSplit += vFileDiff.splitHeight;
       }
     }
+    // NOTE(amadeus): Unclear if we should keep this, but something to
+    // experiment with later (if a big boi diff has a _toooon_ of filetypes, it
+    // migth be less than ideal)
+    const start = Date.now();
+    void preloadHighlighter({
+      themes: [DIFF_OPTIONS.theme],
+      langs: Array.from(filetypes),
+    }).then(() =>
+      console.log(`We've loaded all the langs`, Date.now() - start)
+    );
   }
 
   render(): void {
@@ -85,12 +106,18 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
     }
     const { diffStyle = 'split' } = this.fileOptions;
     const { scrollY, height, scrollHeight, containerOffset } = this;
+    const fitPerfectly =
+      this.lastRenderedScrollY === -1 ||
+      Math.abs(scrollY - this.lastRenderedScrollY) >
+        height * OVERSCROLL_MULTIPLIER;
     const { top, bottom } = createWindowFromScrollPosition({
       scrollY,
       height,
       scrollHeight,
       containerOffset,
+      fitPerfectly,
     });
+    this.lastRenderedScrollY = scrollY;
     for (const [renderedInstance, item] of Array.from(this.rendered)) {
       // If not visible, we should unmount it
       if (
@@ -104,50 +131,40 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
         this.rendered.delete(renderedInstance);
       }
     }
-    for (const fileDiff of this.files) {
+    for (const instance of this.files) {
       // We can stop iterating when we get to elements after the window
-      if (getInstanceSpecs(fileDiff, diffStyle).top > bottom) {
+      if (getInstanceSpecs(instance, diffStyle).top > bottom) {
         break;
       }
       if (
-        getInstanceSpecs(fileDiff, diffStyle).top <
-        top - getInstanceSpecs(fileDiff, diffStyle).height
+        getInstanceSpecs(instance, diffStyle).top <
+        top - getInstanceSpecs(instance, diffStyle).height
       ) {
         continue;
       }
-      const rendered = this.rendered.get(fileDiff);
+      const rendered = this.rendered.get(instance);
       if (rendered == null) {
         const fileContainer = document.createElement('file-diff');
-        this.rendered.set(fileDiff, {
+        this.rendered.set(instance, {
           element: fileContainer,
-          instance: fileDiff,
+          instance: instance,
         });
         // fileContainer.style.top = `${fileDiff.unifiedTop}px`;
         // NOTE(amadeus): We gotta append first to ensure file ordering is
         // correct... but i guess maybe doesn't matter because we are positioning shit
         this.container.appendChild(fileContainer);
-        const start = Date.now();
-        void fileDiff
-          .render({ fileContainer, renderWindow: { top, bottom } })
-          .then(() =>
-            console.log(
-              'ZZZZZ - MOUNTING',
-              fileDiff.fileDiff.name,
-              `took: ${Date.now() - start}ms`
-            )
-          );
+        console.log('ZZZZ - start', instance.fileDiff.name);
+        void instance.render({ fileContainer, renderWindow: { top, bottom } });
+        console.log('ZZZZ - end', instance.fileDiff.name);
       } else {
-        const start = Date.now();
-        void rendered.instance
-          .render({ renderWindow: { top, bottom } })
-          .then(() => {
-            console.log(
-              'ZZZZZ - RENDERING',
-              fileDiff.fileDiff.name,
-              `took: ${Date.now() - start}ms`
-            );
-          });
+        console.log('ZZZZ - start', rendered.instance.fileDiff.name);
+        void rendered.instance.render({ renderWindow: { top, bottom } });
+        console.log('ZZZZ - end', rendered.instance.fileDiff.name);
       }
+    }
+
+    if (fitPerfectly) {
+      queueRender(this._render);
     }
   };
 
@@ -156,8 +173,8 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
     this.container.style.height = `${diffStyle === 'split' ? this.totalHeightSplit : this.totalHeightUnified}px`;
     this.scrollHeight = document.documentElement.scrollHeight;
     if (!this.initialized) {
-      window.addEventListener('scroll', this.handleScroll, { passive: true });
-      window.addEventListener('resize', this.handleResize, { passive: true });
+      window.addEventListener('scroll', this.handleScroll);
+      window.addEventListener('resize', this.handleResize);
       this.initialized = true;
     }
   }
@@ -201,6 +218,7 @@ interface WindowFromScrollPositionProps {
   height: number;
   scrollHeight: number;
   containerOffset: number;
+  fitPerfectly: boolean;
 }
 
 interface VirtualWindowSpecs {
@@ -213,10 +231,11 @@ function createWindowFromScrollPosition({
   scrollHeight,
   height,
   containerOffset,
+  fitPerfectly,
 }: WindowFromScrollPositionProps): VirtualWindowSpecs {
-  const windowHeight = height * 2;
-  if (windowHeight > scrollHeight) {
-    return { top: 0, bottom: scrollHeight };
+  const windowHeight = height * OVERSCROLL_MULTIPLIER;
+  if (windowHeight > scrollHeight || fitPerfectly) {
+    return { top: scrollY, bottom: scrollY + height };
   }
   let top = scrollY + height / 2 - windowHeight / 2;
   let bottom = top + windowHeight;
@@ -235,7 +254,7 @@ function createWindowFromScrollPosition({
 }
 
 function getInstanceSpecs<LAnnotations>(
-  instance: VirtulizedFileDiff<LAnnotations>,
+  instance: VirtualizedFileDiff<LAnnotations>,
   diffStyle: 'split' | 'unified' = 'split'
 ) {
   if (diffStyle === 'split') {
