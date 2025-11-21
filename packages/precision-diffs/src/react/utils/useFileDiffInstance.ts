@@ -85,9 +85,7 @@ export function useFileDiffInstance<LAnnotation>({
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'diff'>
     | undefined => {
-    return instanceRef.current?.getHoveredLine() as
-      | GetHoveredLineResult<'diff'>
-      | undefined;
+    return instanceRef.current?.getHoveredLine();
   }, []);
 
   return { ref, getHoveredLine };

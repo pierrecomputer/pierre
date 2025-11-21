@@ -66,9 +66,7 @@ export function useFileInstance<LAnnotation>({
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'file'>
     | undefined => {
-    return instanceRef.current?.getHoveredLine() as
-      | GetHoveredLineResult<'file'>
-      | undefined;
+    return instanceRef.current?.getHoveredLine();
   }, []);
   return { ref, getHoveredLine };
 }
