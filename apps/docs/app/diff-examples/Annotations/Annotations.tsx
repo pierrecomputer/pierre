@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import type {
   AnnotationSide,
   DiffLineAnnotation,
+  GetHoveredLineResult,
   SelectedLineRange,
 } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
@@ -30,15 +31,9 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   const [annotations, setAnnotations] = useState<
     DiffLineAnnotation<AnnotationMetadata>[]
   >(prerenderedDiff.annotations ?? []);
-  const [buttonPosition, setButtonPosition] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const addCommentAtLine = useCallback(
     (side: AnnotationSide, lineNumber: number) => {
-      let added = false;
       setAnnotations((prev) => {
         const hasAnnotation = prev.some(
           (ann) => ann.side === side && ann.lineNumber === lineNumber
@@ -46,7 +41,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
 
         if (hasAnnotation) return prev;
 
-        added = true;
         return [
           ...prev,
           {
@@ -59,50 +53,9 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           },
         ];
       });
-
-      if (added) {
-        setButtonPosition(null);
-      }
     },
     []
   );
-
-  const handleLineEnter = useCallback(
-    (props: {
-      lineElement: HTMLElement;
-      annotationSide: AnnotationSide;
-      lineNumber: number;
-    }) => {
-      const lineElement = props.lineElement;
-      const container = containerRef.current;
-
-      if (container == null) return;
-
-      const { annotationSide, lineNumber } = props;
-
-      const hasAnnotation = annotations.some(
-        (ann) => ann.side === annotationSide && ann.lineNumber === lineNumber
-      );
-
-      if (hasAnnotation) {
-        setButtonPosition(null);
-        return;
-      }
-
-      const containerRect = container.getBoundingClientRect();
-      const lineRect = lineElement.getBoundingClientRect();
-
-      setButtonPosition({
-        top: lineRect.top - containerRect.top + lineRect.height / 2,
-        left: 16,
-      });
-    },
-    [annotations]
-  );
-
-  const handleLineLeave = useCallback(() => {
-    setButtonPosition(null);
-  }, []);
 
   const hasOpenCommentForm = annotations.some((ann) => !ann.metadata.isThread);
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
@@ -147,53 +100,56 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         title="Comments & Annotations"
         description="Precision Diffs provide a flexible annotation framework for injecting additional content and context. Use it to render your own line comments, annotations from CI jobs, and other third-party content."
       />
-      <div ref={containerRef} className="relative flex flex-col gap-3">
-        {buttonPosition != null && !hasOpenCommentForm && (
-          <Button
-            size="icon-sm"
-            variant="default"
-            style={{
-              position: 'absolute',
-              top: buttonPosition.top,
-              left: buttonPosition.left + 4,
-              transform: 'translateY(-50%)',
-              zIndex: 10,
-              backgroundColor: '#1a76d4',
-              transition: 'none',
-              cursor: 'pointer',
-              pointerEvents: 'none',
-            }}
-          >
-            <IconPlus />
-          </Button>
-        )}
-        <MultiFileDiff
-          {...prerenderedDiff}
-          className="diff-container"
-          selectedLines={selectedRange}
-          options={{
-            ...prerenderedDiff.options,
-            onLineEnter: handleLineEnter,
-            onLineLeave: handleLineLeave,
-            enableLineSelection: !hasOpenCommentForm,
-            onLineSelectionEnd: handleLineSelectionEnd,
-          }}
-          lineAnnotations={annotations}
-          renderAnnotation={(annotation) =>
-            annotation.metadata.isThread ? (
-              <Thread />
-            ) : (
-              <CommentForm
-                side={annotation.side}
-                lineNumber={annotation.lineNumber}
-                onSubmit={handleSubmitComment}
-                onCancel={handleCancelComment}
-              />
-            )
-          }
-        />
-      </div>
+      <MultiFileDiff
+        {...prerenderedDiff}
+        className="diff-container"
+        selectedLines={selectedRange}
+        options={{
+          ...prerenderedDiff.options,
+          enableLineSelection: !hasOpenCommentForm,
+          enableHoverDecoration: !hasOpenCommentForm,
+          onLineSelectionEnd: handleLineSelectionEnd,
+        }}
+        renderHoverDecoration={renderHoverDecoration}
+        lineAnnotations={annotations}
+        renderAnnotation={(annotation) =>
+          annotation.metadata.isThread ? (
+            <Thread />
+          ) : (
+            <CommentForm
+              side={annotation.side}
+              lineNumber={annotation.lineNumber}
+              onSubmit={handleSubmitComment}
+              onCancel={handleCancelComment}
+            />
+          )
+        }
+      />
     </div>
+  );
+}
+
+function renderHoverDecoration(
+  getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
+) {
+  return (
+    <Button
+      size="icon-sm"
+      variant="default"
+      style={{
+        backgroundColor: '#1a76d4',
+        transition: 'none',
+        cursor: 'pointer',
+      }}
+      onClick={(event) => {
+        const hoveredLine = getHoveredLine();
+        if (hoveredLine == null) return;
+        event.stopPropagation();
+        console.log('Clicked on the decoration at', hoveredLine);
+      }}
+    >
+      <IconPlus />
+    </Button>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   pluckLineSelectionOptions,
 } from './LineSelectionManager';
 import {
+  type GetHoveredLineResult,
   MouseEventManager,
   type MouseEventManagerBaseOptions,
   pluckMouseEventOptions,
@@ -34,7 +35,11 @@ import type {
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
-import { createCodeNode, setWrapperProps } from './utils/html_render_utils';
+import {
+  createCodeNode,
+  createHoverContent,
+  setWrapperProps,
+} from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 
 interface FileDiffRenderProps<LAnnotation> {
@@ -59,6 +64,9 @@ export interface FileDiffOptions<LAnnotation>
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
+  renderHoverDecoration?(
+    getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
+  ): HTMLElement | null;
 }
 
 let instanceId = -1;
@@ -74,6 +82,7 @@ export class FileDiff<LAnnotation = undefined> {
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
   private unsafeCSSStyle: HTMLStyleElement | undefined;
+  private hoverContent: HTMLElement | undefined;
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
@@ -186,6 +195,10 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
+  getHoveredLine = (): GetHoveredLineResult<'diff'> | undefined => {
+    return this.mouseEventManager.getHoveredLine();
+  };
+
   setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
     this.lineAnnotations = lineAnnotations;
   }
@@ -269,6 +282,7 @@ export class FileDiff<LAnnotation = undefined> {
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();
+      this.renderHoverDecoration();
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
@@ -416,6 +430,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.applyHunksToDOM(hunksResult, pre, highlighter);
       this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
+      this.renderHoverDecoration();
     }
   }
 
@@ -464,6 +479,22 @@ export class FileDiff<LAnnotation = undefined> {
         this.annotationElements.push(el);
         this.fileContainer.appendChild(el);
       }
+    }
+  }
+
+  private renderHoverDecoration() {
+    const { renderHoverDecoration } = this.options;
+    if (this.fileContainer == null || renderHoverDecoration == null) return;
+    if (this.hoverContent == null) {
+      this.hoverContent = createHoverContent();
+      this.fileContainer.appendChild(this.hoverContent);
+    }
+    const element = renderHoverDecoration(
+      this.mouseEventManager.getHoveredLine
+    );
+    this.hoverContent.innerHTML = '';
+    if (element != null) {
+      this.hoverContent.appendChild(element);
     }
   }
 

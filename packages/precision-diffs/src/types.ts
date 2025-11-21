@@ -212,6 +212,7 @@ export interface LineEventBaseProps {
   type: 'line';
   lineNumber: number;
   lineElement: HTMLElement;
+  numberElement: HTMLElement | undefined;
   numberColumn: boolean;
 }
 

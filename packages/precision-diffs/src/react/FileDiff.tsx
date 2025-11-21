@@ -2,7 +2,7 @@
 
 import type { FileDiffMetadata } from '../types';
 import type { DiffBasePropsReact } from './types';
-import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
+import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
@@ -23,18 +23,21 @@ export function FileDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
+  renderHoverDecoration,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
-  const ref = useFileDiffInstance({
+  const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
     lineAnnotations,
     selectedLines,
   });
-  const children = renderAnnotationChildren({
+  const children = renderDiffChildren({
     fileDiff,
     renderHeaderMetadata,
     renderAnnotation,
     lineAnnotations,
+    renderHoverDecoration,
+    getHoveredLine,
   });
   return (
     <file-diff ref={ref} className={className} style={style}>

@@ -33,7 +33,7 @@ type EventClickProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
   ? OnLineClickProps
   : OnDiffLineClickProps;
 
-type EventEnterLeaveProps<TMode extends MouseEventManagerMode> =
+type MouseEventEnterLeaveProps<TMode extends MouseEventManagerMode> =
   TMode extends 'file' ? OnLineEnterLeaveProps : OnDiffLineEnterLeaveProps;
 
 type EventBaseProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
@@ -45,6 +45,11 @@ interface ExpandoEventProps {
   hunkIndex: number;
   direction: ExpansionDirections;
 }
+
+export type GetHoveredLineResult<TMode extends MouseEventManagerMode> =
+  TMode extends 'file'
+    ? { lineNumber: number }
+    : { lineNumber: number; side: AnnotationSide };
 
 type GetLineDataResult<TMode extends MouseEventManagerMode> =
   TMode extends 'file'
@@ -80,10 +85,11 @@ function isExpandoEventData(
 export interface MouseEventManagerBaseOptions<
   TMode extends MouseEventManagerMode,
 > {
+  enableHoverDecoration?: boolean;
   onLineClick?(props: EventClickProps<TMode>): unknown;
   onLineNumberClick?(props: EventClickProps<TMode>): unknown;
-  onLineEnter?(props: EventEnterLeaveProps<TMode>): unknown;
-  onLineLeave?(props: EventEnterLeaveProps<TMode>): unknown;
+  onLineEnter?(props: MouseEventEnterLeaveProps<TMode>): unknown;
+  onLineLeave?(props: MouseEventEnterLeaveProps<TMode>): unknown;
   __debugMouseEvents?: LogTypes;
 }
 
@@ -93,8 +99,9 @@ export interface MouseEventManagerOptions<TMode extends MouseEventManagerMode>
 }
 
 export class MouseEventManager<TMode extends MouseEventManagerMode> {
-  private hoveredRow: EventBaseProps<TMode> | undefined;
+  private hoveredLine: EventBaseProps<TMode> | undefined;
   private pre: HTMLPreElement | undefined;
+  private hoverSlot: HTMLDivElement | undefined;
 
   constructor(
     private mode: TMode,
@@ -122,10 +129,22 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       onLineEnter,
       onLineLeave,
       onHunkExpand,
+      enableHoverDecoration = false,
     } = this.options;
 
     this.cleanUp();
     this.pre = pre;
+
+    if (enableHoverDecoration && this.hoverSlot == null) {
+      this.hoverSlot = document.createElement('div');
+      this.hoverSlot.dataset.hoverSlot = '';
+      const slotElement = document.createElement('slot');
+      slotElement.name = 'hover-slot';
+      this.hoverSlot.appendChild(slotElement);
+    } else if (!enableHoverDecoration && this.hoverSlot != null) {
+      this.hoverSlot.parentNode?.removeChild(this.hoverSlot);
+      this.hoverSlot = undefined;
+    }
 
     if (
       onLineClick != null ||
@@ -159,7 +178,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
         })()
       );
     }
-    if (onLineEnter != null || onLineLeave != null) {
+    if (onLineEnter != null || onLineLeave != null || enableHoverDecoration) {
       pre.addEventListener('mousemove', this.handleMouseMove);
       debugLogIfEnabled(
         __debugMouseEvents,
@@ -174,6 +193,23 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       );
     }
   }
+
+  getHoveredLine = (): GetHoveredLineResult<TMode> | undefined => {
+    if (this.hoveredLine != null) {
+      if (this.mode === 'diff' && this.hoveredLine.type === 'diff-line') {
+        return {
+          lineNumber: this.hoveredLine.lineNumber,
+          side: this.hoveredLine.annotationSide,
+        } as GetHoveredLineResult<TMode>;
+      }
+      if (this.mode === 'file' && this.hoveredLine.type === 'line') {
+        return {
+          lineNumber: this.hoveredLine.lineNumber,
+        } as GetHoveredLineResult<TMode>;
+      }
+    }
+    return undefined;
+  };
 
   handleMouseClick = (event: MouseEvent): void => {
     debugLogIfEnabled(
@@ -202,19 +238,20 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       'move',
       'FileDiff.DEBUG.handleMouseLeave: no event'
     );
-    if (this.hoveredRow == null) {
+    if (this.hoveredLine == null) {
       debugLogIfEnabled(
         __debugMouseEvents,
         'move',
-        'FileDiff.DEBUG.handleMouseLeave: returned early, no .hoveredRow'
+        'FileDiff.DEBUG.handleMouseLeave: returned early, no .hoveredLine'
       );
       return;
     }
+    this.hoverSlot?.parentElement?.removeChild(this.hoverSlot);
     this.options.onLineLeave?.({
-      ...this.hoveredRow,
+      ...this.hoveredLine,
       event,
-    } as EventEnterLeaveProps<TMode>);
-    this.hoveredRow = undefined;
+    } as MouseEventEnterLeaveProps<TMode>);
+    this.hoveredLine = undefined;
   };
 
   private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
@@ -244,7 +281,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       case 'move': {
         if (
           isLineEventData(data, this.mode) &&
-          this.hoveredRow?.lineElement === data.lineElement
+          this.hoveredLine?.lineElement === data.lineElement
         ) {
           debugLogIfEnabled(
             __debugMouseEvents,
@@ -253,29 +290,33 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
           );
           break;
         }
-        if (this.hoveredRow != null) {
+        if (this.hoveredLine != null) {
           debugLogIfEnabled(
             __debugMouseEvents,
             'move',
-            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', clearing an existing hovered row and firing onLineLeave"
+            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', clearing an existing hovered line and firing onLineLeave"
           );
+          this.hoverSlot?.parentElement?.removeChild(this.hoverSlot);
           onLineLeave?.({
-            ...this.hoveredRow,
+            ...this.hoveredLine,
             event,
-          } as EventEnterLeaveProps<TMode>);
-          this.hoveredRow = undefined;
+          } as MouseEventEnterLeaveProps<TMode>);
+          this.hoveredLine = undefined;
         }
         if (isLineEventData(data, this.mode)) {
           debugLogIfEnabled(
             __debugMouseEvents,
             'move',
-            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', setting up a new hoveredRow and firing onLineEnter"
+            "FileDiff.DEBUG.handleMouseEvent: switch, 'move', setting up a new hoveredLine and firing onLineEnter"
           );
-          this.hoveredRow = data;
+          this.hoveredLine = data;
+          if (this.hoverSlot != null) {
+            data.numberElement?.appendChild(this.hoverSlot);
+          }
           onLineEnter?.({
-            ...this.hoveredRow,
+            ...this.hoveredLine,
             event,
-          } as EventEnterLeaveProps<TMode>);
+          } as MouseEventEnterLeaveProps<TMode>);
         }
         break;
       }
@@ -370,11 +411,20 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       return undefined;
     }
 
+    const numberElement = (() => {
+      const numberElement = lineElement.children[0];
+      return numberElement instanceof HTMLElement &&
+        numberElement.dataset.columnNumber != null
+        ? numberElement
+        : undefined;
+    })();
+
     if (this.mode === 'file') {
       return {
         type: 'line',
         lineElement,
         lineNumber,
+        numberElement,
         numberColumn,
       } as GetLineDataResult<TMode>;
     }
@@ -398,6 +448,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       annotationSide,
       lineType,
       lineElement,
+      numberElement,
       lineNumber,
       numberColumn,
     } as GetLineDataResult<TMode>;
@@ -434,6 +485,7 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
     onLineNumberClick,
     onLineEnter,
     onLineLeave,
+    enableHoverDecoration,
     __debugMouseEvents,
   }: MouseEventManagerBaseOptions<TMode>,
   onHunkExpand?: (hunkIndex: number, direction: ExpansionDirections) => unknown
@@ -443,6 +495,7 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
     onLineNumberClick,
     onLineEnter,
     onLineLeave,
+    enableHoverDecoration,
     __debugMouseEvents,
     onHunkExpand,
   };

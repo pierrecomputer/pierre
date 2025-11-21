@@ -491,6 +491,10 @@ code {
   [data-expand-button]:hover {
     opacity: 1;
   }
+
+  [data-line]:hover {
+    z-index: 2;
+  }
 }
 
 [data-expand-up] [data-icon] {
@@ -866,4 +870,12 @@ code {
   [data-column-content] {
     background-color: var(--pjs-bg-selection);
   }
+}
+
+[data-hover-slot] {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  text-align: center;
 }

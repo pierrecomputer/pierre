@@ -121,6 +121,29 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
         renderAnnotation: renderDiffAnnotation,
         themeType,
         enableLineSelection: true,
+
+        // Hover Decoration Snippets
+        // enableHoverDecoration: true,
+        // renderHoverDecoration(getHoveredLine) {
+        //   const el = document.createElement('div');
+        //   el.style.width = '20px';
+        //   el.style.height = '20px';
+        //   el.style.backgroundColor = 'blue';
+        //   el.style.borderRadius = '2px';
+        //   el.style.marginRight = '-10px';
+        //   el.style.textAlign = 'center';
+        //   el.style.color = 'white';
+        //   el.innerText = '+';
+        //   el.addEventListener('click', (event) => {
+        //     event.stopPropagation();
+        //     console.log('ZZZZ - clicked', getHoveredLine());
+        //   });
+        //   el.addEventListener('mousedown', (event) => {
+        //     event.stopPropagation();
+        //   });
+        //   return el;
+        // },
+
         // Custom Hunk Separators Tests
         // hunkSeparators(hunkData) {
         //   const fragment = document.createDocumentFragment();
@@ -403,7 +426,30 @@ if (renderFileButton != null) {
       onLineNumberClick(props) {
         console.info('onLineNumberClick', props);
       },
+
+      // Hover Decoration Snippets
+      // enableHoverDecoration: true,
+      // renderHoverDecoration(getHoveredLine) {
+      //   const el = document.createElement('div');
+      //   el.style.width = '20px';
+      //   el.style.height = '20px';
+      //   el.style.backgroundColor = 'blue';
+      //   el.style.borderRadius = '2px';
+      //   el.style.marginRight = '-10px';
+      //   el.style.textAlign = 'center';
+      //   el.style.color = 'white';
+      //   el.innerText = '+';
+      //   el.addEventListener('click', (event) => {
+      //     event.stopPropagation();
+      //     console.log('ZZZZ - clicked', getHoveredLine());
+      //   });
+      //   el.addEventListener('mousedown', (event) => {
+      //     event.stopPropagation();
+      //   });
+      //   return el;
+      // },
     });
+
     void instance.render({
       file: { name: 'main.tsx', contents: FILE_NEW },
       containerWrapper: wrapper,

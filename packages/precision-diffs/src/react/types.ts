@@ -1,8 +1,15 @@
 import { type CSSProperties, type ReactNode } from 'react';
-import type { SelectedLineRange } from 'src/LineSelectionManager';
 
+import type { FileOptions } from '../File';
 import type { FileDiffOptions } from '../FileDiff';
-import type { DiffLineAnnotation, RenderHeaderMetadataProps } from '../types';
+import type { SelectedLineRange } from '../LineSelectionManager';
+import type { GetHoveredLineResult } from '../MouseEventManager';
+import type {
+  DiffLineAnnotation,
+  FileContents,
+  LineAnnotation,
+  RenderHeaderMetadataProps,
+} from '../types';
 
 export interface DiffBasePropsReact<LAnnotation> {
   options?: FileDiffOptions<LAnnotation>;
@@ -10,6 +17,24 @@ export interface DiffBasePropsReact<LAnnotation> {
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
+  renderHoverDecoration?(
+    getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
+  ): ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  prerenderedHTML?: string;
+}
+
+export interface FileProps<LAnnotation> {
+  file: FileContents;
+  options?: FileOptions<LAnnotation>;
+  lineAnnotations?: LineAnnotation<LAnnotation>[];
+  selectedLines?: SelectedLineRange | null;
+  renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
+  renderHeaderMetadata?(file: FileContents): ReactNode;
+  renderHoverDecoration?(
+    getHoveredLine: () => GetHoveredLineResult<'file'> | undefined
+  ): ReactNode;
   className?: string;
   style?: CSSProperties;
   prerenderedHTML?: string;

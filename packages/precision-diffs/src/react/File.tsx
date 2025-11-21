@@ -1,28 +1,12 @@
 'use client';
 
-import { type CSSProperties, type ReactNode } from 'react';
-import type { SelectedLineRange } from 'src/LineSelectionManager';
-
 import { type FileOptions } from '../File';
-import { HEADER_METADATA_SLOT_ID } from '../constants';
-import type { FileContents, LineAnnotation } from '../types';
-import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import type { FileProps } from './types';
+import { renderFileChildren } from './utils/renderFileChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileInstance } from './utils/useFileInstance';
 
 export type { FileOptions };
-
-export interface FileProps<LAnnotation> {
-  file: FileContents;
-  options?: FileOptions<LAnnotation>;
-  lineAnnotations?: LineAnnotation<LAnnotation>[];
-  selectedLines?: SelectedLineRange | null;
-  renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
-  renderHeaderMetadata?(file: FileContents): ReactNode;
-  className?: string;
-  style?: CSSProperties;
-  prerenderedHTML?: string;
-}
 
 export function File<LAnnotation = undefined>({
   file,
@@ -34,25 +18,22 @@ export function File<LAnnotation = undefined>({
   renderAnnotation,
   renderHeaderMetadata,
   prerenderedHTML,
+  renderHoverDecoration,
 }: FileProps<LAnnotation>): React.JSX.Element {
-  const ref = useFileInstance({
+  const { ref, getHoveredLine } = useFileInstance({
     file,
     options,
     lineAnnotations,
     selectedLines,
   });
-  const metadata = renderHeaderMetadata?.(file);
-  const children = (
-    <>
-      {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
-      {renderAnnotation != null &&
-        lineAnnotations?.map((annotation, index) => (
-          <div key={index} slot={getLineAnnotationName(annotation)}>
-            {renderAnnotation(annotation)}
-          </div>
-        ))}
-    </>
-  );
+  const children = renderFileChildren({
+    file,
+    renderAnnotation,
+    renderHeaderMetadata,
+    renderHoverDecoration,
+    lineAnnotations,
+    getHoveredLine,
+  });
   return (
     <file-diff ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}

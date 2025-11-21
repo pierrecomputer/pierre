@@ -1,8 +1,9 @@
 import deepEqual from 'fast-deep-equal';
-import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { SelectedLineRange } from 'src/LineSelectionManager';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { FileDiff, type FileDiffOptions } from '../../FileDiff';
+import type { SelectedLineRange } from '../../LineSelectionManager';
+import type { GetHoveredLineResult } from '../../MouseEventManager';
 import type {
   DiffLineAnnotation,
   FileContents,
@@ -22,6 +23,11 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
 }
 
+interface UseFileDiffInstanceReturn {
+  ref(node: HTMLElement | null): void;
+  getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
+}
+
 export function useFileDiffInstance<LAnnotation>({
   oldFile,
   newFile,
@@ -29,9 +35,7 @@ export function useFileDiffInstance<LAnnotation>({
   options,
   lineAnnotations,
   selectedLines,
-}: UseFileDiffInstanceProps<LAnnotation>): (
-  fileContainer: HTMLElement | null
-) => void {
+}: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const instanceRef = useRef<FileDiff<LAnnotation> | null>(null);
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
@@ -78,5 +82,13 @@ export function useFileDiffInstance<LAnnotation>({
     }
   });
 
-  return ref;
+  const getHoveredLine = useCallback(():
+    | GetHoveredLineResult<'diff'>
+    | undefined => {
+    return instanceRef.current?.getHoveredLine() as
+      | GetHoveredLineResult<'diff'>
+      | undefined;
+  }, []);
+
+  return { ref, getHoveredLine };
 }

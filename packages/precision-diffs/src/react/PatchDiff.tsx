@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import type { FileDiffMetadata } from '../types';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import type { DiffBasePropsReact } from './types';
-import { renderAnnotationChildren } from './utils/renderAnnotationChildren';
+import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
@@ -24,19 +24,22 @@ export function PatchDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
+  renderHoverDecoration,
 }: PatchDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = usePatch(patch);
-  const ref = useFileDiffInstance({
+  const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
     lineAnnotations,
     selectedLines,
   });
-  const children = renderAnnotationChildren({
+  const children = renderDiffChildren({
     fileDiff,
     renderHeaderMetadata,
     renderAnnotation,
     lineAnnotations,
+    renderHoverDecoration,
+    getHoveredLine,
   });
   return (
     <file-diff ref={ref} className={className} style={style}>
