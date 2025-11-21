@@ -56,8 +56,32 @@ export function SingleDiff() {
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
 
+      // You must pass \`enableHoverUtility: true\` to the \`options\`
+      // object below. This allows you to render some UI in the number
+      // column when the user is hovered over the line. This is not a
+      // reactive API, in other words, render is not called every time
+      // you mouse over a new line (by design). You can call
+      // \`getHoveredLine()\` in a click handler to know what
+      // line is hovered.
+      renderHoverUtility={(getHoveredLine): ReactNode => {
+        return (
+          <button
+            onClick={() => {
+              console.log(
+                'you clicked on line:',
+                getHoveredLine().lineNumber,
+                'on side:',
+                getHoveredLine().side // 'additions' | 'deletions'
+              );
+            }}
+          >
+            +
+          </button>
+        );
+      }}
+
       // Programmatically control which lines are selected. This
-      // allows two-way binding with state. Selections should be 
+      // allows two-way binding with state. Selections should be
       // stable across 'split' and 'unified' diff styles.
       // 'start' and 'end' map to the visual line numbers you see in the
       // number column. 'side' and 'endSide' are considered optional.
@@ -203,6 +227,10 @@ export function SingleDiff() {
         onLineSelectionEnd(range: SelectedLineRange | null) {
           console.log('Selection completed:', range);
         },
+
+        // If you pass a \`renderHoverUtility\` method as a top
+        // level prop, the ensures it will will display on hover
+        enableHoverUtility: false,
       }}
     />
   );
@@ -253,8 +281,32 @@ export function SingleDiff() {
         return <CommentThread threadId={annotation.metadata.threadId} />;
       }}
 
+      // You must pass \`enableHoverUtility: true\` to the \`options\`
+      // object below. This allows you to render some UI in the number
+      // column when the user is hovered over the line. This is not a
+      // reactive API, in other words, render is not called every time
+      // you mouse over a new line (by design). You can call
+      // \`getHoveredLine()\` in a click handler to know what
+      // line is hovered.
+      renderHoverUtility={(getHoveredLine): ReactNode => {
+        return (
+          <button
+            onClick={() => {
+              console.log(
+                'you clicked on line:',
+                getHoveredLine().lineNumber,
+                'on side:',
+                getHoveredLine().side // 'additions' | 'deletions'
+              );
+            }}
+          >
+            +
+          </button>
+        );
+      }}
+
       // Programmatically control which lines are selected. This
-      // allows two-way binding with state. Selections should be 
+      // allows two-way binding with state. Selections should be
       // stable across 'split' and 'unified' diff styles.
       // 'start' and 'end' map to the visual line numbers you see in the
       // number column. 'side' and 'endSide' are considered optional.
@@ -396,6 +448,10 @@ export function SingleDiff() {
         onLineSelectionEnd(range: SelectedLineRange | null) {
           console.log('Selection completed:', range);
         },
+
+        // If you pass a \`renderHoverUtility\` method as a top
+        // level prop, the ensures it will will display on hover
+        enableHoverUtility: false,
       }}
     />
   );

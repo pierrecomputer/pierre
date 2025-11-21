@@ -195,6 +195,32 @@ const instance = new FileDiff<ThreadMetadata>({
   onLineSelectionEnd(range: SelectedLineRange | null) {
     console.log('Selection completed:', range);
   },
+
+  // If you pass a \`renderHoverUtility\` method as an option,
+  // this ensures it will will display on hover
+  enableHoverUtility: true,
+
+  // You must pass \`enableHoverUtility: true\` as well to enable 
+  // or disable this functionality. This API allows you to render
+  // some UI in the number column when the user is hovered over
+  // the line. This is not a reactive API, in other words,
+  // render is not called every time you mouse over a new line
+  // (by design). You can call \`getHoveredLine()\` in a click
+  // handler to know what line is hovered.
+  renderHoverUtility(getHoveredLine): HTMLElement {
+    const button = document.createElement('button');
+    button.innerText = '+';
+    button.addEventListener('click', () => {
+      console.log(
+        'you clicked on line:',
+        getHoveredLine().lineNumber,
+        'on side:',
+        getHoveredLine().side // 'additions' | 'deletions'
+      );
+    })
+    return button;
+  }
+
 });
 
 // If you ever want to update the options for an instance, simple call
