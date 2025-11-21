@@ -59,7 +59,10 @@ export interface FileDiffOptions<LAnnotation>
     LineSelectionOptions {
   hunkSeparators?:
     | Exclude<HunkSeparators, 'custom'>
-    | ((hunk: HunkData) => HTMLElement | DocumentFragment);
+    | ((
+        hunk: HunkData,
+        instance: FileDiff<LAnnotation>
+      ) => HTMLElement | DocumentFragment);
   disableFileHeader?: boolean;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
   renderAnnotation?(
@@ -452,7 +455,7 @@ export class FileDiff<LAnnotation = undefined> {
       const element = document.createElement('div');
       element.style.display = 'contents';
       element.slot = hunk.slotName;
-      element.appendChild(hunkSeparators(hunk));
+      element.appendChild(hunkSeparators(hunk, this));
       this.fileContainer.appendChild(element);
       this.customHunkElements.push(element);
     }

@@ -505,19 +505,32 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
           if (lines > 0) {
             const slotName = getHunkSeparatorSlotName(type, hunkIndex);
+            const isChunkedExpansion =
+              expandable && hunk.collapsedBefore > expansionLineCount;
             linesAST.push(
               createSeparator({
                 type: hunkSeparators,
                 content: getModifiedLinesString(lines),
                 expandIndex: expandable ? hunkIndex : undefined,
-                isChunkedExpansion:
-                  expandable && hunk.collapsedBefore > expansionLineCount,
+                isChunkedExpansion,
                 slotName,
                 isFirstHunk,
                 isLastHunk: false,
               })
             );
-            hunkData.push({ slotName, lines, type, expandable });
+            hunkData.push({
+              slotName,
+              hunkIndex,
+              lines,
+              type,
+              expandable: expandable
+                ? {
+                    up: expandable && !isFirstHunk,
+                    down: expandable,
+                    chunked: isChunkedExpansion,
+                  }
+                : undefined,
+            });
           }
         } else if (hunkSeparators === 'metadata' && hunk.hunkSpecs != null) {
           linesAST.push(
@@ -551,19 +564,32 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const lines = fileEnd - (hunkEnd + expandedLines);
         if (lines > 0) {
           const slotName = getHunkSeparatorSlotName(type, hunkIndex + 1);
+          const isChunkedExpansion =
+            expandable && fileEnd - hunkEnd > expansionLineCount;
           linesAST.push(
             createSeparator({
               type: hunkSeparators,
               content: getModifiedLinesString(lines),
               expandIndex: expandable ? hunkIndex + 1 : undefined,
-              isChunkedExpansion:
-                expandable && fileEnd - hunkEnd > expansionLineCount,
+              isChunkedExpansion,
               slotName,
               isFirstHunk: false,
               isLastHunk,
             })
           );
-          hunkData.push({ slotName, lines, type, expandable });
+          hunkData.push({
+            slotName,
+            hunkIndex: hunkIndex + 1,
+            lines,
+            type,
+            expandable: expandable
+              ? {
+                  chunked: isChunkedExpansion,
+                  up: expandable,
+                  down: !isLastHunk && expandable,
+                }
+              : undefined,
+          });
         }
       }
     };

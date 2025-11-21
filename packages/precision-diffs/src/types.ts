@@ -248,9 +248,14 @@ export interface ObservedGridNodes {
 
 export interface HunkData {
   slotName: string;
+  hunkIndex: number;
   lines: number;
   type: 'additions' | 'deletions' | 'unified';
-  expandable: boolean;
+  expandable?: {
+    chunked: boolean;
+    up: boolean;
+    down: boolean;
+  };
 }
 
 export interface ChangeHunk {
