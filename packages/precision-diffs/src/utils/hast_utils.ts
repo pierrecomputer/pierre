@@ -1,6 +1,6 @@
 import type {
-  Element,
   ElementContent,
+  Element as HASTElement,
   Properties,
   Root,
   RootContent,
@@ -49,7 +49,7 @@ export function createHastElement({
   tagName,
   children = [],
   properties = {},
-}: CreateHastElementProps): Element {
+}: CreateHastElementProps): HASTElement {
   return {
     type: 'element',
     tagName,
@@ -94,7 +94,7 @@ export function createSeparator({
   slotName,
   isFirstHunk,
   isLastHunk,
-}: CreateSeparatorProps): Element {
+}: CreateSeparatorProps): HASTElement {
   const children = [];
   if (type === 'metadata' && content != null) {
     children.push(
@@ -180,7 +180,7 @@ export function createIcon({
   width = 16,
   height = 16,
   properties,
-}: CreateIconProps): Element {
+}: CreateIconProps): HASTElement {
   return createHastElement({
     tagName: 'svg',
     properties: { width, height, viewBox: '0 0 16 16', ...properties },
@@ -193,7 +193,7 @@ export function createIcon({
   });
 }
 
-export function createAnnotationElement(span: AnnotationSpan): Element {
+export function createAnnotationElement(span: AnnotationSpan): HASTElement {
   return createHastElement({
     tagName: 'div',
     children: [
@@ -211,7 +211,7 @@ export function createAnnotationElement(span: AnnotationSpan): Element {
   });
 }
 
-export function createEmptyRowBuffer(size: number): Element {
+export function createEmptyRowBuffer(size: number): HASTElement {
   return createHastElement({
     tagName: 'div',
     properties: {
@@ -221,8 +221,10 @@ export function createEmptyRowBuffer(size: number): Element {
   });
 }
 
-export function findCodeElement(nodes: Root | Element): Element | undefined {
-  let firstChild: RootContent | Element | Root | null = nodes.children[0];
+export function findCodeElement(
+  nodes: Root | HASTElement
+): HASTElement | undefined {
+  let firstChild: RootContent | HASTElement | Root | null = nodes.children[0];
   while (firstChild != null) {
     if (firstChild.type === 'element' && firstChild.tagName === 'code') {
       return firstChild;
@@ -237,7 +239,7 @@ export function findCodeElement(nodes: Root | Element): Element | undefined {
 }
 
 export function convertLine(
-  node: Element,
+  node: HASTElement,
   line: number,
   state: SharedRenderState
 ): ElementContent {
@@ -349,7 +351,7 @@ export function createFileHeaderElement({
   highlighter,
   prefix,
   themeType = 'system',
-}: CreateFileHeaderProps): Element {
+}: CreateFileHeaderProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-pjs-header': '',
@@ -393,7 +395,7 @@ function createHeaderElement({
   name,
   prevName,
   iconType,
-}: CreateHeaderElementOptions): Element {
+}: CreateHeaderElementOptions): HASTElement {
   const children: ElementContent[] = [
     createIcon({
       name: getIconForType(iconType),
@@ -435,7 +437,7 @@ function createHeaderElement({
 
 function createMetadataElement(
   fileDiff: FileDiffMetadata | undefined
-): Element {
+): HASTElement {
   const children: ElementContent[] = [];
   if (fileDiff != null) {
     let additions = 0;
@@ -484,7 +486,7 @@ function createMetadataElement(
   });
 }
 
-export function createStyleElement(content: string): Element {
+export function createStyleElement(content: string): HASTElement {
   return createHastElement({
     tagName: 'style',
     children: [createTextNode(content)],

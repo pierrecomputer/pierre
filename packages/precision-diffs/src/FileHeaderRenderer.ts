@@ -1,4 +1,4 @@
-import type { Element } from 'hast';
+import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import { getSharedHighlighter, hasLoadedThemes } from './SharedHighlighter';
@@ -57,10 +57,10 @@ export class FileHeaderRenderer {
 
   fileOrDiff: FileDiffMetadata | FileContents | undefined;
   private queuedRenderFileOrDiff: FileDiffMetadata | FileContents | undefined;
-  private queuedRender: Promise<Element | undefined> | undefined;
+  private queuedRender: Promise<HASTElement | undefined> | undefined;
   async render(
     fileOrDiff: FileDiffMetadata | FileContents
-  ): Promise<Element | undefined> {
+  ): Promise<HASTElement | undefined> {
     this.queuedRenderFileOrDiff = fileOrDiff;
     if (this.queuedRender != null) {
       return this.queuedRender;
@@ -86,7 +86,7 @@ export class FileHeaderRenderer {
   private renderHeader(
     fileOrDiff: FileDiffMetadata | FileContents,
     highlighter: PJSHighlighter
-  ): Element {
+  ): HASTElement {
     this.fileOrDiff = fileOrDiff;
     return createFileHeaderElement({
       ...this.options,
@@ -95,7 +95,7 @@ export class FileHeaderRenderer {
     });
   }
 
-  renderResultToHTML(element: Element): string {
+  renderResultToHTML(element: HASTElement): string {
     return toHtml(element);
   }
 }

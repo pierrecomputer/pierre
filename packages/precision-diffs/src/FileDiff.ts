@@ -1,5 +1,5 @@
 import deepEquals from 'fast-deep-equal';
-import type { Element } from 'hast';
+import type { Element as HASTElement } from 'hast';
 
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
 import { FileHeaderRenderer } from './FileHeaderRenderer';
@@ -533,7 +533,10 @@ export class FileDiff<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
+  private applyHeaderToDOM(
+    headerAST: HASTElement,
+    container: HTMLElement
+  ): void {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
     const newHeader = tempDiv.firstElementChild;

@@ -1,4 +1,4 @@
-import type { Element, ElementContent } from 'hast';
+import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -97,7 +97,7 @@ export interface HunksRenderResult {
   unifiedAST: ElementContent[] | undefined;
   hunkData: HunkData[];
   css: string;
-  preNode: Element;
+  preNode: HASTElement;
   totalLines: number;
 }
 
@@ -361,7 +361,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   renderFullAST(
     result: HunksRenderResult,
     children: ElementContent[] = []
-  ): Element {
+  ): HASTElement {
     if (result.unifiedAST != null) {
       children.push(
         createHastElement({

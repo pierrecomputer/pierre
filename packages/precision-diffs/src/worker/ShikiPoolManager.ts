@@ -1,4 +1,4 @@
-import type { Element, ElementContent } from 'hast';
+import type { ElementContent, Element as HASTElement } from 'hast';
 import { createPreNode } from 'src/utils/createPreNode';
 import { renderFileWithHighlighter } from 'src/utils/renderFileWithHighlighter';
 
@@ -126,7 +126,7 @@ export class ShikiPoolManager {
 
   createPreNode(
     options: Omit<CreatePreWrapperPropertiesProps, 'highlighter' | 'theme'>
-  ): Element | undefined {
+  ): HASTElement | undefined {
     if (this.highlighter == null) {
       return undefined;
     }
