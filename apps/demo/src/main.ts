@@ -123,13 +123,7 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
   const wrap =
     wrapCheckbox instanceof HTMLInputElement ? wrapCheckbox.checked : false;
   let patchIndex = 0;
-  const parentThemeSetting = document.documentElement.dataset.themeType;
-  const themeType =
-    parentThemeSetting === 'dark'
-      ? 'dark'
-      : parentThemeSetting === 'light'
-        ? 'light'
-        : 'system';
+  const themeType = getThemeType();
 
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
@@ -485,23 +479,18 @@ async function DoTheThing() {
   //   name: 'file_old.ts',
   //   contents: FILE_OLD,
   // };
-  const file = {
-    name: 'file_new.ts',
-    contents: FILE_NEW,
-  };
+  const file = { name: 'file_new.ts', contents: FILE_NEW };
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;
 
-  const m = await manager;
+  const _manager = await manager;
 
   console.time('sync render time');
   const fileContainer = document.createElement('file-diff');
   wrapper.appendChild(fileContainer);
   const instance = new File(
-    {
-      theme: DEFAULT_THEMES,
-    },
-    m
+    { theme: DEFAULT_THEMES, themeType: getThemeType() },
+    _manager
   );
 
   instance.render({
@@ -509,6 +498,7 @@ async function DoTheThing() {
     fileContainer,
   });
   console.timeEnd('sync render time');
+  fileInstances.push(instance);
 
   // const m = await manager;
   // console.time('rendertime');
@@ -559,6 +549,7 @@ if (renderFileButton != null) {
     wrapper.appendChild(fileContainer);
     const instance = new File<LineCommentMetadata>({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType: getThemeType(),
       renderAnnotation,
       onLineClick(props) {
         console.log('onLineClick', props);
@@ -609,3 +600,12 @@ workerRenderButton?.addEventListener('click', () => {
   //   workerRenderDiff(patches);
   // })();
 });
+
+function getThemeType() {
+  const parentThemeSetting = document.documentElement.dataset.themeType;
+  return parentThemeSetting === 'dark'
+    ? 'dark'
+    : parentThemeSetting === 'light'
+      ? 'light'
+      : 'system';
+}
