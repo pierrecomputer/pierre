@@ -1,6 +1,4 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
-import { createPreNode } from 'src/utils/createPreNode';
-import { renderFileWithHighlighter } from 'src/utils/renderFileWithHighlighter';
 
 import { getSharedHighlighter } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
@@ -12,11 +10,17 @@ import type {
   PJSThemeNames,
   ThemesType,
 } from '../types';
+import { createPreElement } from '../utils/createPreElement';
 import { getThemes } from '../utils/getThemes';
+import {
+  type CreateFileHeaderElementProps,
+  createFileHeaderElement,
+} from '../utils/hast_utils';
 import {
   type SetupWrapperNodesProps,
   setWrapperProps,
 } from '../utils/html_render_utils';
+import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { WorkerPool } from './WorkerPool';
 import type {
   RenderDiffResult,
@@ -124,25 +128,36 @@ export class ShikiPoolManager {
     });
   }
 
-  createPreNode(
+  createPreElement(
     options: Omit<CreatePreWrapperPropertiesProps, 'highlighter' | 'theme'>
   ): HASTElement | undefined {
     if (this.highlighter == null) {
       return undefined;
     }
-    return createPreNode({
+    return createPreElement({
       ...options,
       theme: this.currentTheme,
       highlighter: this.highlighter,
     });
   }
 
-  setPreAttributes(options: Omit<SetupWrapperNodesProps, 'highlighter'>): void {
+  setPreNodeAttributes(
+    options: Omit<SetupWrapperNodesProps, 'highlighter'>
+  ): void {
     if (this.highlighter == null) return;
     setWrapperProps({
       ...options,
       highlighter: this.highlighter,
     });
+  }
+
+  createHeaderElement(
+    props: Omit<CreateFileHeaderElementProps, 'highlighter'>
+  ): HASTElement | undefined {
+    const { highlighter } = this;
+    return highlighter != null
+      ? createFileHeaderElement({ ...props, highlighter })
+      : undefined;
   }
 
   terminate(): void {

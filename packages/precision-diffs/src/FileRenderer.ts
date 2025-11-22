@@ -1,4 +1,4 @@
-import type { Element, ElementContent } from 'hast';
+import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -16,13 +16,20 @@ import type {
   SupportedLanguages,
   ThemeTypes,
 } from './types';
-import { createPreNode } from './utils/createPreNode';
+import { createPreElement } from './utils/createPreElement';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
-import { createAnnotationElement, createHastElement } from './utils/hast_utils';
-import { setWrapperProps } from './utils/html_render_utils';
+import {
+  createAnnotationElement,
+  createFileHeaderElement,
+  createHastElement,
+} from './utils/hast_utils';
+import {
+  type SetupWrapperNodesProps,
+  setWrapperProps,
+} from './utils/html_render_utils';
 import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
 import type { ShikiPoolManager } from './worker';
 
@@ -33,7 +40,7 @@ type AnnotationLineMap<LAnnotation> = Record<
 
 export interface FileRenderResult {
   codeAST: ElementContent[];
-  preNode: Element;
+  preAST: HASTElement;
   css: string;
   totalLines: number;
 }
@@ -44,9 +51,10 @@ export interface FileRendererOptions extends BaseCodeOptions {
 }
 
 export class FileRenderer<LAnnotation = undefined> {
-  highlighter: PJSHighlighter | undefined;
+  private highlighter: PJSHighlighter | undefined;
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
+  private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
@@ -70,7 +78,6 @@ export class FileRenderer<LAnnotation = undefined> {
     this.mergeOptions({ themeType });
   }
 
-  private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
     this.lineAnnotations = {};
     for (const annotation of lineAnnotations) {
@@ -82,28 +89,24 @@ export class FileRenderer<LAnnotation = undefined> {
 
   cleanUp(): void {
     this.renderCache = undefined;
+    this.highlighter = undefined;
+    this.poolManager = undefined;
   }
 
-  render(
+  renderFile(
     file: FileContents | undefined = this.renderCache?.file
   ): FileRenderResult | undefined {
     if (file == null) {
       return undefined;
     }
-    const ast = ((): ElementContent[] | undefined => {
-      let { renderCache } = this;
-      const ast = this.poolManager?.renderPlainFileToHast(
-        file,
-        this.options.startingLineNumber
-      );
-      renderCache ??= {
-        file,
-        highlighted: false,
-        ast,
-      };
-
+    const ast = (() => {
+      this.renderCache ??= { file, highlighted: false, ast: undefined };
       if (this.poolManager != null) {
-        if (!renderCache.highlighted) {
+        this.renderCache.ast ??= this.poolManager.renderPlainFileToHast(
+          file,
+          this.options.startingLineNumber
+        );
+        if (!this.renderCache.highlighted) {
           const { lang, theme, disableLineNumbers } = this.options;
           // TODO(amadeus): Figure out how to only fire this on a per file
           // basis... (maybe the poolManager can figure it out based on file name
@@ -112,25 +115,55 @@ export class FileRenderer<LAnnotation = undefined> {
             .renderFileToHast(file, { lang, theme, disableLineNumbers })
             .then((results) => this.handleAsyncHighlight(file, results));
         }
-      } else if (renderCache.ast == null) {
-        void this.asyncHighlight(file).then((ast) => {
-          this.handleAsyncHighlight(file, ast);
-        });
+      } else if (this.renderCache.ast == null) {
+        if (this.highlighter != null) {
+          this.renderCache.ast = this.renderFileWithHighlighter(
+            file,
+            this.highlighter
+          );
+          this.renderCache.highlighted = true;
+        } else {
+          void this.asyncHighlight(file).then((ast) => {
+            this.handleAsyncHighlight(file, ast);
+          });
+        }
       }
-
-      this.renderCache = renderCache;
-      return renderCache.ast;
+      return this.renderCache.ast;
     })();
-    const preNode = this.createPreNode(ast?.length ?? 0);
-    if (ast == null || preNode == null) {
+    const preElement = this.createPreElement(ast?.length ?? 0);
+    if (ast == null || preElement == null) {
       return undefined;
     }
-    return this.renderFile(ast, preNode);
+    return this.processFileResult(ast, preElement);
   }
 
-  private createPreNode(totalLines: number): Element | undefined {
+  renderHeader(
+    file: FileContents | undefined = this.renderCache?.file
+  ): HASTElement | undefined {
+    if (file == null) {
+      return undefined;
+    }
     if (this.poolManager != null) {
-      return this.poolManager.createPreNode({
+      return this.poolManager.createHeaderElement({
+        fileOrDiff: file,
+        theme: this.options.theme,
+        themeType: this.options.themeType,
+      });
+    }
+    if (this.highlighter != null) {
+      return createFileHeaderElement({
+        fileOrDiff: file,
+        theme: this.options.theme,
+        themeType: this.options.themeType,
+        highlighter: this.highlighter,
+      });
+    }
+    return undefined;
+  }
+
+  private createPreElement(totalLines: number): HASTElement | undefined {
+    if (this.poolManager != null) {
+      return this.poolManager.createPreElement({
         diffIndicators: 'none',
         disableBackground: true,
         overflow: this.options.overflow,
@@ -140,7 +173,7 @@ export class FileRenderer<LAnnotation = undefined> {
       });
     }
     if (this.highlighter != null) {
-      return createPreNode({
+      return createPreElement({
         highlighter: this.highlighter,
         diffIndicators: 'none',
         disableBackground: true,
@@ -155,11 +188,11 @@ export class FileRenderer<LAnnotation = undefined> {
 
   async asyncRender(file: FileContents): Promise<FileRenderResult | undefined> {
     const ast = await this.asyncHighlight(file);
-    const preNode = this.createPreNode(ast.length);
+    const preNode = this.createPreElement(ast.length);
     if (preNode == null) {
       return undefined;
     }
-    return this.renderFile(ast, preNode);
+    return this.processFileResult(ast, preNode);
   }
 
   private async asyncHighlight(file: FileContents): Promise<ElementContent[]> {
@@ -173,6 +206,13 @@ export class FileRenderer<LAnnotation = undefined> {
     // Lets not attempt to store a reference to highlighter when server rendering
     const highlighter =
       this.highlighter ?? (await this.initializeHighlighter());
+    return this.renderFileWithHighlighter(file, highlighter);
+  }
+
+  private renderFileWithHighlighter(
+    file: FileContents,
+    highlighter: PJSHighlighter
+  ): ElementContent[] {
     const {
       theme,
       startingLineNumber,
@@ -189,14 +229,14 @@ export class FileRenderer<LAnnotation = undefined> {
     });
   }
 
-  private renderFile(
-    ast: ElementContent[],
-    preNode: Element
+  private processFileResult(
+    rawAST: ElementContent[],
+    preAST: HASTElement
   ): FileRenderResult {
     const { startingLineNumber = 1 } = this.options;
     const codeAST: ElementContent[] = [];
     let lineIndex = startingLineNumber;
-    for (const line of ast) {
+    for (const line of rawAST) {
       codeAST.push(line);
       const annotations = this.lineAnnotations[lineIndex];
       if (annotations != null) {
@@ -216,8 +256,8 @@ export class FileRenderer<LAnnotation = undefined> {
 
     return {
       codeAST,
-      preNode,
-      totalLines: ast.length,
+      preAST,
+      totalLines: rawAST.length,
       // FIXME(amadeus): Fix this
       css: '',
     };
@@ -230,7 +270,7 @@ export class FileRenderer<LAnnotation = undefined> {
   renderFullAST(
     result: FileRenderResult,
     children: ElementContent[] = []
-  ): Element {
+  ): HASTElement {
     children.push(
       createHastElement({
         tagName: 'code',
@@ -238,7 +278,7 @@ export class FileRenderer<LAnnotation = undefined> {
         properties: { 'data-code': '' },
       })
     );
-    return { ...result.preNode, children };
+    return { ...result.preAST, children };
   }
 
   renderPartialHTML(
@@ -257,6 +297,7 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
+  // FIXME(amadeus): Remove me, this is mostly around for reference...
   // private createHastOptions(
   //   transformers: ShikiTransformer[],
   //   decorations?: DecorationItem[],
@@ -299,34 +340,26 @@ export class FileRenderer<LAnnotation = undefined> {
     this.onRenderUpdate?.();
   }
 
-  // NOTE(amadeus): This is really jank, figure out how to solve it...
-  setupPreAttributes(pre: HTMLPreElement, totalLines: number): void {
+  // NOTE(amadeus): This feels a bit jank, and something that maybe shouldn't
+  // be on FileRenderer... but it's a quick solution for now.  Basically the
+  // thing that kinda sucks is that it silently fails if we don't have a valid
+  // highlighter or poolManager...
+  applyPreNodeAttributes(pre: HTMLPreElement, totalLines: number): void {
     const { overflow = 'scroll', theme, themeType = 'system' } = this.options;
-    const wrap = overflow === 'wrap';
+    const options: Omit<SetupWrapperNodesProps, 'highlighter'> = {
+      pre,
+      theme,
+      split: false,
+      wrap: overflow === 'wrap',
+      themeType,
+      diffIndicators: 'none',
+      disableBackground: true,
+      totalLines,
+    };
     if (this.poolManager != null) {
-      this.poolManager.setPreAttributes({
-        pre,
-        theme,
-        split: false,
-        wrap,
-        themeType,
-        diffIndicators: 'none',
-        disableBackground: true,
-        totalLines,
-      });
-    }
-    if (this.highlighter != null) {
-      setWrapperProps({
-        pre,
-        highlighter: this.highlighter,
-        theme,
-        split: false,
-        wrap,
-        themeType,
-        diffIndicators: 'none',
-        disableBackground: true,
-        totalLines,
-      });
+      this.poolManager.setPreNodeAttributes(options);
+    } else if (this.highlighter != null) {
+      setWrapperProps({ ...options, highlighter: this.highlighter });
     }
   }
 }

@@ -337,7 +337,7 @@ export function createPreWrapperProperties({
   return properties;
 }
 
-interface CreateFileHeaderProps {
+export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
   theme?: PJSThemeNames | ThemesType;
   highlighter: PJSHighlighter;
@@ -351,7 +351,7 @@ export function createFileHeaderElement({
   highlighter,
   prefix,
   themeType = 'system',
-}: CreateFileHeaderProps): HASTElement {
+}: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-pjs-header': '',

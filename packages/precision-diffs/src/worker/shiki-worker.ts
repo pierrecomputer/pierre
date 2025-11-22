@@ -1,5 +1,4 @@
 import { diffWordsWithSpace } from 'diff';
-import { renderFileWithHighlighter } from 'src/utils/renderFileWithHighlighter';
 
 import { getSharedHighlighter } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
@@ -22,6 +21,7 @@ import {
 } from '../utils/parseDiffDecorations';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { parseLineType } from '../utils/parseLineType';
+import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
   InitializeSuccessResponse,
   InitializeWorkerRequest,

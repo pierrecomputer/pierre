@@ -1,6 +1,7 @@
 import deepEquals from 'fast-deep-equal';
+import type { Element as HASTElement } from 'hast';
+import { toHtml } from 'hast-util-to-html';
 
-import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { type FileRenderResult, FileRenderer } from './FileRenderer';
 import {
   LineSelectionManager,
@@ -15,7 +16,7 @@ import {
   pluckMouseEventOptions,
 } from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
-import { DEFAULT_THEMES } from './constants';
+import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
@@ -69,11 +70,9 @@ export class File<LAnnotation = undefined> {
   private hoverContent: HTMLElement | undefined;
 
   private headerElement: HTMLElement | undefined;
-  // FIXME(amadeus): header needs some work...
-  // private headerMetadata: HTMLElement | undefined;
+  private headerMetadata: HTMLElement | undefined;
 
   private fileRenderer: FileRenderer<LAnnotation>;
-  private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
   private mouseEventManager: MouseEventManager<'file'>;
   private lineSelectionManager: LineSelectionManager;
@@ -93,7 +92,6 @@ export class File<LAnnotation = undefined> {
       this.handleHighlightRender,
       poolManager
     );
-    this.headerRenderer = new FileHeaderRenderer(options);
     this.resizeManager = new ResizeManager();
     this.mouseEventManager = new MouseEventManager(
       'file',
@@ -126,7 +124,6 @@ export class File<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
-    this.headerRenderer.setThemeType(themeType);
     this.fileRenderer.setThemeType(themeType);
 
     if (this.headerElement != null) {
@@ -161,18 +158,11 @@ export class File<LAnnotation = undefined> {
 
   // FIXME(amadeus): Figure this out in an async highlighting world...
   setSelectedLines(range: SelectedLineRange | null): void {
-    // If we have a render in progress, we should wait for it to finish before
-    // attempting the selection
-    // if (this.queuedRender != null) {
-    //   void this.queuedRender.then(() => this.setSelectedLines(range));
-    // } else {
     this.lineSelectionManager.setSelection(range);
-    // }
   }
 
   cleanUp(): void {
     this.fileRenderer.cleanUp();
-    this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.lineSelectionManager.cleanUp();
@@ -251,8 +241,8 @@ export class File<LAnnotation = undefined> {
     if (!forceRender && deepEquals(this.file, file)) {
       return;
     }
-    this.file = file;
 
+    this.file = file;
     this.fileRenderer.setOptions(this.options);
     if (lineAnnotations != null) {
       this.fileRenderer.setLineAnnotations(lineAnnotations);
@@ -261,33 +251,32 @@ export class File<LAnnotation = undefined> {
 
     const { disableFileHeader = false } = this.options;
     if (disableFileHeader) {
-      this.headerRenderer.cleanUp();
       // Remove existing header from DOM
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
       }
-    } else {
-      this.headerRenderer.setOptions(this.options);
     }
 
-    // const headerResult = this.headerRenderer.render(file);
-    const fileResult = this.fileRenderer.render(file);
+    const headerResult = !disableFileHeader
+      ? this.fileRenderer.renderHeader(file)
+      : undefined;
+    const fileResult = this.fileRenderer.renderFile(file);
 
-    fileContainer = this.getOrCreateFileContainer(fileContainer);
+    fileContainer = this.getOrCreateFileContainerNode(
+      fileContainer,
+      containerWrapper
+    );
 
-    if (fileResult == null) {
+    if (fileResult == null && headerResult == null) {
+      // FIXME(amadeus): Probably figure out how to render a skeleton?
       return;
     }
-    // if (headerResult != null) {
-    //   this.applyHeaderToDOM(headerResult, fileContainer);
-    // }
-
+    if (headerResult != null) {
+      this.applyHeaderToDOM(headerResult, fileContainer);
+    }
     if (fileResult != null) {
-      if (containerWrapper != null) {
-        containerWrapper.appendChild(fileContainer);
-      }
-      const pre = this.getOrCreatePre(fileContainer);
+      const pre = this.getOrCreatePreNode(fileContainer);
       this.applyHunksToDOM(fileResult, pre);
       this.renderAnnotations();
       this.renderHoverUtility();
@@ -354,7 +343,7 @@ export class File<LAnnotation = undefined> {
   }
 
   private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
-    this.setPreAttributes(pre, result.totalLines);
+    this.applyPreNodeAttributes(pre, result.totalLines);
     pre.innerHTML = '';
     // Create code elements and insert HTML content
     this.code = createCodeNode();
@@ -371,47 +360,55 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  // FIXME(amadeus): Get header shit sorted out...
-  // private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
-  //   const { file } = this;
-  //   if (file == null) return;
-  //   const tempDiv = document.createElement('div');
-  //   tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
-  //   const newHeader = tempDiv.firstElementChild;
-  //   if (!(newHeader instanceof HTMLElement)) {
-  //     return;
-  //   }
-  //   if (this.headerElement != null) {
-  //     container.shadowRoot?.replaceChild(newHeader, this.headerElement);
-  //   } else {
-  //     container.shadowRoot?.prepend(newHeader);
-  //   }
-  //   this.headerElement = newHeader;
-  //
-  //   if (this.isContainerManaged) return;
-  //
-  //   const { renderCustomMetadata } = this.options;
-  //   if (this.headerMetadata != null) {
-  //     this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
-  //   }
-  //   const content = renderCustomMetadata?.(file) ?? undefined;
-  //   if (content != null) {
-  //     this.headerMetadata = document.createElement('div');
-  //     this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
-  //     if (content instanceof Element) {
-  //       this.headerMetadata.appendChild(content);
-  //     } else {
-  //       this.headerMetadata.innerText = `${content}`;
-  //     }
-  //     container.appendChild(this.headerMetadata);
-  //   }
-  // }
+  private applyHeaderToDOM(
+    headerAST: HASTElement,
+    container: HTMLElement
+  ): void {
+    const { file } = this;
+    if (file == null) return;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = toHtml(headerAST);
+    const newHeader = tempDiv.firstElementChild;
+    if (!(newHeader instanceof HTMLElement)) {
+      return;
+    }
+    if (this.headerElement != null) {
+      container.shadowRoot?.replaceChild(newHeader, this.headerElement);
+    } else {
+      container.shadowRoot?.prepend(newHeader);
+    }
+    this.headerElement = newHeader;
 
-  private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
+    if (this.isContainerManaged) return;
+
+    const { renderCustomMetadata } = this.options;
+    if (this.headerMetadata != null) {
+      this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+    }
+    const content = renderCustomMetadata?.(file) ?? undefined;
+    if (content != null) {
+      this.headerMetadata = document.createElement('div');
+      this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
+      if (content instanceof Element) {
+        this.headerMetadata.appendChild(content);
+      } else {
+        this.headerMetadata.innerText = `${content}`;
+      }
+      container.appendChild(this.headerMetadata);
+    }
+  }
+
+  private getOrCreateFileContainerNode(
+    fileContainer?: HTMLElement,
+    parentNode?: HTMLElement
+  ): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement('file-diff');
+    if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
+      parentNode.appendChild(this.fileContainer);
+    }
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -424,7 +421,7 @@ export class File<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  private getOrCreatePre(container: HTMLElement): HTMLPreElement {
+  private getOrCreatePreNode(container: HTMLElement): HTMLPreElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
@@ -438,7 +435,10 @@ export class File<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private setPreAttributes(pre: HTMLPreElement, totalLines: number): void {
-    this.fileRenderer.setupPreAttributes(pre, totalLines);
+  private applyPreNodeAttributes(
+    pre: HTMLPreElement,
+    totalLines: number
+  ): void {
+    this.fileRenderer.applyPreNodeAttributes(pre, totalLines);
   }
 }
