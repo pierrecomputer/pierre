@@ -118,7 +118,7 @@ code {
 }
 
 .tools-container {
-  position: fixed;
+  position: sticky;
   top: 0;
   width: 100%;
   max-width: 100%;
