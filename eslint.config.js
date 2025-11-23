@@ -40,6 +40,7 @@ export default [
       },
     },
     rules: {
+      'prefer-const': ['error', { destructuring: 'all' }],
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
