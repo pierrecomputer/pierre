@@ -9,7 +9,7 @@ import type {
   SupportedLanguages,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
-import { createWorkerTransformerWithState } from './createWorkerTransformerWithState';
+import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getLineNodes } from './getLineNodes';
@@ -34,7 +34,7 @@ export function renderFileWithHighlighter(
   }: RenderOptions = { startingLineNumber: 1 }
 ): ElementContent[] {
   const { state, transformers } =
-    createWorkerTransformerWithState(disableLineNumbers);
+    createTransformerWithState(disableLineNumbers);
   state.lineInfo = (shikiLineNumber: number) => ({
     type: 'context',
     lineIndex: shikiLineNumber - 1,

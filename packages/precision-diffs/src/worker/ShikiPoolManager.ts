@@ -1,5 +1,4 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
-import { renderDiffWithHighlighter } from 'src/utils/renderDiffWithHighlighter';
 
 import { getSharedHighlighter } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
@@ -21,6 +20,7 @@ import {
   type SetupWrapperNodesProps,
   setWrapperProps,
 } from '../utils/html_render_utils';
+import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { WorkerPool } from './WorkerPool';
 import type {

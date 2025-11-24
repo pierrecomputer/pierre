@@ -1,6 +1,6 @@
 import { diffWordsWithSpace } from 'diff';
-import { DEFAULT_THEMES } from 'src/constants';
 
+import { DEFAULT_THEMES } from '../constants';
 import type {
   CodeToHastOptions,
   DecorationItem,
@@ -18,7 +18,7 @@ import type {
   WorkerRenderFileOptions,
 } from '../worker';
 import { cleanLastNewline } from './cleanLastNewline';
-import { createWorkerTransformerWithState } from './createWorkerTransformerWithState';
+import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getLineNodes } from './getLineNodes';
@@ -390,7 +390,7 @@ function renderTwoFiles({
 }: RenderTwoFilesProps) {
   const oldLang = lang ?? getFiletypeFromFileName(oldFile.name);
   const newLang = lang ?? getFiletypeFromFileName(newFile.name);
-  const { state, transformers } = createWorkerTransformerWithState();
+  const { state, transformers } = createTransformerWithState();
   const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
     return typeof theme === 'string'
       ? {

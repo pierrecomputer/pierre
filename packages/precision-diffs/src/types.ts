@@ -206,7 +206,6 @@ export interface LineInfo {
   altLineNumber?: number;
   lineIndex: number;
   metadataContent?: string;
-  spans?: LineSpans[];
 }
 
 export interface SharedRenderState {
