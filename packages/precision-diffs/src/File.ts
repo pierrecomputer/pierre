@@ -103,9 +103,13 @@ export class File<LAnnotation = undefined> {
   }
 
   private handleHighlightRender = (): void => {
-    if (this.file == null) return;
-    void this.render({ file: this.file, forceRender: true });
+    this.rerender();
   };
+
+  rerender(): void {
+    if (this.file == null) return;
+    this.render({ file: this.file, forceRender: true });
+  }
 
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;

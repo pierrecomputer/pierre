@@ -1,4 +1,5 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
+import { renderDiffWithHighlighter } from 'src/utils/renderDiffWithHighlighter';
 
 import { getSharedHighlighter } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
@@ -23,6 +24,7 @@ import {
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { WorkerPool } from './WorkerPool';
 import type {
+  RenderDiffFilesResult,
   RenderDiffResult,
   RenderFileResult,
   WorkerHighlighterOptions,
@@ -63,7 +65,7 @@ export class ShikiPoolManager {
     return this.pool;
   }
 
-  async renderFileToHast(
+  async renderFileToAST(
     file: FileContents,
     options?: WorkerRenderFileOptions
   ): Promise<ElementContent[]> {
@@ -76,7 +78,7 @@ export class ShikiPoolManager {
     return lines;
   }
 
-  renderPlainFileToHast(
+  renderPlainFileToAST(
     file: FileContents,
     startingLineNumber: number = 1
   ): ElementContent[] | undefined {
@@ -90,13 +92,13 @@ export class ShikiPoolManager {
     });
   }
 
-  async renderDiffToHast(
+  async renderDiffFilesToAST(
     oldFile: FileContents,
     newFile: FileContents,
     options?: WorkerRenderFileOptions
-  ): Promise<RenderDiffResult> {
+  ): Promise<RenderDiffFilesResult> {
     const pool = await this.ensureInitialized();
-    return pool.submitTask<RenderDiffResult>({
+    return pool.submitTask<RenderDiffFilesResult>({
       type: 'diff-files',
       oldFile,
       newFile,
@@ -104,19 +106,19 @@ export class ShikiPoolManager {
     });
   }
 
-  renderPlainDiffToHast(
+  renderPlainDiffToAST(
     oldFile: FileContents,
     newFile: FileContents
   ): RenderDiffResult | undefined {
-    const oldLines = this.renderPlainFileToHast(oldFile, 1);
-    const newLines = this.renderPlainFileToHast(newFile, 1);
+    const oldLines = this.renderPlainFileToAST(oldFile, 1);
+    const newLines = this.renderPlainFileToAST(newFile, 1);
     if (oldLines == null || newLines == null) {
       return undefined;
     }
     return { oldLines, newLines };
   }
 
-  async renderDiffMetadataToHast(
+  async renderDiffMetadataToAST(
     diff: FileDiffMetadata,
     options?: WorkerRenderFileOptions
   ): Promise<RenderDiffResult> {
@@ -126,6 +128,19 @@ export class ShikiPoolManager {
       diff,
       options,
     });
+  }
+
+  renderPlainDiffMetadataToAST(
+    diff: FileDiffMetadata,
+    disableLineNumbers = false
+  ): RenderDiffResult | undefined {
+    return this.highlighter != null
+      ? renderDiffWithHighlighter(diff, this.highlighter, {
+          theme: this.currentTheme,
+          lang: 'text',
+          disableLineNumbers,
+        })
+      : undefined;
   }
 
   createPreElement(

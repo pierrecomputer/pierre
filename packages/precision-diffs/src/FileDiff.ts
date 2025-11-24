@@ -1,8 +1,8 @@
 import deepEquals from 'fast-deep-equal';
 import type { Element as HASTElement } from 'hast';
+import { toHtml } from 'hast-util-to-html';
 
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
-import { FileHeaderRenderer } from './FileHeaderRenderer';
 import {
   LineSelectionManager,
   type LineSelectionOptions,
@@ -17,7 +17,6 @@ import {
 } from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
 import { ScrollSyncManager } from './ScrollSyncManager';
-import { getSharedHighlighter } from './SharedHighlighter';
 import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
@@ -29,19 +28,17 @@ import type {
   FileDiffMetadata,
   HunkData,
   HunkSeparators,
-  PJSHighlighter,
   RenderHeaderMetadataCallback,
   ThemeTypes,
 } from './types';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getThemes } from './utils/getThemes';
 import {
   createAnnotationWrapper,
   createCodeNode,
   createHoverContent,
-  setWrapperProps,
 } from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
+import type { ShikiPoolManager } from './worker';
 
 interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -93,7 +90,6 @@ export class FileDiff<LAnnotation = undefined> {
   private customHunkElements: HTMLElement[] = [];
 
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
-  private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
   private scrollSyncManager: ScrollSyncManager;
   private mouseEventManager: MouseEventManager<'diff'>;
@@ -108,17 +104,21 @@ export class FileDiff<LAnnotation = undefined> {
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    poolManager?: ShikiPoolManager | undefined,
     // NOTE(amadeus): Temp hack while we use this component in a react context
     private isContainerManaged = false
   ) {
-    this.hunksRenderer = new DiffHunksRenderer({
-      ...options,
-      hunkSeparators:
-        typeof options.hunkSeparators === 'function'
-          ? 'custom'
-          : options.hunkSeparators,
-    });
-    this.headerRenderer = new FileHeaderRenderer(options);
+    this.hunksRenderer = new DiffHunksRenderer(
+      {
+        ...options,
+        hunkSeparators:
+          typeof options.hunkSeparators === 'function'
+            ? 'custom'
+            : options.hunkSeparators,
+      },
+      this.handleHighlightRender,
+      poolManager
+    );
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
     this.mouseEventManager = new MouseEventManager(
@@ -135,6 +135,10 @@ export class FileDiff<LAnnotation = undefined> {
       pluckLineSelectionOptions(options)
     );
   }
+
+  private handleHighlightRender = (): void => {
+    this.rerender();
+  };
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
   // * Do we publicly allow merging of options or do we have individualized setters?
@@ -175,7 +179,6 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.mergeOptions({ themeType });
     this.hunksRenderer.setThemeType(themeType);
-    this.headerRenderer.setThemeType(themeType);
 
     if (this.headerElement != null) {
       if (themeType === 'system') {
@@ -207,19 +210,13 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
+  // FIXME(amadeus): Figure this out in an async highlighting world...
   setSelectedLines(range: SelectedLineRange | null): void {
-    // If we have a render in progress, we should wait for it to finish before
-    // attempting the selection
-    if (this.queuedRender != null) {
-      void this.queuedRender.then(() => this.setSelectedLines(range));
-    } else {
-      this.lineSelectionManager.setSelection(range);
-    }
+    this.lineSelectionManager.setSelection(range);
   }
 
   cleanUp(): void {
     this.hunksRenderer.cleanUp();
-    this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
@@ -239,7 +236,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerElement = undefined;
   }
 
-  async hydrate(props: FileDiffRenderProps<LAnnotation>): Promise<void> {
+  hydrate(props: FileDiffRenderProps<LAnnotation>): void {
     if (props.fileContainer == null) {
       throw new Error(
         'FileDiff: you must provide a fileContainer on hydration'
@@ -270,7 +267,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      await this.render(props);
+      this.render(props);
     }
     // Otherwise orchestrate our setup
     else {
@@ -297,8 +294,8 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  async rerender(): Promise<void> {
-    await this.render({
+  rerender(): void {
+    this.render({
       oldFile: this.oldFile,
       newFile: this.newFile,
       fileDiff: this.fileDiff,
@@ -315,18 +312,18 @@ export class FileDiff<LAnnotation = undefined> {
 
   expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
     this.hunksRenderer.expandHunk(hunkIndex, direction);
-    void this.rerender();
+    this.rerender();
   }
 
-  private queuedRender: Promise<void> | undefined;
-  async render(props: FileDiffRenderProps<LAnnotation>): Promise<void> {
-    const {
-      oldFile,
-      newFile,
-      fileDiff,
-      forceRender = false,
-      lineAnnotations,
-    } = props;
+  render({
+    oldFile,
+    newFile,
+    fileDiff,
+    forceRender = false,
+    lineAnnotations,
+    fileContainer,
+    containerWrapper,
+  }: FileDiffRenderProps<LAnnotation>): void {
     // Ideally this would just a quick === check because lineAnnotations is
     // unbounded
     const annotationsChanged =
@@ -348,25 +345,6 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
 
-    const currentRender = (this.queuedRender =
-      this.queuedRender != null
-        ? this.queuedRender.then(() => this._render(props))
-        : this._render(props));
-
-    await currentRender;
-    if (this.queuedRender === currentRender) {
-      this.queuedRender = undefined;
-    }
-  }
-
-  private async _render({
-    oldFile,
-    newFile,
-    fileDiff,
-    fileContainer,
-    lineAnnotations,
-    containerWrapper,
-  }: FileDiffRenderProps<LAnnotation>): Promise<void> {
     this.oldFile = oldFile;
     this.newFile = newFile;
     if (fileDiff != null) {
@@ -395,43 +373,33 @@ export class FileDiff<LAnnotation = undefined> {
     const { disableFileHeader = false } = this.options;
 
     if (disableFileHeader) {
-      this.headerRenderer.cleanUp();
       // Remove existing header from DOM
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
       }
-    } else {
-      const { theme, themeType } = this.options;
-      this.headerRenderer.setOptions({ theme, themeType });
     }
+    fileContainer = this.getOrCreateFileContainer(
+      fileContainer,
+      containerWrapper
+    );
 
-    const [highlighter, headerResult, hunksResult] = await Promise.all([
-      getSharedHighlighter({
-        themes: getThemes(this.options.theme),
-        langs: [],
-      }),
-      !disableFileHeader
-        ? this.headerRenderer.render(this.fileDiff)
-        : undefined,
-      this.hunksRenderer.render(this.fileDiff),
-    ]);
+    const headerResult = !disableFileHeader
+      ? this.hunksRenderer.renderHeader(fileDiff)
+      : undefined;
+    const hunksResult = this.hunksRenderer.render(this.fileDiff);
 
     // If both are null, most likely a cleanup, lets abort
     if (headerResult == null && hunksResult == null) {
       return;
     }
 
-    fileContainer = this.getOrCreateFileContainer(fileContainer);
     if (headerResult != null) {
       this.applyHeaderToDOM(headerResult, fileContainer);
     }
     if (hunksResult != null) {
-      if (containerWrapper != null) {
-        containerWrapper.appendChild(fileContainer);
-      }
       const pre = this.getOrCreatePre(fileContainer);
-      this.applyHunksToDOM(hunksResult, pre, highlighter);
+      this.applyHunksToDOM(hunksResult, pre);
       this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
       this.renderHoverUtility();
@@ -498,11 +466,17 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
+  private getOrCreateFileContainer(
+    fileContainer?: HTMLElement,
+    parentNode?: HTMLElement
+  ): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement('file-diff');
+    if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
+      parentNode.appendChild(this.fileContainer);
+    }
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -538,7 +512,7 @@ export class FileDiff<LAnnotation = undefined> {
     container: HTMLElement
   ): void {
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
+    tempDiv.innerHTML = toHtml(headerAST);
     const newHeader = tempDiv.firstElementChild;
     if (!(newHeader instanceof HTMLElement)) {
       return;
@@ -574,37 +548,6 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private setPreAttributes(
-    pre: HTMLPreElement,
-    highlighter: PJSHighlighter,
-    result: HunksRenderResult
-  ): void {
-    const {
-      diffStyle = 'split',
-      overflow = 'scroll',
-      theme,
-      themeType = 'system',
-      diffIndicators = 'bars',
-      disableBackground = false,
-    } = this.options;
-    const unified = diffStyle === 'unified';
-    const split = unified
-      ? false
-      : result.additionsAST != null && result.deletionsAST != null;
-    const wrap = overflow === 'wrap';
-    setWrapperProps({
-      pre,
-      theme,
-      highlighter,
-      split,
-      wrap,
-      themeType,
-      diffIndicators,
-      disableBackground,
-      totalLines: result.totalLines,
-    });
-  }
-
   private injectUnsafeCSS(): void {
     if (this.fileContainer?.shadowRoot == null) {
       return;
@@ -629,10 +572,14 @@ export class FileDiff<LAnnotation = undefined> {
 
   private applyHunksToDOM(
     result: HunksRenderResult,
-    pre: HTMLPreElement,
-    highlighter: PJSHighlighter
+    pre: HTMLPreElement
   ): void {
-    this.setPreAttributes(pre, highlighter, result);
+    const { diffStyle = 'split' } = this.options;
+    const split =
+      diffStyle === 'unified'
+        ? false
+        : result.additionsAST != null && result.deletionsAST != null;
+    this.applyPreNodeAttributes(pre, split, result.totalLines);
 
     // Clear existing content
     pre.innerHTML = '';
@@ -674,5 +621,13 @@ export class FileDiff<LAnnotation = undefined> {
       this.resizeManager.cleanUp();
       this.scrollSyncManager.cleanUp();
     }
+  }
+
+  private applyPreNodeAttributes(
+    pre: HTMLPreElement,
+    split: boolean,
+    totalLines: number
+  ): void {
+    this.hunksRenderer.applyPreNodeAttributes(pre, split, totalLines);
   }
 }

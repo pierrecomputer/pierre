@@ -102,7 +102,7 @@ export class FileRenderer<LAnnotation = undefined> {
     const ast = (() => {
       this.renderCache ??= { file, highlighted: false, ast: undefined };
       if (this.poolManager != null) {
-        this.renderCache.ast ??= this.poolManager.renderPlainFileToHast(
+        this.renderCache.ast ??= this.poolManager.renderPlainFileToAST(
           file,
           this.options.startingLineNumber
         );
@@ -112,7 +112,7 @@ export class FileRenderer<LAnnotation = undefined> {
           // basis... (maybe the poolManager can figure it out based on file name
           // and file contents probably?)
           void this.poolManager
-            .renderFileToHast(file, { lang, theme, disableLineNumbers })
+            .renderFileToAST(file, { lang, theme, disableLineNumbers })
             .then((results) => this.handleAsyncHighlight(file, results));
         }
       } else if (this.renderCache.ast == null) {
@@ -203,10 +203,8 @@ export class FileRenderer<LAnnotation = undefined> {
     ) {
       this.highlighter = undefined;
     }
-    // Lets not attempt to store a reference to highlighter when server rendering
-    const highlighter =
-      this.highlighter ?? (await this.initializeHighlighter());
-    return this.renderFileWithHighlighter(file, highlighter);
+    this.highlighter ??= await this.initializeHighlighter();
+    return this.renderFileWithHighlighter(file, this.highlighter);
   }
 
   private renderFileWithHighlighter(
@@ -296,33 +294,6 @@ export class FileRenderer<LAnnotation = undefined> {
       })
     );
   }
-
-  // FIXME(amadeus): Remove me, this is mostly around for reference...
-  // private createHastOptions(
-  //   transformers: ShikiTransformer[],
-  //   decorations?: DecorationItem[],
-  //   forceTextLang: boolean = false
-  // ): CodeToHastOptions<PJSThemeNames> {
-  //   const { theme = DEFAULT_THEMES } = this.options;
-  //   if (typeof theme === 'string') {
-  //     return {
-  //       theme,
-  //       cssVariablePrefix: formatCSSVariablePrefix(),
-  //       lang: forceTextLang ? 'text' : this.computedLang,
-  //       defaultColor: false,
-  //       transformers,
-  //       decorations,
-  //     };
-  //   }
-  //   return {
-  //     themes: theme,
-  //     cssVariablePrefix: formatCSSVariablePrefix(),
-  //     lang: forceTextLang ? 'text' : this.computedLang,
-  //     defaultColor: false,
-  //     transformers,
-  //     decorations,
-  //   };
-  // }
 
   async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(

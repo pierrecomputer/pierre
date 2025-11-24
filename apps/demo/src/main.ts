@@ -31,6 +31,20 @@ import {
   renderDiffAnnotation,
 } from './utils/renderAnnotation';
 
+const diffInstances: FileDiff<LineCommentMetadata>[] = [];
+const fileInstances: File<unknown>[] = [];
+
+function cleanupInstances() {
+  for (const instance of diffInstances) {
+    instance.cleanUp();
+  }
+  for (const instance of fileInstances) {
+    instance.cleanUp();
+  }
+  diffInstances.length = 0;
+  fileInstances.length = 0;
+}
+
 let loadingPatch: Promise<string> | undefined;
 async function loadPatchContent() {
   loadingPatch =
@@ -104,17 +118,14 @@ async function handlePreloadDiff() {
   });
 }
 
-const diffInstances: FileDiff<LineCommentMetadata>[] = [];
-function renderDiff(parsedPatches: ParsedPatch[]) {
-  console.log('ZZZZZ - rendering', parsedPatches);
+function renderDiff(parsedPatches: ParsedPatch[], manager?: ShikiPoolManager) {
+  console.log('renderDiff: rendering patches:', parsedPatches);
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;
   window.scrollTo({ top: 0 });
-  for (const instance of diffInstances) {
-    instance.cleanUp();
-  }
-  diffInstances.length = 0;
+  cleanupInstances();
   wrapper.dataset.diff = '';
+  wrapper.innerHTML = '';
 
   const checkbox = document.getElementById('unified') as
     | HTMLInputElement
@@ -133,138 +144,134 @@ function renderDiff(parsedPatches: ParsedPatch[]) {
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
-      const instance = new FileDiff<LineCommentMetadata>({
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        diffStyle: unified ? 'unified' : 'split',
-        overflow: wrap ? 'wrap' : 'scroll',
-        renderAnnotation: renderDiffAnnotation,
-        themeType,
-        enableLineSelection: true,
+      const instance = new FileDiff<LineCommentMetadata>(
+        {
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          diffStyle: unified ? 'unified' : 'split',
+          overflow: wrap ? 'wrap' : 'scroll',
+          renderAnnotation: renderDiffAnnotation,
+          themeType,
+          enableLineSelection: true,
 
-        // Hover Decoration Snippets
-        // enableHoverUtility: true,
-        // renderHoverUtility(getHoveredLine) {
-        //   const el = document.createElement('div');
-        //   el.style.width = '20px';
-        //   el.style.height = '20px';
-        //   el.style.backgroundColor = 'blue';
-        //   el.style.borderRadius = '2px';
-        //   el.style.marginRight = '-10px';
-        //   el.style.textAlign = 'center';
-        //   el.style.color = 'white';
-        //   el.innerText = '+';
-        //   el.addEventListener('click', (event) => {
-        //     event.stopPropagation();
-        //     console.log('ZZZZ - clicked', getHoveredLine());
-        //   });
-        //   el.addEventListener('mousedown', (event) => {
-        //     event.stopPropagation();
-        //   });
-        //   return el;
-        // },
+          // Hover Decoration Snippets
+          // enableHoverUtility: true,
+          // renderHoverUtility(getHoveredLine) {
+          //   const el = document.createElement('div');
+          //   el.style.width = '20px';
+          //   el.style.height = '20px';
+          //   el.style.backgroundColor = 'blue';
+          //   el.style.borderRadius = '2px';
+          //   el.style.marginRight = '-10px';
+          //   el.style.textAlign = 'center';
+          //   el.style.color = 'white';
+          //   el.innerText = '+';
+          //   el.addEventListener('click', (event) => {
+          //     event.stopPropagation();
+          //     console.log('ZZZZ - clicked', getHoveredLine());
+          //   });
+          //   el.addEventListener('mousedown', (event) => {
+          //     event.stopPropagation();
+          //   });
+          //   return el;
+          // },
 
-        // Custom Hunk Separators Tests with expansion properties
-        // expansionLineCount: 10,
-        // hunkSeparators(hunkData, instance) {
-        //   const fragment = document.createDocumentFragment();
-        //   const numCol = document.createElement('div');
-        //   numCol.textContent = `${hunkData.lines}`;
-        //   numCol.style.position = 'sticky';
-        //   numCol.style.left = '0';
-        //   numCol.style.backgroundColor = 'blue';
-        //   numCol.style.zIndex = '2';
-        //   numCol.style.color = 'white';
-        //   fragment.appendChild(numCol);
-        //   const contentCol = document.createElement('div');
-        //   contentCol.textContent = 'unmodified lines';
-        //   contentCol.style.position = 'sticky';
-        //   contentCol.style.width = 'var(--pjs-column-content-width)';
-        //   contentCol.style.left = 'var(--pjs-column-number-width)';
-        //   contentCol.style.backgroundColor = 'blue';
-        //   contentCol.style.color = 'white';
-        //   fragment.appendChild(contentCol);
-        //   const { expandable } = hunkData;
-        //   if (expandable != null) {
-        //     if (expandable.up && expandable.down && !expandable.chunked) {
-        //       const button = document.createElement('button');
-        //       button.innerText = 'both';
-        //       button.addEventListener('click', () => {
-        //         instance.expandHunk(hunkData.hunkIndex, 'both');
-        //       });
-        //       contentCol.appendChild(button);
-        //     } else {
-        //       if (expandable.up) {
-        //         const button = document.createElement('button');
-        //         button.innerText = '^';
-        //         button.addEventListener('click', () => {
-        //           instance.expandHunk(hunkData.hunkIndex, 'up');
-        //         });
-        //         contentCol.appendChild(button);
-        //       }
-        //       if (expandable.down) {
-        //         const button = document.createElement('button');
-        //         button.innerText = 'v';
-        //         button.addEventListener('click', () => {
-        //           instance.expandHunk(hunkData.hunkIndex, 'down');
-        //         });
-        //         contentCol.appendChild(button);
-        //       }
-        //     }
-        //   }
-        //   return fragment;
-        // },
-        // hunkSeparators(hunkData) {
-        //   const wrapper = document.createElement('div');
-        //   wrapper.style.gridColumn = 'span 2';
-        //   const contentCol = document.createElement('div');
-        //   contentCol.textContent = `${hunkData.lines} unmodified lines`;
-        //   contentCol.style.position = 'sticky';
-        //   contentCol.style.width = 'var(--pjs-column-width)';
-        //   contentCol.style.left = '0';
-        //   wrapper.appendChild(contentCol);
-        //   return wrapper;
-        // },
-        // hunkSeparators(hunkData) {
-        //   const wrapper = document.createElement('div');
-        //   wrapper.style.gridColumn = '2 / 3';
-        //   wrapper.textContent = `${hunkData.lines} unmodified lines`;
-        //   wrapper.style.position = 'sticky';
-        //   wrapper.style.width = 'var(--pjs-column-content-width)';
-        //   wrapper.style.left = 'var(--pjs-column-number-width)';
-        //   return wrapper;
-        // },
-        onLineClick(props) {
-          console.log('onLineClick', props);
+          // Custom Hunk Separators Tests with expansion properties
+          // expansionLineCount: 10,
+          // hunkSeparators(hunkData, instance) {
+          //   const fragment = document.createDocumentFragment();
+          //   const numCol = document.createElement('div');
+          //   numCol.textContent = `${hunkData.lines}`;
+          //   numCol.style.position = 'sticky';
+          //   numCol.style.left = '0';
+          //   numCol.style.backgroundColor = 'blue';
+          //   numCol.style.zIndex = '2';
+          //   numCol.style.color = 'white';
+          //   fragment.appendChild(numCol);
+          //   const contentCol = document.createElement('div');
+          //   contentCol.textContent = 'unmodified lines';
+          //   contentCol.style.position = 'sticky';
+          //   contentCol.style.width = 'var(--pjs-column-content-width)';
+          //   contentCol.style.left = 'var(--pjs-column-number-width)';
+          //   contentCol.style.backgroundColor = 'blue';
+          //   contentCol.style.color = 'white';
+          //   fragment.appendChild(contentCol);
+          //   const { expandable } = hunkData;
+          //   if (expandable != null) {
+          //     if (expandable.up && expandable.down && !expandable.chunked) {
+          //       const button = document.createElement('button');
+          //       button.innerText = 'both';
+          //       button.addEventListener('click', () => {
+          //         instance.expandHunk(hunkData.hunkIndex, 'both');
+          //       });
+          //       contentCol.appendChild(button);
+          //     } else {
+          //       if (expandable.up) {
+          //         const button = document.createElement('button');
+          //         button.innerText = '^';
+          //         button.addEventListener('click', () => {
+          //           instance.expandHunk(hunkData.hunkIndex, 'up');
+          //         });
+          //         contentCol.appendChild(button);
+          //       }
+          //       if (expandable.down) {
+          //         const button = document.createElement('button');
+          //         button.innerText = 'v';
+          //         button.addEventListener('click', () => {
+          //           instance.expandHunk(hunkData.hunkIndex, 'down');
+          //         });
+          //         contentCol.appendChild(button);
+          //       }
+          //     }
+          //   }
+          //   return fragment;
+          // },
+          // hunkSeparators(hunkData) {
+          //   const wrapper = document.createElement('div');
+          //   wrapper.style.gridColumn = 'span 2';
+          //   const contentCol = document.createElement('div');
+          //   contentCol.textContent = `${hunkData.lines} unmodified lines`;
+          //   contentCol.style.position = 'sticky';
+          //   contentCol.style.width = 'var(--pjs-column-width)';
+          //   contentCol.style.left = '0';
+          //   wrapper.appendChild(contentCol);
+          //   return wrapper;
+          // },
+          // hunkSeparators(hunkData) {
+          //   const wrapper = document.createElement('div');
+          //   wrapper.style.gridColumn = '2 / 3';
+          //   wrapper.textContent = `${hunkData.lines} unmodified lines`;
+          //   wrapper.style.position = 'sticky';
+          //   wrapper.style.width = 'var(--pjs-column-content-width)';
+          //   wrapper.style.left = 'var(--pjs-column-number-width)';
+          //   return wrapper;
+          // },
+          onLineClick(props) {
+            console.log('onLineClick', props);
+          },
+          onLineNumberClick(props) {
+            console.info('onLineNumberClick', props);
+          },
+          // Super noisy, but for debuggin
+          // onLineEnter(props) {
+          //   console.log('onLineEnter', props.annotationSide, props.lineNumber);
+          // },
+          // onLineLeave(props) {
+          //   console.log('onLineLeave', props.annotationSide, props.lineNumber);
+          // },
+          // __debugMouseEvents: 'click',
         },
-        onLineNumberClick(props) {
-          console.info('onLineNumberClick', props);
-        },
-        // Super noisy, but for debuggin
-        // onLineEnter(props) {
-        //   console.log('onLineEnter', props.annotationSide, props.lineNumber);
-        // },
-        // onLineLeave(props) {
-        //   console.log('onLineLeave', props.annotationSide, props.lineNumber);
-        // },
-        // __debugMouseEvents: 'click',
-      });
+        manager
+      );
 
       const fileContainer = document.createElement('file-diff');
       wrapper.appendChild(fileContainer);
       const start = Date.now();
-      void instance
-        .render({
-          fileDiff,
-          lineAnnotations: fileAnnotations,
-          fileContainer,
-        })
-        .then(() =>
-          console.log(
-            'Time To Render',
-            fileDiff.name.trim(),
-            Date.now() - start
-          )
-        );
+      instance.render({
+        fileDiff,
+        lineAnnotations: fileAnnotations,
+        fileContainer,
+      });
+      console.log('Time To Render', fileDiff.name.trim(), Date.now() - start);
       diffInstances.push(instance);
       hunkIndex++;
     }
@@ -291,19 +298,21 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
     for (const fileDiff of parsedPatch.files) {
       const start = Date.now();
       const prom = poolManager
-        ?.renderDiffMetadataToHast(fileDiff, {
+        ?.renderDiffMetadataToAST(fileDiff, {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
         })
-        .then((result) =>
-          console.log(
-            'Worker Render: rendered file:',
-            fileDiff.name,
-            'lines:',
-            result.newLines.length + result.oldLines.length,
-            'time:',
-            Date.now() - start
-          )
-        );
+        .then((result) => {
+          if (result.hunks == null) {
+            console.log(
+              'Worker Render: rendered file:',
+              fileDiff.name,
+              'lines:',
+              result.newLines.length + result.oldLines.length,
+              'time:',
+              Date.now() - start
+            );
+          }
+        });
       if (prom != null) {
         workerInstances.push(prom);
         if (firstFour.length < 4) {
@@ -350,7 +359,8 @@ const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
   function handleClick() {
     void (async () => {
-      renderDiff(parsedPatches ?? parsePatchFiles(await loadPatchContent()));
+      const m = await manager;
+      renderDiff(parsedPatches ?? parsePatchFiles(await loadPatchContent()), m);
     })();
   }
   loadDiff.addEventListener('click', handleClick);
@@ -365,6 +375,13 @@ if (wrapCheckbox != null) {
     }
     const { checked } = currentTarget;
     for (const instance of diffInstances) {
+      instance.setOptions({
+        ...instance.options,
+        overflow: checked ? 'wrap' : 'scroll',
+      });
+      void instance.rerender();
+    }
+    for (const instance of fileInstances) {
       instance.setOptions({
         ...instance.options,
         overflow: checked ? 'wrap' : 'scroll',
@@ -429,7 +446,8 @@ if (diff2Files != null) {
     bottomWrapper.className = 'buttons';
     const render = document.createElement('button');
     render.innerText = 'Render Diff';
-    render.addEventListener('click', () => {
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    render.addEventListener('click', async () => {
       const oldFile = {
         name: fileOldName.value,
         contents: fileOldContents.value,
@@ -441,7 +459,8 @@ if (diff2Files != null) {
 
       lastWrapper?.parentNode?.removeChild(lastWrapper);
       const parsed = parseDiffFromFile(oldFile, newFile);
-      renderDiff([{ files: [parsed] }]);
+      const m = await manager;
+      renderDiff([{ files: [parsed] }], m);
     });
     bottomWrapper.appendChild(render);
 
@@ -460,7 +479,7 @@ if (diff2Files != null) {
 }
 
 // For quick testing diffs
-// (() => {
+// void (async () => {
 //   const oldFile = {
 //     name: 'file_old.ts',
 //     contents: FILE_OLD,
@@ -469,44 +488,10 @@ if (diff2Files != null) {
 //     name: 'file_new.ts',
 //     contents: FILE_NEW,
 //   };
-//
+//   const m = await manager;
 //   const parsed = parseDiffFromFile(oldFile, newFile);
-//   renderDiff([{ files: [parsed] }]);
+//   renderDiff([{ files: [parsed] }], m);
 // })();
-
-async function DoTheThing() {
-  // const oldFile = {
-  //   name: 'file_old.ts',
-  //   contents: FILE_OLD,
-  // };
-  const file = { name: 'file_new.ts', contents: FILE_NEW };
-  const wrapper = document.getElementById('wrapper');
-  if (wrapper == null) return;
-
-  const _manager = await manager;
-
-  console.time('sync render time');
-  const fileContainer = document.createElement('file-diff');
-  wrapper.appendChild(fileContainer);
-  const instance = new File(
-    { theme: DEFAULT_THEMES, themeType: getThemeType() },
-    _manager
-  );
-
-  instance.render({
-    file,
-    fileContainer,
-  });
-  console.timeEnd('sync render time');
-  fileInstances.push(instance);
-
-  // const m = await manager;
-  // console.time('rendertime');
-  // const result = await m.renderDiffToHast(oldFile, newFile);
-  // console.timeEnd('rendertime');
-  // console.log('result', result);
-  // console.log('==============================================================');
-}
 
 function toggleTheme() {
   const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -539,49 +524,55 @@ function toggleTheme() {
   }
 }
 
-const fileInstances: File<unknown>[] = [];
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
-  renderFileButton.addEventListener('click', () => {
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  renderFileButton.addEventListener('click', async () => {
+    const m = await manager;
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) return;
+    cleanupInstances();
+    wrapper.innerHTML = '';
     const fileContainer = document.createElement('file-diff');
     wrapper.appendChild(fileContainer);
-    const instance = new File<LineCommentMetadata>({
-      theme: { dark: 'pierre-dark', light: 'pierre-light' },
-      themeType: getThemeType(),
-      renderAnnotation,
-      onLineClick(props) {
-        console.log('onLineClick', props);
-      },
-      onLineNumberClick(props) {
-        console.info('onLineNumberClick', props);
-      },
+    const instance = new File<LineCommentMetadata>(
+      {
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: getThemeType(),
+        renderAnnotation,
+        onLineClick(props) {
+          console.log('onLineClick', props);
+        },
+        onLineNumberClick(props) {
+          console.info('onLineNumberClick', props);
+        },
 
-      enableLineSelection: true,
+        enableLineSelection: true,
 
-      // Hover Decoration Snippets
-      // enableHoverUtility: true,
-      // renderHoverUtility(getHoveredLine) {
-      //   const el = document.createElement('div');
-      //   el.style.width = '20px';
-      //   el.style.height = '20px';
-      //   el.style.backgroundColor = 'blue';
-      //   el.style.borderRadius = '2px';
-      //   el.style.marginRight = '-10px';
-      //   el.style.textAlign = 'center';
-      //   el.style.color = 'white';
-      //   el.innerText = '+';
-      //   el.addEventListener('click', (event) => {
-      //     event.stopPropagation();
-      //     console.log('ZZZZ - clicked', getHoveredLine());
-      //   });
-      //   el.addEventListener('mousedown', (event) => {
-      //     event.stopPropagation();
-      //   });
-      //   return el;
-      // },
-    });
+        // Hover Decoration Snippets
+        // enableHoverUtility: true,
+        // renderHoverUtility(getHoveredLine) {
+        //   const el = document.createElement('div');
+        //   el.style.width = '20px';
+        //   el.style.height = '20px';
+        //   el.style.backgroundColor = 'blue';
+        //   el.style.borderRadius = '2px';
+        //   el.style.marginRight = '-10px';
+        //   el.style.textAlign = 'center';
+        //   el.style.color = 'white';
+        //   el.innerText = '+';
+        //   el.addEventListener('click', (event) => {
+        //     event.stopPropagation();
+        //     console.log('ZZZZ - clicked', getHoveredLine());
+        //   });
+        //   el.addEventListener('mousedown', (event) => {
+        //     event.stopPropagation();
+        //   });
+        //   return el;
+        // },
+      },
+      m
+    );
 
     void instance.render({
       file: { name: 'main.tsx', contents: FILE_NEW },
@@ -594,11 +585,10 @@ if (renderFileButton != null) {
 
 const workerRenderButton = document.getElementById('worker-load-diff');
 workerRenderButton?.addEventListener('click', () => {
-  void DoTheThing();
-  // void (async () => {
-  //   const patches = parsePatchFiles(await loadPatchContent());
-  //   workerRenderDiff(patches);
-  // })();
+  void (async () => {
+    const patches = parsePatchFiles(await loadPatchContent());
+    workerRenderDiff(patches);
+  })();
 });
 
 function getThemeType() {

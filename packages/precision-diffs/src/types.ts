@@ -10,6 +10,8 @@ import type {
   ThemedToken,
 } from 'shiki';
 
+import type { RenderDiffResult } from './worker';
+
 export interface FileContents {
   name: string;
   contents: string;
@@ -291,4 +293,10 @@ export interface RenderedFileASTCache {
   file: FileContents;
   highlighted: boolean;
   ast: ElementContent[] | undefined;
+}
+
+export interface RenderedDiffASTCache {
+  diff: FileDiffMetadata;
+  highlighted: boolean;
+  ast: RenderDiffResult | undefined;
 }

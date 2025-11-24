@@ -46,7 +46,7 @@ export function useFileDiffInstance<LAnnotation>({
       }
       // FIXME: Ideally we don't use FileDiffUI here, and instead amalgamate
       // the renderers manually
-      instanceRef.current = new FileDiff(options, true);
+      instanceRef.current = new FileDiff(options, undefined, true);
       void instanceRef.current.hydrate({
         fileDiff,
         oldFile,

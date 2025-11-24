@@ -54,9 +54,18 @@ export interface RenderFileResult {
   lines: ElementContent[];
 }
 
-export interface RenderDiffResult {
+export type RenderDiffResult = RenderDiffFilesResult | RenderDiffHunksResult;
+
+export interface RenderDiffFilesResult {
   oldLines: ElementContent[];
   newLines: ElementContent[];
+  hunks?: undefined;
+}
+
+export interface RenderDiffHunksResult {
+  hunks: RenderDiffFilesResult[];
+  oldLines?: undefined;
+  newLines?: undefined;
 }
 
 export interface RenderFileSuccessResponse {

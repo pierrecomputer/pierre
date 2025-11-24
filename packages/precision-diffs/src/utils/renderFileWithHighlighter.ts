@@ -42,14 +42,21 @@ export function renderFileWithHighlighter(
   });
   const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
     if (typeof theme === 'string') {
-      return { lang, ...hastOptions, theme, transformers };
+      return {
+        ...hastOptions,
+        lang,
+        theme,
+        transformers,
+        defaultColor: false,
+        cssVariablePrefix: formatCSSVariablePrefix(),
+      };
     }
     return {
-      lang,
       ...hastOptions,
-      defaultColor: false,
+      lang,
       themes: theme,
       transformers,
+      defaultColor: false,
       cssVariablePrefix: formatCSSVariablePrefix(),
     };
   })();

@@ -17,6 +17,7 @@ import type {
   Hunk,
   ParsedPatch,
 } from '../types';
+import { parseLineType } from './parseLineType';
 
 function processPatch(data: string): ParsedPatch {
   const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
@@ -136,15 +137,16 @@ function processPatch(data: string): ParsedPatch {
         continue;
       } else {
         let currentContent: ContextContent | ChangeContent | undefined;
-        for (const line of lines) {
-          if (line[0] === '+') {
+        for (const rawLine of lines) {
+          const { line, type } = parseLineType(rawLine);
+          if (type === 'addition') {
             if (currentContent == null || currentContent.type !== 'change') {
               currentContent = createContentGroup('change');
               hunkContent.push(currentContent);
             }
             currentContent.additions.push(line);
             additionLines++;
-          } else if (line[0] === '-') {
+          } else if (type === 'deletion') {
             if (currentContent == null || currentContent.type !== 'change') {
               currentContent = createContentGroup('change');
               hunkContent.push(currentContent);
