@@ -1,6 +1,5 @@
 import type { FileDiffOptions } from '../../src/FileDiff';
 import { DiffHunksRenderer } from '../DiffHunksRenderer';
-import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import type {
   DiffLineAnnotation,
   FileContents,
@@ -43,7 +42,6 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
         ? 'custom'
         : options?.hunkSeparators,
   });
-  const fileHeader = new FileHeaderRenderer(options);
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {
@@ -51,8 +49,10 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
   }
 
   const [headerResult, hunkResult] = await Promise.all([
-    !disableFileHeader ? fileHeader.render(fileDiff) : undefined,
-    diffHunksRenderer.render(fileDiff),
+    !disableFileHeader
+      ? diffHunksRenderer.asyncRenderHeader(fileDiff)
+      : undefined,
+    diffHunksRenderer.asyncRender(fileDiff),
   ]);
   if (hunkResult == null) {
     throw new Error('Failed to render file diff');

@@ -921,7 +921,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  renderHeader(diff: FileDiffMetadata | undefined): HASTElement | undefined {
+  renderHeader(
+    diff: FileDiffMetadata | undefined,
+    highlighter: PJSHighlighter | undefined = this.highlighter
+  ): HASTElement | undefined {
     if (diff == null) {
       return undefined;
     }
@@ -932,15 +935,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         themeType: this.options.themeType,
       });
     }
-    if (this.highlighter != null) {
+    if (highlighter != null) {
       return createFileHeaderElement({
         fileOrDiff: diff,
         theme: this.options.theme,
         themeType: this.options.themeType,
-        highlighter: this.highlighter,
+        highlighter,
       });
     }
     return undefined;
+  }
+
+  async asyncRenderHeader(
+    diff: FileDiffMetadata | undefined
+  ): Promise<HASTElement | undefined> {
+    this.highlighter ??= await this.initializeHighlighter();
+    return this.renderHeader(diff, this.highlighter);
   }
 
   applyPreNodeAttributes(

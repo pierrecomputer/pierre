@@ -1,7 +1,6 @@
 export * from './DiffHunksRenderer';
 export * from './File';
 export * from './FileDiff';
-export * from './FileHeaderRenderer';
 export * from './FileStream';
 export * from './LineSelectionManager';
 export * from './MouseEventManager';

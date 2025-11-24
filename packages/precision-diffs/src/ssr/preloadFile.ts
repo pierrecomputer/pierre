@@ -1,5 +1,4 @@
 import type { FileOptions } from '../../src/File';
-import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import { FileRenderer } from '../FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import { createStyleElement } from '../utils/hast_utils';
@@ -26,7 +25,6 @@ export async function preloadFile<LAnnotation = undefined>({
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
   const { disableFileHeader = false } = options ?? {};
   const fileRenderer = new FileRenderer<LAnnotation>(options);
-  const fileHeader = new FileHeaderRenderer(options);
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {
@@ -34,7 +32,7 @@ export async function preloadFile<LAnnotation = undefined>({
   }
 
   const [headerResult, fileResult] = await Promise.all([
-    !disableFileHeader ? fileHeader.render(file) : undefined,
+    !disableFileHeader ? fileRenderer.asyncRenderHeader(file) : undefined,
     fileRenderer.asyncRender(file),
   ]);
   if (fileResult == null) {

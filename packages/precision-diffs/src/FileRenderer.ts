@@ -138,7 +138,8 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   renderHeader(
-    file: FileContents | undefined = this.renderCache?.file
+    file: FileContents | undefined = this.renderCache?.file,
+    highlighter: PJSHighlighter | undefined = this.highlighter
   ): HASTElement | undefined {
     if (file == null) {
       return undefined;
@@ -150,15 +151,22 @@ export class FileRenderer<LAnnotation = undefined> {
         themeType: this.options.themeType,
       });
     }
-    if (this.highlighter != null) {
+    if (highlighter != null) {
       return createFileHeaderElement({
         fileOrDiff: file,
         theme: this.options.theme,
         themeType: this.options.themeType,
-        highlighter: this.highlighter,
+        highlighter,
       });
     }
     return undefined;
+  }
+
+  async asyncRenderHeader(
+    diff: FileContents | undefined
+  ): Promise<HASTElement | undefined> {
+    this.highlighter ??= await this.initializeHighlighter();
+    return this.renderHeader(diff, this.highlighter);
   }
 
   private createPreElement(totalLines: number): HASTElement | undefined {
