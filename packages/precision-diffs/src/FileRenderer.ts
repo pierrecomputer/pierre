@@ -91,6 +91,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache = undefined;
     this.highlighter = undefined;
     this.poolManager = undefined;
+    this.onRenderUpdate = undefined;
   }
 
   renderFile(
@@ -319,6 +320,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   handleAsyncHighlight(file: FileContents, results: ElementContent[]): void {
+    if (this.poolManager == null) return;
     this.renderCache = {
       file,
       highlighted: true,

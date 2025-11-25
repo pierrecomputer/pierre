@@ -3,13 +3,13 @@
 import {
   type ShikiPoolManager,
   type WorkerHighlighterOptions,
-  setupWorkerPoolSingleton,
+  getOrCreateWorkerPoolSingleton,
 } from '@pierre/precision-diffs/worker';
 
-export async function createWorkerAPI(
+export function createWorkerAPI(
   highlighterOptions: WorkerHighlighterOptions
-): Promise<ShikiPoolManager> {
-  return await setupWorkerPoolSingleton({
+): ShikiPoolManager {
+  return getOrCreateWorkerPoolSingleton({
     poolOptions: {
       workerFactory() {
         return new Worker(

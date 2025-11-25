@@ -112,6 +112,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
+    this.poolManager = undefined;
+    this.onRenderUpdate = undefined;
   }
 
   setOptions(options: BaseDiffOptions): void {
@@ -321,6 +323,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private handleAsyncHighlight(diff: FileDiffMetadata, ast: RenderDiffResult) {
+    if (this.poolManager == null) return;
     this.renderCache = {
       diff,
       highlighted: true,

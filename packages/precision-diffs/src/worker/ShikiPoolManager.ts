@@ -1,6 +1,6 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
-import { getSharedHighlighter } from '../SharedHighlighter';
+import { getSharedHighlighter, hasLoadedThemes } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
 import type {
   CreatePreWrapperPropertiesProps,
@@ -37,6 +37,7 @@ export class ShikiPoolManager {
   private pool: WorkerPool;
   private highlighter: PJSHighlighter | undefined;
   private currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
+  private initialized: Promise<void> | boolean = false;
 
   constructor(
     private options: WorkerPoolOptions,
@@ -46,31 +47,56 @@ export class ShikiPoolManager {
     this.pool = new WorkerPool(this.options, this.highlighterOptions);
   }
 
-  async initialize(): Promise<this> {
-    this.currentTheme = this.highlighterOptions.theme;
-    const [highlighter] = await Promise.all([
-      getSharedHighlighter({
-        themes: getThemes(this.currentTheme),
-        preferWasmHighlighter: this.highlighterOptions.preferWasmHighlighter,
+  async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
+    if (hasLoadedThemes(getThemes(theme)) && this.highlighter != null) {
+      this.currentTheme = theme;
+    } else {
+      this.highlighter = await getSharedHighlighter({
+        themes: getThemes(theme),
         langs: ['text'],
-      }),
-      this.ensureInitialized(),
-    ]);
-    this.highlighter = highlighter;
-    return this;
+      });
+      this.currentTheme = theme;
+    }
   }
 
-  private async ensureInitialized(): Promise<WorkerPool> {
-    await this.pool.initialize();
-    return this.pool;
+  isInitialized(): boolean {
+    return this.initialized === true;
+  }
+
+  async initialize(): Promise<void> {
+    if (this.initialized === true) {
+      return;
+    } else if (this.initialized === false) {
+      this.initialized = new Promise((resolve) => {
+        void (async () => {
+          const [highlighter] = await Promise.all([
+            getSharedHighlighter({
+              themes: getThemes(this.currentTheme),
+              preferWasmHighlighter:
+                this.highlighterOptions.preferWasmHighlighter,
+              langs: ['text'],
+            }),
+            this.pool.initialize(),
+          ]);
+          this.currentTheme = this.highlighterOptions.theme;
+          this.highlighter = highlighter;
+          this.initialized = true;
+          resolve();
+        })();
+      });
+    } else {
+      return this.initialized;
+    }
   }
 
   async renderFileToAST(
     file: FileContents,
     options: WorkerRenderFileOptions
   ): Promise<ElementContent[]> {
-    const pool = await this.ensureInitialized();
-    const { lines } = await pool.submitTask<RenderFileResult>({
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
+    const { lines } = await this.pool.submitTask<RenderFileResult>({
       type: 'file',
       file,
       options,
@@ -83,6 +109,7 @@ export class ShikiPoolManager {
     startingLineNumber: number = 1
   ): ElementContent[] | undefined {
     if (this.highlighter == null) {
+      void this.initialize();
       return undefined;
     }
     return renderFileWithHighlighter(file, this.highlighter, {
@@ -98,8 +125,10 @@ export class ShikiPoolManager {
     newFile: FileContents,
     options: WorkerRenderFileOptions
   ): Promise<RenderDiffFilesResult> {
-    const pool = await this.ensureInitialized();
-    return pool.submitTask<RenderDiffFilesResult>({
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
+    return this.pool.submitTask<RenderDiffFilesResult>({
       type: 'diff-files',
       oldFile,
       newFile,
@@ -123,8 +152,10 @@ export class ShikiPoolManager {
     diff: FileDiffMetadata,
     options: WorkerRenderFileOptions
   ): Promise<RenderDiffResult> {
-    const pool = await this.ensureInitialized();
-    return pool.submitTask<RenderDiffResult>({
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
+    return this.pool.submitTask<RenderDiffResult>({
       type: 'diff-metadata',
       diff,
       options,
@@ -149,6 +180,7 @@ export class ShikiPoolManager {
     options: Omit<CreatePreWrapperPropertiesProps, 'highlighter' | 'theme'>
   ): HASTElement | undefined {
     if (this.highlighter == null) {
+      void this.initialize();
       return undefined;
     }
     return createPreElement({
@@ -161,7 +193,10 @@ export class ShikiPoolManager {
   setPreNodeAttributes(
     options: Omit<SetupWrapperNodesProps, 'highlighter'>
   ): void {
-    if (this.highlighter == null) return;
+    if (this.highlighter == null) {
+      void this.initialize();
+      return;
+    }
     setWrapperProps({
       ...options,
       highlighter: this.highlighter,

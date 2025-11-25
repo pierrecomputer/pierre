@@ -104,7 +104,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    poolManager?: ShikiPoolManager | undefined,
+    private poolManager?: ShikiPoolManager | undefined,
     // NOTE(amadeus): Temp hack while we use this component in a react context
     private isContainerManaged = false
   ) {
@@ -117,7 +117,7 @@ export class FileDiff<LAnnotation = undefined> {
             : options.hunkSeparators,
       },
       this.handleHighlightRender,
-      poolManager
+      this.poolManager
     );
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
@@ -137,6 +137,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private handleHighlightRender = (): void => {
+    if (this.poolManager == null) return;
     this.rerender();
   };
 
@@ -221,6 +222,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.lineSelectionManager.cleanUp();
+    this.poolManager = undefined;
 
     // Clean up the data
     this.fileDiff = undefined;
@@ -403,6 +405,8 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
       this.renderHoverUtility();
+    } else if (this.poolManager != null && !this.poolManager.isInitialized()) {
+      void this.poolManager.initialize().then(() => this.rerender());
     }
   }
 

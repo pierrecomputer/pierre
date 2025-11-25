@@ -59,18 +59,11 @@ async function loadPatchContent() {
 
 let poolManager: ShikiPoolManager | undefined;
 // Create worker API - helper handles worker creation automatically!
-const manager = (async () => {
-  const workerInitializedStart = Date.now();
-  const manager = await createWorkerAPI({
+const manager = (() => {
+  const manager = createWorkerAPI({
     theme: DEFAULT_THEMES,
     langs: ['typescript', 'tsx'],
   });
-  console.log(
-    'Worker pool initialized!',
-    manager.getStats(),
-    'in',
-    `${Date.now() - workerInitializedStart}ms`
-  );
 
   // @ts-expect-error bcuz
   window.__POOL = manager;
@@ -360,8 +353,10 @@ const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
   function handleClick() {
     void (async () => {
-      const m = await manager;
-      renderDiff(parsedPatches ?? parsePatchFiles(await loadPatchContent()), m);
+      renderDiff(
+        parsedPatches ?? parsePatchFiles(await loadPatchContent()),
+        manager
+      );
     })();
   }
   loadDiff.addEventListener('click', handleClick);
@@ -447,8 +442,7 @@ if (diff2Files != null) {
     bottomWrapper.className = 'buttons';
     const render = document.createElement('button');
     render.innerText = 'Render Diff';
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    render.addEventListener('click', async () => {
+    render.addEventListener('click', () => {
       const oldFile = {
         name: fileOldName.value,
         contents: fileOldContents.value,
@@ -460,8 +454,7 @@ if (diff2Files != null) {
 
       lastWrapper?.parentNode?.removeChild(lastWrapper);
       const parsed = parseDiffFromFile(oldFile, newFile);
-      const m = await manager;
-      renderDiff([{ files: [parsed] }], m);
+      renderDiff([{ files: [parsed] }], manager);
     });
     bottomWrapper.appendChild(render);
 
@@ -480,7 +473,7 @@ if (diff2Files != null) {
 }
 
 // For quick testing diffs
-// void (async () => {
+// (() => {
 //   const oldFile = {
 //     name: 'file_old.ts',
 //     contents: FILE_OLD,
@@ -489,9 +482,8 @@ if (diff2Files != null) {
 //     name: 'file_new.ts',
 //     contents: FILE_NEW,
 //   };
-//   const m = await manager;
 //   const parsed = parseDiffFromFile(oldFile, newFile);
-//   renderDiff([{ files: [parsed] }], m);
+//   renderDiff([{ files: [parsed] }], manager);
 // })();
 
 function toggleTheme() {
@@ -527,9 +519,7 @@ function toggleTheme() {
 
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  renderFileButton.addEventListener('click', async () => {
-    const m = await manager;
+  renderFileButton.addEventListener('click', () => {
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) return;
     cleanupInstances();
@@ -572,7 +562,7 @@ if (renderFileButton != null) {
         //   return el;
         // },
       },
-      m
+      manager
     );
 
     void instance.render({

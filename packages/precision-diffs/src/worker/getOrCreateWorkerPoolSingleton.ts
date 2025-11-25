@@ -8,15 +8,11 @@ export interface SetupWorkerPoolProps {
   highlighterOptions: WorkerHighlighterOptions;
 }
 
-export async function setupWorkerPoolSingleton({
+export function getOrCreateWorkerPoolSingleton({
   poolOptions,
   highlighterOptions,
-}: SetupWorkerPoolProps): Promise<ShikiPoolManager> {
-  // FIXME(amadeus): We should probably do some shenans here to allow us to
-  // update/preload themes and what not
+}: SetupWorkerPoolProps): ShikiPoolManager {
   managerSingleton ??= new ShikiPoolManager(poolOptions, highlighterOptions);
-  return await managerSingleton.initialize();
+  void managerSingleton.initialize();
+  return managerSingleton;
 }
-
-// NOTE(amadeus): Might be slick to have some getter in here that has stuff
-// just automatically use the singleton if it exists?

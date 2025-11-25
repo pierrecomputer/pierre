@@ -84,13 +84,13 @@ export class File<LAnnotation = undefined> {
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    poolManager?: ShikiPoolManager | undefined,
+    private poolManager?: ShikiPoolManager | undefined,
     private isContainerManaged = false
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(
       options,
       this.handleHighlightRender,
-      poolManager
+      this.poolManager
     );
     this.resizeManager = new ResizeManager();
     this.mouseEventManager = new MouseEventManager(
@@ -103,6 +103,7 @@ export class File<LAnnotation = undefined> {
   }
 
   private handleHighlightRender = (): void => {
+    if (this.poolManager == null) return;
     this.rerender();
   };
 
@@ -170,6 +171,7 @@ export class File<LAnnotation = undefined> {
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.lineSelectionManager.cleanUp();
+    this.poolManager = undefined;
 
     // Clean up the data
     this.file = undefined;
@@ -284,6 +286,8 @@ export class File<LAnnotation = undefined> {
       this.applyHunksToDOM(fileResult, pre);
       this.renderAnnotations();
       this.renderHoverUtility();
+    } else if (this.poolManager != null && !this.poolManager.isInitialized()) {
+      void this.poolManager.initialize().then(() => this.rerender());
     }
   }
 
