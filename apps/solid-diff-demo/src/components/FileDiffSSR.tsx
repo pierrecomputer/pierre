@@ -53,8 +53,12 @@ export function FileDiffSSR(props: FileDiffSSRProps) {
     // Don't call hydrate() - that would re-render content and cause duplication.
     // Instead, just set the fileContainer reference to attach event handlers.
     fileDiffInstance = new FileDiff(props.options ?? {}, true);
-    // @ts-expect-error - fileContainer is private but needed for SSR hydration
-    fileDiffInstance.fileContainer = fileDiffRef;
+
+    fileDiffInstance.hydrate({
+      oldFile: props.oldFile,
+      newFile: props.newFile,
+      fileContainer: fileDiffRef,
+    });
 
     // Hydrate annotation slots with interactive SolidJS components
     if (props.annotations.length > 0 && props.renderAnnotation != null) {
@@ -100,9 +104,10 @@ export function FileDiffSSR(props: FileDiffSSRProps) {
         {isServer && (
           <>
             {/* Declarative Shadow DOM - browsers parse this and create a shadow root */}
-            <template shadowrootmode="open">
-              <div innerHTML={props.preloadedHTML} />
-            </template>
+            <template
+              shadowrootmode="open"
+              innerHTML={props.preloadedHTML}
+            ></template>
             {/* Render static annotation slots on server.
                 Client will clear these and mount interactive components. */}
             <For each={props.annotations}>
