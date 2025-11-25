@@ -1,6 +1,6 @@
 {
   "name": "@pierre/precision-diffs",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "type": "module",
   "license": "apache-2.0",
   "scripts": {
