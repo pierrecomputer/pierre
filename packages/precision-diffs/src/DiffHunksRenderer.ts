@@ -16,7 +16,6 @@ import type {
   FileDiffMetadata,
   Hunk,
   HunkData,
-  HunkSeparators,
   PJSHighlighter,
   RenderedDiffASTCache,
   SupportedLanguages,
@@ -47,6 +46,16 @@ const FULLY_EXPANDED = {
   fromStart: Infinity,
   fromEnd: Infinity,
 };
+
+interface PushHunkSeparatorProps {
+  type: 'additions' | 'deletions' | 'unified';
+  linesAST: ElementContent[];
+  hunkIndex: number;
+  collapsedLines: number;
+  chunked: boolean;
+  isFirstHunk: boolean;
+  isLastHunk: boolean;
+}
 
 interface RenderHunkProps {
   ast: RenderDiffResult;
@@ -359,6 +368,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     })();
     let lineIndex = 0;
     for (const hunk of hunks) {
+      lineIndex += hunk.collapsedBefore;
       this.renderHunks({
         ast,
         hunk,
@@ -495,7 +505,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { hunkSeparators, expansionLineCount, expandUnchanged, diffStyle } =
       this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
-    const expandable = ast.hunks == null;
+    const expandable =
+      ast.hunks == null && ast.newLines.length > 0 && ast.oldLines.length > 0;
     let additionLineNumber = hunk.additionStart - 1;
     let deletionLineNumber = hunk.deletionStart - 1;
 
@@ -509,69 +520,112 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           (preExpandedRegion?.fromStart ?? 0))
       : 0;
 
+    function pushHunkSeparator({
+      type,
+      linesAST,
+      hunkIndex,
+      chunked,
+      collapsedLines,
+      isFirstHunk,
+      isLastHunk,
+    }: PushHunkSeparatorProps) {
+      if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
+        const slotName = getHunkSeparatorSlotName(type, hunkIndex);
+        linesAST.push(
+          createSeparator({
+            type: hunkSeparators,
+            content: getModifiedLinesString(collapsedLines),
+            expandIndex: expandable ? hunkIndex : undefined,
+            chunked,
+            slotName,
+            isFirstHunk,
+            isLastHunk,
+          })
+        );
+        hunkData.push({
+          slotName,
+          hunkIndex,
+          lines: collapsedLines,
+          type,
+          expandable: expandable
+            ? {
+                up: expandable && !isFirstHunk,
+                down: expandable,
+                chunked,
+              }
+            : undefined,
+        });
+      } else if (hunkSeparators === 'metadata' && hunk?.hunkSpecs != null) {
+        linesAST.push(
+          createSeparator({
+            type: 'metadata',
+            content: hunk.hunkSpecs,
+            isFirstHunk,
+            isLastHunk,
+          })
+        );
+      } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
+        linesAST.push(
+          createSeparator({ type: 'simple', isFirstHunk, isLastHunk: false })
+        );
+      }
+    }
+
     // Push hunk separator if necessary
     if (collapsedLines > 0) {
-      const isChunkedExpansion =
-        expandable && hunk.collapsedBefore > expansionLineCount;
+      const chunked = expandable && hunk.collapsedBefore > expansionLineCount;
       if (unified) {
         pushHunkSeparator({
           type: 'unified',
           linesAST: unifiedAST,
-          hunkSeparators,
           hunkIndex,
-          expandable,
-          isChunkedExpansion,
+          chunked,
           collapsedLines,
-          hunk,
           isFirstHunk,
           isLastHunk: false,
-          hunkData,
         });
       } else {
         pushHunkSeparator({
           type: 'deletions',
           linesAST: deletionsAST,
-          hunkSeparators,
           hunkIndex,
-          expandable,
           collapsedLines,
-          isChunkedExpansion,
-          hunk,
+          chunked,
           isFirstHunk,
           isLastHunk: false,
-          hunkData,
         });
         pushHunkSeparator({
           type: 'additions',
           linesAST: additionsAST,
-          hunkSeparators,
           hunkIndex,
-          expandable,
           collapsedLines,
-          isChunkedExpansion,
-          hunk,
+          chunked,
           isFirstHunk,
           isLastHunk: false,
-          hunkData,
         });
       }
     }
 
+    // Render pre-expanded content if necessary
     if (
       preExpandedRegion != null &&
       ast.hunks == null &&
-      preExpandedRegion.fromEnd > 0
+      preExpandedRegion.fromEnd > 0 &&
+      ((isFirstHunk && expandUnchanged) ||
+        // If we already expanded the collapsed rows from the iteration before,
+        // there's no need to do anything
+        hunk.collapsedBefore - preExpandedRegion.fromStart > 0)
     ) {
       const { expandAdditionStart, expandDeletionStart } = (() => {
         if (prevHunk != null) {
           return {
             expandAdditionStart: Math.max(
-              prevHunk.additionStart + prevHunk.additionCount - 1,
-              hunk.additionStart - preExpandedRegion.fromEnd
+              prevHunk.additionStart - 1 + prevHunk.additionCount - 1,
+              hunk.additionStart - 1 - preExpandedRegion.fromEnd
             ),
             expandDeletionStart: Math.max(
-              prevHunk.deletionStart + prevHunk.deletionCount - 1,
-              hunk.deletionStart - preExpandedRegion.fromEnd
+              prevHunk.deletionStart - 1 + prevHunk.deletionCount - 1,
+              hunk.deletionStart - 1 - preExpandedRegion.fromEnd
             ),
           };
         }
@@ -580,12 +634,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (additionLineNumber - expandAdditionStart > 0) {
         additionLineNumber = expandAdditionStart;
         deletionLineNumber = expandDeletionStart;
+        lineIndex -= hunk.additionStart - 1 - additionLineNumber;
         for (let i = additionLineNumber; i < hunk.additionStart - 1; i++) {
           const line = ast.newLines[i];
           if (line == null) {
             throw new Error('DiffHunksRenderer.renderHunks prefill context');
           }
+          deletionLineNumber++;
+          additionLineNumber++;
           if (unified) {
+            unifiedAST.push(line);
             const annotationSpan = this.getAnnotations(
               'unified',
               deletionLineNumber,
@@ -593,11 +651,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               hunkIndex,
               lineIndex
             );
-            unifiedAST.push(line);
             if (annotationSpan != null) {
               unifiedAST.push(createAnnotationElement(annotationSpan));
             }
           } else {
+            deletionsAST.push(line);
+            additionsAST.push(line);
             const [deletionSpan, additionSpan] = this.getAnnotations(
               'split',
               deletionLineNumber,
@@ -605,8 +664,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               hunkIndex,
               lineIndex
             );
-            deletionsAST.push(line);
-            additionsAST.push(line);
             if (deletionSpan != null) {
               deletionsAST.push(createAnnotationElement(deletionSpan));
             }
@@ -614,8 +671,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               additionsAST.push(createAnnotationElement(additionSpan));
             }
           }
-          deletionLineNumber++;
-          additionLineNumber++;
           lineIndex++;
         }
       }
@@ -625,6 +680,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (ast.hunks != null) {
         const lineHunk = ast.hunks[hunkIndex];
         if (lineHunk == null) {
+          console.error({ ast, hunkIndex });
           throw new Error(
             `DiffHunksRenderer.renderHunks: lineHunk doesn't exist`
           );
@@ -644,17 +700,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     })();
 
+    // Render hunk/diff content
     for (const hunkContent of hunk.hunkContent) {
       if (hunkContent.type === 'context') {
         for (const _ of hunkContent.lines) {
           const oldLine = oldLines[oldIndex];
           const newLine = newLines[newIndex];
+          oldIndex++;
+          newIndex++;
+          additionLineNumber++;
+          deletionLineNumber++;
           if (unified) {
             if (newLine == null) {
               throw new Error(
                 'DiffHunksRenderer.renderHunks: newLine doesnt exist for context...'
               );
             }
+            unifiedAST.push(newLine);
             const annotationSpan = this.getAnnotations(
               'unified',
               deletionLineNumber,
@@ -662,23 +724,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               hunkIndex,
               lineIndex
             );
-            unifiedAST.push(newLine);
             if (annotationSpan != null) {
               unifiedAST.push(createAnnotationElement(annotationSpan));
             }
           } else {
             if (newLine == null || oldLine == null) {
-              console.log('ZZZZZZ - hmm', {
-                line: _,
-                newLine,
-                oldLine,
-                newLines,
-                hunk,
-              });
               throw new Error(
                 'DiffHunksRenderer.renderHunks: newLine or oldLine doesnt exist for context...'
               );
             }
+            deletionsAST.push(oldLine);
+            additionsAST.push(newLine);
             const [deletionSpan, additionSpan] = this.getAnnotations(
               'split',
               deletionLineNumber,
@@ -686,17 +742,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               hunkIndex,
               lineIndex
             );
-            deletionsAST.push(oldLine);
-            additionsAST.push(newLine);
             if (deletionSpan != null && additionSpan != null) {
               deletionsAST.push(createAnnotationElement(deletionSpan));
               additionsAST.push(createAnnotationElement(additionSpan));
             }
           }
-          oldIndex++;
-          newIndex++;
-          additionLineNumber++;
-          deletionLineNumber++;
           lineIndex++;
         }
       } else {
@@ -730,13 +780,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           })();
 
           if (unified) {
-            const annotationSpan = this.getAnnotations(
-              'unified',
-              oldLine != null ? deletionLineNumber : undefined,
-              newLine != null ? additionLineNumber : undefined,
-              hunkIndex,
-              lineIndex
-            );
             if (oldLine != null) {
               unifiedAST.push(oldLine);
               oldIndex++;
@@ -746,18 +789,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               newIndex++;
               additionLineNumber++;
             }
-            if (annotationSpan != null) {
-              unifiedAST.push(createAnnotationElement(annotationSpan));
-            }
-            lineIndex++;
-          } else {
-            const [deletionSpan, additionSpan] = this.getAnnotations(
-              'split',
+            const annotationSpan = this.getAnnotations(
+              'unified',
               oldLine != null ? deletionLineNumber : undefined,
               newLine != null ? additionLineNumber : undefined,
               hunkIndex,
               lineIndex
             );
+            if (annotationSpan != null) {
+              unifiedAST.push(createAnnotationElement(annotationSpan));
+            }
+            lineIndex++;
+          } else {
             if (oldLine != null) {
               deletionsAST.push(oldLine);
               oldIndex++;
@@ -772,6 +815,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             } else {
               spanSize++;
             }
+            const [deletionSpan, additionSpan] = this.getAnnotations(
+              'split',
+              oldLine != null ? deletionLineNumber : undefined,
+              newLine != null ? additionLineNumber : undefined,
+              hunkIndex,
+              lineIndex
+            );
             if (deletionSpan != null && additionSpan != null) {
               if (spanSize > 0) {
                 if (aLen > dLen) {
@@ -802,8 +852,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const nextHunk = this.diff?.hunks[hunkIndex + 1];
     const postExpandedRegion = this.expandedHunks.get(hunkIndex + 1);
+    // Render expanded content after the change content if necessary
     if (
       ast.hunks == null &&
+      expandable &&
       (expandUnchanged ||
         (postExpandedRegion != null && postExpandedRegion.fromStart > 0))
     ) {
@@ -827,7 +879,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             'DiffHunksRenderer.renderHunks: Error rendering post expansion, new or old lines do not exist'
           );
         }
+        deletionLineNumber++;
+        additionLineNumber++;
         if (unified) {
+          unifiedAST.push(newLine);
           const annotationSpan = this.getAnnotations(
             'unified',
             deletionLineNumber,
@@ -835,11 +890,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             hunkIndex,
             lineIndex
           );
-          unifiedAST.push(newLine);
           if (annotationSpan != null) {
             unifiedAST.push(createAnnotationElement(annotationSpan));
           }
         } else {
+          deletionsAST.push(oldLine);
+          additionsAST.push(newLine);
           const [deletionSpan, additionSpan] = this.getAnnotations(
             'split',
             deletionLineNumber,
@@ -847,20 +903,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             hunkIndex,
             lineIndex
           );
-          deletionsAST.push(oldLine);
-          additionsAST.push(newLine);
           if (deletionSpan != null && additionSpan != null) {
             deletionsAST.push(createAnnotationElement(deletionSpan));
             additionsAST.push(createAnnotationElement(additionSpan));
           }
         }
-
-        deletionLineNumber++;
-        additionLineNumber++;
         lineIndex++;
       }
     }
 
+    // Render a final hunk separator if necessary
     if (
       isLastHunk &&
       !expandUnchanged &&
@@ -876,45 +928,35 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       const hunkEnd = hunk.additionStart + hunk.additionCount - 1;
       const collapsedLines = fileEnd - (hunkEnd + expandedLines);
       if (collapsedLines > 0) {
-        const isChunkedExpansion =
-          expandable && fileEnd - hunkEnd > expansionLineCount;
+        const chunked = expandable && fileEnd - hunkEnd > expansionLineCount;
         if (unified) {
           pushHunkSeparator({
             type: 'unified',
             linesAST: unifiedAST,
-            hunkSeparators,
             hunkIndex: hunkIndex + 1,
-            isChunkedExpansion,
-            expandable,
+            chunked,
             collapsedLines,
             isFirstHunk: false,
             isLastHunk: true,
-            hunkData,
           });
         } else {
           pushHunkSeparator({
             type: 'deletions',
             linesAST: deletionsAST,
-            hunkSeparators,
             hunkIndex: hunkIndex + 1,
-            expandable,
             collapsedLines,
-            isChunkedExpansion,
+            chunked,
             isFirstHunk: false,
             isLastHunk: true,
-            hunkData,
           });
           pushHunkSeparator({
             type: 'additions',
             linesAST: additionsAST,
-            hunkSeparators,
             hunkIndex: hunkIndex + 1,
-            expandable,
             collapsedLines,
-            isChunkedExpansion,
+            chunked,
             isFirstHunk: false,
             isLastHunk: true,
-            hunkData,
           });
         }
       }
@@ -1044,74 +1086,4 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
 function getModifiedLinesString(lines: number) {
   return `${lines} unmodified line${lines > 1 ? 's' : ''}`;
-}
-
-interface PushHunkSeparatorProps {
-  type: 'additions' | 'deletions' | 'unified';
-  linesAST: ElementContent[];
-  hunkSeparators: HunkSeparators;
-  hunkIndex: number;
-  expandable: boolean;
-  collapsedLines: number;
-  isChunkedExpansion: boolean;
-  hunk?: Hunk;
-  isFirstHunk: boolean;
-  isLastHunk: boolean;
-  hunkData: HunkData[];
-}
-
-// NOTE(amadeus): Kind of a lotta props lol...
-function pushHunkSeparator({
-  type,
-  linesAST,
-  hunkSeparators,
-  hunkIndex,
-  expandable,
-  isChunkedExpansion,
-  collapsedLines,
-  hunk,
-  isFirstHunk,
-  isLastHunk,
-  hunkData,
-}: PushHunkSeparatorProps) {
-  if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
-    const slotName = getHunkSeparatorSlotName(type, hunkIndex);
-    linesAST.push(
-      createSeparator({
-        type: hunkSeparators,
-        content: getModifiedLinesString(collapsedLines),
-        expandIndex: expandable ? hunkIndex : undefined,
-        isChunkedExpansion,
-        slotName,
-        isFirstHunk,
-        isLastHunk,
-      })
-    );
-    hunkData.push({
-      slotName,
-      hunkIndex,
-      lines: collapsedLines,
-      type,
-      expandable: expandable
-        ? {
-            up: expandable && !isFirstHunk,
-            down: expandable,
-            chunked: isChunkedExpansion,
-          }
-        : undefined,
-    });
-  } else if (hunkSeparators === 'metadata' && hunk?.hunkSpecs != null) {
-    linesAST.push(
-      createSeparator({
-        type: 'metadata',
-        content: hunk.hunkSpecs,
-        isFirstHunk,
-        isLastHunk,
-      })
-    );
-  } else if (hunkSeparators === 'simple' && hunkIndex > 0) {
-    linesAST.push(
-      createSeparator({ type: 'simple', isFirstHunk, isLastHunk: false })
-    );
-  }
 }

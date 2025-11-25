@@ -62,7 +62,7 @@ interface CreateSeparatorProps {
   type: HunkSeparators;
   content?: string;
   expandIndex?: number;
-  isChunkedExpansion?: boolean;
+  chunked?: boolean;
   slotName?: string;
   isFirstHunk: boolean;
   isLastHunk: boolean;
@@ -90,7 +90,7 @@ export function createSeparator({
   type,
   content,
   expandIndex,
-  isChunkedExpansion = false,
+  chunked = false,
   slotName,
   isFirstHunk,
   isLastHunk,
@@ -108,7 +108,7 @@ export function createSeparator({
   if (type === 'line-info' && content != null) {
     const contentChildren: ElementContent[] = [];
     if (expandIndex != null) {
-      if (!isChunkedExpansion) {
+      if (!chunked) {
         contentChildren.push(
           createExpandButton(
             !isFirstHunk && !isLastHunk ? 'both' : isFirstHunk ? 'down' : 'up'
