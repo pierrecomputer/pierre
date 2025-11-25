@@ -121,6 +121,7 @@ export interface BaseCodeOptions {
   lang?: SupportedLanguages;
   preferWasmHighlighter?: boolean;
   useCSSClasses?: boolean;
+  tokenizeMaxLineLength?: number;
 
   // Custom CSS injection
   unsafeCSS?: string;
@@ -136,8 +137,6 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   // by a single character
   lineDiffType?: LineDifftypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
-  // FIXME(amadeus): Replace this with built in shiki hast option: `tokenizeMaxLineLength`
-  maxLineLengthForHighlighting?: number; // 1000 is default
 
   // How many lines to expand per click
   expansionLineCount?: number; // 100 is default

@@ -22,10 +22,6 @@ import type {
   WorkerRequestId,
 } from './types';
 
-const DEFAULT_OPTIONS = {
-  theme: DEFAULT_THEMES,
-} as const;
-
 self.addEventListener('error', (event) => {
   console.error('[Shiki Worker] Unhandled error:', event.error);
 });
@@ -84,8 +80,8 @@ async function handleRenderFile({
     lang = getFiletypeFromFileName(file.name),
     disableLineNumbers,
     startingLineNumber,
-    ...hastOptions
-  } = {},
+    tokenizeMaxLineLength,
+  },
 }: RenderFileRequest): Promise<void> {
   sendFileSuccess(id, {
     lines: renderFileWithHighlighter(file, await getHighlighter(lang, theme), {
@@ -93,7 +89,7 @@ async function handleRenderFile({
       lang,
       disableLineNumbers,
       startingLineNumber,
-      hastOptions,
+      tokenizeMaxLineLength,
     }),
   });
 }
@@ -102,7 +98,7 @@ async function handleRenderDiffFiles({
   id,
   oldFile,
   newFile,
-  options = DEFAULT_OPTIONS,
+  options,
 }: RenderDiffFileRequest) {
   const oldLang = options?.lang ?? getFiletypeFromFileName(oldFile.name);
   const newLang = options?.lang ?? getFiletypeFromFileName(newFile.name);
@@ -118,7 +114,7 @@ async function handleRenderDiffFiles({
 
 async function handleRenderDiffMetadata({
   id,
-  options = DEFAULT_OPTIONS,
+  options,
   diff,
 }: RenderDiffMetadataRequest) {
   const { lang } = options ?? {};

@@ -1,7 +1,6 @@
 import type { ElementContent } from 'hast';
 
 import type {
-  CodeToHastOptions,
   FileContents,
   FileDiffMetadata,
   PJSThemeNames,
@@ -15,7 +14,7 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  options?: WorkerRenderFileOptions;
+  options: WorkerRenderFileOptions;
 }
 
 export interface RenderDiffFileRequest {
@@ -23,14 +22,14 @@ export interface RenderDiffFileRequest {
   id: WorkerRequestId;
   oldFile: FileContents;
   newFile: FileContents;
-  options?: WorkerRenderFileOptions;
+  options: WorkerRenderFileOptions;
 }
 
 export interface RenderDiffMetadataRequest {
   type: 'diff-metadata';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  options?: WorkerRenderFileOptions;
+  options: WorkerRenderFileOptions;
 }
 
 export interface InitializeWorkerRequest {
@@ -117,12 +116,12 @@ export type WorkerResponse =
   | InitializeSuccessResponse;
 
 // FIXME(amadeus): We may have to do more work here...
-export interface WorkerRenderFileOptions
-  extends Omit<CodeToHastOptions<PJSThemeNames>, 'lang'> {
+export interface WorkerRenderFileOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   disableLineNumbers?: boolean;
   startingLineNumber?: number;
+  tokenizeMaxLineLength: number;
 }
 
 export interface WorkerPoolOptions {

@@ -31,7 +31,7 @@ interface RenderOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   disableLineNumbers?: boolean;
-  hastOptions?: Partial<CodeToHastOptions<PJSThemeNames>>;
+  tokenizeMaxLineLength: number;
 }
 
 export function renderDiffWithHighlighter(
@@ -374,7 +374,7 @@ interface RenderTwoFilesProps {
   newInfo: Record<number, LineInfo | undefined>;
   oldDecorations: DecorationItem[];
   newDecorations: DecorationItem[];
-  options?: WorkerRenderFileOptions;
+  options: WorkerRenderFileOptions;
   highlighter: PJSHighlighter;
 }
 
@@ -386,7 +386,7 @@ function renderTwoFiles({
   highlighter,
   oldDecorations,
   newDecorations,
-  options: { theme = DEFAULT_THEMES, lang, ...hastOptions } = {},
+  options: { theme = DEFAULT_THEMES, lang, ...options },
 }: RenderTwoFilesProps) {
   const oldLang = lang ?? getFiletypeFromFileName(oldFile.name);
   const newLang = lang ?? getFiletypeFromFileName(newFile.name);
@@ -394,7 +394,8 @@ function renderTwoFiles({
   const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
     return typeof theme === 'string'
       ? {
-          ...hastOptions,
+          ...options,
+          // language will be overwritten for each highlight
           lang: 'text',
           theme,
           transformers,
@@ -403,7 +404,8 @@ function renderTwoFiles({
           cssVariablePrefix: formatCSSVariablePrefix(),
         }
       : {
-          ...hastOptions,
+          ...options,
+          // language will be overwritten for each highlight
           lang: 'text',
           themes: theme,
           transformers,

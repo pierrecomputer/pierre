@@ -173,7 +173,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
-      maxLineLengthForHighlighting = 1000,
+      tokenizeMaxLineLength = 1000,
       overflow = 'scroll',
       theme = DEFAULT_THEMES,
       themeType = 'system',
@@ -189,7 +189,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
-      maxLineLengthForHighlighting,
+      tokenizeMaxLineLength,
       overflow,
       theme,
       themeType,
@@ -212,7 +212,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     const ast = (() => {
-      const { lang, theme, disableLineNumbers } = this.options;
+      const { lang } = this.options;
+      const { theme, disableLineNumbers, tokenizeMaxLineLength } =
+        this.getOptionsWithDefaults();
       this.renderCache ??= { diff, highlighted: false, ast: undefined };
       if (this.poolManager != null) {
         this.renderCache.ast ??= this.poolManager.renderPlainDiffMetadataToAST(
@@ -221,7 +223,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         );
         if (!this.renderCache.highlighted) {
           void this.poolManager
-            .renderDiffMetadataToAST(diff, { lang, theme, disableLineNumbers })
+            .renderDiffMetadataToAST(diff, {
+              lang,
+              theme,
+              disableLineNumbers,
+              tokenizeMaxLineLength,
+            })
             .then((results) => this.handleAsyncHighlight(diff, results));
         }
       } else if (this.renderCache.ast == null) {
@@ -302,11 +309,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     highlighter: PJSHighlighter
   ): RenderDiffResult {
-    const { theme, lang, disableLineNumbers } = this.options;
+    const { lang } = this.options;
+    const { theme, disableLineNumbers, tokenizeMaxLineLength } =
+      this.getOptionsWithDefaults();
     return renderDiffWithHighlighter(diff, highlighter, {
       theme,
       lang,
       disableLineNumbers,
+      tokenizeMaxLineLength,
     });
   }
 

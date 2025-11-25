@@ -19,7 +19,7 @@ export interface RenderOptions {
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   disableLineNumbers?: boolean;
   startingLineNumber?: number;
-  hastOptions?: Partial<CodeToHastOptions<PJSThemeNames>>;
+  tokenizeMaxLineLength: number;
 }
 
 export function renderFileWithHighlighter(
@@ -30,8 +30,8 @@ export function renderFileWithHighlighter(
     disableLineNumbers,
     startingLineNumber = 1,
     lang = getFiletypeFromFileName(file.name),
-    hastOptions,
-  }: RenderOptions = { startingLineNumber: 1 }
+    tokenizeMaxLineLength,
+  }: RenderOptions
 ): ElementContent[] {
   const { state, transformers } =
     createTransformerWithState(disableLineNumbers);
@@ -43,21 +43,21 @@ export function renderFileWithHighlighter(
   const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
     if (typeof theme === 'string') {
       return {
-        ...hastOptions,
         lang,
         theme,
         transformers,
         defaultColor: false,
         cssVariablePrefix: formatCSSVariablePrefix(),
+        tokenizeMaxLineLength,
       };
     }
     return {
-      ...hastOptions,
       lang,
       themes: theme,
       transformers,
       defaultColor: false,
       cssVariablePrefix: formatCSSVariablePrefix(),
+      tokenizeMaxLineLength,
     };
   })();
   return getLineNodes(

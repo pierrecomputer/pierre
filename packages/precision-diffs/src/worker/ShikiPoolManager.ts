@@ -67,7 +67,7 @@ export class ShikiPoolManager {
 
   async renderFileToAST(
     file: FileContents,
-    options?: WorkerRenderFileOptions
+    options: WorkerRenderFileOptions
   ): Promise<ElementContent[]> {
     const pool = await this.ensureInitialized();
     const { lines } = await pool.submitTask<RenderFileResult>({
@@ -89,13 +89,14 @@ export class ShikiPoolManager {
       lang: 'text',
       startingLineNumber,
       theme: this.currentTheme,
+      tokenizeMaxLineLength: 1000,
     });
   }
 
   async renderDiffFilesToAST(
     oldFile: FileContents,
     newFile: FileContents,
-    options?: WorkerRenderFileOptions
+    options: WorkerRenderFileOptions
   ): Promise<RenderDiffFilesResult> {
     const pool = await this.ensureInitialized();
     return pool.submitTask<RenderDiffFilesResult>({
@@ -120,7 +121,7 @@ export class ShikiPoolManager {
 
   async renderDiffMetadataToAST(
     diff: FileDiffMetadata,
-    options?: WorkerRenderFileOptions
+    options: WorkerRenderFileOptions
   ): Promise<RenderDiffResult> {
     const pool = await this.ensureInitialized();
     return pool.submitTask<RenderDiffResult>({
@@ -139,6 +140,7 @@ export class ShikiPoolManager {
           theme: this.currentTheme,
           lang: 'text',
           disableLineNumbers,
+          tokenizeMaxLineLength: 1000,
         })
       : undefined;
   }

@@ -47,7 +47,7 @@ export interface FileRenderResult {
 
 export interface FileRendererOptions extends BaseCodeOptions {
   startingLineNumber?: number;
-  maxLineLengthForHighlighting?: number; // 1000 is default
+  tokenizeMaxLineLength?: number; // 1000 is default
 }
 
 export class FileRenderer<LAnnotation = undefined> {
@@ -107,12 +107,22 @@ export class FileRenderer<LAnnotation = undefined> {
           this.options.startingLineNumber
         );
         if (!this.renderCache.highlighted) {
-          const { lang, theme, disableLineNumbers } = this.options;
+          const {
+            lang,
+            theme,
+            disableLineNumbers,
+            tokenizeMaxLineLength = 1000,
+          } = this.options;
           // TODO(amadeus): Figure out how to only fire this on a per file
           // basis... (maybe the poolManager can figure it out based on file name
           // and file contents probably?)
           void this.poolManager
-            .renderFileToAST(file, { lang, theme, disableLineNumbers })
+            .renderFileToAST(file, {
+              lang,
+              theme,
+              disableLineNumbers,
+              tokenizeMaxLineLength,
+            })
             .then((results) => this.handleAsyncHighlight(file, results));
         }
       } else if (this.renderCache.ast == null) {
@@ -223,15 +233,13 @@ export class FileRenderer<LAnnotation = undefined> {
       theme,
       startingLineNumber,
       lang,
-      maxLineLengthForHighlighting = 1000,
+      tokenizeMaxLineLength = 1000,
     } = this.options;
     return renderFileWithHighlighter(file, highlighter, {
       theme,
       startingLineNumber,
       lang,
-      hastOptions: {
-        tokenizeMaxLineLength: maxLineLengthForHighlighting,
-      },
+      tokenizeMaxLineLength,
     });
   }
 

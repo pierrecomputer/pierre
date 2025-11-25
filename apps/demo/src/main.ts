@@ -300,6 +300,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
       const prom = poolManager
         ?.renderDiffMetadataToAST(fileDiff, {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          tokenizeMaxLineLength: 1000,
         })
         .then((result) => {
           if (result.hunks == null) {

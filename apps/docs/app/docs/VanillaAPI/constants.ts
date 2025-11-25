@@ -148,7 +148,7 @@ const instance = new FileDiff<ThreadMetadata>({
 
   // If any line in the diff exceeds this value then we won't attempt to
   // syntax highlight the diff
-  maxLineLengthForHighlighting: 1000,
+  tokenizeMaxLineLength: 1000,
 
   // Enabling this property will hide the file header with file name and
   // diff stats.
