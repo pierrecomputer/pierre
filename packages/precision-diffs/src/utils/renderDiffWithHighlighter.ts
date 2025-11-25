@@ -145,7 +145,13 @@ function computeLineDiffDecorations({
   if (oldLine == null || newLine == null) {
     return;
   }
-  const lineDiff = diffWordsWithSpace(oldLine, newLine);
+  // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
+  // we also gotta make sure the diff parsing doesn't include the newline
+  // character that could be there...
+  const lineDiff = diffWordsWithSpace(
+    cleanLastNewline(oldLine),
+    cleanLastNewline(newLine)
+  );
   const deletionSpans: [0 | 1, string][] = [];
   const additionSpans: [0 | 1, string][] = [];
   // FIXME(amadeus): Add the proper configuration for this
