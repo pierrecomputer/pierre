@@ -241,15 +241,15 @@ code {
   --pjs-bg-selection: var(
     --pjs-bg-selection-override,
     light-dark(
-      rgb(from var(--pjs-selection-base) r g b / 0.18),
-      rgb(from var(--pjs-selection-base) r g b / 0.26)
+      color-mix(in lab, var(--pjs-bg) 82%, var(--pjs-selection-base)),
+      color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base))
     )
   );
   --pjs-bg-selection-number: var(
     --pjs-bg-selection-number-override,
     light-dark(
-      rgb(from var(--pjs-selection-base) r g b / 0.25),
-      rgb(from var(--pjs-selection-base) r g b / 0.4)
+      color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base)),
+      color-mix(in lab, var(--pjs-bg) 60%, var(--pjs-selection-base))
     )
   );
 
@@ -714,7 +714,7 @@ code {
 }
 
 [data-background] [data-line-type='change-addition'] {
-  background-color: var(--pjs-bg-addition);
+  --pjs-bg: var(--pjs-bg-addition);
 
   [data-column-number] {
     background-color: var(--pjs-bg-addition-number);
@@ -722,7 +722,7 @@ code {
 }
 
 [data-background] [data-line-type='change-deletion'] {
-  background-color: var(--pjs-bg-deletion);
+  --pjs-bg: var(--pjs-bg-deletion);
 
   [data-column-number] {
     background-color: var(--pjs-bg-deletion-number);
@@ -730,10 +730,10 @@ code {
 }
 
 [data-line-type='context-expanded'] {
-  background-color: var(--pjs-bg-context);
+  --pjs-bg: var(--pjs-bg-context);
 
   [data-column-number] {
-    background-color: var(--pjs-bg-context);
+    --pjs-bg: var(--pjs-bg-context);
   }
 }
 
@@ -861,8 +861,7 @@ code {
 }
 
 /* Line selection highlighting */
-[data-selected-line],
-[data-background] [data-selected-line] {
+[data-line-type='context'][data-selected-line] {
   [data-column-number] {
     color: var(--pjs-selection-number-fg);
     background-color: var(--pjs-bg-selection-number);
@@ -871,6 +870,25 @@ code {
   [data-column-content] {
     background-color: var(--pjs-bg-selection);
   }
+}
+
+[data-line-type='context-expanded'][data-selected-line],
+[data-line-type='change-addition'][data-selected-line],
+[data-line-type='change-deletion'][data-selected-line] {
+  background-color: light-dark(
+    color-mix(in lab, var(--pjs-bg) 82%, var(--pjs-selection-base)),
+    color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base))
+  );
+}
+
+[data-line-type='context-expanded'][data-selected-line] [data-column-number],
+[data-line-type='change-addition'][data-selected-line] [data-column-number],
+[data-line-type='change-deletion'][data-selected-line] [data-column-number] {
+  color: var(--pjs-selection-number-fg);
+  background-color: light-dark(
+    color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base)),
+    color-mix(in lab, var(--pjs-bg) 60%, var(--pjs-selection-base))
+  );
 }
 
 [data-hover-slot] {
