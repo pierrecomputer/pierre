@@ -17,6 +17,7 @@ import type {
   Hunk,
   ParsedPatch,
 } from '../types';
+import { cleanLastNewline } from './cleanLastNewline';
 import { parseLineType } from './parseLineType';
 
 function processPatch(data: string): ParsedPatch {
@@ -137,8 +138,13 @@ function processPatch(data: string): ParsedPatch {
         continue;
       } else {
         let currentContent: ContextContent | ChangeContent | undefined;
+        let lastLineType: 'context' | 'addition' | 'deletion' | undefined;
         for (const rawLine of lines) {
-          const { line, type } = parseLineType(rawLine);
+          const parsedLine = parseLineType(rawLine);
+          if (parsedLine == null) {
+            continue;
+          }
+          const { type, line } = parsedLine;
           if (type === 'addition') {
             if (currentContent == null || currentContent.type !== 'change') {
               currentContent = createContentGroup('change');
@@ -146,6 +152,7 @@ function processPatch(data: string): ParsedPatch {
             }
             currentContent.additions.push(line);
             additionLines++;
+            lastLineType = 'addition';
           } else if (type === 'deletion') {
             if (currentContent == null || currentContent.type !== 'change') {
               currentContent = createContentGroup('change');
@@ -153,12 +160,34 @@ function processPatch(data: string): ParsedPatch {
             }
             currentContent.deletions.push(line);
             deletionLines++;
-          } else {
+            lastLineType = 'deletion';
+          } else if (type === 'context') {
             if (currentContent == null || currentContent.type !== 'context') {
               currentContent = createContentGroup('context');
               hunkContent.push(currentContent);
             }
             currentContent.lines.push(line);
+            lastLineType = 'context';
+          } else if (type === 'metadata' && currentContent != null) {
+            if (currentContent.type === 'context') {
+              currentContent.noEOFCR = true;
+            } else if (lastLineType === 'deletion') {
+              currentContent.noEOFCRDeletions = true;
+              const lastIndex = currentContent.deletions.length - 1;
+              if (lastIndex >= 0) {
+                currentContent.deletions[lastIndex] = cleanLastNewline(
+                  currentContent.deletions[lastIndex]
+                );
+              }
+            } else if (lastLineType === 'addition') {
+              currentContent.noEOFCRAdditions = true;
+              const lastIndex = currentContent.additions.length - 1;
+              if (lastIndex >= 0) {
+                currentContent.additions[lastIndex] = cleanLastNewline(
+                  currentContent.additions[lastIndex]
+                );
+              }
+            }
           }
         }
       }
@@ -244,7 +273,13 @@ function createContentGroup(
   type: 'change' | 'context'
 ): ChangeContent | ContextContent {
   if (type === 'change') {
-    return { type: 'change', additions: [], deletions: [] };
+    return {
+      type: 'change',
+      additions: [],
+      deletions: [],
+      noEOFCRAdditions: false,
+      noEOFCRDeletions: false,
+    };
   }
-  return { type: 'context', lines: [] };
+  return { type: 'context', lines: [], noEOFCR: false };
 }

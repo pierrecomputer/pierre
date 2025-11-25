@@ -714,6 +714,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     })();
 
     // Render hunk/diff content
+    // FIXME(amadeus): Add support for `No newline stuff`
     for (const hunkContent of hunk.hunkContent) {
       if (hunkContent.type === 'context') {
         for (const _ of hunkContent.lines) {

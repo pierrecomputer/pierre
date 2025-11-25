@@ -57,12 +57,15 @@ export interface ParsedPatch {
 export interface ContextContent {
   type: 'context';
   lines: string[];
+  noEOFCR: boolean;
 }
 
 export interface ChangeContent {
   type: 'change';
   deletions: string[];
   additions: string[];
+  noEOFCRDeletions: boolean;
+  noEOFCRAdditions: boolean;
 }
 
 export interface Hunk {
