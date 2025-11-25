@@ -4,7 +4,8 @@ import type { DiffLineAnnotation } from '@pierre/precision-diffs';
 import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 import { cache } from '@solidjs/router';
 
-import { NEW_FILE, OLD_FILE } from '../diff-data';
+import OLD_FILE from '../../../demo/src/mocks/fileNew.txt?raw';
+import NEW_FILE from '../../../demo/src/mocks/fileOld.txt?raw';
 
 /**
  * Type definition for annotation metadata.
@@ -38,8 +39,8 @@ export const getPreloadedDiff = cache(async () => {
   'use server';
 
   const preloadedFileDiff = await preloadMultiFileDiff<AnnotationMetadata>({
-    oldFile: OLD_FILE,
-    newFile: NEW_FILE,
+    oldFile: { name: 'file.ts', contents: OLD_FILE },
+    newFile: { name: 'file.ts', contents: NEW_FILE },
     options: {
       theme: 'pierre-dark',
       diffStyle: 'split',
