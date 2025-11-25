@@ -255,38 +255,25 @@ export function convertLine(
   // that may be applied
   node.tagName = 'span';
   node.properties['data-column-content'] = '';
-  if (lineInfo.metadataContent != null) {
-    node.children.push(
-      createHastElement({
-        tagName: 'span',
-        children: [createTextNode(lineInfo.metadataContent)],
-        properties: { 'data-no-newline': '' },
-      })
-    );
-  }
+
   // NOTE(amadeus): We need to push newline characters into empty rows or else
   // copy/pasta will have issues
-  else if (node.children.length === 0) {
+  if (node.children.length === 0) {
     node.children.push(createTextNode('\n'));
   }
-  const children = [node];
-  if (!state.disableLineNumbers) {
-    children.unshift(
-      createHastElement({
-        tagName: 'span',
-        children:
-          lineInfo.metadataContent == null
-            ? [{ type: 'text', value: `${lineInfo.lineNumber}` }]
-            : [],
-        properties: { 'data-column-number': '' },
-      })
-    );
-  }
+  const children = [
+    createHastElement({
+      tagName: 'span',
+      children: [{ type: 'text', value: `${lineInfo.lineNumber}` }],
+      properties: { 'data-column-number': '' },
+    }),
+    node,
+  ];
   return createHastElement({
     tagName: 'div',
     children,
     properties: {
-      'data-line': lineInfo.metadataContent == null ? lineInfo.lineNumber : '',
+      'data-line': lineInfo.lineNumber,
       'data-alt-line': lineInfo.altLineNumber,
       'data-line-type': lineInfo.type,
       'data-line-index':
@@ -490,5 +477,25 @@ export function createStyleElement(content: string): HASTElement {
   return createHastElement({
     tagName: 'style',
     children: [createTextNode(content)],
+  });
+}
+
+export function createNoNewlineElement(
+  type: 'context' | 'change-addition' | 'change-deletion'
+): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    children: [
+      createHastElement({
+        tagName: 'span',
+        properties: { 'data-column-number': '' },
+      }),
+      createHastElement({
+        tagName: 'span',
+        children: [createTextNode('No newline at end of file')],
+        properties: { 'data-column-content': '' },
+      }),
+    ],
+    properties: { 'data-no-newline': '', 'data-line-type': type },
   });
 }

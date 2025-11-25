@@ -14,13 +14,10 @@ interface CreateTransformerWithStateReturn {
 }
 
 export function createTransformerWithState(
-  disableLineNumbers: boolean = false,
   useCSSClasses = false
 ): CreateTransformerWithStateReturn {
   const state: SharedRenderState = {
     lineInfo: {},
-    decorations: [],
-    disableLineNumbers,
   };
   const transformers: ShikiTransformer[] = [
     {

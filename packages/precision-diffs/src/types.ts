@@ -207,15 +207,12 @@ export interface LineInfo {
   lineNumber: number;
   altLineNumber?: number;
   lineIndex: number;
-  metadataContent?: string;
 }
 
 export interface SharedRenderState {
   lineInfo:
     | Record<number, LineInfo | undefined>
     | ((shikiLineNumber: number) => LineInfo);
-  decorations: DecorationItem[];
-  disableLineNumbers: boolean;
 }
 
 export interface AnnotationSpan {

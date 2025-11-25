@@ -33,6 +33,7 @@ import {
   createEmptyRowBuffer,
   createFileHeaderElement,
   createHastElement,
+  createNoNewlineElement,
   createSeparator,
 } from './utils/hast_utils';
 import {
@@ -763,6 +764,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
           lineIndex++;
         }
+        if (hunkContent.noEOFCR) {
+          const node = createNoNewlineElement('context');
+          if (unified) {
+            unifiedAST.push(node);
+          } else {
+            deletionsAST.push(node);
+            additionsAST.push(node);
+          }
+        }
       } else {
         const { length: dLen } = hunkContent.deletions;
         const { length: aLen } = hunkContent.additions;
@@ -859,6 +869,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               additionsAST.push(createEmptyRowBuffer(spanSize));
             }
             spanSize = 0;
+          }
+          if (hunkContent.noEOFCRDeletions) {
+            deletionsAST.push(createNoNewlineElement('change-deletion'));
+            if (!hunkContent.noEOFCRAdditions) {
+              additionsAST.push(createEmptyRowBuffer(1));
+            }
+          }
+          if (hunkContent.noEOFCRAdditions) {
+            additionsAST.push(createNoNewlineElement('change-addition'));
+            if (!hunkContent.noEOFCRDeletions) {
+              deletionsAST.push(createEmptyRowBuffer(1));
+            }
           }
         }
       }
