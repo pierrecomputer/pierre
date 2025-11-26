@@ -377,10 +377,12 @@ code {
 
 [data-type='split'][data-overflow='wrap'] [data-additions] [data-line],
 [data-type='split'][data-overflow='wrap'] [data-additions] [data-separator],
+[data-type='split'][data-overflow='wrap'] [data-additions] [data-buffer],
 [data-type='split'][data-overflow='wrap']
   [data-additions]
   [data-line-annotation] {
-  border-left: 2px solid var(--pjs-bg);
+  /* Gutter between splits when code is allowed to wrap */
+  margin-left: 2px;
 }
 
 [data-buffer] {
