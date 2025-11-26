@@ -577,6 +577,7 @@ code {
 [data-line-annotation] {
   min-height: var(--pjs-annotation-min-height, 0);
   background-color: var(--pjs-bg-context);
+  z-index: 3;
 }
 
 [data-type='split'][data-overflow='wrap'] [data-additions] {
