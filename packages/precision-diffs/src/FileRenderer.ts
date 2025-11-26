@@ -101,22 +101,25 @@ export class FileRenderer<LAnnotation = undefined> {
       return undefined;
     }
     const ast = (() => {
+      const {
+        lang,
+        theme,
+        disableLineNumbers,
+        tokenizeMaxLineLength = 1000,
+      } = this.options;
       this.renderCache ??= { file, highlighted: false, ast: undefined };
+      const fileDidChange =
+        this.renderCache.file.contents !== file.contents ||
+        this.renderCache.file.name !== file.name;
       if (this.poolManager != null) {
         this.renderCache.ast ??= this.poolManager.renderPlainFileToAST(
           file,
           this.options.startingLineNumber
         );
-        if (!this.renderCache.highlighted) {
-          const {
-            lang,
-            theme,
-            disableLineNumbers,
-            tokenizeMaxLineLength = 1000,
-          } = this.options;
-          // TODO(amadeus): Figure out how to only fire this on a per file
-          // basis... (maybe the poolManager can figure it out based on file name
-          // and file contents probably?)
+        // TODO(amadeus): Figure out how to only fire this on a per file
+        // basis... (maybe the poolManager can figure it out based on file name
+        // and file contents probably?)
+        if (!this.renderCache.highlighted || fileDidChange) {
           void this.poolManager
             .renderFileToAST(file, {
               lang,
@@ -126,14 +129,17 @@ export class FileRenderer<LAnnotation = undefined> {
             })
             .then((results) => this.handleAsyncHighlight(file, results));
         }
-      } else if (this.renderCache.ast == null) {
-        if (this.highlighter != null) {
+      } else {
+        if (
+          this.highlighter != null &&
+          (fileDidChange || !this.renderCache.highlighted)
+        ) {
           this.renderCache.ast = this.renderFileWithHighlighter(
             file,
             this.highlighter
           );
           this.renderCache.highlighted = true;
-        } else {
+        } else if (fileDidChange || !this.renderCache.highlighted) {
           void this.asyncHighlight(file).then((ast) => {
             this.handleAsyncHighlight(file, ast);
           });
@@ -141,6 +147,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
       return this.renderCache.ast;
     })();
+    this.renderCache.file = file;
     const preElement = this.createPreElement(ast?.length ?? 0);
     if (ast == null || preElement == null) {
       return undefined;

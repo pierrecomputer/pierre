@@ -255,7 +255,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           diff,
           disableLineNumbers
         );
-        if (!this.renderCache.highlighted) {
+        // TODO(amadeus): Figure out how to only fire this on a per file
+        // basis... (maybe the poolManager can figure it out based on file name
+        // and file contents probably?)
+        if (!this.renderCache.highlighted || this.renderCache.diff !== diff) {
           void this.poolManager
             .renderDiffMetadataToAST(diff, {
               lang,
@@ -265,14 +268,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             })
             .then((results) => this.handleAsyncHighlight(diff, results));
         }
-      } else if (this.renderCache.ast == null) {
-        if (this.highlighter != null) {
+      } else {
+        if (
+          this.highlighter != null &&
+          (this.renderCache.diff !== diff || !this.renderCache.highlighted)
+        ) {
           this.renderCache.ast = this.renderDiffWithHighlighter(
             diff,
             this.highlighter
           );
           this.renderCache.highlighted = true;
-        } else {
+        } else if (
+          this.renderCache.diff !== diff ||
+          !this.renderCache.highlighted
+        ) {
           void this.asyncHighlight(diff).then((result) => {
             this.handleAsyncHighlight(diff, result);
           });
@@ -280,6 +289,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
       return this.renderCache.ast;
     })();
+    this.renderCache.diff = diff;
 
     return ast != null ? this.processDiffResult(diff, ast) : undefined;
   }
