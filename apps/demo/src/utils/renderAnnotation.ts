@@ -5,11 +5,16 @@ import type {
 
 import type { LineCommentMetadata } from '../mocks';
 
-function renderDOM(metadata: LineCommentMetadata) {
+function renderDOM(
+  metadata: LineCommentMetadata,
+  lineNumber: number,
+  side: string = 'line'
+) {
   const wrapper = document.createElement('div');
   wrapper.className = 'comment';
   const author = document.createElement('h6');
   author.innerText = metadata.author;
+  author.innerText += `::(${side}-${lineNumber})`;
   const message = document.createElement('p');
   message.innerText = metadata.message;
   wrapper.appendChild(author);
@@ -20,11 +25,11 @@ function renderDOM(metadata: LineCommentMetadata) {
 export function renderDiffAnnotation(
   annotation: DiffLineAnnotation<LineCommentMetadata>
 ): HTMLElement {
-  return renderDOM(annotation.metadata);
+  return renderDOM(annotation.metadata, annotation.lineNumber, annotation.side);
 }
 
 export function renderAnnotation(
   annotation: LineAnnotation<LineCommentMetadata>
 ): HTMLElement {
-  return renderDOM(annotation.metadata);
+  return renderDOM(annotation.metadata, annotation.lineNumber);
 }

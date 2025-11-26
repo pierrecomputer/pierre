@@ -219,3 +219,7 @@ file-diff {
   margin: 0;
   padding: 0;
 }
+
+.comment h6 {
+  font-size: 14px;
+}

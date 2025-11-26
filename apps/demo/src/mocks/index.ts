@@ -45,56 +45,56 @@ export const FAKE_LINE_ANNOTATIONS: LineAnnotation<LineCommentMetadata>[] = [
   {
     lineNumber: 2,
     metadata: {
-      author: 'Sarah Chen (line-2)',
+      author: 'Sarah Chen',
       message: 'Consider refactoring this for better performance',
     },
   },
   {
     lineNumber: 4,
     metadata: {
-      author: 'Marcus Rodriguez (line-4)',
+      author: 'Marcus Rodriguez',
       message: 'Why are we removing this functionality?',
     },
   },
   {
     lineNumber: 4,
     metadata: {
-      author: 'Olivia Kim (line-4)',
+      author: 'Olivia Kim',
       message: 'This was deprecated last quarter, good catch',
     },
   },
   {
     lineNumber: 6,
     metadata: {
-      author: 'Raj Patel (line-6)',
+      author: 'Raj Patel',
       message: 'We should add unit tests for this change',
     },
   },
   {
     lineNumber: 9,
     metadata: {
-      author: 'Emma Thompson (line-9)',
+      author: 'Emma Thompson',
       message: 'Nice improvement! This should handle edge cases better',
     },
   },
   {
     lineNumber: 11,
     metadata: {
-      author: 'David Johnson (line-11)',
+      author: 'David Johnson',
       message: 'This could break backward compatibility',
     },
   },
   {
     lineNumber: 13,
     metadata: {
-      author: 'Sofia Martinez (line-13)',
+      author: 'Sofia Martinez',
       message: 'Finally cleaning up legacy code!',
     },
   },
   {
     lineNumber: 15,
     metadata: {
-      author: 'Alex Turner (line-15)',
+      author: 'Alex Turner',
       message: 'Does this follow our style guide?',
     },
   },
@@ -108,7 +108,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 2,
           side: 'additions',
           metadata: {
-            author: 'Sarah Chen (additions-2)',
+            author: 'Sarah Chen',
             message: 'Consider refactoring this for better performance',
           },
         },
@@ -116,7 +116,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 4,
           side: 'deletions',
           metadata: {
-            author: 'Marcus Rodriguez (deletions-4)',
+            author: 'Marcus Rodriguez',
             message: 'Why are we removing this functionality?',
           },
         },
@@ -124,7 +124,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 9,
           side: 'additions',
           metadata: {
-            author: 'Emma Thompson (additions-9)',
+            author: 'Emma Thompson',
             message: 'Nice improvement! This should handle edge cases better',
           },
         },
@@ -132,7 +132,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 6,
           side: 'additions',
           metadata: {
-            author: 'Raj Patel (additions-6)',
+            author: 'Raj Patel',
             message: 'We should add unit tests for this change',
           },
         },
@@ -140,7 +140,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 5,
           side: 'deletions',
           metadata: {
-            author: 'Olivia Kim (deletions-5)',
+            author: 'Olivia Kim',
             message: 'This was deprecated last quarter, good catch',
           },
         },
@@ -148,7 +148,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 15,
           side: 'additions',
           metadata: {
-            author: 'Alex Turner (additions-15)',
+            author: 'Alex Turner',
             message: 'Does this follow our style guide?',
           },
         },
@@ -156,7 +156,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 13,
           side: 'deletions',
           metadata: {
-            author: 'Sofia Martinez (deletions-13)',
+            author: 'Sofia Martinez',
             message: 'Finally cleaning up legacy code!',
           },
         },
@@ -164,7 +164,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 11,
           side: 'deletions',
           metadata: {
-            author: 'David Johnson (deletions-11)',
+            author: 'David Johnson',
             message: 'This could break backward compatibility',
           },
         },
@@ -174,7 +174,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           lineNumber: 5,
           side: 'additions',
           metadata: {
-            author: "Liam O'Brien (additions-5)",
+            author: "Liam O'Brien",
             message: 'LGTM, ship it! 🚀',
           },
         },
