@@ -1,7 +1,7 @@
 import type { FileOptions } from '../../src/File';
 import { FileRenderer } from '../FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
-import { createStyleElement } from '../utils/hast_utils';
+import { createStyleElement } from '../utils/createStyleElement';
 import { renderCSS } from './renderCSS';
 import { renderHTML } from './renderHTML';
 

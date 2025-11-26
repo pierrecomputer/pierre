@@ -5,8 +5,8 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../types';
+import { createStyleElement } from '../utils/createStyleElement';
 import { getSingularPatch } from '../utils/getSingularPatch';
-import { createStyleElement } from '../utils/hast_utils';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { renderCSS } from './renderCSS';
 import { renderHTML } from './renderHTML';

@@ -8,14 +8,12 @@ import type {
   ThemeTypes,
   ThemedToken,
 } from './types';
+import { createCodeNode } from './utils/createCodeNode';
+import { createRowNodes } from './utils/createRowNodes';
+import { createSpanFromToken } from './utils/createSpanNodeFromToken';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
-import {
-  createCodeNode,
-  createRow,
-  createSpanFromToken,
-  setWrapperProps,
-} from './utils/html_render_utils';
+import { setWrapperNodeProps } from './utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
   startingLineIndex?: number;
@@ -111,7 +109,7 @@ export class FileStream {
     if (this.pre.parentElement == null) {
       fileContainer.shadowRoot?.appendChild(this.pre);
     }
-    const pre = setWrapperProps({
+    const pre = setWrapperNodeProps({
       pre: this.pre,
       split: false,
       theme,
@@ -221,7 +219,7 @@ export class FileStream {
   };
 
   private createLine(): HTMLElement {
-    const { row, content } = createRow(this.currentLineIndex);
+    const { row, content } = createRowNodes(this.currentLineIndex);
     this.currentLineElement = content;
     return row;
   }

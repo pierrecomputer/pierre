@@ -26,12 +26,10 @@ import type {
   RenderFileMetadata,
   ThemeTypes,
 } from './types';
+import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode';
+import { createCodeNode } from './utils/createCodeNode';
+import { createHoverContentNode } from './utils/createHoverContentNode';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import {
-  createAnnotationWrapper,
-  createCodeNode,
-  createHoverContent,
-} from './utils/html_render_utils';
 import type { ShikiPoolManager } from './worker';
 
 export interface FileRenderProps<LAnnotation> {
@@ -306,7 +304,9 @@ export class File<LAnnotation = undefined> {
       for (const annotation of this.lineAnnotations) {
         const content = renderAnnotation(annotation);
         if (content == null) continue;
-        const el = createAnnotationWrapper(getLineAnnotationName(annotation));
+        const el = createAnnotationWrapperNode(
+          getLineAnnotationName(annotation)
+        );
         el.appendChild(content);
         this.annotationElements.push(el);
         this.fileContainer.appendChild(el);
@@ -318,7 +318,7 @@ export class File<LAnnotation = undefined> {
     const { renderHoverUtility } = this.options;
     if (this.fileContainer == null || renderHoverUtility == null) return;
     if (this.hoverContent == null) {
-      this.hoverContent = createHoverContent();
+      this.hoverContent = createHoverContentNode();
       this.fileContainer.appendChild(this.hoverContent);
     }
     const element = renderHoverUtility(this.mouseEventManager.getHoveredLine);

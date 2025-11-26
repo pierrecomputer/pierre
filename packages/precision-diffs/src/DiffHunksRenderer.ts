@@ -21,26 +21,24 @@ import type {
   SupportedLanguages,
   ThemeTypes,
 } from './types';
+import { createAnnotationElement } from './utils/createAnnotationElement';
+import { createEmptyRowBuffer } from './utils/createEmptyRowBuffer';
+import { createFileHeaderElement } from './utils/createFileHeaderElement';
+import { createNoNewlineElement } from './utils/createNoNewlineElement';
 import { createPreElement } from './utils/createPreElement';
+import { createSeparator } from './utils/createSeparator';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from './utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
 import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
-import {
-  createAnnotationElement,
-  createEmptyRowBuffer,
-  createFileHeaderElement,
-  createHastElement,
-  createNoNewlineElement,
-  createSeparator,
-} from './utils/hast_utils';
-import {
-  type SetupWrapperNodesProps,
-  setWrapperProps,
-} from './utils/html_render_utils';
+import { createHastElement } from './utils/hast_utils';
 import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
+import {
+  type SetupWrapperNodeProps,
+  setWrapperNodeProps,
+} from './utils/setWrapperNodeProps';
 import type { RenderDiffResult, ShikiPoolManager } from './worker';
 
 const EXPANDED_REGION: ExpansionRegion = {
@@ -1080,7 +1078,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   ): void {
     const { overflow, theme, themeType, disableBackground, diffIndicators } =
       this.getOptionsWithDefaults();
-    const options: Omit<SetupWrapperNodesProps, 'highlighter'> = {
+    const options: Omit<SetupWrapperNodeProps, 'highlighter'> = {
       pre,
       theme,
       split,
@@ -1093,7 +1091,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (this.poolManager != null) {
       this.poolManager.setPreNodeAttributes(options);
     } else if (this.highlighter != null) {
-      setWrapperProps({ ...options, highlighter: this.highlighter });
+      setWrapperNodeProps({ ...options, highlighter: this.highlighter });
     }
   }
 }

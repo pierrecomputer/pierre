@@ -10,18 +10,18 @@ import type {
   PJSThemeNames,
   ThemesType,
 } from '../types';
-import { createPreElement } from '../utils/createPreElement';
-import { getThemes } from '../utils/getThemes';
 import {
   type CreateFileHeaderElementProps,
   createFileHeaderElement,
-} from '../utils/hast_utils';
-import {
-  type SetupWrapperNodesProps,
-  setWrapperProps,
-} from '../utils/html_render_utils';
+} from '../utils/createFileHeaderElement';
+import { createPreElement } from '../utils/createPreElement';
+import { getThemes } from '../utils/getThemes';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import {
+  type SetupWrapperNodeProps,
+  setWrapperNodeProps,
+} from '../utils/setWrapperNodeProps';
 import { WorkerPool } from './WorkerPool';
 import type {
   RenderDiffFilesResult,
@@ -191,13 +191,13 @@ export class ShikiPoolManager {
   }
 
   setPreNodeAttributes(
-    options: Omit<SetupWrapperNodesProps, 'highlighter'>
+    options: Omit<SetupWrapperNodeProps, 'highlighter'>
   ): void {
     if (this.highlighter == null) {
       void this.initialize();
       return;
     }
-    setWrapperProps({
+    setWrapperNodeProps({
       ...options,
       highlighter: this.highlighter,
     });

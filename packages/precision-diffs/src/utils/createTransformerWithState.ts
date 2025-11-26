@@ -5,7 +5,8 @@ import {
 import type { ElementContent } from 'hast';
 
 import type { SharedRenderState, ShikiTransformer } from '../types';
-import { convertLine, findCodeElement } from './hast_utils';
+import { findCodeElement } from './hast_utils';
+import { processLine } from './processLine';
 
 interface CreateTransformerWithStateReturn {
   state: SharedRenderState;
@@ -33,7 +34,7 @@ export function createTransformerWithState(
           let index = 1;
           for (const node of code.children) {
             if (node.type !== 'element') continue;
-            children.push(convertLine(node, index, state));
+            children.push(processLine(node, index, state));
             index++;
           }
           code.children = children;
