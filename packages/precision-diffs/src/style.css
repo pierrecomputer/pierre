@@ -586,7 +586,7 @@ code {
 }
 
 [data-type='split'][data-overflow='wrap'] [data-additions] {
-  [data-line-annotation],
+  [data-line-annotation], /* stylelint-disable-line no-duplicate-selectors */
   [data-buffer],
   [data-line],
   [data-separator] {
