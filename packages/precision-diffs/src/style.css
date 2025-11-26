@@ -358,6 +358,9 @@ code {
 
   &::before {
     content: '';
+    position: sticky;
+    top: 0;
+    left: 0;
     display: block;
     border-right: var(--pjs-gap-style, 1px solid var(--pjs-bg));
     background-color: var(--pjs-bg-selection-number);
