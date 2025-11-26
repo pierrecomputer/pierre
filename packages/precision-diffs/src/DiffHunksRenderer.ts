@@ -827,11 +827,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 oldLine = undefined;
               }
             } else {
-              if (hunkContent.additions[i] == null) {
-                newLine = undefined;
-              }
-              if (hunkContent.deletions[i] == null) {
+              if (i >= dLen) {
                 oldLine = undefined;
+              }
+              if (i >= aLen) {
+                newLine = undefined;
               }
             }
             if (oldLine == null && newLine == null) {
