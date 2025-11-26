@@ -375,16 +375,6 @@ code {
   cursor: pointer;
 }
 
-[data-type='split'][data-overflow='wrap'] [data-additions] [data-line],
-[data-type='split'][data-overflow='wrap'] [data-additions] [data-separator],
-[data-type='split'][data-overflow='wrap'] [data-additions] [data-buffer],
-[data-type='split'][data-overflow='wrap']
-  [data-additions]
-  [data-line-annotation] {
-  /* Gutter between splits when code is allowed to wrap */
-  margin-left: 2px;
-}
-
 [data-buffer] {
   position: sticky;
   left: 0;
@@ -586,10 +576,11 @@ code {
 }
 
 [data-type='split'][data-overflow='wrap'] [data-additions] {
-  [data-line-annotation], /* stylelint-disable-line no-duplicate-selectors */
+  [data-line-annotation],
   [data-buffer],
   [data-line],
   [data-separator] {
+    margin-left: 2px;
     grid-column: 3 / 5;
   }
 }
