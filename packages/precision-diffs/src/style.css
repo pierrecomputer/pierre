@@ -268,6 +268,7 @@ code {
 }
 
 [data-column-content] {
+  background-color: var(--pjs-line-bg, 'transparent');
   grid-column: 2 / 3;
 }
 
@@ -590,10 +591,6 @@ code {
   grid-template-columns: subgrid;
 }
 
-[data-column-content] {
-  background-color: var(--pjs-line-bg, 'transparent');
-}
-
 [data-column-content],
 [data-column-number] {
   position: relative;
@@ -876,23 +873,21 @@ code {
 [data-line-type='context-expanded'],
 [data-line-type='change-addition'],
 [data-line-type='change-deletion'] {
-  &[data-selected-line] [data-column-content] {
-    background-color: light-dark(
-      color-mix(in lab, var(--pjs-line-bg) 82%, var(--pjs-selection-base)),
-      color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base))
-    );
-  }
-}
+  &[data-selected-line] {
+    [data-column-content] {
+      background-color: light-dark(
+        color-mix(in lab, var(--pjs-line-bg) 82%, var(--pjs-selection-base)),
+        color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base))
+      );
+    }
 
-[data-line-type='context-expanded'],
-[data-line-type='change-addition'],
-[data-line-type='change-deletion'] {
-  &[data-selected-line] [data-column-number] {
-    color: var(--pjs-selection-number-fg);
-    background-color: light-dark(
-      color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base)),
-      color-mix(in lab, var(--pjs-line-bg) 60%, var(--pjs-selection-base))
-    );
+    [data-column-number] {
+      color: var(--pjs-selection-number-fg);
+      background-color: light-dark(
+        color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base)),
+        color-mix(in lab, var(--pjs-line-bg) 60%, var(--pjs-selection-base))
+      );
+    }
   }
 }
 
