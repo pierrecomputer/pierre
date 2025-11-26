@@ -13,7 +13,7 @@ import { createRowNodes } from './utils/createRowNodes';
 import { createSpanFromToken } from './utils/createSpanNodeFromToken';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
-import { setWrapperNodeProps } from './utils/setWrapperNodeProps';
+import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
   startingLineIndex?: number;
@@ -97,8 +97,9 @@ export class FileStream {
     highlighter: PJSHighlighter
   ): void {
     const {
-      theme = DEFAULT_THEMES,
+      disableLineNumbers = false,
       overflow = 'scroll',
+      theme = DEFAULT_THEMES,
       themeType = 'system',
     } = this.options;
     const fileContainer = this.getOrCreateFileContainer();
@@ -109,15 +110,16 @@ export class FileStream {
     if (this.pre.parentElement == null) {
       fileContainer.shadowRoot?.appendChild(this.pre);
     }
-    const pre = setWrapperNodeProps({
+    const pre = setPreNodeProperties({
+      diffIndicators: 'none',
+      disableBackground: true,
+      disableLineNumbers,
+      highlighter,
+      overflow,
       pre: this.pre,
       split: false,
       theme,
-      highlighter,
-      wrap: overflow === 'wrap',
       themeType,
-      diffIndicators: 'none',
-      disableBackground: true,
       totalLines: 0,
     });
     pre.innerHTML = '';

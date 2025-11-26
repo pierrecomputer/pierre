@@ -17,6 +17,7 @@ import type {
   Hunk,
   HunkData,
   PJSHighlighter,
+  PrePropertiesConfig,
   RenderedDiffASTCache,
   SupportedLanguages,
   ThemeTypes,
@@ -36,8 +37,8 @@ import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import { createHastElement } from './utils/hast_utils';
 import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
 import {
-  type SetupWrapperNodeProps,
-  setWrapperNodeProps,
+  type SetPreNodePropertiesProps,
+  setPreNodeProperties,
 } from './utils/setWrapperNodeProps';
 import type { RenderDiffResult, ShikiPoolManager } from './worker';
 
@@ -302,28 +303,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     split: boolean,
     totalLines: number
   ): HASTElement | undefined {
-    const { theme, diffIndicators, disableBackground, overflow, themeType } =
-      this.getOptionsWithDefaults();
+    const {
+      diffIndicators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      theme,
+      themeType,
+    } = this.getOptionsWithDefaults();
+    const options: Omit<PrePropertiesConfig, 'theme'> = {
+      diffIndicators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      split,
+      themeType,
+      totalLines,
+    };
     if (this.poolManager != null) {
-      return this.poolManager.createPreElement({
-        diffIndicators,
-        disableBackground,
-        overflow,
-        split,
-        themeType,
-        totalLines,
-      });
+      return this.poolManager.createPreElement(options);
     }
     if (this.highlighter != null) {
       return createPreElement({
-        theme,
+        ...options,
         highlighter: this.highlighter,
-        diffIndicators,
-        disableBackground,
-        overflow,
-        split,
-        themeType,
-        totalLines,
+        theme,
       });
     }
     return undefined;
@@ -1076,22 +1080,29 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     split: boolean,
     totalLines: number
   ): void {
-    const { overflow, theme, themeType, disableBackground, diffIndicators } =
-      this.getOptionsWithDefaults();
-    const options: Omit<SetupWrapperNodeProps, 'highlighter'> = {
-      pre,
-      theme,
-      split,
-      wrap: overflow === 'wrap',
-      themeType,
+    const {
       diffIndicators,
       disableBackground,
+      disableLineNumbers,
+      overflow,
+      theme,
+      themeType,
+    } = this.getOptionsWithDefaults();
+    const options: Omit<SetPreNodePropertiesProps, 'highlighter'> = {
+      diffIndicators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      pre,
+      split,
+      theme,
+      themeType,
       totalLines,
     };
     if (this.poolManager != null) {
       this.poolManager.setPreNodeAttributes(options);
     } else if (this.highlighter != null) {
-      setWrapperNodeProps({ ...options, highlighter: this.highlighter });
+      setPreNodeProperties({ ...options, highlighter: this.highlighter });
     }
   }
 }

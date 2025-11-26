@@ -12,6 +12,7 @@ import type {
   FileContents,
   LineAnnotation,
   PJSHighlighter,
+  PrePropertiesConfig,
   RenderedFileASTCache,
   SupportedLanguages,
   ThemeTypes,
@@ -26,8 +27,8 @@ import { getThemes } from './utils/getThemes';
 import { createHastElement } from './utils/hast_utils';
 import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
 import {
-  type SetupWrapperNodeProps,
-  setWrapperNodeProps,
+  type SetPreNodePropertiesProps,
+  setPreNodeProperties,
 } from './utils/setWrapperNodeProps';
 import type { ShikiPoolManager } from './worker';
 
@@ -186,25 +187,29 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private createPreElement(totalLines: number): HASTElement | undefined {
+    const {
+      disableLineNumbers = false,
+      overflow = 'scroll',
+      theme = DEFAULT_THEMES,
+      themeType = 'system',
+    } = this.options;
+    const options: Omit<PrePropertiesConfig, 'theme'> = {
+      diffIndicators: 'none',
+      disableBackground: true,
+      disableLineNumbers,
+      overflow,
+      split: false,
+      themeType,
+      totalLines,
+    };
     if (this.poolManager != null) {
-      return this.poolManager.createPreElement({
-        diffIndicators: 'none',
-        disableBackground: true,
-        overflow: this.options.overflow,
-        split: false,
-        themeType: this.options.themeType,
-        totalLines,
-      });
+      return this.poolManager.createPreElement(options);
     }
     if (this.highlighter != null) {
       return createPreElement({
+        ...options,
         highlighter: this.highlighter,
-        diffIndicators: 'none',
-        disableBackground: true,
-        overflow: this.options.overflow,
-        split: false,
-        themeType: this.options.themeType,
-        totalLines,
+        theme,
       });
     }
     return undefined;
@@ -339,12 +344,18 @@ export class FileRenderer<LAnnotation = undefined> {
   // thing that kinda sucks is that it silently fails if we don't have a valid
   // highlighter or poolManager...
   applyPreNodeAttributes(pre: HTMLPreElement, totalLines: number): void {
-    const { overflow = 'scroll', theme, themeType = 'system' } = this.options;
-    const options: Omit<SetupWrapperNodeProps, 'highlighter'> = {
+    const {
+      overflow = 'scroll',
+      theme = DEFAULT_THEMES,
+      themeType = 'system',
+      disableLineNumbers = false,
+    } = this.options;
+    const options: Omit<SetPreNodePropertiesProps, 'highlighter'> = {
       pre,
       theme,
       split: false,
-      wrap: overflow === 'wrap',
+      overflow,
+      disableLineNumbers,
       themeType,
       diffIndicators: 'none',
       disableBackground: true,
@@ -353,7 +364,7 @@ export class FileRenderer<LAnnotation = undefined> {
     if (this.poolManager != null) {
       this.poolManager.setPreNodeAttributes(options);
     } else if (this.highlighter != null) {
-      setWrapperNodeProps({ ...options, highlighter: this.highlighter });
+      setPreNodeProperties({ ...options, highlighter: this.highlighter });
     }
   }
 }

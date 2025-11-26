@@ -29,7 +29,13 @@ export function processLine(
   const children = [
     createHastElement({
       tagName: 'span',
-      children: [{ type: 'text', value: `${lineInfo.lineNumber}` }],
+      children: [
+        createHastElement({
+          tagName: 'span',
+          children: [{ type: 'text', value: `${lineInfo.lineNumber}` }],
+          properties: { 'data-line-number-content': '' },
+        }),
+      ],
       properties: { 'data-column-number': '' },
     }),
     node,

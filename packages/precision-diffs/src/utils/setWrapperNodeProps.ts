@@ -1,35 +1,23 @@
-import { DEFAULT_THEMES } from '../constants';
-import type {
-  PJSHighlighter,
-  PJSThemeNames,
-  ThemeTypes,
-  ThemesType,
-} from '../types';
+import type { PJSHighlighter, PrePropertiesConfig } from '../types';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 
-export interface SetupWrapperNodeProps {
-  theme?: PJSThemeNames | ThemesType;
+export interface SetPreNodePropertiesProps extends PrePropertiesConfig {
   pre: HTMLPreElement;
   highlighter: PJSHighlighter;
-  split: boolean;
-  wrap: boolean;
-  themeType: ThemeTypes;
-  diffIndicators: 'bars' | 'classic' | 'none';
-  disableBackground: boolean;
-  totalLines: number;
 }
 
-export function setWrapperNodeProps({
-  pre,
-  highlighter,
-  theme = DEFAULT_THEMES,
-  split,
-  wrap,
-  themeType,
+export function setPreNodeProperties({
   diffIndicators,
   disableBackground,
+  disableLineNumbers,
+  highlighter,
+  overflow,
+  pre,
+  split,
+  theme,
+  themeType,
   totalLines,
-}: SetupWrapperNodeProps): HTMLPreElement {
+}: SetPreNodePropertiesProps): HTMLPreElement {
   // Get theme color custom properties (e.g., --pjs-fg, --pjs-bg)
   const styles = getHighlighterThemeStyles({ theme, highlighter });
 
@@ -51,13 +39,18 @@ export function setWrapperNodeProps({
       delete pre.dataset.indicators;
       break;
   }
+  if (disableLineNumbers) {
+    pre.dataset.disableLineNumbers = '';
+  } else {
+    delete pre.dataset.disableLineNumbers;
+  }
   if (disableBackground) {
     delete pre.dataset.background;
   } else {
     pre.dataset.background = '';
   }
   pre.dataset.type = split ? 'split' : 'file';
-  pre.dataset.overflow = wrap ? 'wrap' : 'scroll';
+  pre.dataset.overflow = overflow;
   pre.dataset.pjs = '';
   pre.tabIndex = 0;
   // Set theme color custom properties as inline styles on pre element
