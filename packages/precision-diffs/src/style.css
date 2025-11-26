@@ -590,6 +590,10 @@ code {
   grid-template-columns: subgrid;
 }
 
+[data-column-content] {
+  background-color: var(--pjs-line-bg, 'transparent');
+}
+
 [data-column-content],
 [data-column-number] {
   position: relative;
@@ -711,7 +715,7 @@ code {
 }
 
 [data-background] [data-line-type='change-addition'] {
-  --pjs-bg: var(--pjs-bg-addition);
+  --pjs-line-bg: var(--pjs-bg-addition);
 
   [data-column-number] {
     background-color: var(--pjs-bg-addition-number);
@@ -719,7 +723,7 @@ code {
 }
 
 [data-background] [data-line-type='change-deletion'] {
-  --pjs-bg: var(--pjs-bg-deletion);
+  --pjs-line-bg: var(--pjs-bg-deletion);
 
   [data-column-number] {
     background-color: var(--pjs-bg-deletion-number);
@@ -727,10 +731,10 @@ code {
 }
 
 [data-line-type='context-expanded'] {
-  --pjs-bg: var(--pjs-bg-context);
+  --pjs-line-bg: var(--pjs-bg-context);
 
   [data-column-number] {
-    --pjs-bg: var(--pjs-bg-context);
+    background-color: var(--pjs-bg-context);
   }
 }
 
@@ -869,23 +873,27 @@ code {
   }
 }
 
-[data-line-type='context-expanded'][data-selected-line],
-[data-line-type='change-addition'][data-selected-line],
-[data-line-type='change-deletion'][data-selected-line] {
-  background-color: light-dark(
-    color-mix(in lab, var(--pjs-bg) 82%, var(--pjs-selection-base)),
-    color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base))
-  );
+[data-line-type='context-expanded'],
+[data-line-type='change-addition'],
+[data-line-type='change-deletion'] {
+  &[data-selected-line] [data-column-content] {
+    background-color: light-dark(
+      color-mix(in lab, var(--pjs-line-bg) 82%, var(--pjs-selection-base)),
+      color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base))
+    );
+  }
 }
 
-[data-line-type='context-expanded'][data-selected-line] [data-column-number],
-[data-line-type='change-addition'][data-selected-line] [data-column-number],
-[data-line-type='change-deletion'][data-selected-line] [data-column-number] {
-  color: var(--pjs-selection-number-fg);
-  background-color: light-dark(
-    color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base)),
-    color-mix(in lab, var(--pjs-bg) 60%, var(--pjs-selection-base))
-  );
+[data-line-type='context-expanded'],
+[data-line-type='change-addition'],
+[data-line-type='change-deletion'] {
+  &[data-selected-line] [data-column-number] {
+    color: var(--pjs-selection-number-fg);
+    background-color: light-dark(
+      color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base)),
+      color-mix(in lab, var(--pjs-line-bg) 60%, var(--pjs-selection-base))
+    );
+  }
 }
 
 [data-hover-slot] {
