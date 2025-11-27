@@ -57,9 +57,8 @@ async function loadPatchContent() {
   return loadingPatch;
 }
 
-let poolManager: ShikiPoolManager | undefined;
 // Create worker API - helper handles worker creation automatically!
-const manager = (() => {
+const poolManager = (() => {
   const manager = createWorkerAPI({
     theme: DEFAULT_THEMES,
     langs: ['typescript', 'tsx'],
@@ -67,7 +66,6 @@ const manager = (() => {
 
   // @ts-expect-error bcuz
   window.__POOL = manager;
-  poolManager = manager;
   return manager;
 })();
 
@@ -295,7 +293,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           tokenizeMaxLineLength: 1000,
         })
-        .then((result) => {
+        .then(({ code: result }) => {
           if (result.hunks == null) {
             console.log(
               'Worker Render: rendered file:',
@@ -355,7 +353,7 @@ if (loadDiff != null) {
     void (async () => {
       renderDiff(
         parsedPatches ?? parsePatchFiles(await loadPatchContent()),
-        manager
+        poolManager
       );
     })();
   }
@@ -454,7 +452,7 @@ if (diff2Files != null) {
 
       lastWrapper?.parentNode?.removeChild(lastWrapper);
       const parsed = parseDiffFromFile(oldFile, newFile);
-      renderDiff([{ files: [parsed] }], manager);
+      renderDiff([{ files: [parsed] }], poolManager);
     });
     bottomWrapper.appendChild(render);
 
@@ -562,7 +560,7 @@ if (renderFileButton != null) {
         //   return el;
         // },
       },
-      manager
+      poolManager
     );
 
     void instance.render({
