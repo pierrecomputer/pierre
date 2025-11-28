@@ -33,16 +33,23 @@ import {
 
 const diffInstances: FileDiff<LineCommentMetadata>[] = [];
 const fileInstances: File<unknown>[] = [];
+const streamingInstances: FileStream[] = [];
 
-function cleanupInstances() {
+function cleanupInstances(container: HTMLElement) {
   for (const instance of diffInstances) {
     instance.cleanUp();
   }
   for (const instance of fileInstances) {
     instance.cleanUp();
   }
+  for (const instance of streamingInstances) {
+    instance.cleanUp();
+  }
   diffInstances.length = 0;
   fileInstances.length = 0;
+  streamingInstances.length = 0;
+  container.innerHTML = '';
+  delete container.dataset.diff;
 }
 
 let loadingPatch: Promise<string> | undefined;
@@ -69,15 +76,10 @@ const poolManager = (() => {
   return manager;
 })();
 
-const streamingInstances: FileStream[] = [];
 function startStreaming() {
   const container = document.getElementById('wrapper');
   if (container == null) return;
-  for (const instance of streamingInstances) {
-    instance.cleanUp();
-  }
-  streamingInstances.length = 0;
-  container.innerHTML = '';
+  cleanupInstances(container);
   for (const { content, letterByLetter, options } of CodeConfigs) {
     const instance = new FileStream(options);
     void instance.setup(
@@ -114,9 +116,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: ShikiPoolManager) {
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;
   window.scrollTo({ top: 0 });
-  cleanupInstances();
+  cleanupInstances(wrapper);
   wrapper.dataset.diff = '';
-  wrapper.innerHTML = '';
 
   const checkbox = document.getElementById('unified') as
     | HTMLInputElement
@@ -520,8 +521,8 @@ if (renderFileButton != null) {
   renderFileButton.addEventListener('click', () => {
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) return;
-    cleanupInstances();
-    wrapper.innerHTML = '';
+    cleanupInstances(wrapper);
+
     const fileContainer = document.createElement('file-diff');
     wrapper.appendChild(fileContainer);
     const instance = new File<LineCommentMetadata>(
