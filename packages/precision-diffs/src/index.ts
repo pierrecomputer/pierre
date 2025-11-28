@@ -24,6 +24,7 @@ export * from './utils/createSeparator';
 export * from './utils/createSpanNodeFromToken';
 export * from './utils/createStyleElement';
 export * from './utils/createTransformerWithState';
+export * from './utils/diffAcceptRejectHunk';
 export * from './utils/formatCSSVariablePrefix';
 export * from './utils/getFiletypeFromFileName';
 export * from './utils/getHighlighterOptions';

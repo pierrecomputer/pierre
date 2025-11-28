@@ -392,8 +392,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     fileDiff: FileDiffMetadata,
     { code, themeStyles, baseThemeType }: RenderDiffResult
   ): HunksRenderResult {
-    const { expandUnchanged, diffStyle, disableFileHeader } =
-      this.getOptionsWithDefaults();
+    const { diffStyle, disableFileHeader } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
@@ -405,39 +404,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const hunkData: HunkData[] = [];
 
     let prevHunk: Hunk | undefined;
-    const hunks = (() => {
-      if (fileDiff.hunks.length > 0) {
-        return fileDiff.hunks;
-      }
-      if (
-        expandUnchanged &&
-        this.diff?.newLines != null &&
-        this.diff.newLines.length > 0
-      ) {
-        const lineCount = this.diff.newLines.length + 1;
-        return [
-          {
-            collapsedBefore: 0,
-            additionCount: 0,
-            additionStart: lineCount,
-            additionLines: 0,
-            deletionCount: 0,
-            deletionStart: lineCount,
-            deletionLines: 0,
-            hunkContent: [],
-            hunkContext: undefined,
-            hunkSpecs: undefined,
-            splitLineCount: 0,
-            splitLineStart: 0,
-            unifiedLineCount: 0,
-            unifiedLineStart: 0,
-          } satisfies Hunk,
-        ];
-      }
-      return [];
-    })();
     let lineIndex = 0;
-    for (const hunk of hunks) {
+    for (const hunk of fileDiff.hunks) {
       lineIndex += hunk.collapsedBefore;
       lineIndex = this.renderHunks({
         ast: code,
