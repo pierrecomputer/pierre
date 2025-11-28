@@ -31,6 +31,7 @@ export interface FileStreamOptions extends BaseCodeOptions {
 export class FileStream {
   private highlighter: PJSHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
+  private abortController: AbortController | undefined;
   private fileContainer: HTMLElement | undefined;
   pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
@@ -40,7 +41,8 @@ export class FileStream {
   }
 
   cleanUp(): void {
-    void this.stream?.cancel();
+    this.abortController?.abort();
+    this.abortController = undefined;
   }
 
   setThemeType(themeType: ThemeTypes): void {
@@ -129,13 +131,11 @@ export class FileStream {
 
     this.pre = pre;
     this.code = createCodeNode({ pre });
-    if (this.stream != null) {
-      // Should we be doing this?
-      void this.stream.cancel();
-    }
+    this.abortController?.abort();
+    this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
     this.stream = stream;
-    void this.stream
+    this.stream
       .pipeThrough(
         typeof theme === 'string'
           ? new CodeToTokenTransformStream({
@@ -167,8 +167,15 @@ export class FileStream {
             onStreamAbort?.(reason);
           },
           write: this.handleWrite,
-        })
-      );
+        }),
+        { signal: this.abortController.signal }
+      )
+      .catch((error) => {
+        // Ignore AbortError - it's expected when cleaning up
+        if (error.name !== 'AbortError') {
+          console.error('FileStream pipe error:', error);
+        }
+      });
   }
 
   private queuedTokens: (ThemedToken | RecallToken)[] = [];

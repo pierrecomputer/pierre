@@ -4,9 +4,13 @@ export function createFakeContentStream(data: string, letterByLetter = false) {
   return new ReadableStream<string>({
     start(controller) {
       let timeout: ReturnType<typeof setTimeout> | null = null;
+      let cancelled = false;
+
       function pushNext() {
-        if (data.length === 0) {
-          controller.close();
+        if (cancelled || data.length === 0) {
+          if (!cancelled && data.length === 0) {
+            controller.close();
+          }
           return;
         }
 
@@ -16,7 +20,12 @@ export function createFakeContentStream(data: string, letterByLetter = false) {
 
         const nextData = data.slice(0, chunkSize);
         data = data.slice(chunkSize);
-        controller.enqueue(nextData);
+        try {
+          controller.enqueue(nextData);
+        } catch {
+          cancelled = true;
+          return;
+        }
 
         if (letterByLetter) {
           queueRender(pushNext);
