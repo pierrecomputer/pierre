@@ -1,5 +1,12 @@
-import type { DiffLineAnnotation, FileContents } from '@pierre/precision-diffs';
-import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import {
+  type DiffLineAnnotation,
+  type FileContents,
+  parseDiffFromFile,
+} from '@pierre/precision-diffs';
+import type {
+  PreloadFileDiffOptions,
+  PreloadMultiFileDiffOptions,
+} from '@pierre/precision-diffs/ssr';
 
 export interface AnnotationMetadata {
   key: string;
@@ -114,14 +121,12 @@ export default function Home() {
 export const ACCEPT_REJECT_ANNOTATIONS: DiffLineAnnotation<AcceptRejectMetadata>[] =
   [{ side: 'additions', lineNumber: 9, metadata: { key: 'del-1' } }];
 
-export const ACCEPT_REJECT_EXAMPLE: PreloadMultiFileDiffOptions<AcceptRejectMetadata> =
+export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<AcceptRejectMetadata> =
   {
-    oldFile: ACCEPT_REJECT_OLD_FILE,
-    newFile: ACCEPT_REJECT_NEW_FILE,
+    fileDiff: parseDiffFromFile(ACCEPT_REJECT_OLD_FILE, ACCEPT_REJECT_NEW_FILE),
     options: {
       theme: 'pierre-dark',
       diffStyle: 'unified',
-      expandUnchanged: true,
     },
     annotations: ACCEPT_REJECT_ANNOTATIONS,
   };

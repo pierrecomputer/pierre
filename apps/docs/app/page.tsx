@@ -5,7 +5,10 @@ import {
   IconBrandGithub,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import {
+  preloadFileDiff,
+  preloadMultiFileDiff,
+} from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
@@ -151,7 +154,7 @@ async function ArbitraryFilesSection() {
 async function AcceptRejectSection() {
   return (
     <AcceptRejectExample
-      prerenderedDiff={await preloadMultiFileDiff(ACCEPT_REJECT_EXAMPLE)}
+      prerenderedDiff={await preloadFileDiff(ACCEPT_REJECT_EXAMPLE)}
     />
   );
 }
