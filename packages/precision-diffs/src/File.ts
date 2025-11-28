@@ -30,6 +30,7 @@ import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode
 import { createCodeNode } from './utils/createCodeNode';
 import { createHoverContentNode } from './utils/createHoverContentNode';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 import type { ShikiPoolManager } from './worker';
 
 export interface FileRenderProps<LAnnotation> {
@@ -101,7 +102,6 @@ export class File<LAnnotation = undefined> {
   }
 
   private handleHighlightRender = (): void => {
-    if (this.poolManager == null) return;
     this.rerender();
   };
 
@@ -262,9 +262,6 @@ export class File<LAnnotation = undefined> {
       }
     }
 
-    const headerResult = !disableFileHeader
-      ? this.fileRenderer.renderHeader(file)
-      : undefined;
     const fileResult = this.fileRenderer.renderFile(file);
 
     fileContainer = this.getOrCreateFileContainerNode(
@@ -272,21 +269,20 @@ export class File<LAnnotation = undefined> {
       containerWrapper
     );
 
-    if (fileResult == null && headerResult == null) {
+    if (fileResult == null) {
+      if (this.poolManager != null && !this.poolManager.isInitialized()) {
+        void this.poolManager.initialize().then(() => this.rerender());
+      }
       // FIXME(amadeus): Probably figure out how to render a skeleton?
       return;
     }
-    if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer);
+    if (fileResult.headerAST != null) {
+      this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
     }
-    if (fileResult != null) {
-      const pre = this.getOrCreatePreNode(fileContainer);
-      this.applyHunksToDOM(fileResult, pre);
-      this.renderAnnotations();
-      this.renderHoverUtility();
-    } else if (this.poolManager != null && !this.poolManager.isInitialized()) {
-      void this.poolManager.initialize().then(() => this.rerender());
-    }
+    const pre = this.getOrCreatePreNode(fileContainer);
+    this.applyHunksToDOM(fileResult, pre);
+    this.renderAnnotations();
+    this.renderHoverUtility();
   }
 
   private renderAnnotations(): void {
@@ -351,7 +347,7 @@ export class File<LAnnotation = undefined> {
   }
 
   private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
-    this.applyPreNodeAttributes(pre, result.totalLines);
+    this.applyPreNodeAttributes(pre, result);
     pre.innerHTML = '';
     // Create code elements and insert HTML content
     this.code = createCodeNode();
@@ -445,8 +441,23 @@ export class File<LAnnotation = undefined> {
 
   private applyPreNodeAttributes(
     pre: HTMLPreElement,
-    totalLines: number
+    { totalLines, themeStyles, baseThemeType }: FileRenderResult
   ): void {
-    this.fileRenderer.applyPreNodeAttributes(pre, totalLines);
+    const {
+      overflow = 'scroll',
+      themeType = 'system',
+      disableLineNumbers = false,
+    } = this.options;
+    setPreNodeProperties({
+      pre,
+      split: false,
+      themeStyles,
+      overflow,
+      disableLineNumbers,
+      themeType: baseThemeType ?? themeType,
+      diffIndicators: 'none',
+      disableBackground: true,
+      totalLines,
+    });
   }
 }

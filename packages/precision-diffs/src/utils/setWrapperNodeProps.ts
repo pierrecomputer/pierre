@@ -1,34 +1,24 @@
-import type { PJSHighlighter, PrePropertiesConfig } from '../types';
-import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
+import type { PrePropertiesConfig } from '../types';
 
 export interface SetPreNodePropertiesProps extends PrePropertiesConfig {
   pre: HTMLPreElement;
-  highlighter: PJSHighlighter;
 }
 
 export function setPreNodeProperties({
   diffIndicators,
   disableBackground,
   disableLineNumbers,
-  highlighter,
   overflow,
   pre,
   split,
-  theme,
+  themeStyles,
   themeType,
   totalLines,
 }: SetPreNodePropertiesProps): HTMLPreElement {
-  // Get theme color custom properties (e.g., --pjs-fg, --pjs-bg)
-  const styles = getHighlighterThemeStyles({ theme, highlighter });
-
   if (themeType === 'system') {
     delete pre.dataset.themeType;
   } else {
     pre.dataset.themeType = themeType;
-  }
-  if (typeof theme === 'string') {
-    const themeData = highlighter.getTheme(theme);
-    pre.dataset.themeType = themeData.type;
   }
   switch (diffIndicators) {
     case 'bars':
@@ -54,7 +44,7 @@ export function setPreNodeProperties({
   pre.dataset.pjs = '';
   pre.tabIndex = 0;
   // Set theme color custom properties as inline styles on pre element
-  pre.style = styles;
+  pre.style = themeStyles;
   // Set CSS custom property for line number column width
   pre.style.setProperty(
     '--pjs-min-number-column-width-default',

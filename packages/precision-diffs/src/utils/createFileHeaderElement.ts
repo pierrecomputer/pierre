@@ -5,12 +5,8 @@ import type {
   ChangeTypes,
   FileContents,
   FileDiffMetadata,
-  PJSHighlighter,
-  PJSThemeNames,
   ThemeTypes,
-  ThemesType,
 } from '../types';
-import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getIconForType } from './getIconForType';
 import {
   createHastElement,
@@ -20,37 +16,22 @@ import {
 
 export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
-  theme?: PJSThemeNames | ThemesType;
-  highlighter: PJSHighlighter;
-  prefix?: string;
-  themeType?: ThemeTypes;
+  themeStyles: string;
+  themeType: ThemeTypes;
 }
 
 export function createFileHeaderElement({
   fileOrDiff,
-  theme,
-  highlighter,
-  prefix,
-  themeType = 'system',
+  themeStyles,
+  themeType,
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-pjs-header': '',
-    style: getHighlighterThemeStyles({ theme, highlighter, prefix }),
+    'data-change-type': fileDiff?.type,
+    'data-theme-type': themeType !== 'system' ? themeType : undefined,
+    style: themeStyles,
   };
-
-  if (fileDiff != null) {
-    properties['data-change-type'] = fileDiff.type;
-  }
-
-  // If a theme is specified, then we should just override the themeType and
-  // ignore whatever might be passed in
-  if (typeof theme === 'string') {
-    const themeData = highlighter.getTheme(theme);
-    properties['data-theme-type'] = themeData.type;
-  } else if (themeType !== 'system') {
-    properties['data-theme-type'] = themeType;
-  }
 
   return createHastElement({
     tagName: 'div',

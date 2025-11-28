@@ -12,7 +12,6 @@ import type {
   FileContents,
   LineAnnotation,
   PJSHighlighter,
-  PrePropertiesConfig,
   RenderedFileASTCache,
   SupportedLanguages,
   ThemeTypes,
@@ -26,11 +25,7 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
 import { createHastElement } from './utils/hast_utils';
 import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
-import {
-  type SetPreNodePropertiesProps,
-  setPreNodeProperties,
-} from './utils/setWrapperNodeProps';
-import type { ShikiPoolManager } from './worker';
+import type { RenderFileResult, ShikiPoolManager } from './worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -40,8 +35,11 @@ type AnnotationLineMap<LAnnotation> = Record<
 export interface FileRenderResult {
   codeAST: ElementContent[];
   preAST: HASTElement;
+  headerAST: HASTElement | undefined;
   css: string;
   totalLines: number;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface FileRendererOptions extends BaseCodeOptions {
@@ -99,136 +97,86 @@ export class FileRenderer<LAnnotation = undefined> {
     if (file == null) {
       return undefined;
     }
-    const ast = (() => {
-      const {
-        lang,
-        theme,
-        disableLineNumbers,
-        tokenizeMaxLineLength = 1000,
-      } = this.options;
-      this.renderCache ??= { file, highlighted: false, ast: undefined };
-      const fileDidChange =
-        this.renderCache.file.contents !== file.contents ||
-        this.renderCache.file.name !== file.name;
-      if (this.poolManager != null) {
-        this.renderCache.ast ??= this.poolManager.renderPlainFileToAST(
-          file,
-          this.options.startingLineNumber
-        );
-        // TODO(amadeus): Figure out how to only fire this on a per file
-        // basis... (maybe the poolManager can figure it out based on file name
-        // and file contents probably?)
-        if (!this.renderCache.highlighted || fileDidChange) {
-          void this.poolManager
-            .renderFileToAST(file, {
-              lang,
-              theme,
-              disableLineNumbers,
-              tokenizeMaxLineLength,
-            })
-            .then((results) => this.handleAsyncHighlight(file, results));
-        }
-      } else {
-        if (
-          this.highlighter != null &&
-          (fileDidChange || !this.renderCache.highlighted)
-        ) {
-          this.renderCache.ast = this.renderFileWithHighlighter(
-            file,
-            this.highlighter
-          );
-          this.renderCache.highlighted = true;
-        } else if (fileDidChange || !this.renderCache.highlighted) {
-          void this.asyncHighlight(file).then((ast) => {
-            this.handleAsyncHighlight(file, ast);
-          });
-        }
-      }
-      return this.renderCache.ast;
-    })();
-    this.renderCache.file = file;
-    const preElement = this.createPreElement(ast?.length ?? 0);
-    if (ast == null || preElement == null) {
-      return undefined;
-    }
-    return this.processFileResult(ast, preElement);
-  }
-
-  renderHeader(
-    file: FileContents | undefined = this.renderCache?.file,
-    highlighter: PJSHighlighter | undefined = this.highlighter
-  ): HASTElement | undefined {
-    if (file == null) {
-      return undefined;
-    }
-    if (this.poolManager != null) {
-      return this.poolManager.createHeaderElement({
-        fileOrDiff: file,
-        theme: this.options.theme,
-        themeType: this.options.themeType,
-      });
-    }
-    if (highlighter != null) {
-      return createFileHeaderElement({
-        fileOrDiff: file,
-        theme: this.options.theme,
-        themeType: this.options.themeType,
-        highlighter,
-      });
-    }
-    return undefined;
-  }
-
-  async asyncRenderHeader(
-    diff: FileContents | undefined
-  ): Promise<HASTElement | undefined> {
-    this.highlighter ??= await this.initializeHighlighter();
-    return this.renderHeader(diff, this.highlighter);
-  }
-
-  private createPreElement(totalLines: number): HASTElement | undefined {
-    const {
-      disableLineNumbers = false,
-      overflow = 'scroll',
-      theme = DEFAULT_THEMES,
-      themeType = 'system',
-    } = this.options;
-    const options: Omit<PrePropertiesConfig, 'theme'> = {
-      diffIndicators: 'none',
-      disableBackground: true,
-      disableLineNumbers,
-      overflow,
-      split: false,
-      themeType,
-      totalLines,
+    const { lang, theme, tokenizeMaxLineLength = 1000 } = this.options;
+    this.renderCache ??= {
+      file,
+      highlighted: false,
+      code: undefined,
+      themeStyles: undefined,
+      baseThemeType: undefined,
     };
+    const fileDidChange =
+      this.renderCache.file.contents !== file.contents ||
+      this.renderCache.file.name !== file.name;
     if (this.poolManager != null) {
-      return this.poolManager.createPreElement(options);
-    }
-    if (this.highlighter != null) {
-      return createPreElement({
-        ...options,
-        highlighter: this.highlighter,
-        theme,
-      });
-    }
-    return undefined;
-  }
+      if (this.renderCache.code == null) {
+        this.renderCache = {
+          ...this.renderCache,
+          ...this.poolManager.renderPlainFileToAST(
+            file,
+            this.options.startingLineNumber
+          ),
+        };
+      }
+      // TODO(amadeus): Figure out how to only fire this on a per file
+      // basis... (maybe the poolManager can figure it out based on file name
+      // and file contents probably?)
+      if (!this.renderCache.highlighted || fileDidChange) {
+        void this.poolManager
+          .renderFileToAST(file, {
+            lang,
+            theme,
+            tokenizeMaxLineLength,
+          })
+          .then((results) => this.handleAsyncHighlight(file, results));
+      }
+    } else {
+      this.computedLang =
+        this.options.lang ?? getFiletypeFromFileName(file.name);
+      if (
+        // Reset highlighter if we no longer have the appropriate
+        // themes or languages loaded...
+        !hasLoadedThemes(getThemes(theme)) ||
+        !hasLoadedLanguage(this.computedLang)
+      ) {
+        this.highlighter = undefined;
+      }
 
-  async asyncRender(file: FileContents): Promise<FileRenderResult | undefined> {
-    const ast = await this.asyncHighlight(file);
-    const preNode = this.createPreElement(ast.length);
-    if (preNode == null) {
+      if (this.highlighter == null) {
+        void this.asyncHighlight(file).then((result) => {
+          this.handleAsyncHighlight(file, result);
+        });
+      } else if (fileDidChange || !this.renderCache.highlighted) {
+        this.renderCache = {
+          ...this.renderCache,
+          ...this.renderFileWithHighlighter(file, this.highlighter),
+          highlighted: true,
+        };
+      }
+    }
+
+    this.renderCache.file = file;
+    const { code, themeStyles, baseThemeType } = this.renderCache;
+    if (code == null || themeStyles == null) {
       return undefined;
     }
-    return this.processFileResult(ast, preNode);
+    return this.processFileResult(file, {
+      code,
+      themeStyles,
+      baseThemeType,
+    });
   }
 
-  private async asyncHighlight(file: FileContents): Promise<ElementContent[]> {
+  async asyncRender(file: FileContents): Promise<FileRenderResult> {
+    return this.processFileResult(file, await this.asyncHighlight(file));
+  }
+
+  private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
     this.computedLang = this.options.lang ?? getFiletypeFromFileName(file.name);
     if (
-      !hasLoadedLanguage(this.computedLang) ||
-      !hasLoadedThemes(getThemes(this.options.theme))
+      this.highlighter != null &&
+      (!hasLoadedLanguage(this.computedLang) ||
+        !hasLoadedThemes(getThemes(this.options.theme)))
     ) {
       this.highlighter = undefined;
     }
@@ -239,7 +187,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private renderFileWithHighlighter(
     file: FileContents,
     highlighter: PJSHighlighter
-  ): ElementContent[] {
+  ): RenderFileResult {
     const {
       theme,
       startingLineNumber,
@@ -255,13 +203,13 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private processFileResult(
-    rawAST: ElementContent[],
-    preAST: HASTElement
+    file: FileContents,
+    result: RenderFileResult
   ): FileRenderResult {
-    const { startingLineNumber = 1 } = this.options;
+    const { startingLineNumber = 1, disableFileHeader = false } = this.options;
     const codeAST: ElementContent[] = [];
     let lineIndex = startingLineNumber;
-    for (const line of rawAST) {
+    for (const line of result.code) {
       codeAST.push(line);
       const annotations = this.lineAnnotations[lineIndex];
       if (annotations != null) {
@@ -281,11 +229,33 @@ export class FileRenderer<LAnnotation = undefined> {
 
     return {
       codeAST,
-      preAST,
-      totalLines: rawAST.length,
+      preAST: this.createPreElement(
+        result.code.length,
+        result.themeStyles,
+        result.baseThemeType
+      ),
+      headerAST: !disableFileHeader
+        ? this.renderHeader(file, result.themeStyles, result.baseThemeType)
+        : undefined,
+      totalLines: result.code.length,
+      themeStyles: result.themeStyles,
+      baseThemeType: result.baseThemeType,
       // FIXME(amadeus): Fix this
       css: '',
     };
+  }
+
+  private renderHeader(
+    file: FileContents,
+    themeStyles: string,
+    baseThemeType: 'light' | 'dark' | undefined
+  ) {
+    const { themeType = 'system' } = this.options;
+    return createFileHeaderElement({
+      fileOrDiff: file,
+      themeStyles,
+      themeType: baseThemeType ?? themeType,
+    });
   }
 
   renderFullHTML(result: FileRenderResult): string {
@@ -329,42 +299,37 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  handleAsyncHighlight(file: FileContents, results: ElementContent[]): void {
-    if (this.poolManager == null) return;
+  handleAsyncHighlight(file: FileContents, results: RenderFileResult): void {
+    if (this.renderCache == null) {
+      return;
+    }
     this.renderCache = {
       file,
       highlighted: true,
-      ast: results,
+      ...results,
     };
     this.onRenderUpdate?.();
   }
 
-  // NOTE(amadeus): This feels a bit jank, and something that maybe shouldn't
-  // be on FileRenderer... but it's a quick solution for now.  Basically the
-  // thing that kinda sucks is that it silently fails if we don't have a valid
-  // highlighter or poolManager...
-  applyPreNodeAttributes(pre: HTMLPreElement, totalLines: number): void {
+  private createPreElement(
+    totalLines: number,
+    themeStyles: string,
+    baseThemeType: 'light' | 'dark' | undefined
+  ): HASTElement {
     const {
-      overflow = 'scroll',
-      theme = DEFAULT_THEMES,
-      themeType = 'system',
       disableLineNumbers = false,
+      overflow = 'scroll',
+      themeType = 'system',
     } = this.options;
-    const options: Omit<SetPreNodePropertiesProps, 'highlighter'> = {
-      pre,
-      theme,
-      split: false,
-      overflow,
-      disableLineNumbers,
-      themeType,
+    return createPreElement({
       diffIndicators: 'none',
       disableBackground: true,
+      disableLineNumbers,
+      overflow,
+      themeStyles,
+      themeType: baseThemeType ?? themeType,
+      split: false,
       totalLines,
-    };
-    if (this.poolManager != null) {
-      this.poolManager.setPreNodeAttributes(options);
-    } else if (this.highlighter != null) {
-      setPreNodeProperties({ ...options, highlighter: this.highlighter });
-    }
+    });
   }
 }

@@ -23,7 +23,6 @@ export async function preloadFile<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
-  const { disableFileHeader = false } = options ?? {};
   const fileRenderer = new FileRenderer<LAnnotation>(options);
 
   // Set line annotations if provided
@@ -31,18 +30,13 @@ export async function preloadFile<LAnnotation = undefined>({
     fileRenderer.setLineAnnotations(annotations);
   }
 
-  const [headerResult, fileResult] = await Promise.all([
-    !disableFileHeader ? fileRenderer.asyncRenderHeader(file) : undefined,
-    fileRenderer.asyncRender(file),
-  ]);
-  if (fileResult == null) {
-    throw new Error('Failed to render file diff');
-  }
+  const fileResult = await fileRenderer.asyncRender(file);
+
   const children = [
     createStyleElement(renderCSS(fileResult.css, options?.unsafeCSS)),
   ];
-  if (headerResult != null) {
-    children.push(headerResult);
+  if (fileResult.headerAST != null) {
+    children.push(fileResult.headerAST);
   }
   const code = fileRenderer.renderFullAST(fileResult);
   code.properties['data-dehydrated'] = '';

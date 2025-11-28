@@ -26,7 +26,6 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadDiffOptions<LAnnotation>): Promise<string> {
-  const { disableFileHeader = false } = options ?? {};
   if (fileDiff == null && oldFile != null && newFile != null) {
     fileDiff = parseDiffFromFile(oldFile, newFile);
   }
@@ -48,21 +47,13 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
     diffHunksRenderer.setLineAnnotations(annotations);
   }
 
-  const [headerResult, hunkResult] = await Promise.all([
-    !disableFileHeader
-      ? diffHunksRenderer.asyncRenderHeader(fileDiff)
-      : undefined,
-    diffHunksRenderer.asyncRender(fileDiff),
-  ]);
-  if (hunkResult == null) {
-    throw new Error('Failed to render file diff');
-  }
+  const hunkResult = await diffHunksRenderer.asyncRender(fileDiff);
 
   const children = [
     createStyleElement(renderCSS(hunkResult.css, options?.unsafeCSS)),
   ];
-  if (headerResult != null) {
-    children.push(headerResult);
+  if (hunkResult.headerElement != null) {
+    children.push(hunkResult.headerElement);
   }
   const code = diffHunksRenderer.renderFullAST(hunkResult);
   code.properties['data-dehydrated'] = '';

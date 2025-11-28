@@ -10,7 +10,7 @@ import type {
   ThemedToken,
 } from 'shiki';
 
-import type { RenderDiffResult } from './worker';
+import type { RenderDiffFilesResult, RenderDiffHunksResult } from './worker';
 
 export interface FileContents {
   name: string;
@@ -119,6 +119,7 @@ export interface BaseCodeOptions {
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
+  disableFileHeader?: boolean;
 
   // Shiki config options
   lang?: SupportedLanguages;
@@ -152,15 +153,15 @@ export interface PrePropertiesConfig
   extends Required<
     Pick<
       BaseDiffOptions,
-      | 'overflow'
-      | 'themeType'
       | 'diffIndicators'
       | 'disableBackground'
-      | 'theme'
       | 'disableLineNumbers'
+      | 'overflow'
+      | 'themeType'
     >
   > {
   split: boolean;
+  themeStyles: string;
   totalLines: number;
 }
 
@@ -299,11 +300,15 @@ export type ExpansionDirections = 'up' | 'down' | 'both';
 export interface RenderedFileASTCache {
   file: FileContents;
   highlighted: boolean;
-  ast: ElementContent[] | undefined;
+  code: ElementContent[] | undefined;
+  themeStyles: string | undefined;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface RenderedDiffASTCache {
   diff: FileDiffMetadata;
   highlighted: boolean;
-  ast: RenderDiffResult | undefined;
+  code: RenderDiffFilesResult | RenderDiffHunksResult | undefined;
+  themeStyles: string | undefined;
+  baseThemeType: 'light' | 'dark' | undefined;
 }

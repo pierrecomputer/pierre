@@ -21,6 +21,7 @@ import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
+import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
 import {
   createDiffSpanDecoration,
@@ -30,7 +31,6 @@ import {
 interface RenderOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
-  disableLineNumbers?: boolean;
   tokenizeMaxLineLength: number;
 }
 
@@ -39,6 +39,17 @@ export function renderDiffWithHighlighter(
   highlighter: PJSHighlighter,
   options: RenderOptions
 ): RenderDiffResult {
+  const baseThemeType = (() => {
+    const theme = options.theme ?? DEFAULT_THEMES;
+    if (typeof theme === 'string') {
+      return highlighter.getTheme(theme).type;
+    }
+    return undefined;
+  })();
+  const themeStyles = getHighlighterThemeStyles({
+    theme: options.theme,
+    highlighter,
+  });
   // If we've received a diff with both files
   if (diff.newLines != null && diff.oldLines != null) {
     const {
@@ -61,7 +72,7 @@ export function renderDiffWithHighlighter(
       name: diff.name,
       contents: newContent,
     };
-    return renderTwoFiles({
+    const code = renderTwoFiles({
       oldFile,
       oldInfo,
       oldDecorations,
@@ -73,6 +84,7 @@ export function renderDiffWithHighlighter(
       highlighter,
       options,
     });
+    return { code, themeStyles, baseThemeType };
   }
   // FIXME(amadeus): Maybe explore rendering all hunks as 1 file instead as a
   // ton of smaller ones?
@@ -114,14 +126,17 @@ export function renderDiffWithHighlighter(
     lineIndex = newLineIndex;
   }
 
-  if (hunks.length <= 1) {
-    const hunk = hunks[0] ?? { oldLines: [], newLines: [] };
-    if (hunk.newLines.length === 0 || hunk.oldLines.length === 0) {
-      return hunk;
+  const code = (() => {
+    if (hunks.length <= 1) {
+      const hunk = hunks[0] ?? { oldLines: [], newLines: [] };
+      if (hunk.newLines.length === 0 || hunk.oldLines.length === 0) {
+        return hunk;
+      }
     }
-  }
+    return { hunks };
+  })();
 
-  return { hunks };
+  return { code, themeStyles, baseThemeType };
 }
 
 interface ProcessLineDiffProps {

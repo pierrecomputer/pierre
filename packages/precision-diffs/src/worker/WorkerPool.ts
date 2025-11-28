@@ -97,19 +97,19 @@ export class WorkerPool {
     this.initialized = true;
   }
 
-  submitTask<T extends RenderFileResult | RenderDiffResult>(
+  submitTask<T extends RenderDiffResult | RenderFileResult>(
     request: SubmitRequest
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const requestId = this.generateRequestId();
+      const id = this.generateRequestId();
       const requestStart = Date.now();
       const task = (() => {
         switch (request.type) {
           case 'file':
             return {
               type: 'file',
-              id: requestId,
-              request: { ...request, id: requestId },
+              id,
+              request: { ...request, id },
               resolve,
               reject,
               requestStart,
@@ -117,8 +117,8 @@ export class WorkerPool {
           case 'diff-files':
             return {
               type: 'diff-files',
-              id: requestId,
-              request: { ...request, id: requestId },
+              id,
+              request: { ...request, id },
               resolve,
               reject,
               requestStart,
@@ -126,8 +126,8 @@ export class WorkerPool {
           case 'diff-metadata':
             return {
               type: 'diff-metadata',
-              id: requestId,
-              request: { ...request, id: requestId },
+              id,
+              request: { ...request, id },
               resolve,
               reject,
               requestStart,
@@ -135,7 +135,7 @@ export class WorkerPool {
         }
       })() as RenderFileTask | RenderDiffTask | RenderDiffMetadataTask;
 
-      this.pendingTasks.set(requestId, task);
+      this.pendingTasks.set(id, task);
 
       // Try to execute immediately if a worker is available -- Should we wait
       // a tick for a pool of workers to build before trying again?

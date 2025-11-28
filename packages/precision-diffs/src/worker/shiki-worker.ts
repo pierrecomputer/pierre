@@ -78,20 +78,19 @@ async function handleRenderFile({
   options: {
     theme = DEFAULT_THEMES,
     lang = getFiletypeFromFileName(file.name),
-    disableLineNumbers,
     startingLineNumber,
     tokenizeMaxLineLength,
   },
 }: RenderFileRequest): Promise<void> {
-  sendFileSuccess(id, {
-    lines: renderFileWithHighlighter(file, await getHighlighter(lang, theme), {
+  sendFileSuccess(
+    id,
+    renderFileWithHighlighter(file, await getHighlighter(lang, theme), {
       theme,
       lang,
-      disableLineNumbers,
       startingLineNumber,
       tokenizeMaxLineLength,
-    }),
-  });
+    })
+  );
 }
 
 async function handleRenderDiffFiles({

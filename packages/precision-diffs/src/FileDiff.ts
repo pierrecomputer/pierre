@@ -36,6 +36,7 @@ import { createCodeNode } from './utils/createCodeNode';
 import { createHoverContentNode } from './utils/createHoverContentNode';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
+import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 import type { ShikiPoolManager } from './worker';
 
 interface FileDiffRenderProps<LAnnotation> {
@@ -135,7 +136,6 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private handleHighlightRender = (): void => {
-    if (this.poolManager == null) return;
     this.rerender();
   };
 
@@ -384,28 +384,24 @@ export class FileDiff<LAnnotation = undefined> {
       containerWrapper
     );
 
-    const headerResult = !disableFileHeader
-      ? this.hunksRenderer.renderHeader(fileDiff)
-      : undefined;
-    const hunksResult = this.hunksRenderer.render(this.fileDiff);
+    const hunksResult = this.hunksRenderer.renderDiff(this.fileDiff);
 
     // If both are null, most likely a cleanup, lets abort
-    if (headerResult == null && hunksResult == null) {
+    if (hunksResult == null) {
+      if (this.poolManager != null && !this.poolManager.isInitialized()) {
+        void this.poolManager.initialize().then(() => this.rerender());
+      }
       return;
     }
 
-    if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer);
+    if (hunksResult.headerElement != null) {
+      this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
     }
-    if (hunksResult != null) {
-      const pre = this.getOrCreatePre(fileContainer);
-      this.applyHunksToDOM(hunksResult, pre);
-      this.renderSeparators(hunksResult.hunkData);
-      this.renderAnnotations();
-      this.renderHoverUtility();
-    } else if (this.poolManager != null && !this.poolManager.isInitialized()) {
-      void this.poolManager.initialize().then(() => this.rerender());
-    }
+    const pre = this.getOrCreatePre(fileContainer);
+    this.applyHunksToDOM(pre, hunksResult);
+    this.renderSeparators(hunksResult.hunkData);
+    this.renderAnnotations();
+    this.renderHoverUtility();
   }
 
   private renderSeparators(hunkData: HunkData[]): void {
@@ -575,15 +571,10 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private applyHunksToDOM(
-    result: HunksRenderResult,
-    pre: HTMLPreElement
+    pre: HTMLPreElement,
+    result: HunksRenderResult
   ): void {
-    const { diffStyle = 'split' } = this.options;
-    const split =
-      diffStyle === 'unified'
-        ? false
-        : result.additionsAST != null && result.deletionsAST != null;
-    this.applyPreNodeAttributes(pre, split, result.totalLines);
+    this.applyPreNodeAttributes(pre, result);
 
     // Clear existing content
     pre.innerHTML = '';
@@ -629,9 +620,36 @@ export class FileDiff<LAnnotation = undefined> {
 
   private applyPreNodeAttributes(
     pre: HTMLPreElement,
-    split: boolean,
-    totalLines: number
+    {
+      themeStyles,
+      baseThemeType,
+      additionsAST,
+      deletionsAST,
+      totalLines,
+    }: HunksRenderResult
   ): void {
-    this.hunksRenderer.applyPreNodeAttributes(pre, split, totalLines);
+    const {
+      diffIndicators = 'bars',
+      disableBackground = false,
+      disableLineNumbers = false,
+      overflow = 'scroll',
+      themeType = 'system',
+      diffStyle = 'split',
+    } = this.options;
+    const split =
+      diffStyle === 'unified'
+        ? false
+        : additionsAST != null && deletionsAST != null;
+    setPreNodeProperties({
+      pre,
+      diffIndicators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      split,
+      themeStyles,
+      themeType: baseThemeType ?? themeType,
+      totalLines,
+    });
   }
 }

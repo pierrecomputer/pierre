@@ -17,7 +17,6 @@ import type {
   Hunk,
   HunkData,
   PJSHighlighter,
-  PrePropertiesConfig,
   RenderedDiffASTCache,
   SupportedLanguages,
   ThemeTypes,
@@ -36,11 +35,12 @@ import { getThemes } from './utils/getThemes';
 import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import { createHastElement } from './utils/hast_utils';
 import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
-import {
-  type SetPreNodePropertiesProps,
-  setPreNodeProperties,
-} from './utils/setWrapperNodeProps';
-import type { RenderDiffResult, ShikiPoolManager } from './worker';
+import type {
+  RenderDiffFilesResult,
+  RenderDiffHunksResult,
+  RenderDiffResult,
+  ShikiPoolManager,
+} from './worker';
 
 const EXPANDED_REGION: ExpansionRegion = {
   fromStart: 0,
@@ -71,7 +71,7 @@ interface PushLineWithAnnotation {
 }
 
 interface RenderCollapsedHunksProps {
-  ast: RenderDiffResult;
+  ast: RenderDiffFilesResult | RenderDiffHunksResult;
   hunkData: HunkData[];
   hunkIndex: number;
   hunkSpecs: string | undefined;
@@ -96,7 +96,7 @@ interface RenderHunkProps {
   isLastHunk: boolean;
   prevHunk: Hunk | undefined;
 
-  ast: RenderDiffResult;
+  ast: RenderDiffFilesResult | RenderDiffHunksResult;
   unifiedAST: ElementContent[];
   deletionsAST: ElementContent[];
   additionsAST: ElementContent[];
@@ -118,7 +118,10 @@ export interface HunksRenderResult {
   hunkData: HunkData[];
   css: string;
   preNode: HASTElement;
+  headerElement: HASTElement | undefined;
   totalLines: number;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
@@ -200,32 +203,34 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diffIndicators = 'bars',
       diffStyle = 'split',
       disableBackground = false,
+      disableFileHeader = false,
       disableLineNumbers = false,
       expandUnchanged = false,
       expansionLineCount = 100,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
-      tokenizeMaxLineLength = 1000,
       overflow = 'scroll',
       theme = DEFAULT_THEMES,
       themeType = 'system',
+      tokenizeMaxLineLength = 1000,
       useCSSClasses = false,
     } = this.options;
     return {
       diffIndicators,
       diffStyle,
       disableBackground,
+      disableFileHeader,
       disableLineNumbers,
       expandUnchanged,
       expansionLineCount,
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
-      tokenizeMaxLineLength,
       overflow,
       theme,
       themeType,
+      tokenizeMaxLineLength,
       useCSSClasses,
     };
   }
@@ -237,100 +242,103 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  render(
+  renderDiff(
     diff: FileDiffMetadata | undefined = this.renderCache?.diff
   ): HunksRenderResult | undefined {
     if (diff == null) {
       return undefined;
     }
+    const { lang } = this.options;
+    const { theme, tokenizeMaxLineLength } = this.getOptionsWithDefaults();
+    this.renderCache ??= {
+      diff,
+      highlighted: false,
+      code: undefined,
+      themeStyles: undefined,
+      baseThemeType: undefined,
+    };
+    if (this.poolManager != null) {
+      if (this.renderCache.code == null) {
+        this.renderCache = {
+          ...this.renderCache,
+          ...this.poolManager.renderPlainDiffMetadataToAST(diff),
+        };
+      }
 
-    const ast = (() => {
-      const { lang } = this.options;
-      const { theme, disableLineNumbers, tokenizeMaxLineLength } =
-        this.getOptionsWithDefaults();
-      this.renderCache ??= { diff, highlighted: false, ast: undefined };
-      if (this.poolManager != null) {
-        this.renderCache.ast ??= this.poolManager.renderPlainDiffMetadataToAST(
-          diff,
-          disableLineNumbers
-        );
-        // TODO(amadeus): Figure out how to only fire this on a per file
-        // basis... (maybe the poolManager can figure it out based on file name
-        // and file contents probably?)
-        if (!this.renderCache.highlighted || this.renderCache.diff !== diff) {
-          void this.poolManager
-            .renderDiffMetadataToAST(diff, {
-              lang,
-              theme,
-              disableLineNumbers,
-              tokenizeMaxLineLength,
-            })
-            .then((results) => this.handleAsyncHighlight(diff, results));
-        }
-      } else {
-        if (
-          this.highlighter != null &&
-          (this.renderCache.diff !== diff || !this.renderCache.highlighted)
-        ) {
-          this.renderCache.ast = this.renderDiffWithHighlighter(
-            diff,
-            this.highlighter
-          );
-          this.renderCache.highlighted = true;
-        } else if (
-          this.renderCache.diff !== diff ||
-          !this.renderCache.highlighted
-        ) {
-          void this.asyncHighlight(diff).then((result) => {
+      // TODO(amadeus): Figure out how to only fire this on a per file
+      // basis... (maybe the poolManager can figure it out based on file name
+      // and file contents probably?)
+      if (!this.renderCache.highlighted || this.renderCache.diff !== diff) {
+        void this.poolManager
+          .renderDiffMetadataToAST(diff, {
+            lang,
+            theme,
+            tokenizeMaxLineLength,
+          })
+          .then((result) => {
             this.handleAsyncHighlight(diff, result);
           });
-        }
       }
-      return this.renderCache.ast;
-    })();
+    } else {
+      this.computedLang =
+        this.options.lang ?? getFiletypeFromFileName(diff.name);
+      if (
+        // Reset highlighter if we do not have the appropriate
+        // themes or languages loaded...
+        !hasLoadedThemes(getThemes(theme)) ||
+        !hasLoadedLanguage(this.computedLang)
+      ) {
+        this.highlighter = undefined;
+      }
+      if (this.highlighter == null) {
+        void this.asyncHighlight(diff).then((result) => {
+          this.handleAsyncHighlight(diff, result);
+        });
+      } else if (
+        this.renderCache.diff !== diff ||
+        !this.renderCache.highlighted
+      ) {
+        this.renderCache = {
+          ...this.renderCache,
+          ...this.renderDiffWithHighlighter(diff, this.highlighter),
+          highlighted: true,
+        };
+      }
+    }
     this.renderCache.diff = diff;
-
-    return ast != null ? this.processDiffResult(diff, ast) : undefined;
+    const { code, themeStyles, baseThemeType } = this.renderCache;
+    return code != null && themeStyles != null
+      ? this.processDiffResult(diff, { code, themeStyles, baseThemeType })
+      : undefined;
   }
 
-  async asyncRender(
-    diff: FileDiffMetadata
-  ): Promise<HunksRenderResult | undefined> {
+  async asyncRender(diff: FileDiffMetadata): Promise<HunksRenderResult> {
     return this.processDiffResult(diff, await this.asyncHighlight(diff));
   }
 
   private createPreElement(
     split: boolean,
-    totalLines: number
-  ): HASTElement | undefined {
+    totalLines: number,
+    themeStyles: string,
+    baseThemeType: 'light' | 'dark' | undefined
+  ): HASTElement {
     const {
       diffIndicators,
       disableBackground,
       disableLineNumbers,
       overflow,
-      theme,
       themeType,
     } = this.getOptionsWithDefaults();
-    const options: Omit<PrePropertiesConfig, 'theme'> = {
+    return createPreElement({
       diffIndicators,
       disableBackground,
       disableLineNumbers,
       overflow,
+      themeStyles,
       split,
-      themeType,
+      themeType: baseThemeType ?? themeType,
       totalLines,
-    };
-    if (this.poolManager != null) {
-      return this.poolManager.createPreElement(options);
-    }
-    if (this.highlighter != null) {
-      return createPreElement({
-        ...options,
-        highlighter: this.highlighter,
-        theme,
-      });
-    }
-    return undefined;
+    });
   }
 
   private async asyncHighlight(
@@ -341,8 +349,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // double check the highlighter has loaded the appropriate languages and
     // themes
     if (
-      !hasLoadedLanguage(this.computedLang) ||
-      !hasLoadedThemes(getThemes(this.options.theme))
+      this.highlighter != null &&
+      (!hasLoadedLanguage(this.computedLang) ||
+        !hasLoadedThemes(getThemes(this.options.theme)))
     ) {
       this.highlighter = undefined;
     }
@@ -356,31 +365,35 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     highlighter: PJSHighlighter
   ): RenderDiffResult {
     const { lang } = this.options;
-    const { theme, disableLineNumbers, tokenizeMaxLineLength } =
-      this.getOptionsWithDefaults();
+    const { theme, tokenizeMaxLineLength } = this.getOptionsWithDefaults();
     return renderDiffWithHighlighter(diff, highlighter, {
       theme,
       lang,
-      disableLineNumbers,
       tokenizeMaxLineLength,
     });
   }
 
-  private handleAsyncHighlight(diff: FileDiffMetadata, ast: RenderDiffResult) {
-    if (this.poolManager == null) return;
+  private handleAsyncHighlight(
+    diff: FileDiffMetadata,
+    result: RenderDiffResult
+  ) {
+    if (this.renderCache == null) {
+      return;
+    }
     this.renderCache = {
       diff,
       highlighted: true,
-      ast,
+      ...result,
     };
     this.onRenderUpdate?.();
   }
 
   private processDiffResult(
     fileDiff: FileDiffMetadata,
-    ast: RenderDiffResult
+    { code, themeStyles, baseThemeType }: RenderDiffResult
   ): HunksRenderResult {
-    const { expandUnchanged, diffStyle } = this.getOptionsWithDefaults();
+    const { expandUnchanged, diffStyle, disableFileHeader } =
+      this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
@@ -427,7 +440,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     for (const hunk of hunks) {
       lineIndex += hunk.collapsedBefore;
       lineIndex = this.renderHunks({
-        ast,
+        ast: code,
         hunk,
         prevHunk,
         hunkIndex,
@@ -449,26 +462,28 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
     const preNode = this.createPreElement(
       !unified ? deletionsAST.length > 0 && additionsAST.length > 0 : false,
-      totalLines
+      totalLines,
+      themeStyles,
+      baseThemeType
     );
-    if (preNode == null) {
-      throw new Error(
-        'DiffHunksRenderer.processDiffResult: unable to process preNode'
-      );
-    }
 
     return {
       additionsAST:
-        !unified && (ast.hunks != null || ast.newLines.length > 0)
+        !unified && (code.hunks != null || code.newLines.length > 0)
           ? additionsAST
           : undefined,
       deletionsAST:
-        !unified && (ast.hunks != null || ast.oldLines.length > 0)
+        !unified && (code.hunks != null || code.oldLines.length > 0)
           ? deletionsAST
           : undefined,
       unifiedAST: unifiedAST.length > 0 ? unifiedAST : undefined,
       hunkData,
       preNode,
+      themeStyles,
+      baseThemeType,
+      headerElement: !disableFileHeader
+        ? this.renderHeader(this.diff, themeStyles, baseThemeType)
+        : undefined,
       totalLines,
       // FIXME
       css: '',
@@ -1043,67 +1058,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { deletionSpan, additionSpan };
   }
 
-  renderHeader(
-    diff: FileDiffMetadata | undefined,
-    highlighter: PJSHighlighter | undefined = this.highlighter
-  ): HASTElement | undefined {
-    if (diff == null) {
-      return undefined;
-    }
-    if (this.poolManager != null) {
-      return this.poolManager.createHeaderElement({
-        fileOrDiff: diff,
-        theme: this.options.theme,
-        themeType: this.options.themeType,
-      });
-    }
-    if (highlighter != null) {
-      return createFileHeaderElement({
-        fileOrDiff: diff,
-        theme: this.options.theme,
-        themeType: this.options.themeType,
-        highlighter,
-      });
-    }
-    return undefined;
-  }
-
-  async asyncRenderHeader(
-    diff: FileDiffMetadata | undefined
-  ): Promise<HASTElement | undefined> {
-    this.highlighter ??= await this.initializeHighlighter();
-    return this.renderHeader(diff, this.highlighter);
-  }
-
-  applyPreNodeAttributes(
-    pre: HTMLPreElement,
-    split: boolean,
-    totalLines: number
-  ): void {
-    const {
-      diffIndicators,
-      disableBackground,
-      disableLineNumbers,
-      overflow,
-      theme,
-      themeType,
-    } = this.getOptionsWithDefaults();
-    const options: Omit<SetPreNodePropertiesProps, 'highlighter'> = {
-      diffIndicators,
-      disableBackground,
-      disableLineNumbers,
-      overflow,
-      pre,
-      split,
-      theme,
-      themeType,
-      totalLines,
-    };
-    if (this.poolManager != null) {
-      this.poolManager.setPreNodeAttributes(options);
-    } else if (this.highlighter != null) {
-      setPreNodeProperties({ ...options, highlighter: this.highlighter });
-    }
+  private renderHeader(
+    diff: FileDiffMetadata,
+    themeStyles: string,
+    baseThemeType: 'light' | 'dark' | undefined
+  ): HASTElement {
+    const { themeType } = this.getOptionsWithDefaults();
+    return createFileHeaderElement({
+      fileOrDiff: diff,
+      themeStyles,
+      themeType: baseThemeType ?? themeType,
+    });
   }
 }
 

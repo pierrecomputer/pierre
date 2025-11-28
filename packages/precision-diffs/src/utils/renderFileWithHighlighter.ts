@@ -1,4 +1,4 @@
-import type { ElementContent } from 'hast';
+import type { RenderFileResult } from 'src/worker';
 
 import { DEFAULT_THEMES } from '../constants';
 import type {
@@ -12,12 +12,12 @@ import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
+import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
 
 export interface RenderOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
-  disableLineNumbers?: boolean;
   startingLineNumber?: number;
   tokenizeMaxLineLength: number;
 }
@@ -27,14 +27,22 @@ export function renderFileWithHighlighter(
   highlighter: PJSHighlighter,
   {
     theme = DEFAULT_THEMES,
-    disableLineNumbers,
     startingLineNumber = 1,
     lang = getFiletypeFromFileName(file.name),
     tokenizeMaxLineLength,
   }: RenderOptions
-): ElementContent[] {
-  const { state, transformers } =
-    createTransformerWithState(disableLineNumbers);
+): RenderFileResult {
+  const { state, transformers } = createTransformerWithState();
+  const baseThemeType = (() => {
+    if (typeof theme === 'string') {
+      return highlighter.getTheme(theme).type;
+    }
+    return undefined;
+  })();
+  const themeStyles = getHighlighterThemeStyles({
+    theme,
+    highlighter,
+  });
   state.lineInfo = (shikiLineNumber: number) => ({
     type: 'context',
     lineIndex: shikiLineNumber - 1,
@@ -60,7 +68,11 @@ export function renderFileWithHighlighter(
       tokenizeMaxLineLength,
     };
   })();
-  return getLineNodes(
-    highlighter.codeToHast(cleanLastNewline(file.contents), hastConfig)
-  );
+  return {
+    code: getLineNodes(
+      highlighter.codeToHast(cleanLastNewline(file.contents), hastConfig)
+    ),
+    themeStyles,
+    baseThemeType: baseThemeType,
+  };
 }

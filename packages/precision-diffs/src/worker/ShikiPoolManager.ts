@@ -1,5 +1,3 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
-
 import { getSharedHighlighter, hasLoadedThemes } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
 import type {
@@ -7,24 +5,13 @@ import type {
   FileDiffMetadata,
   PJSHighlighter,
   PJSThemeNames,
-  PrePropertiesConfig,
   ThemesType,
 } from '../types';
-import {
-  type CreateFileHeaderElementProps,
-  createFileHeaderElement,
-} from '../utils/createFileHeaderElement';
-import { createPreElement } from '../utils/createPreElement';
 import { getThemes } from '../utils/getThemes';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
-import {
-  type SetPreNodePropertiesProps,
-  setPreNodeProperties,
-} from '../utils/setWrapperNodeProps';
 import { WorkerPool } from './WorkerPool';
 import type {
-  RenderDiffFilesResult,
   RenderDiffResult,
   RenderFileResult,
   WorkerHighlighterOptions,
@@ -92,22 +79,21 @@ export class ShikiPoolManager {
   async renderFileToAST(
     file: FileContents,
     options: WorkerRenderFileOptions
-  ): Promise<ElementContent[]> {
+  ): Promise<RenderFileResult> {
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    const { lines } = await this.pool.submitTask<RenderFileResult>({
+    return this.pool.submitTask({
       type: 'file',
       file,
       options,
     });
-    return lines;
   }
 
   renderPlainFileToAST(
     file: FileContents,
     startingLineNumber: number = 1
-  ): ElementContent[] | undefined {
+  ): RenderFileResult | undefined {
     if (this.highlighter == null) {
       void this.initialize();
       return undefined;
@@ -124,11 +110,11 @@ export class ShikiPoolManager {
     oldFile: FileContents,
     newFile: FileContents,
     options: WorkerRenderFileOptions
-  ): Promise<RenderDiffFilesResult> {
+  ): Promise<RenderDiffResult> {
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    return this.pool.submitTask<RenderDiffFilesResult>({
+    return this.pool.submitTask({
       type: 'diff-files',
       oldFile,
       newFile,
@@ -136,16 +122,22 @@ export class ShikiPoolManager {
     });
   }
 
+  // NOTE(amadeus): Do we even need this API?
+  // Currently nothing is using this function
   renderPlainDiffToAST(
     oldFile: FileContents,
     newFile: FileContents
   ): RenderDiffResult | undefined {
-    const oldLines = this.renderPlainFileToAST(oldFile, 1);
-    const newLines = this.renderPlainFileToAST(newFile, 1);
-    if (oldLines == null || newLines == null) {
+    const oldResult = this.renderPlainFileToAST(oldFile, 1);
+    const newResult = this.renderPlainFileToAST(newFile, 1);
+    if (oldResult == null || newResult == null) {
       return undefined;
     }
-    return { oldLines, newLines };
+    return {
+      code: { oldLines: oldResult.code, newLines: newResult.code },
+      themeStyles: newResult.themeStyles,
+      baseThemeType: newResult.baseThemeType,
+    };
   }
 
   async renderDiffMetadataToAST(
@@ -155,7 +147,7 @@ export class ShikiPoolManager {
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    return this.pool.submitTask<RenderDiffResult>({
+    return this.pool.submitTask({
       type: 'diff-metadata',
       diff,
       options,
@@ -163,52 +155,14 @@ export class ShikiPoolManager {
   }
 
   renderPlainDiffMetadataToAST(
-    diff: FileDiffMetadata,
-    disableLineNumbers = false
+    diff: FileDiffMetadata
   ): RenderDiffResult | undefined {
     return this.highlighter != null
       ? renderDiffWithHighlighter(diff, this.highlighter, {
           theme: this.currentTheme,
           lang: 'text',
-          disableLineNumbers,
           tokenizeMaxLineLength: 1000,
         })
-      : undefined;
-  }
-
-  createPreElement(
-    options: Omit<PrePropertiesConfig, 'theme'>
-  ): HASTElement | undefined {
-    if (this.highlighter == null) {
-      void this.initialize();
-      return undefined;
-    }
-    return createPreElement({
-      ...options,
-      theme: this.currentTheme,
-      highlighter: this.highlighter,
-    });
-  }
-
-  setPreNodeAttributes(
-    options: Omit<SetPreNodePropertiesProps, 'highlighter'>
-  ): void {
-    if (this.highlighter == null) {
-      void this.initialize();
-      return;
-    }
-    setPreNodeProperties({
-      ...options,
-      highlighter: this.highlighter,
-    });
-  }
-
-  createHeaderElement(
-    props: Omit<CreateFileHeaderElementProps, 'highlighter'>
-  ): HASTElement | undefined {
-    const { highlighter } = this;
-    return highlighter != null
-      ? createFileHeaderElement({ ...props, highlighter })
       : undefined;
   }
 

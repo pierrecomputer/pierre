@@ -50,10 +50,16 @@ export type WorkerRequest =
   | InitializeWorkerRequest;
 
 export interface RenderFileResult {
-  lines: ElementContent[];
+  code: ElementContent[];
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
-export type RenderDiffResult = RenderDiffFilesResult | RenderDiffHunksResult;
+export interface RenderDiffResult {
+  code: RenderDiffFilesResult | RenderDiffHunksResult;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
+}
 
 export interface RenderDiffFilesResult {
   oldLines: ElementContent[];
@@ -119,7 +125,6 @@ export type WorkerResponse =
 export interface WorkerRenderFileOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
-  disableLineNumbers?: boolean;
   startingLineNumber?: number;
   tokenizeMaxLineLength: number;
 }

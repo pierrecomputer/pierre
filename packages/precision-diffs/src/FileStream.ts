@@ -13,6 +13,7 @@ import { createRowNodes } from './utils/createRowNodes';
 import { createSpanFromToken } from './utils/createSpanNodeFromToken';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
+import { getHighlighterThemeStyles } from './utils/getHighlighterThemeStyles';
 import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
@@ -110,16 +111,18 @@ export class FileStream {
     if (this.pre.parentElement == null) {
       fileContainer.shadowRoot?.appendChild(this.pre);
     }
+    const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
+    const baseThemeType =
+      typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
     const pre = setPreNodeProperties({
       diffIndicators: 'none',
       disableBackground: true,
       disableLineNumbers,
-      highlighter,
       overflow,
       pre: this.pre,
       split: false,
-      theme,
-      themeType,
+      themeType: baseThemeType ?? themeType,
+      themeStyles,
       totalLines: 0,
     });
     pre.innerHTML = '';

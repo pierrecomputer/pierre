@@ -19,7 +19,6 @@ export * from './utils/createFileHeaderElement';
 export * from './utils/createHoverContentNode';
 export * from './utils/createNoNewlineElement';
 export * from './utils/createPreElement';
-export * from './utils/createPreWrapperProperties';
 export * from './utils/createRowNodes';
 export * from './utils/createSeparator';
 export * from './utils/createSpanNodeFromToken';
