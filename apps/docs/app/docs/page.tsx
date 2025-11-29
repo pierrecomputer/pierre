@@ -66,8 +66,8 @@ export default function DocsPage() {
           <ReactAPISection />
           <VanillaAPISection />
           <StylingSection />
-          <SSRSection />
           <WorkerPoolSection />
+          <SSRSection />
           {/* <ComponentProps /> */}
           {/* <RendererOptions /> */}
           {/* <EventHandlers /> */}
