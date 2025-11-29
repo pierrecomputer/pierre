@@ -6,9 +6,9 @@ import { DocsCodeExample } from '../DocsCodeExample';
 
 interface WorkerPoolProps {
   helperVite: PreloadedFileResult<undefined>;
-  helperNextjs: PreloadedFileResult<undefined>;
+  helperNextJS: PreloadedFileResult<undefined>;
   helperWebpack: PreloadedFileResult<undefined>;
-  helperEsbuild: PreloadedFileResult<undefined>;
+  helperESBuild: PreloadedFileResult<undefined>;
   helperStatic: PreloadedFileResult<undefined>;
   helperVanilla: PreloadedFileResult<undefined>;
   vanillaUsage: PreloadedFileResult<undefined>;
@@ -18,9 +18,9 @@ interface WorkerPoolProps {
 
 export function WorkerPool({
   helperVite,
-  helperNextjs,
+  helperNextJS,
   helperWebpack,
-  helperEsbuild,
+  helperESBuild,
   helperStatic,
   helperVanilla,
   vanillaUsage,
@@ -73,13 +73,13 @@ export function WorkerPool({
         sure your function has the <code>'use client'</code> directive if using
         App Router.
       </p>
-      <DocsCodeExample {...helperNextjs} />
+      <DocsCodeExample {...helperNextJS} />
 
       <h4 data-toc-ignore>Webpack 5</h4>
       <DocsCodeExample {...helperWebpack} />
 
       <h4 data-toc-ignore>esbuild</h4>
-      <DocsCodeExample {...helperEsbuild} />
+      <DocsCodeExample {...helperESBuild} />
 
       <h4 data-toc-ignore>Rollup / Static Files</h4>
       <p>

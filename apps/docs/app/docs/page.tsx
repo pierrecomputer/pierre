@@ -212,9 +212,9 @@ async function WorkerPoolSection() {
   return (
     <WorkerPool
       helperVite={helperVite}
-      helperNextjs={helperNextjs}
+      helperNextJS={helperNextjs}
       helperWebpack={helperWebpack}
-      helperEsbuild={helperEsbuild}
+      helperESBuild={helperEsbuild}
       helperStatic={helperStatic}
       helperVanilla={helperVanilla}
       vanillaUsage={vanillaUsage}
