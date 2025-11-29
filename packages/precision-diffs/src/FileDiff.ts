@@ -36,10 +36,11 @@ import { createCodeNode } from './utils/createCodeNode';
 import { createHoverContentNode } from './utils/createHoverContentNode';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
+import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 import type { ShikiPoolManager } from './worker';
 
-interface FileDiffRenderProps<LAnnotation> {
+export interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
   newFile?: FileContents;
@@ -47,6 +48,12 @@ interface FileDiffRenderProps<LAnnotation> {
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+}
+
+export interface FileDiffHydrationProps<LAnnotation>
+  extends Omit<FileDiffRenderProps<LAnnotation>, 'fileContainer'> {
+  fileContainer: HTMLElement;
+  prerenderedHTML?: string;
 }
 
 export interface FileDiffOptions<LAnnotation>
@@ -236,14 +243,11 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerElement = undefined;
   }
 
-  hydrate(props: FileDiffRenderProps<LAnnotation>): void {
-    if (props.fileContainer == null) {
-      throw new Error(
-        'FileDiff: you must provide a fileContainer on hydration'
-      );
-    }
+  hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
+    const { fileContainer, prerenderedHTML } = props;
+    prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
-      props.fileContainer.shadowRoot?.children ?? []
+      fileContainer.shadowRoot?.children ?? []
     )) {
       if (element instanceof SVGElement) {
         this.spriteSVG = element;
@@ -271,15 +275,20 @@ export class FileDiff<LAnnotation = undefined> {
     }
     // Otherwise orchestrate our setup
     else {
-      this.fileContainer = props.fileContainer;
+      const { lineAnnotations, oldFile, newFile, fileDiff } = props;
+      this.fileContainer = fileContainer;
       delete this.pre.dataset.dehydrated;
 
-      this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
-      this.newFile = props.newFile;
-      this.oldFile = props.oldFile;
-      this.fileDiff = props.fileDiff;
+      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+      this.newFile = newFile;
+      this.oldFile = oldFile;
+      this.fileDiff =
+        fileDiff ??
+        (oldFile != null && newFile != null
+          ? parseDiffFromFile(oldFile, newFile)
+          : undefined);
 
-      void this.hunksRenderer.initializeHighlighter();
+      this.hunksRenderer.hydrate(this.fileDiff);
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();

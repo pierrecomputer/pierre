@@ -6,6 +6,7 @@ export * from './File';
 export * from './FileDiff';
 export * from './MultiFileDiff';
 export * from './PatchDiff';
+export * from './WorkerPoolContext';
 export * from './types';
 export * from './utils/renderDiffChildren';
 export * from './utils/renderFileChildren';

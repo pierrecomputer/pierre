@@ -92,6 +92,28 @@ export class FileRenderer<LAnnotation = undefined> {
     this.onRenderUpdate = undefined;
   }
 
+  hydrate(file: FileContents): void {
+    this.renderCache ??= {
+      file,
+      highlighted: false,
+      result: undefined,
+    };
+    const { lang, theme, tokenizeMaxLineLength = 1000 } = this.options;
+    if (this.poolManager != null) {
+      void this.poolManager
+        .renderFileToAST(file, {
+          lang,
+          theme,
+          tokenizeMaxLineLength,
+        })
+        .then((results) => this.handleAsyncHighlight(file, results, true));
+    } else {
+      void this.asyncHighlight(file).then((result) => {
+        this.handleAsyncHighlight(file, result, true);
+      });
+    }
+  }
+
   renderFile(
     file: FileContents | undefined = this.renderCache?.file
   ): FileRenderResult | undefined {
@@ -286,14 +308,20 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  handleAsyncHighlight(file: FileContents, result: RenderFileResult): void {
+  handleAsyncHighlight(
+    file: FileContents,
+    result: RenderFileResult,
+    hydrate = false
+  ): void {
     if (this.renderCache == null) {
       return;
     }
     this.renderCache.file = file;
     this.renderCache.result = result;
     this.renderCache.highlighted = true;
-    this.onRenderUpdate?.();
+    if (!hydrate) {
+      this.onRenderUpdate?.();
+    }
   }
 
   private createPreElement(

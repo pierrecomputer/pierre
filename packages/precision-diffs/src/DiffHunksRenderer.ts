@@ -242,6 +242,35 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
+  hydrate(diff: FileDiffMetadata | undefined): void {
+    if (diff == null) {
+      return;
+    }
+    this.diff = diff;
+    this.renderCache ??= {
+      diff,
+      highlighted: false,
+      result: undefined,
+    };
+    const { lang } = this.options;
+    const { theme, tokenizeMaxLineLength } = this.getOptionsWithDefaults();
+    if (this.poolManager != null) {
+      void this.poolManager
+        .renderDiffMetadataToAST(this.diff, {
+          lang,
+          theme,
+          tokenizeMaxLineLength,
+        })
+        .then((result) => {
+          this.handleAsyncHighlight(diff, result, true);
+        });
+    } else {
+      void this.asyncHighlight(diff).then((result) => {
+        this.handleAsyncHighlight(diff, result, true);
+      });
+    }
+  }
+
   renderDiff(
     diff: FileDiffMetadata | undefined = this.renderCache?.diff
   ): HunksRenderResult | undefined {
@@ -367,7 +396,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private handleAsyncHighlight(
     diff: FileDiffMetadata,
-    result: RenderDiffResult
+    result: RenderDiffResult,
+    hydrate = false
   ) {
     if (this.renderCache == null) {
       return;
@@ -375,7 +405,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.renderCache.diff = diff;
     this.renderCache.result = result;
     this.renderCache.highlighted = true;
-    this.onRenderUpdate?.();
+    if (!hydrate) {
+      this.onRenderUpdate?.();
+    }
   }
 
   private processDiffResult(

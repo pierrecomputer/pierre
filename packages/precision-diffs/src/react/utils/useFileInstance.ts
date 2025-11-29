@@ -1,10 +1,17 @@
 import deepEqual from 'fast-deep-equal';
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 
 import { File, type FileOptions } from '../../File';
 import type { SelectedLineRange } from '../../LineSelectionManager';
 import type { GetHoveredLineResult } from '../../MouseEventManager';
 import type { FileContents, LineAnnotation } from '../../types';
+import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
 const useIsometricEffect =
@@ -15,6 +22,7 @@ interface UseFileInstanceProps<LAnnotation> {
   options: FileOptions<LAnnotation> | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
+  prerenderedHTML: string | undefined;
 }
 
 interface UseFileInstanceReturn {
@@ -27,7 +35,9 @@ export function useFileInstance<LAnnotation>({
   options,
   lineAnnotations,
   selectedLines,
+  prerenderedHTML,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
+  const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<File<LAnnotation> | null>(null);
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
@@ -38,11 +48,12 @@ export function useFileInstance<LAnnotation>({
       }
       // FIXME: Ideally we don't use FileUI here, and instead amalgamate
       // the renderers manually
-      instanceRef.current = new File(options, undefined, true);
+      instanceRef.current = new File(options, poolManager, true);
       void instanceRef.current.hydrate({
         file,
         fileContainer: node,
         lineAnnotations,
+        prerenderedHTML,
       });
     } else {
       if (instanceRef.current == null) {

@@ -30,6 +30,7 @@ import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode
 import { createCodeNode } from './utils/createCodeNode';
 import { createHoverContentNode } from './utils/createHoverContentNode';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
+import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 import type { ShikiPoolManager } from './worker';
 
@@ -39,6 +40,12 @@ export interface FileRenderProps<LAnnotation> {
   containerWrapper?: HTMLElement;
   forceRender?: boolean;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+}
+
+export interface FileHyrdateProps<LAnnotation>
+  extends Omit<FileRenderProps<LAnnotation>, 'fileContainer'> {
+  fileContainer: HTMLElement;
+  prerenderedHTML?: string;
 }
 
 export interface FileOptions<LAnnotation>
@@ -183,14 +190,11 @@ export class File<LAnnotation = undefined> {
     this.headerElement = undefined;
   }
 
-  hydrate(props: FileRenderProps<LAnnotation>): void {
-    if (props.fileContainer == null) {
-      throw new Error(
-        'FileDiff: you must provide a fileContainer on hydration'
-      );
-    }
+  hydrate(props: FileHyrdateProps<LAnnotation>): void {
+    const { fileContainer, prerenderedHTML } = props;
+    prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
-      props.fileContainer.shadowRoot?.children ?? []
+      fileContainer.shadowRoot?.children ?? []
     )) {
       if (element instanceof SVGElement) {
         this.spriteSVG = element;
@@ -218,12 +222,13 @@ export class File<LAnnotation = undefined> {
     }
     // Otherwise orchestrate our setup
     else {
-      this.fileContainer = props.fileContainer;
+      const { file, lineAnnotations } = props;
+      this.fileContainer = fileContainer;
       delete this.pre.dataset.dehydrated;
 
-      this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
-      this.file = props.file;
-      void this.fileRenderer.initializeHighlighter();
+      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+      this.file = file;
+      this.fileRenderer.hydrate(file);
       this.renderAnnotations();
       this.renderHoverUtility();
       this.injectUnsafeCSS();

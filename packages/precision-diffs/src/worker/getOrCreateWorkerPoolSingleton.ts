@@ -12,7 +12,9 @@ export function getOrCreateWorkerPoolSingleton({
   poolOptions,
   highlighterOptions,
 }: SetupWorkerPoolProps): ShikiPoolManager {
-  managerSingleton ??= new ShikiPoolManager(poolOptions, highlighterOptions);
-  void managerSingleton.initialize();
+  if (managerSingleton == null) {
+    managerSingleton = new ShikiPoolManager(poolOptions, highlighterOptions);
+    void managerSingleton.initialize();
+  }
   return managerSingleton;
 }
