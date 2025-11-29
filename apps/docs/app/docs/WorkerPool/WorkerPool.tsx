@@ -157,29 +157,37 @@ export function WorkerPool({
 │ │   <FileDiff />                      │ │
 │ │   <File />                          │ │
 │ │ </WorkerPoolContextProvider>        │ │
+│ │                                     │ │
+│ │ * Each component manages their own  │ │
+│ │   instances of the Vanilla JS       │ │
+│ │   Classes                           │ │
 │ └─┬───────────────────────────────────┘ │
-│   ↓ (each manage their own instances)   │
+│   │                                     │
+│   ↓                                     │
 │ ┌ Vanilla JS Classes ─────────────────┐ │
 │ │ new FileDiff(opts, poolManager)     │ │
 │ │ new File(opts, poolManager)         │ │
+│ │                                     │ │
 │ │ * Renders plain text synchronously  │ │
 │ │ * Queue requests to WorkerPool for  │ │
 │ │   highlighted HAST                  │ │
 │ │ * Automatically render the          │ │
 │ │   highlighted HAST response         │ │
-│ └─┬───────────────────────────────────┘ │
-│   ↓ (Request)         HAST Response ↑   │
-│ ┌───────────────────────────────────┴─┐ │
-│ │ ShikiPoolManager                    │ │
+│ └─┬─────────────────────────────────┬─┘ │
+│   │ HAST Request                    ↑   │
+│   ↓                   HAST Response │   │
+│ ┌ ShikiPoolManager ─────────────────┴─┐ │
 │ │ * Shared singleton                  │ │
 │ │ * Manages WorkerPool instance and   │ │
 │ │   request queue                     │ │
 │ └─┬─────────────────────────────────┬─┘ │
-└───┼─────────────────────────────────┼───┘
-    ↓ postMessage       HAST Response ↑
-┌───┼───────── Worker Threads ────────┼───┐
-│ ┌─┴─ shiki-worker.js (8x default) ──┴─┐ │
-│ │ * Runs Shiki's codeToHast()         │ │
+└───│─────────────────────────────────│───┘
+    │ postMessage                     ↑
+    ↓                   HAST Response │
+┌───┴───────── Worker Threads ────────│───┐
+│ ┌ shiki-worker.js ──────────────────│─┐ │
+│ │ * 8 threads by default            │ │ │
+│ │ * Runs Shiki's codeToHast() ──────┘ │ │
 │ │ * Manages themes and language       │ │
 │ │   loading automatically             │ │
 │ └─────────────────────────────────────┘ │
