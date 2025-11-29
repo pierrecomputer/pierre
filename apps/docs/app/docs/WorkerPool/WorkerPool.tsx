@@ -68,12 +68,12 @@ export function WorkerPool({
       <DocsCodeExample {...helperVite} />
 
       <h4 data-toc-ignore>NextJS</h4>
-      <DocsCodeExample {...helperNextjs} />
       <p>
         <strong>Important:</strong> Workers only work in client components. Make
         sure your function has the <code>'use client'</code> directive if using
         App Router.
       </p>
+      <DocsCodeExample {...helperNextjs} />
 
       <h4 data-toc-ignore>Webpack 5</h4>
       <DocsCodeExample {...helperWebpack} />
