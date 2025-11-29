@@ -17,6 +17,7 @@ import type {
   Hunk,
   HunkData,
   PJSHighlighter,
+  RenderDiffResult,
   RenderedDiffASTCache,
   SupportedLanguages,
   ThemeTypes,
@@ -38,7 +39,6 @@ import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
 import type {
   RenderDiffFilesResult,
   RenderDiffHunksResult,
-  RenderDiffResult,
   ShikiPoolManager,
 } from './worker';
 
@@ -253,17 +253,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.renderCache ??= {
       diff,
       highlighted: false,
-      code: undefined,
-      themeStyles: undefined,
-      baseThemeType: undefined,
+      result: undefined,
     };
     if (this.poolManager != null) {
-      if (this.renderCache.code == null) {
-        this.renderCache = {
-          ...this.renderCache,
-          ...this.poolManager.renderPlainDiffMetadataToAST(diff),
-        };
-      }
+      this.renderCache.result ??=
+        this.poolManager.renderPlainDiffMetadataToAST(diff);
 
       // TODO(amadeus): Figure out how to only fire this on a per file
       // basis... (maybe the poolManager can figure it out based on file name
@@ -298,18 +292,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.renderCache.diff !== diff ||
         !this.renderCache.highlighted
       ) {
-        this.renderCache = {
-          ...this.renderCache,
-          ...this.renderDiffWithHighlighter(diff, this.highlighter),
-          highlighted: true,
-        };
+        this.renderCache.result = this.renderDiffWithHighlighter(
+          diff,
+          this.highlighter
+        );
+        this.renderCache.highlighted = true;
       }
     }
     this.renderCache.diff = diff;
-    const { code, themeStyles, baseThemeType } = this.renderCache;
-    return code != null && themeStyles != null
-      ? this.processDiffResult(diff, { code, themeStyles, baseThemeType })
-      : undefined;
+    const { result } = this.renderCache;
+    return result != null ? this.processDiffResult(diff, result) : undefined;
   }
 
   async asyncRender(diff: FileDiffMetadata): Promise<HunksRenderResult> {
@@ -380,11 +372,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (this.renderCache == null) {
       return;
     }
-    this.renderCache = {
-      diff,
-      highlighted: true,
-      ...result,
-    };
+    this.renderCache.diff = diff;
+    this.renderCache.result = result;
+    this.renderCache.highlighted = true;
     this.onRenderUpdate?.();
   }
 

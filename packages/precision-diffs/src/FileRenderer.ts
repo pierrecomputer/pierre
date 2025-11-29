@@ -12,6 +12,7 @@ import type {
   FileContents,
   LineAnnotation,
   PJSHighlighter,
+  RenderFileResult,
   RenderedFileASTCache,
   SupportedLanguages,
   ThemeTypes,
@@ -25,7 +26,7 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
 import { createHastElement } from './utils/hast_utils';
 import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
-import type { RenderFileResult, ShikiPoolManager } from './worker';
+import type { ShikiPoolManager } from './worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -101,23 +102,16 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache ??= {
       file,
       highlighted: false,
-      code: undefined,
-      themeStyles: undefined,
-      baseThemeType: undefined,
+      result: undefined,
     };
     const fileDidChange =
       this.renderCache.file.contents !== file.contents ||
       this.renderCache.file.name !== file.name;
     if (this.poolManager != null) {
-      if (this.renderCache.code == null) {
-        this.renderCache = {
-          ...this.renderCache,
-          ...this.poolManager.renderPlainFileToAST(
-            file,
-            this.options.startingLineNumber
-          ),
-        };
-      }
+      this.renderCache.result ??= this.poolManager.renderPlainFileToAST(
+        file,
+        this.options.startingLineNumber
+      );
       // TODO(amadeus): Figure out how to only fire this on a per file
       // basis... (maybe the poolManager can figure it out based on file name
       // and file contents probably?)
@@ -147,24 +141,17 @@ export class FileRenderer<LAnnotation = undefined> {
           this.handleAsyncHighlight(file, result);
         });
       } else if (fileDidChange || !this.renderCache.highlighted) {
-        this.renderCache = {
-          ...this.renderCache,
-          ...this.renderFileWithHighlighter(file, this.highlighter),
-          highlighted: true,
-        };
+        this.renderCache.result = this.renderFileWithHighlighter(
+          file,
+          this.highlighter
+        );
+        this.renderCache.highlighted = true;
       }
     }
 
     this.renderCache.file = file;
-    const { code, themeStyles, baseThemeType } = this.renderCache;
-    if (code == null || themeStyles == null) {
-      return undefined;
-    }
-    return this.processFileResult(file, {
-      code,
-      themeStyles,
-      baseThemeType,
-    });
+    const { result } = this.renderCache;
+    return result != null ? this.processFileResult(file, result) : undefined;
   }
 
   async asyncRender(file: FileContents): Promise<FileRenderResult> {
@@ -299,15 +286,13 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  handleAsyncHighlight(file: FileContents, results: RenderFileResult): void {
+  handleAsyncHighlight(file: FileContents, result: RenderFileResult): void {
     if (this.renderCache == null) {
       return;
     }
-    this.renderCache = {
-      file,
-      highlighted: true,
-      ...results,
-    };
+    this.renderCache.file = file;
+    this.renderCache.result = result;
+    this.renderCache.highlighted = true;
     this.onRenderUpdate?.();
   }
 

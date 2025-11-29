@@ -1,12 +1,14 @@
-import type { SupportedLanguages } from '../types';
+import type {
+  RenderDiffResult,
+  RenderFileResult,
+  SupportedLanguages,
+} from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import type {
   AllWorkerTasks,
   InitializeWorkerTask,
   RenderDiffMetadataTask,
-  RenderDiffResult,
   RenderDiffTask,
-  RenderFileResult,
   RenderFileTask,
   SubmitRequest,
   WorkerHighlighterOptions,

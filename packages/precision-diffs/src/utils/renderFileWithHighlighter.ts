@@ -1,11 +1,10 @@
-import type { RenderFileResult } from 'src/worker';
-
 import { DEFAULT_THEMES } from '../constants';
 import type {
   CodeToHastOptions,
   FileContents,
   PJSHighlighter,
   PJSThemeNames,
+  RenderFileResult,
   SupportedLanguages,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';

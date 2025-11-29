@@ -1,6 +1,11 @@
 import { getSharedHighlighter } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
-import type { PJSHighlighter, SupportedLanguages } from '../types';
+import type {
+  PJSHighlighter,
+  RenderDiffResult,
+  RenderFileResult,
+  SupportedLanguages,
+} from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
@@ -12,11 +17,9 @@ import type {
   RenderDiffFileRequest,
   RenderDiffMetadataRequest,
   RenderDiffMetadataSuccessResponse,
-  RenderDiffResult,
   RenderDiffSuccessResponse,
   RenderErrorResponse,
   RenderFileRequest,
-  RenderFileResult,
   RenderFileSuccessResponse,
   WorkerRequest,
   WorkerRequestId,

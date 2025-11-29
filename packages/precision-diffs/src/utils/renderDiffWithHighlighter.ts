@@ -10,13 +10,10 @@ import type {
   LineInfo,
   PJSHighlighter,
   PJSThemeNames,
+  RenderDiffResult,
   SupportedLanguages,
 } from '../types';
-import type {
-  RenderDiffFilesResult,
-  RenderDiffResult,
-  WorkerRenderFileOptions,
-} from '../worker';
+import type { RenderDiffFilesResult, WorkerRenderFileOptions } from '../worker';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';

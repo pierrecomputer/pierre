@@ -5,6 +5,8 @@ import type {
   FileDiffMetadata,
   PJSHighlighter,
   PJSThemeNames,
+  RenderDiffResult,
+  RenderFileResult,
   ThemesType,
 } from '../types';
 import { getThemes } from '../utils/getThemes';
@@ -12,8 +14,6 @@ import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { WorkerPool } from './WorkerPool';
 import type {
-  RenderDiffResult,
-  RenderFileResult,
   WorkerHighlighterOptions,
   WorkerPoolOptions,
   WorkerRenderFileOptions,

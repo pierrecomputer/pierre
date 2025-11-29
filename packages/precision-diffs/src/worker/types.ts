@@ -4,6 +4,8 @@ import type {
   FileContents,
   FileDiffMetadata,
   PJSThemeNames,
+  RenderDiffResult,
+  RenderFileResult,
   SupportedLanguages,
   ThemesType,
 } from '../types';
@@ -48,18 +50,6 @@ export type WorkerRequest =
   | RenderDiffFileRequest
   | RenderDiffMetadataRequest
   | InitializeWorkerRequest;
-
-export interface RenderFileResult {
-  code: ElementContent[];
-  themeStyles: string;
-  baseThemeType: 'light' | 'dark' | undefined;
-}
-
-export interface RenderDiffResult {
-  code: RenderDiffFilesResult | RenderDiffHunksResult;
-  themeStyles: string;
-  baseThemeType: 'light' | 'dark' | undefined;
-}
 
 export interface RenderDiffFilesResult {
   oldLines: ElementContent[];

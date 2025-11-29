@@ -297,18 +297,26 @@ export type AnnotationLineMap<LAnnotation> = Record<
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
+export interface RenderFileResult {
+  code: ElementContent[];
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
+}
+
+export interface RenderDiffResult {
+  code: RenderDiffFilesResult | RenderDiffHunksResult;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
+}
+
 export interface RenderedFileASTCache {
   file: FileContents;
   highlighted: boolean;
-  code: ElementContent[] | undefined;
-  themeStyles: string | undefined;
-  baseThemeType: 'light' | 'dark' | undefined;
+  result: RenderFileResult | undefined;
 }
 
 export interface RenderedDiffASTCache {
   diff: FileDiffMetadata;
   highlighted: boolean;
-  code: RenderDiffFilesResult | RenderDiffHunksResult | undefined;
-  themeStyles: string | undefined;
-  baseThemeType: 'light' | 'dark' | undefined;
+  result: RenderDiffResult | undefined;
 }
