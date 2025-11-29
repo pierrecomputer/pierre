@@ -41,6 +41,18 @@ import {
   VANILLA_API_HUNKS_RENDERER_FILE,
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
 } from './VanillaAPI/constants';
+import { WorkerPool } from './WorkerPool/WorkerPool';
+import {
+  WORKER_POOL_API_REFERENCE,
+  WORKER_POOL_HELPER_ESBUILD,
+  WORKER_POOL_HELPER_NEXTJS,
+  WORKER_POOL_HELPER_STATIC,
+  WORKER_POOL_HELPER_VANILLA,
+  WORKER_POOL_HELPER_VITE,
+  WORKER_POOL_HELPER_WEBPACK,
+  WORKER_POOL_REACT_COMPONENT,
+  WORKER_POOL_USAGE,
+} from './WorkerPool/constants';
 
 export default function DocsPage() {
   return (
@@ -55,6 +67,7 @@ export default function DocsPage() {
           <VanillaAPISection />
           <StylingSection />
           <SSRSection />
+          <WorkerPoolSection />
           {/* <ComponentProps /> */}
           {/* <RendererOptions /> */}
           {/* <EventHandlers /> */}
@@ -170,6 +183,43 @@ async function SSRSection() {
       serverComponent={serverComponent}
       clientComponent={clientComponent}
       installationComponent={installationComponent}
+    />
+  );
+}
+
+async function WorkerPoolSection() {
+  const [
+    helperVite,
+    helperNextjs,
+    helperWebpack,
+    helperEsbuild,
+    helperStatic,
+    helperVanilla,
+    usage,
+    reactComponent,
+    apiReference,
+  ] = await Promise.all([
+    preloadFile(WORKER_POOL_HELPER_VITE),
+    preloadFile(WORKER_POOL_HELPER_NEXTJS),
+    preloadFile(WORKER_POOL_HELPER_WEBPACK),
+    preloadFile(WORKER_POOL_HELPER_ESBUILD),
+    preloadFile(WORKER_POOL_HELPER_STATIC),
+    preloadFile(WORKER_POOL_HELPER_VANILLA),
+    preloadFile(WORKER_POOL_USAGE),
+    preloadFile(WORKER_POOL_REACT_COMPONENT),
+    preloadFile(WORKER_POOL_API_REFERENCE),
+  ]);
+  return (
+    <WorkerPool
+      helperVite={helperVite}
+      helperNextjs={helperNextjs}
+      helperWebpack={helperWebpack}
+      helperEsbuild={helperEsbuild}
+      helperStatic={helperStatic}
+      helperVanilla={helperVanilla}
+      usage={usage}
+      reactComponent={reactComponent}
+      apiReference={apiReference}
     />
   );
 }
