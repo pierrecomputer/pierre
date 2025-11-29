@@ -224,7 +224,10 @@ export const WORKER_POOL_VANILLA_USAGE: PreloadFileOptions<undefined> = {
   file: {
     name: 'vanilla-worker-usage.ts',
     contents: `import { FileDiff } from '@pierre/precision-diffs';
-import { getOrCreateWorkerPoolSingleton } from '@pierre/precision-diffs/worker';
+import {
+  getOrCreateWorkerPoolSingleton,
+  terminateWorkerPoolSingleton,
+} from '@pierre/precision-diffs/worker';
 import { workerFactory } from './utils/workerFactory';
 
 // Create a singleton worker pool instance using your workerFactory.
@@ -253,7 +256,12 @@ await instance.render({
   oldFile: { name: 'example.ts', contents: 'const x = 1;' },
   newFile: { name: 'example.ts', contents: 'const x = 2;' },
   containerWrapper: document.body,
-});`,
+});
+
+// Optional: terminate workers when no longer needed (e.g., SPA navigation)
+// Page unload automatically cleans up workers, but for SPAs you may want
+// to call this when unmounting to free resources sooner.
+// terminateWorkerPoolSingleton();`,
   },
   options,
 };
