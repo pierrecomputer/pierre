@@ -168,6 +168,8 @@ export class ShikiPoolManager {
 
   terminate(): void {
     this.pool.terminate();
+    this.highlighter = undefined;
+    this.initialized = false;
   }
 
   getStats(): WorkerStats {

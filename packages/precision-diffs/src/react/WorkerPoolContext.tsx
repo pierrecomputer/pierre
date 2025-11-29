@@ -5,6 +5,8 @@ import {
   type ReactNode,
   createContext,
   useContext,
+  useEffect,
+  useInsertionEffect,
   useState,
 } from 'react';
 import {
@@ -13,12 +15,15 @@ import {
   type WorkerHighlighterOptions,
   type WorkerPoolOptions,
   getOrCreateWorkerPoolSingleton,
+  terminateWorkerPoolSingleton,
 } from 'src/worker';
 
 export type { WorkerPoolOptions, WorkerHighlighterOptions };
 
 export const WorkerPoolContext: Context<ShikiPoolManager | undefined> =
   createContext<ShikiPoolManager | undefined>(undefined);
+
+let instanceCount = 0;
 
 interface WorkerPoolContextProps extends SetupWorkerPoolProps {
   children: ReactNode;
@@ -38,6 +43,21 @@ export function WorkerPoolContextProvider({
       highlighterOptions,
     });
   });
+  // We use insertion effect for the instance counting to essentially debounce
+  // potentially conflicting mount/unmounts
+  useInsertionEffect(() => {
+    instanceCount++;
+    return () => {
+      instanceCount--;
+    };
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (instanceCount === 0) {
+        terminateWorkerPoolSingleton();
+      }
+    };
+  }, []);
   return (
     <WorkerPoolContext.Provider value={poolManager}>
       {children}

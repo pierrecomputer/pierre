@@ -18,3 +18,11 @@ export function getOrCreateWorkerPoolSingleton({
   }
   return managerSingleton;
 }
+
+export function terminateWorkerPoolSingleton(): void {
+  if (managerSingleton == null) {
+    return;
+  }
+  managerSingleton.terminate();
+  managerSingleton = undefined;
+}
