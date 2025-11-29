@@ -53,9 +53,8 @@ export function WorkerPool({
         then pass that function to our provided APIs.
       </p>
       <p>
-        To begin you'll need to create a function that can spawn a worker thread
-        correctly for your bundler and environment. We've provided some examples
-        for common use cases below.
+        Lets begin with that <code>workerFactory</code> function. We've provided
+        some examples for common use cases below.
       </p>
       <p>
         <em>
@@ -115,6 +114,12 @@ export function WorkerPool({
         will automatically use the worker pool for syntax highlighting.
       </p>
       <p>
+        The <code>WorkerPoolContextProvider</code> will automatically spin up or
+        shut down the worker pool based on its react lifecycle. If you have
+        multiple context providers, they will all share the same pool, and
+        termination won't occur until all contexts are unmounted.
+      </p>
+      <p>
         <strong>Important:</strong> The worker pool only works in client
         components. Make sure your provider is in a component with the{' '}
         <code>'use client'</code> directive if you're using NextJS App Router.
@@ -124,9 +129,11 @@ export function WorkerPool({
 
       <h4>Vanilla JS</h4>
       <p>
-        Once you've instantiated your worker pool, pass it directly to your{' '}
-        <code>File</code> and <code>FileDiff</code> constructors via the{' '}
-        <code>workerPool</code> option.
+        Simply use <code>getOrCreateWorkerPoolSingleton</code> to spin up a
+        singleton worker pool. Then pass that as the second argument to{' '}
+        <code>File</code> and/or <code>FileDiff</code>. When you are done with
+        the worker pool, you can use <code>terminateWorkerPoolSingleton</code>{' '}
+        to free up resources.
       </p>
       <DocsCodeExample {...vanillaUsage} />
 
