@@ -11,8 +11,6 @@ interface WorkerPoolProps {
   helperEsbuild: PreloadedFileResult<undefined>;
   helperStatic: PreloadedFileResult<undefined>;
   helperVanilla: PreloadedFileResult<undefined>;
-  usage: PreloadedFileResult<undefined>;
-  reactComponent: PreloadedFileResult<undefined>;
   apiReference: PreloadedFileResult<undefined>;
 }
 
@@ -23,46 +21,21 @@ export function WorkerPool({
   helperEsbuild,
   helperStatic,
   helperVanilla,
-  usage,
-  reactComponent,
   apiReference,
 }: WorkerPoolProps) {
   return (
     <section className="space-y-4">
       <h2>Worker Pool</h2>
       <p>
-        Precision Diffs provides infrastructure for offloading Shiki's syntax
-        highlighting to Web Worker threads, preventing main thread blocking
-        during rendering. This is especially useful when rendering large files
-        or multiple diffs simultaneously.
+        By default, syntax highlighting runs on the main thread. For improved
+        performance—especially when rendering large files or multiple diffs—you
+        can opt into worker-based rendering. This moves all Shiki syntax
+        highlighting off the main thread, keeping your UI responsive.
       </p>
-
-      <h3>Architecture</h3>
       <p>
-        The worker pool manages a configurable number of worker threads that
-        each initialize their own Shiki highlighter instance. Tasks are
-        distributed across available workers, with queuing when all workers are
-        busy.
+        To enable this, create a <code>ShikiPoolManager</code> instance and pass
+        it to the existing React or Vanilla JS APIs.
       </p>
-      <pre
-        className="inline-block rounded-lg bg-neutral-100 p-4 text-sm dark:bg-neutral-900"
-        style={{ fontFamily: 'Berkeley Mono, monospace', lineHeight: '16px' }}
-      >
-        {`┌─────────────────┐
-│   Main Thread   │
-│ ShikiPoolManager│ ← API
-│       ↓         │
-│  WorkerPool.ts  │
-└────────┬────────┘
-         │ postMessage
-         ↓
-┌─────────────────┐
-│ Workers (8x)    │
-│ shiki-worker.ts │
-│  → codeToHast() │
-│  → returns HAST │
-└─────────────────┘`}
-      </pre>
 
       <h3>Setup</h3>
       <p>
@@ -102,17 +75,12 @@ export function WorkerPool({
       </p>
       <DocsCodeExample {...helperVanilla} />
 
-      <h3>Usage</h3>
-      <DocsCodeExample {...usage} />
-
-      <h3>React Integration</h3>
-      <p>
-        When using the worker pool in React, create the pool instance in state
-        and clean it up on unmount:
-      </p>
-      <DocsCodeExample {...reactComponent} />
-
       <h3>API Reference</h3>
+      <p>
+        These methods are exposed for advanced use cases. In most scenarios, you
+        should pass the <code>ShikiPoolManager</code> instance to the React or
+        Vanilla JS APIs rather than calling these methods directly.
+      </p>
       <DocsCodeExample {...apiReference} />
 
       <h3>Worker Performance Tips</h3>
@@ -152,6 +120,33 @@ export function WorkerPool({
           <code>terminate()</code> when done to free worker resources.
         </li>
       </ul>
+
+      <h3>Architecture</h3>
+      <p>
+        The worker pool manages a configurable number of worker threads that
+        each initialize their own Shiki highlighter instance. Tasks are
+        distributed across available workers, with queuing when all workers are
+        busy.
+      </p>
+      <pre
+        className="inline-block rounded-lg bg-neutral-100 p-4 text-sm dark:bg-neutral-900"
+        style={{ fontFamily: 'Berkeley Mono, monospace', lineHeight: '16px' }}
+      >
+        {`┌─────────────────┐
+│   Main Thread   │
+│ ShikiPoolManager│ ← API
+│       ↓         │
+│  WorkerPool.ts  │
+└────────┬────────┘
+         │ postMessage
+         ↓
+┌─────────────────┐
+│ Workers (8x)    │
+│ shiki-worker.ts │
+│  → codeToHast() │
+│  → returns HAST │
+└─────────────────┘`}
+      </pre>
     </section>
   );
 }

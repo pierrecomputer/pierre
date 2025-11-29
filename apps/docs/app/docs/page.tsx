@@ -50,8 +50,6 @@ import {
   WORKER_POOL_HELPER_VANILLA,
   WORKER_POOL_HELPER_VITE,
   WORKER_POOL_HELPER_WEBPACK,
-  WORKER_POOL_REACT_COMPONENT,
-  WORKER_POOL_USAGE,
 } from './WorkerPool/constants';
 
 export default function DocsPage() {
@@ -195,8 +193,6 @@ async function WorkerPoolSection() {
     helperEsbuild,
     helperStatic,
     helperVanilla,
-    usage,
-    reactComponent,
     apiReference,
   ] = await Promise.all([
     preloadFile(WORKER_POOL_HELPER_VITE),
@@ -205,8 +201,6 @@ async function WorkerPoolSection() {
     preloadFile(WORKER_POOL_HELPER_ESBUILD),
     preloadFile(WORKER_POOL_HELPER_STATIC),
     preloadFile(WORKER_POOL_HELPER_VANILLA),
-    preloadFile(WORKER_POOL_USAGE),
-    preloadFile(WORKER_POOL_REACT_COMPONENT),
     preloadFile(WORKER_POOL_API_REFERENCE),
   ]);
   return (
@@ -217,8 +211,6 @@ async function WorkerPoolSection() {
       helperEsbuild={helperEsbuild}
       helperStatic={helperStatic}
       helperVanilla={helperVanilla}
-      usage={usage}
-      reactComponent={reactComponent}
       apiReference={apiReference}
     />
   );
