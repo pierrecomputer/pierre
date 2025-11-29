@@ -64,14 +64,10 @@ export function WorkerPool({
         </em>
       </p>
 
-      <p className="!mb-0">
-        <strong>Vite</strong>
-      </p>
+      <h4 data-toc-ignore>Vite</h4>
       <DocsCodeExample {...helperVite} />
 
-      <p className="!mb-0">
-        <strong>NextJS</strong>
-      </p>
+      <h4 data-toc-ignore>NextJS</h4>
       <DocsCodeExample {...helperNextjs} />
       <p>
         <strong>Important:</strong> Workers only work in client components. Make
@@ -79,28 +75,20 @@ export function WorkerPool({
         App Router.
       </p>
 
-      <p className="!mb-0">
-        <strong>Webpack 5</strong>
-      </p>
+      <h4 data-toc-ignore>Webpack 5</h4>
       <DocsCodeExample {...helperWebpack} />
 
-      <p className="!mb-0">
-        <strong>esbuild</strong>
-      </p>
+      <h4 data-toc-ignore>esbuild</h4>
       <DocsCodeExample {...helperEsbuild} />
 
-      <p className="!mb-0">
-        <strong>Rollup / Static Files</strong>
-      </p>
+      <h4 data-toc-ignore>Rollup / Static Files</h4>
       <p>
         If your bundler doesn't have special worker support, build and serve the
         worker file statically:
       </p>
       <DocsCodeExample {...helperStatic} />
 
-      <p className="!mb-0">
-        <strong>Vanilla JS (No Bundler)</strong>
-      </p>
+      <h4 data-toc-ignore>Vanilla JS (No Bundler)</h4>
       <p>
         For projects without a bundler, host the worker file on your server and
         reference it directly:

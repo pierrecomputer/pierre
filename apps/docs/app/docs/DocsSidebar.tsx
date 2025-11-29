@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+'use client';
+
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 import NavLink from '../../components/NavLink';
 
@@ -31,34 +33,39 @@ export function DocsSidebar({
   };
 
   // Extract headings from the page content
-  useEffect(() => {
-    const extractHeadings = () => {
-      const headingElements = document.querySelectorAll('h2, h3, h4');
-      const headingItems: HeadingItem[] = [];
+  useLayoutEffect(() => {
+    const headingElements = document.querySelectorAll('h2, h3, h4');
+    const headingItems: HeadingItem[] = [];
 
-      headingElements.forEach((element) => {
-        const text = element.textContent ?? '';
-        const id = generateId(text);
-        const level = parseInt(element.tagName.charAt(1));
+    for (const element of headingElements) {
+      if (!(element instanceof HTMLElement) || 'tocIgnore' in element.dataset) {
+        continue;
+      }
+      const text = element.textContent ?? '';
+      const id = generateId(text);
+      const level = parseInt(element.tagName.charAt(1));
 
-        // Set the ID on the element for anchor linking
-        element.id = id;
+      // Set the ID on the element for anchor linking
+      element.id = id;
 
-        headingItems.push({
-          id,
-          text,
-          level,
-          element: element as HTMLElement,
-        });
+      headingItems.push({
+        id,
+        text,
+        level,
+        element: element,
       });
+    }
 
-      setHeadings(headingItems);
-    };
+    setHeadings(headingItems);
 
-    // Extract headings after a short delay to ensure DOM is ready
-    const timeoutId = setTimeout(extractHeadings, 100);
-
-    return () => clearTimeout(timeoutId);
+    // After setting IDs, scroll to hash if present (browser couldn't do it earlier)
+    if (window.location.hash.trim() !== '') {
+      const id = window.location.hash.slice(1);
+      const element = document.getElementById(id);
+      if (element != null) {
+        element.scrollIntoView();
+      }
+    }
   }, []);
 
   // Handle scroll-based active heading detection
