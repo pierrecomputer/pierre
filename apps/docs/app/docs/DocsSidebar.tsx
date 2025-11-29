@@ -34,38 +34,46 @@ export function DocsSidebar({
 
   // Extract headings from the page content
   useLayoutEffect(() => {
-    const headingElements = document.querySelectorAll('h2, h3, h4');
-    const headingItems: HeadingItem[] = [];
+    const timeoutId = setTimeout(() => {
+      const headingElements = document.querySelectorAll('h2, h3, h4');
+      const headingItems: HeadingItem[] = [];
 
-    for (const element of headingElements) {
-      if (!(element instanceof HTMLElement) || 'tocIgnore' in element.dataset) {
-        continue;
+      for (const element of headingElements) {
+        if (
+          !(element instanceof HTMLElement) ||
+          'tocIgnore' in element.dataset
+        ) {
+          continue;
+        }
+        const text = element.textContent ?? '';
+        const id = generateId(text);
+        const level = parseInt(element.tagName.charAt(1));
+
+        // Set the ID on the element for anchor linking
+        element.id = id;
+
+        headingItems.push({
+          id,
+          text,
+          level,
+          element: element,
+        });
       }
-      const text = element.textContent ?? '';
-      const id = generateId(text);
-      const level = parseInt(element.tagName.charAt(1));
 
-      // Set the ID on the element for anchor linking
-      element.id = id;
+      setHeadings(headingItems);
 
-      headingItems.push({
-        id,
-        text,
-        level,
-        element: element,
-      });
-    }
-
-    setHeadings(headingItems);
-
-    // After setting IDs, scroll to hash if present (browser couldn't do it earlier)
-    if (window.location.hash.trim() !== '') {
-      const id = window.location.hash.slice(1);
-      const element = document.getElementById(id);
-      if (element != null) {
-        element.scrollIntoView();
+      // After setting IDs, scroll to hash if present (browser couldn't do it earlier)
+      if (window.location.hash.trim() !== '') {
+        const id = window.location.hash.slice(1);
+        const element = document.getElementById(id);
+        if (element != null) {
+          element.scrollIntoView();
+        }
       }
-    }
+    }, 100);
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   // Handle scroll-based active heading detection
