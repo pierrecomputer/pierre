@@ -6,21 +6,11 @@ const options = {
 
 export const WORKER_POOL_HELPER_VITE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'createWorkerAPI.ts',
-    contents: `// utils/createWorkerAPI.ts
-import {
-  ShikiPoolManager,
-  type WorkerPoolOptions,
-} from '@pierre/precision-diffs/worker';
-import ShikiWorkerUrl from '@pierre/precision-diffs/worker/shiki-worker.js?worker&url';
+    name: 'utils/workerFactory.ts',
+    contents: `import ShikiWorkerUrl from '@pierre/precision-diffs/worker/shiki-worker.js?worker&url';
 
-export function createWorkerAPI(
-  poolOptions?: WorkerPoolOptions
-): ShikiPoolManager {
-  return new ShikiPoolManager(
-    () => new Worker(ShikiWorkerUrl, { type: 'module' }),
-    poolOptions
-  );
+export function workerFactory(): Worker {
+  return new Worker(ShikiWorkerUrl, { type: 'module' });
 }`,
   },
   options,
@@ -28,28 +18,16 @@ export function createWorkerAPI(
 
 export const WORKER_POOL_HELPER_NEXTJS: PreloadFileOptions<undefined> = {
   file: {
-    name: 'createWorkerAPI.ts',
-    contents: `// utils/createWorkerAPI.ts
-'use client';
+    name: 'utils/workerFactory.ts',
+    contents: `'use client';
 
-import {
-  ShikiPoolManager,
-  type WorkerPoolOptions,
-} from '@pierre/precision-diffs/worker';
-
-export function createWorkerAPI(
-  poolOptions?: WorkerPoolOptions
-): ShikiPoolManager {
-  return new ShikiPoolManager(
-    () =>
-      new Worker(
-        new URL(
-          '@pierre/precision-diffs/worker/shiki-worker.js',
-          import.meta.url
-        ),
-        { type: 'module' }
-      ),
-    poolOptions
+export function workerFactory(): Worker {
+  return new Worker(
+    new URL(
+      '@pierre/precision-diffs/worker/shiki-worker.js',
+      import.meta.url
+    ),
+    { type: 'module' }
   );
 }`,
   },
@@ -58,26 +36,14 @@ export function createWorkerAPI(
 
 export const WORKER_POOL_HELPER_WEBPACK: PreloadFileOptions<undefined> = {
   file: {
-    name: 'createWorkerAPI.ts',
-    contents: `// utils/createWorkerAPI.ts
-import {
-  ShikiPoolManager,
-  type WorkerPoolOptions,
-} from '@pierre/precision-diffs/worker';
-
-export function createWorkerAPI(
-  poolOptions?: WorkerPoolOptions
-): ShikiPoolManager {
-  return new ShikiPoolManager(
-    () =>
-      new Worker(
-        new URL(
-          '@pierre/precision-diffs/worker/shiki-worker.js',
-          import.meta.url
-        ),
-        { type: 'module' }
-      ),
-    poolOptions
+    name: 'utils/workerFactory.ts',
+    contents: `export function workerFactory(): Worker {
+  return new Worker(
+    new URL(
+      '@pierre/precision-diffs/worker/shiki-worker.js',
+      import.meta.url
+    ),
+    { type: 'module' }
   );
 }`,
   },
@@ -86,26 +52,14 @@ export function createWorkerAPI(
 
 export const WORKER_POOL_HELPER_ESBUILD: PreloadFileOptions<undefined> = {
   file: {
-    name: 'createWorkerAPI.ts',
-    contents: `// utils/createWorkerAPI.ts
-import {
-  ShikiPoolManager,
-  type WorkerPoolOptions,
-} from '@pierre/precision-diffs/worker';
-
-export function createWorkerAPI(
-  poolOptions?: WorkerPoolOptions
-): ShikiPoolManager {
-  return new ShikiPoolManager(
-    () =>
-      new Worker(
-        new URL(
-          '@pierre/precision-diffs/worker/shiki-worker.js',
-          import.meta.url
-        ),
-        { type: 'module' }
-      ),
-    poolOptions
+    name: 'utils/workerFactory.ts',
+    contents: `export function workerFactory(): Worker {
+  return new Worker(
+    new URL(
+      '@pierre/precision-diffs/worker/shiki-worker.js',
+      import.meta.url
+    ),
+    { type: 'module' }
   );
 }`,
   },
@@ -114,24 +68,13 @@ export function createWorkerAPI(
 
 export const WORKER_POOL_HELPER_STATIC: PreloadFileOptions<undefined> = {
   file: {
-    name: 'createWorkerAPI.ts',
-    contents: `// utils/createWorkerAPI.ts
-// For Rollup or bundlers without special worker support:
+    name: 'utils/workerFactory.ts',
+    contents: `// For Rollup or bundlers without special worker support:
 // 1. Copy shiki-worker.js to your static/public folder
 // 2. Reference it by URL
 
-import {
-  ShikiPoolManager,
-  type WorkerPoolOptions,
-} from '@pierre/precision-diffs/worker';
-
-export function createWorkerAPI(
-  poolOptions?: WorkerPoolOptions
-): ShikiPoolManager {
-  return new ShikiPoolManager(
-    () => new Worker('/static/workers/shiki-worker.js', { type: 'module' }),
-    poolOptions
-  );
+export function workerFactory(): Worker {
+  return new Worker('/static/workers/shiki-worker.js', { type: 'module' });
 }`,
   },
   options,
@@ -139,33 +82,12 @@ export function createWorkerAPI(
 
 export const WORKER_POOL_HELPER_VANILLA: PreloadFileOptions<undefined> = {
   file: {
-    name: 'worker-setup.js',
+    name: 'utils/workerFactory.js',
     contents: `// No bundler / Vanilla JS
-// 1. Include precision-diffs as a script or use import maps
-// 2. Host shiki-worker.js on your server
+// Host shiki-worker.js on your server and reference it by URL
 
-import {
-  ShikiPoolManager,
-} from '@pierre/precision-diffs/worker';
-
-// Create worker pool pointing to your hosted worker file
-const workerAPI = new ShikiPoolManager(
-  () => new Worker('/path/to/shiki-worker.js', { type: 'module' }),
-  {
-    poolSize: 8,
-    initOptions: {
-      themes: ['pierre-dark', 'pierre-light'],
-    },
-  }
-);
-
-// Use the API
-async function highlightCode() {
-  const result = await workerAPI.renderFileToHast(
-    { name: 'example.ts', contents: 'const x = 42;' },
-    { theme: 'pierre-dark' }
-  );
-  console.log(result.lines);
+export function workerFactory() {
+  return new Worker('/path/to/shiki-worker.js', { type: 'module' });
 }`,
   },
   options,
@@ -243,6 +165,95 @@ export function CodeViewer() {
 
   // Use workerAPI.renderFileToHast() etc.
 }`,
+  },
+  options,
+};
+
+export const WORKER_POOL_REACT_USAGE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'HighlightProvider.tsx',
+    contents: `// components/HighlightProvider.tsx
+'use client';
+
+import { WorkerPoolContextProvider } from '@pierre/precision-diffs/react';
+import type { ReactNode } from 'react';
+import { workerFactory } from '@/utils/workerFactory';
+
+// Create a client component that wraps children with the worker pool.
+// Import this in your layout to provide the worker pool to all pages.
+export function HighlightProvider({ children }: { children: ReactNode }) {
+  return (
+    <WorkerPoolContextProvider
+      poolOptions={{
+        workerFactory,
+        // poolSize defaults to 8. More workers = more parallelism but
+        // also more memory. Too many can actually slow things down.
+        // poolSize: 8,
+      }}
+      highlighterOptions={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        // Optionally preload languages to avoid lazy-loading delays
+        langs: ['typescript', 'javascript', 'css', 'html'],
+      }}
+    >
+      {children}
+    </WorkerPoolContextProvider>
+  );
+}
+
+// layout.tsx
+// import { HighlightProvider } from '@/components/HighlightProvider';
+//
+// export default function Layout({ children }) {
+//   return (
+//     <html>
+//       <body>
+//         <HighlightProvider>{children}</HighlightProvider>
+//       </body>
+//     </html>
+//   );
+// }
+
+// Any FileDiff or File component nested within the layout will
+// automatically use the worker pool—no additional props required.`,
+  },
+  options,
+};
+
+export const WORKER_POOL_VANILLA_USAGE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'vanilla-worker-usage.ts',
+    contents: `import { FileDiff } from '@pierre/precision-diffs';
+import { getOrCreateWorkerPoolSingleton } from '@pierre/precision-diffs/worker';
+import { workerFactory } from './utils/workerFactory';
+
+// Create a singleton worker pool instance using your workerFactory.
+// This ensures the same pool is reused across your app.
+const workerPool = getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    workerFactory,
+    // poolSize defaults to 8. More workers = more parallelism but
+    // also more memory. Too many can actually slow things down.
+    // poolSize: 8,
+  },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Optionally preload languages to avoid lazy-loading delays
+    langs: ['typescript', 'javascript', 'css', 'html'],
+  },
+});
+
+// Pass the workerPool to FileDiff to offload syntax highlighting
+const instance = new FileDiff({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  workerPool,
+});
+
+await instance.render({
+  oldFile: { name: 'example.ts', contents: 'const x = 1;' },
+  newFile: { name: 'example.ts', contents: 'const x = 2;' },
+  containerWrapper: document.body,
+});`,
   },
   options,
 };
