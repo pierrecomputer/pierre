@@ -26,11 +26,12 @@ export function ReactAPI({
     <section className="space-y-4">
       <h2>React API</h2>
       <p>
-        Right now, the React API exposes two main components,{' '}
-        <code>FileDiff</code> (for rendering diffs for a specific file) and{' '}
-        <code>File</code> for rendering just a single code file. We plan to add
-        more components like a file picker and tools for virtualization of
-        longer diffs in the future.
+        The React API exposes four main components: <code>MultiFileDiff</code>{' '}
+        (compare two file versions), <code>PatchDiff</code> (render from a patch
+        string), <code>FileDiff</code> (render a pre-parsed{' '}
+        <code>FileDiffMetadata</code>), and <code>File</code> (render a single
+        code file without diff). We plan to add more components like a file
+        picker and tools for virtualization of longer diffs in the future.
       </p>
       <p>
         You can import the React components from{' '}

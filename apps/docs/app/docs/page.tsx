@@ -33,6 +33,14 @@ import {
   STYLING_CODE_INLINE,
   STYLING_CODE_UNSAFE,
 } from './Styling/constants';
+import { Utilities } from './Utilities/Utilities';
+import {
+  HELPER_DIFF_ACCEPT_REJECT,
+  HELPER_DIFF_ACCEPT_REJECT_REACT,
+  HELPER_PARSE_DIFF_FROM_FILE,
+  HELPER_PARSE_PATCH_FILES,
+  HELPER_REGISTER_CUSTOM_THEME,
+} from './Utilities/constants';
 import { VanillaAPI } from './VanillaAPI/VanillaAPI';
 import {
   VANILLA_API_CODE_UTILITIES,
@@ -68,6 +76,7 @@ export default function DocsPage() {
             <OverviewSection />
             <ReactAPISection />
             <VanillaAPISection />
+            <UtilitiesSection />
             <StylingSection />
             <WorkerPoolSection />
             <SSRSection />
@@ -156,6 +165,31 @@ async function VanillaAPISection() {
       vanillaAPIHunksRenderer={vanillaAPIHunksRenderer}
       vanillaAPIHunksRendererPatch={vanillaAPIHunksRendererPatch}
       vanillaAPICodeUtilities={vanillaAPICodeUtilities}
+    />
+  );
+}
+
+async function UtilitiesSection() {
+  const [
+    parseDiffFromFile,
+    parsePatchFiles,
+    registerCustomTheme,
+    diffAcceptReject,
+    diffAcceptRejectReact,
+  ] = await Promise.all([
+    preloadFile(HELPER_PARSE_DIFF_FROM_FILE),
+    preloadFile(HELPER_PARSE_PATCH_FILES),
+    preloadFile(HELPER_REGISTER_CUSTOM_THEME),
+    preloadFile(HELPER_DIFF_ACCEPT_REJECT),
+    preloadFile(HELPER_DIFF_ACCEPT_REJECT_REACT),
+  ]);
+  return (
+    <Utilities
+      parseDiffFromFile={parseDiffFromFile}
+      parsePatchFiles={parsePatchFiles}
+      registerCustomTheme={registerCustomTheme}
+      diffAcceptReject={diffAcceptReject}
+      diffAcceptRejectReact={diffAcceptRejectReact}
     />
   );
 }

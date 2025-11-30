@@ -42,7 +42,7 @@ export const OVERVIEW_REACT_SINGLE_FILE: PreloadFileOptions<undefined> = {
     name: 'react_single_file.tsx',
     contents: `import {
   type FileContents,
-  FileDiff,
+  MultiFileDiff,
 } from '@pierre/precision-diffs/react';
 
 // Store file objects in variables rather than inlining them.
@@ -73,10 +73,10 @@ pub fn main() !void {
 
 function SingleDiff() {
   return (
-    <FileDiff
+    <MultiFileDiff
       // We automatically detect the language based on filename
       // You can also provide 'lang' property in 'options' when
-      // rendering FileDiff
+      // rendering MultiFileDiff
       oldFile={oldFile}
       newFile={newFile}
       options={{ theme: 'pierre-dark' }}
@@ -118,7 +118,7 @@ function Patches() {
 
   return (
     <>
-      {parsePatchFiles.map((patch, index) => (
+      {parsedPatches.map((patch, index) => (
         <Fragment key={index}>
           {patch.files.map((fileDiff, index) => (
             // Under the hood, all instances of FileDiff will use a
