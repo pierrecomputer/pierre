@@ -342,11 +342,11 @@ export class FileDiff<LAnnotation = undefined> {
       newFile != null &&
       (!deepEquals(oldFile, this.oldFile) ||
         !deepEquals(newFile, this.newFile));
-    // Ideally this would just a quick === check because lineAnnotations is
-    // unbounded
     const annotationsChanged =
       lineAnnotations != null &&
-      !deepEquals(lineAnnotations, this.lineAnnotations);
+      (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
+        ? lineAnnotations !== this.lineAnnotations
+        : false;
     if (
       !forceRender &&
       !annotationsChanged &&
@@ -382,7 +382,6 @@ export class FileDiff<LAnnotation = undefined> {
           : this.options.hunkSeparators,
     });
 
-    // This is kinda jank, lol
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
     const { disableFileHeader = false } = this.options;

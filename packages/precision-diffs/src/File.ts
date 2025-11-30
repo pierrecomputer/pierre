@@ -248,16 +248,21 @@ export class File<LAnnotation = undefined> {
     containerWrapper,
     lineAnnotations,
   }: FileRenderProps<LAnnotation>): void {
-    if (!forceRender && deepEquals(this.file, file)) {
+    const annotationsChanged =
+      lineAnnotations != null &&
+      (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
+        ? lineAnnotations !== this.lineAnnotations
+        : false;
+    if (!forceRender && deepEquals(this.file, file) && !annotationsChanged) {
       return;
     }
 
     this.file = file;
     this.fileRenderer.setOptions(this.options);
     if (lineAnnotations != null) {
-      this.fileRenderer.setLineAnnotations(lineAnnotations);
       this.setLineAnnotations(lineAnnotations);
     }
+    this.fileRenderer.setLineAnnotations(this.lineAnnotations);
 
     const { disableFileHeader = false } = this.options;
     if (disableFileHeader) {
