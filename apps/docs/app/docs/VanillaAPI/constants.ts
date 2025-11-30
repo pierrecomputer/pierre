@@ -30,7 +30,9 @@ interface ThreadMetadata {
   threadId: string;
 }
 
-// Annotation metadata can be typed any way you'd like
+// Annotation metadata can be typed any way you'd like.
+// Like file objects, keep annotation arrays stable to avoid unnecessary
+// re-renders - store them in variables rather than creating inline.
 const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   {
     side: 'additions',
