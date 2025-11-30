@@ -34,10 +34,12 @@ export function Utilities({
   return (
     <section className="space-y-4">
       <h2>Utilities</h2>
+      <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
+        You can import these utility functions from{' '}
+        <code>@pierre/precision-diffs</code>
+      </p>
       <p>
-        These utility functions are available from the core{' '}
-        <code>@pierre/precision-diffs</code> package and can be used with any
-        framework or rendering approach.
+        These utilities can be used with any framework or rendering approach.
       </p>
 
       <h3>diffAcceptRejectHunk</h3>

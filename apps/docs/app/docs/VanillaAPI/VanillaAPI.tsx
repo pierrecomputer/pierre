@@ -40,13 +40,15 @@ export function VanillaAPI({
   return (
     <section className="space-y-4">
       <h2>Vanilla JS API</h2>
+      <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
+        You can import the vanilla JavaScript classes, components and methods
+        from <code>@pierre/precision-diffs</code>.
+      </p>
       <p>
-        You can import the vanilla JavaScript classes from{' '}
-        <code>@pierre/precision-diffs</code>. We offer two components,{' '}
-        <code>FileDiff</code> for rendering diffs, and <code>File</code> for
-        rendering plain files. Typically you'll want to interface with these as
-        they'll handle all the complicated aspects of syntax highlighting and
-        themeing for you.
+        We offer two components, <code>FileDiff</code> for rendering diffs, and{' '}
+        <code>File</code> for rendering plain files. Typically you'll want to
+        interface with these as they'll handle all the complicated aspects of
+        syntax highlighting and themeing for you.
       </p>
 
       <h3>Components</h3>

@@ -33,6 +33,10 @@ export function WorkerPool({
   return (
     <section className="space-y-4">
       <h2>Worker Pool</h2>
+      <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
+        You can import the worker utilities from{' '}
+        <code>@pierre/precision-diffs/worker</code>
+      </p>
       <p>
         By default, syntax highlighting runs on the main thread using Shiki. If
         you are rendering large files or many diffs this can cause a bottleneck

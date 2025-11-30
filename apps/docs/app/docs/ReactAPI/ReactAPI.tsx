@@ -40,11 +40,13 @@ export function ReactAPI({
   return (
     <section className="space-y-4">
       <h2>React API</h2>
-      <p>
+      <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
         You can import the React components from{' '}
-        <code>@pierre/precision-diffs/react</code>. We offer a variety of
-        components to render diffs and files. Many of them share similar types
-        of props, which you can find documented in{' '}
+        <code>@pierre/precision-diffs/react</code>
+      </p>
+      <p>
+        We offer a variety of components to render diffs and files. Many of them
+        share similar types of props, which you can find documented in{' '}
         <a href="#react-api-shared-props">Shared Props</a>.
       </p>
 
