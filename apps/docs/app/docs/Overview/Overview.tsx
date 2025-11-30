@@ -107,22 +107,38 @@ export function Overview({
         You can see examples of these approaches below, in both JavaScript and
         React.
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <ButtonGroup
+          className="flex-1 sm:flex-initial"
           value={type}
           onValueChange={(value) => setType(value as 'vanilla' | 'react')}
         >
-          <ButtonGroupItem value="vanilla">Vanilla JS</ButtonGroupItem>
-          <ButtonGroupItem value="react">React</ButtonGroupItem>
+          <ButtonGroupItem className="flex-1 sm:flex-initial" value="vanilla">
+            Vanilla JS
+          </ButtonGroupItem>
+          <ButtonGroupItem className="flex-1 sm:flex-initial" value="react">
+            React
+          </ButtonGroupItem>
         </ButtonGroup>
         <ButtonGroup
+          className="flex-1 sm:flex-initial"
           value={example}
           onValueChange={(value) =>
             setExample(value as 'single-file' | 'patch-file')
           }
         >
-          <ButtonGroupItem value="single-file">Single file</ButtonGroupItem>
-          <ButtonGroupItem value="patch-file">Patch file</ButtonGroupItem>
+          <ButtonGroupItem
+            className="flex-1 sm:flex-initial"
+            value="single-file"
+          >
+            Single file
+          </ButtonGroupItem>
+          <ButtonGroupItem
+            className="flex-1 sm:flex-initial"
+            value="patch-file"
+          >
+            Patch file
+          </ButtonGroupItem>
         </ButtonGroup>
       </div>
       <DocsCodeExample {...file} />

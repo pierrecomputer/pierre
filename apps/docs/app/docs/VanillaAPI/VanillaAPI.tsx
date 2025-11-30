@@ -94,12 +94,8 @@ export function VanillaAPI({
           setHunkType(value as 'hunk-file' | 'hunk-patch')
         }
       >
-        <ButtonGroupItem value="hunk-file">
-          DiffHunksRenderer File
-        </ButtonGroupItem>
-        <ButtonGroupItem value="hunk-patch">
-          DiffHunksRenderer Patch
-        </ButtonGroupItem>
+        <ButtonGroupItem value="hunk-file">From Two Files</ButtonGroupItem>
+        <ButtonGroupItem value="hunk-patch">From Patch File</ButtonGroupItem>
       </ButtonGroup>
       {hunkType === 'hunk-file' ? (
         <DocsCodeExample {...vanillaAPIHunksRenderer} />
