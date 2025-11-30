@@ -7,19 +7,25 @@ import { useState } from 'react';
 import { DocsCodeExample } from '../DocsCodeExample';
 
 interface UtilitiesProps {
-  parseDiffFromFile: PreloadedFileResult<undefined>;
-  parsePatchFiles: PreloadedFileResult<undefined>;
-  registerCustomTheme: PreloadedFileResult<undefined>;
   diffAcceptReject: PreloadedFileResult<undefined>;
   diffAcceptRejectReact: PreloadedFileResult<undefined>;
+  disposeHighlighter: PreloadedFileResult<undefined>;
+  getSharedHighlighter: PreloadedFileResult<undefined>;
+  parseDiffFromFile: PreloadedFileResult<undefined>;
+  parsePatchFiles: PreloadedFileResult<undefined>;
+  preloadHighlighter: PreloadedFileResult<undefined>;
+  registerCustomTheme: PreloadedFileResult<undefined>;
 }
 
 export function Utilities({
-  parseDiffFromFile,
-  parsePatchFiles,
-  registerCustomTheme,
   diffAcceptReject,
   diffAcceptRejectReact,
+  disposeHighlighter,
+  getSharedHighlighter,
+  parseDiffFromFile,
+  parsePatchFiles,
+  preloadHighlighter,
+  registerCustomTheme,
 }: UtilitiesProps) {
   const [acceptRejectType, setAcceptRejectType] = useState<'vanilla' | 'react'>(
     'vanilla'
@@ -63,6 +69,20 @@ export function Utilities({
         <DocsCodeExample {...diffAcceptRejectReact} />
       )}
 
+      <h3>disposeHighlighter</h3>
+      <p>
+        Dispose the shared Shiki highlighter instance to free memory. Useful
+        when cleaning up resources in single-page applications.
+      </p>
+      <DocsCodeExample {...disposeHighlighter} />
+
+      <h3>getSharedHighlighter</h3>
+      <p>
+        Get direct access to the shared Shiki highlighter instance used
+        internally by all components. Useful for custom highlighting operations.
+      </p>
+      <DocsCodeExample {...getSharedHighlighter} />
+
       <h3>parseDiffFromFile</h3>
       <p>
         Compare two versions of a file and generate a{' '}
@@ -78,6 +98,13 @@ export function Utilities({
         PR <code>.patch</code> URLs).
       </p>
       <DocsCodeExample {...parsePatchFiles} />
+
+      <h3>preloadHighlighter</h3>
+      <p>
+        Preload specific themes and languages before rendering to ensure instant
+        highlighting with no async loading delay.
+      </p>
+      <DocsCodeExample {...preloadHighlighter} />
 
       <h3>registerCustomTheme</h3>
       <p>

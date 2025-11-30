@@ -12,7 +12,6 @@ interface VanillaAPIProps {
   vanillaAPICustomHunk: PreloadedFileResult<undefined>;
   vanillaAPIHunksRenderer: PreloadedFileResult<undefined>;
   vanillaAPIHunksRendererPatch: PreloadedFileResult<undefined>;
-  vanillaAPICodeUtilities: PreloadedFileResult<undefined>;
 }
 
 export function VanillaAPI({
@@ -21,7 +20,6 @@ export function VanillaAPI({
   vanillaAPICustomHunk,
   vanillaAPIHunksRenderer,
   vanillaAPIHunksRendererPatch,
-  vanillaAPICodeUtilities,
 }: VanillaAPIProps) {
   const [componentType, setComponentType] = useState<'file-diff' | 'file'>(
     'file-diff'
@@ -102,28 +100,6 @@ export function VanillaAPI({
       ) : (
         <DocsCodeExample {...vanillaAPIHunksRendererPatch} />
       )}
-      <h3>Shared Highlighter Utilities</h3>
-      <p>
-        Because it‘s important to re-use your highlighter instance when using
-        Shiki, we‘ve ensured that all the classes and components you use with
-        Precision Diffs will automatically use a shared highlighter instance and
-        also automatically load languages and themes on demand as necessary.
-      </p>
-      <p>
-        We provide APIs to preload the highlighter, themes, and languages if you
-        want to have that ready before rendering. Also there are some cleanup
-        utilities if you want to be memory conscious.
-      </p>
-      <p>
-        Shiki comes with a lot of built-in{' '}
-        <a href="https://shiki.style/themes" target="_blank">
-          themes
-        </a>
-        , but if you would like to use your own custom or modified theme, you
-        simply have to register it and then it‘ll just work as any other
-        built-in theme.
-      </p>
-      <DocsCodeExample {...vanillaAPICodeUtilities} />
     </section>
   );
 }

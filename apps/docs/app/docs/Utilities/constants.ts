@@ -118,6 +118,71 @@ registerCustomTheme('inline-theme', async () => ({
   options,
 };
 
+export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'disposeHighlighter.ts',
+    contents: `import { disposeHighlighter } from '@pierre/precision-diffs';
+
+// Dispose the shared highlighter instance to free memory.
+// This is useful when you're done rendering diffs and want
+// to clean up resources (e.g., in a single-page app when
+// navigating away from a diff view).
+//
+// Note: After calling this, all themes and languages will
+// need to be reloaded on the next render.
+disposeHighlighter();`,
+  },
+  options,
+};
+
+export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'getSharedHighlighter.ts',
+    contents: `import { getSharedHighlighter } from '@pierre/precision-diffs';
+
+// Get the shared Shiki highlighter instance.
+// This is the same instance used internally by all FileDiff
+// and File components. Useful if you need direct access to
+// Shiki for custom highlighting operations.
+//
+// The highlighter is initialized lazily - themes and languages
+// are loaded on demand as you render different files.
+const highlighter = await getSharedHighlighter();
+
+// You can use it directly for custom highlighting
+const tokens = highlighter.codeToTokens('const x = 1;', {
+  lang: 'typescript',
+  theme: 'pierre-dark',
+});`,
+  },
+  options,
+};
+
+export const HELPER_PRELOAD_HIGHLIGHTER: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'preloadHighlighter.ts',
+    contents: `import { preloadHighlighter } from '@pierre/precision-diffs';
+
+// Preload specific themes and languages before rendering.
+// This ensures the highlighter is ready with the assets you
+// need, avoiding any flash of unstyled content on first render.
+//
+// By default, themes and languages are loaded on demand,
+// but preloading is useful when you know which languages
+// you'll be rendering ahead of time.
+await preloadHighlighter({
+  // Themes to preload
+  themes: ['pierre-dark', 'pierre-light', 'github-dark'],
+  // Languages to preload
+  langs: ['typescript', 'javascript', 'python', 'rust', 'go'],
+});
+
+// After preloading, rendering diffs in these languages
+// will be instant with no async loading delay.`,
+  },
+  options,
+};
+
 export const HELPER_DIFF_ACCEPT_REJECT: PreloadFileOptions<undefined> = {
   file: {
     name: 'diffAcceptRejectHunk.ts',

@@ -37,13 +37,15 @@ import { Utilities } from './Utilities/Utilities';
 import {
   HELPER_DIFF_ACCEPT_REJECT,
   HELPER_DIFF_ACCEPT_REJECT_REACT,
+  HELPER_DISPOSE_HIGHLIGHTER,
+  HELPER_GET_SHARED_HIGHLIGHTER,
   HELPER_PARSE_DIFF_FROM_FILE,
   HELPER_PARSE_PATCH_FILES,
+  HELPER_PRELOAD_HIGHLIGHTER,
   HELPER_REGISTER_CUSTOM_THEME,
 } from './Utilities/constants';
 import { VanillaAPI } from './VanillaAPI/VanillaAPI';
 import {
-  VANILLA_API_CODE_UTILITIES,
   VANILLA_API_CUSTOM_HUNK_FILE,
   VANILLA_API_FILE_DIFF,
   VANILLA_API_FILE_FILE,
@@ -148,14 +150,12 @@ async function VanillaAPISection() {
     vanillaAPICustomHunk,
     vanillaAPIHunksRenderer,
     vanillaAPIHunksRendererPatch,
-    vanillaAPICodeUtilities,
   ] = await Promise.all([
     preloadFile(VANILLA_API_FILE_DIFF),
     preloadFile(VANILLA_API_FILE_FILE),
     preloadFile(VANILLA_API_CUSTOM_HUNK_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
-    preloadFile(VANILLA_API_CODE_UTILITIES),
   ]);
   return (
     <VanillaAPI
@@ -164,32 +164,40 @@ async function VanillaAPISection() {
       vanillaAPICustomHunk={vanillaAPICustomHunk}
       vanillaAPIHunksRenderer={vanillaAPIHunksRenderer}
       vanillaAPIHunksRendererPatch={vanillaAPIHunksRendererPatch}
-      vanillaAPICodeUtilities={vanillaAPICodeUtilities}
     />
   );
 }
 
 async function UtilitiesSection() {
   const [
-    parseDiffFromFile,
-    parsePatchFiles,
-    registerCustomTheme,
     diffAcceptReject,
     diffAcceptRejectReact,
+    disposeHighlighter,
+    getSharedHighlighter,
+    parseDiffFromFile,
+    parsePatchFiles,
+    preloadHighlighter,
+    registerCustomTheme,
   ] = await Promise.all([
-    preloadFile(HELPER_PARSE_DIFF_FROM_FILE),
-    preloadFile(HELPER_PARSE_PATCH_FILES),
-    preloadFile(HELPER_REGISTER_CUSTOM_THEME),
     preloadFile(HELPER_DIFF_ACCEPT_REJECT),
     preloadFile(HELPER_DIFF_ACCEPT_REJECT_REACT),
+    preloadFile(HELPER_DISPOSE_HIGHLIGHTER),
+    preloadFile(HELPER_GET_SHARED_HIGHLIGHTER),
+    preloadFile(HELPER_PARSE_DIFF_FROM_FILE),
+    preloadFile(HELPER_PARSE_PATCH_FILES),
+    preloadFile(HELPER_PRELOAD_HIGHLIGHTER),
+    preloadFile(HELPER_REGISTER_CUSTOM_THEME),
   ]);
   return (
     <Utilities
-      parseDiffFromFile={parseDiffFromFile}
-      parsePatchFiles={parsePatchFiles}
-      registerCustomTheme={registerCustomTheme}
       diffAcceptReject={diffAcceptReject}
       diffAcceptRejectReact={diffAcceptRejectReact}
+      disposeHighlighter={disposeHighlighter}
+      getSharedHighlighter={getSharedHighlighter}
+      parseDiffFromFile={parseDiffFromFile}
+      parsePatchFiles={parsePatchFiles}
+      preloadHighlighter={preloadHighlighter}
+      registerCustomTheme={registerCustomTheme}
     />
   );
 }
