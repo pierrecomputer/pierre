@@ -1,6 +1,6 @@
 import type { Element as HASTElement, Properties } from 'hast';
-import type { PrePropertiesConfig } from 'src/types';
 
+import type { PrePropertiesConfig } from '../types';
 import { createHastElement } from './hast_utils';
 
 export function createPreElement(options: PrePropertiesConfig): HASTElement {

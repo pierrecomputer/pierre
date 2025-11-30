@@ -1,4 +1,4 @@
-import type { ContextContent, FileDiffMetadata } from 'src/types';
+import type { ContextContent, FileDiffMetadata } from '../types';
 
 export function diffAcceptRejectHunk(
   diff: FileDiffMetadata,

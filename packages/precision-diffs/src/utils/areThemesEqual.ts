@@ -1,4 +1,4 @@
-import type { PJSThemeNames, ThemesType } from 'src/types';
+import type { PJSThemeNames, ThemesType } from '../types';
 
 export function areThemesEqual(
   themeA: PJSThemeNames | ThemesType | undefined,

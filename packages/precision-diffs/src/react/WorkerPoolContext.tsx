@@ -9,6 +9,7 @@ import {
   useInsertionEffect,
   useState,
 } from 'react';
+
 import {
   type SetupWorkerPoolProps,
   type WorkerHighlighterOptions,
@@ -16,7 +17,7 @@ import {
   type WorkerPoolOptions,
   getOrCreateWorkerPoolSingleton,
   terminateWorkerPoolSingleton,
-} from 'src/worker';
+} from '../worker';
 
 export type { WorkerPoolOptions, WorkerHighlighterOptions };
 
