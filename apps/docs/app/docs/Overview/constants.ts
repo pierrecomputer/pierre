@@ -30,11 +30,10 @@ pub fn main() !void {
 `,
     },
     options: {
-      theme: 'pierre-dark',
-      diffStyle: 'unified',
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      diffStyle: 'split',
       diffIndicators: 'bars',
       overflow: 'wrap',
-      lineDiffType: 'word-alt',
     },
   };
 
