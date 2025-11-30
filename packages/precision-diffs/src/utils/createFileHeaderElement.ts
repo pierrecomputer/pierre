@@ -108,7 +108,7 @@ function createMetadataElement(
       additions += hunk.additionLines;
       deletions += hunk.deletionLines;
     }
-    if (deletions > 0) {
+    if (deletions > 0 || additions === 0) {
       children.push(
         createHastElement({
           tagName: 'span',
@@ -117,20 +117,12 @@ function createMetadataElement(
         })
       );
     }
-    if (additions > 0) {
+    if (additions > 0 || deletions === 0) {
       children.push(
         createHastElement({
           tagName: 'span',
           children: [createTextNodeElement(`+${additions}`)],
           properties: { 'data-additions-count': '' },
-        })
-      );
-    }
-    if (deletions === 0 && additions === 0) {
-      children.push(
-        createHastElement({
-          tagName: 'span',
-          children: [createTextNodeElement('No diff')],
         })
       );
     }
