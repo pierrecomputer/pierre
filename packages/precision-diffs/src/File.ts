@@ -106,6 +106,7 @@ export class File<LAnnotation = undefined> {
     this.lineSelectionManager = new LineSelectionManager(
       pluckLineSelectionOptions(options)
     );
+    this.workerManager?.subscribeToThemeChanges(this);
   }
 
   private handleHighlightRender = (): void => {
@@ -175,6 +176,7 @@ export class File<LAnnotation = undefined> {
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.lineSelectionManager.cleanUp();
+    this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
 
     // Clean up the data

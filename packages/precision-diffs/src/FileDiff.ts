@@ -140,6 +140,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineSelectionManager = new LineSelectionManager(
       pluckLineSelectionOptions(options)
     );
+    this.workerManager?.subscribeToThemeChanges(this);
   }
 
   private handleHighlightRender = (): void => {
@@ -226,6 +227,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.lineSelectionManager.cleanUp();
+    this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
 
     // Clean up the data
@@ -303,6 +305,9 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   rerender(): void {
+    if (this.fileDiff == null && this.newFile == null && this.oldFile == null) {
+      return;
+    }
     this.render({
       oldFile: this.oldFile,
       newFile: this.newFile,

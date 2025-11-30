@@ -15,6 +15,7 @@ import type {
   ThemedFileResult,
   ThemesType,
 } from '../types';
+import { areThemesEqual } from '../utils/areThemesEqual';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
@@ -40,6 +41,10 @@ interface ManagedWorker {
   langs: Set<SupportedLanguages>;
 }
 
+interface ThemeSubscriber {
+  rerender(): void;
+}
+
 export class WorkerPoolManager {
   private highlighter: PJSHighlighter | undefined;
 
@@ -50,6 +55,7 @@ export class WorkerPoolManager {
   private taskQueue: AllWorkerTasks[] = [];
   private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
   private nextRequestId = 0;
+  private themeSubscribers = new Set<ThemeSubscriber>();
 
   constructor(
     private options: WorkerPoolOptions,
@@ -59,6 +65,9 @@ export class WorkerPoolManager {
   }
 
   async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
+    if (areThemesEqual(theme, this.currentTheme)) {
+      return;
+    }
     if (hasLoadedThemes(getThemes(theme)) && this.highlighter != null) {
       this.currentTheme = theme;
     } else {
@@ -68,6 +77,20 @@ export class WorkerPoolManager {
       });
       this.currentTheme = theme;
     }
+    for (const instance of this.themeSubscribers) {
+      instance.rerender();
+    }
+  }
+
+  subscribeToThemeChanges(instance: ThemeSubscriber): () => void {
+    this.themeSubscribers.add(instance);
+    return () => {
+      this.unsubscribeToThemeChanges(instance);
+    };
+  }
+
+  unsubscribeToThemeChanges(instance: ThemeSubscriber): void {
+    this.themeSubscribers.delete(instance);
   }
 
   isInitialized(): boolean {
