@@ -13,6 +13,17 @@ export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
 // These options are shared by MultiFileDiff, PatchDiff, and FileDiff.
 // Pass them via the \`options\` prop.
 
+import { MultiFileDiff } from '@pierre/precision-diffs/react';
+
+<MultiFileDiff
+  {...}
+  options={{
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    diffStyle: 'split',
+    // ... see below for all available options
+  }}
+/>
+
 interface DiffOptions {
   // ─────────────────────────────────────────────────────────────
   // THEMING
@@ -90,7 +101,8 @@ interface DiffOptions {
   // Hide the file header with filename and stats
   disableFileHeader: false,
 
-  // Override automatic language detection (usually not needed)
+  // Override automatic language detection (usually not needed
+  // because we detect language automatically based on file name)
   // See: https://shiki.style/languages
   // lang: 'typescript',
 
@@ -116,11 +128,25 @@ interface DiffOptions {
   },
 
   // ─────────────────────────────────────────────────────────────
-  // HOVER UTILITY
+  // MOUSE EVENTS
   // ─────────────────────────────────────────────────────────────
 
   // Must be true to enable renderHoverUtility prop
   enableHoverUtility: false,
+
+  // Callbacks for mouse events on diff lines
+  onLineClick({ lineNumber, side, event }) {
+    // Fires when clicking anywhere on a line
+  },
+  onLineNumberClick({ lineNumber, side, event }) {
+    // Fires when clicking anywhere in the line number column
+  },
+  onLineEnter({ lineNumber, side }) {
+    // Fires when mouse enters a line
+  },
+  onLineLeave({ lineNumber, side }) {
+    // Fires when mouse leaves a line
+  },
 }`,
   },
   options,
@@ -408,3 +434,203 @@ export function CodeFile() {
   },
   options,
 };
+
+export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'shared_file_options.tsx',
+    contents: `// ============================================================
+// OPTIONS FOR THE FILE COMPONENT
+// ============================================================
+// Pass these via the \`options\` prop on the File component.
+
+import { File } from '@pierre/precision-diffs/react';
+
+<File
+  {...}
+  options={{
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // ... see below for all available options
+  }}
+/>
+
+interface FileOptions {
+  // ─────────────────────────────────────────────────────────────
+  // THEMING
+  // ─────────────────────────────────────────────────────────────
+
+  // Theme for syntax highlighting. Can be a single theme name or an
+  // object with 'dark' and 'light' keys for automatic switching.
+  // Built-in options: 'pierre-dark', 'pierre-light', or any Shiki theme.
+  // See: https://shiki.style/themes
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+
+  // When using dark/light theme object, this controls which is used:
+  // 'system' (default) - follows OS preference
+  // 'dark' or 'light' - forces specific theme
+  themeType: 'system',
+
+  // ─────────────────────────────────────────────────────────────
+  // LAYOUT & DISPLAY
+  // ─────────────────────────────────────────────────────────────
+
+  // Show line numbers (default: true)
+  disableLineNumbers: false,
+
+  // Long line handling: 'scroll' (default) or 'wrap'
+  overflow: 'scroll',
+
+  // Hide the file header with filename
+  disableFileHeader: false,
+
+  // Override automatic language detection (usually not needed
+  // because we detect language automatically based on file name)
+  // See: https://shiki.style/languages
+  // lang: 'typescript',
+
+  // Skip syntax highlighting for lines exceeding this length
+  tokenizeMaxLineLength: 1000,
+
+  // ─────────────────────────────────────────────────────────────
+  // LINE SELECTION
+  // ─────────────────────────────────────────────────────────────
+
+  // Enable click-to-select on line numbers
+  enableLineSelection: false,
+
+  // Callbacks for selection events
+  onLineSelected(range: SelectedLineRange | null) {
+    // Fires continuously during drag
+  },
+  onLineSelectionStart(range: SelectedLineRange | null) {
+    // Fires on mouse down
+  },
+  onLineSelectionEnd(range: SelectedLineRange | null) {
+    // Fires on mouse up - good for saving selection
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // MOUSE EVENTS
+  // ─────────────────────────────────────────────────────────────
+
+  // Must be true to enable renderHoverUtility prop
+  enableHoverUtility: false,
+
+  // Callbacks for mouse events on file lines
+  onLineClick({ lineNumber, event }) {
+    // Fires when clicking anywhere on a line
+  },
+  onLineNumberClick({ lineNumber, event }) {
+    // Fires when clicking anywhere in the line number column
+  },
+  onLineEnter({ lineNumber }) {
+    // Fires when mouse enters a line
+  },
+  onLineLeave({ lineNumber }) {
+    // Fires when mouse leaves a line
+  },
+}`,
+  },
+  options,
+};
+
+export const REACT_API_SHARED_FILE_RENDER_PROPS: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'shared_file_render_props.tsx',
+      contents: `// ============================================================
+// RENDER PROPS FOR THE FILE COMPONENT
+// ============================================================
+// These props are available on the File component.
+
+import { File } from '@pierre/precision-diffs/react';
+
+interface CommentMetadata {
+  commentId: string;
+}
+
+<File<CommentMetadata>
+  {...}
+
+  // ─────────────────────────────────────────────────────────────
+  // LINE ANNOTATIONS
+  // ─────────────────────────────────────────────────────────────
+
+  // Array of annotations to display on specific lines.
+  // Keep annotation arrays stable (useState/useMemo) to avoid re-renders.
+  // Annotation metadata can be typed any way you'd like.
+  // Multiple annotations can target the same line.
+  //
+  // Note: Unlike diff components, File uses LineAnnotation which
+  // has no 'side' property since there's only one column.
+  lineAnnotations={[
+    {
+      lineNumber: 5,    // visual line number in the file
+      metadata: { commentId: 'comment-123' },
+    },
+  ]}
+
+  // Render function for each annotation. Despite the file being
+  // rendered in shadow DOM, annotations use slots so you can use
+  // normal CSS and styling.
+  renderAnnotation={(annotation) => (
+    <Comment commentId={annotation.metadata.commentId} />
+  )}
+
+  // ─────────────────────────────────────────────────────────────
+  // HEADER METADATA
+  // ─────────────────────────────────────────────────────────────
+
+  // Render custom content on the right side of the file header.
+  // Props: { file }
+  renderHeaderMetadata={({ file }) => (
+    <span>{file.name}</span>
+  )}
+
+  // ─────────────────────────────────────────────────────────────
+  // HOVER UTILITY
+  // ─────────────────────────────────────────────────────────────
+
+  // Render UI in the line number column on hover.
+  // Requires options.enableHoverUtility = true
+  //
+  // Note: This is NOT reactive - render is not called on every
+  // mouse move. Use getHoveredLine() in click handlers.
+  renderHoverUtility={(getHoveredLine) => (
+    <button
+      onClick={() => {
+        const { lineNumber } = getHoveredLine();
+        console.log(\`Clicked line \${lineNumber}\`);
+      }}
+    >
+      +
+    </button>
+  )}
+
+  // ─────────────────────────────────────────────────────────────
+  // LINE SELECTION (controlled)
+  // ─────────────────────────────────────────────────────────────
+
+  // Programmatically control which lines are selected.
+  selectedLines={{
+    start: 3,
+    end: 5,
+  }}
+
+  // ─────────────────────────────────────────────────────────────
+  // STYLING
+  // ─────────────────────────────────────────────────────────────
+
+  className="my-file"
+  style={{ maxHeight: 500 }}
+
+  // ─────────────────────────────────────────────────────────────
+  // SSR (advanced)
+  // ─────────────────────────────────────────────────────────────
+
+  // Pre-rendered HTML from server for hydration
+  // See the SSR section for details
+  prerenderedHTML={htmlFromServer}
+/>`,
+    },
+    options,
+  };

@@ -21,6 +21,8 @@ import {
   REACT_API_PATCH_DIFF,
   REACT_API_SHARED_DIFF_OPTIONS,
   REACT_API_SHARED_DIFF_RENDER_PROPS,
+  REACT_API_SHARED_FILE_OPTIONS,
+  REACT_API_SHARED_FILE_RENDER_PROPS,
 } from './ReactAPI/constants';
 import { SSR } from './SSR/SSR';
 import {
@@ -136,6 +138,8 @@ async function ReactAPISection() {
     reactAPIFileDiff,
     sharedDiffOptions,
     sharedDiffRenderProps,
+    sharedFileOptions,
+    sharedFileRenderProps,
   ] = await Promise.all([
     preloadFile(REACT_API_MULTI_FILE_DIFF),
     preloadFile(REACT_API_FILE),
@@ -143,6 +147,8 @@ async function ReactAPISection() {
     preloadFile(REACT_API_FILE_DIFF),
     preloadFile(REACT_API_SHARED_DIFF_OPTIONS),
     preloadFile(REACT_API_SHARED_DIFF_RENDER_PROPS),
+    preloadFile(REACT_API_SHARED_FILE_OPTIONS),
+    preloadFile(REACT_API_SHARED_FILE_RENDER_PROPS),
   ]);
   return (
     <ReactAPI
@@ -152,6 +158,8 @@ async function ReactAPISection() {
       reactAPIFile={reactAPIFile}
       sharedDiffOptions={sharedDiffOptions}
       sharedDiffRenderProps={sharedDiffRenderProps}
+      sharedFileOptions={sharedFileOptions}
+      sharedFileRenderProps={sharedFileRenderProps}
     />
   );
 }

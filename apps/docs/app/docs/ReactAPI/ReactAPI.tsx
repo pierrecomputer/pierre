@@ -7,7 +7,11 @@ import { useState } from 'react';
 import { DocsCodeExample } from '../DocsCodeExample';
 
 type ExampleTypes = 'multi-file-diff' | 'patch-diff' | 'file-diff' | 'file';
-type SharedPropsTypes = 'options' | 'render-props';
+type SharedPropsTypes =
+  | 'diff-options'
+  | 'diff-render-props'
+  | 'file-options'
+  | 'file-render-props';
 
 interface ReactAPIProps {
   reactAPIMultiFileDiff: PreloadedFileResult<undefined>;
@@ -16,6 +20,8 @@ interface ReactAPIProps {
   reactAPIFile: PreloadedFileResult<undefined>;
   sharedDiffOptions: PreloadedFileResult<undefined>;
   sharedDiffRenderProps: PreloadedFileResult<undefined>;
+  sharedFileOptions: PreloadedFileResult<undefined>;
+  sharedFileRenderProps: PreloadedFileResult<undefined>;
 }
 
 export function ReactAPI({
@@ -25,15 +31,21 @@ export function ReactAPI({
   reactAPIPatch,
   sharedDiffOptions,
   sharedDiffRenderProps,
+  sharedFileOptions,
+  sharedFileRenderProps,
 }: ReactAPIProps) {
   const [example, setExample] = useState<ExampleTypes>('multi-file-diff');
-  const [sharedProps, setSharedProps] = useState<SharedPropsTypes>('options');
+  const [sharedProps, setSharedProps] =
+    useState<SharedPropsTypes>('diff-options');
   return (
     <section className="space-y-4">
       <h2>React API</h2>
       <p>
         You can import the React components from{' '}
-        <code>@pierre/precision-diffs/react</code>
+        <code>@pierre/precision-diffs/react</code>. We offer a variety of
+        components to render diffs and files. Many of them share similar types
+        of props, which you can find documented in{' '}
+        <a href="#react-api-shared-props">Shared Props</a>.
       </p>
 
       <h3>Components</h3>
@@ -78,15 +90,25 @@ export function ReactAPI({
         value={sharedProps}
         onValueChange={(value) => setSharedProps(value as SharedPropsTypes)}
       >
-        <ButtonGroupItem value="options">Options</ButtonGroupItem>
-        <ButtonGroupItem value="render-props">Render Props</ButtonGroupItem>
+        <ButtonGroupItem value="diff-options">Diff Options</ButtonGroupItem>
+        <ButtonGroupItem value="diff-render-props">
+          Diff Render Props
+        </ButtonGroupItem>
+        <ButtonGroupItem value="file-options">File Options</ButtonGroupItem>
+        <ButtonGroupItem value="file-render-props">
+          File Render Props
+        </ButtonGroupItem>
       </ButtonGroup>
       {(() => {
         switch (sharedProps) {
-          case 'options':
+          case 'diff-options':
             return <DocsCodeExample {...sharedDiffOptions} />;
-          case 'render-props':
+          case 'diff-render-props':
             return <DocsCodeExample {...sharedDiffRenderProps} />;
+          case 'file-options':
+            return <DocsCodeExample {...sharedFileOptions} />;
+          case 'file-render-props':
+            return <DocsCodeExample {...sharedFileRenderProps} />;
         }
       })()}
     </section>
