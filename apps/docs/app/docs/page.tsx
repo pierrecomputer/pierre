@@ -26,9 +26,13 @@ import {
 } from './ReactAPI/constants';
 import { SSR } from './SSR/SSR';
 import {
-  SSR_CLIENT_COMPONENT,
-  SSR_INSTALLATION,
-  SSR_SERVER_COMPONENT,
+  SSR_PRELOAD_FILE,
+  SSR_PRELOAD_FILE_DIFF,
+  SSR_PRELOAD_MULTI_FILE_DIFF,
+  SSR_PRELOAD_PATCH_DIFF,
+  SSR_PRELOAD_PATCH_FILE,
+  SSR_USAGE_CLIENT,
+  SSR_USAGE_SERVER,
 } from './SSR/constants';
 import { SidebarWrapper } from './SidebarWrapper';
 import { Styling } from './Styling/Styling';
@@ -250,17 +254,32 @@ async function StylingSection() {
 }
 
 async function SSRSection() {
-  const [serverComponent, clientComponent, installationComponent] =
-    await Promise.all([
-      preloadFile(SSR_SERVER_COMPONENT),
-      preloadFile(SSR_CLIENT_COMPONENT),
-      preloadFile(SSR_INSTALLATION),
-    ]);
+  const [
+    usageServer,
+    usageClient,
+    preloadFileDiff,
+    preloadMultiFileDiff,
+    preloadPatchDiff,
+    preloadFileResult,
+    preloadPatchFile,
+  ] = await Promise.all([
+    preloadFile(SSR_USAGE_SERVER),
+    preloadFile(SSR_USAGE_CLIENT),
+    preloadFile(SSR_PRELOAD_FILE_DIFF),
+    preloadFile(SSR_PRELOAD_MULTI_FILE_DIFF),
+    preloadFile(SSR_PRELOAD_PATCH_DIFF),
+    preloadFile(SSR_PRELOAD_FILE),
+    preloadFile(SSR_PRELOAD_PATCH_FILE),
+  ]);
   return (
     <SSR
-      serverComponent={serverComponent}
-      clientComponent={clientComponent}
-      installationComponent={installationComponent}
+      usageServer={usageServer}
+      usageClient={usageClient}
+      preloadFileDiff={preloadFileDiff}
+      preloadMultiFileDiff={preloadMultiFileDiff}
+      preloadPatchDiff={preloadPatchDiff}
+      preloadFile={preloadFileResult}
+      preloadPatchFile={preloadPatchFile}
     />
   );
 }
