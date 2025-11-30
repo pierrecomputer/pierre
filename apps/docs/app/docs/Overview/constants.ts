@@ -45,6 +45,10 @@ export const OVERVIEW_REACT_SINGLE_FILE: PreloadFileOptions<undefined> = {
   FileDiff,
 } from '@pierre/precision-diffs/react';
 
+// Store file objects in variables rather than inlining them.
+// The React components use reference equality to detect changes
+// and skip unnecessary re-renders, so keep these references stable
+// (e.g., with useState or useMemo).
 const oldFile: FileContents = {
   name: 'main.zig',
   contents: \`const std = @import("std");
@@ -67,7 +71,6 @@ pub fn main() !void {
 \`,
 };
 
-// Comparing two files
 function SingleDiff() {
   return (
     <FileDiff
@@ -149,7 +152,9 @@ export const OVERVIEW_VANILLA_SINGLE_FILE: PreloadFileOptions<undefined> = {
   FileDiff,
 } from '@pierre/precision-diffs';
 
-// Comparing two files
+// Store file objects in variables rather than inlining them.
+// FileDiff uses reference equality to detect changes and skip
+// unnecessary re-renders, so keep these references stable.
 const oldFile: FileContents = {
   name: 'main.zig',
   contents: \`const std = @import("std");
@@ -176,8 +181,9 @@ pub fn main() !void {
 // You can also provide a lang property when instantiating FileDiff.
 const fileDiffInstance = new FileDiff({ theme: 'pierre-dark' });
 
-// Render is awaitable if you need that
-await fileDiffInstance.render({
+// render() is synchronous. Syntax highlighting happens async in the
+// background and the diff updates automatically when complete.
+fileDiffInstance.render({
   oldFile,
   newFile,
   // where to render the diff into

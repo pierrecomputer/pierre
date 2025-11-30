@@ -13,6 +13,10 @@ export const REACT_API_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
   MultiFileDiff,
 } from '@pierre/precision-diffs/react';
 
+// Store file objects in variables rather than inlining them.
+// The React components use reference equality to detect changes
+// and skip unnecessary re-renders, so keep these references stable
+// (e.g., with useState or useMemo).
 const oldFile: FileContents = {
   name: 'filename.ts',
   contents: 'console.log("Hello world")',

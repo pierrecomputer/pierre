@@ -13,6 +13,9 @@ export const VANILLA_API_FILE_DIFF: PreloadFileOptions<undefined> = {
   type DiffLineAnnotation,
 } from '@pierre/precision-diffs';
 
+// Store file objects in variables rather than inlining them.
+// FileDiff uses reference equality to detect changes and skip
+// unnecessary re-renders, so keep these references stable.
 const oldFile: FileContents = {
   name: 'filename.ts',
   contents: 'console.log("Hello world")',
@@ -232,8 +235,10 @@ instance.setOptions({
 });
 
 // When ready to render, simply call .render with old/new file, optional
-// annotations and a container element to hold the diff
-await instance.render({
+// annotations and a container element to hold the diff.
+// Note: render() is synchronous. Syntax highlighting happens async in
+// the background and the diff updates automatically when complete.
+instance.render({
   oldFile,
   newFile,
   lineAnnotations,

@@ -175,7 +175,10 @@ export const WORKER_POOL_REACT_USAGE: PreloadFileOptions<undefined> = {
     contents: `// components/HighlightProvider.tsx
 'use client';
 
-import { WorkerPoolContextProvider } from '@pierre/precision-diffs/react';
+import {
+  useWorkerPool,
+  WorkerPoolContextProvider,
+} from '@pierre/precision-diffs/react';
 import type { ReactNode } from 'react';
 import { workerFactory } from '@/utils/workerFactory';
 
@@ -214,8 +217,23 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
 //   );
 // }
 
-// Any FileDiff or File component nested within the layout will
-// automatically use the worker pool—no additional props required.`,
+// Any File, FileDiff, MultiFileDiff, or PatchDiff component nested within
+// the layout will automatically use the worker pool, no additional props required.
+
+// ---
+
+// To change themes dynamically, use the useWorkerPool hook:
+function ThemeSwitcher() {
+  const workerPool = useWorkerPool();
+
+  const switchToGitHub = () => {
+    void workerPool?.setTheme({ dark: 'github-dark', light: 'github-light' });
+  };
+
+  return <button onClick={switchToGitHub}>Switch to GitHub theme</button>;
+}
+// All connected File, FileDiff, MultiFileDiff, and PatchDiff instances
+// will automatically re-render with the new theme once it has loaded.`,
   },
   options,
 };
@@ -246,17 +264,24 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   },
 });
 
-// Pass the workerPool to FileDiff to offload syntax highlighting
-const instance = new FileDiff({
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  workerPool,
-});
+// Pass the workerPool as the second argument to FileDiff
+const instance = new FileDiff(
+  { theme: { dark: 'pierre-dark', light: 'pierre-light' } },
+  workerPool
+);
 
-await instance.render({
-  oldFile: { name: 'example.ts', contents: 'const x = 1;' },
-  newFile: { name: 'example.ts', contents: 'const x = 2;' },
-  containerWrapper: document.body,
-});
+// Note: Store file objects in variables rather than inlining them.
+// FileDiff uses reference equality to detect changes and skip
+// unnecessary re-renders.
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
+
+instance.render({ oldFile, newFile, containerWrapper: document.body });
+
+// To change themes dynamically, call setTheme on the worker pool:
+await workerPool.setTheme({ dark: 'github-dark', light: 'github-light' });
+// All connected File, FileDiff, MultiFileDiff, and PatchDiff instances
+// will automatically re-render with the new theme once it has loaded.
 
 // Optional: terminate workers when no longer needed (e.g., SPA navigation)
 // Page unload automatically cleans up workers, but for SPAs you may want
