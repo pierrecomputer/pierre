@@ -270,34 +270,43 @@ export const WORKER_POOL_API_REFERENCE: PreloadFileOptions<undefined> = {
   file: {
     name: 'api-reference.ts',
     contents: `// WorkerPoolManager constructor
-new WorkerPoolManager(workerFactory, poolOptions?)
+new WorkerPoolManager(poolOptions, highlighterOptions)
 
 // Parameters:
-// - workerFactory: () => Worker - Function that creates a Worker instance
-// - poolOptions?: WorkerPoolOptions
-//     - poolSize: number (default: 8) - Number of workers
-//     - initOptions: InitOptions
-//         - themes: string[] - Array of theme names to preload
-//         - langs?: string[] - Array of languages to preload
-//         - preferWasmHighlighter?: boolean - Use WASM highlighter
+// - poolOptions: WorkerPoolOptions
+//   - workerFactory: () => Worker - Function that creates a Worker instance
+//   - poolSize?: number (default: 8) - Number of workers
+// - highlighterOptions: WorkerHighlighterOptions
+//   - theme: PJSThemeNames | ThemesType - Theme name or { dark, light } object
+//   - langs?: SupportedLanguages[] - Array of languages to preload
+//   - preferWasmHighlighter?: boolean - Use WASM highlighter
 
 // Methods:
-workerAPI.renderFileToHast(file, options?)
-// Returns: Promise<{ lines: ElementContent[] }>
+poolManager.initialize()
+// Returns: Promise<void> - Initializes workers (auto-called on first render)
 
-workerAPI.renderDiffToHast(oldFile, newFile, options?)
-// Returns: Promise<{ oldLines: ElementContent[], newLines: ElementContent[] }>
+poolManager.isInitialized()
+// Returns: boolean
 
-workerAPI.renderDiffMetadataToHast(diff, options?)
-// Returns: Promise<{ oldLines: ElementContent[], newLines: ElementContent[] }>
+poolManager.setTheme(theme)
+// Returns: Promise<void> - Changes the active theme
 
-workerAPI.ensureInitialized()
-// Returns: Promise<void>
+poolManager.renderFileToAST(file, options)
+// Returns: Promise<RenderFileResult>
 
-workerAPI.terminate()
-// Terminates all workers
+poolManager.renderPlainFileToAST(file, startingLineNumber?)
+// Returns: RenderFileResult | undefined - Sync render with 'text' lang
 
-workerAPI.getStats()
+poolManager.renderDiffFilesToAST(oldFile, newFile, options)
+// Returns: Promise<RenderDiffResult>
+
+poolManager.renderDiffMetadataToAST(diff, options)
+// Returns: Promise<RenderDiffResult>
+
+poolManager.terminate()
+// Terminates all workers and resets state
+
+poolManager.getStats()
 // Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }`,
   },
   options,
