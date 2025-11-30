@@ -38,6 +38,9 @@ export function DocsSidebar({
       const headingElements = document.querySelectorAll('h2, h3, h4');
       const headingItems: HeadingItem[] = [];
 
+      // Track parent headings at each level for hierarchical IDs
+      const parentIds: Record<number, string> = {};
+
       for (const element of headingElements) {
         if (
           !(element instanceof HTMLElement) ||
@@ -46,8 +49,21 @@ export function DocsSidebar({
           continue;
         }
         const text = element.textContent ?? '';
-        const id = generateId(text);
         const level = parseInt(element.tagName.charAt(1));
+        const baseId = generateId(text);
+
+        // Build hierarchical ID from parent headings
+        let id = baseId;
+        if (level > 2 && parentIds[level - 1] != null) {
+          id = `${parentIds[level - 1]}-${baseId}`;
+        }
+
+        // Store this heading's ID for child headings
+        parentIds[level] = id;
+        // Clear child levels when we encounter a new parent
+        for (let i = level + 1; i <= 4; i++) {
+          delete parentIds[i];
+        }
 
         // Set the ID on the element for anchor linking
         element.id = id;
