@@ -280,8 +280,8 @@ instance.render({ oldFile, newFile, containerWrapper: document.body });
 
 // To change themes dynamically, call setTheme on the worker pool:
 await workerPool.setTheme({ dark: 'github-dark', light: 'github-light' });
-// All connected File, FileDiff, MultiFileDiff, and PatchDiff instances
-// will automatically re-render with the new theme once it has loaded.
+// All connected File and FileDiff instances will automatically re-render
+// with the new theme once it has loaded.
 
 // Optional: terminate workers when no longer needed (e.g., SPA navigation)
 // Page unload automatically cleans up workers, but for SPAs you may want
