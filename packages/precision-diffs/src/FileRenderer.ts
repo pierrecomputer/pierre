@@ -168,12 +168,13 @@ export class FileRenderer<LAnnotation = undefined> {
           this.highlighter
         );
         this.renderCache.highlighted = true;
+        this.renderCache.file = file;
       }
     }
 
-    this.renderCache.file = file;
-    const { result } = this.renderCache;
-    return result != null ? this.processFileResult(file, result) : undefined;
+    return this.renderCache.result != null
+      ? this.processFileResult(this.renderCache.file, this.renderCache.result)
+      : undefined;
   }
 
   async asyncRender(file: FileContents): Promise<FileRenderResult> {

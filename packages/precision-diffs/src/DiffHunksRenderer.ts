@@ -332,11 +332,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           this.highlighter
         );
         this.renderCache.highlighted = true;
+        this.renderCache.diff = diff;
       }
     }
-    this.renderCache.diff = diff;
-    const { result } = this.renderCache;
-    return result != null ? this.processDiffResult(diff, result) : undefined;
+    return this.renderCache.result != null
+      ? this.processDiffResult(this.renderCache.diff, this.renderCache.result)
+      : undefined;
   }
 
   async asyncRender(diff: FileDiffMetadata): Promise<HunksRenderResult> {
