@@ -876,16 +876,32 @@ code {
   &[data-selected-line] {
     [data-column-content] {
       background-color: light-dark(
-        color-mix(in lab, var(--pjs-line-bg) 82%, var(--pjs-selection-base)),
-        color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base))
+        color-mix(
+          in lab,
+          var(--pjs-line-bg, var(--pjs-bg)) 82%,
+          var(--pjs-selection-base)
+        ),
+        color-mix(
+          in lab,
+          var(--pjs-line-bg, var(--pjs-bg)) 75%,
+          var(--pjs-selection-base)
+        )
       );
     }
 
     [data-column-number] {
       color: var(--pjs-selection-number-fg);
       background-color: light-dark(
-        color-mix(in lab, var(--pjs-line-bg) 75%, var(--pjs-selection-base)),
-        color-mix(in lab, var(--pjs-line-bg) 60%, var(--pjs-selection-base))
+        color-mix(
+          in lab,
+          var(--pjs-line-bg, var(--pjs-bg)) 75%,
+          var(--pjs-selection-base)
+        ),
+        color-mix(
+          in lab,
+          var(--pjs-line-bg, var(--pjs-bg)) 60%,
+          var(--pjs-selection-base)
+        )
       );
     }
   }
