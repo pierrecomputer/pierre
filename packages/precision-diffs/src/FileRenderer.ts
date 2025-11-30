@@ -28,7 +28,7 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
 import { createHastElement } from './utils/hast_utils';
 import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
-import type { ShikiPoolManager } from './worker';
+import type { WorkerPoolManager } from './worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -59,7 +59,7 @@ export class FileRenderer<LAnnotation = undefined> {
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
-    private poolManager?: ShikiPoolManager | undefined
+    private poolManager?: WorkerPoolManager | undefined
   ) {}
 
   setOptions(options: FileRendererOptions): void {

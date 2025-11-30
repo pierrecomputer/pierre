@@ -11,8 +11,8 @@ import {
 } from 'react';
 import {
   type SetupWorkerPoolProps,
-  type ShikiPoolManager,
   type WorkerHighlighterOptions,
+  type WorkerPoolManager,
   type WorkerPoolOptions,
   getOrCreateWorkerPoolSingleton,
   terminateWorkerPoolSingleton,
@@ -20,8 +20,8 @@ import {
 
 export type { WorkerPoolOptions, WorkerHighlighterOptions };
 
-export const WorkerPoolContext: Context<ShikiPoolManager | undefined> =
-  createContext<ShikiPoolManager | undefined>(undefined);
+export const WorkerPoolContext: Context<WorkerPoolManager | undefined> =
+  createContext<WorkerPoolManager | undefined>(undefined);
 
 let instanceCount = 0;
 
@@ -65,6 +65,6 @@ export function WorkerPoolContextProvider({
   );
 }
 
-export function useWorkerPool(): ShikiPoolManager | undefined {
+export function useWorkerPool(): WorkerPoolManager | undefined {
   return useContext(WorkerPoolContext);
 }

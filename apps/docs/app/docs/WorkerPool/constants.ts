@@ -269,8 +269,8 @@ await instance.render({
 export const WORKER_POOL_API_REFERENCE: PreloadFileOptions<undefined> = {
   file: {
     name: 'api-reference.ts',
-    contents: `// ShikiPoolManager constructor
-new ShikiPoolManager(workerFactory, poolOptions?)
+    contents: `// WorkerPoolManager constructor
+new WorkerPoolManager(workerFactory, poolOptions?)
 
 // Parameters:
 // - workerFactory: () => Worker - Function that creates a Worker instance

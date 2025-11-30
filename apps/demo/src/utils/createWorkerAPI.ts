@@ -1,13 +1,13 @@
 import {
-  type ShikiPoolManager,
   type WorkerHighlighterOptions,
+  type WorkerPoolManager,
   getOrCreateWorkerPoolSingleton,
 } from '@pierre/precision-diffs/worker';
 import ShikiWorkerUrl from '@pierre/precision-diffs/worker/shiki-worker.js?worker&url';
 
 export function createWorkerAPI(
   highlighterOptions: WorkerHighlighterOptions
-): ShikiPoolManager {
+): WorkerPoolManager {
   return getOrCreateWorkerPoolSingleton({
     poolOptions: {
       workerFactory() {

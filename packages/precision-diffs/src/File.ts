@@ -32,7 +32,7 @@ import { createHoverContentNode } from './utils/createHoverContentNode';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from './utils/setWrapperNodeProps';
-import type { ShikiPoolManager } from './worker';
+import type { WorkerPoolManager } from './worker';
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -90,13 +90,13 @@ export class File<LAnnotation = undefined> {
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    private poolManager?: ShikiPoolManager | undefined,
+    private workerManager?: WorkerPoolManager | undefined,
     private isContainerManaged = false
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(
       options,
       this.handleHighlightRender,
-      this.poolManager
+      this.workerManager
     );
     this.resizeManager = new ResizeManager();
     this.mouseEventManager = new MouseEventManager(
@@ -175,7 +175,7 @@ export class File<LAnnotation = undefined> {
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.lineSelectionManager.cleanUp();
-    this.poolManager = undefined;
+    this.workerManager = undefined;
 
     // Clean up the data
     this.file = undefined;
@@ -274,8 +274,8 @@ export class File<LAnnotation = undefined> {
     );
 
     if (fileResult == null) {
-      if (this.poolManager != null && !this.poolManager.isInitialized()) {
-        void this.poolManager.initialize().then(() => this.rerender());
+      if (this.workerManager != null && !this.workerManager.isInitialized()) {
+        void this.workerManager.initialize().then(() => this.rerender());
       }
       // FIXME(amadeus): Probably figure out how to render a skeleton?
       return;

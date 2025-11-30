@@ -13,7 +13,7 @@ import {
   parsePatchFiles,
   preloadHighlighter,
 } from '@pierre/precision-diffs';
-import type { ShikiPoolManager } from '@pierre/precision-diffs/worker';
+import type { WorkerPoolManager } from '@pierre/precision-diffs/worker';
 
 import {
   CodeConfigs,
@@ -111,7 +111,7 @@ async function handlePreloadDiff() {
   });
 }
 
-function renderDiff(parsedPatches: ParsedPatch[], manager?: ShikiPoolManager) {
+function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
   console.log('renderDiff: rendering patches:', parsedPatches);
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;

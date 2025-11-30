@@ -1,4 +1,3 @@
-export * from './ShikiPoolManager';
-export * from './WorkerPool';
+export * from './WorkerPoolManager';
 export * from './getOrCreateWorkerPoolSingleton';
 export * from './types';

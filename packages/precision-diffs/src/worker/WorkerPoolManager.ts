@@ -1,9 +1,22 @@
+import { getSharedHighlighter, hasLoadedThemes } from '../SharedHighlighter';
+import { DEFAULT_THEMES } from '../constants';
 import type {
+  FileContents,
+  FileDiffMetadata,
+  LineDiffTypes,
+  PJSHighlighter,
+  PJSThemeNames,
+  RenderDiffOptions,
   RenderDiffResult,
+  RenderFileOptions,
   RenderFileResult,
   SupportedLanguages,
+  ThemesType,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
+import { getThemes } from '../utils/getThemes';
+import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
+import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
   AllWorkerTasks,
   InitializeWorkerTask,
@@ -18,13 +31,6 @@ import type {
   WorkerStats,
 } from './types';
 
-/**
- * Worker Pool Manager
- *
- * Manages a pool of Web Workers for parallel Shiki rendering.
- * Distributes work across workers and handles the request/response lifecycle.
- */
-
 interface ManagedWorker {
   worker: Worker;
   busy: boolean;
@@ -32,7 +38,11 @@ interface ManagedWorker {
   langs: Set<SupportedLanguages>;
 }
 
-export class WorkerPool {
+export class WorkerPoolManager {
+  private highlighter: PJSHighlighter | undefined;
+  private currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
+  private initialized: Promise<void> | boolean = false;
+
   private workers: ManagedWorker[] = [];
   private taskQueue: AllWorkerTasks[] = [];
   private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
@@ -43,14 +53,49 @@ export class WorkerPool {
     private highlighterOptions: WorkerHighlighterOptions
   ) {}
 
-  private initialized: Promise<void> | true | undefined;
+  async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
+    if (hasLoadedThemes(getThemes(theme)) && this.highlighter != null) {
+      this.currentTheme = theme;
+    } else {
+      this.highlighter = await getSharedHighlighter({
+        themes: getThemes(theme),
+        langs: ['text'],
+      });
+      this.currentTheme = theme;
+    }
+  }
+
+  isInitialized(): boolean {
+    return this.initialized === true;
+  }
 
   async initialize(): Promise<void> {
     if (this.initialized === true) {
       return;
-    } else if (this.initialized != null) {
+    } else if (this.initialized === false) {
+      this.initialized = new Promise((resolve) => {
+        void (async () => {
+          const [highlighter] = await Promise.all([
+            getSharedHighlighter({
+              themes: getThemes(this.currentTheme),
+              preferWasmHighlighter:
+                this.highlighterOptions.preferWasmHighlighter,
+              langs: ['text'],
+            }),
+            this.initializeWorkers(),
+          ]);
+          this.currentTheme = this.highlighterOptions.theme;
+          this.highlighter = highlighter;
+          this.initialized = true;
+          resolve();
+        })();
+      });
+    } else {
       return this.initialized;
     }
+  }
+
+  private async initializeWorkers(): Promise<void> {
     const initPromises: Promise<unknown>[] = [];
     for (let i = 0; i < (this.options.poolSize ?? 8); i++) {
       const worker = this.options.workerFactory();
@@ -94,12 +139,122 @@ export class WorkerPool {
       );
     }
 
-    this.initialized = Promise.all(initPromises).then(() => undefined);
-    await this.initialized;
-    this.initialized = true;
+    await Promise.all(initPromises);
   }
 
-  submitTask<T extends RenderDiffResult | RenderFileResult>(
+  async renderFileToAST(
+    file: FileContents,
+    options: RenderFileOptions
+  ): Promise<RenderFileResult> {
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
+    return this.submitTask({
+      type: 'file',
+      file,
+      options,
+    });
+  }
+
+  renderPlainFileToAST(
+    file: FileContents,
+    startingLineNumber: number = 1
+  ): RenderFileResult | undefined {
+    if (this.highlighter == null) {
+      void this.initialize();
+      return undefined;
+    }
+    return renderFileWithHighlighter(file, this.highlighter, {
+      lang: 'text',
+      startingLineNumber,
+      theme: this.currentTheme,
+      tokenizeMaxLineLength: 1000,
+    });
+  }
+
+  async renderDiffFilesToAST(
+    oldFile: FileContents,
+    newFile: FileContents,
+    options: RenderDiffOptions
+  ): Promise<RenderDiffResult> {
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
+    return this.submitTask({
+      type: 'diff-files',
+      oldFile,
+      newFile,
+      options,
+    });
+  }
+
+  // NOTE(amadeus): Do we even need this API?
+  // Currently nothing is using this function
+  renderPlainDiffToAST(
+    oldFile: FileContents,
+    newFile: FileContents
+  ): RenderDiffResult | undefined {
+    const oldResult = this.renderPlainFileToAST(oldFile, 1);
+    const newResult = this.renderPlainFileToAST(newFile, 1);
+    if (oldResult == null || newResult == null) {
+      return undefined;
+    }
+    return {
+      code: { oldLines: oldResult.code, newLines: newResult.code },
+      themeStyles: newResult.themeStyles,
+      baseThemeType: newResult.baseThemeType,
+    };
+  }
+
+  async renderDiffMetadataToAST(
+    diff: FileDiffMetadata,
+    options: RenderDiffOptions
+  ): Promise<RenderDiffResult> {
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
+    return this.submitTask({
+      type: 'diff-metadata',
+      diff,
+      options,
+    });
+  }
+
+  renderPlainDiffMetadataToAST(
+    diff: FileDiffMetadata,
+    lineDiffType: LineDiffTypes
+  ): RenderDiffResult | undefined {
+    return this.highlighter != null
+      ? renderDiffWithHighlighter(diff, this.highlighter, {
+          theme: this.currentTheme,
+          lang: 'text',
+          tokenizeMaxLineLength: 1000,
+          lineDiffType,
+        })
+      : undefined;
+  }
+
+  terminate(): void {
+    for (const managedWorker of this.workers) {
+      managedWorker.worker.terminate();
+    }
+    this.workers.length = 0;
+    this.taskQueue.length = 0;
+    this.pendingTasks.clear();
+    this.highlighter = undefined;
+    this.initialized = false;
+  }
+
+  getStats(): WorkerStats {
+    return {
+      totalWorkers: this.workers.length,
+      busyWorkers: this.workers.filter((w) => w.busy).length,
+      queuedTasks: this.taskQueue.length,
+      pendingTasks: this.pendingTasks.size,
+    };
+  }
+
+  private submitTask<T extends RenderDiffResult | RenderFileResult>(
     request: SubmitRequest
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -139,34 +294,13 @@ export class WorkerPool {
 
       this.pendingTasks.set(id, task);
 
-      // Try to execute immediately if a worker is available -- Should we wait
-      // a tick for a pool of workers to build before trying again?
       const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
       if (availableWorker != null) {
         this.executeTask(availableWorker, task);
       } else {
-        // Queue the task for later
         this.taskQueue.push(task);
       }
     });
-  }
-
-  terminate(): void {
-    for (const managedWorker of this.workers) {
-      managedWorker.worker.terminate();
-    }
-    this.workers = [];
-    this.taskQueue = [];
-    this.pendingTasks.clear();
-  }
-
-  getStats(): WorkerStats {
-    return {
-      totalWorkers: this.workers.length,
-      busyWorkers: this.workers.filter((w) => w.busy).length,
-      queuedTasks: this.taskQueue.length,
-      pendingTasks: this.pendingTasks.size,
-    };
   }
 
   private handleWorkerMessage(
@@ -292,8 +426,6 @@ function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
       }
     }
   }
-  // We can always assume text is available, so lets not bother with the
-  // lookups for it
   langs.delete('text');
   return Array.from(langs);
 }

@@ -41,7 +41,7 @@ import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
 import type {
   RenderDiffFilesResult,
   RenderDiffHunksResult,
-  ShikiPoolManager,
+  WorkerPoolManager,
 } from './worker';
 
 const EXPANDED_REGION: ExpansionRegion = {
@@ -146,14 +146,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   constructor(
     public options: BaseDiffOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
-    private poolManager?: ShikiPoolManager | undefined
+    private workerManager?: WorkerPoolManager | undefined
   ) {}
 
   cleanUp(): void {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
-    this.poolManager = undefined;
+    this.workerManager = undefined;
     this.onRenderUpdate = undefined;
   }
 
@@ -261,8 +261,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       options,
       result: undefined,
     };
-    if (this.poolManager != null) {
-      void this.poolManager
+    if (this.workerManager != null) {
+      void this.workerManager
         .renderDiffMetadataToAST(this.diff, options)
         .then((result) => {
           this.handleAsyncHighlight(diff, options, result, true);
@@ -313,17 +313,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       options,
       result: undefined,
     };
-    if (this.poolManager != null) {
-      this.renderCache.result ??= this.poolManager.renderPlainDiffMetadataToAST(
-        diff,
-        options.lineDiffType
-      );
+    if (this.workerManager != null) {
+      this.renderCache.result ??=
+        this.workerManager.renderPlainDiffMetadataToAST(
+          diff,
+          options.lineDiffType
+        );
 
       // TODO(amadeus): Figure out how to only fire this on a per file
-      // basis... (maybe the poolManager can figure it out based on file name
+      // basis... (maybe the workerManager can figure it out based on file name
       // and file contents probably?)
       if (!this.renderCache.highlighted || forceRender) {
-        void this.poolManager
+        void this.workerManager
           .renderDiffMetadataToAST(diff, options)
           .then((result) => {
             this.handleAsyncHighlight(diff, options, result);

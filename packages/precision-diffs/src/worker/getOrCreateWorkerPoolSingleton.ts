@@ -1,7 +1,7 @@
-import { ShikiPoolManager } from './ShikiPoolManager';
+import { WorkerPoolManager } from './WorkerPoolManager';
 import type { WorkerHighlighterOptions, WorkerPoolOptions } from './types';
 
-let managerSingleton: ShikiPoolManager | undefined;
+let workerPoolSingletone: WorkerPoolManager | undefined;
 
 export interface SetupWorkerPoolProps {
   poolOptions: WorkerPoolOptions;
@@ -11,18 +11,21 @@ export interface SetupWorkerPoolProps {
 export function getOrCreateWorkerPoolSingleton({
   poolOptions,
   highlighterOptions,
-}: SetupWorkerPoolProps): ShikiPoolManager {
-  if (managerSingleton == null) {
-    managerSingleton = new ShikiPoolManager(poolOptions, highlighterOptions);
-    void managerSingleton.initialize();
+}: SetupWorkerPoolProps): WorkerPoolManager {
+  if (workerPoolSingletone == null) {
+    workerPoolSingletone = new WorkerPoolManager(
+      poolOptions,
+      highlighterOptions
+    );
+    void workerPoolSingletone.initialize();
   }
-  return managerSingleton;
+  return workerPoolSingletone;
 }
 
 export function terminateWorkerPoolSingleton(): void {
-  if (managerSingleton == null) {
+  if (workerPoolSingletone == null) {
     return;
   }
-  managerSingleton.terminate();
-  managerSingleton = undefined;
+  workerPoolSingletone.terminate();
+  workerPoolSingletone = undefined;
 }

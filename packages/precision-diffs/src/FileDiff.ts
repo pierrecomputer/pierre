@@ -38,7 +38,7 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from './utils/setWrapperNodeProps';
-import type { ShikiPoolManager } from './worker';
+import type { WorkerPoolManager } from './worker';
 
 export interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -110,7 +110,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    private poolManager?: ShikiPoolManager | undefined,
+    private workerManager?: WorkerPoolManager | undefined,
     // NOTE(amadeus): Temp hack while we use this component in a react context
     private isContainerManaged = false
   ) {
@@ -123,7 +123,7 @@ export class FileDiff<LAnnotation = undefined> {
             : options.hunkSeparators,
       },
       this.handleHighlightRender,
-      this.poolManager
+      this.workerManager
     );
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
@@ -226,7 +226,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.lineSelectionManager.cleanUp();
-    this.poolManager = undefined;
+    this.workerManager = undefined;
 
     // Clean up the data
     this.fileDiff = undefined;
@@ -398,8 +398,8 @@ export class FileDiff<LAnnotation = undefined> {
 
     // If both are null, most likely a cleanup, lets abort
     if (hunksResult == null) {
-      if (this.poolManager != null && !this.poolManager.isInitialized()) {
-        void this.poolManager.initialize().then(() => this.rerender());
+      if (this.workerManager != null && !this.workerManager.isInitialized()) {
+        void this.workerManager.initialize().then(() => this.rerender());
       }
       return;
     }

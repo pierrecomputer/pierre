@@ -183,7 +183,7 @@ export function WorkerPool({
 │ └─┬─────────────────────────────────┬─┘ │
 │   │ HAST Request                    ↑   │
 │   ↓                   HAST Response │   │
-│ ┌ ShikiPoolManager ─────────────────┴─┐ │
+│ ┌ WorkerPoolManager ────────────────┴─┐ │
 │ │ * Shared singleton                  │ │
 │ │ * Manages WorkerPool instance and   │ │
 │ │   request queue                     │ │
