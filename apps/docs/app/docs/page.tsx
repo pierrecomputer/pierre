@@ -49,6 +49,7 @@ import {
   VANILLA_API_CUSTOM_HUNK_FILE,
   VANILLA_API_FILE_DIFF,
   VANILLA_API_FILE_FILE,
+  VANILLA_API_FILE_RENDERER,
   VANILLA_API_HUNKS_RENDERER_FILE,
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
 } from './VanillaAPI/constants';
@@ -148,22 +149,25 @@ async function VanillaAPISection() {
     vanillaAPIFileDiff,
     vanillaAPIFileFile,
     vanillaAPICustomHunk,
-    vanillaAPIHunksRenderer,
-    vanillaAPIHunksRendererPatch,
+    vanillaAPIDiffHunksRenderer,
+    vanillaAPIDiffHunksRendererPatch,
+    vanillaAPIFileRenderer,
   ] = await Promise.all([
     preloadFile(VANILLA_API_FILE_DIFF),
     preloadFile(VANILLA_API_FILE_FILE),
     preloadFile(VANILLA_API_CUSTOM_HUNK_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
+    preloadFile(VANILLA_API_FILE_RENDERER),
   ]);
   return (
     <VanillaAPI
       vanillaAPIFileDiff={vanillaAPIFileDiff}
       vanillaAPIFileFile={vanillaAPIFileFile}
       vanillaAPICustomHunk={vanillaAPICustomHunk}
-      vanillaAPIHunksRenderer={vanillaAPIHunksRenderer}
-      vanillaAPIHunksRendererPatch={vanillaAPIHunksRendererPatch}
+      vanillaAPIDiffHunksRenderer={vanillaAPIDiffHunksRenderer}
+      vanillaAPIDiffHunksRendererPatch={vanillaAPIDiffHunksRendererPatch}
+      vanillaAPIFileRenderer={vanillaAPIFileRenderer}
     />
   );
 }

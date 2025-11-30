@@ -346,8 +346,7 @@ export const VANILLA_API_HUNKS_RENDERER_FILE: PreloadFileOptions<undefined> = {
 
 const instance = new DiffHunksRenderer();
 
-// this API is a full replacement of any existing options, it will
-// not merge in existing options already set
+// Set options (this is a full replacement, not a merge)
 instance.setOptions({ theme: 'github-dark', diffStyle: 'split' });
 
 // Parse diff content from 2 versions of a file
@@ -357,21 +356,29 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
 );
 
 // Render hunks (async - waits for highlighter initialization)
-const result: HunksRenderResult =
-  await instance.asyncRender(fileDiff);
+const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-// Depending on your diffStyle settings and depending the type of
-// changes, you'll get raw hast nodes for each line for each column
-// type based on your settings. If your diffStyle is 'unified',
-// then additionsAST and deletionsAST will be undefined and 'split'
-// will be the inverse
-console.log(result?.additionsAST);
-console.log(result?.deletionsAST);
-console.log(result?.unifiedAST);
+// result contains hast nodes for each column based on diffStyle:
+// - 'split' mode: additionsAST and deletionsAST (side-by-side)
+// - 'unified' mode: unifiedAST only (single column)
+// - preNode: the wrapper <pre> element as a hast node
+// - headerNode: the file header element
+// - hunkData: metadata about each hunk (for custom separators)
 
-// There are 2 utility methods on the instance to render these hast
-// nodes to html, '.renderFullHTML' and '.renderPartialHTML'
-`,
+// Render to a complete HTML string (includes <pre> and <code> wrappers)
+const fullHTML: string = instance.renderFullHTML(result);
+
+// Or render just a specific column to HTML
+const additionsHTML: string = instance.renderPartialHTML(
+  result.additionsAST,
+  'additions' // wraps in <code data-additions>
+);
+
+// Or render without the <code> wrapper
+const rawHTML: string = instance.renderPartialHTML(result.additionsAST);
+
+// Or get the full AST for further transformation
+const fullAST = instance.renderFullAST(result);`,
   },
   options,
 };
@@ -421,41 +428,92 @@ index c52c9ca..f3b592b 100644
 
 for (const patch of patches) {
   for (const fileDiff of patch.files) {
-    // Ideally you create a new hunks renderer for each file separately
+    // Create a new renderer for each file
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       theme: 'pierre-dark',
     });
-    const result: HunksRenderResult =
-      await instance.asyncRender(fileDiff);
 
-    // Depending on your diffStyle settings and depending the type
-    // of changes, you'll get raw HAST nodes for each lines for each
-    // column type. If your diffStyle is 'unified', then additionsAST
-    // and deletionsAST will be undefined and if your setting is
-    // 'split' then it will be the inverse
-    console.log(result.additionsAST);
-    console.log(result.deletionsAST);
-    console.log(result.unifiedAST);
+    // Render hunks (async - waits for highlighter initialization)
+    const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-    // If you want to render out these nodes, just pass the result to
-    // 'renderFullHTML'. This string will include a wrapper '<pre'
-    // element and '<code' elements for each column.
+    // result contains hast nodes based on diffStyle:
+    // - 'unified' mode: unifiedAST only
+    // - 'split' mode: additionsAST and deletionsAST
+
+    // Render to complete HTML (includes <pre> and <code> wrappers)
     const fullHTML: string = instance.renderFullHTML(result);
 
-    // If you'd prefer to just render out a particular column to html,
-    // with or without the '<code' wrapper, you can do so via:
-    const partialHTML = instance.renderPartialHTML(
+    // Or render just the unified column with <code> wrapper
+    const unifiedHTML: string = instance.renderPartialHTML(
       result.unifiedAST,
-      // if you pass this optional argument of 'unified' | 'additions' |
-      // 'deletions' then the lines will be wrapped in a '<code' element
       'unified'
     );
+
+    // Or render without any wrapper
+    const rawHTML: string = instance.renderPartialHTML(result.unifiedAST);
+
+    // Or get the full AST for custom transformation
+    const fullAST = instance.renderFullAST(result);
   }
 }`,
     },
     options,
   };
+
+export const VANILLA_API_FILE_RENDERER: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'file_renderer.ts',
+    contents: `import {
+  FileRenderer,
+  type FileContents,
+  type FileRenderResult,
+} from '@pierre/precision-diffs';
+
+const instance = new FileRenderer();
+
+// Set options (this is a full replacement, not a merge)
+instance.setOptions({
+  theme: 'pierre-dark',
+  overflow: 'scroll',
+  disableLineNumbers: false,
+  disableFileHeader: false,
+  // Starting line number (useful for showing snippets)
+  startingLineNumber: 1,
+  // Skip syntax highlighting for very long lines
+  tokenizeMaxLineLength: 1000,
+});
+
+const file: FileContents = {
+  name: 'example.ts',
+  contents: \`function greet(name: string) {
+  console.log(\\\`Hello, \\\${name}!\\\`);
+}
+
+export { greet };\`,
+};
+
+// Render file (async - waits for highlighter initialization)
+const result: FileRenderResult = await instance.asyncRender(file);
+
+// result contains:
+// - codeAST: array of hast ElementContent nodes for each line
+// - preAST: the wrapper <pre> element as a hast node
+// - headerAST: the file header element (if not disabled)
+// - totalLines: number of lines in the file
+// - themeStyles: CSS custom properties for theming
+
+// Render to a complete HTML string (includes <pre> wrapper)
+const fullHTML: string = instance.renderFullHTML(result);
+
+// Or render just the code lines to HTML
+const partialHTML: string = instance.renderPartialHTML(result.codeAST);
+
+// Or get the full AST for further transformation
+const fullAST = instance.renderFullAST(result);`,
+  },
+  options,
+};
 
 export const VANILLA_API_CODE_UTILITIES: PreloadFileOptions<undefined> = {
   file: {

@@ -10,23 +10,25 @@ interface VanillaAPIProps {
   vanillaAPIFileDiff: PreloadedFileResult<undefined>;
   vanillaAPIFileFile: PreloadedFileResult<undefined>;
   vanillaAPICustomHunk: PreloadedFileResult<undefined>;
-  vanillaAPIHunksRenderer: PreloadedFileResult<undefined>;
-  vanillaAPIHunksRendererPatch: PreloadedFileResult<undefined>;
+  vanillaAPIDiffHunksRenderer: PreloadedFileResult<undefined>;
+  vanillaAPIDiffHunksRendererPatch: PreloadedFileResult<undefined>;
+  vanillaAPIFileRenderer: PreloadedFileResult<undefined>;
 }
 
 export function VanillaAPI({
   vanillaAPIFileDiff,
   vanillaAPIFileFile,
   vanillaAPICustomHunk,
-  vanillaAPIHunksRenderer,
-  vanillaAPIHunksRendererPatch,
+  vanillaAPIDiffHunksRenderer,
+  vanillaAPIDiffHunksRendererPatch,
+  vanillaAPIFileRenderer,
 }: VanillaAPIProps) {
   const [componentType, setComponentType] = useState<'file-diff' | 'file'>(
     'file-diff'
   );
-  const [hunkType, setHunkType] = useState<'hunk-file' | 'hunk-patch'>(
-    'hunk-file'
-  );
+  const [diffHunksType, setDiffHunksType] = useState<
+    'from-file' | 'from-patch'
+  >('from-file');
   return (
     <section className="space-y-4">
       <h2>Vanilla JS API</h2>
@@ -63,43 +65,56 @@ export function VanillaAPI({
       )}
       <h4>Hunk Separators</h4>
       <p>
-        If you want to render custom hunk separators that won‘t scroll with the
+        If you want to render custom hunk separators that won't scroll with the
         content, there are a few tricks you will need to employ. See the
         following code snippet:
       </p>
       <DocsCodeExample {...vanillaAPICustomHunk} />
-      <h3>Classes</h3>
+      <h3>Renderers</h3>
       <p>
-        These core classes can be thought of as the building blocks for the
-        different components and APIs in Precision Diffs. Most of them should be
-        usable in a variety of environments (server and browser).
+        <strong>Note:</strong> For most use cases, you should use the
+        higher-level components like <code>FileDiff</code> and <code>File</code>{' '}
+        (vanilla JS) or the React components (<code>MultiFileDiff</code>,{' '}
+        <code>FileDiff</code>, <code>PatchDiff</code>, <code>File</code>). These
+        renderers are low-level building blocks intended for advanced use cases.
       </p>
-      <h4>DiffHunksRenderer</h4>
       <p>
-        Essentially a class that takes <code>FileDiffMetadata</code> data
-        structure and can render out the raw{' '}
+        These renderer classes handle the low-level work of parsing and
+        rendering code with syntax highlighting. Useful when you need direct
+        access to the rendered output as{' '}
         <a href="https://github.com/syntax-tree/hast" target="_blank">
           hast
         </a>{' '}
-        elements of the code which can be subsequently rendered as HTML strings
-        or transformed further. You can generate <code>FileDiffMetadata</code>{' '}
-        via <code>parseDiffFromFile</code> or <code>parsePatchFiles</code>{' '}
-        utility functions.
+        nodes or HTML strings for custom rendering pipelines.
+      </p>
+      <h4>DiffHunksRenderer</h4>
+      <p>
+        Takes a <code>FileDiffMetadata</code> data structure and renders out the
+        raw hast elements for diff hunks. You can generate{' '}
+        <code>FileDiffMetadata</code> via <code>parseDiffFromFile</code> or{' '}
+        <code>parsePatchFiles</code> utility functions.
       </p>
       <ButtonGroup
-        value={hunkType}
+        value={diffHunksType}
         onValueChange={(value) =>
-          setHunkType(value as 'hunk-file' | 'hunk-patch')
+          setDiffHunksType(value as 'from-file' | 'from-patch')
         }
       >
-        <ButtonGroupItem value="hunk-file">From Two Files</ButtonGroupItem>
-        <ButtonGroupItem value="hunk-patch">From Patch File</ButtonGroupItem>
+        <ButtonGroupItem value="from-file">From Two Files</ButtonGroupItem>
+        <ButtonGroupItem value="from-patch">From Patch File</ButtonGroupItem>
       </ButtonGroup>
-      {hunkType === 'hunk-file' ? (
-        <DocsCodeExample {...vanillaAPIHunksRenderer} />
+      {diffHunksType === 'from-file' ? (
+        <DocsCodeExample {...vanillaAPIDiffHunksRenderer} />
       ) : (
-        <DocsCodeExample {...vanillaAPIHunksRendererPatch} />
+        <DocsCodeExample {...vanillaAPIDiffHunksRendererPatch} />
       )}
+      <h4>FileRenderer</h4>
+      <p>
+        Takes a <code>FileContents</code> object (just a filename and contents
+        string) and renders syntax-highlighted code as hast elements. Useful for
+        rendering single files without any diff context.
+      </p>
+      <DocsCodeExample {...vanillaAPIFileRenderer} />
     </section>
   );
 }
