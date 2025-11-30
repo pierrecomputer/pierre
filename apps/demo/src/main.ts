@@ -291,17 +291,16 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
       const start = Date.now();
       const prom = poolManager
         ?.renderDiffMetadataToAST(fileDiff, {
-          theme: { dark: 'pierre-dark', light: 'pierre-light' },
           tokenizeMaxLineLength: 1000,
           lineDiffType: 'word-alt',
         })
-        .then(({ code: result }) => {
-          if (result.hunks == null) {
+        .then(({ result: { code } }) => {
+          if (code.hunks == null) {
             console.log(
               'Worker Render: rendered file:',
               fileDiff.name,
               'lines:',
-              result.newLines.length + result.oldLines.length,
+              code.newLines.length + code.oldLines.length,
               'time:',
               Date.now() - start
             );
