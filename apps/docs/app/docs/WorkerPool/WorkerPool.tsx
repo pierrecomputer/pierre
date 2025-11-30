@@ -108,6 +108,14 @@ export function WorkerPool({
         ensures a single pool instance that you can then manually pass to all
         your File/FileDiff instances.
       </p>
+      <p>
+        <strong>Note:</strong> When using the worker pool, theme settings are
+        controlled by the pool manager, not individual component props. Any{' '}
+        <code>theme</code> options passed to <code>File</code> or{' '}
+        <code>FileDiff</code> components will be ignored. To change the theme,
+        use the <code>setTheme()</code> method on the pool manager. All
+        connected instances will automatically re-render with the new theme.
+      </p>
 
       <h4>React</h4>
       <p>
@@ -128,6 +136,10 @@ export function WorkerPool({
         <code>'use client'</code> directive if you're using NextJS App Router.
         Workers cannot be instantiated during server-side rendering.
       </p>
+      <p>
+        To change themes dynamically, use the <code>useWorkerPool()</code> hook
+        to access the pool manager and call <code>setTheme()</code>.
+      </p>
       <DocsCodeExample {...reactUsage} />
 
       <h4>Vanilla JS</h4>
@@ -137,6 +149,10 @@ export function WorkerPool({
         <code>File</code> and/or <code>FileDiff</code>. When you are done with
         the worker pool, you can use <code>terminateWorkerPoolSingleton</code>{' '}
         to free up resources.
+      </p>
+      <p>
+        To change themes dynamically, call{' '}
+        <code>workerPool.setTheme(theme)</code> on the pool instance.
       </p>
       <DocsCodeExample {...vanillaUsage} />
 
