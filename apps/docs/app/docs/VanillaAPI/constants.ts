@@ -4,273 +4,448 @@ const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
 } as const;
 
-export const VANILLA_API_FILE_DIFF: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'file_diff.ts',
-    contents: `import {
-  type FileContents,
-  FileDiff,
-  type DiffLineAnnotation,
-} from '@pierre/precision-diffs';
+// =============================================================================
+// COMPONENT EXAMPLES (short, focused on usage)
+// =============================================================================
 
-// Store file objects in variables rather than inlining them.
-// FileDiff uses reference equality to detect changes and skip
-// unnecessary re-renders, so keep these references stable.
+export const VANILLA_API_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'file_diff_example.ts',
+    contents: `import { FileDiff, type FileContents } from '@pierre/precision-diffs';
+
+// Create the instance with options
+const instance = new FileDiff({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  diffStyle: 'split',
+});
+
+// Define your files (keep references stable to avoid re-renders)
 const oldFile: FileContents = {
-  name: 'filename.ts',
+  name: 'example.ts',
   contents: 'console.log("Hello world")',
 };
 
 const newFile: FileContents = {
-  name: 'filename.ts',
-  contents: 'console.warn("Uh oh")',
+  name: 'example.ts',
+  contents: 'console.warn("Updated message")',
 };
 
-interface ThreadMetadata {
-  threadId: string;
-}
-
-// Annotation metadata can be typed any way you'd like.
-// Like file objects, keep annotation arrays stable to avoid unnecessary
-// re-renders - store them in variables rather than creating inline.
-const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
-  {
-    side: 'additions',
-    // The line number specified for an annotation is the visual line
-    // number you see in the number column of a diff
-    lineNumber: 16,
-    metadata: { threadId: '68b329da9893e34099c7d8ad5cb9c940' },
-  },
-];
-
-const instance = new FileDiff<ThreadMetadata>({
-  // You can provide a 'theme' prop that maps to any
-  // built in shiki theme or you can register a custom
-  // theme. We also include 2 custom themes
-  //
-  // 'pierre-dark' and 'pierre-light
-  //
-  // You can also pass an object with 'dark' and 'light' keys
-  // to theme based on OS or 'themeType' setting below.
-  //
-  // By default we initialize with our custom pierre themes
-  // for dark and light theme
-  //
-  // For the rest of the available shiki themes, either check
-  // typescript autocomplete or visit:
-  // https://shiki.style/themes
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-
-  // When using the 'theme' prop that specifies dark and light
-  // themes, 'themeType' allows you to force 'dark' or 'light'
-  // theme, or inherit from the OS ('system') theme.
-  themeType: 'system',
-
-  // Disable the line numbers for your diffs, generally not recommended
-  disableLineNumbers: false,
-
-  // Whether code should 'wrap' with long lines or 'scroll'.
-  overflow: 'scroll',
-
-  // Normally you shouldn't need this prop, but if you don't provide a
-  // valid filename or your file doesn't have an extension you may want
-  // to override the automatic detection. You can specify that
-  // language here:
-  // https://shiki.style/languages
-  // lang?: SupportedLanguages;
-
-  // 'diffStyle' controls whether the diff is presented side by side or
-  // in a unified (single column) view
-  diffStyle: 'split',
-
-  // Unchanged context regions are collapsed by default, set this
-  // to true to force them to always render.  This depends on using
-  // the oldFile/newFile API or FileDiffMetadata including newLines.
-  expandUnchanged: false,
-
-  // Line decorators to help highlight changes.
-  // 'bars' (default):
-  // Shows some red-ish or green-ish (theme dependent) bars on the left
-  // edge of relevant lines
-  //
-  // 'classic':
-  // shows '+' characters on additions and '-' characters on deletions
-  //
-  // 'none':
-  // No special diff indicators are shown
-  diffIndicators: 'bars',
-
-  // By default green-ish or red-ish background are shown on added and
-  // deleted lines respectively. Disable that feature here
-  disableBackground: false,
-
-  // Diffs are split up into hunks, this setting customizes what to
-  // show between each hunk.
-  //
-  // 'line-info' (default):
-  // Shows a bar that tells you how many lines are collapsed. If you
-  // are using the oldFile/newFile API then you can click those bars
-  // to expand the content between them
-  //
-  // (hunk: HunkData) => HTMLElement | DocumentFragment:
-  // If you want to fully customize what gets displayed for hunks you
-  // can pass a custom function to generate dom nodes to render.
-  // 'hunkData' will include the number of lines collapsed as well as
-  // the 'type' of column you are rendering into.  Bear in the elements
-  // you return will be subject to the css grid of the document, and
-  // if you want to prevent the elements from scrolling with content
-  // you will need to use a few tricks. See a code example below this
-  // file example.  Click to expand will happen automatically.
-  //
-  // 'metadata':
-  // Shows the content you'd see in a normal patch file, usually in
-  // some format like '@@ -60,6 +60,22 @@'. You cannot use these to
-  // expand hidden content
-  //
-  // 'simple':
-  // Just a subtle bar separator between each hunk
-  hunkSeparators: 'line-info',
-
-  // On lines that have both additions and deletions, we can run a
-  // separate diff check to mark parts of the lines that change.
-  // 'none':
-  // Do not show these secondary highlights
-  //
-  // 'char':
-  // Show changes at a per character granularity
-  //
-  // 'word':
-  // Show changes but rounded up to word boundaries
-  //
-  // 'word-alt' (default):
-  // Similar to 'word', however we attempt to minimize single character
-  // gaps between highlighted changes
-  lineDiffType: 'word-alt',
-
-  // If lines exceed these character lengths then we won't perform the
-  // line lineDiffType check
-  maxLineDiffLength: 1000,
-
-  // If any line in the diff exceeds this value then we won't attempt to
-  // syntax highlight the diff
-  tokenizeMaxLineLength: 1000,
-
-  // Enabling this property will hide the file header with file name and
-  // diff stats.
-  disableFileHeader: false,
-
-  // For the collapsed code between diff hunks, this controls the 
-  // maximum code revealed per click
-  expansionLineCount: 100,
-
-  // You can optionally pass a render function for rendering out line
-  // annotations.  Just return the dom node to render
-  renderAnnotation(
-    annotation: DiffLineAnnotation<ThreadMetadata>
-  ): HTMLElement {
-    // Despite the diff itself being rendered in the shadow dom,
-    // annotations are inserted via the web components 'slots' api and you
-    // can use all your normal normal css and styling for them
-    const element = document.createElement('div');
-    element.innerText = annotation.metadata.threadId;
-    return element;
-  },
-
-  // Enable interactive line selection - users can click line
-  // numbers to select lines. Click to select a single line,
-  // click and drag to select a range, or hold Shift and click
-  // to extend the selection.
-  enableLineSelection: false,
-
-  // Callback fired when the selection changes (continuously
-  // during drag operations).
-  onLineSelected(range: SelectedLineRange | null) {
-    console.log('Selection changed:', range);
-  },
-
-  // Callback fired when user begins a selection interaction
-  // (mouse down on a line number).
-  onLineSelectionStart(range: SelectedLineRange | null) {
-    console.log('Selection started:', range);
-  },
-
-  // Callback fired when user completes a selection interaction
-  // (mouse up). This is useful for triggering actions like
-  // adding comment annotations or saving the selection.
-  onLineSelectionEnd(range: SelectedLineRange | null) {
-    console.log('Selection completed:', range);
-  },
-
-  // If you pass a \`renderHoverUtility\` method as an option,
-  // this ensures it will will display on hover
-  enableHoverUtility: true,
-
-  // You must pass \`enableHoverUtility: true\` as well to enable 
-  // or disable this functionality. This API allows you to render
-  // some UI in the number column when the user is hovered over
-  // the line. This is not a reactive API, in other words,
-  // render is not called every time you mouse over a new line
-  // (by design). You can call \`getHoveredLine()\` in a click
-  // handler to know what line is hovered.
-  renderHoverUtility(getHoveredLine): HTMLElement {
-    const button = document.createElement('button');
-    button.innerText = '+';
-    button.addEventListener('click', () => {
-      console.log(
-        'you clicked on line:',
-        getHoveredLine().lineNumber,
-        'on side:',
-        getHoveredLine().side // 'additions' | 'deletions'
-      );
-    })
-    return button;
-  }
-
-});
-
-// If you ever want to update the options for an instance, simple call
-// 'setOptions' with the new options. Bear in mind, this does NOT merge
-// existing properties, it's a full replace
-instance.setOptions({
-  ...instance.options,
-  theme: 'pierre-dark',
-});
-
-// When ready to render, simply call .render with old/new file, optional
-// annotations and a container element to hold the diff.
-// Note: render() is synchronous. Syntax highlighting happens async in
-// the background and the diff updates automatically when complete.
+// Render the diff into a container
 instance.render({
   oldFile,
   newFile,
-  lineAnnotations,
+  containerWrapper: document.getElementById('diff-container'),
+});
+
+// Update options later if needed (full replacement, not merge)
+instance.setOptions({ ...instance.options, diffStyle: 'unified' });
+instance.rerender(); // Must call rerender() after updating options
+
+// Clean up when done
+instance.cleanUp();`,
+  },
+  options,
+};
+
+export const VANILLA_API_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'file_example.ts',
+    contents: `import { File, type FileContents } from '@pierre/precision-diffs';
+
+// Create the instance with options
+const instance = new File({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  overflow: 'scroll',
+});
+
+// Define your file (keep reference stable to avoid re-renders)
+const file: FileContents = {
+  name: 'example.ts',
+  contents: \`function greet(name: string) {
+  console.log(\\\`Hello, \\\${name}!\\\`);
+}
+
+export { greet };\`,
+};
+
+// Render the file into a container
+instance.render({
+  file,
+  containerWrapper: document.getElementById('file-container'),
+});
+
+// Update options later if needed (full replacement, not merge)
+instance.setOptions({ ...instance.options, overflow: 'wrap' });
+instance.rerender(); // Must call rerender() after updating options
+
+// Clean up when done
+instance.cleanUp();`,
+  },
+  options,
+};
+
+// =============================================================================
+// FILEDIFF PROPS
+// =============================================================================
+
+export const VANILLA_API_FILE_DIFF_PROPS: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'file_diff_props.ts',
+    contents: `import { FileDiff } from '@pierre/precision-diffs';
+
+// All available options for the FileDiff class
+const instance = new FileDiff({
+
+  // ─────────────────────────────────────────────────────────────
+  // THEMING
+  // ─────────────────────────────────────────────────────────────
+
+  // Theme for syntax highlighting. Can be a single theme name or an
+  // object with 'dark' and 'light' keys for automatic switching.
+  // Built-in options: 'pierre-dark', 'pierre-light', or any Shiki theme.
+  // See: https://shiki.style/themes
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+
+  // When using dark/light theme object, this controls which is used:
+  // 'system' (default) - follows OS preference
+  // 'dark' or 'light' - forces specific theme
+  themeType: 'system',
+
+  // ─────────────────────────────────────────────────────────────
+  // DIFF DISPLAY
+  // ─────────────────────────────────────────────────────────────
+
+  // 'split' (default) - side-by-side view
+  // 'unified' - single column view
+  diffStyle: 'split',
+
+  // Line change indicators:
+  // 'bars' (default) - colored bars on left edge
+  // 'classic' - '+' and '-' characters
+  // 'none' - no indicators
+  diffIndicators: 'bars',
+
+  // Show colored backgrounds on changed lines (default: true)
+  disableBackground: false,
+
+  // ─────────────────────────────────────────────────────────────
+  // HUNK SEPARATORS
+  // ─────────────────────────────────────────────────────────────
+
+  // What to show between diff hunks:
+  // 'line-info' (default) - shows collapsed line count, clickable to expand
+  // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
+  // 'simple' - subtle bar separator
+  // Or pass a function for custom rendering (see Hunk Separators section)
+  hunkSeparators: 'line-info',
+
+  // Force unchanged context to always render (default: false)
+  // Requires oldFile/newFile API or FileDiffMetadata with newLines
+  expandUnchanged: false,
+
+  // Lines revealed per click when expanding collapsed regions
+  expansionLineCount: 100,
+
+  // ─────────────────────────────────────────────────────────────
+  // INLINE CHANGE HIGHLIGHTING
+  // ─────────────────────────────────────────────────────────────
+
+  // Highlight changed portions within modified lines:
+  // 'word-alt' (default) - word boundaries, minimizes single-char gaps
+  // 'word' - word boundaries
+  // 'char' - character-level granularity
+  // 'none' - disable inline highlighting
+  lineDiffType: 'word-alt',
+
+  // Skip inline diff for lines exceeding this length
+  maxLineDiffLength: 1000,
+
+  // ─────────────────────────────────────────────────────────────
+  // LAYOUT & DISPLAY
+  // ─────────────────────────────────────────────────────────────
+
+  // Show line numbers (default: true)
+  disableLineNumbers: false,
+
+  // Long line handling: 'scroll' (default) or 'wrap'
+  overflow: 'scroll',
+
+  // Hide the file header with filename and stats
+  disableFileHeader: false,
+
+  // Override automatic language detection (usually not needed)
+  // See: https://shiki.style/languages
+  // lang: 'typescript',
+
+  // Skip syntax highlighting for lines exceeding this length
+  tokenizeMaxLineLength: 1000,
+
+  // ─────────────────────────────────────────────────────────────
+  // LINE SELECTION
+  // ─────────────────────────────────────────────────────────────
+
+  // Enable click-to-select on line numbers
+  enableLineSelection: false,
+
+  // Callbacks for selection events
+  onLineSelected(range) {
+    // Fires continuously during drag
+  },
+  onLineSelectionStart(range) {
+    // Fires on mouse down
+  },
+  onLineSelectionEnd(range) {
+    // Fires on mouse up - good for saving selection
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // MOUSE EVENTS
+  // ─────────────────────────────────────────────────────────────
+
+  // Must be true to enable renderHoverUtility
+  enableHoverUtility: false,
+
+  // Fires when clicking anywhere on a line
+  onLineClick({ lineNumber, side, event }) {},
+
+  // Fires when clicking anywhere in the line number column
+  onLineNumberClick({ lineNumber, side, event }) {},
+
+  // Fires when mouse enters a line
+  onLineEnter({ lineNumber, side }) {},
+
+  // Fires when mouse leaves a line
+  onLineLeave({ lineNumber, side }) {},
+
+  // ─────────────────────────────────────────────────────────────
+  // RENDER CALLBACKS
+  // ─────────────────────────────────────────────────────────────
+
+  // Render custom content in the file header (after +/- stats)
+  renderHeaderMetadata({ oldFile, newFile, fileDiff }) {
+    const span = document.createElement('span');
+    span.textContent = fileDiff?.newName ?? '';
+    return span;
+  },
+
+  // Render annotations on specific lines
+  renderAnnotation(annotation) {
+    const element = document.createElement('div');
+    element.textContent = annotation.metadata.threadId;
+    return element;
+  },
+
+  // Render UI in the line number column on hover
+  // Requires enableHoverUtility: true
+  renderHoverUtility(getHoveredLine) {
+    const button = document.createElement('button');
+    button.textContent = '+';
+    button.addEventListener('click', () => {
+      const { lineNumber, side } = getHoveredLine();
+      console.log('Clicked line', lineNumber, 'on', side);
+    });
+    return button;
+  },
+
+});
+
+// ─────────────────────────────────────────────────────────────
+// INSTANCE METHODS
+// ─────────────────────────────────────────────────────────────
+
+// Render the diff
+instance.render({
+  oldFile: { name: 'file.ts', contents: '...' },
+  newFile: { name: 'file.ts', contents: '...' },
+  lineAnnotations: [{ side: 'additions', lineNumber: 5, metadata: {} }],
   containerWrapper: document.body,
 });
 
-// Programmatically control which lines are selected. Selections should
-// be stable across 'split' and 'unified' diff styles.
-// 'start' and 'end' map to the visual line numbers you see in the
-// number column. 'side' and 'endSide' are considered optional.
-// 'side' will default to the 'additions' side. 'endSide' will
-// default to whatever 'side' is unless you specify otherwise.
+// Update options (full replacement, not merge)
+instance.setOptions({ ...instance.options, diffStyle: 'unified' });
+
+// Update line annotations after initial render
+instance.setLineAnnotations([
+  { side: 'additions', lineNumber: 5, metadata: { threadId: 'abc' } }
+]);
+
+// Programmatically control selected lines
 instance.setSelectedLines({
   start: 12,
-  side: 'additions',
   end: 22,
-  endSide: 'deletions'
-});`,
+  side: 'additions',
+  endSide: 'deletions',
+});
+
+// Force re-render (useful after changing options)
+instance.rerender();
+
+// Programmatically expand a collapsed hunk
+instance.expandHunk(0, 'down'); // hunkIndex, direction: 'up' | 'down' | 'all'
+
+// Change the active theme type
+instance.setThemeType('dark'); // 'dark' | 'light' | 'system'
+
+// Clean up (removes DOM, event listeners, clears state)
+instance.cleanUp();`,
   },
   options,
 };
 
-export const VANILLA_API_FILE_FILE: PreloadFileOptions<undefined> = {
+// =============================================================================
+// FILE PROPS
+// =============================================================================
+
+export const VANILLA_API_FILE_PROPS: PreloadFileOptions<undefined> = {
   file: {
-    name: 'coming_soon.ts',
-    contents:
-      '// documentation coming soon, check typescript types for more info',
+    name: 'file_props.ts',
+    contents: `import { File } from '@pierre/precision-diffs';
+
+// All available options for the File class
+const instance = new File({
+
+  // ─────────────────────────────────────────────────────────────
+  // THEMING
+  // ─────────────────────────────────────────────────────────────
+
+  // Theme for syntax highlighting. Can be a single theme name or an
+  // object with 'dark' and 'light' keys for automatic switching.
+  // Built-in options: 'pierre-dark', 'pierre-light', or any Shiki theme.
+  // See: https://shiki.style/themes
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+
+  // When using dark/light theme object, this controls which is used:
+  // 'system' (default) - follows OS preference
+  // 'dark' or 'light' - forces specific theme
+  themeType: 'system',
+
+  // ─────────────────────────────────────────────────────────────
+  // LAYOUT & DISPLAY
+  // ─────────────────────────────────────────────────────────────
+
+  // Show line numbers (default: true)
+  disableLineNumbers: false,
+
+  // Long line handling: 'scroll' (default) or 'wrap'
+  overflow: 'scroll',
+
+  // Hide the file header with filename
+  disableFileHeader: false,
+
+  // Override automatic language detection (usually not needed)
+  // See: https://shiki.style/languages
+  // lang: 'typescript',
+
+  // Skip syntax highlighting for lines exceeding this length
+  tokenizeMaxLineLength: 1000,
+
+  // ─────────────────────────────────────────────────────────────
+  // LINE SELECTION
+  // ─────────────────────────────────────────────────────────────
+
+  // Enable click-to-select on line numbers
+  enableLineSelection: false,
+
+  // Callbacks for selection events
+  onLineSelected(range) {
+    // Fires continuously during drag
+  },
+  onLineSelectionStart(range) {
+    // Fires on mouse down
+  },
+  onLineSelectionEnd(range) {
+    // Fires on mouse up - good for saving selection
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // MOUSE EVENTS
+  // ─────────────────────────────────────────────────────────────
+
+  // Must be true to enable renderHoverUtility
+  enableHoverUtility: false,
+
+  // Fires when clicking anywhere on a line
+  onLineClick({ lineNumber, event }) {},
+
+  // Fires when clicking anywhere in the line number column
+  onLineNumberClick({ lineNumber, event }) {},
+
+  // Fires when mouse enters a line
+  onLineEnter({ lineNumber }) {},
+
+  // Fires when mouse leaves a line
+  onLineLeave({ lineNumber }) {},
+
+  // ─────────────────────────────────────────────────────────────
+  // RENDER CALLBACKS
+  // ─────────────────────────────────────────────────────────────
+
+  // Render custom content in the file header
+  renderCustomMetadata(file) {
+    const span = document.createElement('span');
+    span.textContent = file.name;
+    return span;
+  },
+
+  // Render annotations on specific lines
+  // Note: File uses LineAnnotation (no 'side' property)
+  renderAnnotation(annotation) {
+    const element = document.createElement('div');
+    element.textContent = annotation.metadata.commentId;
+    return element;
+  },
+
+  // Render UI in the line number column on hover
+  // Requires enableHoverUtility: true
+  renderHoverUtility(getHoveredLine) {
+    const button = document.createElement('button');
+    button.textContent = '+';
+    button.addEventListener('click', () => {
+      const { lineNumber } = getHoveredLine();
+      console.log('Clicked line', lineNumber);
+    });
+    return button;
+  },
+
+});
+
+// ─────────────────────────────────────────────────────────────
+// INSTANCE METHODS
+// ─────────────────────────────────────────────────────────────
+
+// Render the file
+instance.render({
+  file: { name: 'example.ts', contents: '...' },
+  lineAnnotations: [{ lineNumber: 5, metadata: {} }],
+  containerWrapper: document.body,
+});
+
+// Update options (full replacement, not merge)
+instance.setOptions({ ...instance.options, overflow: 'wrap' });
+
+// Update line annotations after initial render
+instance.setLineAnnotations([
+  { lineNumber: 5, metadata: { commentId: 'abc' } }
+]);
+
+// Programmatically control selected lines
+instance.setSelectedLines({ start: 3, end: 8 });
+
+// Force re-render (useful after changing options)
+instance.rerender();
+
+// Change the active theme type
+instance.setThemeType('dark'); // 'dark' | 'light' | 'system'
+
+// Clean up (removes DOM, event listeners, clears state)
+instance.cleanUp();`,
   },
   options,
 };
+
+// =============================================================================
+// CUSTOM HUNK SEPARATORS
+// =============================================================================
 
 export const VANILLA_API_CUSTOM_HUNK_FILE: PreloadFileOptions<undefined> = {
   file: {
@@ -318,7 +493,7 @@ const instance2 = new FileDiff({
 
 // If you want to create a single column that's aligned with the content
 // column and doesn't scroll, you can do something like this:
-const instance2 = new FileDiff({
+const instance3 = new FileDiff({
   hunkSeparators(hunkData: HunkData) {
     const wrapper = document.createElement('div');
     wrapper.style.gridColumn = '2 / 3';
@@ -333,6 +508,10 @@ const instance2 = new FileDiff({
   },
   options,
 };
+
+// =============================================================================
+// RENDERERS (low-level)
+// =============================================================================
 
 export const VANILLA_API_HUNKS_RENDERER_FILE: PreloadFileOptions<undefined> = {
   file: {
@@ -511,37 +690,6 @@ const partialHTML: string = instance.renderPartialHTML(result.codeAST);
 
 // Or get the full AST for further transformation
 const fullAST = instance.renderFullAST(result);`,
-  },
-  options,
-};
-
-export const VANILLA_API_CODE_UTILITIES: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'misc.ts',
-    contents: `import {
-  getSharedHighlighter,
-  preloadHighlighter,
-  registerCustomTheme,
-  disposeHighlighter
-} from '@pierre/precision-diffs';
-
-// Preload themes and languages
-await preloadHighlighter({
-  themes: ['pierre-dark', 'github-light'],
-  langs: ['typescript', 'python', 'rust']
-});
-
-// Register custom themes (make sure the name you pass
-// for your theme and the name in your shiki json theme
-// are identical)
-registerCustomTheme('my-custom-theme', () => import('./theme.json'));
-
-// Get the shared highlighter instance
-const highlighter = await getSharedHighlighter();
-
-// Cleanup when shutting down. Just note that if you call this,
-// all themes and languages will have to be reloaded
-disposeHighlighter();`,
   },
   options,
 };

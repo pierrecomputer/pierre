@@ -51,8 +51,10 @@ import {
 import { VanillaAPI } from './VanillaAPI/VanillaAPI';
 import {
   VANILLA_API_CUSTOM_HUNK_FILE,
-  VANILLA_API_FILE_DIFF,
-  VANILLA_API_FILE_FILE,
+  VANILLA_API_FILE_DIFF_EXAMPLE,
+  VANILLA_API_FILE_DIFF_PROPS,
+  VANILLA_API_FILE_EXAMPLE,
+  VANILLA_API_FILE_PROPS,
   VANILLA_API_FILE_RENDERER,
   VANILLA_API_HUNKS_RENDERER_FILE,
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
@@ -166,15 +168,19 @@ async function ReactAPISection() {
 
 async function VanillaAPISection() {
   const [
-    vanillaAPIFileDiff,
-    vanillaAPIFileFile,
-    vanillaAPICustomHunk,
-    vanillaAPIDiffHunksRenderer,
-    vanillaAPIDiffHunksRendererPatch,
-    vanillaAPIFileRenderer,
+    fileDiffExample,
+    fileExample,
+    fileDiffProps,
+    fileProps,
+    customHunk,
+    diffHunksRenderer,
+    diffHunksRendererPatch,
+    fileRenderer,
   ] = await Promise.all([
-    preloadFile(VANILLA_API_FILE_DIFF),
-    preloadFile(VANILLA_API_FILE_FILE),
+    preloadFile(VANILLA_API_FILE_DIFF_EXAMPLE),
+    preloadFile(VANILLA_API_FILE_EXAMPLE),
+    preloadFile(VANILLA_API_FILE_DIFF_PROPS),
+    preloadFile(VANILLA_API_FILE_PROPS),
     preloadFile(VANILLA_API_CUSTOM_HUNK_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
@@ -182,12 +188,14 @@ async function VanillaAPISection() {
   ]);
   return (
     <VanillaAPI
-      vanillaAPIFileDiff={vanillaAPIFileDiff}
-      vanillaAPIFileFile={vanillaAPIFileFile}
-      vanillaAPICustomHunk={vanillaAPICustomHunk}
-      vanillaAPIDiffHunksRenderer={vanillaAPIDiffHunksRenderer}
-      vanillaAPIDiffHunksRendererPatch={vanillaAPIDiffHunksRendererPatch}
-      vanillaAPIFileRenderer={vanillaAPIFileRenderer}
+      fileDiffExample={fileDiffExample}
+      fileExample={fileExample}
+      fileDiffProps={fileDiffProps}
+      fileProps={fileProps}
+      customHunk={customHunk}
+      diffHunksRenderer={diffHunksRenderer}
+      diffHunksRendererPatch={diffHunksRendererPatch}
+      fileRenderer={fileRenderer}
     />
   );
 }

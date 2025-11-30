@@ -6,70 +6,98 @@ import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 
+type ComponentType = 'file-diff' | 'file';
+type PropsType = 'file-diff' | 'file';
+type DiffHunksType = 'from-file' | 'from-patch';
+
 interface VanillaAPIProps {
-  vanillaAPIFileDiff: PreloadedFileResult<undefined>;
-  vanillaAPIFileFile: PreloadedFileResult<undefined>;
-  vanillaAPICustomHunk: PreloadedFileResult<undefined>;
-  vanillaAPIDiffHunksRenderer: PreloadedFileResult<undefined>;
-  vanillaAPIDiffHunksRendererPatch: PreloadedFileResult<undefined>;
-  vanillaAPIFileRenderer: PreloadedFileResult<undefined>;
+  fileDiffExample: PreloadedFileResult<undefined>;
+  fileExample: PreloadedFileResult<undefined>;
+  fileDiffProps: PreloadedFileResult<undefined>;
+  fileProps: PreloadedFileResult<undefined>;
+  customHunk: PreloadedFileResult<undefined>;
+  diffHunksRenderer: PreloadedFileResult<undefined>;
+  diffHunksRendererPatch: PreloadedFileResult<undefined>;
+  fileRenderer: PreloadedFileResult<undefined>;
 }
 
 export function VanillaAPI({
-  vanillaAPIFileDiff,
-  vanillaAPIFileFile,
-  vanillaAPICustomHunk,
-  vanillaAPIDiffHunksRenderer,
-  vanillaAPIDiffHunksRendererPatch,
-  vanillaAPIFileRenderer,
+  fileDiffExample,
+  fileExample,
+  fileDiffProps,
+  fileProps,
+  customHunk,
+  diffHunksRenderer,
+  diffHunksRendererPatch,
+  fileRenderer,
 }: VanillaAPIProps) {
-  const [componentType, setComponentType] = useState<'file-diff' | 'file'>(
-    'file-diff'
-  );
-  const [diffHunksType, setDiffHunksType] = useState<
-    'from-file' | 'from-patch'
-  >('from-file');
+  const [componentType, setComponentType] =
+    useState<ComponentType>('file-diff');
+  const [propsType, setPropsType] = useState<PropsType>('file-diff');
+  const [diffHunksType, setDiffHunksType] =
+    useState<DiffHunksType>('from-file');
+
   return (
     <section className="space-y-4">
       <h2>Vanilla JS API</h2>
       <p>
-        The vanilla JavaScript API for Precision Diffs exposes a mix of
-        components and raw classes. The components and the React API are built
-        on many of these foundation classes. The goal has been to abstract away
-        a lot of the heavy lifting when working with Shiki directly and provide
-        a set of standardized APIs that can be used with any framework and even
-        server rendered if necessary.
+        You can import the vanilla JavaScript classes from{' '}
+        <code>@pierre/precision-diffs</code>. We offer two components,{' '}
+        <code>FileDiff</code> for rendering diffs, and <code>File</code> for
+        rendering plain files. Typically you'll want to interface with these as
+        they'll handle all the complicated aspects of syntax highlighting and
+        themeing for you.
       </p>
-      <p>
-        You can import all of this via the core package{' '}
-        <code>@pierre/precision-diffs</code>
-      </p>
+
       <h3>Components</h3>
       <p>
-        There are two core components in the vanilla JavaScript API,{' '}
-        <code>FileDiff</code> and <code>File</code>
+        The Vanilla JS API exposes two core components: <code>FileDiff</code>{' '}
+        (compare two file versions or render a pre-parsed{' '}
+        <code>FileDiffMetadata</code>) and <code>File</code> (render a single
+        code file without diff).
       </p>
       <ButtonGroup
         value={componentType}
-        onValueChange={(value) =>
-          setComponentType(value as 'file-diff' | 'file')
-        }
+        onValueChange={(value) => setComponentType(value as ComponentType)}
       >
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
         <ButtonGroupItem value="file">File</ButtonGroupItem>
       </ButtonGroup>
       {componentType === 'file-diff' ? (
-        <DocsCodeExample {...vanillaAPIFileDiff} />
+        <DocsCodeExample {...fileDiffExample} />
       ) : (
-        <DocsCodeExample {...vanillaAPIFileFile} />
+        <DocsCodeExample {...fileExample} />
       )}
-      <h4>Hunk Separators</h4>
+
+      <h3 id="vanilla-js-api-props">Props</h3>
+      <p>
+        Both <code>FileDiff</code> and <code>File</code> accept an options
+        object in their constructor. The <code>File</code> component has similar
+        options but excludes diff-specific settings and uses{' '}
+        <code>LineAnnotation</code> instead of <code>DiffLineAnnotation</code>{' '}
+        (no <code>side</code> property).
+      </p>
+      <ButtonGroup
+        value={propsType}
+        onValueChange={(value) => setPropsType(value as PropsType)}
+      >
+        <ButtonGroupItem value="file-diff">FileDiff Props</ButtonGroupItem>
+        <ButtonGroupItem value="file">File Props</ButtonGroupItem>
+      </ButtonGroup>
+      {propsType === 'file-diff' ? (
+        <DocsCodeExample {...fileDiffProps} />
+      ) : (
+        <DocsCodeExample {...fileProps} />
+      )}
+
+      <h4 data-toc-ignore>Custom Hunk Separators</h4>
       <p>
         If you want to render custom hunk separators that won't scroll with the
         content, there are a few tricks you will need to employ. See the
         following code snippet:
       </p>
-      <DocsCodeExample {...vanillaAPICustomHunk} />
+      <DocsCodeExample {...customHunk} />
+
       <h3>Renderers</h3>
       <p>
         <strong>Note:</strong> For most use cases, you should use the
@@ -87,7 +115,7 @@ export function VanillaAPI({
         </a>{' '}
         nodes or HTML strings for custom rendering pipelines.
       </p>
-      <h4>DiffHunksRenderer</h4>
+      <h4 data-toc-ignore>DiffHunksRenderer</h4>
       <p>
         Takes a <code>FileDiffMetadata</code> data structure and renders out the
         raw hast elements for diff hunks. You can generate{' '}
@@ -96,25 +124,23 @@ export function VanillaAPI({
       </p>
       <ButtonGroup
         value={diffHunksType}
-        onValueChange={(value) =>
-          setDiffHunksType(value as 'from-file' | 'from-patch')
-        }
+        onValueChange={(value) => setDiffHunksType(value as DiffHunksType)}
       >
         <ButtonGroupItem value="from-file">From Two Files</ButtonGroupItem>
         <ButtonGroupItem value="from-patch">From Patch File</ButtonGroupItem>
       </ButtonGroup>
       {diffHunksType === 'from-file' ? (
-        <DocsCodeExample {...vanillaAPIDiffHunksRenderer} />
+        <DocsCodeExample {...diffHunksRenderer} />
       ) : (
-        <DocsCodeExample {...vanillaAPIDiffHunksRendererPatch} />
+        <DocsCodeExample {...diffHunksRendererPatch} />
       )}
-      <h4>FileRenderer</h4>
+      <h4 data-toc-ignore>FileRenderer</h4>
       <p>
         Takes a <code>FileContents</code> object (just a filename and contents
         string) and renders syntax-highlighted code as hast elements. Useful for
         rendering single files without any diff context.
       </p>
-      <DocsCodeExample {...vanillaAPIFileRenderer} />
+      <DocsCodeExample {...fileRenderer} />
     </section>
   );
 }
