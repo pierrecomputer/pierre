@@ -4,8 +4,8 @@ import type {
   FileContents,
   PJSHighlighter,
   PJSThemeNames,
+  RenderFileOptions,
   RenderFileResult,
-  SupportedLanguages,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
@@ -13,13 +13,6 @@ import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
-
-export interface RenderOptions {
-  lang?: SupportedLanguages;
-  theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
-  startingLineNumber?: number;
-  tokenizeMaxLineLength: number;
-}
 
 export function renderFileWithHighlighter(
   file: FileContents,
@@ -29,7 +22,7 @@ export function renderFileWithHighlighter(
     startingLineNumber = 1,
     lang = getFiletypeFromFileName(file.name),
     tokenizeMaxLineLength,
-  }: RenderOptions
+  }: RenderFileOptions
 ): RenderFileResult {
   const { state, transformers } = createTransformerWithState();
   const baseThemeType = (() => {

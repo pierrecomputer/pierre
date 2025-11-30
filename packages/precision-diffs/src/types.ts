@@ -309,14 +309,30 @@ export interface RenderDiffResult {
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
+export interface RenderFileOptions {
+  lang?: SupportedLanguages;
+  theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  startingLineNumber: number;
+  tokenizeMaxLineLength: number;
+}
+
+export interface RenderDiffOptions {
+  lang?: SupportedLanguages;
+  theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  tokenizeMaxLineLength: number;
+  lineDiffType: LineDiffTypes;
+}
+
 export interface RenderedFileASTCache {
   file: FileContents;
   highlighted: boolean;
+  options: RenderFileOptions;
   result: RenderFileResult | undefined;
 }
 
 export interface RenderedDiffASTCache {
   diff: FileDiffMetadata;
   highlighted: boolean;
+  options: RenderDiffOptions;
   result: RenderDiffResult | undefined;
 }

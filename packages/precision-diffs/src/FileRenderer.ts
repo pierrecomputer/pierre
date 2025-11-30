@@ -12,11 +12,13 @@ import type {
   FileContents,
   LineAnnotation,
   PJSHighlighter,
+  RenderFileOptions,
   RenderFileResult,
   RenderedFileASTCache,
   SupportedLanguages,
   ThemeTypes,
 } from './types';
+import { areThemesEqual } from './utils/areThemesEqual';
 import { createAnnotationElement } from './utils/createAnnotationElement';
 import { createFileHeaderElement } from './utils/createFileHeaderElement';
 import { createPreElement } from './utils/createPreElement';
@@ -93,25 +95,56 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   hydrate(file: FileContents): void {
+    const { options } = this.getRenderOptions(file);
     this.renderCache ??= {
       file,
+      options,
       highlighted: false,
       result: undefined,
     };
-    const { lang, theme, tokenizeMaxLineLength = 1000 } = this.options;
     if (this.poolManager != null) {
       void this.poolManager
-        .renderFileToAST(file, {
-          lang,
-          theme,
-          tokenizeMaxLineLength,
-        })
-        .then((results) => this.handleAsyncHighlight(file, results, true));
+        .renderFileToAST(file, options)
+        .then((results) =>
+          this.handleAsyncHighlight(file, options, results, true)
+        );
     } else {
       void this.asyncHighlight(file).then((result) => {
-        this.handleAsyncHighlight(file, result, true);
+        this.handleAsyncHighlight(file, options, result, true);
       });
     }
+  }
+
+  private getRenderOptions(file: FileContents): {
+    options: RenderFileOptions;
+    forceRender: boolean;
+  } {
+    const {
+      lang,
+      startingLineNumber = 1,
+      theme,
+      tokenizeMaxLineLength = 1000,
+    } = this.options;
+    const { renderCache } = this;
+    const options: RenderFileOptions = {
+      lang,
+      theme,
+      tokenizeMaxLineLength,
+      startingLineNumber,
+    };
+    if (renderCache?.result == null) {
+      return { options, forceRender: true };
+    }
+    if (
+      file !== renderCache.file ||
+      !areThemesEqual(theme, renderCache.options.theme) ||
+      lang !== renderCache.options.lang ||
+      startingLineNumber !== renderCache.options.startingLineNumber ||
+      tokenizeMaxLineLength !== renderCache.options.tokenizeMaxLineLength
+    ) {
+      return { options, forceRender: true };
+    }
+    return { options, forceRender: false };
   }
 
   renderFile(
@@ -120,15 +153,13 @@ export class FileRenderer<LAnnotation = undefined> {
     if (file == null) {
       return undefined;
     }
-    const { lang, theme, tokenizeMaxLineLength = 1000 } = this.options;
+    const { options, forceRender } = this.getRenderOptions(file);
     this.renderCache ??= {
       file,
       highlighted: false,
+      options,
       result: undefined,
     };
-    const fileDidChange =
-      this.renderCache.file.contents !== file.contents ||
-      this.renderCache.file.name !== file.name;
     if (this.poolManager != null) {
       this.renderCache.result ??= this.poolManager.renderPlainFileToAST(
         file,
@@ -137,14 +168,10 @@ export class FileRenderer<LAnnotation = undefined> {
       // TODO(amadeus): Figure out how to only fire this on a per file
       // basis... (maybe the poolManager can figure it out based on file name
       // and file contents probably?)
-      if (!this.renderCache.highlighted || fileDidChange) {
+      if (!this.renderCache.highlighted || forceRender) {
         void this.poolManager
-          .renderFileToAST(file, {
-            lang,
-            theme,
-            tokenizeMaxLineLength,
-          })
-          .then((results) => this.handleAsyncHighlight(file, results));
+          .renderFileToAST(file, options)
+          .then((results) => this.handleAsyncHighlight(file, options, results));
       }
     } else {
       this.computedLang =
@@ -152,23 +179,23 @@ export class FileRenderer<LAnnotation = undefined> {
       if (
         // Reset highlighter if we no longer have the appropriate
         // themes or languages loaded...
-        !hasLoadedThemes(getThemes(theme)) ||
-        !hasLoadedLanguage(this.computedLang)
+        !hasLoadedThemes(getThemes(options.theme)) ||
+        !hasLoadedLanguage(options.lang ?? this.computedLang)
       ) {
         this.highlighter = undefined;
       }
 
       if (this.highlighter == null) {
         void this.asyncHighlight(file).then((result) => {
-          this.handleAsyncHighlight(file, result);
+          this.handleAsyncHighlight(file, options, result);
         });
-      } else if (fileDidChange || !this.renderCache.highlighted) {
-        this.renderCache.result = this.renderFileWithHighlighter(
+      } else if (forceRender || !this.renderCache.highlighted) {
+        this.renderCache = {
           file,
-          this.highlighter
-        );
-        this.renderCache.highlighted = true;
-        this.renderCache.file = file;
+          options,
+          highlighted: true,
+          result: this.renderFileWithHighlighter(file, this.highlighter),
+        };
       }
     }
 
@@ -200,7 +227,7 @@ export class FileRenderer<LAnnotation = undefined> {
   ): RenderFileResult {
     const {
       theme,
-      startingLineNumber,
+      startingLineNumber = 1,
       lang,
       tokenizeMaxLineLength = 1000,
     } = this.options;
@@ -311,15 +338,21 @@ export class FileRenderer<LAnnotation = undefined> {
 
   handleAsyncHighlight(
     file: FileContents,
+    // FIXME(amadeus): These values should be returned with the result, so we
+    // don't have to do shenanery to maintain their relationship results
+    options: RenderFileOptions,
     result: RenderFileResult,
     hydrate = false
   ): void {
     if (this.renderCache == null) {
       return;
     }
-    this.renderCache.file = file;
-    this.renderCache.result = result;
-    this.renderCache.highlighted = true;
+    this.renderCache = {
+      file,
+      options,
+      highlighted: true,
+      result,
+    };
     if (!hydrate) {
       this.onRenderUpdate?.();
     }

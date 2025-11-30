@@ -11,10 +11,10 @@ import type {
   LineInfo,
   PJSHighlighter,
   PJSThemeNames,
+  RenderDiffOptions,
   RenderDiffResult,
-  SupportedLanguages,
 } from '../types';
-import type { RenderDiffFilesResult, WorkerRenderFileOptions } from '../worker';
+import type { RenderDiffFilesResult } from '../worker';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -26,17 +26,10 @@ import {
   pushOrJoinSpan,
 } from './parseDiffDecorations';
 
-interface RenderOptions {
-  lang?: SupportedLanguages;
-  theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
-  tokenizeMaxLineLength: number;
-  lineDiffType: LineDiffTypes;
-}
-
 export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
   highlighter: PJSHighlighter,
-  options: RenderOptions
+  options: RenderDiffOptions
 ): RenderDiffResult {
   const baseThemeType = (() => {
     const theme = options.theme ?? DEFAULT_THEMES;
@@ -402,7 +395,7 @@ interface RenderTwoFilesProps {
   newInfo: Record<number, LineInfo | undefined>;
   oldDecorations: DecorationItem[];
   newDecorations: DecorationItem[];
-  options: WorkerRenderFileOptions;
+  options: RenderDiffOptions;
   highlighter: PJSHighlighter;
 }
 

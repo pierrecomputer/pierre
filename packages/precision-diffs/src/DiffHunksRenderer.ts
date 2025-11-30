@@ -17,11 +17,13 @@ import type {
   Hunk,
   HunkData,
   PJSHighlighter,
+  RenderDiffOptions,
   RenderDiffResult,
   RenderedDiffASTCache,
   SupportedLanguages,
   ThemeTypes,
 } from './types';
+import { areThemesEqual } from './utils/areThemesEqual';
 import { createAnnotationElement } from './utils/createAnnotationElement';
 import { createEmptyRowBuffer } from './utils/createEmptyRowBuffer';
 import { createFileHeaderElement } from './utils/createFileHeaderElement';
@@ -100,6 +102,11 @@ interface RenderHunkProps {
   unifiedAST: ElementContent[];
   deletionsAST: ElementContent[];
   additionsAST: ElementContent[];
+}
+
+interface GetRenderOptionsReturn {
+  options: RenderDiffOptions;
+  forceRender: boolean;
 }
 
 type OptionsWithDefaults = Required<
@@ -247,30 +254,50 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     this.diff = diff;
+    const { options } = this.getRenderOptions(diff);
     this.renderCache ??= {
       diff,
       highlighted: false,
+      options,
       result: undefined,
     };
-    const { lang } = this.options;
-    const { theme, tokenizeMaxLineLength, lineDiffType } =
-      this.getOptionsWithDefaults();
     if (this.poolManager != null) {
       void this.poolManager
-        .renderDiffMetadataToAST(this.diff, {
-          lang,
-          theme,
-          tokenizeMaxLineLength,
-          lineDiffType,
-        })
+        .renderDiffMetadataToAST(this.diff, options)
         .then((result) => {
-          this.handleAsyncHighlight(diff, result, true);
+          this.handleAsyncHighlight(diff, options, result, true);
         });
     } else {
       void this.asyncHighlight(diff).then((result) => {
-        this.handleAsyncHighlight(diff, result, true);
+        this.handleAsyncHighlight(diff, options, result, true);
       });
     }
+  }
+
+  private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
+    const { lang } = this.options;
+    const { theme, tokenizeMaxLineLength, lineDiffType } =
+      this.getOptionsWithDefaults();
+    const { renderCache } = this;
+    const options: RenderDiffOptions = {
+      lang,
+      theme,
+      tokenizeMaxLineLength,
+      lineDiffType,
+    };
+    if (renderCache?.result == null) {
+      return { options, forceRender: true };
+    }
+    if (
+      diff !== renderCache.diff ||
+      !areThemesEqual(theme, renderCache.options.theme) ||
+      lang !== renderCache.options.lang ||
+      tokenizeMaxLineLength !== renderCache.options.tokenizeMaxLineLength ||
+      lineDiffType !== renderCache.options.lineDiffType
+    ) {
+      return { options, forceRender: true };
+    }
+    return { options, forceRender: false };
   }
 
   renderDiff(
@@ -279,33 +306,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff == null) {
       return undefined;
     }
-    const { lang } = this.options;
-    const { theme, tokenizeMaxLineLength, lineDiffType } =
-      this.getOptionsWithDefaults();
+    const { options, forceRender } = this.getRenderOptions(diff);
     this.renderCache ??= {
       diff,
       highlighted: false,
+      options,
       result: undefined,
     };
     if (this.poolManager != null) {
       this.renderCache.result ??= this.poolManager.renderPlainDiffMetadataToAST(
         diff,
-        lineDiffType
+        options.lineDiffType
       );
 
       // TODO(amadeus): Figure out how to only fire this on a per file
       // basis... (maybe the poolManager can figure it out based on file name
       // and file contents probably?)
-      if (!this.renderCache.highlighted || this.renderCache.diff !== diff) {
+      if (!this.renderCache.highlighted || forceRender) {
         void this.poolManager
-          .renderDiffMetadataToAST(diff, {
-            lang,
-            theme,
-            tokenizeMaxLineLength,
-            lineDiffType,
-          })
+          .renderDiffMetadataToAST(diff, options)
           .then((result) => {
-            this.handleAsyncHighlight(diff, result);
+            this.handleAsyncHighlight(diff, options, result);
           });
       }
     } else {
@@ -314,25 +335,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (
         // Reset highlighter if we do not have the appropriate
         // themes or languages loaded...
-        !hasLoadedThemes(getThemes(theme)) ||
-        !hasLoadedLanguage(this.computedLang)
+        !hasLoadedThemes(getThemes(options.theme)) ||
+        !hasLoadedLanguage(options.lang ?? this.computedLang)
       ) {
         this.highlighter = undefined;
       }
       if (this.highlighter == null) {
         void this.asyncHighlight(diff).then((result) => {
-          this.handleAsyncHighlight(diff, result);
+          this.handleAsyncHighlight(diff, options, result);
         });
-      } else if (
-        this.renderCache.diff !== diff ||
-        !this.renderCache.highlighted
-      ) {
-        this.renderCache.result = this.renderDiffWithHighlighter(
+      } else if (forceRender || !this.renderCache.highlighted) {
+        this.renderCache = {
           diff,
-          this.highlighter
-        );
-        this.renderCache.highlighted = true;
-        this.renderCache.diff = diff;
+          options,
+          highlighted: true,
+          result: this.renderDiffWithHighlighter(diff, this.highlighter),
+        };
       }
     }
     return this.renderCache.result != null
@@ -405,15 +423,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private handleAsyncHighlight(
     diff: FileDiffMetadata,
+    // FIXME(amadeus): These values should be returned with the result, so we
+    // don't have to do shenanery to maintain their relationship results
+    options: RenderDiffOptions,
     result: RenderDiffResult,
     hydrate = false
   ) {
     if (this.renderCache == null) {
       return;
     }
-    this.renderCache.diff = diff;
-    this.renderCache.result = result;
-    this.renderCache.highlighted = true;
+    this.renderCache = {
+      diff,
+      options,
+      highlighted: true,
+      result,
+    };
     if (!hydrate) {
       this.onRenderUpdate?.();
     }

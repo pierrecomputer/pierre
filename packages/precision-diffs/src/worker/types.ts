@@ -3,9 +3,10 @@ import type { ElementContent } from 'hast';
 import type {
   FileContents,
   FileDiffMetadata,
-  LineDiffTypes,
   PJSThemeNames,
+  RenderDiffOptions,
   RenderDiffResult,
+  RenderFileOptions,
   RenderFileResult,
   SupportedLanguages,
   ThemesType,
@@ -17,7 +18,7 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  options: WorkerRenderFileOptions;
+  options: RenderFileOptions;
 }
 
 export interface RenderDiffFileRequest {
@@ -25,14 +26,14 @@ export interface RenderDiffFileRequest {
   id: WorkerRequestId;
   oldFile: FileContents;
   newFile: FileContents;
-  options: WorkerRenderDiffOptions;
+  options: RenderDiffOptions;
 }
 
 export interface RenderDiffMetadataRequest {
   type: 'diff-metadata';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  options: WorkerRenderDiffOptions;
+  options: RenderDiffOptions;
 }
 
 export interface InitializeWorkerRequest {
@@ -111,17 +112,6 @@ export type WorkerResponse =
   | RenderSuccessResponse
   | RenderErrorResponse
   | InitializeSuccessResponse;
-
-export interface WorkerRenderFileOptions {
-  lang?: SupportedLanguages;
-  theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
-  startingLineNumber?: number;
-  tokenizeMaxLineLength: number;
-}
-
-export interface WorkerRenderDiffOptions extends WorkerRenderFileOptions {
-  lineDiffType: LineDiffTypes;
-}
 
 export interface WorkerPoolOptions {
   workerFactory: () => Worker;

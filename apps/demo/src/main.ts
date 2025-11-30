@@ -293,6 +293,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
         ?.renderDiffMetadataToAST(fileDiff, {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           tokenizeMaxLineLength: 1000,
+          lineDiffType: 'word-alt',
         })
         .then(({ code: result }) => {
           if (result.hunks == null) {

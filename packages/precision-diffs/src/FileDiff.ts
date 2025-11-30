@@ -332,6 +332,11 @@ export class FileDiff<LAnnotation = undefined> {
     fileContainer,
     containerWrapper,
   }: FileDiffRenderProps<LAnnotation>): void {
+    const filesDidChange =
+      oldFile != null &&
+      newFile != null &&
+      (!deepEquals(oldFile, this.oldFile) ||
+        !deepEquals(newFile, this.newFile));
     // Ideally this would just a quick === check because lineAnnotations is
     // unbounded
     const annotationsChanged =
@@ -345,10 +350,7 @@ export class FileDiff<LAnnotation = undefined> {
       ((fileDiff != null && fileDiff === this.fileDiff) ||
         // If using the oldFile/newFile API then lets check to see if they are
         // equal
-        (oldFile != null &&
-          newFile != null &&
-          deepEquals(oldFile, this.oldFile) &&
-          deepEquals(newFile, this.newFile)))
+        (fileDiff == null && !filesDidChange))
     ) {
       return;
     }
@@ -357,7 +359,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.newFile = newFile;
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
-    } else if (oldFile != null && newFile != null) {
+    } else if (oldFile != null && newFile != null && filesDidChange) {
       this.fileDiff = parseDiffFromFile(oldFile, newFile);
     }
 
