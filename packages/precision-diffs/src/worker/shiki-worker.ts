@@ -104,13 +104,9 @@ async function handleRenderDiffFiles({
 }: RenderDiffFileRequest) {
   const oldLang = options?.lang ?? getFiletypeFromFileName(oldFile.name);
   const newLang = options?.lang ?? getFiletypeFromFileName(newFile.name);
-  console.time('handleRenderDiffFiles.parseDiffFromFile');
   const fileDiff = parseDiffFromFile(oldFile, newFile);
-  console.timeEnd('handleRenderDiffFiles.parseDiffFromFile');
   const highlighter = await getHighlighter([oldLang, newLang], options?.theme);
-  console.time('handleRenderDiffFiles.renderDiffWithHighlighter');
   const result = renderDiffWithHighlighter(fileDiff, highlighter, options);
-  console.timeEnd('handleRenderDiffFiles.renderDiffWithHighlighter');
   sendDiffSuccess(id, result);
 }
 
@@ -123,9 +119,7 @@ async function handleRenderDiffMetadata({
   const oldLang = lang ?? getFiletypeFromFileName(diff.prevName ?? diff.name);
   const newLang = lang ?? getFiletypeFromFileName(diff.name);
   const highlighter = await getHighlighter([oldLang, newLang], options?.theme);
-  console.time('handleRenderDiffMetadata.renderDiffWithHighlighter');
   const result = renderDiffWithHighlighter(diff, highlighter, options);
-  console.timeEnd('handleRenderDiffMetadata.renderDiffWithHighlighter');
   sendDiffMetadataSuccess(id, result);
 }
 

@@ -407,18 +407,18 @@ function renderTwoFiles({
   highlighter,
   oldDecorations,
   newDecorations,
-  options: { theme = DEFAULT_THEMES, lang, ...options },
+  options: { theme: themeOrThemes = DEFAULT_THEMES, lang, ...options },
 }: RenderTwoFilesProps) {
   const oldLang = lang ?? getFiletypeFromFileName(oldFile.name);
   const newLang = lang ?? getFiletypeFromFileName(newFile.name);
   const { state, transformers } = createTransformerWithState();
   const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
-    return typeof theme === 'string'
+    return typeof themeOrThemes === 'string'
       ? {
           ...options,
           // language will be overwritten for each highlight
           lang: 'text',
-          theme,
+          theme: themeOrThemes,
           transformers,
           decorations: undefined,
           defaultColor: false,
@@ -428,7 +428,7 @@ function renderTwoFiles({
           ...options,
           // language will be overwritten for each highlight
           lang: 'text',
-          themes: theme,
+          themes: themeOrThemes,
           transformers,
           decorations: undefined,
           defaultColor: false,
@@ -436,7 +436,6 @@ function renderTwoFiles({
         };
   })();
 
-  console.time(`renderingOld: ${oldFile.name}`);
   const oldLines = (() => {
     if (oldFile.contents === '') {
       return [];
@@ -446,8 +445,6 @@ function renderTwoFiles({
     hastConfig.decorations = oldDecorations;
     return getLineNodes(highlighter.codeToHast(oldFile.contents, hastConfig));
   })();
-  console.timeEnd(`renderingOld: ${oldFile.name}`);
-  console.time(`renderingNew: ${newFile.name}`);
   const newLines = (() => {
     if (newFile.contents === '') {
       return [];
@@ -457,7 +454,6 @@ function renderTwoFiles({
     state.lineInfo = newInfo;
     return getLineNodes(highlighter.codeToHast(newFile.contents, hastConfig));
   })();
-  console.timeEnd(`renderingNew: ${newFile.name}`);
 
   return { oldLines, newLines };
 }
