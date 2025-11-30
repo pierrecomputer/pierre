@@ -3,6 +3,7 @@ import { DEFAULT_THEMES } from '../constants';
 import type {
   FileContents,
   FileDiffMetadata,
+  LineDiffTypes,
   PJSHighlighter,
   PJSThemeNames,
   RenderDiffResult,
@@ -16,6 +17,7 @@ import { WorkerPool } from './WorkerPool';
 import type {
   WorkerHighlighterOptions,
   WorkerPoolOptions,
+  WorkerRenderDiffOptions,
   WorkerRenderFileOptions,
   WorkerStats,
 } from './types';
@@ -109,7 +111,7 @@ export class ShikiPoolManager {
   async renderDiffFilesToAST(
     oldFile: FileContents,
     newFile: FileContents,
-    options: WorkerRenderFileOptions
+    options: WorkerRenderDiffOptions
   ): Promise<RenderDiffResult> {
     if (!this.isInitialized()) {
       await this.initialize();
@@ -142,7 +144,7 @@ export class ShikiPoolManager {
 
   async renderDiffMetadataToAST(
     diff: FileDiffMetadata,
-    options: WorkerRenderFileOptions
+    options: WorkerRenderDiffOptions
   ): Promise<RenderDiffResult> {
     if (!this.isInitialized()) {
       await this.initialize();
@@ -155,13 +157,15 @@ export class ShikiPoolManager {
   }
 
   renderPlainDiffMetadataToAST(
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    lineDiffType: LineDiffTypes
   ): RenderDiffResult | undefined {
     return this.highlighter != null
       ? renderDiffWithHighlighter(diff, this.highlighter, {
           theme: this.currentTheme,
           lang: 'text',
           tokenizeMaxLineLength: 1000,
+          lineDiffType,
         })
       : undefined;
   }

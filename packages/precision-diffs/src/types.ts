@@ -112,7 +112,7 @@ export type ThemeTypes = 'system' | 'light' | 'dark';
 
 export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
 
-export type LineDifftypes = 'word-alt' | 'word' | 'char' | 'none';
+export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
 
 export interface BaseCodeOptions {
   theme?: PJSThemeNames | ThemesType;
@@ -139,7 +139,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expandUnchanged?: boolean; // false is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
-  lineDiffType?: LineDifftypes; // 'word-alt' is default
+  lineDiffType?: LineDiffTypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
 
   // How many lines to expand per click

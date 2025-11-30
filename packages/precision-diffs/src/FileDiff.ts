@@ -216,7 +216,6 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
-  // FIXME(amadeus): Figure this out in an async highlighting world...
   setSelectedLines(range: SelectedLineRange | null): void {
     this.lineSelectionManager.setSelection(range);
   }

@@ -1,4 +1,4 @@
-import { diffWordsWithSpace } from 'diff';
+import { diffChars, diffWordsWithSpace } from 'diff';
 
 import { DEFAULT_THEMES } from '../constants';
 import type {
@@ -7,6 +7,7 @@ import type {
   FileContents,
   FileDiffMetadata,
   Hunk,
+  LineDiffTypes,
   LineInfo,
   PJSHighlighter,
   PJSThemeNames,
@@ -29,6 +30,7 @@ interface RenderOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   tokenizeMaxLineLength: number;
+  lineDiffType: LineDiffTypes;
 }
 
 export function renderDiffWithHighlighter(
@@ -60,6 +62,7 @@ export function renderDiffWithHighlighter(
       hunks: diff.hunks,
       oldLines: diff.oldLines,
       newLines: diff.newLines,
+      lineDiffType: options.lineDiffType,
     });
     const oldFile = {
       name: diff.prevName ?? diff.name,
@@ -83,12 +86,14 @@ export function renderDiffWithHighlighter(
     });
     return { code, themeStyles, baseThemeType };
   }
-  // FIXME(amadeus): Maybe explore rendering all hunks as 1 file instead as a
-  // ton of smaller ones?
   const hunks: RenderDiffFilesResult[] = [];
   let lineIndex = 0;
   for (const hunk of diff.hunks) {
-    const result = processLines({ hunks: [hunk], lineIndex });
+    const result = processLines({
+      hunks: [hunk],
+      lineIndex,
+      lineDiffType: options.lineDiffType,
+    });
     const {
       oldContent,
       newContent,
@@ -143,6 +148,7 @@ interface ProcessLineDiffProps {
   newLineIndex: number;
   oldDecorations: DecorationItem[];
   newDecorations: DecorationItem[];
+  lineDiffType: LineDiffTypes;
 }
 
 function computeLineDiffDecorations({
@@ -152,40 +158,41 @@ function computeLineDiffDecorations({
   newLineIndex,
   oldDecorations,
   newDecorations,
+  lineDiffType,
 }: ProcessLineDiffProps) {
-  // FIXME(amadeus): Figure out how to get the line diff settings back in here
-  if (oldLine == null || newLine == null) {
+  if (oldLine == null || newLine == null || lineDiffType === 'none') {
     return;
   }
+  oldLine = cleanLastNewline(oldLine);
+  newLine = cleanLastNewline(newLine);
   // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
   // we also gotta make sure the diff parsing doesn't include the newline
   // character that could be there...
-  const lineDiff = diffWordsWithSpace(
-    cleanLastNewline(oldLine),
-    cleanLastNewline(newLine)
-  );
+  const lineDiff =
+    lineDiffType === 'char'
+      ? diffChars(oldLine, newLine)
+      : diffWordsWithSpace(oldLine, newLine);
   const deletionSpans: [0 | 1, string][] = [];
   const additionSpans: [0 | 1, string][] = [];
-  // FIXME(amadeus): Add the proper configuration for this
-  // const enableJoin = lineDiffType === 'word-alt';
+  const enableJoin = lineDiffType === 'word-alt';
   for (const item of lineDiff) {
     if (!item.added && !item.removed) {
       pushOrJoinSpan({
         item,
         arr: deletionSpans,
-        enableJoin: false,
+        enableJoin,
         isNeutral: true,
       });
       pushOrJoinSpan({
         item,
         arr: additionSpans,
-        enableJoin: false,
+        enableJoin,
         isNeutral: true,
       });
     } else if (item.removed) {
-      pushOrJoinSpan({ item, arr: deletionSpans, enableJoin: false });
+      pushOrJoinSpan({ item, arr: deletionSpans, enableJoin });
     } else {
-      pushOrJoinSpan({ item, arr: additionSpans, enableJoin: false });
+      pushOrJoinSpan({ item, arr: additionSpans, enableJoin });
     }
   }
   let spanIndex = 0;
@@ -225,6 +232,7 @@ interface ProcessLinesProps {
   lineIndex?: number;
   newLineIndex?: number;
   oldLineIndex?: number;
+  lineDiffType: LineDiffTypes;
 }
 
 function processLines({
@@ -232,6 +240,7 @@ function processLines({
   oldLines,
   newLines,
   lineIndex = 0,
+  lineDiffType,
 }: ProcessLinesProps) {
   const oldInfo: Record<number, LineInfo | undefined> = {};
   const newInfo: Record<number, LineInfo | undefined> = {};
@@ -310,6 +319,7 @@ function processLines({
             newLineIndex,
             oldDecorations,
             newDecorations,
+            lineDiffType,
           });
           if (oldLine != null) {
             oldInfo[oldLineIndex] = {

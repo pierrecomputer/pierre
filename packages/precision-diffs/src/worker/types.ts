@@ -3,6 +3,7 @@ import type { ElementContent } from 'hast';
 import type {
   FileContents,
   FileDiffMetadata,
+  LineDiffTypes,
   PJSThemeNames,
   RenderDiffResult,
   RenderFileResult,
@@ -24,14 +25,14 @@ export interface RenderDiffFileRequest {
   id: WorkerRequestId;
   oldFile: FileContents;
   newFile: FileContents;
-  options: WorkerRenderFileOptions;
+  options: WorkerRenderDiffOptions;
 }
 
 export interface RenderDiffMetadataRequest {
   type: 'diff-metadata';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  options: WorkerRenderFileOptions;
+  options: WorkerRenderDiffOptions;
 }
 
 export interface InitializeWorkerRequest {
@@ -111,12 +112,15 @@ export type WorkerResponse =
   | RenderErrorResponse
   | InitializeSuccessResponse;
 
-// FIXME(amadeus): We may have to do more work here...
 export interface WorkerRenderFileOptions {
   lang?: SupportedLanguages;
   theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   startingLineNumber?: number;
   tokenizeMaxLineLength: number;
+}
+
+export interface WorkerRenderDiffOptions extends WorkerRenderFileOptions {
+  lineDiffType: LineDiffTypes;
 }
 
 export interface WorkerPoolOptions {

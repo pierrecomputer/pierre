@@ -253,13 +253,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: undefined,
     };
     const { lang } = this.options;
-    const { theme, tokenizeMaxLineLength } = this.getOptionsWithDefaults();
+    const { theme, tokenizeMaxLineLength, lineDiffType } =
+      this.getOptionsWithDefaults();
     if (this.poolManager != null) {
       void this.poolManager
         .renderDiffMetadataToAST(this.diff, {
           lang,
           theme,
           tokenizeMaxLineLength,
+          lineDiffType,
         })
         .then((result) => {
           this.handleAsyncHighlight(diff, result, true);
@@ -278,15 +280,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return undefined;
     }
     const { lang } = this.options;
-    const { theme, tokenizeMaxLineLength } = this.getOptionsWithDefaults();
+    const { theme, tokenizeMaxLineLength, lineDiffType } =
+      this.getOptionsWithDefaults();
     this.renderCache ??= {
       diff,
       highlighted: false,
       result: undefined,
     };
     if (this.poolManager != null) {
-      this.renderCache.result ??=
-        this.poolManager.renderPlainDiffMetadataToAST(diff);
+      this.renderCache.result ??= this.poolManager.renderPlainDiffMetadataToAST(
+        diff,
+        lineDiffType
+      );
 
       // TODO(amadeus): Figure out how to only fire this on a per file
       // basis... (maybe the poolManager can figure it out based on file name
@@ -297,6 +302,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             lang,
             theme,
             tokenizeMaxLineLength,
+            lineDiffType,
           })
           .then((result) => {
             this.handleAsyncHighlight(diff, result);
@@ -386,11 +392,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     highlighter: PJSHighlighter
   ): RenderDiffResult {
     const { lang } = this.options;
-    const { theme, tokenizeMaxLineLength } = this.getOptionsWithDefaults();
+    const { theme, tokenizeMaxLineLength, lineDiffType } =
+      this.getOptionsWithDefaults();
     return renderDiffWithHighlighter(diff, highlighter, {
       theme,
       lang,
       tokenizeMaxLineLength,
+      lineDiffType,
     });
   }
 
