@@ -85,8 +85,8 @@ export default function DocsPage() {
         <div className="gap-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
           <SidebarWrapper />
           <div className="prose prose-neutral prose-headings:font-semibold prose-a:underline-offset-4 prose-code:before:content-none prose-code:after:content-none dark:prose-invert w-full max-w-full min-w-0 [&_p]:max-w-[50em]">
-            <InstallationSection />
             <OverviewSection />
+            <InstallationSection />
             <ReactAPISection />
             <VanillaAPISection />
             <UtilitiesSection />
