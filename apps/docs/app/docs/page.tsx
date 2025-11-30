@@ -45,6 +45,7 @@ import {
 import { WorkerPool } from './WorkerPool/WorkerPool';
 import {
   WORKER_POOL_API_REFERENCE,
+  WORKER_POOL_ARCHITECTURE_ASCII,
   WORKER_POOL_HELPER_ESBUILD,
   WORKER_POOL_HELPER_NEXTJS,
   WORKER_POOL_HELPER_STATIC,
@@ -201,6 +202,7 @@ async function WorkerPoolSection() {
     vanillaUsage,
     reactUsage,
     apiReference,
+    architectureASCII,
   ] = await Promise.all([
     preloadFile(WORKER_POOL_HELPER_VITE),
     preloadFile(WORKER_POOL_HELPER_NEXTJS),
@@ -211,6 +213,7 @@ async function WorkerPoolSection() {
     preloadFile(WORKER_POOL_VANILLA_USAGE),
     preloadFile(WORKER_POOL_REACT_USAGE),
     preloadFile(WORKER_POOL_API_REFERENCE),
+    preloadFile(WORKER_POOL_ARCHITECTURE_ASCII),
   ]);
   return (
     <WorkerPool
@@ -223,6 +226,7 @@ async function WorkerPoolSection() {
       vanillaUsage={vanillaUsage}
       reactUsage={reactUsage}
       apiReference={apiReference}
+      architectureASCII={architectureASCII}
     />
   );
 }

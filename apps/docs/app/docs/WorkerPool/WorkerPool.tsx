@@ -1,6 +1,7 @@
 'use client';
 
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { CSSProperties } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 
@@ -14,6 +15,7 @@ interface WorkerPoolProps {
   vanillaUsage: PreloadedFileResult<undefined>;
   reactUsage: PreloadedFileResult<undefined>;
   apiReference: PreloadedFileResult<undefined>;
+  architectureASCII: PreloadedFileResult<undefined>;
 }
 
 export function WorkerPool({
@@ -26,6 +28,7 @@ export function WorkerPool({
   vanillaUsage,
   reactUsage,
   apiReference,
+  architectureASCII,
 }: WorkerPoolProps) {
   return (
     <section className="space-y-4">
@@ -153,54 +156,15 @@ export function WorkerPool({
         distributed across available workers, with queuing when all workers are
         busy.
       </p>
-      <code
-        className="m-0 inline-block overflow-x-auto rounded-lg bg-neutral-100 p-4 text-sm font-normal whitespace-pre dark:bg-neutral-900"
-        style={{ fontFamily: 'Berkeley Mono, monospace', lineHeight: '16px' }}
-      >
-        {`
-┌────────────── Main Thread ──────────────┐
-│ ┌ React (if used) ────────────────────┐ │
-│ │ <WorkerPoolContextProvider>         │ │
-│ │   <FileDiff />                      │ │
-│ │   <File />                          │ │
-│ │ </WorkerPoolContextProvider>        │ │
-│ │                                     │ │
-│ │ * Each component manages their own  │ │
-│ │   instances of the Vanilla JS       │ │
-│ │   Classes                           │ │
-│ └─┬───────────────────────────────────┘ │
-│   │                                     │
-│   ↓                                     │
-│ ┌ Vanilla JS Classes ─────────────────┐ │
-│ │ new FileDiff(opts, poolManager)     │ │
-│ │ new File(opts, poolManager)         │ │
-│ │                                     │ │
-│ │ * Renders plain text synchronously  │ │
-│ │ * Queue requests to WorkerPool for  │ │
-│ │   highlighted HAST                  │ │
-│ │ * Automatically render the          │ │
-│ │   highlighted HAST response         │ │
-│ └─┬─────────────────────────────────┬─┘ │
-│   │ HAST Request                    ↑   │
-│   ↓                   HAST Response │   │
-│ ┌ WorkerPoolManager ────────────────┴─┐ │
-│ │ * Shared singleton                  │ │
-│ │ * Manages WorkerPool instance and   │ │
-│ │   request queue                     │ │
-│ └─┬─────────────────────────────────┬─┘ │
-└───│─────────────────────────────────│───┘
-    │ postMessage                     ↑
-    ↓                   HAST Response │
-┌───┴───────── Worker Threads ────────│───┐
-│ ┌ shiki-worker.js ──────────────────│─┐ │
-│ │ * 8 threads by default            │ │ │
-│ │ * Runs Shiki's codeToHast() ──────┘ │ │
-│ │ * Manages themes and language       │ │
-│ │   loading automatically             │ │
-│ └─────────────────────────────────────┘ │
-└─────────────────────────────────────────┘
-`.trim()}
-      </code>
+      <DocsCodeExample
+        {...architectureASCII}
+        className="inline-block"
+        style={
+          {
+            '--pjs-line-height': '15px',
+          } as CSSProperties
+        }
+      />
     </section>
   );
 }

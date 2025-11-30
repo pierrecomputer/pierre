@@ -311,3 +311,55 @@ poolManager.getStats()
   },
   options,
 };
+
+export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'architecture.txt',
+    contents: `┌────────────── Main Thread ──────────────┐
+│ ┌ React (if used) ────────────────────┐ │
+│ │ <WorkerPoolContextProvider>         │ │
+│ │   <FileDiff />                      │ │
+│ │   <File />                          │ │
+│ │ </WorkerPoolContextProvider>        │ │
+│ │                                     │ │
+│ │ * Each component manages their own  │ │
+│ │   instances of the Vanilla JS       │ │
+│ │   Classes                           │ │
+│ └─┬───────────────────────────────────┘ │
+│   │                                     │
+│   ↓                                     │
+│ ┌ Vanilla JS Classes ─────────────────┐ │
+│ │ new FileDiff(opts, poolManager)     │ │
+│ │ new File(opts, poolManager)         │ │
+│ │                                     │ │
+│ │ * Renders plain text synchronously  │ │
+│ │ * Queue requests to WorkerPool for  │ │
+│ │   highlighted HAST                  │ │
+│ │ * Automatically render the          │ │
+│ │   highlighted HAST response         │ │
+│ └─┬─────────────────────────────────┬─┘ │
+│   │ HAST Request                    ↑   │
+│   ↓                   HAST Response │   │
+│ ┌ WorkerPoolManager ────────────────┴─┐ │
+│ │ * Shared singleton                  │ │
+│ │ * Manages WorkerPool instance and   │ │
+│ │   request queue                     │ │
+│ └─┬─────────────────────────────────┬─┘ │
+└───│─────────────────────────────────│───┘
+    │ postMessage                     ↑
+    ↓                   HAST Response │
+┌───┴───────── Worker Threads ────────│───┐
+│ ┌ shiki-worker.js ──────────────────│─┐ │
+│ │ * 8 threads by default            │ │ │
+│ │ * Runs Shiki's codeToHast() ──────┘ │ │
+│ │ * Manages themes and language       │ │
+│ │   loading automatically             │ │
+│ └─────────────────────────────────────┘ │
+└─────────────────────────────────────────┘`,
+  },
+  options: {
+    ...options,
+    disableFileHeader: true,
+    disableLineNumbers: true,
+  },
+};
