@@ -51,7 +51,9 @@ export class WorkerPoolManager {
   constructor(
     private options: WorkerPoolOptions,
     private highlighterOptions: WorkerHighlighterOptions
-  ) {}
+  ) {
+    void this.initialize();
+  }
 
   async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
     if (hasLoadedThemes(getThemes(theme)) && this.highlighter != null) {
@@ -73,21 +75,33 @@ export class WorkerPoolManager {
     if (this.initialized === true) {
       return;
     } else if (this.initialized === false) {
-      this.initialized = new Promise((resolve) => {
+      this.initialized = new Promise((resolve, reject) => {
         void (async () => {
-          const [highlighter] = await Promise.all([
-            getSharedHighlighter({
-              themes: getThemes(this.currentTheme),
-              preferWasmHighlighter:
-                this.highlighterOptions.preferWasmHighlighter,
-              langs: ['text'],
-            }),
-            this.initializeWorkers(),
-          ]);
-          this.currentTheme = this.highlighterOptions.theme;
-          this.highlighter = highlighter;
-          this.initialized = true;
-          resolve();
+          try {
+            const [highlighter] = await Promise.all([
+              getSharedHighlighter({
+                themes: getThemes(this.currentTheme),
+                preferWasmHighlighter:
+                  this.highlighterOptions.preferWasmHighlighter,
+                langs: ['text'],
+              }),
+              this.initializeWorkers(),
+            ]);
+            // If we were terminated while initializing, we should probably kill
+            // any workers that may have been created
+            if (this.initialized === false) {
+              this.terminateWorkers();
+              reject();
+              return;
+            }
+            this.currentTheme = this.highlighterOptions.theme;
+            this.highlighter = highlighter;
+            this.initialized = true;
+            this.drainQueue();
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
         })();
       });
     } else {
@@ -138,17 +152,31 @@ export class WorkerPoolManager {
         })
       );
     }
-
     await Promise.all(initPromises);
   }
 
-  async renderFileToAST(
+  private drainQueue = () => {
+    this._queuedDrain = undefined;
+    // If we are initializing or things got cancelled while initializing, we
+    // should not attempt to drain the queue
+    if (this.initialized !== true || this.taskQueue.length === 0) {
+      return;
+    }
+    while (this.taskQueue.length > 0) {
+      const task = this.taskQueue[0];
+      const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
+      if (availableWorker == null) {
+        break;
+      }
+      this.taskQueue.shift();
+      this.executeTask(availableWorker, task);
+    }
+  };
+
+  renderFileToAST(
     file: FileContents,
     options: RenderFileOptions
   ): Promise<RenderFileResult> {
-    if (!this.isInitialized()) {
-      await this.initialize();
-    }
     return this.submitTask({
       type: 'file',
       file,
@@ -172,14 +200,11 @@ export class WorkerPoolManager {
     });
   }
 
-  async renderDiffFilesToAST(
+  renderDiffFilesToAST(
     oldFile: FileContents,
     newFile: FileContents,
     options: RenderDiffOptions
   ): Promise<RenderDiffResult> {
-    if (!this.isInitialized()) {
-      await this.initialize();
-    }
     return this.submitTask({
       type: 'diff-files',
       oldFile,
@@ -206,13 +231,10 @@ export class WorkerPoolManager {
     };
   }
 
-  async renderDiffMetadataToAST(
+  renderDiffMetadataToAST(
     diff: FileDiffMetadata,
     options: RenderDiffOptions
   ): Promise<RenderDiffResult> {
-    if (!this.isInitialized()) {
-      await this.initialize();
-    }
     return this.submitTask({
       type: 'diff-metadata',
       diff,
@@ -235,14 +257,18 @@ export class WorkerPoolManager {
   }
 
   terminate(): void {
-    for (const managedWorker of this.workers) {
-      managedWorker.worker.terminate();
-    }
-    this.workers.length = 0;
+    this.terminateWorkers();
     this.taskQueue.length = 0;
     this.pendingTasks.clear();
     this.highlighter = undefined;
     this.initialized = false;
+  }
+
+  private terminateWorkers() {
+    for (const managedWorker of this.workers) {
+      managedWorker.worker.terminate();
+    }
+    this.workers.length = 0;
   }
 
   getStats(): WorkerStats {
@@ -257,6 +283,10 @@ export class WorkerPoolManager {
   private submitTask<T extends RenderDiffResult | RenderFileResult>(
     request: SubmitRequest
   ): Promise<T> {
+    if (this.initialized === false) {
+      void this.initialize();
+    }
+
     return new Promise<T>((resolve, reject) => {
       const id = this.generateRequestId();
       const requestStart = Date.now();
@@ -291,9 +321,6 @@ export class WorkerPoolManager {
             };
         }
       })() as RenderFileTask | RenderDiffTask | RenderDiffMetadataTask;
-
-      this.pendingTasks.set(id, task);
-
       const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
       if (availableWorker != null) {
         this.executeTask(availableWorker, task);
@@ -355,10 +382,17 @@ export class WorkerPoolManager {
 
     this.pendingTasks.delete(response.id);
     managedWorker.busy = false;
-    const nextTask = this.taskQueue.shift();
-    if (nextTask != null) {
-      this.executeTask(managedWorker, nextTask);
+    if (this.taskQueue.length > 0) {
+      // We queue drain so that potentially multiple workers can free up
+      // allowing for better language matches if possible
+      this.queueDrain();
     }
+  }
+
+  private _queuedDrain: Promise<void> | undefined;
+  private queueDrain() {
+    if (this._queuedDrain != null) return;
+    this._queuedDrain = Promise.resolve().then(this.drainQueue);
   }
 
   private executeTask(
@@ -366,6 +400,7 @@ export class WorkerPoolManager {
     task: AllWorkerTasks
   ): void {
     managedWorker.busy = true;
+    this.pendingTasks.set(task.id, task);
     for (const lang of getLangsFromTask(task)) {
       managedWorker.langs.add(lang);
     }
