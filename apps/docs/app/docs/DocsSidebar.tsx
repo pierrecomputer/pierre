@@ -67,7 +67,7 @@ export function DocsSidebar({
         const id = window.location.hash.slice(1);
         const element = document.getElementById(id);
         if (element != null) {
-          element.scrollIntoView();
+          element.scrollIntoView({ behavior: 'instant', block: 'start' });
         }
       }
     }, 100);
