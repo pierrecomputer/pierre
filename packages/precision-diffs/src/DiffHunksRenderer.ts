@@ -22,6 +22,7 @@ import type {
   RenderedDiffASTCache,
   SupportedLanguages,
   ThemeTypes,
+  ThemedDiffResult,
 } from './types';
 import { areThemesEqual } from './utils/areThemesEqual';
 import { createAnnotationElement } from './utils/createAnnotationElement';
@@ -235,7 +236,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineDiffType,
       maxLineDiffLength,
       overflow,
-      theme,
+      theme: this.workerManager?.currentTheme ?? theme,
       themeType,
       tokenizeMaxLineLength,
       useCSSClasses,
@@ -264,11 +265,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (this.workerManager != null) {
       void this.workerManager
         .renderDiffMetadataToAST(this.diff, options)
-        .then((result) => {
+        .then(({ result, options }) => {
           this.handleAsyncHighlight(diff, options, result, true);
         });
     } else {
-      void this.asyncHighlight(diff).then((result) => {
+      void this.asyncHighlight(diff).then(({ result, options }) => {
         this.handleAsyncHighlight(diff, options, result, true);
       });
     }
@@ -290,10 +291,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     if (
       diff !== renderCache.diff ||
-      !areThemesEqual(theme, renderCache.options.theme) ||
-      lang !== renderCache.options.lang ||
-      tokenizeMaxLineLength !== renderCache.options.tokenizeMaxLineLength ||
-      lineDiffType !== renderCache.options.lineDiffType
+      !areThemesEqual(options.theme, renderCache.options.theme) ||
+      options.lang !== renderCache.options.lang ||
+      options.tokenizeMaxLineLength !==
+        renderCache.options.tokenizeMaxLineLength ||
+      options.lineDiffType !== renderCache.options.lineDiffType
     ) {
       return { options, forceRender: true };
     }
@@ -326,7 +328,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (!this.renderCache.highlighted || forceRender) {
         void this.workerManager
           .renderDiffMetadataToAST(diff, options)
-          .then((result) => {
+          .then(({ result, options }) => {
             this.handleAsyncHighlight(diff, options, result);
           });
       }
@@ -342,15 +344,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.highlighter = undefined;
       }
       if (this.highlighter == null) {
-        void this.asyncHighlight(diff).then((result) => {
+        void this.asyncHighlight(diff).then(({ result, options }) => {
           this.handleAsyncHighlight(diff, options, result);
         });
       } else if (forceRender || !this.renderCache.highlighted) {
+        const { result, options } = this.renderDiffWithHighlighter(
+          diff,
+          this.highlighter
+        );
         this.renderCache = {
           diff,
           options,
           highlighted: true,
-          result: this.renderDiffWithHighlighter(diff, this.highlighter),
+          result,
         };
       }
     }
@@ -360,7 +366,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   async asyncRender(diff: FileDiffMetadata): Promise<HunksRenderResult> {
-    return this.processDiffResult(diff, await this.asyncHighlight(diff));
+    const { result } = await this.asyncHighlight(diff);
+    return this.processDiffResult(diff, result);
   }
 
   private createPreElement(
@@ -411,23 +418,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     highlighter: PJSHighlighter
   ): RenderDiffResult {
-    const { lang } = this.options;
-    const { theme, tokenizeMaxLineLength, lineDiffType } =
-      this.getOptionsWithDefaults();
-    return renderDiffWithHighlighter(diff, highlighter, {
-      theme,
-      lang,
-      tokenizeMaxLineLength,
-      lineDiffType,
-    });
+    const { options } = this.getRenderOptions(diff);
+    const result = renderDiffWithHighlighter(diff, highlighter, options);
+    return { result, options };
   }
 
   private handleAsyncHighlight(
     diff: FileDiffMetadata,
-    // FIXME(amadeus): These values should be returned with the result, so we
-    // don't have to do shenanery to maintain their relationship results
     options: RenderDiffOptions,
-    result: RenderDiffResult,
+    result: ThemedDiffResult,
     hydrate = false
   ) {
     if (this.renderCache == null) {
@@ -446,7 +445,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private processDiffResult(
     fileDiff: FileDiffMetadata,
-    { code, themeStyles, baseThemeType }: RenderDiffResult
+    { code, themeStyles, baseThemeType }: ThemedDiffResult
   ): HunksRenderResult {
     const { diffStyle, disableFileHeader } = this.getOptionsWithDefaults();
 

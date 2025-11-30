@@ -11,6 +11,8 @@ import type {
   RenderFileOptions,
   RenderFileResult,
   SupportedLanguages,
+  ThemedDiffResult,
+  ThemedFileResult,
   ThemesType,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
@@ -40,9 +42,10 @@ interface ManagedWorker {
 
 export class WorkerPoolManager {
   private highlighter: PJSHighlighter | undefined;
-  private currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
-  private initialized: Promise<void> | boolean = false;
 
+  currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
+
+  private initialized: Promise<void> | boolean = false;
   private workers: ManagedWorker[] = [];
   private taskQueue: AllWorkerTasks[] = [];
   private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
@@ -175,19 +178,19 @@ export class WorkerPoolManager {
 
   renderFileToAST(
     file: FileContents,
-    options: RenderFileOptions
+    options: Omit<RenderFileOptions, 'theme'>
   ): Promise<RenderFileResult> {
     return this.submitTask({
       type: 'file',
       file,
-      options,
+      options: { ...options, theme: this.currentTheme },
     });
   }
 
   renderPlainFileToAST(
     file: FileContents,
     startingLineNumber: number = 1
-  ): RenderFileResult | undefined {
+  ): ThemedFileResult | undefined {
     if (this.highlighter == null) {
       void this.initialize();
       return undefined;
@@ -203,22 +206,20 @@ export class WorkerPoolManager {
   renderDiffFilesToAST(
     oldFile: FileContents,
     newFile: FileContents,
-    options: RenderDiffOptions
+    options: Omit<RenderDiffOptions, 'theme'>
   ): Promise<RenderDiffResult> {
     return this.submitTask({
       type: 'diff-files',
       oldFile,
       newFile,
-      options,
+      options: { ...options, theme: this.currentTheme },
     });
   }
 
-  // NOTE(amadeus): Do we even need this API?
-  // Currently nothing is using this function
-  renderPlainDiffToAST(
+  renderPlainDiffFilesToAST(
     oldFile: FileContents,
     newFile: FileContents
-  ): RenderDiffResult | undefined {
+  ): ThemedDiffResult | undefined {
     const oldResult = this.renderPlainFileToAST(oldFile, 1);
     const newResult = this.renderPlainFileToAST(newFile, 1);
     if (oldResult == null || newResult == null) {
@@ -233,19 +234,19 @@ export class WorkerPoolManager {
 
   renderDiffMetadataToAST(
     diff: FileDiffMetadata,
-    options: RenderDiffOptions
+    options: Omit<RenderDiffOptions, 'theme'>
   ): Promise<RenderDiffResult> {
     return this.submitTask({
       type: 'diff-metadata',
       diff,
-      options,
+      options: { ...options, theme: this.currentTheme },
     });
   }
 
   renderPlainDiffMetadataToAST(
     diff: FileDiffMetadata,
     lineDiffType: LineDiffTypes
-  ): RenderDiffResult | undefined {
+  ): ThemedDiffResult | undefined {
     return this.highlighter != null
       ? renderDiffWithHighlighter(diff, this.highlighter, {
           theme: this.currentTheme,
@@ -280,7 +281,7 @@ export class WorkerPoolManager {
     };
   }
 
-  private submitTask<T extends RenderDiffResult | RenderFileResult>(
+  private submitTask<T extends RenderFileResult | RenderDiffResult>(
     request: SubmitRequest
   ): Promise<T> {
     if (this.initialized === false) {
@@ -356,24 +357,33 @@ export class WorkerPoolManager {
             }
             task.resolve();
             break;
-          case 'file':
+          case 'file': {
             if (task.type !== 'file') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            task.resolve(response.result);
+            const { result } = response;
+            const { options } = task.request;
+            task.resolve({ result, options });
             break;
-          case 'diff-files':
+          }
+          case 'diff-files': {
             if (task.type !== 'diff-files') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            task.resolve(response.result);
+            const { result } = response;
+            const { options } = task.request;
+            task.resolve({ result, options });
             break;
-          case 'diff-metadata':
+          }
+          case 'diff-metadata': {
             if (task.type !== 'diff-metadata') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            task.resolve(response.result);
+            const { result } = response;
+            const { options } = task.request;
+            task.resolve({ result, options });
             break;
+          }
         }
       } catch (e) {
         console.error(e, task, response);

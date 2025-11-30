@@ -17,7 +17,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { preloadHighlighter } from '@pierre/precision-diffs';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
+import {
+  MultiFileDiff,
+  WorkerPoolContext,
+} from '@pierre/precision-diffs/react';
 import type {
   PreloadMultiFileDiffResult,
   ThemesType,
@@ -231,15 +234,19 @@ export function ShikiThemes({
           </ButtonGroupItem>
         </ButtonGroup>
       </div>
-      <MultiFileDiff
-        {...props}
-        className="overflow-hidden rounded-lg border dark:border-neutral-800"
-        options={{
-          diffStyle: 'split',
-          themeType: selectedColorMode,
-          theme: { dark: selectedDarkTheme, light: selectedLightTheme },
-        }}
-      />
+      {/* We want this component to operate independent of the shiki web
+          workers because the worker pool is locked to 1 theme setting */}
+      <WorkerPoolContext value={undefined}>
+        <MultiFileDiff
+          {...props}
+          className="overflow-hidden rounded-lg border dark:border-neutral-800"
+          options={{
+            diffStyle: 'split',
+            themeType: selectedColorMode,
+            theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+          }}
+        />
+      </WorkerPoolContext>
       <div className="flex gap-1">
         <IconArrowDownRight className="text-muted-foreground my-[2px] opacity-50" />
         <p className="text-muted-foreground text-sm">

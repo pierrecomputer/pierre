@@ -2,9 +2,9 @@ import { getSharedHighlighter } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
 import type {
   PJSHighlighter,
-  RenderDiffResult,
-  RenderFileResult,
   SupportedLanguages,
+  ThemedDiffResult,
+  ThemedFileResult,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
@@ -143,7 +143,7 @@ async function getHighlighter(
   });
 }
 
-function sendFileSuccess(id: WorkerRequestId, result: RenderFileResult) {
+function sendFileSuccess(id: WorkerRequestId, result: ThemedFileResult) {
   postMessage({
     type: 'success',
     requestType: 'file',
@@ -153,7 +153,7 @@ function sendFileSuccess(id: WorkerRequestId, result: RenderFileResult) {
   } satisfies RenderFileSuccessResponse);
 }
 
-function sendDiffSuccess(id: WorkerRequestId, result: RenderDiffResult) {
+function sendDiffSuccess(id: WorkerRequestId, result: ThemedDiffResult) {
   postMessage({
     type: 'success',
     requestType: 'diff-files',
@@ -165,7 +165,7 @@ function sendDiffSuccess(id: WorkerRequestId, result: RenderDiffResult) {
 
 function sendDiffMetadataSuccess(
   id: WorkerRequestId,
-  result: RenderDiffResult
+  result: ThemedDiffResult
 ) {
   postMessage({
     type: 'success',

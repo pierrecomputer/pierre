@@ -5,7 +5,7 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   RenderFileOptions,
-  RenderFileResult,
+  ThemedFileResult,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
@@ -23,7 +23,7 @@ export function renderFileWithHighlighter(
     lang = getFiletypeFromFileName(file.name),
     tokenizeMaxLineLength,
   }: RenderFileOptions
-): RenderFileResult {
+): ThemedFileResult {
   const { state, transformers } = createTransformerWithState();
   const baseThemeType = (() => {
     if (typeof theme === 'string') {

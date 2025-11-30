@@ -297,13 +297,13 @@ export type AnnotationLineMap<LAnnotation> = Record<
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
-export interface RenderFileResult {
+export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
-export interface RenderDiffResult {
+export interface ThemedDiffResult {
   code: RenderDiffFilesResult | RenderDiffHunksResult;
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
@@ -311,28 +311,38 @@ export interface RenderDiffResult {
 
 export interface RenderFileOptions {
   lang?: SupportedLanguages;
-  theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   startingLineNumber: number;
   tokenizeMaxLineLength: number;
 }
 
 export interface RenderDiffOptions {
   lang?: SupportedLanguages;
-  theme?: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+}
+
+export interface RenderFileResult {
+  result: ThemedFileResult;
+  options: RenderFileOptions;
+}
+
+export interface RenderDiffResult {
+  result: ThemedDiffResult;
+  options: RenderDiffOptions;
 }
 
 export interface RenderedFileASTCache {
   file: FileContents;
   highlighted: boolean;
   options: RenderFileOptions;
-  result: RenderFileResult | undefined;
+  result: ThemedFileResult | undefined;
 }
 
 export interface RenderedDiffASTCache {
   diff: FileDiffMetadata;
   highlighted: boolean;
   options: RenderDiffOptions;
-  result: RenderDiffResult | undefined;
+  result: ThemedDiffResult | undefined;
 }

@@ -9,6 +9,8 @@ import type {
   RenderFileOptions,
   RenderFileResult,
   SupportedLanguages,
+  ThemedDiffResult,
+  ThemedFileResult,
   ThemesType,
 } from '../types';
 
@@ -69,7 +71,7 @@ export interface RenderFileSuccessResponse {
   type: 'success';
   requestType: 'file';
   id: WorkerRequestId;
-  result: RenderFileResult;
+  result: ThemedFileResult;
   sentAt: number;
 }
 
@@ -77,7 +79,7 @@ export interface RenderDiffSuccessResponse {
   type: 'success';
   requestType: 'diff-files';
   id: WorkerRequestId;
-  result: RenderDiffResult;
+  result: ThemedDiffResult;
   sentAt: number;
 }
 
@@ -85,7 +87,7 @@ export interface RenderDiffMetadataSuccessResponse {
   type: 'success';
   requestType: 'diff-metadata';
   id: WorkerRequestId;
-  result: RenderDiffResult;
+  result: ThemedDiffResult;
   sentAt: number;
 }
 

@@ -12,7 +12,7 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   RenderDiffOptions,
-  RenderDiffResult,
+  ThemedDiffResult,
 } from '../types';
 import type { RenderDiffFilesResult } from '../worker';
 import { cleanLastNewline } from './cleanLastNewline';
@@ -30,7 +30,7 @@ export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
   highlighter: PJSHighlighter,
   options: RenderDiffOptions
-): RenderDiffResult {
+): ThemedDiffResult {
   const baseThemeType = (() => {
     const theme = options.theme ?? DEFAULT_THEMES;
     if (typeof theme === 'string') {
