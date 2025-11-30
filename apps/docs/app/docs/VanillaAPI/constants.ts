@@ -354,9 +354,9 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
   { name: 'file.ts', contents: 'const greeting = "Hello, World!";' }
 );
 
-// Render hunks
-const result: HunksRenderResult | undefined =
-  await instance.render(fileDiff);
+// Render hunks (async - waits for highlighter initialization)
+const result: HunksRenderResult =
+  await instance.asyncRender(fileDiff);
 
 // Depending on your diffStyle settings and depending the type of
 // changes, you'll get raw hast nodes for each line for each column
@@ -424,8 +424,8 @@ for (const patch of patches) {
       diffStyle: 'unified',
       theme: 'pierre-dark',
     });
-    const result: HunksRenderResult | undefined =
-      await instance.render(fileDiff);
+    const result: HunksRenderResult =
+      await instance.asyncRender(fileDiff);
 
     // Depending on your diffStyle settings and depending the type
     // of changes, you'll get raw HAST nodes for each lines for each
