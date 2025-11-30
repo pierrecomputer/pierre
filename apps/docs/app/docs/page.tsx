@@ -4,7 +4,10 @@ import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 
 import { DocsHeader } from './DocsHeader';
 import { Installation } from './Installation/Installation';
-import { INSTALLATION_EXAMPLE } from './Installation/constants';
+import {
+  INSTALLATION_EXAMPLES,
+  PACKAGE_MANAGERS,
+} from './Installation/constants';
 import { Overview } from './Overview/Overview';
 import {
   OVERVIEW_INITIAL_EXAMPLE,
@@ -107,8 +110,15 @@ export default function DocsPage() {
 }
 
 async function InstallationSection() {
-  const installationExample = await preloadFile(INSTALLATION_EXAMPLE);
-  return <Installation installationExample={installationExample} />;
+  const installationExamples = Object.fromEntries(
+    await Promise.all(
+      PACKAGE_MANAGERS.map(async (pm) => [
+        pm,
+        await preloadFile(INSTALLATION_EXAMPLES[pm]),
+      ])
+    )
+  );
+  return <Installation installationExamples={installationExamples} />;
 }
 
 async function OverviewSection() {
