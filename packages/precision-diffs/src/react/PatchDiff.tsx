@@ -32,6 +32,7 @@ export function PatchDiff<LAnnotation = undefined>({
     options,
     lineAnnotations,
     selectedLines,
+    prerenderedHTML,
   });
   const children = renderDiffChildren({
     fileDiff,

@@ -40,27 +40,27 @@ const NavLink = ({
     className
   );
 
-  if (external) {
+  // Apparently NextJS's Link tag doesn't support # links... lol
+  if (external || href[0] === '#') {
     return (
       <a
         href={href}
-        target="_blank"
-        rel="noopener noreferrer"
         className={baseClasses}
+        {...(external && { target: '_blank', rel: 'noopener noreferrer' })}
       >
         {icon != null && (
           <span className="flex h-4 w-4 items-center justify-center">
             {icon}
           </span>
         )}
-        <span className="flex-1">{children}</span>
-        <IconArrowUpRight color="fg4" />
+        {external ? <span className="flex-1">{children}</span> : children}
+        {external && <IconArrowUpRight color="fg4" />}
       </a>
     );
   }
 
   return (
-    <Link href={href} className={baseClasses}>
+    <Link href={href} className={baseClasses} prefetch>
       {icon != null && (
         <span className="flex h-4 w-4 items-center justify-center">{icon}</span>
       )}

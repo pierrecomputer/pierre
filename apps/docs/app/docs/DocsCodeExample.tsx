@@ -1,9 +1,11 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import {
   File,
   type FileContents,
   type FileOptions,
+  type FileProps,
   type LineAnnotation,
 } from '@pierre/precision-diffs/react';
 
@@ -14,6 +16,8 @@ interface DocsCodeExampleProps<LAnnotation> {
   options?: FileOptions<LAnnotation>;
   annotations?: LineAnnotation<LAnnotation>[];
   prerenderedHTML?: string;
+  style?: FileProps<LAnnotation>['style'];
+  className?: string | undefined;
 }
 
 export function DocsCodeExample<LAnnotation = undefined>(
@@ -22,7 +26,7 @@ export function DocsCodeExample<LAnnotation = undefined>(
   return (
     <File
       {...props}
-      className="overflow-hidden rounded-md border-1"
+      className={cn('overflow-hidden rounded-md border-1', props.className)}
       renderHeaderMetadata={(file) => (
         <CopyCodeButton content={file.contents} />
       )}

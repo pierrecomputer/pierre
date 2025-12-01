@@ -1,3 +1,4 @@
+import type { ElementContent } from 'hast';
 import type {
   BundledLanguage,
   BundledTheme,
@@ -8,6 +9,8 @@ import type {
   ThemeRegistrationResolved,
   ThemedToken,
 } from 'shiki';
+
+import type { RenderDiffFilesResult, RenderDiffHunksResult } from './worker';
 
 export interface FileContents {
   name: string;
@@ -54,12 +57,15 @@ export interface ParsedPatch {
 export interface ContextContent {
   type: 'context';
   lines: string[];
+  noEOFCR: boolean;
 }
 
 export interface ChangeContent {
   type: 'change';
   deletions: string[];
   additions: string[];
+  noEOFCRDeletions: boolean;
+  noEOFCRAdditions: boolean;
 }
 
 export interface Hunk {
@@ -106,18 +112,20 @@ export type ThemeTypes = 'system' | 'light' | 'dark';
 
 export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
 
-export type LineDifftypes = 'word-alt' | 'word' | 'char' | 'none';
+export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
 
 export interface BaseCodeOptions {
   theme?: PJSThemeNames | ThemesType;
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
+  disableFileHeader?: boolean;
 
   // Shiki config options
   lang?: SupportedLanguages;
   preferWasmHighlighter?: boolean;
   useCSSClasses?: boolean;
+  tokenizeMaxLineLength?: number;
 
   // Custom CSS injection
   unsafeCSS?: string;
@@ -131,12 +139,30 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expandUnchanged?: boolean; // false is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
-  lineDiffType?: LineDifftypes; // 'word-alt' is default
+  lineDiffType?: LineDiffTypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
-  maxLineLengthForHighlighting?: number; // 1000 is default
 
   // How many lines to expand per click
   expansionLineCount?: number; // 100 is default
+}
+
+// NOTE(amadeus): This is the shared config that all `pre` nodes will need to
+// get setup properly. Whether it's via direct DOM manipulation or via HAST
+// html rendering, this interface can be shared across both of these areas.
+export interface PrePropertiesConfig
+  extends Required<
+    Pick<
+      BaseDiffOptions,
+      | 'diffIndicators'
+      | 'disableBackground'
+      | 'disableLineNumbers'
+      | 'overflow'
+      | 'themeType'
+    >
+  > {
+  split: boolean;
+  themeStyles: string;
+  totalLines: number;
 }
 
 export interface RenderHeaderMetadataProps {
@@ -191,14 +217,12 @@ export interface LineInfo {
   lineNumber: number;
   altLineNumber?: number;
   lineIndex: number;
-  metadataContent?: string;
-  spans?: LineSpans[];
 }
 
 export interface SharedRenderState {
-  lineInfo: Record<number, LineInfo | undefined>;
-  decorations: DecorationItem[];
-  disableLineNumbers: boolean;
+  lineInfo:
+    | Record<number, LineInfo | undefined>
+    | ((shikiLineNumber: number) => LineInfo);
 }
 
 export interface AnnotationSpan {
@@ -272,3 +296,53 @@ export type AnnotationLineMap<LAnnotation> = Record<
 >;
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
+
+export interface ThemedFileResult {
+  code: ElementContent[];
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
+}
+
+export interface ThemedDiffResult {
+  code: RenderDiffFilesResult | RenderDiffHunksResult;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
+}
+
+export interface RenderFileOptions {
+  lang?: SupportedLanguages;
+  theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  startingLineNumber: number;
+  tokenizeMaxLineLength: number;
+}
+
+export interface RenderDiffOptions {
+  lang?: SupportedLanguages;
+  theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  tokenizeMaxLineLength: number;
+  lineDiffType: LineDiffTypes;
+}
+
+export interface RenderFileResult {
+  result: ThemedFileResult;
+  options: RenderFileOptions;
+}
+
+export interface RenderDiffResult {
+  result: ThemedDiffResult;
+  options: RenderDiffOptions;
+}
+
+export interface RenderedFileASTCache {
+  file: FileContents;
+  highlighted: boolean;
+  options: RenderFileOptions;
+  result: ThemedFileResult | undefined;
+}
+
+export interface RenderedDiffASTCache {
+  diff: FileDiffMetadata;
+  highlighted: boolean;
+  options: RenderDiffOptions;
+  result: ThemedDiffResult | undefined;
+}

@@ -45,13 +45,13 @@ export function Hero() {
         />
       </svg>
 
-      <h1 className="text-4xl font-semibold tracking-tight md:text-4xl lg:text-5xl">
-        Precision Diffs
+      <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+        Diffs, from Pierre
       </h1>
       <p className="text-md text-muted-foreground mb-2 md:text-lg lg:text-xl">
-        Fast, exact diffing for modern apps. Fully open source, built on Shiki,
-        insanely customizable, and packed with the features you need. Made with
-        love by{' '}
+        <code>@pierre/precision-diffs</code> is an open source diff and file
+        rendering library. It's built on Shiki, is super customizable, and
+        packed with features. Made with love by{' '}
         <Link
           target="_blank"
           href="https://pierre.computer"
