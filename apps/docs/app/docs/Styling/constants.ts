@@ -70,7 +70,7 @@ export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
     name: 'unsafe-css.tsx',
     contents: `<FileDiff
   options={{
-    unsafeCSS: \`[data-pjs] {
+    unsafeCSS: /* css */ \`[data-pjs] {
       border: 2px solid #C635E4;
       border-bottom-left-radius: 8px;
       border-bottom-right-radius: 8px; }\`

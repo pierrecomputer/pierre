@@ -3,22 +3,23 @@
 import { IconArrowDownRight, IconPlus } from '@/components/icons/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import type {
-  AnnotationSide,
-  DiffLineAnnotation,
-  GetHoveredLineResult,
-  SelectedLineRange,
+import {
+  type AnnotationSide,
+  type DiffLineAnnotation,
+  type GetHoveredLineResult,
+  type SelectedLineRange,
+  diffAcceptRejectHunk,
 } from '@pierre/precision-diffs';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+import { FileDiff, MultiFileDiff } from '@pierre/precision-diffs/react';
+import type {
+  FileDiffMetadata,
+  PreloadFileDiffResult,
+  PreloadMultiFileDiffResult,
+} from '@pierre/precision-diffs/ssr';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
 import {
-  ACCEPT_REJECT_ANNOTATIONS,
-  ACCEPT_REJECT_EXAMPLE,
-  ACCEPT_REJECT_NEW_FILE,
-  ACCEPT_REJECT_OLD_FILE,
   type AcceptRejectMetadata,
   type AnnotationMetadata,
 } from './constants';
@@ -98,7 +99,14 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     <div className="scroll-mt-[20px] space-y-5" id="annotations">
       <FeatureHeader
         title="Comments & Annotations"
-        description="Precision Diffs provide a flexible annotation framework for injecting additional content and context. Use it to render your own line comments, annotations from CI jobs, and other third-party content."
+        description={
+          <>
+            <code>@pierre/precision-diffs</code> provide a flexible annotation
+            framework for injecting additional content and context. Use it to
+            render your own line comments, annotations from CI jobs, and other
+            third-party content.
+          </>
+        }
       />
       <MultiFileDiff
         {...prerenderedDiff}
@@ -363,70 +371,58 @@ export function CommentThread({
 }
 
 interface AcceptRejectExampleProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<AcceptRejectMetadata>;
+  prerenderedDiff: PreloadFileDiffResult<AcceptRejectMetadata>;
 }
 
 export function AcceptRejectExample({
   prerenderedDiff,
 }: AcceptRejectExampleProps) {
-  const [annotationState, setAnnotationState] = useState<
-    'accepted' | 'rejected' | 'pending'
-  >('pending');
-
-  const preloadedAnnotations =
-    prerenderedDiff.annotations ?? ACCEPT_REJECT_ANNOTATIONS;
-
-  const {
-    annotations: _ignoredAnnotations,
-    prerenderedHTML,
-    options,
-    ...rest
-  } = prerenderedDiff;
-
-  const resolvedOldFile =
-    annotationState === 'pending'
-      ? ACCEPT_REJECT_OLD_FILE
-      : annotationState === 'accepted'
-        ? ACCEPT_REJECT_NEW_FILE
-        : ACCEPT_REJECT_OLD_FILE;
-
-  const resolvedNewFile =
-    annotationState === 'pending'
-      ? ACCEPT_REJECT_NEW_FILE
-      : annotationState === 'accepted'
-        ? ACCEPT_REJECT_NEW_FILE
-        : ACCEPT_REJECT_OLD_FILE;
-
-  const activeAnnotations =
-    annotationState === 'pending' ? preloadedAnnotations : [];
-
-  const diffOptions = options ??
-    ACCEPT_REJECT_EXAMPLE.options ?? {
-      theme: 'pierre-dark',
-      diffStyle: 'unified',
-      expandUnchanged: true,
-    };
-
-  const fileDiffProps =
-    annotationState === 'pending'
-      ? {
-          ...rest,
-          prerenderedHTML,
-          options: diffOptions,
-        }
-      : {
-          ...rest,
-          oldFile: resolvedOldFile,
-          newFile: resolvedNewFile,
-          options: diffOptions,
-        };
-
-  const handleAccept = useCallback(() => {
-    setAnnotationState('accepted');
-  }, []);
-
-  const handleReject = useCallback(() => {
-    setAnnotationState('rejected');
+  const [fileDiff, setFileDiff] = useState<FileDiffMetadata>(
+    prerenderedDiff.fileDiff
+  );
+  const [annotations, setAnnotations] = useState(prerenderedDiff.annotations);
+  const renderAnnotation = useCallback(() => {
+    return (
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 10,
+          width: '100%',
+          backgroundColor: 'red',
+          overflow: 'visible',
+          fontFamily: 'Geist',
+        }}
+      >
+        <div className="absolute top-1 right-8 flex gap-1">
+          <Button
+            variant="muted"
+            size="xs"
+            className="rounded-[4px]"
+            onClick={() => {
+              setFileDiff((fileDiff) =>
+                diffAcceptRejectHunk(fileDiff, 0, 'reject')
+              );
+              setAnnotations([]);
+            }}
+          >
+            Undo <span className="-ml-0.5 font-normal opacity-80">⌘N</span>
+          </Button>
+          <Button
+            variant="success"
+            size="xs"
+            className="rounded-[4px] text-black dark:text-black"
+            onClick={() => {
+              setFileDiff((fileDiff) =>
+                diffAcceptRejectHunk(fileDiff, 0, 'accept')
+              );
+              setAnnotations([]);
+            }}
+          >
+            Keep <span className="-ml-0.5 font-normal opacity-40">⌘Y</span>
+          </Button>
+        </div>
+      </div>
+    );
   }, []);
 
   return (
@@ -435,45 +431,12 @@ export function AcceptRejectExample({
         title="Accept/Reject Changes"
         description="Annotations can also be used to build interactive code review interfaces similar to AI-assisted coding tools like Cursor. Use it to track the state of each change, inject custom UI like accept/reject buttons, and provide immediate visual feedback."
       />
-      <MultiFileDiff
-        {...fileDiffProps}
+      <FileDiff
+        {...prerenderedDiff}
+        fileDiff={fileDiff}
         className="diff-container"
-        lineAnnotations={activeAnnotations}
-        renderAnnotation={() => {
-          return (
-            <div
-              style={{
-                position: 'relative',
-                zIndex: 10,
-                width: '100%',
-                backgroundColor: 'red',
-                overflow: 'visible',
-                fontFamily: 'Geist',
-              }}
-            >
-              <div className="absolute top-1 right-8 flex gap-1">
-                <Button
-                  variant="muted"
-                  size="xs"
-                  className="rounded-[4px]"
-                  onClick={handleReject}
-                >
-                  Undo{' '}
-                  <span className="-ml-0.5 font-normal opacity-80">⌘N</span>
-                </Button>
-                <Button
-                  variant="success"
-                  size="xs"
-                  className="rounded-[4px] text-black dark:text-black"
-                  onClick={handleAccept}
-                >
-                  Keep{' '}
-                  <span className="-ml-0.5 font-normal opacity-40">⌘Y</span>
-                </Button>
-              </div>
-            </div>
-          );
-        }}
+        lineAnnotations={annotations}
+        renderAnnotation={renderAnnotation}
       />
     </div>
   );

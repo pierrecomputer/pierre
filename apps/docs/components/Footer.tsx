@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer className="pt-12 pb-12">
       <div className="flex items-center justify-between">
-        <div className="text-muted-foreground text-sm">Precision Diffs</div>
+        <div className="text-muted-foreground text-sm">Diffs</div>
         <nav className="flex items-center gap-4">
           <Link
             href="/"

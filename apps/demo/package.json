@@ -10,9 +10,10 @@
     "build-types": "bun run build:deps && tsc --build",
     "dev": "bun run build:deps && concurrently \"bun run dev:deps:precision-diffs\" \"bun run dev:vite\" --names \"diffs,vite\" --prefix-colors \"blue,green\"",
     "dev:deps:precision-diffs": "(cd ../../packages/precision-diffs && bun run dev)",
-    "dev:vite": "vite --clearScreen=false",
-    "preview": "bun run preview",
-    "prod": "bun run build && bun run preview",
+    "dev:vite": "vite --host --clearScreen=false",
+    "preview": "vite preview",
+    "start": "vite preview",
+    "prod": "bun run build && bun run start",
     "tsc": "bun run build:deps && tsc --noEmit --pretty"
   },
   "devDependencies": {

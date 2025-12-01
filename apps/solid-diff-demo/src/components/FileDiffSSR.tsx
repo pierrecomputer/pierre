@@ -52,7 +52,7 @@ export function FileDiffSSR(props: FileDiffSSRProps) {
     // Create FileDiff instance and connect to existing server-rendered DOM.
     // Don't call hydrate() - that would re-render content and cause duplication.
     // Instead, just set the fileContainer reference to attach event handlers.
-    fileDiffInstance = new FileDiff(props.options ?? {}, true);
+    fileDiffInstance = new FileDiff(props.options ?? {}, undefined, true);
     // @ts-expect-error - fileContainer is private but needed for SSR hydration
     fileDiffInstance.fileContainer = fileDiffRef;
 

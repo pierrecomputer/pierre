@@ -8,14 +8,13 @@ import type {
   ThemeTypes,
   ThemedToken,
 } from './types';
+import { createCodeNode } from './utils/createCodeNode';
+import { createRowNodes } from './utils/createRowNodes';
+import { createSpanFromToken } from './utils/createSpanNodeFromToken';
 import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
-import {
-  createCodeNode,
-  createRow,
-  createSpanFromToken,
-  setWrapperProps,
-} from './utils/html_render_utils';
+import { getHighlighterThemeStyles } from './utils/getHighlighterThemeStyles';
+import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
   startingLineIndex?: number;
@@ -32,6 +31,7 @@ export interface FileStreamOptions extends BaseCodeOptions {
 export class FileStream {
   private highlighter: PJSHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
+  private abortController: AbortController | undefined;
   private fileContainer: HTMLElement | undefined;
   pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
@@ -41,7 +41,8 @@ export class FileStream {
   }
 
   cleanUp(): void {
-    void this.stream?.cancel();
+    this.abortController?.abort();
+    this.abortController = undefined;
   }
 
   setThemeType(themeType: ThemeTypes): void {
@@ -99,8 +100,9 @@ export class FileStream {
     highlighter: PJSHighlighter
   ): void {
     const {
-      theme = DEFAULT_THEMES,
+      disableLineNumbers = false,
       overflow = 'scroll',
+      theme = DEFAULT_THEMES,
       themeType = 'system',
     } = this.options;
     const fileContainer = this.getOrCreateFileContainer();
@@ -111,28 +113,29 @@ export class FileStream {
     if (this.pre.parentElement == null) {
       fileContainer.shadowRoot?.appendChild(this.pre);
     }
-    const pre = setWrapperProps({
-      pre: this.pre,
-      split: false,
-      theme,
-      highlighter,
-      wrap: overflow === 'wrap',
-      themeType,
+    const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
+    const baseThemeType =
+      typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
+    const pre = setPreNodeProperties({
       diffIndicators: 'none',
       disableBackground: true,
+      disableLineNumbers,
+      overflow,
+      pre: this.pre,
+      split: false,
+      themeType: baseThemeType ?? themeType,
+      themeStyles,
       totalLines: 0,
     });
     pre.innerHTML = '';
 
     this.pre = pre;
     this.code = createCodeNode({ pre });
-    if (this.stream != null) {
-      // Should we be doing this?
-      void this.stream.cancel();
-    }
+    this.abortController?.abort();
+    this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
     this.stream = stream;
-    void this.stream
+    this.stream
       .pipeThrough(
         typeof theme === 'string'
           ? new CodeToTokenTransformStream({
@@ -164,8 +167,15 @@ export class FileStream {
             onStreamAbort?.(reason);
           },
           write: this.handleWrite,
-        })
-      );
+        }),
+        { signal: this.abortController.signal }
+      )
+      .catch((error) => {
+        // Ignore AbortError - it's expected when cleaning up
+        if (error.name !== 'AbortError') {
+          console.error('FileStream pipe error:', error);
+        }
+      });
   }
 
   private queuedTokens: (ThemedToken | RecallToken)[] = [];
@@ -221,7 +231,7 @@ export class FileStream {
   };
 
   private createLine(): HTMLElement {
-    const { row, content } = createRow(this.currentLineIndex);
+    const { row, content } = createRowNodes(this.currentLineIndex);
     this.currentLineElement = content;
     return row;
   }

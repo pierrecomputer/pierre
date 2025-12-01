@@ -1,0 +1,70 @@
+import { DEFAULT_THEMES } from '../constants';
+import type {
+  CodeToHastOptions,
+  FileContents,
+  PJSHighlighter,
+  PJSThemeNames,
+  RenderFileOptions,
+  ThemedFileResult,
+} from '../types';
+import { cleanLastNewline } from './cleanLastNewline';
+import { createTransformerWithState } from './createTransformerWithState';
+import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
+import { getFiletypeFromFileName } from './getFiletypeFromFileName';
+import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
+import { getLineNodes } from './getLineNodes';
+
+export function renderFileWithHighlighter(
+  file: FileContents,
+  highlighter: PJSHighlighter,
+  {
+    theme = DEFAULT_THEMES,
+    startingLineNumber = 1,
+    lang = getFiletypeFromFileName(file.name),
+    tokenizeMaxLineLength,
+  }: RenderFileOptions
+): ThemedFileResult {
+  const { state, transformers } = createTransformerWithState();
+  const baseThemeType = (() => {
+    if (typeof theme === 'string') {
+      return highlighter.getTheme(theme).type;
+    }
+    return undefined;
+  })();
+  const themeStyles = getHighlighterThemeStyles({
+    theme,
+    highlighter,
+  });
+  state.lineInfo = (shikiLineNumber: number) => ({
+    type: 'context',
+    lineIndex: shikiLineNumber - 1,
+    lineNumber: startingLineNumber + (shikiLineNumber - 1),
+  });
+  const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
+    if (typeof theme === 'string') {
+      return {
+        lang,
+        theme,
+        transformers,
+        defaultColor: false,
+        cssVariablePrefix: formatCSSVariablePrefix(),
+        tokenizeMaxLineLength,
+      };
+    }
+    return {
+      lang,
+      themes: theme,
+      transformers,
+      defaultColor: false,
+      cssVariablePrefix: formatCSSVariablePrefix(),
+      tokenizeMaxLineLength,
+    };
+  })();
+  return {
+    code: getLineNodes(
+      highlighter.codeToHast(cleanLastNewline(file.contents), hastConfig)
+    ),
+    themeStyles,
+    baseThemeType: baseThemeType,
+  };
+}

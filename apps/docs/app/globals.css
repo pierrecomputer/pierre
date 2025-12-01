@@ -139,6 +139,14 @@
     color: var(--color-primary);
     letter-spacing: -0.02em;
   }
+
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply scroll-mt-5;
+  }
 }
 
 .gridstack {

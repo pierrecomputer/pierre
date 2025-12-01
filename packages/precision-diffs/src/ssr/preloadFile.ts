@@ -1,10 +1,7 @@
-import { createStyleElement } from 'src/utils/hast_utils';
-
 import type { FileOptions } from '../../src/File';
-import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import { FileRenderer } from '../FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
-import { renderCSS } from './renderCSS';
+import { createStyleElement } from '../utils/createStyleElement';
 import { renderHTML } from './renderHTML';
 
 export type PreloadFileOptions<LAnnotation> = {
@@ -25,27 +22,23 @@ export async function preloadFile<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
-  const { disableFileHeader = false } = options ?? {};
   const fileRenderer = new FileRenderer<LAnnotation>(options);
-  const fileHeader = new FileHeaderRenderer(options);
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {
     fileRenderer.setLineAnnotations(annotations);
   }
 
-  const [headerResult, fileResult] = await Promise.all([
-    !disableFileHeader ? fileHeader.render(file) : undefined,
-    fileRenderer.render(file, true),
-  ]);
-  if (fileResult == null) {
-    throw new Error('Failed to render file diff');
+  const fileResult = await fileRenderer.asyncRender(file);
+
+  const children = [createStyleElement(fileResult.css, true)];
+
+  if (options?.unsafeCSS != null) {
+    children.push(createStyleElement(options.unsafeCSS));
   }
-  const children = [
-    createStyleElement(renderCSS(fileResult.css, options?.unsafeCSS)),
-  ];
-  if (headerResult != null) {
-    children.push(headerResult);
+
+  if (fileResult.headerAST != null) {
+    children.push(fileResult.headerAST);
   }
   const code = fileRenderer.renderFullAST(fileResult);
   code.properties['data-dehydrated'] = '';

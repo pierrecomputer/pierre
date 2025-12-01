@@ -1,7 +1,7 @@
 import deepEquals from 'fast-deep-equal';
-import type { Element } from 'hast';
+import type { Element as HASTElement } from 'hast';
+import { toHtml } from 'hast-util-to-html';
 
-import { FileHeaderRenderer } from './FileHeaderRenderer';
 import { type FileRenderResult, FileRenderer } from './FileRenderer';
 import {
   LineSelectionManager,
@@ -16,28 +16,31 @@ import {
   pluckMouseEventOptions,
 } from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
-import { getSharedHighlighter } from './SharedHighlighter';
-import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
+import {
+  DEFAULT_THEMES,
+  HEADER_METADATA_SLOT_ID,
+  UNSAFE_CSS_ATTRIBUTE,
+} from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
-  PJSHighlighter,
   RenderFileMetadata,
   ThemeTypes,
 } from './types';
+import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode';
+import { createCodeNode } from './utils/createCodeNode';
+import { createHoverContentNode } from './utils/createHoverContentNode';
+import { createUnsafeCSSStyleNode } from './utils/createUnsafeCSSStyleNode';
+import { wrapUnsafeCSS } from './utils/cssWrappers';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getThemes } from './utils/getThemes';
-import {
-  createAnnotationWrapper,
-  createCodeNode,
-  createHoverContent,
-  setWrapperProps,
-} from './utils/html_render_utils';
+import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
+import { setPreNodeProperties } from './utils/setWrapperNodeProps';
+import type { WorkerPoolManager } from './worker';
 
-interface FileRenderProps<LAnnotation> {
+export interface FileRenderProps<LAnnotation> {
   file: FileContents;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
@@ -45,10 +48,17 @@ interface FileRenderProps<LAnnotation> {
   lineAnnotations?: LineAnnotation<LAnnotation>[];
 }
 
+export interface FileHyrdateProps<LAnnotation>
+  extends Omit<FileRenderProps<LAnnotation>, 'fileContainer'> {
+  fileContainer: HTMLElement;
+  prerenderedHTML?: string;
+}
+
 export interface FileOptions<LAnnotation>
   extends BaseCodeOptions,
     MouseEventManagerBaseOptions<'file'>,
     LineSelectionOptions {
+  startingLineNumber?: number;
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
   renderAnnotation?(
@@ -71,12 +81,12 @@ export class File<LAnnotation = undefined> {
   private code: HTMLElement | undefined;
   private unsafeCSSStyle: HTMLStyleElement | undefined;
   private hoverContent: HTMLElement | undefined;
+  private errorWrapper: HTMLElement | undefined;
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
 
   private fileRenderer: FileRenderer<LAnnotation>;
-  private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
   private mouseEventManager: MouseEventManager<'file'>;
   private lineSelectionManager: LineSelectionManager;
@@ -88,10 +98,14 @@ export class File<LAnnotation = undefined> {
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    private workerManager?: WorkerPoolManager | undefined,
     private isContainerManaged = false
   ) {
-    this.fileRenderer = new FileRenderer<LAnnotation>(options);
-    this.headerRenderer = new FileHeaderRenderer(options);
+    this.fileRenderer = new FileRenderer<LAnnotation>(
+      options,
+      this.handleHighlightRender,
+      this.workerManager
+    );
     this.resizeManager = new ResizeManager();
     this.mouseEventManager = new MouseEventManager(
       'file',
@@ -100,6 +114,16 @@ export class File<LAnnotation = undefined> {
     this.lineSelectionManager = new LineSelectionManager(
       pluckLineSelectionOptions(options)
     );
+    this.workerManager?.subscribeToThemeChanges(this);
+  }
+
+  private handleHighlightRender = (): void => {
+    this.rerender();
+  };
+
+  rerender(): void {
+    if (this.file == null) return;
+    this.render({ file: this.file, forceRender: true });
   }
 
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
@@ -119,7 +143,6 @@ export class File<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
-    this.headerRenderer.setThemeType(themeType);
     this.fileRenderer.setThemeType(themeType);
 
     if (this.headerElement != null) {
@@ -153,21 +176,16 @@ export class File<LAnnotation = undefined> {
   }
 
   setSelectedLines(range: SelectedLineRange | null): void {
-    // If we have a render in progress, we should wait for it to finish before
-    // attempting the selection
-    if (this.queuedRender != null) {
-      void this.queuedRender.then(() => this.setSelectedLines(range));
-    } else {
-      this.lineSelectionManager.setSelection(range);
-    }
+    this.lineSelectionManager.setSelection(range);
   }
 
   cleanUp(): void {
     this.fileRenderer.cleanUp();
-    this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.lineSelectionManager.cleanUp();
+    this.workerManager?.unsubscribeToThemeChanges(this);
+    this.workerManager = undefined;
 
     // Clean up the data
     this.file = undefined;
@@ -176,19 +194,21 @@ export class File<LAnnotation = undefined> {
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
+    if (this.fileContainer?.shadowRoot != null) {
+      this.fileContainer.shadowRoot.innerHTML = '';
+    }
     this.fileContainer = undefined;
     this.pre = undefined;
     this.headerElement = undefined;
+    this.errorWrapper = undefined;
+    this.unsafeCSSStyle = undefined;
   }
 
-  async hydrate(props: FileRenderProps<LAnnotation>): Promise<void> {
-    if (props.fileContainer == null) {
-      throw new Error(
-        'FileDiff: you must provide a fileContainer on hydration'
-      );
-    }
+  hydrate(props: FileHyrdateProps<LAnnotation>): void {
+    const { fileContainer, prerenderedHTML } = props;
+    prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
-      props.fileContainer.shadowRoot?.children ?? []
+      fileContainer.shadowRoot?.children ?? []
     )) {
       if (element instanceof SVGElement) {
         this.spriteSVG = element;
@@ -201,7 +221,10 @@ export class File<LAnnotation = undefined> {
         this.pre = element;
         continue;
       }
-      if (element instanceof HTMLStyleElement) {
+      if (
+        element instanceof HTMLStyleElement &&
+        element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
+      ) {
         this.unsafeCSSStyle = element;
         continue;
       }
@@ -212,16 +235,17 @@ export class File<LAnnotation = undefined> {
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      await this.render(props);
+      this.render(props);
     }
     // Otherwise orchestrate our setup
     else {
-      this.fileContainer = props.fileContainer;
+      const { file, lineAnnotations } = props;
+      this.fileContainer = fileContainer;
       delete this.pre.dataset.dehydrated;
 
-      this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
-      this.file = props.file;
-      void this.fileRenderer.initializeHighlighter();
+      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+      this.file = file;
+      this.fileRenderer.hydrate(file);
       this.renderAnnotations();
       this.renderHoverUtility();
       this.injectUnsafeCSS();
@@ -233,74 +257,63 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private queuedRender: Promise<void> | undefined;
-  async render(props: FileRenderProps<LAnnotation>): Promise<void> {
-    const { file, forceRender = false } = props;
-    if (!forceRender && deepEquals(this.file, file)) {
-      return;
-    }
-    const currentRender = (this.queuedRender =
-      this.queuedRender != null
-        ? this.queuedRender.then(() => this._render(props))
-        : this._render(props));
-    await currentRender;
-    if (this.queuedRender === currentRender) {
-      this.queuedRender = undefined;
-    }
-  }
-
-  private async _render({
+  render({
     file,
     fileContainer,
+    forceRender = false,
     containerWrapper,
     lineAnnotations,
-  }: FileRenderProps<LAnnotation>): Promise<void> {
-    this.file = file;
+  }: FileRenderProps<LAnnotation>): void {
+    const annotationsChanged =
+      lineAnnotations != null &&
+      (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
+        ? lineAnnotations !== this.lineAnnotations
+        : false;
+    if (!forceRender && deepEquals(this.file, file) && !annotationsChanged) {
+      return;
+    }
 
+    this.file = file;
     this.fileRenderer.setOptions(this.options);
     if (lineAnnotations != null) {
-      this.fileRenderer.setLineAnnotations(lineAnnotations);
       this.setLineAnnotations(lineAnnotations);
     }
+    this.fileRenderer.setLineAnnotations(this.lineAnnotations);
 
     const { disableFileHeader = false } = this.options;
     if (disableFileHeader) {
-      this.headerRenderer.cleanUp();
       // Remove existing header from DOM
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
       }
-    } else {
-      this.headerRenderer.setOptions(this.options);
     }
 
-    const [highlighter, headerResult, fileResult] = await Promise.all([
-      getSharedHighlighter({
-        themes: getThemes(this.options.theme),
-        langs: [],
-      }),
-      !disableFileHeader ? this.headerRenderer.render(file) : undefined,
-      this.fileRenderer.render(file),
-    ]);
+    fileContainer = this.getOrCreateFileContainerNode(
+      fileContainer,
+      containerWrapper
+    );
 
-    if (headerResult == null && fileResult == null) {
-      return;
-    }
-
-    fileContainer = this.getOrCreateFileContainer(fileContainer);
-    if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer);
-    }
-
-    if (fileResult != null) {
-      if (containerWrapper != null) {
-        containerWrapper.appendChild(fileContainer);
+    try {
+      const fileResult = this.fileRenderer.renderFile(file);
+      if (fileResult == null) {
+        if (this.workerManager != null && !this.workerManager.isInitialized()) {
+          void this.workerManager.initialize().then(() => this.rerender());
+        }
+        // FIXME(amadeus): Probably figure out how to render a skeleton?
+        return;
       }
-      const pre = this.getOrCreatePre(fileContainer);
-      this.applyHunksToDOM(fileResult, pre, highlighter);
+      if (fileResult.headerAST != null) {
+        this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
+      }
+      const pre = this.getOrCreatePreNode(fileContainer);
+      this.applyHunksToDOM(fileResult, pre);
       this.renderAnnotations();
       this.renderHoverUtility();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        this.applyErrorToDOM(error, fileContainer);
+      }
     }
   }
 
@@ -319,7 +332,9 @@ export class File<LAnnotation = undefined> {
       for (const annotation of this.lineAnnotations) {
         const content = renderAnnotation(annotation);
         if (content == null) continue;
-        const el = createAnnotationWrapper(getLineAnnotationName(annotation));
+        const el = createAnnotationWrapperNode(
+          getLineAnnotationName(annotation)
+        );
         el.appendChild(content);
         this.annotationElements.push(el);
         this.fileContainer.appendChild(el);
@@ -331,7 +346,7 @@ export class File<LAnnotation = undefined> {
     const { renderHoverUtility } = this.options;
     if (this.fileContainer == null || renderHoverUtility == null) return;
     if (this.hoverContent == null) {
-      this.hoverContent = createHoverContent();
+      this.hoverContent = createHoverContentNode();
       this.fileContainer.appendChild(this.hoverContent);
     }
     const element = renderHoverUtility(this.mouseEventManager.getHoveredLine);
@@ -348,27 +363,25 @@ export class File<LAnnotation = undefined> {
     const { unsafeCSS } = this.options;
 
     if (unsafeCSS == null || unsafeCSS === '') {
+      if (this.unsafeCSSStyle != null) {
+        this.unsafeCSSStyle.parentNode?.removeChild(this.unsafeCSSStyle);
+        this.unsafeCSSStyle = undefined;
+      }
       return;
     }
 
     // Create or update the style element
     if (this.unsafeCSSStyle == null) {
-      this.unsafeCSSStyle = document.createElement('style');
+      this.unsafeCSSStyle = createUnsafeCSSStyleNode();
       this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
     }
     // Wrap in @layer unsafe to match SSR behavior
-    this.unsafeCSSStyle.insertAdjacentText(
-      'beforeend',
-      `@layer unsafe {\n${unsafeCSS}\n}`
-    );
+    this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
   }
 
-  private applyHunksToDOM(
-    result: FileRenderResult,
-    pre: HTMLPreElement,
-    highlighter: PJSHighlighter
-  ): void {
-    this.setPreAttributes(pre, highlighter, result.totalLines);
+  private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
+    this.cleanupErrorWrapper();
+    this.applyPreNodeAttributes(pre, result);
     pre.innerHTML = '';
     // Create code elements and insert HTML content
     this.code = createCodeNode();
@@ -385,11 +398,15 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
+  private applyHeaderToDOM(
+    headerAST: HASTElement,
+    container: HTMLElement
+  ): void {
     const { file } = this;
     if (file == null) return;
+    this.cleanupErrorWrapper();
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
+    tempDiv.innerHTML = toHtml(headerAST);
     const newHeader = tempDiv.firstElementChild;
     if (!(newHeader instanceof HTMLElement)) {
       return;
@@ -420,11 +437,17 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
+  private getOrCreateFileContainerNode(
+    fileContainer?: HTMLElement,
+    parentNode?: HTMLElement
+  ): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement('file-diff');
+    if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
+      parentNode.appendChild(this.fileContainer);
+    }
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -437,7 +460,7 @@ export class File<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  private getOrCreatePre(container: HTMLElement): HTMLPreElement {
+  private getOrCreatePreNode(container: HTMLElement): HTMLPreElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
@@ -451,23 +474,52 @@ export class File<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private setPreAttributes(
+  private applyPreNodeAttributes(
     pre: HTMLPreElement,
-    highlighter: PJSHighlighter,
-    totalLines: number
+    { totalLines, themeStyles, baseThemeType }: FileRenderResult
   ): void {
-    const { overflow = 'scroll', theme, themeType = 'system' } = this.options;
-    const wrap = overflow === 'wrap';
-    setWrapperProps({
+    const {
+      overflow = 'scroll',
+      themeType = 'system',
+      disableLineNumbers = false,
+    } = this.options;
+    setPreNodeProperties({
       pre,
-      theme,
-      highlighter,
       split: false,
-      wrap,
-      themeType,
+      themeStyles,
+      overflow,
+      disableLineNumbers,
+      themeType: baseThemeType ?? themeType,
       diffIndicators: 'none',
       disableBackground: true,
       totalLines,
     });
+  }
+
+  private applyErrorToDOM(error: Error, container: HTMLElement) {
+    this.cleanupErrorWrapper();
+    const pre = this.getOrCreatePreNode(container);
+    pre.innerHTML = '';
+    pre.parentNode?.removeChild(pre);
+    this.pre = undefined;
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    this.errorWrapper ??= document.createElement('div');
+    this.errorWrapper.dataset.errorWrapper = '';
+    this.errorWrapper.innerHTML = '';
+    shadowRoot.appendChild(this.errorWrapper);
+    const errorMessage = document.createElement('div');
+    errorMessage.dataset.errorMessage = '';
+    errorMessage.innerText = error.message;
+    this.errorWrapper.appendChild(errorMessage);
+    const errorStack = document.createElement('pre');
+    errorStack.dataset.errorStack = '';
+    errorStack.innerText = error.stack ?? 'No Error Stack';
+    this.errorWrapper.appendChild(errorStack);
+  }
+
+  private cleanupErrorWrapper() {
+    this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
+    this.errorWrapper = undefined;
   }
 }
