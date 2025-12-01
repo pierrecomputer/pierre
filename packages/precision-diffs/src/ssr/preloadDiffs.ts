@@ -8,7 +8,6 @@ import type {
 import { createStyleElement } from '../utils/createStyleElement';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
-import { renderCSS } from './renderCSS';
 import { renderHTML } from './renderHTML';
 
 export interface PreloadDiffOptions<LAnnotation> {
@@ -49,9 +48,12 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
 
   const hunkResult = await diffHunksRenderer.asyncRender(fileDiff);
 
-  const children = [
-    createStyleElement(renderCSS(hunkResult.css, options?.unsafeCSS)),
-  ];
+  const children = [createStyleElement(hunkResult.css, true)];
+
+  if (options?.unsafeCSS != null) {
+    children.push(createStyleElement(options.unsafeCSS));
+  }
+
   if (hunkResult.headerElement != null) {
     children.push(hunkResult.headerElement);
   }

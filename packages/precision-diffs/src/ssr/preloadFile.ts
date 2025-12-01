@@ -2,7 +2,6 @@ import type { FileOptions } from '../../src/File';
 import { FileRenderer } from '../FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import { createStyleElement } from '../utils/createStyleElement';
-import { renderCSS } from './renderCSS';
 import { renderHTML } from './renderHTML';
 
 export type PreloadFileOptions<LAnnotation> = {
@@ -32,9 +31,12 @@ export async function preloadFile<LAnnotation = undefined>({
 
   const fileResult = await fileRenderer.asyncRender(file);
 
-  const children = [
-    createStyleElement(renderCSS(fileResult.css, options?.unsafeCSS)),
-  ];
+  const children = [createStyleElement(fileResult.css, true)];
+
+  if (options?.unsafeCSS != null) {
+    children.push(createStyleElement(options.unsafeCSS));
+  }
+
   if (fileResult.headerAST != null) {
     children.push(fileResult.headerAST);
   }

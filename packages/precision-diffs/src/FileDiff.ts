@@ -17,7 +17,11 @@ import {
 } from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
 import { ScrollSyncManager } from './ScrollSyncManager';
-import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
+import {
+  DEFAULT_THEMES,
+  HEADER_METADATA_SLOT_ID,
+  UNSAFE_CSS_ATTRIBUTE,
+} from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
@@ -34,6 +38,8 @@ import type {
 import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode';
 import { createCodeNode } from './utils/createCodeNode';
 import { createHoverContentNode } from './utils/createHoverContentNode';
+import { createUnsafeCSSStyleNode } from './utils/createUnsafeCSSStyleNode';
+import { wrapUnsafeCSS } from './utils/cssWrappers';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
@@ -270,7 +276,10 @@ export class FileDiff<LAnnotation = undefined> {
         this.headerElement = element;
         continue;
       }
-      if (element instanceof HTMLStyleElement) {
+      if (
+        element instanceof HTMLStyleElement &&
+        element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
+      ) {
         this.unsafeCSSStyle = element;
         continue;
       }
@@ -584,14 +593,11 @@ export class FileDiff<LAnnotation = undefined> {
 
     // Create or update the style element
     if (this.unsafeCSSStyle == null) {
-      this.unsafeCSSStyle = document.createElement('style');
+      this.unsafeCSSStyle = createUnsafeCSSStyleNode();
       this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
     }
     // Wrap in @layer unsafe to match SSR behavior
-    this.unsafeCSSStyle.insertAdjacentText(
-      'beforeend',
-      `@layer unsafe {\n${unsafeCSS}\n}`
-    );
+    this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
   }
 
   private applyHunksToDOM(
