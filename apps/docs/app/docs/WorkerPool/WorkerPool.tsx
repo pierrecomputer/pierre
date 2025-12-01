@@ -121,7 +121,7 @@ export function WorkerPool({
         connected instances will automatically re-render with the new theme.
       </p>
 
-      <h4>React</h4>
+      <h4 data-toc-ignore>React</h4>
       <p>
         Wrap your component tree with <code>WorkerPoolContextProvider</code>{' '}
         from <code>@pierre/precision-diffs/react</code>. All{' '}
@@ -146,7 +146,7 @@ export function WorkerPool({
       </p>
       <DocsCodeExample {...reactUsage} />
 
-      <h4>Vanilla JS</h4>
+      <h4 data-toc-ignore>Vanilla JS</h4>
       <p>
         Simply use <code>getOrCreateWorkerPoolSingleton</code> to spin up a
         singleton worker pool. Then pass that as the second argument to{' '}

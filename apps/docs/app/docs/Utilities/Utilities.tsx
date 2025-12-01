@@ -42,7 +42,7 @@ export function Utilities({
         These utilities can be used with any framework or rendering approach.
       </p>
 
-      <h3>diffAcceptRejectHunk</h3>
+      <h3 data-toc-ignore>diffAcceptRejectHunk</h3>
       <p>
         Programmatically accept or reject individual hunks in a diff. This is
         useful for building interactive code review interfaces, AI-assisted
@@ -71,21 +71,21 @@ export function Utilities({
         <DocsCodeExample {...diffAcceptRejectReact} />
       )}
 
-      <h3>disposeHighlighter</h3>
+      <h3 data-toc-ignore>disposeHighlighter</h3>
       <p>
         Dispose the shared Shiki highlighter instance to free memory. Useful
         when cleaning up resources in single-page applications.
       </p>
       <DocsCodeExample {...disposeHighlighter} />
 
-      <h3>getSharedHighlighter</h3>
+      <h3 data-toc-ignore>getSharedHighlighter</h3>
       <p>
         Get direct access to the shared Shiki highlighter instance used
         internally by all components. Useful for custom highlighting operations.
       </p>
       <DocsCodeExample {...getSharedHighlighter} />
 
-      <h3>parseDiffFromFile</h3>
+      <h3 data-toc-ignore>parseDiffFromFile</h3>
       <p>
         Compare two versions of a file and generate a{' '}
         <code>FileDiffMetadata</code> structure. Use this when you have the full
@@ -93,7 +93,7 @@ export function Utilities({
       </p>
       <DocsCodeExample {...parseDiffFromFile} />
 
-      <h3>parsePatchFiles</h3>
+      <h3 data-toc-ignore>parsePatchFiles</h3>
       <p>
         Parse unified diff / patch file content into structured data. Handles
         both single patches and multi-commit patch files (like those from GitHub
@@ -101,14 +101,14 @@ export function Utilities({
       </p>
       <DocsCodeExample {...parsePatchFiles} />
 
-      <h3>preloadHighlighter</h3>
+      <h3 data-toc-ignore>preloadHighlighter</h3>
       <p>
         Preload specific themes and languages before rendering to ensure instant
         highlighting with no async loading delay.
       </p>
       <DocsCodeExample {...preloadHighlighter} />
 
-      <h3>registerCustomTheme</h3>
+      <h3 data-toc-ignore>registerCustomTheme</h3>
       <p>
         Register a custom Shiki theme for use with any component. The theme name
         you register must match the <code>name</code> field inside your theme

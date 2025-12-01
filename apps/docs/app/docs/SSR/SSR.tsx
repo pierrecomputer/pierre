@@ -60,7 +60,7 @@ export function SSR({
         Choose the one that matches your data source.
       </p>
 
-      <h4>preloadFile</h4>
+      <h4 data-toc-ignore>preloadFile</h4>
       <p>
         Preloads a single file with syntax highlighting (no diff). Use this when
         you want to render a file without any diff context. Spread into the{' '}
@@ -68,7 +68,7 @@ export function SSR({
       </p>
       <DocsCodeExample {...preloadFile} />
 
-      <h4>preloadFileDiff</h4>
+      <h4 data-toc-ignore>preloadFileDiff</h4>
       <p>
         Preloads a diff from a <code>FileDiffMetadata</code> object. Use this
         when you already have parsed diff metadata (e.g., from{' '}
@@ -77,7 +77,7 @@ export function SSR({
       </p>
       <DocsCodeExample {...preloadFileDiff} />
 
-      <h4>preloadMultiFileDiff</h4>
+      <h4 data-toc-ignore>preloadMultiFileDiff</h4>
       <p>
         Preloads a diff directly from old and new file contents. This is the
         simplest option when you have the raw file contents and want to generate
@@ -85,7 +85,7 @@ export function SSR({
       </p>
       <DocsCodeExample {...preloadMultiFileDiff} />
 
-      <h4>preloadPatchDiff</h4>
+      <h4 data-toc-ignore>preloadPatchDiff</h4>
       <p>
         Preloads a diff from a unified patch string for a single file. Use this
         when you have a patch in unified diff format. Spread into the{' '}
@@ -93,7 +93,7 @@ export function SSR({
       </p>
       <DocsCodeExample {...preloadPatchDiff} />
 
-      <h4>preloadPatchFile</h4>
+      <h4 data-toc-ignore>preloadPatchFile</h4>
       <p>
         Preloads multiple diffs from a multi-file patch string. Returns an array
         of results, one for each file in the patch. Each result can be spread
