@@ -17,7 +17,7 @@ export function HeaderWrapper() {
             </>
           }
         >
-          Precision Diffs
+          Diffs
         </Header.Logo>
       }
     >

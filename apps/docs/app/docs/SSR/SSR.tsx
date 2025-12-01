@@ -19,10 +19,10 @@ export function SSR({
     <section className="space-y-4">
       <h2>SSR</h2>
       <p>
-        Precision Diffs supports Server-Side Rendering (SSR) for improved
-        performance and SEO. The SSR API allows you to pre-render file diffs on
-        the server with syntax highlighting, then hydrate them on the client for
-        full interactivity.
+        Diffs supports Server-Side Rendering (SSR) for improved performance and
+        SEO. The SSR API allows you to pre-render file diffs on the server with
+        syntax highlighting, then hydrate them on the client for full
+        interactivity.
       </p>
 
       <p>

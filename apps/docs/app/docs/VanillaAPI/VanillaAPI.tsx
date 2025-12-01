@@ -33,12 +33,12 @@ export function VanillaAPI({
     <section className="space-y-4">
       <h2>Vanilla JS API</h2>
       <p>
-        The vanilla JavaScript API for Precision Diffs exposes a mix of
-        components and raw classes. The components and the React API are built
-        on many of these foundation classes. The goal has been to abstract away
-        a lot of the heavy lifting when working with Shiki directly and provide
-        a set of standardized APIs that can be used with any framework and even
-        server rendered if necessary.
+        The vanilla JavaScript API for Diffs exposes a mix of components and raw
+        classes. The components and the React API are built on many of these
+        foundation classes. The goal has been to abstract away a lot of the
+        heavy lifting when working with Shiki directly and provide a set of
+        standardized APIs that can be used with any framework and even server
+        rendered if necessary.
       </p>
       <p>
         You can import all of this via the core package{' '}
@@ -73,8 +73,8 @@ export function VanillaAPI({
       <h3>Classes</h3>
       <p>
         These core classes can be thought of as the building blocks for the
-        different components and APIs in Precision Diffs. Most of them should be
-        usable in a variety of environments (server and browser).
+        different components and APIs in Diffs. Most of them should be usable in
+        a variety of environments (server and browser).
       </p>
       <h4>DiffHunksRenderer</h4>
       <p>
@@ -110,8 +110,8 @@ export function VanillaAPI({
       <p>
         Because it‘s important to re-use your highlighter instance when using
         Shiki, we‘ve ensured that all the classes and components you use with
-        Precision Diffs will automatically use a shared highlighter instance and
-        also automatically load languages and themes on demand as necessary.
+        Diffs will automatically use a shared highlighter instance and also
+        automatically load languages and themes on demand as necessary.
       </p>
       <p>
         We provide APIs to preload the highlighter, themes, and languages if you

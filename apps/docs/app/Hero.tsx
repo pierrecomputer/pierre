@@ -46,7 +46,7 @@ export function Hero() {
       </svg>
 
       <h1 className="text-4xl font-semibold tracking-tight md:text-4xl lg:text-5xl">
-        Precision Diffs
+        Diffs
       </h1>
       <p className="text-md text-muted-foreground mb-2 md:text-lg lg:text-xl">
         Fast, exact diffing for modern apps. Fully open source, built on Shiki,

@@ -82,7 +82,7 @@ export function PrebuiltReact() {
       <div className="space-y-4">
         <FeatureHeader
           title="Pre-built React and JavaScript components"
-          description="No two codebases are alike, so we give you the freedom to implement Precision Diffs however you like. Components are logically separated—file wrapper, header, hunk, and more—and are all available in React or JavaScript versions."
+          description="No two codebases are alike, so we give you the freedom to implement Diffs however you like. Components are logically separated—file wrapper, header, hunk, and more—and are all available in React or JavaScript versions."
         />
         <div className="grid gap-4 md:grid-cols-2">
           <CodeBlock code={reactCode} language="React" />
