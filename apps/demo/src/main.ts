@@ -70,6 +70,9 @@ const poolManager = (() => {
     theme: DEFAULT_THEMES,
     langs: ['typescript', 'tsx'],
   });
+  void manager.initialize().then(() => {
+    console.log('WorkerPoolManager initialized, with:', manager.getStats());
+  });
 
   // @ts-expect-error bcuz
   window.__POOL = manager;
@@ -283,7 +286,7 @@ const workerInstances: Promise<unknown>[] = [];
 export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
   workerInstances.length = 0;
 
-  console.log('Worker Render: Starting to server render patch');
+  console.log('Worker Render: Starting to async render patch');
   for (const parsedPatch of parsedPatches) {
     for (const fileDiff of parsedPatch.files) {
       const start = Date.now();
