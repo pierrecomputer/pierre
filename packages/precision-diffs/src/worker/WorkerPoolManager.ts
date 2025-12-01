@@ -7,9 +7,7 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   RenderDiffOptions,
-  RenderDiffResult,
   RenderFileOptions,
-  RenderFileResult,
   SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
@@ -22,9 +20,12 @@ import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
   AllWorkerTasks,
+  DiffRendererInstance,
+  FileRendererInstance,
   InitializeWorkerTask,
+  RenderDiffMetadataRequest,
   RenderDiffMetadataTask,
-  RenderDiffTask,
+  RenderFileRequest,
   RenderFileTask,
   SubmitRequest,
   WorkerHighlighterOptions,
@@ -200,10 +201,11 @@ export class WorkerPoolManager {
   };
 
   renderFileToAST(
+    instance: FileRendererInstance,
     file: FileContents,
     options: Omit<RenderFileOptions, 'theme'>
-  ): Promise<RenderFileResult> {
-    return this.submitTask({
+  ): void {
+    this.submitTask(instance, {
       type: 'file',
       file,
       options: { ...options, theme: this.currentTheme },
@@ -226,40 +228,12 @@ export class WorkerPoolManager {
     });
   }
 
-  renderDiffFilesToAST(
-    oldFile: FileContents,
-    newFile: FileContents,
-    options: Omit<RenderDiffOptions, 'theme'>
-  ): Promise<RenderDiffResult> {
-    return this.submitTask({
-      type: 'diff-files',
-      oldFile,
-      newFile,
-      options: { ...options, theme: this.currentTheme },
-    });
-  }
-
-  renderPlainDiffFilesToAST(
-    oldFile: FileContents,
-    newFile: FileContents
-  ): ThemedDiffResult | undefined {
-    const oldResult = this.renderPlainFileToAST(oldFile, 1);
-    const newResult = this.renderPlainFileToAST(newFile, 1);
-    if (oldResult == null || newResult == null) {
-      return undefined;
-    }
-    return {
-      code: { oldLines: oldResult.code, newLines: newResult.code },
-      themeStyles: newResult.themeStyles,
-      baseThemeType: newResult.baseThemeType,
-    };
-  }
-
   renderDiffMetadataToAST(
+    instance: DiffRendererInstance,
     diff: FileDiffMetadata,
     options: Omit<RenderDiffOptions, 'theme'>
-  ): Promise<RenderDiffResult> {
-    return this.submitTask({
+  ): void {
+    this.submitTask(instance, {
       type: 'diff-metadata',
       diff,
       options: { ...options, theme: this.currentTheme },
@@ -304,54 +278,50 @@ export class WorkerPoolManager {
     };
   }
 
-  private submitTask<T extends RenderFileResult | RenderDiffResult>(
+  private submitTask(
+    instance: FileRendererInstance,
+    request: Omit<RenderFileRequest, 'id'>
+  ): void;
+  private submitTask(
+    instance: DiffRendererInstance,
+    request: Omit<RenderDiffMetadataRequest, 'id'>
+  ): void;
+  private submitTask(
+    instance: FileRendererInstance | DiffRendererInstance,
     request: SubmitRequest
-  ): Promise<T> {
+  ): void {
     if (this.initialized === false) {
       void this.initialize();
     }
 
-    return new Promise<T>((resolve, reject) => {
-      const id = this.generateRequestId();
-      const requestStart = Date.now();
-      const task = (() => {
-        switch (request.type) {
-          case 'file':
-            return {
-              type: 'file',
-              id,
-              request: { ...request, id },
-              resolve,
-              reject,
-              requestStart,
-            };
-          case 'diff-files':
-            return {
-              type: 'diff-files',
-              id,
-              request: { ...request, id },
-              resolve,
-              reject,
-              requestStart,
-            };
-          case 'diff-metadata':
-            return {
-              type: 'diff-metadata',
-              id,
-              request: { ...request, id },
-              resolve,
-              reject,
-              requestStart,
-            };
-        }
-      })() as RenderFileTask | RenderDiffTask | RenderDiffMetadataTask;
-      const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
-      if (availableWorker != null) {
-        this.executeTask(availableWorker, task);
-      } else {
-        this.taskQueue.push(task);
+    const id = this.generateRequestId();
+    const requestStart = Date.now();
+    const task: RenderFileTask | RenderDiffMetadataTask = (() => {
+      switch (request.type) {
+        case 'file':
+          return {
+            type: 'file',
+            id,
+            request: { ...request, id },
+            instance: instance as FileRendererInstance,
+            requestStart,
+          };
+        case 'diff-metadata':
+          return {
+            type: 'diff-metadata',
+            id,
+            request: { ...request, id },
+            instance: instance as DiffRendererInstance,
+            requestStart,
+          };
       }
-    });
+    })();
+    const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
+    if (availableWorker != null) {
+      this.executeTask(availableWorker, task);
+    } else {
+      this.taskQueue.push(task);
+    }
   }
 
   private handleWorkerMessage(
@@ -370,7 +340,11 @@ export class WorkerPoolManager {
       if (response.stack) {
         error.stack = response.stack;
       }
-      task.reject(error);
+      if ('reject' in task) {
+        task.reject(error);
+      } else {
+        task.instance.onHighlightError(error);
+      }
     } else {
       try {
         switch (response.requestType) {
@@ -385,17 +359,8 @@ export class WorkerPoolManager {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
             const { result } = response;
-            const { options } = task.request;
-            task.resolve({ result, options });
-            break;
-          }
-          case 'diff-files': {
-            if (task.type !== 'diff-files') {
-              throw new Error('handleWorkerMessage: task/response dont match');
-            }
-            const { result } = response;
-            const { options } = task.request;
-            task.resolve({ result, options });
+            const { instance, request } = task;
+            instance.onHighlightSuccess(request.file, result, request.options);
             break;
           }
           case 'diff-metadata': {
@@ -403,8 +368,8 @@ export class WorkerPoolManager {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
             const { result } = response;
-            const { options } = task.request;
-            task.resolve({ result, options });
+            const { instance, request } = task;
+            instance.onHighlightSuccess(request.diff, result, request.options);
             break;
           }
         }
@@ -480,11 +445,6 @@ function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
     switch (task.type) {
       case 'file': {
         langs.add(getFiletypeFromFileName(task.request.file.name));
-        break;
-      }
-      case 'diff-files': {
-        langs.add(getFiletypeFromFileName(task.request.newFile.name));
-        langs.add(getFiletypeFromFileName(task.request.oldFile.name));
         break;
       }
       case 'diff-metadata': {

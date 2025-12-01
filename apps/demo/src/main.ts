@@ -289,23 +289,27 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
   for (const parsedPatch of parsedPatches) {
     for (const fileDiff of parsedPatch.files) {
       const start = Date.now();
-      const prom = poolManager
-        ?.renderDiffMetadataToAST(fileDiff, {
-          tokenizeMaxLineLength: 1000,
-          lineDiffType: 'word-alt',
-        })
-        .then(({ result: { code } }) => {
-          if (code.hunks == null) {
-            console.log(
-              'Worker Render: rendered file:',
-              fileDiff.name,
-              'lines:',
-              code.newLines.length + code.oldLines.length,
-              'time:',
-              Date.now() - start
-            );
-          }
-        });
+      const prom = poolManager?.renderDiffMetadataToAST(
+        {
+          onHighlightSuccess(_diff, { code }) {
+            if (code.hunks == null) {
+              console.log(
+                'Worker Render: rendered file:',
+                fileDiff.name,
+                'lines:',
+                code.newLines.length + code.oldLines.length,
+                'time:',
+                Date.now() - start
+              );
+            }
+          },
+          onHighlightError(error: unknown) {
+            console.error(error);
+          },
+        },
+        fileDiff,
+        { tokenizeMaxLineLength: 1000, lineDiffType: 'word-alt' }
+      );
       if (prom != null) {
         workerInstances.push(prom);
         if (firstFour.length < 4) {

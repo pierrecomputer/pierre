@@ -1,3 +1,4 @@
+import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -100,18 +101,16 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache ??= {
       file,
       options,
-      highlighted: false,
+      // NOTE(amadeus): If we're hydrating, we can assume there was
+      // pre-rendered HTML, otherwise one should not be hydrating
+      highlighted: true,
       result: undefined,
     };
     if (this.poolManager != null) {
-      void this.poolManager
-        .renderFileToAST(file, options)
-        .then(({ result, options }) =>
-          this.handleAsyncHighlight(file, options, result, true)
-        );
+      this.poolManager.renderFileToAST(this, file, options);
     } else {
       void this.asyncHighlight(file).then(({ result, options }) => {
-        this.handleAsyncHighlight(file, options, result, true);
+        this.onHighlightSuccess(file, result, options);
       });
     }
   }
@@ -171,11 +170,7 @@ export class FileRenderer<LAnnotation = undefined> {
       // basis... (maybe the poolManager can figure it out based on file name
       // and file contents probably?)
       if (!this.renderCache.highlighted || forceRender) {
-        void this.poolManager
-          .renderFileToAST(file, options)
-          .then(({ result, options }) =>
-            this.handleAsyncHighlight(file, options, result)
-          );
+        this.poolManager.renderFileToAST(this, file, options);
       }
     } else {
       this.computedLang =
@@ -191,7 +186,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
       if (this.highlighter == null) {
         void this.asyncHighlight(file).then(({ result, options }) => {
-          this.handleAsyncHighlight(file, options, result);
+          this.onHighlightSuccess(file, result, options);
         });
       } else if (forceRender || !this.renderCache.highlighted) {
         const { result, options } = this.renderFileWithHighlighter(
@@ -336,26 +331,33 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.highlighter;
   }
 
-  handleAsyncHighlight(
+  onHighlightSuccess(
     file: FileContents,
-    // FIXME(amadeus): These values should be returned with the result, so we
-    // don't have to do shenanery to maintain their relationship results
-    options: RenderFileOptions,
     result: ThemedFileResult,
-    hydrate = false
+    options: RenderFileOptions
   ): void {
     if (this.renderCache == null) {
       return;
     }
+    const triggerRenderUpdate =
+      this.renderCache.file !== file ||
+      !this.renderCache.highlighted ||
+      !deepEqual(options, this.renderCache.options);
+
     this.renderCache = {
       file,
       options,
       highlighted: true,
       result,
     };
-    if (!hydrate) {
+
+    if (triggerRenderUpdate) {
       this.onRenderUpdate?.();
     }
+  }
+
+  onHighlightError(error: unknown): void {
+    console.error(error);
   }
 
   private createPreElement(

@@ -8,16 +8,13 @@ import type {
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
-import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
   InitializeSuccessResponse,
   InitializeWorkerRequest,
-  RenderDiffFileRequest,
   RenderDiffMetadataRequest,
   RenderDiffMetadataSuccessResponse,
-  RenderDiffSuccessResponse,
   RenderErrorResponse,
   RenderFileRequest,
   RenderFileSuccessResponse,
@@ -41,9 +38,6 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
         break;
       case 'file':
         await handleRenderFile(request);
-        break;
-      case 'diff-files':
-        await handleRenderDiffFiles(request);
         break;
       case 'diff-metadata':
         await handleRenderDiffMetadata(request);
@@ -96,20 +90,6 @@ async function handleRenderFile({
   );
 }
 
-async function handleRenderDiffFiles({
-  id,
-  oldFile,
-  newFile,
-  options,
-}: RenderDiffFileRequest) {
-  const oldLang = options?.lang ?? getFiletypeFromFileName(oldFile.name);
-  const newLang = options?.lang ?? getFiletypeFromFileName(newFile.name);
-  const fileDiff = parseDiffFromFile(oldFile, newFile);
-  const highlighter = await getHighlighter([oldLang, newLang], options?.theme);
-  const result = renderDiffWithHighlighter(fileDiff, highlighter, options);
-  sendDiffSuccess(id, result);
-}
-
 async function handleRenderDiffMetadata({
   id,
   options,
@@ -145,16 +125,6 @@ function sendFileSuccess(id: WorkerRequestId, result: ThemedFileResult) {
     result,
     sentAt: Date.now(),
   } satisfies RenderFileSuccessResponse);
-}
-
-function sendDiffSuccess(id: WorkerRequestId, result: ThemedDiffResult) {
-  postMessage({
-    type: 'success',
-    requestType: 'diff-files',
-    id,
-    result,
-    sentAt: Date.now(),
-  } satisfies RenderDiffSuccessResponse);
 }
 
 function sendDiffMetadataSuccess(

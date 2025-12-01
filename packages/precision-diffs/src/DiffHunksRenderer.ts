@@ -1,3 +1,4 @@
+import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -258,19 +259,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { options } = this.getRenderOptions(diff);
     this.renderCache ??= {
       diff,
-      highlighted: false,
+      // NOTE(amadeus): If we're hydrating, we can assume there was
+      // pre-rendered HTML, otherwise one should not be hydrating
+      highlighted: true,
       options,
       result: undefined,
     };
     if (this.workerManager != null) {
-      void this.workerManager
-        .renderDiffMetadataToAST(this.diff, options)
-        .then(({ result, options }) => {
-          this.handleAsyncHighlight(diff, options, result, true);
-        });
+      this.workerManager.renderDiffMetadataToAST(this, this.diff, options);
     } else {
       void this.asyncHighlight(diff).then(({ result, options }) => {
-        this.handleAsyncHighlight(diff, options, result, true);
+        this.onHighlightSuccess(diff, result, options);
       });
     }
   }
@@ -326,11 +325,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // basis... (maybe the workerManager can figure it out based on file name
       // and file contents probably?)
       if (!this.renderCache.highlighted || forceRender) {
-        void this.workerManager
-          .renderDiffMetadataToAST(diff, options)
-          .then(({ result, options }) => {
-            this.handleAsyncHighlight(diff, options, result);
-          });
+        this.workerManager.renderDiffMetadataToAST(this, diff, options);
       }
     } else {
       this.computedLang =
@@ -345,7 +340,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
       if (this.highlighter == null) {
         void this.asyncHighlight(diff).then(({ result, options }) => {
-          this.handleAsyncHighlight(diff, options, result);
+          this.onHighlightSuccess(diff, result, options);
         });
       } else if (forceRender || !this.renderCache.highlighted) {
         const { result, options } = this.renderDiffWithHighlighter(
@@ -423,24 +418,33 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { result, options };
   }
 
-  private handleAsyncHighlight(
+  onHighlightSuccess(
     diff: FileDiffMetadata,
-    options: RenderDiffOptions,
     result: ThemedDiffResult,
-    hydrate = false
-  ) {
+    options: RenderDiffOptions
+  ): void {
+    // If renderCache was blown away, we can assume we've run cleanUp()
     if (this.renderCache == null) {
       return;
     }
+    const triggerRenderUpdate =
+      this.renderCache.diff !== diff ||
+      !this.renderCache.highlighted ||
+      !deepEqual(this.renderCache.options, options);
+
     this.renderCache = {
       diff,
       options,
       highlighted: true,
       result,
     };
-    if (!hydrate) {
+    if (triggerRenderUpdate) {
       this.onRenderUpdate?.();
     }
+  }
+
+  onHighlightError(error: unknown): void {
+    console.error(error);
   }
 
   private processDiffResult(

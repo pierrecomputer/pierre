@@ -5,9 +5,7 @@ import type {
   FileDiffMetadata,
   PJSThemeNames,
   RenderDiffOptions,
-  RenderDiffResult,
   RenderFileOptions,
-  RenderFileResult,
   SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
@@ -16,6 +14,24 @@ import type {
 
 export type WorkerRequestId = string;
 
+export interface FileRendererInstance {
+  onHighlightSuccess(
+    file: FileContents,
+    result: ThemedFileResult,
+    options: RenderFileOptions
+  ): unknown;
+  onHighlightError(error: unknown): unknown;
+}
+
+export interface DiffRendererInstance {
+  onHighlightSuccess(
+    diff: FileDiffMetadata,
+    result: ThemedDiffResult,
+    options: RenderDiffOptions
+  ): unknown;
+  onHighlightError(error: unknown): unknown;
+}
+
 export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
@@ -23,15 +39,8 @@ export interface RenderFileRequest {
   options: RenderFileOptions;
 }
 
-export interface RenderDiffFileRequest {
-  type: 'diff-files';
-  id: WorkerRequestId;
-  oldFile: FileContents;
-  newFile: FileContents;
-  options: RenderDiffOptions;
-}
-
 export interface RenderDiffMetadataRequest {
+  // FIXME(amadeus): Make this just 'diff'
   type: 'diff-metadata';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
@@ -46,12 +55,10 @@ export interface InitializeWorkerRequest {
 
 export type SubmitRequest =
   | Omit<RenderFileRequest, 'id'>
-  | Omit<RenderDiffFileRequest, 'id'>
   | Omit<RenderDiffMetadataRequest, 'id'>;
 
 export type WorkerRequest =
   | RenderFileRequest
-  | RenderDiffFileRequest
   | RenderDiffMetadataRequest
   | InitializeWorkerRequest;
 
@@ -139,17 +146,7 @@ export interface RenderFileTask {
   type: 'file';
   id: WorkerRequestId;
   request: RenderFileRequest;
-  resolve(value: RenderFileResult): void;
-  reject(error: Error): void;
-  requestStart: number;
-}
-
-export interface RenderDiffTask {
-  type: 'diff-files';
-  id: WorkerRequestId;
-  request: RenderDiffFileRequest;
-  resolve(value: RenderDiffResult): void;
-  reject(error: Error): void;
+  instance: FileRendererInstance;
   requestStart: number;
 }
 
@@ -157,15 +154,13 @@ export interface RenderDiffMetadataTask {
   type: 'diff-metadata';
   id: WorkerRequestId;
   request: RenderDiffMetadataRequest;
-  resolve(value: RenderDiffResult): void;
-  reject(error: Error): void;
+  instance: DiffRendererInstance;
   requestStart: number;
 }
 
 export type AllWorkerTasks =
   | InitializeWorkerTask
   | RenderFileTask
-  | RenderDiffTask
   | RenderDiffMetadataTask;
 
 export interface WorkerStats {
