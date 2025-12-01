@@ -1,4 +1,4 @@
-# Precision Diffs × SolidStart SSR Demo
+# Diffs × SolidStart SSR Demo
 
 This demo shows that **`@pierre/precision-diffs`** works seamlessly with **SolidStart's server-side rendering (SSR)**, including support for interactive SolidJS components inside annotation slots within shadow DOM.
 
@@ -121,7 +121,7 @@ This two-phase approach avoids hydration mismatches while enabling full SolidJS 
 
 ## Integration Guide
 
-### Step 1: Install Precision Diffs
+### Step 1: Install Diffs
 
 ```bash
 bun add @pierre/precision-diffs
@@ -302,7 +302,7 @@ const dispose = render(() => <Component />, slotElement);
 
 ## Learn More
 
-- [Precision Diffs Documentation](https://precision-diffs.pierre.io)
+- [Diffs Documentation](https://diffs.com)
 - [SolidStart Documentation](https://start.solidjs.com)
 - [Declarative Shadow DOM](https://developer.chrome.com/docs/css-ui/declarative-shadow-dom)
 - [Shadow DOM Event Model](https://javascript.info/shadow-dom-events)

@@ -62,12 +62,12 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
               <>
                 by{' '}
                 <span className="font-normal uppercase">
-                  The Pierre Computer Company
+                  The Pierre Computer Co.
                 </span>
               </>
             }
           >
-            Precision Diffs
+            Diffs
           </Header.Logo>
         }
       >
