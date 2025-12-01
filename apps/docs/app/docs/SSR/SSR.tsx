@@ -28,7 +28,7 @@ export function SSR({
       <h2>SSR</h2>
       <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
         You can import the SSR utilities from{' '}
-        <code>@pierre/precision-diffs/ssr</code>.
+        <code>@pierre/precision-diffs/ssr</code>
       </p>
       <p>
         The SSR API allows you to pre-render file diffs on the server with
