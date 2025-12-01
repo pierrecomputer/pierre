@@ -94,6 +94,7 @@ export class FileDiff<LAnnotation = undefined> {
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
   private customHunkElements: HTMLElement[] = [];
+  private errorWrapper: HTMLElement | undefined;
 
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
   private resizeManager: ResizeManager;
@@ -239,9 +240,13 @@ export class FileDiff<LAnnotation = undefined> {
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
+    if (this.fileContainer?.shadowRoot != null) {
+      this.fileContainer.shadowRoot.innerHTML = '';
+    }
     this.fileContainer = undefined;
     this.pre = undefined;
     this.headerElement = undefined;
+    this.errorWrapper = undefined;
   }
 
   hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
@@ -398,24 +403,28 @@ export class FileDiff<LAnnotation = undefined> {
       containerWrapper
     );
 
-    const hunksResult = this.hunksRenderer.renderDiff(this.fileDiff);
-
-    // If both are null, most likely a cleanup, lets abort
-    if (hunksResult == null) {
-      if (this.workerManager != null && !this.workerManager.isInitialized()) {
-        void this.workerManager.initialize().then(() => this.rerender());
+    try {
+      const hunksResult = this.hunksRenderer.renderDiff(this.fileDiff);
+      if (hunksResult == null) {
+        if (this.workerManager != null && !this.workerManager.isInitialized()) {
+          void this.workerManager.initialize().then(() => this.rerender());
+        }
+        return;
       }
-      return;
-    }
 
-    if (hunksResult.headerElement != null) {
-      this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
+      if (hunksResult.headerElement != null) {
+        this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
+      }
+      const pre = this.getOrCreatePreNode(fileContainer);
+      this.applyHunksToDOM(pre, hunksResult);
+      this.renderSeparators(hunksResult.hunkData);
+      this.renderAnnotations();
+      this.renderHoverUtility();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        this.applyErrorToDOM(error, fileContainer);
+      }
     }
-    const pre = this.getOrCreatePre(fileContainer);
-    this.applyHunksToDOM(pre, hunksResult);
-    this.renderSeparators(hunksResult.hunkData);
-    this.renderAnnotations();
-    this.renderHoverUtility();
   }
 
   private renderSeparators(hunkData: HunkData[]): void {
@@ -507,7 +516,7 @@ export class FileDiff<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  private getOrCreatePre(container: HTMLElement): HTMLPreElement {
+  private getOrCreatePreNode(container: HTMLElement): HTMLPreElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
@@ -525,6 +534,7 @@ export class FileDiff<LAnnotation = undefined> {
     headerAST: HASTElement,
     container: HTMLElement
   ): void {
+    this.cleanupErrorWrapper();
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = toHtml(headerAST);
     const newHeader = tempDiv.firstElementChild;
@@ -588,6 +598,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     result: HunksRenderResult
   ): void {
+    this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
 
     // Clear existing content
@@ -665,5 +676,32 @@ export class FileDiff<LAnnotation = undefined> {
       themeType: baseThemeType ?? themeType,
       totalLines,
     });
+  }
+
+  private applyErrorToDOM(error: Error, container: HTMLElement) {
+    this.cleanupErrorWrapper();
+    const pre = this.getOrCreatePreNode(container);
+    pre.innerHTML = '';
+    pre.parentNode?.removeChild(pre);
+    this.pre = undefined;
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    this.errorWrapper ??= document.createElement('div');
+    this.errorWrapper.dataset.errorWrapper = '';
+    this.errorWrapper.innerHTML = '';
+    shadowRoot.appendChild(this.errorWrapper);
+    const errorMessage = document.createElement('div');
+    errorMessage.dataset.errorMessage = '';
+    errorMessage.innerText = error.message;
+    this.errorWrapper.appendChild(errorMessage);
+    const errorStack = document.createElement('pre');
+    errorStack.dataset.errorStack = '';
+    errorStack.innerText = error.stack ?? 'No Error Stack';
+    this.errorWrapper.appendChild(errorStack);
+  }
+
+  private cleanupErrorWrapper() {
+    this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
+    this.errorWrapper = undefined;
   }
 }

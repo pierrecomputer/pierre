@@ -61,7 +61,8 @@
 /* NOTE(mdo): Some semantic HTML elements (e.g. `pre`, `code`) have default
  * user-agent styles. These must be overridden to use our custom styles. */
 pre,
-code {
+code,
+[data-error-wrapper] {
   margin: 0;
   padding: 0;
   display: block;
@@ -98,7 +99,8 @@ code {
 }
 
 [data-pjs-header],
-[data-pjs] {
+[data-pjs],
+[data-error-wrapper] {
   --pjs-bg: light-dark(var(--pjs-light-bg), var(--pjs-dark-bg));
   /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
    * and vscode use an older build of chrome that appears to have a bug with
@@ -945,5 +947,23 @@ code {
         )
       );
     }
+  }
+}
+
+[data-error-wrapper] {
+  overflow: auto;
+  padding: var(--pjs-gap-block, var(--pjs-gap-fallback))
+    var(--pjs-gap-inline, var(--pjs-gap-fallback));
+  max-height: 400px;
+  scrollbar-width: none;
+
+  [data-error-message] {
+    font-weight: bold;
+    font-size: 18px;
+    color: var(--pjs-deletion-base);
+  }
+
+  [data-error-stack] {
+    color: var(--pjs-fg-number);
   }
 }
