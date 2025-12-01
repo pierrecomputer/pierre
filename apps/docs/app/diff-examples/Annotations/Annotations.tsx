@@ -99,7 +99,14 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     <div className="scroll-mt-[20px] space-y-5" id="annotations">
       <FeatureHeader
         title="Comments & Annotations"
-        description="Precision Diffs provide a flexible annotation framework for injecting additional content and context. Use it to render your own line comments, annotations from CI jobs, and other third-party content."
+        description={
+          <>
+            <code>@pierre/precision-diffs</code> provide a flexible annotation
+            framework for injecting additional content and context. Use it to
+            render your own line comments, annotations from CI jobs, and other
+            third-party content.
+          </>
+        }
       />
       <MultiFileDiff
         {...prerenderedDiff}

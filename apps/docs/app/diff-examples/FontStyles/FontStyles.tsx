@@ -49,8 +49,9 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
           title="Bring your own fonts"
           description={
             <>
-              Precision Diffs adapts to any <code>font</code>,{' '}
-              <code>font-size</code>, <code>line-height</code>, and even{' '}
+              <code>@pierre/precision-diffs</code> adapts to any{' '}
+              <code>font</code>, <code>font-size</code>,{' '}
+              <code>line-height</code>, and even{' '}
               <code>font-feature-settings</code> you may have set. Configure
               font options with your preferred CSS method globally or on a
               per-component basis.

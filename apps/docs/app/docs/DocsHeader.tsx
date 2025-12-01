@@ -17,7 +17,7 @@ export function DocsHeader() {
             </>
           }
         >
-          Precision Diffs
+          Diffs
         </Header.Logo>
       }
     >
