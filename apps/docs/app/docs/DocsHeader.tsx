@@ -12,7 +12,7 @@ export function DocsHeader() {
             <>
               by{' '}
               <span className="font-normal uppercase">
-                The Pierre Computer Company
+                The Pierre Computer Co.
               </span>
             </>
           }

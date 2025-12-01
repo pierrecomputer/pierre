@@ -51,14 +51,13 @@ export function Overview({
       <h2>Overview</h2>
       <div className="text-md flex gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 text-cyan-600 dark:text-cyan-300">
         <IconCiWarningFill className="mt-[7px]" />
-        Precision Diffs is in early active development—APIs are subject to
-        change.
+        Diffs is in early active development—APIs are subject to change.
       </div>
       <p>
-        <strong>Precision Diffs</strong> is a library for rendering code and
-        diffs on the web. This includes both high-level, easy-to-use components,
-        as well as exposing many of the internals if you want to selectively use
-        specific pieces. We‘ve built syntax highlighting on top of{' '}
+        <strong>Diffs</strong> is a library for rendering code and diffs on the
+        web. This includes both high-level, easy-to-use components, as well as
+        exposing many of the internals if you want to selectively use specific
+        pieces. We‘ve built syntax highlighting on top of{' '}
         <Link href="https://shiki.style/" target="_blank">
           Shiki
         </Link>{' '}
@@ -88,7 +87,7 @@ export function Overview({
         For this overview, we‘ll talk about the vanilla JavaScript components
         for now but there are React equivalents for all of these.
       </p>
-      <h3>Rendering Diffs</h3>
+      <h3>Rendering diffs</h3>
       <p>
         It‘s in the name, it‘s probably why you‘re here. Our goal with
         visualizing diffs was to provide some flexible and approachable APIs for{' '}
