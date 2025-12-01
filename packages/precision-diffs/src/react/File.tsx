@@ -25,6 +25,7 @@ export function File<LAnnotation = undefined>({
     options,
     lineAnnotations,
     selectedLines,
+    prerenderedHTML,
   });
   const children = renderFileChildren({
     file,

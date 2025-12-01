@@ -5,7 +5,10 @@ import {
   IconBrandGithub,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import {
+  preloadFileDiff,
+  preloadMultiFileDiff,
+} from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
 
 import { HeaderWrapper } from './HeaderWrapper';
@@ -51,10 +54,10 @@ export default function Home() {
       {/* TODO: add this back once we add the migration APIs
 
       <section className="max-w-4xl mx-auto px-8 py-12 space-y-4">
-        <h2 className="text-3xl font-bold">Migrate to Precision Diffs</h2>
+        <h2 className="text-3xl font-bold">Migrate to @pierre/precision-diffs</h2>
         <p className="text-muted-foreground">
           Already using git-diff-viewer? Learn how to migrate your diff
-          rendering to Precision Diffs.
+          rendering to @pierre/precision-diffs.
         </p>
       </section> */}
 
@@ -151,7 +154,7 @@ async function ArbitraryFilesSection() {
 async function AcceptRejectSection() {
   return (
     <AcceptRejectExample
-      prerenderedDiff={await preloadMultiFileDiff(ACCEPT_REJECT_EXAMPLE)}
+      prerenderedDiff={await preloadFileDiff(ACCEPT_REJECT_EXAMPLE)}
     />
   );
 }

@@ -1,5 +1,4 @@
-import { DEFAULT_THEMES } from 'src/constants';
-
+import { DEFAULT_THEMES } from '../constants';
 import type {
   PJSHighlighter,
   PJSThemeNames,

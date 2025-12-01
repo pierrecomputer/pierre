@@ -1,8 +1,8 @@
 import deepEquals from 'fast-deep-equal';
-import type { Element } from 'hast';
+import type { Element as HASTElement } from 'hast';
+import { toHtml } from 'hast-util-to-html';
 
 import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
-import { FileHeaderRenderer } from './FileHeaderRenderer';
 import {
   LineSelectionManager,
   type LineSelectionOptions,
@@ -17,8 +17,11 @@ import {
 } from './MouseEventManager';
 import { ResizeManager } from './ResizeManager';
 import { ScrollSyncManager } from './ScrollSyncManager';
-import { getSharedHighlighter } from './SharedHighlighter';
-import { DEFAULT_THEMES, HEADER_METADATA_SLOT_ID } from './constants';
+import {
+  DEFAULT_THEMES,
+  HEADER_METADATA_SLOT_ID,
+  UNSAFE_CSS_ATTRIBUTE,
+} from './constants';
 import { PJSContainerLoaded } from './custom-components/Container';
 import { SVGSpriteSheet } from './sprite';
 import type {
@@ -29,21 +32,21 @@ import type {
   FileDiffMetadata,
   HunkData,
   HunkSeparators,
-  PJSHighlighter,
   RenderHeaderMetadataCallback,
   ThemeTypes,
 } from './types';
+import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode';
+import { createCodeNode } from './utils/createCodeNode';
+import { createHoverContentNode } from './utils/createHoverContentNode';
+import { createUnsafeCSSStyleNode } from './utils/createUnsafeCSSStyleNode';
+import { wrapUnsafeCSS } from './utils/cssWrappers';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getThemes } from './utils/getThemes';
-import {
-  createAnnotationWrapper,
-  createCodeNode,
-  createHoverContent,
-  setWrapperProps,
-} from './utils/html_render_utils';
 import { parseDiffFromFile } from './utils/parseDiffFromFile';
+import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
+import { setPreNodeProperties } from './utils/setWrapperNodeProps';
+import type { WorkerPoolManager } from './worker';
 
-interface FileDiffRenderProps<LAnnotation> {
+export interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
   newFile?: FileContents;
@@ -51,6 +54,12 @@ interface FileDiffRenderProps<LAnnotation> {
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+}
+
+export interface FileDiffHydrationProps<LAnnotation>
+  extends Omit<FileDiffRenderProps<LAnnotation>, 'fileContainer'> {
+  fileContainer: HTMLElement;
+  prerenderedHTML?: string;
 }
 
 export interface FileDiffOptions<LAnnotation>
@@ -91,9 +100,9 @@ export class FileDiff<LAnnotation = undefined> {
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
   private customHunkElements: HTMLElement[] = [];
+  private errorWrapper: HTMLElement | undefined;
 
   private hunksRenderer: DiffHunksRenderer<LAnnotation>;
-  private headerRenderer: FileHeaderRenderer;
   private resizeManager: ResizeManager;
   private scrollSyncManager: ScrollSyncManager;
   private mouseEventManager: MouseEventManager<'diff'>;
@@ -108,17 +117,21 @@ export class FileDiff<LAnnotation = undefined> {
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    private workerManager?: WorkerPoolManager | undefined,
     // NOTE(amadeus): Temp hack while we use this component in a react context
     private isContainerManaged = false
   ) {
-    this.hunksRenderer = new DiffHunksRenderer({
-      ...options,
-      hunkSeparators:
-        typeof options.hunkSeparators === 'function'
-          ? 'custom'
-          : options.hunkSeparators,
-    });
-    this.headerRenderer = new FileHeaderRenderer(options);
+    this.hunksRenderer = new DiffHunksRenderer(
+      {
+        ...options,
+        hunkSeparators:
+          typeof options.hunkSeparators === 'function'
+            ? 'custom'
+            : options.hunkSeparators,
+      },
+      this.handleHighlightRender,
+      this.workerManager
+    );
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
     this.mouseEventManager = new MouseEventManager(
@@ -134,7 +147,12 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineSelectionManager = new LineSelectionManager(
       pluckLineSelectionOptions(options)
     );
+    this.workerManager?.subscribeToThemeChanges(this);
   }
+
+  private handleHighlightRender = (): void => {
+    this.rerender();
+  };
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
   // * Do we publicly allow merging of options or do we have individualized setters?
@@ -175,7 +193,6 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.mergeOptions({ themeType });
     this.hunksRenderer.setThemeType(themeType);
-    this.headerRenderer.setThemeType(themeType);
 
     if (this.headerElement != null) {
       if (themeType === 'system') {
@@ -208,22 +225,17 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   setSelectedLines(range: SelectedLineRange | null): void {
-    // If we have a render in progress, we should wait for it to finish before
-    // attempting the selection
-    if (this.queuedRender != null) {
-      void this.queuedRender.then(() => this.setSelectedLines(range));
-    } else {
-      this.lineSelectionManager.setSelection(range);
-    }
+    this.lineSelectionManager.setSelection(range);
   }
 
   cleanUp(): void {
     this.hunksRenderer.cleanUp();
-    this.headerRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.lineSelectionManager.cleanUp();
+    this.workerManager?.unsubscribeToThemeChanges(this);
+    this.workerManager = undefined;
 
     // Clean up the data
     this.fileDiff = undefined;
@@ -234,19 +246,20 @@ export class FileDiff<LAnnotation = undefined> {
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
+    if (this.fileContainer?.shadowRoot != null) {
+      this.fileContainer.shadowRoot.innerHTML = '';
+    }
     this.fileContainer = undefined;
     this.pre = undefined;
     this.headerElement = undefined;
+    this.errorWrapper = undefined;
   }
 
-  async hydrate(props: FileDiffRenderProps<LAnnotation>): Promise<void> {
-    if (props.fileContainer == null) {
-      throw new Error(
-        'FileDiff: you must provide a fileContainer on hydration'
-      );
-    }
+  hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
+    const { fileContainer, prerenderedHTML } = props;
+    prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
-      props.fileContainer.shadowRoot?.children ?? []
+      fileContainer.shadowRoot?.children ?? []
     )) {
       if (element instanceof SVGElement) {
         this.spriteSVG = element;
@@ -263,26 +276,34 @@ export class FileDiff<LAnnotation = undefined> {
         this.headerElement = element;
         continue;
       }
-      if (element instanceof HTMLStyleElement) {
+      if (
+        element instanceof HTMLStyleElement &&
+        element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
+      ) {
         this.unsafeCSSStyle = element;
         continue;
       }
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      await this.render(props);
+      this.render(props);
     }
     // Otherwise orchestrate our setup
     else {
-      this.fileContainer = props.fileContainer;
+      const { lineAnnotations, oldFile, newFile, fileDiff } = props;
+      this.fileContainer = fileContainer;
       delete this.pre.dataset.dehydrated;
 
-      this.lineAnnotations = props.lineAnnotations ?? this.lineAnnotations;
-      this.newFile = props.newFile;
-      this.oldFile = props.oldFile;
-      this.fileDiff = props.fileDiff;
+      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+      this.newFile = newFile;
+      this.oldFile = oldFile;
+      this.fileDiff =
+        fileDiff ??
+        (oldFile != null && newFile != null
+          ? parseDiffFromFile(oldFile, newFile)
+          : undefined);
 
-      void this.hunksRenderer.initializeHighlighter();
+      this.hunksRenderer.hydrate(this.fileDiff);
       // FIXME(amadeus): not sure how to handle this yet...
       // this.renderSeparators();
       this.renderAnnotations();
@@ -297,8 +318,11 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  async rerender(): Promise<void> {
-    await this.render({
+  rerender(): void {
+    if (this.fileDiff == null && this.newFile == null && this.oldFile == null) {
+      return;
+    }
+    this.render({
       oldFile: this.oldFile,
       newFile: this.newFile,
       fileDiff: this.fileDiff,
@@ -315,23 +339,28 @@ export class FileDiff<LAnnotation = undefined> {
 
   expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
     this.hunksRenderer.expandHunk(hunkIndex, direction);
-    void this.rerender();
+    this.rerender();
   }
 
-  private queuedRender: Promise<void> | undefined;
-  async render(props: FileDiffRenderProps<LAnnotation>): Promise<void> {
-    const {
-      oldFile,
-      newFile,
-      fileDiff,
-      forceRender = false,
-      lineAnnotations,
-    } = props;
-    // Ideally this would just a quick === check because lineAnnotations is
-    // unbounded
+  render({
+    oldFile,
+    newFile,
+    fileDiff,
+    forceRender = false,
+    lineAnnotations,
+    fileContainer,
+    containerWrapper,
+  }: FileDiffRenderProps<LAnnotation>): void {
+    const filesDidChange =
+      oldFile != null &&
+      newFile != null &&
+      (!deepEquals(oldFile, this.oldFile) ||
+        !deepEquals(newFile, this.newFile));
     const annotationsChanged =
       lineAnnotations != null &&
-      !deepEquals(lineAnnotations, this.lineAnnotations);
+      (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
+        ? lineAnnotations !== this.lineAnnotations
+        : false;
     if (
       !forceRender &&
       !annotationsChanged &&
@@ -340,38 +369,16 @@ export class FileDiff<LAnnotation = undefined> {
       ((fileDiff != null && fileDiff === this.fileDiff) ||
         // If using the oldFile/newFile API then lets check to see if they are
         // equal
-        (oldFile != null &&
-          newFile != null &&
-          deepEquals(oldFile, this.oldFile) &&
-          deepEquals(newFile, this.newFile)))
+        (fileDiff == null && !filesDidChange))
     ) {
       return;
     }
 
-    const currentRender = (this.queuedRender =
-      this.queuedRender != null
-        ? this.queuedRender.then(() => this._render(props))
-        : this._render(props));
-
-    await currentRender;
-    if (this.queuedRender === currentRender) {
-      this.queuedRender = undefined;
-    }
-  }
-
-  private async _render({
-    oldFile,
-    newFile,
-    fileDiff,
-    fileContainer,
-    lineAnnotations,
-    containerWrapper,
-  }: FileDiffRenderProps<LAnnotation>): Promise<void> {
     this.oldFile = oldFile;
     this.newFile = newFile;
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
-    } else if (oldFile != null && newFile != null) {
+    } else if (oldFile != null && newFile != null && filesDidChange) {
       this.fileDiff = parseDiffFromFile(oldFile, newFile);
     }
 
@@ -389,52 +396,43 @@ export class FileDiff<LAnnotation = undefined> {
           : this.options.hunkSeparators,
     });
 
-    // This is kinda jank, lol
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
     const { disableFileHeader = false } = this.options;
 
     if (disableFileHeader) {
-      this.headerRenderer.cleanUp();
       // Remove existing header from DOM
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
       }
-    } else {
-      const { theme, themeType } = this.options;
-      this.headerRenderer.setOptions({ theme, themeType });
     }
+    fileContainer = this.getOrCreateFileContainer(
+      fileContainer,
+      containerWrapper
+    );
 
-    const [highlighter, headerResult, hunksResult] = await Promise.all([
-      getSharedHighlighter({
-        themes: getThemes(this.options.theme),
-        langs: [],
-      }),
-      !disableFileHeader
-        ? this.headerRenderer.render(this.fileDiff)
-        : undefined,
-      this.hunksRenderer.render(this.fileDiff),
-    ]);
-
-    // If both are null, most likely a cleanup, lets abort
-    if (headerResult == null && hunksResult == null) {
-      return;
-    }
-
-    fileContainer = this.getOrCreateFileContainer(fileContainer);
-    if (headerResult != null) {
-      this.applyHeaderToDOM(headerResult, fileContainer);
-    }
-    if (hunksResult != null) {
-      if (containerWrapper != null) {
-        containerWrapper.appendChild(fileContainer);
+    try {
+      const hunksResult = this.hunksRenderer.renderDiff(this.fileDiff);
+      if (hunksResult == null) {
+        if (this.workerManager != null && !this.workerManager.isInitialized()) {
+          void this.workerManager.initialize().then(() => this.rerender());
+        }
+        return;
       }
-      const pre = this.getOrCreatePre(fileContainer);
-      this.applyHunksToDOM(hunksResult, pre, highlighter);
+
+      if (hunksResult.headerElement != null) {
+        this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
+      }
+      const pre = this.getOrCreatePreNode(fileContainer);
+      this.applyHunksToDOM(pre, hunksResult);
       this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
       this.renderHoverUtility();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        this.applyErrorToDOM(error, fileContainer);
+      }
     }
   }
 
@@ -476,7 +474,9 @@ export class FileDiff<LAnnotation = undefined> {
       for (const annotation of this.lineAnnotations) {
         const content = renderAnnotation(annotation);
         if (content == null) continue;
-        const el = createAnnotationWrapper(getLineAnnotationName(annotation));
+        const el = createAnnotationWrapperNode(
+          getLineAnnotationName(annotation)
+        );
         el.appendChild(content);
         this.annotationElements.push(el);
         this.fileContainer.appendChild(el);
@@ -488,7 +488,7 @@ export class FileDiff<LAnnotation = undefined> {
     const { renderHoverUtility } = this.options;
     if (this.fileContainer == null || renderHoverUtility == null) return;
     if (this.hoverContent == null) {
-      this.hoverContent = createHoverContent();
+      this.hoverContent = createHoverContentNode();
       this.fileContainer.appendChild(this.hoverContent);
     }
     const element = renderHoverUtility(this.mouseEventManager.getHoveredLine);
@@ -498,11 +498,17 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
+  private getOrCreateFileContainer(
+    fileContainer?: HTMLElement,
+    parentNode?: HTMLElement
+  ): HTMLElement {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement('file-diff');
+    if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
+      parentNode.appendChild(this.fileContainer);
+    }
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -519,7 +525,7 @@ export class FileDiff<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  private getOrCreatePre(container: HTMLElement): HTMLPreElement {
+  private getOrCreatePreNode(container: HTMLElement): HTMLPreElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
@@ -533,9 +539,13 @@ export class FileDiff<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private applyHeaderToDOM(headerAST: Element, container: HTMLElement): void {
+  private applyHeaderToDOM(
+    headerAST: HASTElement,
+    container: HTMLElement
+  ): void {
+    this.cleanupErrorWrapper();
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = this.headerRenderer.renderResultToHTML(headerAST);
+    tempDiv.innerHTML = toHtml(headerAST);
     const newHeader = tempDiv.firstElementChild;
     if (!(newHeader instanceof HTMLElement)) {
       return;
@@ -571,37 +581,6 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private setPreAttributes(
-    pre: HTMLPreElement,
-    highlighter: PJSHighlighter,
-    result: HunksRenderResult
-  ): void {
-    const {
-      diffStyle = 'split',
-      overflow = 'scroll',
-      theme,
-      themeType = 'system',
-      diffIndicators = 'bars',
-      disableBackground = false,
-    } = this.options;
-    const unified = diffStyle === 'unified';
-    const split = unified
-      ? false
-      : result.additionsAST != null && result.deletionsAST != null;
-    const wrap = overflow === 'wrap';
-    setWrapperProps({
-      pre,
-      theme,
-      highlighter,
-      split,
-      wrap,
-      themeType,
-      diffIndicators,
-      disableBackground,
-      totalLines: result.totalLines,
-    });
-  }
-
   private injectUnsafeCSS(): void {
     if (this.fileContainer?.shadowRoot == null) {
       return;
@@ -614,22 +593,19 @@ export class FileDiff<LAnnotation = undefined> {
 
     // Create or update the style element
     if (this.unsafeCSSStyle == null) {
-      this.unsafeCSSStyle = document.createElement('style');
+      this.unsafeCSSStyle = createUnsafeCSSStyleNode();
       this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
     }
     // Wrap in @layer unsafe to match SSR behavior
-    this.unsafeCSSStyle.insertAdjacentText(
-      'beforeend',
-      `@layer unsafe {\n${unsafeCSS}\n}`
-    );
+    this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
   }
 
   private applyHunksToDOM(
-    result: HunksRenderResult,
     pre: HTMLPreElement,
-    highlighter: PJSHighlighter
+    result: HunksRenderResult
   ): void {
-    this.setPreAttributes(pre, highlighter, result);
+    this.cleanupErrorWrapper();
+    this.applyPreNodeAttributes(pre, result);
 
     // Clear existing content
     pre.innerHTML = '';
@@ -671,5 +647,67 @@ export class FileDiff<LAnnotation = undefined> {
       this.resizeManager.cleanUp();
       this.scrollSyncManager.cleanUp();
     }
+  }
+
+  private applyPreNodeAttributes(
+    pre: HTMLPreElement,
+    {
+      themeStyles,
+      baseThemeType,
+      additionsAST,
+      deletionsAST,
+      totalLines,
+    }: HunksRenderResult
+  ): void {
+    const {
+      diffIndicators = 'bars',
+      disableBackground = false,
+      disableLineNumbers = false,
+      overflow = 'scroll',
+      themeType = 'system',
+      diffStyle = 'split',
+    } = this.options;
+    const split =
+      diffStyle === 'unified'
+        ? false
+        : additionsAST != null && deletionsAST != null;
+    setPreNodeProperties({
+      pre,
+      diffIndicators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      split,
+      themeStyles,
+      themeType: baseThemeType ?? themeType,
+      totalLines,
+    });
+  }
+
+  private applyErrorToDOM(error: Error, container: HTMLElement) {
+    this.cleanupErrorWrapper();
+    const pre = this.getOrCreatePreNode(container);
+    pre.innerHTML = '';
+    pre.parentNode?.removeChild(pre);
+    this.pre = undefined;
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    this.errorWrapper ??= document.createElement('div');
+    this.errorWrapper.dataset.errorWrapper = '';
+    this.errorWrapper.innerHTML = '';
+    shadowRoot.appendChild(this.errorWrapper);
+    const errorMessage = document.createElement('div');
+    errorMessage.dataset.errorMessage = '';
+    errorMessage.innerText = error.message;
+    this.errorWrapper.appendChild(errorMessage);
+    const errorStack = document.createElement('pre');
+    errorStack.dataset.errorStack = '';
+    errorStack.innerText = error.stack ?? 'No Error Stack';
+    this.errorWrapper.appendChild(errorStack);
+  }
+
+  private cleanupErrorWrapper() {
+    this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
+    this.errorWrapper = undefined;
   }
 }

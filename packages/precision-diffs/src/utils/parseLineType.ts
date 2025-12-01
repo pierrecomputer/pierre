@@ -1,40 +1,32 @@
 import type { HunkLineType } from '../types';
 
-export interface ParseLineTypeReturn {
+export interface ParsedLine {
   line: string;
-  type: HunkLineType;
-  longLine: boolean;
+  type: Exclude<HunkLineType, 'expanded'>;
 }
 
-export function parseLineType(
-  line: string,
-  maxLineLength: number
-): ParseLineTypeReturn {
+export function parseLineType(line: string): ParsedLine | undefined {
   const firstChar = line[0];
   if (
     firstChar !== '+' &&
     firstChar !== '-' &&
     firstChar !== ' ' &&
-    firstChar !== '\n' &&
-    firstChar !== '\r' &&
     firstChar !== '\\'
   ) {
-    throw new Error(
+    console.error(
       `parseLineType: Invalid firstChar: "${firstChar}", full line: "${line}"`
     );
+    return undefined;
   }
   return {
     line: line.substring(1),
     type:
-      // NOTE(amadeus): Don't love allowing this, but it's
-      // _probably_ generally safe
-      firstChar === ' ' || firstChar === '\n' || firstChar === '\r'
+      firstChar === ' '
         ? 'context'
         : firstChar === '\\'
           ? 'metadata'
           : firstChar === '+'
             ? 'addition'
             : 'deletion',
-    longLine: line.length - 1 >= maxLineLength,
   };
 }

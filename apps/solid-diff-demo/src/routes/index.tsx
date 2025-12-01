@@ -67,10 +67,8 @@ export default function Home() {
 
   return (
     <main style={{ padding: '20px', 'max-width': '1200px', margin: '0 auto' }}>
-      <Title>SolidStart + Precision Diffs SSR Demo</Title>
-      <h1 style={{ 'margin-bottom': '10px' }}>
-        SolidStart + Precision Diffs SSR Demo
-      </h1>
+      <Title>SolidStart + Diffs SSR Demo</Title>
+      <h1 style={{ 'margin-bottom': '10px' }}>SolidStart + Diffs SSR Demo</h1>
       <p style={{ 'margin-bottom': '20px' }}>
         This entire page is server-rendered with SolidStart. Try disabling
         JavaScript!
