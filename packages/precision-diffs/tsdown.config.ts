@@ -4,7 +4,7 @@ import { type UserConfig, defineConfig } from 'tsdown';
 
 const config: UserConfig = defineConfig([
   {
-    entry: ['src/**/*.ts', 'src/**/*.tsx'],
+    entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/worker/shiki-worker.ts'],
     loader: {
       '.css': 'text',
     },
@@ -34,6 +34,16 @@ const config: UserConfig = defineConfig([
         },
       },
     ],
+  },
+  {
+    entry: ['src/worker/shiki-worker.ts'],
+    outDir: 'dist/worker',
+    tsconfig: './tsconfig.json',
+    clean: false,
+    dts: {
+      sourcemap: true,
+    },
+    platform: 'neutral',
   },
 ]);
 
