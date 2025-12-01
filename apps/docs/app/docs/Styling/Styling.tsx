@@ -38,6 +38,15 @@ export function Styling({
         the cascade. Use this sparingly and with caution, as it bypasses the
         normal style isolation.
       </p>
+      <p>
+        We also recommend that any CSS you apply uses simple, direct selectors
+        targeting the existing data attributes. Avoid structural selectors like{' '}
+        <code>:first-child</code>, <code>:last-child</code>,{' '}
+        <code>:nth-child()</code>, sibling combinators (<code>+</code> or{' '}
+        <code>~</code>), deeply nested descendant selectors, or bare tag
+        selectors—these are susceptible to breaking in future versions or in
+        edge cases that may be difficult to anticipate.
+      </p>
       <p className="font-semibold italic">
         <IconCiWarning size={16} className="inline-block text-red-500" /> We
         cannot currently guarantee backwards compatibility for this feature
