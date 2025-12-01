@@ -35,6 +35,8 @@ import type {
   WorkerStats,
 } from './types';
 
+const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
+
 interface ManagedWorker {
   worker: Worker;
   busy: boolean;
@@ -57,6 +59,10 @@ export class WorkerPoolManager {
   private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
   private nextRequestId = 0;
   private themeSubscribers = new Set<ThemeSubscriber>();
+  private instanceRequestMap = new Map<
+    FileRendererInstance | DiffRendererInstance,
+    string
+  >();
 
   constructor(
     private options: WorkerPoolOptions,
@@ -256,6 +262,7 @@ export class WorkerPoolManager {
 
   terminate(): void {
     this.terminateWorkers();
+    this.instanceRequestMap.clear();
     this.taskQueue.length = 0;
     this.pendingTasks.clear();
     this.highlighter = undefined;
@@ -316,6 +323,8 @@ export class WorkerPoolManager {
           };
       }
     })();
+
+    this.instanceRequestMap.set(instance, id);
     const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
     if (availableWorker != null) {
       this.executeTask(availableWorker, task);
@@ -329,24 +338,32 @@ export class WorkerPoolManager {
     response: WorkerResponse
   ): void {
     const task = this.pendingTasks.get(response.id);
-
-    if (task == null) {
-      console.error(
-        'handleWorkerMessage: Received response for unknown task:',
-        response
-      );
-    } else if (response.type === 'error') {
-      const error = new Error(response.error);
-      if (response.stack) {
-        error.stack = response.stack;
-      }
-      if ('reject' in task) {
-        task.reject(error);
+    try {
+      if (task == null) {
+        throw new Error(
+          'handleWorkerMessage: Received response for unknown task'
+        );
+      } else if (response.type === 'error') {
+        const error = new Error(response.error);
+        if (response.stack) {
+          error.stack = response.stack;
+        }
+        if ('reject' in task) {
+          task.reject(error);
+        } else {
+          task.instance.onHighlightError(error);
+        }
+        throw error;
       } else {
-        task.instance.onHighlightError(error);
-      }
-    } else {
-      try {
+        // If we've gotten a newer request from the same instance, we should
+        // ignore this response either because it's out of order or because we
+        // have a newer more important request
+        if (
+          'instance' in task &&
+          this.instanceRequestMap.get(task.instance) !== response.id
+        ) {
+          throw IGNORE_RESPONSE;
+        }
         switch (response.requestType) {
           case 'initialize':
             if (task.type !== 'initialize') {
@@ -373,11 +390,20 @@ export class WorkerPoolManager {
             break;
           }
         }
-      } catch (e) {
-        console.error(e, task, response);
+      }
+    } catch (error) {
+      if (error !== IGNORE_RESPONSE) {
+        console.error(error, task, response);
       }
     }
 
+    if (
+      task != null &&
+      'instance' in task &&
+      this.instanceRequestMap.get(task.instance) === response.id
+    ) {
+      this.instanceRequestMap.delete(task.instance);
+    }
     this.pendingTasks.delete(response.id);
     managedWorker.busy = false;
     if (this.taskQueue.length > 0) {
