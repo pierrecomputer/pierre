@@ -462,20 +462,6 @@ if (diff2Files != null) {
   });
 }
 
-// For quick testing diffs
-// (() => {
-//   const oldFile = {
-//     name: 'file_old.ts',
-//     contents: FILE_OLD,
-//   };
-//   const newFile = {
-//     name: 'file_new.ts',
-//     contents: FILE_NEW,
-//   };
-//   const parsed = parseDiffFromFile(oldFile, newFile);
-//   renderDiff([{ files: [parsed] }], manager);
-// })();
-
 function toggleTheme() {
   const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
@@ -580,3 +566,17 @@ function getThemeType() {
       ? 'light'
       : 'system';
 }
+
+// For quick testing diffs
+// (() => {
+//   const oldFile = {
+//     name: 'file_old.ts',
+//     contents: FILE_OLD,
+//   };
+//   const newFile = {
+//     name: 'file_new.ts',
+//     contents: FILE_NEW,
+//   };
+//   const parsed = parseDiffFromFile(oldFile, newFile);
+//   renderDiff([{ files: [parsed] }], poolManager);
+// })();
