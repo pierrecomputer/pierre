@@ -4,79 +4,169 @@ const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
 } as const;
 
-export const SSR_SERVER_COMPONENT: PreloadFileOptions<undefined> = {
+export const SSR_USAGE_SERVER: PreloadFileOptions<undefined> = {
   file: {
     name: 'page.tsx',
     contents: `// app/diff/page.tsx (Server Component)
 import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
-import { DiffPage } from './DiffPage';
+import { DiffViewer } from './DiffViewer';
 
-const OLD_FILE = {
-  name: 'main.ts',
+const oldFile = {
+  name: 'example.ts',
   contents: \`function greet(name: string) {
   console.log("Hello, " + name);
 }\`,
 };
 
-const NEW_FILE = {
-  name: 'main.ts',
+const newFile = {
+  name: 'example.ts',
   contents: \`function greet(name: string) {
   console.log(\\\`Hello, \\\${name}!\\\`);
 }\`,
 };
 
-export default async function DiffRoute() {
-  const preloadedFileDiff = await preloadMultiFileDiff({
-    oldFile: OLD_FILE,
-    newFile: NEW_FILE,
-    options: {
-      theme: 'pierre-dark',
-      diffStyle: 'split',
-      diffIndicators: 'bars',
-    },
+export default async function DiffPage() {
+  const preloaded = await preloadMultiFileDiff({
+    oldFile,
+    newFile,
+    options: { theme: 'pierre-dark', diffStyle: 'split' },
   });
 
-  return <DiffPage preloadedFileDiff={preloadedFileDiff} />;
+  return <DiffViewer preloaded={preloaded} />;
 }`,
   },
   options,
 };
 
-export const SSR_CLIENT_COMPONENT: PreloadFileOptions<undefined> = {
+export const SSR_USAGE_CLIENT: PreloadFileOptions<undefined> = {
   file: {
-    name: 'DiffPage.tsx',
-    contents: `// app/diff/DiffPage.tsx (Client Component)
+    name: 'DiffViewer.tsx',
+    contents: `// app/diff/DiffViewer.tsx (Client Component)
 'use client';
 
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 
-interface DiffPageProps {
-  preloadedFileDiff: PreloadMultiFileDiffResult;
+interface Props {
+  preloaded: PreloadMultiFileDiffResult;
 }
 
-export function DiffPage({ preloadedFileDiff }: DiffPageProps) {
-  return (
-    <MultiFileDiff
-      {...preloadedFileDiff}
-      className="overflow-hidden rounded-lg border"
-    />
-  );
+export function DiffViewer({ preloaded }: Props) {
+  // Spread the entire result to ensure inputs match what was pre-rendered
+  return <MultiFileDiff {...preloaded} />;
 }`,
   },
   options,
 };
 
-export const SSR_INSTALLATION: PreloadFileOptions<undefined> = {
+export const SSR_PRELOAD_FILE_DIFF: PreloadFileOptions<undefined> = {
   file: {
     name: 'example.tsx',
-    contents: `import {
-  // There are matching preload functions for each react component
-  preloadMultiFileDiff,
-  preloadFileDiff,
-  preloadPatchDiff,
-  preloadFile,
-} from '@pierre/precision-diffs/ssr';`,
+    contents: `import { preloadFileDiff } from '@pierre/precision-diffs/ssr';
+import { parseDiffFromFile } from '@pierre/precision-diffs';
+
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
+
+// First parse the diff to get FileDiffMetadata
+const fileDiff = parseDiffFromFile(oldFile, newFile);
+
+// Then preload for SSR
+const result = await preloadFileDiff({
+  fileDiff,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <FileDiff {...result} />`,
+  },
+  options,
+};
+
+export const SSR_PRELOAD_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'example.tsx',
+    contents: `import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
+
+const result = await preloadMultiFileDiff({
+  oldFile,
+  newFile,
+  options: { theme: 'pierre-dark', diffStyle: 'split' },
+});
+
+// Spread result into <MultiFileDiff {...result} />`,
+  },
+  options,
+};
+
+export const SSR_PRELOAD_PATCH_DIFF: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'example.tsx',
+    contents: `import { preloadPatchDiff } from '@pierre/precision-diffs/ssr';
+
+const patch = \`--- a/example.ts
++++ b/example.ts
+@@ -1 +1 @@
+-const x = 1;
++const x = 2;\`;
+
+const result = await preloadPatchDiff({
+  patch,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <PatchDiff {...result} />`,
+  },
+  options,
+};
+
+export const SSR_PRELOAD_FILE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'example.tsx',
+    contents: `import { preloadFile } from '@pierre/precision-diffs/ssr';
+
+const file = {
+  name: 'example.ts',
+  contents: 'export function hello() { return "world"; }',
+};
+
+const result = await preloadFile({
+  file,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <File {...result} />`,
+  },
+  options,
+};
+
+export const SSR_PRELOAD_PATCH_FILE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'example.tsx',
+    contents: `import { preloadPatchFile } from '@pierre/precision-diffs/ssr';
+
+// A patch containing multiple file changes
+const patch = \`diff --git a/foo.ts b/foo.ts
+--- a/foo.ts
++++ b/foo.ts
+@@ -1 +1 @@
+-const a = 1;
++const a = 2;
+diff --git a/bar.ts b/bar.ts
+--- a/bar.ts
++++ b/bar.ts
+@@ -1 +1 @@
+-const b = 1;
++const b = 2;\`;
+
+const results = await preloadPatchFile({
+  patch,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread each result into <FileDiff {...results[i]} />`,
   },
   options,
 };

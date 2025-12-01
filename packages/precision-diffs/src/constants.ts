@@ -22,3 +22,6 @@ export const DEFAULT_THEMES: ThemesType = {
   dark: 'pierre-dark',
   light: 'pierre-light',
 };
+
+export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';
+export const CORE_CSS_ATTRIBUTE = 'data-core-css';

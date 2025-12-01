@@ -8,16 +8,15 @@ export function parseDiffFromFile(
   oldFile: FileContents,
   newFile: FileContents
 ): FileDiffMetadata {
-  const fileData = parsePatchFiles(
-    createTwoFilesPatch(
-      oldFile.name,
-      newFile.name,
-      oldFile.contents,
-      newFile.contents,
-      oldFile.header,
-      newFile.header
-    )
-  )[0]?.files[0];
+  const patch = createTwoFilesPatch(
+    oldFile.name,
+    newFile.name,
+    oldFile.contents,
+    newFile.contents,
+    oldFile.header,
+    newFile.header
+  );
+  const fileData = parsePatchFiles(patch)[0]?.files[0];
   if (fileData == null) {
     throw new Error(
       'parseDiffFrom: FileInvalid diff -- probably need to fix something -- if the files are the same maybe?'

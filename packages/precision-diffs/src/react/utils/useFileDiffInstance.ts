@@ -1,5 +1,11 @@
 import deepEqual from 'fast-deep-equal';
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 
 import { FileDiff, type FileDiffOptions } from '../../FileDiff';
 import type { SelectedLineRange } from '../../LineSelectionManager';
@@ -9,6 +15,7 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../../types';
+import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
 const useIsometricEffect =
@@ -21,6 +28,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   options: FileDiffOptions<LAnnotation> | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
+  prerenderedHTML: string | undefined;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -35,7 +43,9 @@ export function useFileDiffInstance<LAnnotation>({
   options,
   lineAnnotations,
   selectedLines,
+  prerenderedHTML,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
+  const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<FileDiff<LAnnotation> | null>(null);
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
@@ -46,13 +56,14 @@ export function useFileDiffInstance<LAnnotation>({
       }
       // FIXME: Ideally we don't use FileDiffUI here, and instead amalgamate
       // the renderers manually
-      instanceRef.current = new FileDiff(options, true);
+      instanceRef.current = new FileDiff(options, poolManager, true);
       void instanceRef.current.hydrate({
         fileDiff,
         oldFile,
         newFile,
         fileContainer,
         lineAnnotations,
+        prerenderedHTML,
       });
     } else {
       if (instanceRef.current == null) {

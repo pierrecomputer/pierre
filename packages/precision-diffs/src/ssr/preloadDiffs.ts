@@ -1,15 +1,13 @@
 import type { FileDiffOptions } from '../../src/FileDiff';
 import { DiffHunksRenderer } from '../DiffHunksRenderer';
-import { FileHeaderRenderer } from '../FileHeaderRenderer';
 import type {
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
 } from '../types';
+import { createStyleElement } from '../utils/createStyleElement';
 import { getSingularPatch } from '../utils/getSingularPatch';
-import { createStyleElement } from '../utils/hast_utils';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
-import { renderCSS } from './renderCSS';
 import { renderHTML } from './renderHTML';
 
 export interface PreloadDiffOptions<LAnnotation> {
@@ -27,7 +25,6 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadDiffOptions<LAnnotation>): Promise<string> {
-  const { disableFileHeader = false } = options ?? {};
   if (fileDiff == null && oldFile != null && newFile != null) {
     fileDiff = parseDiffFromFile(oldFile, newFile);
   }
@@ -43,26 +40,22 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
         ? 'custom'
         : options?.hunkSeparators,
   });
-  const fileHeader = new FileHeaderRenderer(options);
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {
     diffHunksRenderer.setLineAnnotations(annotations);
   }
 
-  const [headerResult, hunkResult] = await Promise.all([
-    !disableFileHeader ? fileHeader.render(fileDiff) : undefined,
-    diffHunksRenderer.render(fileDiff),
-  ]);
-  if (hunkResult == null) {
-    throw new Error('Failed to render file diff');
+  const hunkResult = await diffHunksRenderer.asyncRender(fileDiff);
+
+  const children = [createStyleElement(hunkResult.css, true)];
+
+  if (options?.unsafeCSS != null) {
+    children.push(createStyleElement(options.unsafeCSS));
   }
 
-  const children = [
-    createStyleElement(renderCSS(hunkResult.css, options?.unsafeCSS)),
-  ];
-  if (headerResult != null) {
-    children.push(headerResult);
+  if (hunkResult.headerElement != null) {
+    children.push(hunkResult.headerElement);
   }
   const code = diffHunksRenderer.renderFullAST(hunkResult);
   code.properties['data-dehydrated'] = '';

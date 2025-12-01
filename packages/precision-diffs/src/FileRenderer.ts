@@ -1,4 +1,5 @@
-import type { Element, ElementContent, Root, RootContent } from 'hast';
+import deepEqual from 'fast-deep-equal';
+import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -6,30 +7,30 @@ import {
   hasLoadedLanguage,
   hasLoadedThemes,
 } from './SharedHighlighter';
-import { DEFAULT_THEMES, SPLIT_WITH_NEWLINES } from './constants';
+import { DEFAULT_THEMES } from './constants';
 import type {
   BaseCodeOptions,
-  CodeToHastOptions,
-  DecorationItem,
   FileContents,
   LineAnnotation,
-  LineInfo,
   PJSHighlighter,
-  PJSThemeNames,
-  ShikiTransformer,
+  RenderFileOptions,
+  RenderFileResult,
+  RenderedFileASTCache,
   SupportedLanguages,
   ThemeTypes,
+  ThemedFileResult,
 } from './types';
-import { createTransformerWithState } from './utils/createTransformerWithState';
-import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
+import { areThemesEqual } from './utils/areThemesEqual';
+import { createAnnotationElement } from './utils/createAnnotationElement';
+import { createFileHeaderElement } from './utils/createFileHeaderElement';
+import { createPreElement } from './utils/createPreElement';
 import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getThemes } from './utils/getThemes';
-import {
-  createHastElement,
-  createPreWrapperProperties,
-} from './utils/hast_utils';
+import { createHastElement } from './utils/hast_utils';
+import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
+import type { WorkerPoolManager } from './worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -38,22 +39,29 @@ type AnnotationLineMap<LAnnotation> = Record<
 
 export interface FileRenderResult {
   codeAST: ElementContent[];
-  preNode: Element;
+  preAST: HASTElement;
+  headerAST: HASTElement | undefined;
   css: string;
   totalLines: number;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
-interface FileRendererOptions extends BaseCodeOptions {
+export interface FileRendererOptions extends BaseCodeOptions {
   startingLineNumber?: number;
-  maxLineLengthForHighlighting?: number; // 1000 is default
+  tokenizeMaxLineLength?: number; // 1000 is default
 }
 
 export class FileRenderer<LAnnotation = undefined> {
-  highlighter: PJSHighlighter | undefined;
-  fileContent: string | undefined;
+  private highlighter: PJSHighlighter | undefined;
+  private renderCache: RenderedFileASTCache | undefined;
+  private computedLang: SupportedLanguages = 'text';
+  private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
 
   constructor(
-    public options: FileRendererOptions = { theme: DEFAULT_THEMES }
+    public options: FileRendererOptions = { theme: DEFAULT_THEMES },
+    private onRenderUpdate?: () => unknown,
+    private poolManager?: WorkerPoolManager | undefined
   ) {}
 
   setOptions(options: FileRendererOptions): void {
@@ -72,7 +80,6 @@ export class FileRenderer<LAnnotation = undefined> {
     this.mergeOptions({ themeType });
   }
 
-  private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
     this.lineAnnotations = {};
     for (const annotation of lineAnnotations) {
@@ -83,81 +90,204 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   cleanUp(): void {
+    this.renderCache = undefined;
     this.highlighter = undefined;
-    this.fileContent = undefined;
-    this.queuedFile = undefined;
+    this.poolManager = undefined;
+    this.onRenderUpdate = undefined;
   }
 
-  private computedLang: SupportedLanguages = 'text';
-  private queuedFile: FileContents | undefined;
-  private queuedRender: Promise<FileRenderResult | undefined> | undefined;
-  async render(
-    file: FileContents,
-    useCSSClasses: boolean = false
-  ): Promise<FileRenderResult | undefined> {
-    this.queuedFile = file;
-    if (this.queuedRender != null) {
-      return this.queuedRender;
+  hydrate(file: FileContents): void {
+    const { options } = this.getRenderOptions(file);
+    this.renderCache ??= {
+      file,
+      options,
+      // NOTE(amadeus): If we're hydrating, we can assume there was
+      // pre-rendered HTML, otherwise one should not be hydrating
+      highlighted: true,
+      result: undefined,
+    };
+    if (this.poolManager != null) {
+      this.poolManager.highlightFileAST(this, file, options);
+    } else {
+      void this.asyncHighlight(file).then(({ result, options }) => {
+        this.onHighlightSuccess(file, result, options);
+      });
     }
-    this.queuedRender = (async () => {
+  }
+
+  private getRenderOptions(file: FileContents): {
+    options: RenderFileOptions;
+    forceRender: boolean;
+  } {
+    const {
+      lang,
+      startingLineNumber = 1,
+      theme = DEFAULT_THEMES,
+      tokenizeMaxLineLength = 1000,
+    } = this.options;
+    const { renderCache } = this;
+    const options: RenderFileOptions = {
+      lang,
+      theme: this.poolManager?.currentTheme ?? theme,
+      tokenizeMaxLineLength,
+      startingLineNumber,
+    };
+    if (renderCache?.result == null) {
+      return { options, forceRender: true };
+    }
+    if (
+      file !== renderCache.file ||
+      !areThemesEqual(options.theme, renderCache.options.theme) ||
+      options.lang !== renderCache.options.lang ||
+      options.startingLineNumber !== renderCache.options.startingLineNumber ||
+      options.tokenizeMaxLineLength !==
+        renderCache.options.tokenizeMaxLineLength
+    ) {
+      return { options, forceRender: true };
+    }
+    return { options, forceRender: false };
+  }
+
+  renderFile(
+    file: FileContents | undefined = this.renderCache?.file
+  ): FileRenderResult | undefined {
+    if (file == null) {
+      return undefined;
+    }
+    const { options, forceRender } = this.getRenderOptions(file);
+    this.renderCache ??= {
+      file,
+      highlighted: false,
+      options,
+      result: undefined,
+    };
+    if (this.poolManager != null) {
+      this.renderCache.result ??= this.poolManager.getPlainFileAST(
+        file,
+        this.options.startingLineNumber
+      );
+      // TODO(amadeus): Figure out how to only fire this on a per file
+      // basis... (maybe the poolManager can figure it out based on file name
+      // and file contents probably?)
+      if (!this.renderCache.highlighted || forceRender) {
+        this.poolManager.highlightFileAST(this, file, options);
+      }
+    } else {
       this.computedLang =
         this.options.lang ?? getFiletypeFromFileName(file.name);
       if (
-        !hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(getThemes(this.options.theme))
+        // Reset highlighter if we no longer have the appropriate
+        // themes or languages loaded...
+        !hasLoadedThemes(getThemes(options.theme)) ||
+        !hasLoadedLanguage(options.lang ?? this.computedLang)
       ) {
         this.highlighter = undefined;
       }
-      this.highlighter ??= await this.initializeHighlighter();
-      if (this.queuedFile == null) {
-        return undefined;
+
+      if (this.highlighter == null) {
+        void this.asyncHighlight(file).then(({ result, options }) => {
+          this.onHighlightSuccess(file, result, options);
+        });
+      } else if (forceRender || !this.renderCache.highlighted) {
+        const { result, options } = this.renderFileWithHighlighter(
+          file,
+          this.highlighter
+        );
+        this.renderCache = {
+          file,
+          options,
+          highlighted: true,
+          result,
+        };
       }
-      return this.renderFile(this.queuedFile, this.highlighter, useCSSClasses);
-    })();
-    const result = await this.queuedRender;
-    this.queuedFile = undefined;
-    this.queuedRender = undefined;
-    return result;
+    }
+
+    return this.renderCache.result != null
+      ? this.processFileResult(this.renderCache.file, this.renderCache.result)
+      : undefined;
   }
 
-  private renderFile(
-    file: FileContents,
-    highlighter: PJSHighlighter,
-    useCSSClasses: boolean
-  ): FileRenderResult {
-    const { theme, themeType, disableLineNumbers = false } = this.options;
-    const { state, transformers, toClass } = createTransformerWithState({
-      disableLineNumbers,
-      useCSSClasses,
-    });
+  async asyncRender(file: FileContents): Promise<FileRenderResult> {
+    const { result } = await this.asyncHighlight(file);
+    return this.processFileResult(file, result);
+  }
 
-    const { lineInfoMap, hasLongLines } = this.computeLineInfo(file.contents);
-    state.lineInfo = lineInfoMap;
-    const codeAST = this.getLineNodes(
-      highlighter.codeToHast(
-        file.contents.replace(/\n$/, ''),
-        this.createHastOptions(transformers, undefined, hasLongLines)
-      )
-    );
+  private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
+    this.computedLang = this.options.lang ?? getFiletypeFromFileName(file.name);
+    if (
+      this.highlighter != null &&
+      (!hasLoadedLanguage(this.computedLang) ||
+        !hasLoadedThemes(getThemes(this.options.theme)))
+    ) {
+      this.highlighter = undefined;
+    }
+    this.highlighter ??= await this.initializeHighlighter();
+    return this.renderFileWithHighlighter(file, this.highlighter);
+  }
+
+  private renderFileWithHighlighter(
+    file: FileContents,
+    highlighter: PJSHighlighter
+  ): RenderFileResult {
+    const { options } = this.getRenderOptions(file);
+    const result = renderFileWithHighlighter(file, highlighter, options);
+    return { result, options };
+  }
+
+  private processFileResult(
+    file: FileContents,
+    result: ThemedFileResult
+  ): FileRenderResult {
+    const { startingLineNumber = 1, disableFileHeader = false } = this.options;
+    const codeAST: ElementContent[] = [];
+    let lineIndex = startingLineNumber;
+    for (const line of result.code) {
+      codeAST.push(line);
+      const annotations = this.lineAnnotations[lineIndex];
+      if (annotations != null) {
+        codeAST.push(
+          createAnnotationElement({
+            type: 'annotation',
+            hunkIndex: 0,
+            lineIndex,
+            annotations: annotations.map((annotation) =>
+              getLineAnnotationName(annotation)
+            ),
+          })
+        );
+      }
+      lineIndex++;
+    }
 
     return {
       codeAST,
-      preNode: createHastElement({
-        tagName: 'pre',
-        properties: createPreWrapperProperties({
-          diffIndicators: 'none',
-          disableBackground: true,
-          highlighter,
-          overflow: this.options.overflow,
-          split: false,
-          theme,
-          themeType,
-          totalLines: codeAST.length,
-        }),
-      }),
-      totalLines: codeAST.length,
-      css: toClass.getCSS(),
+      preAST: this.createPreElement(
+        result.code.length,
+        result.themeStyles,
+        result.baseThemeType
+      ),
+      headerAST: !disableFileHeader
+        ? this.renderHeader(file, result.themeStyles, result.baseThemeType)
+        : undefined,
+      totalLines: result.code.length,
+      themeStyles: result.themeStyles,
+      baseThemeType: result.baseThemeType,
+      // FIXME(amadeus): Fix this
+      css: '',
     };
+  }
+
+  private renderHeader(
+    file: FileContents,
+    themeStyles: string,
+    baseThemeType: 'light' | 'dark' | undefined
+  ) {
+    const { themeType = 'system' } = this.options;
+    return createFileHeaderElement({
+      fileOrDiff: file,
+      themeStyles,
+      themeType: baseThemeType ?? themeType,
+    });
   }
 
   renderFullHTML(result: FileRenderResult): string {
@@ -167,7 +297,7 @@ export class FileRenderer<LAnnotation = undefined> {
   renderFullAST(
     result: FileRenderResult,
     children: ElementContent[] = []
-  ): Element {
+  ): HASTElement {
     children.push(
       createHastElement({
         tagName: 'code',
@@ -175,7 +305,7 @@ export class FileRenderer<LAnnotation = undefined> {
         properties: { 'data-code': '' },
       })
     );
-    return { ...result.preNode, children };
+    return { ...result.preAST, children };
   }
 
   renderPartialHTML(
@@ -194,91 +324,61 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  private getLineNodes(nodes: Root): ElementContent[] {
-    let firstChild: RootContent | Element | Root | null = nodes.children[0];
-    while (firstChild != null) {
-      if (firstChild.type === 'element' && firstChild.tagName === 'code') {
-        return firstChild.children;
-      }
-      if ('children' in firstChild) {
-        firstChild = firstChild.children[0];
-      } else {
-        firstChild = null;
-      }
-    }
-    console.error(nodes);
-    throw new Error(
-      'DiffHunksRenderer.getNodesToRender: Unable to find children'
-    );
-  }
-
-  private computeLineInfo(contents: string): {
-    lineInfoMap: Record<number, LineInfo | undefined>;
-    hasLongLines: boolean;
-  } {
-    const { startingLineNumber = 1, maxLineLengthForHighlighting = 1000 } =
-      this.options;
-    const lineInfoMap: Record<number, LineInfo | undefined> = {};
-    let hasLongLines = false;
-
-    let lineIndex = 0;
-    for (const line of contents.split(SPLIT_WITH_NEWLINES)) {
-      hasLongLines = hasLongLines || line.length > maxLineLengthForHighlighting;
-
-      const lineInfo: LineInfo = {
-        type: 'context',
-        lineIndex,
-        lineNumber: startingLineNumber + lineIndex,
-      };
-      const annotations = this.lineAnnotations[startingLineNumber + lineIndex];
-      if (annotations != null) {
-        lineInfo.spans = [
-          {
-            type: 'annotation',
-            hunkIndex: 0,
-            lineIndex,
-            annotations: annotations.map((annotation) =>
-              getLineAnnotationName(annotation)
-            ),
-          },
-        ];
-      }
-      lineInfoMap[lineIndex + 1] = lineInfo;
-      lineIndex++;
-    }
-    return { lineInfoMap, hasLongLines };
-  }
-
-  private createHastOptions(
-    transformers: ShikiTransformer[],
-    decorations?: DecorationItem[],
-    forceTextLang: boolean = false
-  ): CodeToHastOptions<PJSThemeNames> {
-    const { theme = DEFAULT_THEMES } = this.options;
-    if (typeof theme === 'string') {
-      return {
-        theme,
-        cssVariablePrefix: formatCSSVariablePrefix(),
-        lang: forceTextLang ? 'text' : this.computedLang,
-        defaultColor: false,
-        transformers,
-        decorations,
-      };
-    }
-    return {
-      themes: theme,
-      cssVariablePrefix: formatCSSVariablePrefix(),
-      lang: forceTextLang ? 'text' : this.computedLang,
-      defaultColor: false,
-      transformers,
-      decorations,
-    };
-  }
-
   async initializeHighlighter(): Promise<PJSHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );
     return this.highlighter;
+  }
+
+  onHighlightSuccess(
+    file: FileContents,
+    result: ThemedFileResult,
+    options: RenderFileOptions
+  ): void {
+    if (this.renderCache == null) {
+      return;
+    }
+    const triggerRenderUpdate =
+      this.renderCache.file !== file ||
+      !this.renderCache.highlighted ||
+      !deepEqual(options, this.renderCache.options);
+
+    this.renderCache = {
+      file,
+      options,
+      highlighted: true,
+      result,
+    };
+
+    if (triggerRenderUpdate) {
+      this.onRenderUpdate?.();
+    }
+  }
+
+  onHighlightError(error: unknown): void {
+    console.error(error);
+  }
+
+  private createPreElement(
+    totalLines: number,
+    themeStyles: string,
+    baseThemeType: 'light' | 'dark' | undefined
+  ): HASTElement {
+    const {
+      disableLineNumbers = false,
+      overflow = 'scroll',
+      themeType = 'system',
+    } = this.options;
+    return createPreElement({
+      diffIndicators: 'none',
+      disableBackground: true,
+      disableLineNumbers,
+      overflow,
+      themeStyles,
+      themeType: baseThemeType ?? themeType,
+      split: false,
+      totalLines,
+    });
   }
 }

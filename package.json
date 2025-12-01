@@ -5,7 +5,7 @@
   "scripts": {
     "demo:build": "(cd apps/demo && bun run build)",
     "demo:dev": "(cd apps/demo && bun run dev)",
-    "demo:prod": "(cd apps/demo && bun run prod)",
+    "demo:prod": "(cd apps/demo && bun run build && bun run start)",
     "demo:tsc": "(cd apps/demo && bun run tsc)",
     "diffs:build": "(cd packages/precision-diffs && bun run build)",
     "diffs:dev": "(cd packages/precision-diffs && bun run dev)",

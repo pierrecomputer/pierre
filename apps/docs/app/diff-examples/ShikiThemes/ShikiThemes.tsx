@@ -135,7 +135,14 @@ export function ShikiThemes({
     <div className="scroll-mt-[20px] space-y-5" id="themes">
       <FeatureHeader
         title="Adapts to any Shiki theme"
-        description="Precision Diffs are built with Shiki for syntax highlighting and general theming. Our components automatically adapt to blend in with your theme selection, including across color modes."
+        description={
+          <>
+            We built <code>@pierre/precision-diffs</code> on top of Shiki for
+            syntax highlighting and general theming. Our components
+            automatically adapt to blend in with your theme selection, including
+            across color modes.
+          </>
+        }
       />
       <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
         <div className="bg-secondary rounded-lg p-[2px]">

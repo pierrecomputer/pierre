@@ -1,5 +1,4 @@
 // sort-imports-ignore
-import { ShikiPreloader } from '@/components/ShikiPreloader';
 import type { Metadata } from 'next';
 import { ThemeProvider } from 'next-themes';
 import {
@@ -79,7 +78,6 @@ export default function RootLayout({
             data-theme="light"
           ></div>
         </ThemeProvider>
-        <ShikiPreloader />
       </body>
     </html>
   );

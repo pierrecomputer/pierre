@@ -50,21 +50,23 @@ export function Overview({
     <section className="space-y-4">
       <h2>Overview</h2>
       <div className="text-md flex gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 text-cyan-600 dark:text-cyan-300">
-        <IconCiWarningFill className="mt-[6px]" />
-        Precision Diffs is in early active development—APIs are subject to
-        change.
+        <IconCiWarningFill className="mt-[7px]" />
+        Diffs is in early active development—APIs are subject to change.
       </div>
       <p>
-        <strong>Precision Diffs</strong> is a library for rendering code and
-        diffs on the web. This includes both high-level, easy-to-use components,
-        as well as exposing many of the internals if you want to selectively use
-        specific pieces. We‘ve built syntax highlighting on top of{' '}
+        <strong>Diffs</strong> is a library for rendering code and diffs on the
+        web. This includes both high-level, easy-to-use components, as well as
+        exposing many of the internals if you want to selectively use specific
+        pieces. We‘ve built syntax highlighting on top of{' '}
         <Link href="https://shiki.style/" target="_blank">
           Shiki
         </Link>{' '}
         which provides a lot of great theme and language support.
       </p>
-      <MultiFileDiff {...initialDiffProps} className="diff-container" />
+      <MultiFileDiff
+        {...initialDiffProps}
+        className="overflow-hidden rounded-md border-1"
+      />
       <p>
         We have an opinionated stance in our architecture:{' '}
         <strong>browsers are rather efficient at rendering raw HTML</strong>. We
@@ -85,7 +87,7 @@ export function Overview({
         For this overview, we‘ll talk about the vanilla JavaScript components
         for now but there are React equivalents for all of these.
       </p>
-      <h3>Rendering Diffs</h3>
+      <h3>Rendering diffs</h3>
       <p>
         It‘s in the name, it‘s probably why you‘re here. Our goal with
         visualizing diffs was to provide some flexible and approachable APIs for{' '}
@@ -104,22 +106,38 @@ export function Overview({
         You can see examples of these approaches below, in both JavaScript and
         React.
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <ButtonGroup
+          className="flex-1 sm:flex-initial"
           value={type}
           onValueChange={(value) => setType(value as 'vanilla' | 'react')}
         >
-          <ButtonGroupItem value="vanilla">Vanilla JS</ButtonGroupItem>
-          <ButtonGroupItem value="react">React</ButtonGroupItem>
+          <ButtonGroupItem className="flex-1 sm:flex-initial" value="vanilla">
+            Vanilla JS
+          </ButtonGroupItem>
+          <ButtonGroupItem className="flex-1 sm:flex-initial" value="react">
+            React
+          </ButtonGroupItem>
         </ButtonGroup>
         <ButtonGroup
+          className="flex-1 sm:flex-initial"
           value={example}
           onValueChange={(value) =>
             setExample(value as 'single-file' | 'patch-file')
           }
         >
-          <ButtonGroupItem value="single-file">Single file</ButtonGroupItem>
-          <ButtonGroupItem value="patch-file">Patch file</ButtonGroupItem>
+          <ButtonGroupItem
+            className="flex-1 sm:flex-initial"
+            value="single-file"
+          >
+            Single file
+          </ButtonGroupItem>
+          <ButtonGroupItem
+            className="flex-1 sm:flex-initial"
+            value="patch-file"
+          >
+            Patch file
+          </ButtonGroupItem>
         </ButtonGroup>
       </div>
       <DocsCodeExample {...file} />

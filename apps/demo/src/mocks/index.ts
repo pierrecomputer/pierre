@@ -173,7 +173,10 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
         {
           lineNumber: 5,
           side: 'additions',
-          metadata: { author: "Liam O'Brien", message: 'LGTM, ship it! 🚀' },
+          metadata: {
+            author: "Liam O'Brien",
+            message: 'LGTM, ship it! 🚀',
+          },
         },
       ],
     ],

@@ -30,6 +30,7 @@ export function FileDiff<LAnnotation = undefined>({
     options,
     lineAnnotations,
     selectedLines,
+    prerenderedHTML,
   });
   const children = renderDiffChildren({
     fileDiff,

@@ -18,7 +18,15 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
     <div className="scroll-mt-[20px] space-y-5" id="arbitrary">
       <FeatureHeader
         title="Diff arbitrary files"
-        description="In addition to rendering standard Git diffs and patches, you can pass any two files in Precision Diffs and get a diff between them. This is especially useful when comparing across generative snapshots where linear history isn't always available. Edit the css below to see the diff."
+        description={
+          <>
+            In addition to rendering standard Git diffs and patches, you can
+            pass any two files in <code>@pierre/precision-diffs</code> and get a
+            diff between them. This is especially useful when comparing across
+            generative snapshots where linear history isn't always available.
+            Edit the css below to see the diff.
+          </>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

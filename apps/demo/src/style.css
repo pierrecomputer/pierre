@@ -45,7 +45,6 @@ body,
   display: block;
   margin: 0;
   padding: 0;
-  min-width: 100dvw;
   min-height: 100vh;
   min-height: 100dvh;
   overscroll-behavior: none;
@@ -118,7 +117,7 @@ code {
 }
 
 .tools-container {
-  position: fixed;
+  position: sticky;
   top: 0;
   width: 100%;
   max-width: 100%;
@@ -219,4 +218,8 @@ file-diff {
 .comment p {
   margin: 0;
   padding: 0;
+}
+
+.comment h6 {
+  font-size: 14px;
 }

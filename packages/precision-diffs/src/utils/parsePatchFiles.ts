@@ -17,6 +17,8 @@ import type {
   Hunk,
   ParsedPatch,
 } from '../types';
+import { cleanLastNewline } from './cleanLastNewline';
+import { parseLineType } from './parseLineType';
 
 function processPatch(data: string): ParsedPatch {
   const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
@@ -81,17 +83,17 @@ function processPatch(data: string): ParsedPatch {
           if (line.startsWith('diff --git')) {
             const [, , prevName, , name] =
               line.trim().match(ALTERNATE_FILE_NAMES_GIT) ?? [];
-            currentFile.name = name;
+            currentFile.name = name.trim();
             if (prevName !== name) {
-              currentFile.prevName = prevName;
+              currentFile.prevName = prevName.trim();
             }
           } else if (filenameMatch != null) {
             const [, type, fileName] = filenameMatch;
             if (type === '---' && fileName !== '/dev/null') {
-              currentFile.prevName = fileName;
-              currentFile.name = fileName;
+              currentFile.prevName = fileName.trim();
+              currentFile.name = fileName.trim();
             } else if (type === '+++' && fileName !== '/dev/null') {
-              currentFile.name = fileName;
+              currentFile.name = fileName.trim();
             }
           }
           // Git diffs have a bunch of additional metadata we can pull from
@@ -129,34 +131,63 @@ function processPatch(data: string): ParsedPatch {
               currentFile.prevName = line.replace('rename from ', '');
             }
             if (line.startsWith('rename to ')) {
-              currentFile.name = line.replace('rename to ', '');
+              currentFile.name = line.replace('rename to ', '').trim();
             }
           }
         }
         continue;
       } else {
         let currentContent: ContextContent | ChangeContent | undefined;
-        for (const line of lines) {
-          if (line[0] === '+') {
+        let lastLineType: 'context' | 'addition' | 'deletion' | undefined;
+        for (const rawLine of lines) {
+          const parsedLine = parseLineType(rawLine);
+          if (parsedLine == null) {
+            continue;
+          }
+          const { type, line } = parsedLine;
+          if (type === 'addition') {
             if (currentContent == null || currentContent.type !== 'change') {
               currentContent = createContentGroup('change');
               hunkContent.push(currentContent);
             }
             currentContent.additions.push(line);
             additionLines++;
-          } else if (line[0] === '-') {
+            lastLineType = 'addition';
+          } else if (type === 'deletion') {
             if (currentContent == null || currentContent.type !== 'change') {
               currentContent = createContentGroup('change');
               hunkContent.push(currentContent);
             }
             currentContent.deletions.push(line);
             deletionLines++;
-          } else {
+            lastLineType = 'deletion';
+          } else if (type === 'context') {
             if (currentContent == null || currentContent.type !== 'context') {
               currentContent = createContentGroup('context');
               hunkContent.push(currentContent);
             }
             currentContent.lines.push(line);
+            lastLineType = 'context';
+          } else if (type === 'metadata' && currentContent != null) {
+            if (currentContent.type === 'context') {
+              currentContent.noEOFCR = true;
+            } else if (lastLineType === 'deletion') {
+              currentContent.noEOFCRDeletions = true;
+              const lastIndex = currentContent.deletions.length - 1;
+              if (lastIndex >= 0) {
+                currentContent.deletions[lastIndex] = cleanLastNewline(
+                  currentContent.deletions[lastIndex]
+                );
+              }
+            } else if (lastLineType === 'addition') {
+              currentContent.noEOFCRAdditions = true;
+              const lastIndex = currentContent.additions.length - 1;
+              if (lastIndex >= 0) {
+                currentContent.additions[lastIndex] = cleanLastNewline(
+                  currentContent.additions[lastIndex]
+                );
+              }
+            }
           }
         }
       }
@@ -242,7 +273,13 @@ function createContentGroup(
   type: 'change' | 'context'
 ): ChangeContent | ContextContent {
   if (type === 'change') {
-    return { type: 'change', additions: [], deletions: [] };
+    return {
+      type: 'change',
+      additions: [],
+      deletions: [],
+      noEOFCRAdditions: false,
+      noEOFCRDeletions: false,
+    };
   }
-  return { type: 'context', lines: [] };
+  return { type: 'context', lines: [], noEOFCR: false };
 }
