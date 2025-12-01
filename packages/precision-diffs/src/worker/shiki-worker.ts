@@ -39,7 +39,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
       case 'file':
         await handleRenderFile(request);
         break;
-      case 'diff-metadata':
+      case 'diff':
         await handleRenderDiffMetadata(request);
         break;
       default:
@@ -133,7 +133,7 @@ function sendDiffMetadataSuccess(
 ) {
   postMessage({
     type: 'success',
-    requestType: 'diff-metadata',
+    requestType: 'diff',
     id,
     result,
     sentAt: Date.now(),

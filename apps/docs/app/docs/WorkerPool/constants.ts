@@ -316,17 +316,17 @@ poolManager.isInitialized()
 poolManager.setTheme(theme)
 // Returns: Promise<void> - Changes the active theme
 
-poolManager.renderFileToAST(file, options)
-// Returns: Promise<RenderFileResult>
+poolManager.highlightFileAST(fileInstance, file, options)
+// Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
 
-poolManager.renderPlainFileToAST(file, startingLineNumber?)
-// Returns: RenderFileResult | undefined - Sync render with 'text' lang
+poolManager.getPlainFileAST(file, startingLineNumber?)
+// Returns: ThemedFileResult | undefined - Sync render with 'text' lang
 
-poolManager.renderDiffFilesToAST(oldFile, newFile, options)
-// Returns: Promise<RenderDiffResult>
+poolManager.highlightDiffAST(fileDiffInstance, diff, options)
+// Queues highlighted diff render, calls fileDiffInstance.onHighlightSuccess when done
 
-poolManager.renderDiffMetadataToAST(diff, options)
-// Returns: Promise<RenderDiffResult>
+poolManager.getPlainDiffAST(diff, lineDiffType)
+// Returns: ThemedDiffResult | undefined - Sync render with 'text' lang
 
 poolManager.terminate()
 // Terminates all workers and resets state

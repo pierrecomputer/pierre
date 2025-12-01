@@ -284,12 +284,10 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
   workerInstances.length = 0;
 
   console.log('Worker Render: Starting to server render patch');
-  const start = Date.now();
-  const firstFour: Promise<unknown>[] = [];
   for (const parsedPatch of parsedPatches) {
     for (const fileDiff of parsedPatch.files) {
       const start = Date.now();
-      const prom = poolManager?.renderDiffMetadataToAST(
+      poolManager?.highlightDiffAST(
         {
           onHighlightSuccess(_diff, { code }) {
             if (code.hunks == null) {
@@ -310,22 +308,8 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
         fileDiff,
         { tokenizeMaxLineLength: 1000, lineDiffType: 'word-alt' }
       );
-      if (prom != null) {
-        workerInstances.push(prom);
-        if (firstFour.length < 4) {
-          firstFour.push(prom);
-        }
-      }
     }
   }
-  let firstFourTime = 0;
-  void Promise.all(firstFour).then(() => {
-    firstFourTime = Date.now() - start;
-  });
-  void Promise.all(workerInstances).then(() => {
-    console.log('Worker Render: total time', Date.now() - start);
-    console.log('Worker Render: first four files', firstFourTime);
-  });
 }
 
 function handlePreload() {

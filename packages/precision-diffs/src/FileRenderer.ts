@@ -107,7 +107,7 @@ export class FileRenderer<LAnnotation = undefined> {
       result: undefined,
     };
     if (this.poolManager != null) {
-      this.poolManager.renderFileToAST(this, file, options);
+      this.poolManager.highlightFileAST(this, file, options);
     } else {
       void this.asyncHighlight(file).then(({ result, options }) => {
         this.onHighlightSuccess(file, result, options);
@@ -162,7 +162,7 @@ export class FileRenderer<LAnnotation = undefined> {
       result: undefined,
     };
     if (this.poolManager != null) {
-      this.renderCache.result ??= this.poolManager.renderPlainFileToAST(
+      this.renderCache.result ??= this.poolManager.getPlainFileAST(
         file,
         this.options.startingLineNumber
       );
@@ -170,7 +170,7 @@ export class FileRenderer<LAnnotation = undefined> {
       // basis... (maybe the poolManager can figure it out based on file name
       // and file contents probably?)
       if (!this.renderCache.highlighted || forceRender) {
-        this.poolManager.renderFileToAST(this, file, options);
+        this.poolManager.highlightFileAST(this, file, options);
       }
     } else {
       this.computedLang =

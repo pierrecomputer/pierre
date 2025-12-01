@@ -200,7 +200,7 @@ export class WorkerPoolManager {
     }
   };
 
-  renderFileToAST(
+  highlightFileAST(
     instance: FileRendererInstance,
     file: FileContents,
     options: Omit<RenderFileOptions, 'theme'>
@@ -212,7 +212,7 @@ export class WorkerPoolManager {
     });
   }
 
-  renderPlainFileToAST(
+  getPlainFileAST(
     file: FileContents,
     startingLineNumber: number = 1
   ): ThemedFileResult | undefined {
@@ -228,19 +228,19 @@ export class WorkerPoolManager {
     });
   }
 
-  renderDiffMetadataToAST(
+  highlightDiffAST(
     instance: DiffRendererInstance,
     diff: FileDiffMetadata,
     options: Omit<RenderDiffOptions, 'theme'>
   ): void {
     this.submitTask(instance, {
-      type: 'diff-metadata',
+      type: 'diff',
       diff,
       options: { ...options, theme: this.currentTheme },
     });
   }
 
-  renderPlainDiffMetadataToAST(
+  getPlainDiffAST(
     diff: FileDiffMetadata,
     lineDiffType: LineDiffTypes
   ): ThemedDiffResult | undefined {
@@ -306,9 +306,9 @@ export class WorkerPoolManager {
             instance: instance as FileRendererInstance,
             requestStart,
           };
-        case 'diff-metadata':
+        case 'diff':
           return {
-            type: 'diff-metadata',
+            type: 'diff',
             id,
             request: { ...request, id },
             instance: instance as DiffRendererInstance,
@@ -363,8 +363,8 @@ export class WorkerPoolManager {
             instance.onHighlightSuccess(request.file, result, request.options);
             break;
           }
-          case 'diff-metadata': {
-            if (task.type !== 'diff-metadata') {
+          case 'diff': {
+            if (task.type !== 'diff') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
             const { result } = response;
@@ -447,7 +447,7 @@ function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
         langs.add(getFiletypeFromFileName(task.request.file.name));
         break;
       }
-      case 'diff-metadata': {
+      case 'diff': {
         langs.add(getFiletypeFromFileName(task.request.diff.name));
         langs.add(getFiletypeFromFileName(task.request.diff.prevName ?? '-'));
         break;

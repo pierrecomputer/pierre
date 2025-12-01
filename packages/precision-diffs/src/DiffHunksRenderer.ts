@@ -266,7 +266,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: undefined,
     };
     if (this.workerManager != null) {
-      this.workerManager.renderDiffMetadataToAST(this, this.diff, options);
+      this.workerManager.highlightDiffAST(this, this.diff, options);
     } else {
       void this.asyncHighlight(diff).then(({ result, options }) => {
         this.onHighlightSuccess(diff, result, options);
@@ -315,17 +315,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: undefined,
     };
     if (this.workerManager != null) {
-      this.renderCache.result ??=
-        this.workerManager.renderPlainDiffMetadataToAST(
-          diff,
-          options.lineDiffType
-        );
+      this.renderCache.result ??= this.workerManager.getPlainDiffAST(
+        diff,
+        options.lineDiffType
+      );
 
       // TODO(amadeus): Figure out how to only fire this on a per file
       // basis... (maybe the workerManager can figure it out based on file name
       // and file contents probably?)
       if (!this.renderCache.highlighted || forceRender) {
-        this.workerManager.renderDiffMetadataToAST(this, diff, options);
+        this.workerManager.highlightDiffAST(this, diff, options);
       }
     } else {
       this.computedLang =

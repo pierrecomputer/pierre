@@ -40,8 +40,7 @@ export interface RenderFileRequest {
 }
 
 export interface RenderDiffMetadataRequest {
-  // FIXME(amadeus): Make this just 'diff'
-  type: 'diff-metadata';
+  type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
   options: RenderDiffOptions;
@@ -92,7 +91,7 @@ export interface RenderDiffSuccessResponse {
 
 export interface RenderDiffMetadataSuccessResponse {
   type: 'success';
-  requestType: 'diff-metadata';
+  requestType: 'diff';
   id: WorkerRequestId;
   result: ThemedDiffResult;
   sentAt: number;
@@ -151,7 +150,7 @@ export interface RenderFileTask {
 }
 
 export interface RenderDiffMetadataTask {
-  type: 'diff-metadata';
+  type: 'diff';
   id: WorkerRequestId;
   request: RenderDiffMetadataRequest;
   instance: DiffRendererInstance;
