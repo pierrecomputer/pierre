@@ -113,7 +113,7 @@ export class WorkerPoolManager {
           try {
             const [highlighter] = await Promise.all([
               getSharedHighlighter({
-                themes: getThemes(this.currentTheme),
+                themes: getThemes(this.highlighterOptions.theme),
                 preferWasmHighlighter:
                   this.highlighterOptions.preferWasmHighlighter,
                 langs: ['text'],
