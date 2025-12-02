@@ -169,23 +169,26 @@ function computeLineDiffDecorations({
   const additionSpans: [0 | 1, string][] = [];
   const enableJoin = lineDiffType === 'word-alt';
   for (const item of lineDiff) {
+    const isLastItem = item === lineDiff[lineDiff.length - 1];
     if (!item.added && !item.removed) {
       pushOrJoinSpan({
         item,
         arr: deletionSpans,
         enableJoin,
         isNeutral: true,
+        isLastItem,
       });
       pushOrJoinSpan({
         item,
         arr: additionSpans,
         enableJoin,
         isNeutral: true,
+        isLastItem,
       });
     } else if (item.removed) {
-      pushOrJoinSpan({ item, arr: deletionSpans, enableJoin });
+      pushOrJoinSpan({ item, arr: deletionSpans, enableJoin, isLastItem });
     } else {
-      pushOrJoinSpan({ item, arr: additionSpans, enableJoin });
+      pushOrJoinSpan({ item, arr: additionSpans, enableJoin, isLastItem });
     }
   }
   let spanIndex = 0;
