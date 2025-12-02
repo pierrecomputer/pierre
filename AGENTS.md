@@ -23,6 +23,8 @@ You can use prettier's 'autofix' functionality by running `bun run format`
 
 **Important:** Always run `bun run format` from the monorepo root after making changes to ensure consistent formatting.
 
+- Always preserve trailing newlines at the end of files.
+
 ## Typescript
 
 We use typescript everywhere possible and try to stick to fairly strict types, which are then linted with typescript powered eslint.
