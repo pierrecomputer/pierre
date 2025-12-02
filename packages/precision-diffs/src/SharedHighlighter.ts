@@ -1,9 +1,4 @@
-import {
-  createHighlighter,
-  createJavaScriptRegexEngine,
-  createOnigurumaEngine,
-  loadWasm,
-} from 'shiki';
+import { createHighlighter, createJavaScriptRegexEngine } from 'shiki';
 
 import type {
   PJSHighlighter,
@@ -25,57 +20,46 @@ const loadedLanguages = new Map<SupportedLanguages, true | Promise<void>>();
 interface HighlighterOptions {
   themes: PJSThemeNames[];
   langs: SupportedLanguages[];
-  preferWasmHighlighter?: boolean;
 }
 
 export async function getSharedHighlighter({
   themes,
   langs,
-  preferWasmHighlighter = false,
 }: HighlighterOptions): Promise<PJSHighlighter> {
   if (isHighlighterNull(highlighter)) {
     // NOTE(amadeus): We should probably build in some logic for rejection
     // handling...
     highlighter = new Promise((resolve) => {
-      void (
-        preferWasmHighlighter
-          ? loadWasm(import('shiki/wasm'))
-          : Promise.resolve()
-      )
-        .then(() => {
-          // Since we are loading the languages and themes along with the
-          // highlighter, we can just go ahead and mark them as loaded since
-          // they'll be ready when the highlighter is ready which any calls to
-          // getSharedHighlighter will resolve automatically for us
-          const themesToLoad: (
-            | PJSThemeNames
-            | Promise<ThemeRegistrationResolved>
-          )[] = [];
-          for (const theme of themes) {
-            loadedThemes.set(theme, true);
-            const customTheme = CustomThemes.get(theme);
-            if (customTheme != null) {
-              themesToLoad.push(customTheme());
-            } else {
-              themesToLoad.push(theme);
-            }
+      void (async () => {
+        // Since we are loading the languages and themes along with the
+        // highlighter, we can just go ahead and mark them as loaded since
+        // they'll be ready when the highlighter is ready which any calls to
+        // getSharedHighlighter will resolve automatically for us
+        const themesToLoad: (
+          | PJSThemeNames
+          | Promise<ThemeRegistrationResolved>
+        )[] = [];
+        for (const theme of themes) {
+          loadedThemes.set(theme, true);
+          const customTheme = CustomThemes.get(theme);
+          if (customTheme != null) {
+            themesToLoad.push(customTheme());
+          } else {
+            themesToLoad.push(theme);
           }
-          for (const language of langs) {
-            loadedLanguages.set(language, true);
-          }
-          loadedLanguages.set('text', true);
-          return createHighlighter({
-            themes: themesToLoad,
-            langs: [...langs, 'text'],
-            engine: preferWasmHighlighter
-              ? createOnigurumaEngine()
-              : createJavaScriptRegexEngine(),
-          }) as Promise<PJSHighlighter>;
-        })
-        .then((instance) => {
-          highlighter = instance;
-          resolve(instance);
-        });
+        }
+        for (const language of langs) {
+          loadedLanguages.set(language, true);
+        }
+        loadedLanguages.set('text', true);
+        const instance = (await createHighlighter({
+          themes: themesToLoad,
+          langs: [...langs, 'text'],
+          engine: createJavaScriptRegexEngine(),
+        })) as PJSHighlighter;
+        highlighter = instance;
+        resolve(instance);
+      })();
     });
     return highlighter;
   }
