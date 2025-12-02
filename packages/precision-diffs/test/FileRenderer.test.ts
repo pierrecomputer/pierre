@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { FileRenderer } from '../src/FileRenderer';
 import { mockFiles } from './mocks';
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Element, ElementContent } from 'hast';
+
 import { FileRenderer } from '../src/FileRenderer';
 import { mockFiles } from './mocks';
 
@@ -69,7 +70,9 @@ describe('FileRenderer AST Structure', () => {
             typeof node.properties?.style === 'string'
               ? node.properties.style
               : undefined;
-          node.children?.forEach((child) => traverse(child, style || parentStyle));
+          node.children?.forEach((child) =>
+            traverse(child, style || parentStyle)
+          );
         }
       };
 
@@ -93,7 +96,9 @@ describe('FileRenderer AST Structure', () => {
     const functionToken = textNodes.find((node) => node.text === 'function');
     expect(functionToken).toBeDefined();
     expect(functionToken!.style).toBeDefined();
-    expect(functionToken!.style).toMatch(/--pjs-dark:#[A-F0-9]{6};--pjs-light:#[A-F0-9]{6}/);
+    expect(functionToken!.style).toMatch(
+      /--pjs-dark:#[A-F0-9]{6};--pjs-light:#[A-F0-9]{6}/
+    );
   });
 
   test('should generate correct totalLines count', async () => {
