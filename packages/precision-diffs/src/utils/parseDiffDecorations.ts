@@ -26,6 +26,7 @@ interface PushOrJoinSpanProps {
   arr: [0 | 1, string][];
   enableJoin: boolean;
   isNeutral?: boolean;
+  isLastItem?: boolean;
 }
 
 // For diff decoration spans, we want to be sure that if there is a single
@@ -38,16 +39,17 @@ export function pushOrJoinSpan({
   arr,
   enableJoin,
   isNeutral = false,
+  isLastItem = false,
 }: PushOrJoinSpanProps): void {
   const lastItem = arr[arr.length - 1];
-  if (lastItem == null || item.value === '\n' || !enableJoin) {
+  if (lastItem == null || isLastItem || !enableJoin) {
     arr.push([isNeutral ? 0 : 1, item.value]);
     return;
   }
   const isLastItemNeutral = lastItem[0] === 0;
   if (
     isNeutral === isLastItemNeutral ||
-    // If we have a single space neutral item, lets join it to a previously
+    // If we have a single space neutral item, lets join it to a previous
     // space non-neutral item to avoid single space gaps
     (isNeutral && item.value.length === 1 && !isLastItemNeutral)
   ) {
