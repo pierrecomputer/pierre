@@ -53,9 +53,9 @@ export function SSR({
 
       <Notice variant="warning" icon={<IconCiWarningFill />}>
         Inputs used for pre-rendering must exactly match what’s rendered in the
-        client component. We recommend spreading the entire result object to
-        ensure the client receives the same inputs that were used to generate
-        the pre-rendered HTML.
+        client component. We recommend spreading the entire result object into
+        your File or Diff component to ensure the client receives the same
+        inputs that were used to generate the pre-rendered HTML.
       </Notice>
 
       <h4 data-toc-ignore>Server Component</h4>

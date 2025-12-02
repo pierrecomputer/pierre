@@ -44,7 +44,7 @@ export function VanillaAPI({
       <h2>Vanilla JS API</h2>
 
       <Notice icon={<IconInfoFill />}>
-        Import the vanilla JavaScript classes, components, and methods from{' '}
+        Import vanilla JavaScript classes, components, and methods from{' '}
         <code>@pierre/precision-diffs</code>.
       </Notice>
 
@@ -54,8 +54,8 @@ export function VanillaAPI({
         (compare two file versions or render a pre-parsed{' '}
         <code>FileDiffMetadata</code>) and <code>File</code> (render a single
         code file without diff). Typically you’ll want to interface with these
-        as they’ll handle all the complicated aspects of syntax highlighting and
-        theming for you.
+        as they’ll handle all the complicated aspects of syntax highlighting,
+        theming, and full interactivity for you.
       </p>
       <ButtonGroup
         value={componentType}
