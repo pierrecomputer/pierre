@@ -1,4 +1,9 @@
-import { getSharedHighlighter, hasLoadedThemes } from '../SharedHighlighter';
+import {
+  getSharedHighlighter,
+  hasLoadedThemes,
+  isCustomTheme,
+  resolveCustomTheme,
+} from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
 import type {
   FileContents,
@@ -23,10 +28,12 @@ import type {
   DiffRendererInstance,
   FileRendererInstance,
   InitializeWorkerTask,
+  RegisterThemeWorkerTask,
   RenderDiffMetadataRequest,
   RenderDiffMetadataTask,
   RenderFileRequest,
   RenderFileTask,
+  ResolvedCustomTheme,
   SubmitRequest,
   WorkerHighlighterOptions,
   WorkerPoolOptions,
@@ -59,6 +66,7 @@ export class WorkerPoolManager {
   private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
   private nextRequestId = 0;
   private themeSubscribers = new Set<ThemeSubscriber>();
+  private workersFailed = false;
   private instanceRequestMap = new Map<
     FileRendererInstance | DiffRendererInstance,
     string
@@ -71,22 +79,99 @@ export class WorkerPoolManager {
     void this.initialize();
   }
 
+  isWorkingPool(): boolean {
+    return !this.workersFailed;
+  }
+
   async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
     if (areThemesEqual(theme, this.currentTheme)) {
       return;
     }
+    const customThemes = this.resolveCustomThemes(getThemes(theme));
     if (hasLoadedThemes(getThemes(theme)) && this.highlighter != null) {
+      if (customThemes.length > 0) {
+        await this.registerThemesOnWorkers(await Promise.all(customThemes));
+      }
       this.currentTheme = theme;
     } else {
-      this.highlighter = await getSharedHighlighter({
-        themes: getThemes(theme),
-        langs: ['text'],
-      });
+      const [highlighter] = await Promise.all([
+        getSharedHighlighter({
+          themes: getThemes(theme),
+          langs: ['text'],
+        }),
+        Promise.all(customThemes).then((resolvedThemes) =>
+          this.registerThemesOnWorkers(resolvedThemes)
+        ),
+      ]);
+      this.highlighter = highlighter;
       this.currentTheme = theme;
     }
     for (const instance of this.themeSubscribers) {
       instance.rerender();
     }
+  }
+
+  private resolveCustomThemes(
+    themeNames: PJSThemeNames[]
+  ): Promise<ResolvedCustomTheme>[] {
+    const resolvedThemes: Promise<ResolvedCustomTheme>[] = [];
+    for (const themeName of themeNames) {
+      if (isCustomTheme(themeName)) {
+        resolvedThemes.push(
+          resolveCustomTheme(themeName).then((data) => ({
+            name: themeName,
+            data,
+          }))
+        );
+      }
+    }
+    return resolvedThemes;
+  }
+
+  private async registerThemesOnWorkers(
+    themes: ResolvedCustomTheme[]
+  ): Promise<void> {
+    if (themes.length === 0 || this.workersFailed) {
+      return;
+    }
+    if (!this.isInitialized()) {
+      await this.initialize();
+    }
+    if (this.workers.length === 0) {
+      return;
+    }
+    const registerPromises: Promise<void>[] = [];
+    for (const managedWorker of this.workers) {
+      if (!managedWorker.initialized) {
+        console.log({ managedWorker });
+        throw new Error(
+          'registerThemesOnWorkers: Somehow we have an uninitialized worker'
+        );
+      }
+      registerPromises.push(
+        new Promise<void>((resolve, reject) => {
+          const requestId = this.generateRequestId();
+          const task: RegisterThemeWorkerTask = {
+            type: 'register-theme',
+            id: requestId,
+            request: {
+              type: 'register-theme',
+              id: requestId,
+              themes,
+            },
+            resolve,
+            reject,
+            requestStart: Date.now(),
+          };
+          this.pendingTasks.set(requestId, task);
+          managedWorker.worker.postMessage(task.request);
+        })
+      );
+    }
+    await Promise.all(registerPromises);
   }
 
   subscribeToThemeChanges(instance: ThemeSubscriber): () => void {
@@ -111,14 +196,17 @@ export class WorkerPoolManager {
       this.initialized = new Promise((resolve, reject) => {
         void (async () => {
           try {
+            const themes = getThemes(this.highlighterOptions.theme);
             const [highlighter] = await Promise.all([
               getSharedHighlighter({
-                themes: getThemes(this.highlighterOptions.theme),
+                themes,
                 preferWasmHighlighter:
                   this.highlighterOptions.preferWasmHighlighter,
                 langs: ['text'],
               }),
-              this.initializeWorkers(),
+              Promise.all(this.resolveCustomThemes(themes)).then(
+                (customThemes) => this.initializeWorkers(customThemes)
+              ),
             ]);
             // If we were terminated while initializing, we should probably kill
             // any workers that may have been created
@@ -133,6 +221,8 @@ export class WorkerPoolManager {
             this.drainQueue();
             resolve();
           } catch (e) {
+            this.initialized = false;
+            this.workersFailed = true;
             reject(e);
           }
         })();
@@ -142,8 +232,14 @@ export class WorkerPoolManager {
     }
   }
 
-  private async initializeWorkers(): Promise<void> {
+  private async initializeWorkers(
+    customThemes: ResolvedCustomTheme[]
+  ): Promise<void> {
+    this.workersFailed = false;
     const initPromises: Promise<unknown>[] = [];
+    if (this.workers.length > 0) {
+      this.terminateWorkers();
+    }
     for (let i = 0; i < (this.options.poolSize ?? 8); i++) {
       const worker = this.options.workerFactory();
       const managedWorker: ManagedWorker = {
@@ -172,6 +268,7 @@ export class WorkerPoolManager {
               type: 'initialize',
               id: requestId,
               options: this.highlighterOptions,
+              customThemes,
             },
             resolve() {
               managedWorker.initialized = true;
@@ -267,6 +364,7 @@ export class WorkerPoolManager {
     this.pendingTasks.clear();
     this.highlighter = undefined;
     this.initialized = false;
+    this.workersFailed = false;
   }
 
   private terminateWorkers() {
@@ -371,6 +469,12 @@ export class WorkerPoolManager {
             }
             task.resolve();
             break;
+          case 'register-theme':
+            if (task.type !== 'register-theme') {
+              throw new Error('handleWorkerMessage: task/response dont match');
+            }
+            task.resolve();
+            break;
           case 'file': {
             if (task.type !== 'file') {
               throw new Error('handleWorkerMessage: task/response dont match');
@@ -464,6 +568,9 @@ export class WorkerPoolManager {
 
 function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
   const langs = new Set<SupportedLanguages>();
+  if (task.type === 'initialize' || task.type === 'register-theme') {
+    return [];
+  }
   const options = task.request.options ?? {};
   if ('lang' in options && options.lang != null) {
     langs.add(options.lang);
