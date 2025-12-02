@@ -1,6 +1,12 @@
 'use client';
 
-import { IconCiWarningFill, IconInfoFill } from '@/components/icons';
+import {
+  IconBoxTape,
+  IconBulb,
+  IconBulbFill,
+  IconCiWarningFill,
+  IconInfoFill,
+} from '@/components/icons';
 import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 
@@ -29,8 +35,8 @@ export function SSR({
     <section className="space-y-4">
       <h2>SSR</h2>
 
-      <Notice icon={<IconInfoFill />}>
-        Import the SSR utilities from <code>@pierre/precision-diffs/ssr</code>
+      <Notice icon={<IconBulbFill />}>
+        Import the SSR utilities from <code>@pierre/precision-diffs/ssr</code>.
       </Notice>
       <p>
         The SSR API allows you to pre-render file diffs on the server with
@@ -44,11 +50,12 @@ export function SSR({
         plus a <code>prerenderedHTML</code> string. This object can be spread
         directly into the corresponding React component for automatic hydration.
       </p>
+
       <Notice variant="warning" icon={<IconCiWarningFill />}>
-        The inputs used for pre-rendering must exactly match what’s rendered in
-        the client component. This is why we recommend spreading the entire
-        result object—it ensures the client receives the same inputs that were
-        used to generate the pre-rendered HTML.
+        Inputs used for pre-rendering must exactly match what’s rendered in the
+        client component. We recommend spreading the entire result object to
+        ensure the client receives the same inputs that were used to generate
+        the pre-rendered HTML.
       </Notice>
 
       <h4 data-toc-ignore>Server Component</h4>
