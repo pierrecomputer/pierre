@@ -15,6 +15,7 @@ export default [
       '{packages,apps}/*/.source/**',
       '{packages,apps}/*/.vinxi/**',
       '{packages,apps}/*/.output/**',
+      '{packages,apps}/*/.vercel/**',
       'packages/storage-elements/blocks/git-platform-sync/api/**/*',
       'packages/storage-elements/blocks/git-platform-sync/pages/**/*',
       'update-themes.js',
