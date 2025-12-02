@@ -134,8 +134,8 @@
   }
   code {
     font-family: var(--pjs-font-family);
-    font-size: 90%;
-    font-weight: 600;
+    font-size: 95% !important;
+    font-weight: 500 !important;
     color: var(--color-primary);
     letter-spacing: -0.02em;
   }
@@ -146,6 +146,19 @@
   h5,
   h6 {
     @apply scroll-mt-5;
+  }
+
+  .prose code {
+    color: color-mix(in lab, var(--color-primary), currentcolor) !important;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -161,4 +174,8 @@
 
 .diff-container {
   @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
+}
+
+[data-slot='header'].is-stuck {
+  /* @apply py-3; */
 }

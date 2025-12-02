@@ -36,7 +36,7 @@ export function SidebarWrapper() {
       <Button
         variant="outline"
         onClick={toggleMobileMenu}
-        className="bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted sticky top-5 z-50 mt-8 md:hidden"
+        className="bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted fixed top-5 right-5 z-50 md:hidden"
       >
         <IconParagraph />
         Menu

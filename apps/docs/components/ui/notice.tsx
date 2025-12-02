@@ -5,12 +5,12 @@ import * as React from 'react';
 const noticeVariants = cva('text-md flex gap-2 rounded-md border px-5 py-4', {
   variants: {
     variant: {
-      info: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-600 dark:text-cyan-300',
+      info: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
       warning:
-        'border-yellow-500/20 bg-yellow-500/10 text-yellow-600 dark:text-yellow-300',
-      error: 'border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-300',
+        'border-yellow-500/20 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300',
+      error: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
       success:
-        'border-green-500/20 bg-green-500/10 text-green-600 dark:text-green-300',
+        'border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-300',
     },
   },
   defaultVariants: {
