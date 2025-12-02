@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 import { type VariantProps, cva } from 'class-variance-authority';
 import * as React from 'react';
 
-const noticeVariants = cva('text-md flex gap-2 rounded-md border px-5 py-4', {
+const noticeVariants = cva('text-md flex gap-2 rounded-md border p-4', {
   variants: {
     variant: {
       info: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
@@ -26,7 +26,7 @@ export type NoticeProps = React.HTMLAttributes<HTMLDivElement> &
 function Notice({ className, variant, icon, children, ...props }: NoticeProps) {
   return (
     <div className={cn(noticeVariants({ variant, className }))} {...props}>
-      {icon && <div className="mt-[4px] flex-shrink-0">{icon}</div>}
+      {icon && <div className="mt-[2px] flex-shrink-0 md:mt-[4px]">{icon}</div>}
       <div className="leading-[1.5]">{children}</div>
     </div>
   );

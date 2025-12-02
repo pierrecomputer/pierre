@@ -37,7 +37,8 @@ export function HeaderWrapper() {
       <Header.Nav>
         <Header.NavLink href="/">Home</Header.NavLink>
         <Header.NavLink href="/docs">Docs</Header.NavLink>
-        <li className="border-border h-5 w-[1px] items-center border-l" />
+        <li className="border-border hidden h-5 w-[1px] items-center border-l md:block" />
+        <li className="ml-auto bg-red-500 md:hidden" />
         <Header.NavLink href="https://discord.gg/pierre" external>
           <IconBrandDiscord />
         </Header.NavLink>
