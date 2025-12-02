@@ -7,6 +7,7 @@ import type {
   RenderDiffOptions,
   RenderFileOptions,
   SupportedLanguages,
+  ThemeRegistrationResolved,
   ThemedDiffResult,
   ThemedFileResult,
   ThemesType,
@@ -50,6 +51,18 @@ export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
   options: WorkerHighlighterOptions;
+  customThemes: ResolvedCustomTheme[];
+}
+
+export interface ResolvedCustomTheme {
+  name: string;
+  data: ThemeRegistrationResolved | undefined;
+}
+
+export interface RegisterThemeWorkerRequest {
+  type: 'register-theme';
+  id: WorkerRequestId;
+  themes: ResolvedCustomTheme[];
 }
 
 export type SubmitRequest =
@@ -59,7 +72,8 @@ export type SubmitRequest =
 export type WorkerRequest =
   | RenderFileRequest
   | RenderDiffMetadataRequest
-  | InitializeWorkerRequest;
+  | InitializeWorkerRequest
+  | RegisterThemeWorkerRequest;
 
 export interface RenderDiffFilesResult {
   oldLines: ElementContent[];
@@ -104,6 +118,13 @@ export interface InitializeSuccessResponse {
   sentAt: number;
 }
 
+export interface RegisterThemeSuccessResponse {
+  type: 'success';
+  requestType: 'register-theme';
+  id: WorkerRequestId;
+  sentAt: number;
+}
+
 export interface RenderErrorResponse {
   type: 'error';
   id: WorkerRequestId;
@@ -119,7 +140,8 @@ export type RenderSuccessResponse =
 export type WorkerResponse =
   | RenderSuccessResponse
   | RenderErrorResponse
-  | InitializeSuccessResponse;
+  | InitializeSuccessResponse
+  | RegisterThemeSuccessResponse;
 
 export interface WorkerPoolOptions {
   workerFactory: () => Worker;
@@ -136,6 +158,15 @@ export interface InitializeWorkerTask {
   type: 'initialize';
   id: WorkerRequestId;
   request: InitializeWorkerRequest;
+  resolve(value?: undefined): void;
+  reject(error: Error): void;
+  requestStart: number;
+}
+
+export interface RegisterThemeWorkerTask {
+  type: 'register-theme';
+  id: WorkerRequestId;
+  request: RegisterThemeWorkerRequest;
   resolve(value?: undefined): void;
   reject(error: Error): void;
   requestStart: number;
@@ -159,6 +190,7 @@ export interface RenderDiffMetadataTask {
 
 export type AllWorkerTasks =
   | InitializeWorkerTask
+  | RegisterThemeWorkerTask
   | RenderFileTask
   | RenderDiffMetadataTask;
 

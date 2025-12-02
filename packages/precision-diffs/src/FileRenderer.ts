@@ -61,7 +61,7 @@ export class FileRenderer<LAnnotation = undefined> {
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
-    private poolManager?: WorkerPoolManager | undefined
+    private workerManager?: WorkerPoolManager | undefined
   ) {}
 
   setOptions(options: FileRendererOptions): void {
@@ -92,7 +92,7 @@ export class FileRenderer<LAnnotation = undefined> {
   cleanUp(): void {
     this.renderCache = undefined;
     this.highlighter = undefined;
-    this.poolManager = undefined;
+    this.workerManager = undefined;
     this.onRenderUpdate = undefined;
   }
 
@@ -106,8 +106,8 @@ export class FileRenderer<LAnnotation = undefined> {
       highlighted: true,
       result: undefined,
     };
-    if (this.poolManager != null) {
-      this.poolManager.highlightFileAST(this, file, options);
+    if (this.workerManager?.isWorkingPool() === true) {
+      this.workerManager.highlightFileAST(this, file, options);
     } else {
       void this.asyncHighlight(file).then(({ result, options }) => {
         this.onHighlightSuccess(file, result, options);
@@ -128,7 +128,7 @@ export class FileRenderer<LAnnotation = undefined> {
     const { renderCache } = this;
     const options: RenderFileOptions = {
       lang,
-      theme: this.poolManager?.currentTheme ?? theme,
+      theme: this.workerManager?.currentTheme ?? theme,
       tokenizeMaxLineLength,
       startingLineNumber,
     };
@@ -161,8 +161,8 @@ export class FileRenderer<LAnnotation = undefined> {
       options,
       result: undefined,
     };
-    if (this.poolManager != null) {
-      this.renderCache.result ??= this.poolManager.getPlainFileAST(
+    if (this.workerManager?.isWorkingPool() === true) {
+      this.renderCache.result ??= this.workerManager.getPlainFileAST(
         file,
         this.options.startingLineNumber
       );
@@ -170,7 +170,7 @@ export class FileRenderer<LAnnotation = undefined> {
       // basis... (maybe the poolManager can figure it out based on file name
       // and file contents probably?)
       if (!this.renderCache.highlighted || forceRender) {
-        this.poolManager.highlightFileAST(this, file, options);
+        this.workerManager.highlightFileAST(this, file, options);
       }
     } else {
       this.computedLang =

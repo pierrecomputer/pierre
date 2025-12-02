@@ -1,4 +1,7 @@
-import { getSharedHighlighter } from '../SharedHighlighter';
+import {
+  getSharedHighlighter,
+  registerResolvedTheme,
+} from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
 import type {
   PJSHighlighter,
@@ -13,6 +16,7 @@ import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
   InitializeSuccessResponse,
   InitializeWorkerRequest,
+  RegisterThemeWorkerRequest,
   RenderDiffMetadataRequest,
   RenderDiffMetadataSuccessResponse,
   RenderErrorResponse,
@@ -36,6 +40,9 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
       case 'initialize':
         await handleInitialize(request);
         break;
+      case 'register-theme':
+        handleRegisterTheme(request);
+        break;
       case 'file':
         await handleRenderFile(request);
         break;
@@ -53,7 +60,18 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
   }
 });
 
-async function handleInitialize({ id, options }: InitializeWorkerRequest) {
+async function handleInitialize({
+  id,
+  options,
+  customThemes,
+}: InitializeWorkerRequest) {
+  if (customThemes != null) {
+    for (const { name, data } of customThemes) {
+      if (data != null) {
+        registerResolvedTheme(name, data);
+      }
+    }
+  }
   const langs = new Set(options?.langs);
   langs.add('text');
   await getSharedHighlighter({
@@ -67,6 +85,20 @@ async function handleInitialize({ id, options }: InitializeWorkerRequest) {
     requestType: 'initialize',
     sentAt: Date.now(),
   } satisfies InitializeSuccessResponse);
+}
+
+function handleRegisterTheme({ id, themes }: RegisterThemeWorkerRequest) {
+  for (const { name, data } of themes) {
+    if (data != null) {
+      registerResolvedTheme(name, data);
+    }
+  }
+  postMessage({
+    type: 'success',
+    id,
+    requestType: 'register-theme',
+    sentAt: Date.now(),
+  });
 }
 
 async function handleRenderFile({
