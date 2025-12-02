@@ -33,3 +33,38 @@ We use project references between each of our packages and apps.
 
 - We always want to make sure that we are updating the root `tsconfig.json` file to reference any new or renamed package or app in our monorepo
 - We always want to make sure that if a package has a dependency on another `workspace:` package, that the dependent package is added to the `references` block of the consuming package. This ensures fast and accurate type checking without extra work across all packages.
+
+## Testing
+
+We use Bun's built-in testing framework for unit tests. Tests are located in a `test/` folder within each package, separate from the source code.
+
+### Running Tests
+
+For the precision-diffs package:
+
+```bash
+# From the package directory
+bun test
+
+# From the monorepo root
+bun run diffs:test
+```
+
+### Updating Snapshots
+
+When test snapshots need to be updated:
+
+```bash
+# From the package directory
+bun test --update-snapshots
+
+# From the monorepo root
+bun run diffs:update-snapshots
+```
+
+### Test Structure
+
+- Tests use Bun's native `describe`, `test`, and `expect` from `bun:test`
+- Snapshot testing is supported natively via `toMatchSnapshot()`
+- Shared test fixtures and mocks are located in `test/mocks.ts`
+- Test files are included in TypeScript type checking via `tsconfig.json`

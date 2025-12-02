@@ -15,6 +15,18 @@ bun install
 bun run dev
 ```
 
+## Testing
+
+Run tests for the precision-diffs package:
+
+```bash
+# Run tests
+bun run diffs:test
+
+# Update snapshots
+bun run diffs:update-snapshots
+```
+
 ## Publishing precision diffs
 
 ```sh
