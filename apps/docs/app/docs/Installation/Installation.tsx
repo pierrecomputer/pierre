@@ -17,6 +17,7 @@ export function Installation({ installationExamples }: InstallationProps) {
   return (
     <section className="space-y-4">
       <h2>Installation</h2>
+      <p>Install Diffs with the package manager of your choice:</p>
       <ButtonGroup
         value={selectedPm}
         onValueChange={(v) => setSelectedPm(v as PackageManager)}

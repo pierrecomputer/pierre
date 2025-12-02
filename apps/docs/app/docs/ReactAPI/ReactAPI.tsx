@@ -1,6 +1,8 @@
 'use client';
 
+import { IconInfoFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
@@ -40,10 +42,9 @@ export function ReactAPI({
   return (
     <section className="space-y-4">
       <h2>React API</h2>
-      <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
-        You can import the React components from{' '}
-        <code>@pierre/precision-diffs/react</code>
-      </p>
+      <Notice icon={<IconInfoFill />}>
+        Import React components from <code>@pierre/precision-diffs/react</code>.
+      </Notice>
       <p>
         We offer a variety of components to render diffs and files. Many of them
         share similar types of props, which you can find documented in{' '}
@@ -51,13 +52,23 @@ export function ReactAPI({
       </p>
 
       <h3>Components</h3>
-      <p>
-        The React API exposes four main components: <code>MultiFileDiff</code>{' '}
-        (compare two file versions), <code>PatchDiff</code> (render from a patch
-        string), <code>FileDiff</code> (render a pre-parsed{' '}
-        <code>FileDiffMetadata</code>), and <code>File</code> (render a single
-        code file without diff).
-      </p>
+      <p>The React API exposes four main components:</p>
+      <ul>
+        <li>
+          <code>MultiFileDiff</code> compares two file versions
+        </li>
+        <li>
+          <code>PatchDiff</code> renders from a patch string
+        </li>
+        <li>
+          <code>FileDiff</code> renders a pre-parsed{' '}
+          <code>FileDiffMetadata</code>
+        </li>
+        <li>
+          <code>File</code> renders a single code file without diff
+        </li>
+      </ul>
+
       <ButtonGroup
         value={example}
         onValueChange={(value) => setExample(value as ExampleTypes)}
@@ -85,8 +96,9 @@ export function ReactAPI({
         The three diff components (<code>MultiFileDiff</code>,{' '}
         <code>PatchDiff</code>, and <code>FileDiff</code>) share a common set of
         props for configuration, annotations, and styling. The <code>File</code>{' '}
-        component has similar props but uses <code>LineAnnotation</code> instead
-        of <code>DiffLineAnnotation</code> (no <code>side</code> property).
+        component has similar props, but uses <code>LineAnnotation</code>{' '}
+        instead of <code>DiffLineAnnotation</code> (no <code>side</code>{' '}
+        property).
       </p>
       <ButtonGroup
         value={sharedProps}
