@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  IconBoxTape,
-  IconBulb,
-  IconBulbFill,
-  IconCiWarningFill,
-  IconInfoFill,
-} from '@/components/icons';
+import { IconBulbFill, IconCiWarningFill } from '@/components/icons';
 import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 
