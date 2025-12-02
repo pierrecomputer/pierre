@@ -123,7 +123,6 @@ export interface BaseCodeOptions {
 
   // Shiki config options
   lang?: SupportedLanguages;
-  preferWasmHighlighter?: boolean;
   useCSSClasses?: boolean;
   tokenizeMaxLineLength?: number;
 
