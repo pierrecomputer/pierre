@@ -76,6 +76,18 @@ export function WorkerPool({
       </Notice>
 
       <h4 data-toc-ignore>Vite</h4>
+      <p>
+        You may need to explicitly set the <code>worker.format</code> option in
+        your{' '}
+        <a
+          href="https://vite.dev/config/worker-options#worker-format"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vite Config
+        </a>{' '}
+        to <code>'es'</code>.{' '}
+      </p>
       <DocsCodeExample {...helperVite} />
 
       <h4 data-toc-ignore>NextJS</h4>
