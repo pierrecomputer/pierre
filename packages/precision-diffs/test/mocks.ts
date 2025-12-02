@@ -20,4 +20,15 @@ export function areThemesEqual(
   return themeA.dark === themeB.dark && themeA.light === themeB.light;
 }`,
   },
+  file2: {
+    name: 'file2.js',
+    contents: `function calculateTotal(items) {
+  const total = items.reduce((sum, item) => {
+    return sum + item.price;
+  }, 0);
+  return total;
+}
+
+export default calculateTotal;`,
+  },
 };
