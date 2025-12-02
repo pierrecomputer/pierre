@@ -27,9 +27,9 @@ describe('FileRenderer AST Structure', () => {
 
       // Each line should have the correct properties
       expect(lineElement.properties).toBeDefined();
-      expect(lineElement.properties!['data-line']).toBe(i + 1);
-      expect(lineElement.properties!['data-line-type']).toBe('context');
-      expect(lineElement.properties!['data-line-index']).toBe(i);
+      expect(lineElement.properties['data-line']).toBe(i + 1);
+      expect(lineElement.properties['data-line-type']).toBe('context');
+      expect(lineElement.properties['data-line-index']).toBe(i);
 
       // Each line should have two child spans: column-number and column-content
       expect(lineElement.children).toBeDefined();
@@ -40,12 +40,12 @@ describe('FileRenderer AST Structure', () => {
       // Verify line number column
       expect(numberColumn.type).toBe('element');
       expect(numberColumn.tagName).toBe('span');
-      expect(numberColumn.properties!['data-column-number']).toBe('');
+      expect(numberColumn.properties['data-column-number']).toBe('');
 
       // Verify content column
       expect(contentColumn.type).toBe('element');
       expect(contentColumn.tagName).toBe('span');
-      expect(contentColumn.properties!['data-column-content']).toBe('');
+      expect(contentColumn.properties['data-column-content']).toBe('');
     }
   });
 
@@ -71,7 +71,7 @@ describe('FileRenderer AST Structure', () => {
               ? node.properties.style
               : undefined;
           node.children?.forEach((child) =>
-            traverse(child, style || parentStyle)
+            traverse(child, style ?? parentStyle)
           );
         }
       };
@@ -87,8 +87,11 @@ describe('FileRenderer AST Structure', () => {
     expect(styledTokens.length).toBeGreaterThan(0);
 
     // Verify that styled tokens have the expected CSS variable format
-    const tokensWithCSSVars = styledTokens.filter((node) =>
-      node.style?.match(/--pjs-dark:#[A-F0-9]{6};--pjs-light:#[A-F0-9]{6}/)
+    const tokensWithCSSVars = styledTokens.filter(
+      (node) =>
+        node.style?.match(
+          /--pjs-dark:#[A-F0-9]{6};--pjs-light:#[A-F0-9]{6}/
+        ) !== null
     );
     expect(tokensWithCSSVars.length).toBeGreaterThan(0);
 
