@@ -53,8 +53,8 @@ export function VanillaAPI({
         The Vanilla JS API exposes two core components: <code>FileDiff</code>{' '}
         (compare two file versions or render a pre-parsed{' '}
         <code>FileDiffMetadata</code>) and <code>File</code> (render a single
-        code file without diff). Typically you'll want to interface with these
-        as they'll handle all the complicated aspects of syntax highlighting and
+        code file without diff). Typically you’ll want to interface with these
+        as they’ll handle all the complicated aspects of syntax highlighting and
         theming for you.
       </p>
       <ButtonGroup
@@ -93,7 +93,7 @@ export function VanillaAPI({
 
       <h4 data-toc-ignore>Custom Hunk Separators</h4>
       <p>
-        If you want to render custom hunk separators that won't scroll with the
+        If you want to render custom hunk separators that won’t scroll with the
         content, there are a few tricks you will need to employ. See the
         following code snippet:
       </p>

@@ -40,14 +40,14 @@ export function WorkerPool({
     <section className="space-y-4">
       <h2>Worker Pool</h2>
       <Notice icon={<IconBulbFill />}>
-        Import worker utilities from{' '}
-        <code>@pierre/precision-diffs/worker</code>.
+        Import worker utilities from <code>@pierre/precision-diffs/worker</code>
+        .
       </Notice>
       <p>
         By default, syntax highlighting runs on the main thread using Shiki. If
         you’re rendering large files or many diffs, this can cause a bottleneck
         on your JavaScript thread resulting in jank or unresponsiveness. To work
-        around this, we've provided some APIs to run all syntax highlighting in
+        around this, we’ve provided some APIs to run all syntax highlighting in
         worker threads. The main thread will still attempt to render plain text
         synchronously and then apply the syntax highlighting when we get a
         response from the worker threads.
@@ -94,7 +94,7 @@ export function WorkerPool({
 
       <h4 data-toc-ignore>Rollup / Static Files</h4>
       <p>
-        If your bundler doesn't have special worker support, build and serve the
+        If your bundler doesn’t have special worker support, build and serve the
         worker file statically:
       </p>
       <DocsCodeExample {...helperStatic} />
@@ -138,7 +138,7 @@ export function WorkerPool({
         The <code>WorkerPoolContextProvider</code> will automatically spin up or
         shut down the worker pool based on its react lifecycle. If you have
         multiple context providers, they will all share the same pool, and
-        termination won't occur until all contexts are unmounted.
+        termination won’t occur until all contexts are unmounted.
       </p>
 
       <Notice variant="warning" icon={<IconCiWarningFill />}>

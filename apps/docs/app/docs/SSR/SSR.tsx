@@ -36,7 +36,7 @@ export function SSR({
       <h2>SSR</h2>
 
       <Notice icon={<IconBulbFill />}>
-        Import the SSR utilities from <code>@pierre/precision-diffs/ssr</code>.
+        Import SSR utilities from <code>@pierre/precision-diffs/ssr</code>.
       </Notice>
       <p>
         The SSR API allows you to pre-render file diffs on the server with
