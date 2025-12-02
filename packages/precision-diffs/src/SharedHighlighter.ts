@@ -187,6 +187,35 @@ export function registerCustomTheme(
   CustomThemes.set(themeName, loader);
 }
 
+export function isCustomTheme(themeName: string): boolean {
+  return CustomThemes.has(themeName);
+}
+
+export async function resolveCustomTheme(
+  themeName: string
+): Promise<ThemeRegistrationResolved | undefined> {
+  const loader = CustomThemes.get(themeName);
+  if (loader == null) {
+    return undefined;
+  }
+  const result = await loader();
+  // Handle dynamic imports that return a module with default export
+  if ('default' in result) {
+    return result.default as ThemeRegistrationResolved;
+  }
+  return result;
+}
+
+export function registerResolvedTheme(
+  themeName: string,
+  themeData: ThemeRegistrationResolved
+): void {
+  if (CustomThemes.has(themeName)) {
+    return;
+  }
+  CustomThemes.set(themeName, () => Promise.resolve(themeData));
+}
+
 registerCustomTheme(
   'pierre-dark',
   () =>

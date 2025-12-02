@@ -265,7 +265,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       options,
       result: undefined,
     };
-    if (this.workerManager != null) {
+    if (this.workerManager?.isWorkingPool() === true) {
       this.workerManager.highlightDiffAST(this, this.diff, options);
     } else {
       void this.asyncHighlight(diff).then(({ result, options }) => {
@@ -314,7 +314,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       options,
       result: undefined,
     };
-    if (this.workerManager != null) {
+    if (this.workerManager?.isWorkingPool() === true) {
       this.renderCache.result ??= this.workerManager.getPlainDiffAST(
         diff,
         options.lineDiffType
