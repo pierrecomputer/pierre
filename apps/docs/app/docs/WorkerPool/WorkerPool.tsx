@@ -74,7 +74,11 @@ export function WorkerPool({
       <p>
         You may need to explicitly set the <code>worker.format</code> option in
         your{' '}
-        <a href="https://vite.dev/config/worker-options#worker-format">
+        <a
+          href="https://vite.dev/config/worker-options#worker-format"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           Vite Config
         </a>{' '}
         to <code>'es'</code>.{' '}
