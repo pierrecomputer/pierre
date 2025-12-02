@@ -1,5 +1,7 @@
 'use client';
 
+import { IconBulbFill, IconCiWarningFill } from '@/components/icons';
+import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 
 import { DocsCodeExample } from '../DocsCodeExample';
@@ -26,10 +28,10 @@ export function SSR({
   return (
     <section className="space-y-4">
       <h2>SSR</h2>
-      <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
-        You can import the SSR utilities from{' '}
-        <code>@pierre/precision-diffs/ssr</code>
-      </p>
+
+      <Notice icon={<IconBulbFill />}>
+        Import SSR utilities from <code>@pierre/precision-diffs/ssr</code>.
+      </Notice>
       <p>
         The SSR API allows you to pre-render file diffs on the server with
         syntax highlighting, then hydrate them on the client for full
@@ -42,15 +44,17 @@ export function SSR({
         plus a <code>prerenderedHTML</code> string. This object can be spread
         directly into the corresponding React component for automatic hydration.
       </p>
-      <p>
-        <strong>Important:</strong> The inputs used for pre-rendering must
-        exactly match what's rendered in the client component. This is why we
-        recommend spreading the entire result object—it ensures the client
-        receives the same inputs that were used to generate the prerendered
-        HTML.
-      </p>
+
+      <Notice variant="warning" icon={<IconCiWarningFill />}>
+        Inputs used for pre-rendering must exactly match what’s rendered in the
+        client component. We recommend spreading the entire result object into
+        your File or Diff component to ensure the client receives the same
+        inputs that were used to generate the pre-rendered HTML.
+      </Notice>
+
       <h4 data-toc-ignore>Server Component</h4>
       <DocsCodeExample {...usageServer} />
+
       <h4 data-toc-ignore>Client Component</h4>
       <DocsCodeExample {...usageClient} />
 
