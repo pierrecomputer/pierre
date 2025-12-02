@@ -30,9 +30,9 @@
       "import": "./dist/worker/index.js",
       "types": "./dist/worker/index.d.ts"
     },
-    "./worker/shiki-worker.js": {
-      "import": "./dist/worker/shiki-worker.js",
-      "types": "./dist/worker/shiki-worker.d.ts"
+    "./worker/worker.js": {
+      "import": "./dist/worker/worker.js",
+      "types": "./dist/worker/worker.d.ts"
     }
   },
   "files": [

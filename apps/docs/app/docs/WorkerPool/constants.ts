@@ -7,10 +7,10 @@ const options = {
 export const WORKER_POOL_HELPER_VITE: PreloadFileOptions<undefined> = {
   file: {
     name: 'utils/workerFactory.ts',
-    contents: `import ShikiWorkerUrl from '@pierre/precision-diffs/worker/shiki-worker.js?worker&url';
+    contents: `import WorkerUrl from '@pierre/precision-diffs/worker/worker.js?worker&url';
 
 export function workerFactory(): Worker {
-  return new Worker(ShikiWorkerUrl, { type: 'module' });
+  return new Worker(WorkerUrl, { type: 'module' });
 }`,
   },
   options,
@@ -24,7 +24,7 @@ export const WORKER_POOL_HELPER_NEXTJS: PreloadFileOptions<undefined> = {
 export function workerFactory(): Worker {
   return new Worker(
     new URL(
-      '@pierre/precision-diffs/worker/shiki-worker.js',
+      '@pierre/precision-diffs/worker/worker.js',
       import.meta.url
     ),
     { type: 'module' }
@@ -40,7 +40,7 @@ export const WORKER_POOL_HELPER_WEBPACK: PreloadFileOptions<undefined> = {
     contents: `export function workerFactory(): Worker {
   return new Worker(
     new URL(
-      '@pierre/precision-diffs/worker/shiki-worker.js',
+      '@pierre/precision-diffs/worker/worker.js',
       import.meta.url
     ),
     { type: 'module' }
@@ -56,7 +56,7 @@ export const WORKER_POOL_HELPER_ESBUILD: PreloadFileOptions<undefined> = {
     contents: `export function workerFactory(): Worker {
   return new Worker(
     new URL(
-      '@pierre/precision-diffs/worker/shiki-worker.js',
+      '@pierre/precision-diffs/worker/worker.js',
       import.meta.url
     ),
     { type: 'module' }
@@ -70,11 +70,11 @@ export const WORKER_POOL_HELPER_STATIC: PreloadFileOptions<undefined> = {
   file: {
     name: 'utils/workerFactory.ts',
     contents: `// For Rollup or bundlers without special worker support:
-// 1. Copy shiki-worker.js to your static/public folder
+// 1. Copy worker.js to your static/public folder
 // 2. Reference it by URL
 
 export function workerFactory(): Worker {
-  return new Worker('/static/workers/shiki-worker.js', { type: 'module' });
+  return new Worker('/static/workers/worker.js', { type: 'module' });
 }`,
   },
   options,
@@ -84,10 +84,10 @@ export const WORKER_POOL_HELPER_VANILLA: PreloadFileOptions<undefined> = {
   file: {
     name: 'utils/workerFactory.js',
     contents: `// No bundler / Vanilla JS
-// Host shiki-worker.js on your server and reference it by URL
+// Host worker.js on your server and reference it by URL
 
 export function workerFactory() {
-  return new Worker('/path/to/shiki-worker.js', { type: 'module' });
+  return new Worker('/path/to/worker.js', { type: 'module' });
 }`,
   },
   options,
@@ -374,7 +374,7 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<undefined> = {
     │ postMessage                     ↑
     ↓                   HAST Response │
 ┌───┴───────── Worker Threads ────────│───┐
-│ ┌ shiki-worker.js ──────────────────│─┐ │
+│ ┌ worker.js ────────────────────────│─┐ │
 │ │ * 8 threads by default            │ │ │
 │ │ * Runs Shiki's codeToHast() ──────┘ │ │
 │ │ * Manages themes and language       │ │
