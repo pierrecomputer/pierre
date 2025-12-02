@@ -77,7 +77,6 @@ async function handleInitialize({
   await getSharedHighlighter({
     themes: getThemes(options.theme),
     langs: Array.from(langs),
-    preferWasmHighlighter: options.preferWasmHighlighter,
   });
   postMessage({
     type: 'success',
@@ -137,15 +136,13 @@ async function handleRenderDiffMetadata({
 
 async function getHighlighter(
   lang: SupportedLanguages | SupportedLanguages[],
-  theme: string | Record<'dark' | 'light', string> = DEFAULT_THEMES,
-  preferWasmHighlighter = false
+  theme: string | Record<'dark' | 'light', string> = DEFAULT_THEMES
 ): Promise<PJSHighlighter> {
   const filteredLangs = new Set(!Array.isArray(lang) ? [lang] : lang);
   filteredLangs.add('text');
   return await getSharedHighlighter({
     themes: getThemes(theme),
     langs: Array.from(filteredLangs),
-    preferWasmHighlighter,
   });
 }
 

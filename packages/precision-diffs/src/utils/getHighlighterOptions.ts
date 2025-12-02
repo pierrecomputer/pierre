@@ -3,13 +3,11 @@ import { getThemes } from './getThemes';
 
 interface HighlighterOptionsShape {
   theme?: PJSThemeNames | ThemesType;
-  preferWasmHighlighter?: boolean;
 }
 
 interface GetHighlighterOptionsReturn {
   langs: SupportedLanguages[];
   themes: PJSThemeNames[];
-  preferWasmHighlighter?: boolean;
 }
 
 export function getHighlighterOptions(
@@ -19,6 +17,5 @@ export function getHighlighterOptions(
   return {
     langs: [lang ?? 'text'],
     themes: getThemes(options.theme),
-    preferWasmHighlighter: options.preferWasmHighlighter,
   };
 }

@@ -151,7 +151,6 @@ export interface WorkerPoolOptions {
 export interface WorkerHighlighterOptions {
   theme: PJSThemeNames | ThemesType;
   langs?: SupportedLanguages[];
-  preferWasmHighlighter?: boolean;
 }
 
 export interface InitializeWorkerTask {
