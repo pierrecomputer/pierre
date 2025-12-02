@@ -112,7 +112,7 @@ interface GetRenderOptionsReturn {
 }
 
 type OptionsWithDefaults = Required<
-  Omit<BaseDiffOptions, 'lang' | 'preferWasmHighlighter' | 'unsafeCSS'>
+  Omit<BaseDiffOptions, 'lang' | 'unsafeCSS'>
 >;
 
 interface ExpansionRegion {
