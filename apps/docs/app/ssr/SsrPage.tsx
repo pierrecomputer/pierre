@@ -1,8 +1,8 @@
 'use client';
 
+import { HeaderWrapper } from '@/app/HeaderWrapper';
 import Footer from '@/components/Footer';
 import { IconBell } from '@/components/icons';
-import { Header } from '@/components/ui/header';
 import type { DiffLineAnnotation } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import '@pierre/precision-diffs/ssr';
@@ -54,34 +54,7 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
         } as React.CSSProperties
       }
     >
-      <Header
-        logo={
-          <Header.Logo
-            href="/"
-            subtitle={
-              <>
-                by{' '}
-                <span className="font-normal uppercase">
-                  The Pierre Computer Co.
-                </span>
-              </>
-            }
-          >
-            Diffs
-          </Header.Logo>
-        }
-      >
-        <Header.Nav>
-          <Header.NavLink href="/">Home</Header.NavLink>
-          <Header.NavLink href="/docs">Docs</Header.NavLink>
-          <Header.NavLink href="https://discord.gg/pierre" external>
-            Discord
-          </Header.NavLink>
-          <Header.NavLink href="https://github.com/pierredotco/" external>
-            GitHub
-          </Header.NavLink>
-        </Header.Nav>
-      </Header>
+      <HeaderWrapper />
 
       <h1 className="py-8 text-3xl font-medium tracking-tight md:text-4xl">
         SSR Demos

@@ -1,6 +1,8 @@
 'use client';
 
+import { IconInfoFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
@@ -34,13 +36,10 @@ export function Utilities({
   return (
     <section className="space-y-4">
       <h2>Utilities</h2>
-      <p className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-cyan-600 dark:text-cyan-300">
-        You can import these utility functions from{' '}
-        <code>@pierre/precision-diffs</code>
-      </p>
-      <p>
-        These utilities can be used with any framework or rendering approach.
-      </p>
+      <Notice icon={<IconInfoFill />}>
+        Import utility functions from <code>@pierre/precision-diffs</code>.
+        These can be used with any framework or rendering approach.
+      </Notice>
 
       <h3 data-toc-ignore>diffAcceptRejectHunk</h3>
       <p>
@@ -97,7 +96,7 @@ export function Utilities({
       <p>
         Parse unified diff / patch file content into structured data. Handles
         both single patches and multi-commit patch files (like those from GitHub
-        PR <code>.patch</code> URLs).
+        pull request <code>.patch</code> URLs).
       </p>
       <DocsCodeExample {...parsePatchFiles} />
 
