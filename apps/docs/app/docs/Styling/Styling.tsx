@@ -1,6 +1,7 @@
 'use client';
 
-import { IconCiWarning } from '@/components/icons';
+import { IconCiWarningFill } from '@/components/icons';
+import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
 
 import { DocsCodeExample } from '../DocsCodeExample';
@@ -20,12 +21,11 @@ export function Styling({
     <section className="space-y-4">
       <h2>Styling</h2>
       <p>
-        Diff and code are rendered using shadow DOM APIs. This means that the
-        styles applied to the diffs will be well isolated from your page's
-        existing CSS. However, it also means if you want to customize the
-        built-in styles, you'll have to utilize some custom CSS variables. These
-        can be done either in your global CSS, as style props on parent
-        components, or on the <code>FileDiff</code> component directly.
+        Diff and code components are rendered using shadow DOM APIs, allowing
+        styles to be well-isolated from your page’s existing CSS. However, it
+        also means you may have to utilize some custom CSS variables to override
+        default styles. These can be done in your global CSS, as style props on
+        parent components, or on the <code>FileDiff</code> component directly.
       </p>
       <DocsCodeExample {...stylingGlobal} />
       <DocsCodeExample {...stylingInline} />
@@ -47,13 +47,12 @@ export function Styling({
         selectors—these are susceptible to breaking in future versions or in
         edge cases that may be difficult to anticipate.
       </p>
-      <p className="font-semibold italic">
-        <IconCiWarning size={16} className="inline-block text-red-500" /> We
-        cannot currently guarantee backwards compatibility for this feature
+      <Notice variant="warning" icon={<IconCiWarningFill />}>
+        We cannot currently guarantee backwards compatibility for this feature
         across any future changes to the library, even in patch versions. Please
-        reach out so that we can discuss a more permanent solution for the style
-        change that you're looking for.
-      </p>
+        reach out so that we can discuss a more permanent solution for modifying
+        styles.
+      </Notice>
       <DocsCodeExample {...stylingUnsafe} />
     </section>
   );

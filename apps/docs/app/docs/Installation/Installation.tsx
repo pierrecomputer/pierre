@@ -17,6 +17,17 @@ export function Installation({ installationExamples }: InstallationProps) {
   return (
     <section className="space-y-4">
       <h2>Installation</h2>
+      <p>
+        Diffs is{' '}
+        <a
+          href="https://www.npmjs.com/package/@pierre/precision-diffs"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          published as an npm package
+        </a>
+        . Install Diffs with the package manager of your choice:
+      </p>
       <ButtonGroup
         value={selectedPm}
         onValueChange={(v) => setSelectedPm(v as PackageManager)}
@@ -28,31 +39,57 @@ export function Installation({ installationExamples }: InstallationProps) {
         ))}
       </ButtonGroup>
       <DocsCodeExample {...installationExamples[selectedPm]} />
+
       <h3>Package Exports</h3>
       <p>The package provides several entry points for different use cases:</p>
-      <ul>
-        <li>
-          <code>@pierre/precision-diffs</code> —{' '}
-          <a href="#vanilla-js-api">Vanilla JS components</a> and{' '}
-          <a href="#utilities">utility functions</a> for parsing and rendering
-          diffs
-        </li>
-        <li>
-          <code>@pierre/precision-diffs/react</code> —{' '}
-          <a href="#react-api">React components</a> for rendering diffs with
-          full interactivity
-        </li>
-        <li>
-          <code>@pierre/precision-diffs/ssr</code> —{' '}
-          <a href="#ssr">Server-side rendering utilities</a> for pre-rendering
-          diffs with syntax highlighting
-        </li>
-        <li>
-          <code>@pierre/precision-diffs/worker</code> —{' '}
-          <a href="#worker-pool">Worker pool utilities</a> for offloading syntax
-          highlighting to background threads
-        </li>
-      </ul>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>@pierre/precision-diffs</code>
+            </td>
+            <td>
+              <a href="#vanilla-js-api">Vanilla JS components</a> and{' '}
+              <a href="#utilities">utility functions</a> for parsing and
+              rendering diffs
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>@pierre/precision-diffs/react</code>
+            </td>
+            <td>
+              <a href="#react-api">React components</a> for rendering diffs with
+              full interactivity
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>@pierre/precision-diffs/ssr</code>
+            </td>
+            <td>
+              <a href="#ssr">Server-side rendering utilities</a> for
+              pre-rendering diffs with syntax highlighting
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>@pierre/precision-diffs/worker</code>
+            </td>
+            <td>
+              <a href="#worker-pool">Worker pool utilities</a> for offloading
+              syntax highlighting to background threads
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </section>
   );
 }
