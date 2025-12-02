@@ -65,7 +65,7 @@ export function ReactAPI({
           <code>FileDiffMetadata</code>
         </li>
         <li>
-          <code>File</code> renders a single code file without diff
+          <code>File</code> renders a single code file without a diff
         </li>
       </ul>
 

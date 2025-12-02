@@ -40,7 +40,7 @@ export function WorkerPool({
     <section className="space-y-4">
       <h2>Worker Pool</h2>
       <Notice icon={<IconBulbFill />}>
-        Import the worker utilities from{' '}
+        Import worker utilities from{' '}
         <code>@pierre/precision-diffs/worker</code>.
       </Notice>
       <p>
