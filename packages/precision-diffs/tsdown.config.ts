@@ -10,7 +10,7 @@ const config: UserConfig = defineConfig([
     },
     attw: process.env.ATTW === 'true',
     tsconfig: './tsconfig.json',
-    clean: false,
+    clean: true,
     dts: {
       sourcemap: true,
     },
@@ -40,10 +40,13 @@ const config: UserConfig = defineConfig([
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',
     clean: false,
+    unbundle: false,
+    noExternal: [/.*/],
     dts: {
       sourcemap: true,
     },
     platform: 'neutral',
+    format: 'esm',
   },
 ]);
 
