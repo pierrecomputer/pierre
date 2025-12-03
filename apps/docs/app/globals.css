@@ -176,6 +176,9 @@
   @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
 }
 
+[data-slot='header'] {
+  @apply border-b border-transparent transition-[border-color] duration-200;
+}
 [data-slot='header'].is-stuck {
-  /* @apply py-3; */
+  @apply border-border;
 }

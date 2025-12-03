@@ -9,19 +9,16 @@ export function HeaderWrapper() {
   const [isStuck, setIsStuck] = useState(false);
 
   useEffect(() => {
-    const header = headerRef.current;
-    if (header === null) return;
+    const handleScroll = () => {
+      setIsStuck(window.scrollY > 0);
+    };
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // When header is stuck at top, it won't be fully intersecting with negative margin
-        setIsStuck(entry.intersectionRatio < 1);
-      },
-      { threshold: [1], rootMargin: '-1px 0px 0px 0px' }
-    );
+    // Check initial state
+    handleScroll();
 
-    observer.observe(header);
-    return () => observer.disconnect();
+    // Update on scroll
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   return (
@@ -37,8 +34,8 @@ export function HeaderWrapper() {
       <Header.Nav>
         <Header.NavLink href="/">Home</Header.NavLink>
         <Header.NavLink href="/docs">Docs</Header.NavLink>
-        <li className="border-border hidden h-5 w-[1px] items-center border-l md:block" />
-        <li className="ml-auto bg-red-500 md:hidden" />
+        <li className="border-border h-5 w-[1px] items-center border-l" />
+        {/* <li className="ml-auto bg-red-500 md:hidden" /> */}
         <Header.NavLink href="https://discord.gg/pierre" external>
           <IconBrandDiscord />
         </Header.NavLink>

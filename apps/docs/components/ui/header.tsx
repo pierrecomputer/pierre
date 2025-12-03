@@ -52,7 +52,7 @@ function HeaderLogo({
       <div className="flex items-baseline gap-1.5">
         <span className="text-lg leading-[20px] font-semibold">{children}</span>
         {subtitle != null && (
-          <small className="text-muted-foreground text-sm leading-[20px]">
+          <small className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
             {subtitle}
           </small>
         )}
@@ -116,7 +116,7 @@ const HeaderRoot = React.forwardRef<HTMLElement, HeaderProps>(
         ref={ref}
         data-slot="header"
         className={cn(
-          'bg-background sticky top-0 z-40 flex flex-col justify-between border-b py-4 transition-[padding,box-shadow] duration-200 md:flex-row md:items-center',
+          'bg-background sticky top-0 z-40 flex justify-between gap-4 py-4 transition-[padding,box-shadow] duration-200 md:flex-row md:items-center',
           className
         )}
         {...props}
