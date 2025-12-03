@@ -48,8 +48,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Pierre JS Docs',
-  description: 'Its docs for it!',
+  title: 'Diffs, from Pierre',
+  description:
+    'An open source diff and file rendering library by The Pierre Computer Company.',
 };
 
 export default function RootLayout({

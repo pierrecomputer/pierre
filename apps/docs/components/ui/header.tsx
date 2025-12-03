@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
-import { IconArrowUpRight } from '../icons';
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -35,22 +34,6 @@ interface HeaderLogoProps extends React.ComponentProps<typeof Link> {
   children?: React.ReactNode;
 }
 
-function Header({ className, logo, children, ...props }: HeaderProps) {
-  return (
-    <header
-      data-slot="header"
-      className={cn(
-        'flex flex-col justify-between border-b py-6 md:flex-row md:items-start',
-        className
-      )}
-      {...props}
-    >
-      {logo}
-      {children}
-    </header>
-  );
-}
-
 function HeaderLogo({
   className,
   subtitle,
@@ -61,36 +44,15 @@ function HeaderLogo({
     <Link
       data-slot="header-logo"
       className={cn(
-        'text-foreground hover:text-foreground/80 flex gap-2 transition-colors',
+        'text-foreground hover:text-foreground/80 flex items-center gap-2 transition-colors',
         className
       )}
       {...props}
     >
-      {/* <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="20"
-        height="40"
-        fill="none"
-        viewBox="0 0 16 32"
-      >
-        <path
-          fill="currentcolor"
-          fill-rule="evenodd"
-          d="M0 15.5V3a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v12.5H0ZM12 8a1 1 0 0 0-1-1H9V5a1 1 0 0 0-2 0v2H5a1 1 0 0 0 0 2h2v2a1 1 0 1 0 2 0V9h2a1 1 0 0 0 1-1Z"
-          clip-rule="evenodd"
-        />
-        <path
-          fill="currentcolor"
-          fill-rule="evenodd"
-          d="M16 29a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V16.5h16V29Zm-4-5a1 1 0 0 0-1-1H5a1 1 0 1 0 0 2h6a1 1 0 0 0 1-1Z"
-          clip-rule="evenodd"
-          opacity=".3"
-        />
-      </svg> */}
-      <div className="flex flex-col">
+      <div className="flex items-baseline gap-1.5">
         <span className="text-lg leading-[20px] font-semibold">{children}</span>
         {subtitle != null && (
-          <small className="text-muted-foreground text-xs leading-[20px]">
+          <small className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
             {subtitle}
           </small>
         )}
@@ -131,7 +93,7 @@ function HeaderNavLink({
         href={hrefString}
         className={cn(
           navigationMenuTriggerStyle(),
-          'text-muted-foreground h-auto bg-transparent px-0 py-1.5 font-normal md:-mt-1.5',
+          'text-muted-foreground h-auto bg-transparent px-0 py-1.5 leading-[20px] font-normal',
           isActive && 'text-accent-foreground font-medium',
           external && 'inline-flex items-center gap-[2px]',
           className
@@ -141,14 +103,35 @@ function HeaderNavLink({
         {...props}
       >
         {children}
-        {external && <IconArrowUpRight />}
       </NavigationMenuLink>
     </NavigationMenuItem>
   );
 }
 
-Header.Logo = HeaderLogo;
-Header.Nav = HeaderNav;
-Header.NavLink = HeaderNavLink;
+const HeaderRoot = React.forwardRef<HTMLElement, HeaderProps>(
+  ({ className, logo, children, ...props }, ref) => {
+    return (
+      <header
+        ref={ref}
+        data-slot="header"
+        className={cn(
+          'bg-background sticky top-0 z-40 flex justify-between gap-4 py-4 transition-[padding,box-shadow] duration-200 md:flex-row md:items-center',
+          className
+        )}
+        {...props}
+      >
+        {logo}
+        {children}
+      </header>
+    );
+  }
+);
+HeaderRoot.displayName = 'Header';
+
+const Header = Object.assign(HeaderRoot, {
+  Logo: HeaderLogo,
+  Nav: HeaderNav,
+  NavLink: HeaderNavLink,
+});
 
 export { Header, HeaderLogo, HeaderNav, HeaderNavLink };

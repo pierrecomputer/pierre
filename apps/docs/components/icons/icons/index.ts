@@ -166,6 +166,7 @@ export { IconGlobe } from './IconGlobe';
 export { IconGrid } from './IconGrid';
 export { IconGrid2x1 } from './IconGrid2x1';
 export { IconGrip } from './IconGrip';
+export { IconHash } from './IconHash';
 export { IconHeart } from './IconHeart';
 export { IconHeartFill } from './IconHeartFill';
 export { IconHome } from './IconHome';

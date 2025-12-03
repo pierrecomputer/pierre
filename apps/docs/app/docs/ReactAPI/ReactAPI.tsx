@@ -103,6 +103,7 @@ export function ReactAPI({
       <ButtonGroup
         value={sharedProps}
         onValueChange={(value) => setSharedProps(value as SharedPropsTypes)}
+        className="no-scrollbar max-w-full overflow-x-auto"
       >
         <ButtonGroupItem value="diff-options">Diff Options</ButtonGroupItem>
         <ButtonGroupItem value="diff-render-props">
