@@ -148,6 +148,31 @@
     @apply scroll-mt-5;
   }
 
+  /* Heading anchor links */
+  .heading-anchor {
+    @apply text-muted-foreground hover:text-foreground ml-2 opacity-0 transition-opacity duration-200;
+    text-decoration: none !important;
+    font-weight: 400;
+    display: inline-flex;
+    align-items: center;
+    width: 1em;
+    height: 1em;
+    vertical-align: text-bottom;
+  }
+
+  .heading-anchor svg {
+    display: block;
+  }
+
+  :is(h2, h3, h4):hover .heading-anchor,
+  .heading-anchor:focus-visible {
+    @apply opacity-50;
+  }
+
+  :is(h2, h3, h4):hover .heading-anchor:hover {
+    @apply opacity-75;
+  }
+
   .prose code {
     color: color-mix(in lab, var(--color-primary), currentcolor) !important;
   }
