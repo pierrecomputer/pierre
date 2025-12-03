@@ -9,8 +9,13 @@ export function HeaderWrapper() {
   const [isStuck, setIsStuck] = useState(false);
 
   useEffect(() => {
+    let lastStuck: boolean | undefined;
     const handleScroll = () => {
-      setIsStuck(window.scrollY > 0);
+      const isStuck = window.scrollY > 0;
+      if (isStuck !== lastStuck) {
+        lastStuck = isStuck;
+        setIsStuck(isStuck);
+      }
     };
 
     // Check initial state
@@ -35,7 +40,6 @@ export function HeaderWrapper() {
         <Header.NavLink href="/">Home</Header.NavLink>
         <Header.NavLink href="/docs">Docs</Header.NavLink>
         <li className="border-border h-5 w-[1px] items-center border-l" />
-        {/* <li className="ml-auto bg-red-500 md:hidden" /> */}
         <Header.NavLink href="https://discord.gg/pierre" external>
           <IconBrandDiscord />
         </Header.NavLink>

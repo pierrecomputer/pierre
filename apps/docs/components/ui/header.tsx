@@ -103,7 +103,6 @@ function HeaderNavLink({
         {...props}
       >
         {children}
-        {/* {external && <IconArrowUpRight />} */}
       </NavigationMenuLink>
     </NavigationMenuItem>
   );

@@ -26,7 +26,9 @@ export type NoticeProps = React.HTMLAttributes<HTMLDivElement> &
 function Notice({ className, variant, icon, children, ...props }: NoticeProps) {
   return (
     <div className={cn(noticeVariants({ variant, className }))} {...props}>
-      {icon != null && <div className="mt-[2px] flex-shrink-0 md:mt-[4px]">{icon}</div>}
+      {icon != null && (
+        <div className="mt-[2px] flex-shrink-0 md:mt-[4px]">{icon}</div>
+      )}
       <div className="leading-[1.5]">{children}</div>
     </div>
   );
