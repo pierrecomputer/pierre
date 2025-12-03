@@ -4,8 +4,7 @@
   "type": "module",
   "license": "apache-2.0",
   "scripts": {
-    "generate:worker-full": "bun run scripts/generate-worker-full.ts",
-    "build": "bun run generate:worker-full && tsdown --clean",
+    "build": "tsdown --clean",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
     "tsc": "tsc --noEmit --pretty",
@@ -34,10 +33,6 @@
     "./worker/worker.js": {
       "import": "./dist/worker/worker.js",
       "types": "./dist/worker/worker.d.ts"
-    },
-    "./worker/worker-full.js": {
-      "import": "./dist/worker/worker-full.js",
-      "types": "./dist/worker/worker-full.d.ts"
     }
   },
   "files": [

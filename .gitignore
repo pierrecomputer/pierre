@@ -30,6 +30,3 @@ tsconfig.tsbuildinfo
 
 # Project-specific
 svgs/*
-
-# Auto-generated files
-packages/precision-diffs/src/worker/worker-full.ts
