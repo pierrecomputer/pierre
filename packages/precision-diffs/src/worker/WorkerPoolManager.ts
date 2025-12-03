@@ -1,8 +1,8 @@
 import {
   getSharedHighlighter,
   hasLoadedThemes,
-  isCustomTheme,
-  resolveCustomTheme,
+  loadResolvedLanguageOnMainThread,
+  registerResolvedTheme,
 } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
 import type {
@@ -23,6 +23,8 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { resolveLanguage } from '../utils/resolveLanguages';
+import { resolveTheme } from '../utils/resolveThemes';
 import type {
   AllWorkerTasks,
   DiffRendererInstance,
@@ -34,6 +36,7 @@ import type {
   RenderFileRequest,
   RenderFileTask,
   ResolvedCustomTheme,
+  ResolvedLanguage,
   SubmitRequest,
   WorkerHighlighterOptions,
   WorkerPoolOptions,
@@ -71,6 +74,10 @@ export class WorkerPoolManager {
     FileRendererInstance | DiffRendererInstance,
     string
   >();
+  private resolvedLanguageCache = new Map<
+    SupportedLanguages,
+    ResolvedLanguage
+  >();
 
   constructor(
     private options: WorkerPoolOptions,
@@ -90,45 +97,77 @@ export class WorkerPoolManager {
     if (areThemesEqual(theme, this.currentTheme)) {
       return;
     }
-    const customThemes = this.resolveCustomThemes(getThemes(theme));
-    if (hasLoadedThemes(getThemes(theme)) && this.highlighter != null) {
-      if (customThemes.length > 0) {
-        await this.registerThemesOnWorkers(await Promise.all(customThemes));
-      }
+
+    const themeNames = getThemes(theme);
+    const resolvedThemes = await this.resolveAllThemes(themeNames);
+
+    if (hasLoadedThemes(themeNames) && this.highlighter != null) {
+      await this.registerThemesOnWorkers(resolvedThemes);
       this.currentTheme = theme;
     } else {
       const [highlighter] = await Promise.all([
         getSharedHighlighter({
-          themes: getThemes(theme),
+          themes: themeNames,
           langs: ['text'],
         }),
-        Promise.all(customThemes).then((resolvedThemes) =>
-          this.registerThemesOnWorkers(resolvedThemes)
-        ),
+        this.registerThemesOnWorkers(resolvedThemes),
       ]);
       this.highlighter = highlighter;
       this.currentTheme = theme;
     }
+
     for (const instance of this.themeSubscribers) {
       instance.rerender();
     }
   }
 
-  private resolveCustomThemes(
+  private async resolveAllThemes(
     themeNames: PJSThemeNames[]
-  ): Promise<ResolvedCustomTheme>[] {
-    const resolvedThemes: Promise<ResolvedCustomTheme>[] = [];
+  ): Promise<ResolvedCustomTheme[]> {
+    const resolvedThemes: ResolvedCustomTheme[] = [];
+
     for (const themeName of themeNames) {
-      if (isCustomTheme(themeName)) {
-        resolvedThemes.push(
-          resolveCustomTheme(themeName).then((data) => ({
-            name: themeName,
-            data,
-          }))
-        );
+      const data = await resolveTheme(themeName);
+      if (data != null) {
+        // Register on main thread so main thread SharedHighlighter can use it
+        registerResolvedTheme(themeName, data);
+        resolvedThemes.push({ name: themeName, data });
       }
     }
+
     return resolvedThemes;
+  }
+
+  private async resolveInitialLanguages(): Promise<
+    ResolvedLanguage[] | undefined
+  > {
+    const initialLangs = this.highlighterOptions.langs;
+    if (initialLangs == null || initialLangs.length === 0) {
+      return undefined;
+    }
+
+    const resolvedLanguages: ResolvedLanguage[] = [];
+
+    for (const lang of initialLangs) {
+      const cached = this.resolvedLanguageCache.get(lang);
+      if (cached != null) {
+        resolvedLanguages.push(cached);
+        continue;
+      }
+
+      const data = await resolveLanguage(lang);
+      const resolved: ResolvedLanguage = { name: lang, data };
+      this.resolvedLanguageCache.set(lang, resolved);
+
+      // Also load on main thread if highlighter exists
+      if (data != null) {
+        await loadResolvedLanguageOnMainThread(lang, data);
+      }
+
+      resolvedLanguages.push(resolved);
+    }
+
+    return resolvedLanguages.length > 0 ? resolvedLanguages : undefined;
   }
 
   private async registerThemesOnWorkers(
@@ -197,15 +236,21 @@ export class WorkerPoolManager {
         void (async () => {
           try {
             const themes = getThemes(this.highlighterOptions.theme);
+
+            // Resolve all themes using the unified resolveTheme function
+            const resolvedThemes = await this.resolveAllThemes(themes);
+
+            // Resolve initial languages if provided
+            const resolvedLanguages = await this.resolveInitialLanguages();
+
             const [highlighter] = await Promise.all([
               getSharedHighlighter({
                 themes,
-                langs: ['text'],
+                langs: ['text', ...(this.highlighterOptions.langs ?? [])],
               }),
-              Promise.all(this.resolveCustomThemes(themes)).then(
-                (customThemes) => this.initializeWorkers(customThemes)
-              ),
+              this.initializeWorkers(resolvedThemes, resolvedLanguages),
             ]);
+
             // If we were terminated while initializing, we should probably kill
             // any workers that may have been created
             if (this.initialized === false) {
@@ -231,7 +276,8 @@ export class WorkerPoolManager {
   }
 
   private async initializeWorkers(
-    customThemes: ResolvedCustomTheme[]
+    resolvedThemes: ResolvedCustomTheme[],
+    resolvedLanguages?: ResolvedLanguage[]
   ): Promise<void> {
     this.workersFailed = false;
     const initPromises: Promise<unknown>[] = [];
@@ -266,7 +312,8 @@ export class WorkerPoolManager {
               type: 'initialize',
               id: requestId,
               options: this.highlighterOptions,
-              customThemes,
+              resolvedThemes,
+              resolvedLanguages,
             },
             resolve() {
               managedWorker.initialized = true;
@@ -292,12 +339,17 @@ export class WorkerPoolManager {
     }
     while (this.taskQueue.length > 0) {
       const task = this.taskQueue[0];
-      const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
+      const langs = getLangsFromTask(task);
+      const availableWorker = this.getAvailableWorker(langs);
       if (availableWorker == null) {
         break;
       }
       this.taskQueue.shift();
-      this.executeTask(availableWorker, task);
+      // Resolve languages if needed
+      void this.resolveLanguagesAndExecuteTask(
+        task as RenderFileTask | RenderDiffMetadataTask,
+        langs
+      );
     }
   };
 
@@ -421,12 +473,55 @@ export class WorkerPoolManager {
     })();
 
     this.instanceRequestMap.set(instance, id);
-    const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
-    if (availableWorker != null) {
-      this.executeTask(availableWorker, task);
-    } else {
+
+    // Resolve languages if needed before executing the task
+    const langs = getLangsFromTask(task);
+    void this.resolveLanguagesAndExecuteTask(task, langs);
+  }
+
+  private async resolveLanguagesAndExecuteTask(
+    task: RenderFileTask | RenderDiffMetadataTask,
+    langs: SupportedLanguages[]
+  ): Promise<void> {
+    const availableWorker = this.getAvailableWorker(langs);
+    if (availableWorker == null) {
       this.taskQueue.push(task);
+      return;
     }
+
+    // Check which languages the worker doesn't have
+    const missingLangs = langs.filter(
+      (lang) => !availableWorker.langs.has(lang)
+    );
+
+    if (missingLangs.length > 0) {
+      // Resolve missing languages
+      const resolvedLanguages: ResolvedLanguage[] = [];
+
+      for (const lang of missingLangs) {
+        // Check cache first
+        let resolved = this.resolvedLanguageCache.get(lang);
+
+        if (resolved == null) {
+          // Resolve and cache
+          const data = await resolveLanguage(lang);
+          resolved = { name: lang, data };
+          this.resolvedLanguageCache.set(lang, resolved);
+
+          // Also load on main thread if highlighter exists
+          if (data != null) {
+            await loadResolvedLanguageOnMainThread(lang, data);
+          }
+        }
+
+        resolvedLanguages.push(resolved);
+      }
+
+      // Add resolved languages to the request
+      task.request.resolvedLanguages = resolvedLanguages;
+    }
+
+    this.executeTask(availableWorker, task);
   }
 
   private handleWorkerMessage(

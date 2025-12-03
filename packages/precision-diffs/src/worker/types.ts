@@ -3,6 +3,7 @@ import type { ElementContent } from 'hast';
 import type {
   FileContents,
   FileDiffMetadata,
+  LanguageRegistration,
   PJSThemeNames,
   RenderDiffOptions,
   RenderFileOptions,
@@ -38,6 +39,7 @@ export interface RenderFileRequest {
   id: WorkerRequestId;
   file: FileContents;
   options: RenderFileOptions;
+  resolvedLanguages?: ResolvedLanguage[];
 }
 
 export interface RenderDiffMetadataRequest {
@@ -45,18 +47,25 @@ export interface RenderDiffMetadataRequest {
   id: WorkerRequestId;
   diff: FileDiffMetadata;
   options: RenderDiffOptions;
+  resolvedLanguages?: ResolvedLanguage[];
 }
 
 export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
   options: WorkerHighlighterOptions;
-  customThemes: ResolvedCustomTheme[];
+  resolvedThemes: ResolvedCustomTheme[];
+  resolvedLanguages?: ResolvedLanguage[];
 }
 
 export interface ResolvedCustomTheme {
   name: string;
   data: ThemeRegistrationResolved | undefined;
+}
+
+export interface ResolvedLanguage {
+  name: string;
+  data: LanguageRegistration[] | undefined;
 }
 
 export interface RegisterThemeWorkerRequest {

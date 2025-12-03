@@ -1,5 +1,6 @@
 import {
   getSharedHighlighter,
+  loadResolvedLanguagesAndUpdateMap,
   registerResolvedTheme,
 } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
@@ -63,21 +64,29 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
 async function handleInitialize({
   id,
   options,
-  customThemes,
+  resolvedThemes,
+  resolvedLanguages,
 }: InitializeWorkerRequest) {
-  if (customThemes != null) {
-    for (const { name, data } of customThemes) {
+  // Register all resolved themes (both custom and bundled)
+  if (resolvedThemes != null) {
+    for (const { name, data } of resolvedThemes) {
       if (data != null) {
         registerResolvedTheme(name, data);
       }
     }
   }
+
   const langs = new Set(options?.langs);
   langs.add('text');
   await getSharedHighlighter({
     themes: getThemes(options.theme),
     langs: Array.from(langs),
   });
+
+  // Load any resolved languages and update the Map
+  if (resolvedLanguages != null) {
+    await loadResolvedLanguagesAndUpdateMap(resolvedLanguages);
+  }
   postMessage({
     type: 'success',
     id,
@@ -109,7 +118,13 @@ async function handleRenderFile({
     startingLineNumber,
     tokenizeMaxLineLength,
   },
+  resolvedLanguages,
 }: RenderFileRequest): Promise<void> {
+  // Load resolved languages if provided
+  if (resolvedLanguages != null) {
+    await loadResolvedLanguagesAndUpdateMap(resolvedLanguages);
+  }
+
   sendFileSuccess(
     id,
     renderFileWithHighlighter(file, await getHighlighter(lang, theme), {
@@ -125,7 +140,13 @@ async function handleRenderDiffMetadata({
   id,
   options,
   diff,
+  resolvedLanguages,
 }: RenderDiffMetadataRequest) {
+  // Load resolved languages if provided
+  if (resolvedLanguages != null) {
+    await loadResolvedLanguagesAndUpdateMap(resolvedLanguages);
+  }
+
   const { lang } = options ?? {};
   const oldLang = lang ?? getFiletypeFromFileName(diff.prevName ?? diff.name);
   const newLang = lang ?? getFiletypeFromFileName(diff.name);

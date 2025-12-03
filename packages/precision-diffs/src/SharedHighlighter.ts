@@ -1,11 +1,15 @@
 import { createHighlighter, createJavaScriptRegexEngine } from 'shiki';
+import type { LanguageRegistration } from 'shiki';
 
+import pierreDarkTheme from './themes/pierre-dark.json';
+import pierreLightTheme from './themes/pierre-light.json';
 import type {
   PJSHighlighter,
   PJSThemeNames,
   SupportedLanguages,
   ThemeRegistrationResolved,
 } from './types';
+import { resolveLanguage } from './utils/resolveLanguages';
 
 type CachedOrLoadingHighlighterType =
   | Promise<PJSHighlighter>
@@ -15,7 +19,10 @@ type CachedOrLoadingHighlighterType =
 let highlighter: CachedOrLoadingHighlighterType;
 
 const loadedThemes = new Map<string, true | Promise<void>>();
-const loadedLanguages = new Map<SupportedLanguages, true | Promise<void>>();
+const resolvedLanguagesMap = new Map<
+  SupportedLanguages,
+  LanguageRegistration[] | Promise<LanguageRegistration[]>
+>();
 
 interface HighlighterOptions {
   themes: PJSThemeNames[];
@@ -48,10 +55,12 @@ export async function getSharedHighlighter({
             themesToLoad.push(theme);
           }
         }
+        // Mark languages as resolved (they'll be loaded with the highlighter)
         for (const language of langs) {
-          loadedLanguages.set(language, true);
+          // Store empty array to mark as "will be loaded by createHighlighter"
+          resolvedLanguagesMap.set(language, []);
         }
-        loadedLanguages.set('text', true);
+        resolvedLanguagesMap.set('text', []);
         const instance = (await createHighlighter({
           themes: themesToLoad,
           langs: [...langs, 'text'],
@@ -68,20 +77,47 @@ export async function getSharedHighlighter({
     : highlighter;
   const loaders: Promise<void>[] = [];
   for (const language of langs) {
-    const loadedOrLoading = loadedLanguages.get(language);
-    // We haven't loaded this language yet, so lets queue it up
-    if (loadedOrLoading == null) {
-      const promise = instance
-        .loadLanguage(language)
-        .then(() => void loadedLanguages.set(language, true));
-      loadedLanguages.set(language, promise);
-      loaders.push(promise);
+    const resolvedOrResolving = resolvedLanguagesMap.get(language);
+
+    if (resolvedOrResolving == null) {
+      // Language not yet resolved, resolve it now
+      const promise = (async (): Promise<LanguageRegistration[]> => {
+        const langData = await resolveLanguage(language);
+        if (langData != null) {
+          // Store the resolved data
+          resolvedLanguagesMap.set(language, langData);
+          // Load into highlighter
+          for (const langReg of langData) {
+            await instance.loadLanguage(langReg);
+          }
+          return langData;
+        }
+        // Return empty array for languages that couldn't be resolved
+        return [];
+      })();
+      resolvedLanguagesMap.set(language, promise);
+      loaders.push(promise.then(() => void 0));
+    } else if ('then' in resolvedOrResolving) {
+      // Currently resolving, wait for it
+      loaders.push(
+        resolvedOrResolving.then(async (langData) => {
+          if (langData != null) {
+            for (const langReg of langData) {
+              await instance.loadLanguage(langReg);
+            }
+          }
+        })
+      );
+    } else if (resolvedOrResolving.length > 0) {
+      // Already resolved, just load into highlighter
+      const loadPromise = (async () => {
+        for (const langReg of resolvedOrResolving) {
+          await instance.loadLanguage(langReg);
+        }
+      })();
+      loaders.push(loadPromise);
     }
-    // We are currently loading the language,
-    // so lets queue the existing promise
-    else if (loadedOrLoading !== true) {
-      loaders.push(loadedOrLoading);
-    }
+    // else: empty array means already loaded by createHighlighter
   }
   for (const themeName of themes) {
     const loadedOrLoading = loadedThemes.get(themeName);
@@ -117,7 +153,8 @@ export function hasLoadedThemes(themes: PJSThemeNames[]): boolean {
 }
 
 export function hasLoadedLanguage(lang: SupportedLanguages): boolean {
-  return loadedLanguages.get(lang) === true;
+  const resolved = resolvedLanguagesMap.get(lang);
+  return resolved != null && !('then' in resolved);
 }
 
 export function isHighlighterLoaded(
@@ -148,7 +185,7 @@ export async function disposeHighlighter(): Promise<void> {
   if (highlighter == null) return;
   (await highlighter).dispose();
   loadedThemes.clear();
-  loadedLanguages.clear();
+  resolvedLanguagesMap.clear();
   highlighter = undefined;
 }
 
@@ -200,18 +237,65 @@ export function registerResolvedTheme(
   CustomThemes.set(themeName, () => Promise.resolve(themeData));
 }
 
-registerCustomTheme(
-  'pierre-dark',
-  () =>
-    import(
-      './themes/pierre-dark.json'
-    ) as unknown as Promise<ThemeRegistrationResolved>
+export async function loadResolvedLanguageOnMainThread(
+  langName: string,
+  langData: LanguageRegistration[]
+): Promise<void> {
+  // Store resolved language data in the Map
+  resolvedLanguagesMap.set(langName as SupportedLanguages, langData);
+
+  // Only load if main thread highlighter exists
+  if (!isHighlighterLoaded(highlighter)) {
+    return;
+  }
+
+  const instance = highlighter;
+
+  // Load each language registration into highlighter
+  for (const langReg of langData) {
+    await instance.loadLanguage(langReg);
+  }
+}
+
+export async function loadResolvedLanguagesAndUpdateMap(
+  resolvedLanguages: Array<{
+    name: string;
+    data: LanguageRegistration[] | undefined;
+  }>
+): Promise<void> {
+  // First, store all resolved languages in the Map
+  for (const { name, data } of resolvedLanguages) {
+    if (data != null) {
+      resolvedLanguagesMap.set(name as SupportedLanguages, data);
+    }
+  }
+
+  // Get or wait for the highlighter instance
+  const instance = isHighlighterLoading(highlighter)
+    ? await highlighter
+    : highlighter;
+
+  if (instance == null) {
+    console.warn(
+      'loadResolvedLanguagesAndUpdateMap: highlighter not initialized'
+    );
+    return;
+  }
+
+  // Load each resolved language into the highlighter
+  for (const { data } of resolvedLanguages) {
+    if (data != null) {
+      for (const langReg of data) {
+        await instance.loadLanguage(langReg);
+      }
+    }
+  }
+}
+
+registerCustomTheme('pierre-dark', () =>
+  Promise.resolve(pierreDarkTheme as unknown as ThemeRegistrationResolved)
 );
 
-registerCustomTheme(
-  'pierre-light',
-  () =>
-    import(
-      './themes/pierre-light.json'
-    ) as unknown as Promise<ThemeRegistrationResolved>
+registerCustomTheme('pierre-light', () =>
+  Promise.resolve(pierreLightTheme as unknown as ThemeRegistrationResolved)
 );
