@@ -185,7 +185,6 @@ export class WorkerPoolManager {
           try {
             const themes = getThemes(this.highlighterOptions.theme);
             let resolvedThemes: ThemeRegistrationResolved[] = [];
-
             if (hasResolvedThemes(themes)) {
               resolvedThemes = getResolvedThemes(themes);
             } else {
