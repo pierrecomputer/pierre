@@ -4,7 +4,7 @@
   "type": "module",
   "license": "apache-2.0",
   "scripts": {
-    "build": "tsdown --clean",
+    "build": "bun run scripts/prebuild.ts && tsdown --clean",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
     "tsc": "tsc --noEmit --pretty",
@@ -33,6 +33,10 @@
     "./worker/worker.js": {
       "import": "./dist/worker/worker.js",
       "types": "./dist/worker/worker.d.ts"
+    },
+    "./worker/worker-portable.js": {
+      "import": "./dist/worker/worker-portable.js",
+      "types": "./dist/worker/worker-portable.d.ts"
     }
   },
   "files": [

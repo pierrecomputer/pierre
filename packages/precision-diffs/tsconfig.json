@@ -1,9 +1,10 @@
 {
   "extends": "../../tsconfig.options.json",
   "include": [
+    "scripts/**/*.ts",
+    "src/**/*.json",
     "src/**/*.ts",
     "src/**/*.tsx",
-    "src/**/*.json",
     "test/**/*.ts",
     "tsdown.config.ts"
   ],
