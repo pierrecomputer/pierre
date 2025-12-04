@@ -1,9 +1,9 @@
+import { DEFAULT_THEMES } from '../constants';
+import { attachResolvedLanguages } from '../highlighter/languages';
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
-} from '../SharedHighlighter';
-import { DEFAULT_THEMES } from '../constants';
-import { attachResolvedLanguages } from '../highlighter/languages';
+} from '../highlighter/shared_highlighter';
 import { attachResolvedThemes } from '../highlighter/themes';
 import type {
   PJSHighlighter,

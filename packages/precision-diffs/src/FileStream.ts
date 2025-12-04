@@ -1,6 +1,6 @@
-import { getSharedHighlighter } from './SharedHighlighter';
 import { queueRender } from './UniversalRenderer';
 import { DEFAULT_THEMES } from './constants';
+import { getSharedHighlighter } from './highlighter/shared_highlighter';
 import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
 import type {
   BaseCodeOptions,

@@ -2,9 +2,9 @@ import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { getSharedHighlighter } from './SharedHighlighter';
 import { DEFAULT_THEMES } from './constants';
 import { hasResolvedLanguages } from './highlighter/languages';
+import { getSharedHighlighter } from './highlighter/shared_highlighter';
 import { hasResolvedThemes } from './highlighter/themes';
 import type {
   AnnotationLineMap,

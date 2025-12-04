@@ -1,10 +1,10 @@
-import { getSharedHighlighter } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
 import {
   getResolvedLanguages,
   hasResolvedLanguages,
   resolveLanguages,
 } from '../highlighter/languages';
+import { getSharedHighlighter } from '../highlighter/shared_highlighter';
 import {
   attachResolvedThemes,
   getResolvedThemes,

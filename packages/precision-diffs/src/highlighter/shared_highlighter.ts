@@ -1,22 +1,22 @@
 import { createHighlighter, createJavaScriptRegexEngine } from 'shiki';
 
-import {
-  attachResolvedLanguages,
-  cleanUpResolvedLanguages,
-  getResolvedOrResolveLanguage,
-} from './highlighter/languages';
-import {
-  attachResolvedThemes,
-  cleanUpResolvedThemes,
-  getResolvedOrResolveTheme,
-} from './highlighter/themes';
 import type {
   PJSHighlighter,
   PJSThemeNames,
   SupportedLanguages,
   ThemeRegistrationResolved,
-} from './types';
-import type { ResolvedLanguage } from './worker';
+} from '../types';
+import type { ResolvedLanguage } from '../worker/types';
+import {
+  attachResolvedLanguages,
+  cleanUpResolvedLanguages,
+  getResolvedOrResolveLanguage,
+} from './languages';
+import {
+  attachResolvedThemes,
+  cleanUpResolvedThemes,
+  getResolvedOrResolveTheme,
+} from './themes';
 
 type CachedOrLoadingHighlighterType =
   | Promise<PJSHighlighter>
