@@ -4,7 +4,7 @@
   "type": "module",
   "license": "apache-2.0",
   "scripts": {
-    "build": "bun run scripts/prebuild.ts && tsdown --clean",
+    "build": "bun run scripts/prebuild.ts && tsdown --clean && rm -f src/worker/worker-portable.ts",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
     "tsc": "tsc --noEmit --pretty",
