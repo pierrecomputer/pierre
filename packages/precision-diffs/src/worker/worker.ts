@@ -15,7 +15,6 @@ import type {
   ThemesType,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
-import { getThemes } from '../utils/getThemes';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
@@ -142,13 +141,8 @@ async function handleRenderDiffMetadata({
   sendDiffMetadataSuccess(id, result, _options);
 }
 
-async function getHighlighter(
-  theme?: string | Record<'dark' | 'light', string>
-): Promise<PJSHighlighter> {
-  return await getSharedHighlighter({
-    themes: theme != null ? getThemes(theme) : [],
-    langs: ['text'],
-  });
+async function getHighlighter(): Promise<PJSHighlighter> {
+  return await getSharedHighlighter({ themes: [], langs: ['text'] });
 }
 
 function sendFileSuccess(
