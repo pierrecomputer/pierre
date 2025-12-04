@@ -108,12 +108,12 @@ export class WorkerPoolManager {
 
     if (this.highlighter != null) {
       attachResolvedThemes(resolvedThemes, this.highlighter);
-      await this.registerThemesOnWorkers(resolvedThemes);
+      await this.registerThemesOnWorkers(theme, resolvedThemes);
       this.currentTheme = theme;
     } else {
       const [highlighter] = await Promise.all([
         getSharedHighlighter({ themes: themeNames, langs: ['text'] }),
-        this.registerThemesOnWorkers(resolvedThemes),
+        this.registerThemesOnWorkers(theme, resolvedThemes),
       ]);
       this.highlighter = highlighter;
       this.currentTheme = theme;
@@ -125,6 +125,7 @@ export class WorkerPoolManager {
   }
 
   private async registerThemesOnWorkers(
+    theme: PJSThemeNames | ThemesType,
     resolvedThemes: ThemeRegistrationResolved[]
   ): Promise<void> {
     if (resolvedThemes.length === 0 || this.workersFailed) {
@@ -147,7 +148,7 @@ export class WorkerPoolManager {
           const task: RegisterThemeWorkerTask = {
             type: 'register-theme',
             id,
-            request: { type: 'register-theme', id, resolvedThemes },
+            request: { type: 'register-theme', id, theme, resolvedThemes },
             resolve,
             reject,
             requestStart: Date.now(),
@@ -201,7 +202,11 @@ export class WorkerPoolManager {
 
             const [highlighter] = await Promise.all([
               getSharedHighlighter({ themes, langs: ['text', ...languages] }),
-              this.initializeWorkers(resolvedThemes, resolvedLanguages),
+              this.initializeWorkers(
+                this.highlighterOptions.theme,
+                resolvedThemes,
+                resolvedLanguages
+              ),
             ]);
 
             // If we were terminated while initializing, we should probably kill
@@ -229,6 +234,7 @@ export class WorkerPoolManager {
   }
 
   private async initializeWorkers(
+    theme: PJSThemeNames | ThemesType,
     resolvedThemes: ThemeRegistrationResolved[],
     resolvedLanguages: ResolvedLanguage[]
   ): Promise<void> {
@@ -264,6 +270,7 @@ export class WorkerPoolManager {
             request: {
               type: 'initialize',
               id,
+              theme,
               resolvedThemes,
               resolvedLanguages,
             },
@@ -306,11 +313,7 @@ export class WorkerPoolManager {
     file: FileContents,
     options: Omit<RenderFileOptions, 'theme'>
   ): void {
-    this.submitTask(instance, {
-      type: 'file',
-      file,
-      options: { ...options, theme: this.currentTheme },
-    });
+    this.submitTask(instance, { type: 'file', file, options });
   }
 
   getPlainFileAST(
@@ -334,11 +337,7 @@ export class WorkerPoolManager {
     diff: FileDiffMetadata,
     options: Omit<RenderDiffOptions, 'theme'>
   ): void {
-    this.submitTask(instance, {
-      type: 'diff',
-      diff,
-      options: { ...options, theme: this.currentTheme },
-    });
+    this.submitTask(instance, { type: 'diff', diff, options });
   }
 
   getPlainDiffAST(
@@ -497,18 +496,18 @@ export class WorkerPoolManager {
             if (task.type !== 'file') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result } = response;
+            const { result, options } = response;
             const { instance, request } = task;
-            instance.onHighlightSuccess(request.file, result, request.options);
+            instance.onHighlightSuccess(request.file, result, options);
             break;
           }
           case 'diff': {
             if (task.type !== 'diff') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result } = response;
+            const { result, options } = response;
             const { instance, request } = task;
-            instance.onHighlightSuccess(request.diff, result, request.options);
+            instance.onHighlightSuccess(request.diff, result, options);
             break;
           }
         }

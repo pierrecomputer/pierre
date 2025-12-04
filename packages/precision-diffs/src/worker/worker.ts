@@ -7,8 +7,12 @@ import {
 import { attachResolvedThemes } from '../highlighter/themes';
 import type {
   PJSHighlighter,
+  PJSThemeNames,
+  RenderDiffOptions,
+  RenderFileOptions,
   ThemedDiffResult,
   ThemedFileResult,
+  ThemesType,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
@@ -26,6 +30,8 @@ import type {
   WorkerRequest,
   WorkerRequestId,
 } from './types';
+
+let currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
 
 self.addEventListener('error', (event) => {
   console.error('[Shiki Worker] Unhandled error:', event.error);
@@ -63,6 +69,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
 
 async function handleInitialize({
   id,
+  theme,
   resolvedThemes,
   resolvedLanguages,
 }: InitializeWorkerRequest) {
@@ -71,6 +78,7 @@ async function handleInitialize({
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
+  currentTheme = theme;
   postMessage({
     type: 'success',
     id,
@@ -81,10 +89,12 @@ async function handleInitialize({
 
 async function handleRegisterTheme({
   id,
+  theme,
   resolvedThemes,
 }: RegisterThemeWorkerRequest) {
   const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
   attachResolvedThemes(resolvedThemes, highlighter);
+  currentTheme = theme;
   postMessage({
     type: 'success',
     id,
@@ -96,12 +106,7 @@ async function handleRegisterTheme({
 async function handleRenderFile({
   id,
   file,
-  options: {
-    theme = DEFAULT_THEMES,
-    lang = getFiletypeFromFileName(file.name),
-    startingLineNumber,
-    tokenizeMaxLineLength,
-  },
+  options,
   resolvedLanguages,
 }: RenderFileRequest): Promise<void> {
   const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
@@ -112,11 +117,11 @@ async function handleRenderFile({
   sendFileSuccess(
     id,
     renderFileWithHighlighter(file, highlighter, {
-      theme,
-      lang,
-      startingLineNumber,
-      tokenizeMaxLineLength,
-    })
+      ...options,
+      theme: currentTheme,
+      lang: options.lang ?? getFiletypeFromFileName(file.name),
+    }),
+    { ...options, theme: currentTheme }
   );
 }
 
@@ -132,8 +137,9 @@ async function handleRenderDiffMetadata({
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
 
-  const result = renderDiffWithHighlighter(diff, highlighter, options);
-  sendDiffMetadataSuccess(id, result);
+  const _options = { ...options, theme: currentTheme };
+  const result = renderDiffWithHighlighter(diff, highlighter, _options);
+  sendDiffMetadataSuccess(id, result, _options);
 }
 
 async function getHighlighter(
@@ -145,25 +151,32 @@ async function getHighlighter(
   });
 }
 
-function sendFileSuccess(id: WorkerRequestId, result: ThemedFileResult) {
+function sendFileSuccess(
+  id: WorkerRequestId,
+  result: ThemedFileResult,
+  options: RenderFileOptions
+) {
   postMessage({
     type: 'success',
     requestType: 'file',
     id,
     result,
+    options,
     sentAt: Date.now(),
   } satisfies RenderFileSuccessResponse);
 }
 
 function sendDiffMetadataSuccess(
   id: WorkerRequestId,
-  result: ThemedDiffResult
+  result: ThemedDiffResult,
+  options: RenderDiffOptions
 ) {
   postMessage({
     type: 'success',
     requestType: 'diff',
     id,
     result,
+    options,
     sentAt: Date.now(),
   } satisfies RenderDiffSuccessResponse);
 }

@@ -38,7 +38,7 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  options: RenderFileOptions;
+  options: Omit<RenderFileOptions, 'theme'>;
   resolvedLanguages?: ResolvedLanguage[];
 }
 
@@ -46,13 +46,14 @@ export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  options: RenderDiffOptions;
+  options: Omit<RenderDiffOptions, 'theme'>;
   resolvedLanguages?: ResolvedLanguage[];
 }
 
 export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
+  theme: PJSThemeNames | ThemesType;
   resolvedThemes: ThemeRegistrationResolved[];
   resolvedLanguages?: ResolvedLanguage[];
 }
@@ -65,6 +66,7 @@ export interface ResolvedLanguage {
 export interface RegisterThemeWorkerRequest {
   type: 'register-theme';
   id: WorkerRequestId;
+  theme: PJSThemeNames | ThemesType;
   resolvedThemes: ThemeRegistrationResolved[];
 }
 
@@ -95,6 +97,7 @@ export interface RenderFileSuccessResponse {
   requestType: 'file';
   id: WorkerRequestId;
   result: ThemedFileResult;
+  options: RenderFileOptions;
   sentAt: number;
 }
 
@@ -103,6 +106,7 @@ export interface RenderDiffSuccessResponse {
   requestType: 'diff';
   id: WorkerRequestId;
   result: ThemedDiffResult;
+  options: RenderDiffOptions;
   sentAt: number;
 }
 
