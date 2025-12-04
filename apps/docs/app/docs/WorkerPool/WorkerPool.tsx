@@ -14,6 +14,13 @@ import { DocsCodeExample } from '../DocsCodeExample';
 interface WorkerPoolProps {
   helperVite: PreloadedFileResult<undefined>;
   helperNextJS: PreloadedFileResult<undefined>;
+  vscodeLocalRoots: PreloadedFileResult<undefined>;
+  vscodeWorkerUri: PreloadedFileResult<undefined>;
+  vscodeInlineScript: PreloadedFileResult<undefined>;
+  vscodeCsp: PreloadedFileResult<undefined>;
+  vscodeGlobal: PreloadedFileResult<undefined>;
+  vscodeBlobUrl: PreloadedFileResult<undefined>;
+  vscodeFactory: PreloadedFileResult<undefined>;
   helperWebpack: PreloadedFileResult<undefined>;
   helperESBuild: PreloadedFileResult<undefined>;
   helperStatic: PreloadedFileResult<undefined>;
@@ -27,6 +34,13 @@ interface WorkerPoolProps {
 export function WorkerPool({
   helperVite,
   helperNextJS,
+  vscodeLocalRoots,
+  vscodeWorkerUri,
+  vscodeInlineScript,
+  vscodeCsp,
+  vscodeGlobal,
+  vscodeBlobUrl,
+  vscodeFactory,
   helperWebpack,
   helperESBuild,
   helperStatic,
@@ -95,8 +109,44 @@ export function WorkerPool({
         Workers only work in client components. Ensure your function has the{' '}
         <code>'use client'</code> directive if using App Router.
       </Notice>
-
       <DocsCodeExample {...helperNextJS} />
+
+      <h4 data-toc-ignore>VS Code Webview Extension</h4>
+      <p>
+        VS Code webviews have special security restrictions that require a
+        different approach. You’ll need to configure both the extension side (to
+        expose the worker file) and the webview side (to load it via blob URL).
+      </p>
+      <p>
+        <strong>Extension side:</strong> Add the worker directory to{' '}
+        <code>localResourceRoots</code> in your <code>getWebviewOptions()</code>
+        :
+      </p>
+      <DocsCodeExample {...vscodeLocalRoots} />
+      <p>
+        Create the worker URI in <code>_getHtmlForWebview()</code>. Note: use{' '}
+        <code>worker-portable.js</code> instead of <code>worker.js</code> — the
+        portable version is designed for environments where ES modules aren't
+        supported in web workers.
+      </p>
+      <DocsCodeExample {...vscodeWorkerUri} />
+      <p>Pass the URI to the webview via an inline script in your HTML:</p>
+      <DocsCodeExample {...vscodeInlineScript} />
+      <p>
+        Your Content Security Policy must include <code>worker-src</code> and{' '}
+        <code>connect-src</code>:
+      </p>
+      <DocsCodeExample {...vscodeCsp} />
+      <p>
+        <strong>Webview side:</strong> Declare the global type for the URI:
+      </p>
+      <DocsCodeExample {...vscodeGlobal} />
+      <p>Fetch the worker code and create a blob URL:</p>
+      <DocsCodeExample {...vscodeBlobUrl} />
+      <p>
+        Create the <code>workerFactory</code> function:
+      </p>
+      <DocsCodeExample {...vscodeFactory} />
 
       <h4 data-toc-ignore>Webpack 5</h4>
       <DocsCodeExample {...helperWebpack} />

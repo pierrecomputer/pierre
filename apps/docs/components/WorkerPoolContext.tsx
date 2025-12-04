@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
 const PoolOptions: WorkerPoolOptions = {
   workerFactory() {
     return new Worker(
-      new URL('@pierre/precision-diffs/worker/shiki-worker.js', import.meta.url)
+      new URL('@pierre/precision-diffs/worker/worker.js', import.meta.url)
     );
   },
 };

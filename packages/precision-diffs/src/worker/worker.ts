@@ -1,30 +1,36 @@
-import {
-  getSharedHighlighter,
-  registerResolvedTheme,
-} from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
+import { attachResolvedLanguages } from '../highlighter/languages';
+import {
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from '../highlighter/shared_highlighter';
+import { attachResolvedThemes } from '../highlighter/themes';
 import type {
   PJSHighlighter,
-  SupportedLanguages,
+  PJSThemeNames,
+  RenderDiffOptions,
+  RenderFileOptions,
   ThemedDiffResult,
   ThemedFileResult,
+  ThemesType,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
-import { getThemes } from '../utils/getThemes';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
   InitializeSuccessResponse,
   InitializeWorkerRequest,
   RegisterThemeWorkerRequest,
-  RenderDiffMetadataRequest,
-  RenderDiffMetadataSuccessResponse,
+  RenderDiffRequest,
+  RenderDiffSuccessResponse,
   RenderErrorResponse,
   RenderFileRequest,
   RenderFileSuccessResponse,
   WorkerRequest,
   WorkerRequestId,
 } from './types';
+
+let currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
 
 self.addEventListener('error', (event) => {
   console.error('[Shiki Worker] Unhandled error:', event.error);
@@ -41,7 +47,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
         await handleInitialize(request);
         break;
       case 'register-theme':
-        handleRegisterTheme(request);
+        await handleRegisterTheme(request);
         break;
       case 'file':
         await handleRenderFile(request);
@@ -62,22 +68,16 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
 
 async function handleInitialize({
   id,
-  options,
-  customThemes,
+  theme,
+  resolvedThemes,
+  resolvedLanguages,
 }: InitializeWorkerRequest) {
-  if (customThemes != null) {
-    for (const { name, data } of customThemes) {
-      if (data != null) {
-        registerResolvedTheme(name, data);
-      }
-    }
+  const highlighter = await getHighlighter();
+  attachResolvedThemes(resolvedThemes, highlighter);
+  if (resolvedLanguages != null) {
+    attachResolvedLanguages(resolvedLanguages, highlighter);
   }
-  const langs = new Set(options?.langs);
-  langs.add('text');
-  await getSharedHighlighter({
-    themes: getThemes(options.theme),
-    langs: Array.from(langs),
-  });
+  currentTheme = theme;
   postMessage({
     type: 'success',
     id,
@@ -86,12 +86,14 @@ async function handleInitialize({
   } satisfies InitializeSuccessResponse);
 }
 
-function handleRegisterTheme({ id, themes }: RegisterThemeWorkerRequest) {
-  for (const { name, data } of themes) {
-    if (data != null) {
-      registerResolvedTheme(name, data);
-    }
-  }
+async function handleRegisterTheme({
+  id,
+  theme,
+  resolvedThemes,
+}: RegisterThemeWorkerRequest) {
+  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  attachResolvedThemes(resolvedThemes, highlighter);
+  currentTheme = theme;
   postMessage({
     type: 'success',
     id,
@@ -103,21 +105,22 @@ function handleRegisterTheme({ id, themes }: RegisterThemeWorkerRequest) {
 async function handleRenderFile({
   id,
   file,
-  options: {
-    theme = DEFAULT_THEMES,
-    lang = getFiletypeFromFileName(file.name),
-    startingLineNumber,
-    tokenizeMaxLineLength,
-  },
+  options,
+  resolvedLanguages,
 }: RenderFileRequest): Promise<void> {
+  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  // Load resolved languages if provided
+  if (resolvedLanguages != null) {
+    attachResolvedLanguages(resolvedLanguages, highlighter);
+  }
   sendFileSuccess(
     id,
-    renderFileWithHighlighter(file, await getHighlighter(lang, theme), {
-      theme,
-      lang,
-      startingLineNumber,
-      tokenizeMaxLineLength,
-    })
+    renderFileWithHighlighter(file, highlighter, {
+      ...options,
+      theme: currentTheme,
+      lang: options.lang ?? getFiletypeFromFileName(file.name),
+    }),
+    { ...options, theme: currentTheme }
   );
 }
 
@@ -125,48 +128,51 @@ async function handleRenderDiffMetadata({
   id,
   options,
   diff,
-}: RenderDiffMetadataRequest) {
-  const { lang } = options ?? {};
-  const oldLang = lang ?? getFiletypeFromFileName(diff.prevName ?? diff.name);
-  const newLang = lang ?? getFiletypeFromFileName(diff.name);
-  const highlighter = await getHighlighter([oldLang, newLang], options?.theme);
-  const result = renderDiffWithHighlighter(diff, highlighter, options);
-  sendDiffMetadataSuccess(id, result);
+  resolvedLanguages,
+}: RenderDiffRequest) {
+  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  // Load resolved languages if provided
+  if (resolvedLanguages != null) {
+    attachResolvedLanguages(resolvedLanguages, highlighter);
+  }
+
+  const _options = { ...options, theme: currentTheme };
+  const result = renderDiffWithHighlighter(diff, highlighter, _options);
+  sendDiffMetadataSuccess(id, result, _options);
 }
 
-async function getHighlighter(
-  lang: SupportedLanguages | SupportedLanguages[],
-  theme: string | Record<'dark' | 'light', string> = DEFAULT_THEMES
-): Promise<PJSHighlighter> {
-  const filteredLangs = new Set(!Array.isArray(lang) ? [lang] : lang);
-  filteredLangs.add('text');
-  return await getSharedHighlighter({
-    themes: getThemes(theme),
-    langs: Array.from(filteredLangs),
-  });
+async function getHighlighter(): Promise<PJSHighlighter> {
+  return await getSharedHighlighter({ themes: [], langs: ['text'] });
 }
 
-function sendFileSuccess(id: WorkerRequestId, result: ThemedFileResult) {
+function sendFileSuccess(
+  id: WorkerRequestId,
+  result: ThemedFileResult,
+  options: RenderFileOptions
+) {
   postMessage({
     type: 'success',
     requestType: 'file',
     id,
     result,
+    options,
     sentAt: Date.now(),
   } satisfies RenderFileSuccessResponse);
 }
 
 function sendDiffMetadataSuccess(
   id: WorkerRequestId,
-  result: ThemedDiffResult
+  result: ThemedDiffResult,
+  options: RenderDiffOptions
 ) {
   postMessage({
     type: 'success',
     requestType: 'diff',
     id,
     result,
+    options,
     sentAt: Date.now(),
-  } satisfies RenderDiffMetadataSuccessResponse);
+  } satisfies RenderDiffSuccessResponse);
 }
 
 function sendError(id: WorkerRequestId, error: unknown) {

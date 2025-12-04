@@ -4,13 +4,18 @@ import { type UserConfig, defineConfig } from 'tsdown';
 
 const config: UserConfig = defineConfig([
   {
-    entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/worker/shiki-worker.ts'],
+    entry: [
+      'src/**/*.ts',
+      'src/**/*.tsx',
+      '!src/worker/worker.ts',
+      '!src/worker/worker-portable.ts',
+    ],
     loader: {
       '.css': 'text',
     },
     attw: process.env.ATTW === 'true',
     tsconfig: './tsconfig.json',
-    clean: false,
+    clean: true,
     dts: {
       sourcemap: true,
     },
@@ -36,14 +41,24 @@ const config: UserConfig = defineConfig([
     ],
   },
   {
-    entry: ['src/worker/shiki-worker.ts'],
+    entry: ['src/worker/worker.ts'],
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',
     clean: false,
-    dts: {
-      sourcemap: true,
-    },
+    dts: { sourcemap: true },
     platform: 'neutral',
+  },
+  {
+    entry: ['src/worker/worker-portable.ts'],
+    outDir: 'dist/worker',
+    tsconfig: './tsconfig.json',
+    clean: false,
+    unbundle: false,
+    noExternal: [/.*/],
+    dts: { sourcemap: true },
+    platform: 'neutral',
+    format: 'esm',
+    treeshake: false,
   },
 ]);
 

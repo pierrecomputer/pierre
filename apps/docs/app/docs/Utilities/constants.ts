@@ -2,6 +2,7 @@ import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  disableFileHeader: true,
 } as const;
 
 export const HELPER_PARSE_DIFF_FROM_FILE: PreloadFileOptions<undefined> = {

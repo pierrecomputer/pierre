@@ -5,6 +5,7 @@ import type {
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  disableFileHeader: true,
 } as const;
 
 export const OVERVIEW_INITIAL_EXAMPLE: PreloadMultiFileDiffOptions<undefined> =
