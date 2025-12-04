@@ -216,7 +216,10 @@ function processPatch(data: string): ParsedPatch {
         console.error('parsePatchContent: invalid hunk metadata', hunkData);
         continue;
       }
-      hunkData.collapsedBefore = hunkData.additionStart - 1 - lastHunkEnd;
+      hunkData.collapsedBefore = Math.max(
+        hunkData.additionStart - 1 - lastHunkEnd,
+        0
+      );
       currentFile.hunks.push(hunkData);
       lastHunkEnd = hunkData.additionStart + hunkData.additionCount - 1;
       hunkData.splitLineCount = Math.max(
