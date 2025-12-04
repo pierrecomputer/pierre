@@ -132,7 +132,7 @@ async function handleRenderDiffMetadata({
 }: RenderDiffRequest) {
   const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
   // Load resolved languages if provided
-  if (resolvedLanguages != null && resolvedLanguages.length > 0) {
+  if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
 
