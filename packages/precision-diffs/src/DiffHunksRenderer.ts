@@ -2,12 +2,10 @@ import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import {
-  getSharedHighlighter,
-  hasLoadedLanguage,
-  hasLoadedThemes,
-} from './SharedHighlighter';
+import { getSharedHighlighter } from './SharedHighlighter';
 import { DEFAULT_THEMES } from './constants';
+import { hasResolvedLanguages } from './highlighter/languages';
+import { hasResolvedThemes } from './highlighter/themes';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
@@ -332,8 +330,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (
         // Reset highlighter if we do not have the appropriate
         // themes or languages loaded...
-        !hasLoadedThemes(getThemes(options.theme)) ||
-        !hasLoadedLanguage(options.lang ?? this.computedLang)
+        !hasResolvedThemes(getThemes(options.theme)) ||
+        !hasResolvedLanguages(options.lang ?? this.computedLang)
       ) {
         this.highlighter = undefined;
       }
@@ -398,8 +396,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // themes
     if (
       this.highlighter != null &&
-      (!hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(getThemes(this.options.theme)))
+      (!hasResolvedThemes(getThemes(this.options.theme)) ||
+        !hasResolvedLanguages(this.computedLang))
     ) {
       this.highlighter = undefined;
     }

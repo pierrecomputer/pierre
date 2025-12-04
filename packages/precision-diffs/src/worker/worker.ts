@@ -1,11 +1,12 @@
 import {
+  getHighlighterIfLoaded,
   getSharedHighlighter,
-  registerResolvedTheme,
 } from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
+import { attachResolvedLanguages } from '../highlighter/languages';
+import { attachResolvedThemes } from '../highlighter/themes';
 import type {
   PJSHighlighter,
-  SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
 } from '../types';
@@ -41,7 +42,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
         await handleInitialize(request);
         break;
       case 'register-theme':
-        handleRegisterTheme(request);
+        await handleRegisterTheme(request);
         break;
       case 'file':
         await handleRenderFile(request);
@@ -62,22 +63,14 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
 
 async function handleInitialize({
   id,
-  options,
-  customThemes,
+  resolvedThemes,
+  resolvedLanguages,
 }: InitializeWorkerRequest) {
-  if (customThemes != null) {
-    for (const { name, data } of customThemes) {
-      if (data != null) {
-        registerResolvedTheme(name, data);
-      }
-    }
+  const highlighter = await getHighlighter();
+  attachResolvedThemes(resolvedThemes, highlighter);
+  if (resolvedLanguages != null) {
+    attachResolvedLanguages(resolvedLanguages, highlighter);
   }
-  const langs = new Set(options?.langs);
-  langs.add('text');
-  await getSharedHighlighter({
-    themes: getThemes(options.theme),
-    langs: Array.from(langs),
-  });
   postMessage({
     type: 'success',
     id,
@@ -86,12 +79,12 @@ async function handleInitialize({
   } satisfies InitializeSuccessResponse);
 }
 
-function handleRegisterTheme({ id, themes }: RegisterThemeWorkerRequest) {
-  for (const { name, data } of themes) {
-    if (data != null) {
-      registerResolvedTheme(name, data);
-    }
-  }
+async function handleRegisterTheme({
+  id,
+  resolvedThemes,
+}: RegisterThemeWorkerRequest) {
+  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  attachResolvedThemes(resolvedThemes, highlighter);
   postMessage({
     type: 'success',
     id,
@@ -109,10 +102,16 @@ async function handleRenderFile({
     startingLineNumber,
     tokenizeMaxLineLength,
   },
+  resolvedLanguages,
 }: RenderFileRequest): Promise<void> {
+  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  // Load resolved languages if provided
+  if (resolvedLanguages != null) {
+    attachResolvedLanguages(resolvedLanguages, highlighter);
+  }
   sendFileSuccess(
     id,
-    renderFileWithHighlighter(file, await getHighlighter(lang, theme), {
+    renderFileWithHighlighter(file, highlighter, {
       theme,
       lang,
       startingLineNumber,
@@ -125,24 +124,24 @@ async function handleRenderDiffMetadata({
   id,
   options,
   diff,
+  resolvedLanguages,
 }: RenderDiffMetadataRequest) {
-  const { lang } = options ?? {};
-  const oldLang = lang ?? getFiletypeFromFileName(diff.prevName ?? diff.name);
-  const newLang = lang ?? getFiletypeFromFileName(diff.name);
-  const highlighter = await getHighlighter([oldLang, newLang], options?.theme);
+  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  // Load resolved languages if provided
+  if (resolvedLanguages != null && resolvedLanguages.length > 0) {
+    attachResolvedLanguages(resolvedLanguages, highlighter);
+  }
+
   const result = renderDiffWithHighlighter(diff, highlighter, options);
   sendDiffMetadataSuccess(id, result);
 }
 
 async function getHighlighter(
-  lang: SupportedLanguages | SupportedLanguages[],
-  theme: string | Record<'dark' | 'light', string> = DEFAULT_THEMES
+  theme?: string | Record<'dark' | 'light', string>
 ): Promise<PJSHighlighter> {
-  const filteredLangs = new Set(!Array.isArray(lang) ? [lang] : lang);
-  filteredLangs.add('text');
   return await getSharedHighlighter({
-    themes: getThemes(theme),
-    langs: Array.from(filteredLangs),
+    themes: theme != null ? getThemes(theme) : [],
+    langs: ['text'],
   });
 }
 

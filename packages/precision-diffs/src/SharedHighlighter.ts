@@ -1,11 +1,22 @@
 import { createHighlighter, createJavaScriptRegexEngine } from 'shiki';
 
+import {
+  attachResolvedLanguages,
+  cleanUpResolvedLanguages,
+  getResolvedOrResolveLanguage,
+} from './highlighter/languages';
+import {
+  attachResolvedThemes,
+  cleanUpResolvedThemes,
+  getResolvedOrResolveTheme,
+} from './highlighter/themes';
 import type {
   PJSHighlighter,
   PJSThemeNames,
   SupportedLanguages,
   ThemeRegistrationResolved,
 } from './types';
+import type { ResolvedLanguage } from './worker';
 
 type CachedOrLoadingHighlighterType =
   | Promise<PJSHighlighter>
@@ -13,9 +24,6 @@ type CachedOrLoadingHighlighterType =
   | undefined;
 
 let highlighter: CachedOrLoadingHighlighterType;
-
-const loadedThemes = new Map<string, true | Promise<void>>();
-const loadedLanguages = new Map<SupportedLanguages, true | Promise<void>>();
 
 interface HighlighterOptions {
   themes: PJSThemeNames[];
@@ -26,104 +34,64 @@ export async function getSharedHighlighter({
   themes,
   langs,
 }: HighlighterOptions): Promise<PJSHighlighter> {
-  if (isHighlighterNull(highlighter)) {
-    // NOTE(amadeus): We should probably build in some logic for rejection
-    // handling...
-    highlighter = new Promise((resolve) => {
-      void (async () => {
-        // Since we are loading the languages and themes along with the
-        // highlighter, we can just go ahead and mark them as loaded since
-        // they'll be ready when the highlighter is ready which any calls to
-        // getSharedHighlighter will resolve automatically for us
-        const themesToLoad: (
-          | PJSThemeNames
-          | Promise<ThemeRegistrationResolved>
-        )[] = [];
-        for (const theme of themes) {
-          loadedThemes.set(theme, true);
-          const customTheme = CustomThemes.get(theme);
-          if (customTheme != null) {
-            themesToLoad.push(customTheme());
-          } else {
-            themesToLoad.push(theme);
-          }
-        }
-        for (const language of langs) {
-          loadedLanguages.set(language, true);
-        }
-        loadedLanguages.set('text', true);
-        const instance = (await createHighlighter({
-          themes: themesToLoad,
-          langs: [...langs, 'text'],
-          engine: createJavaScriptRegexEngine(),
-        })) as PJSHighlighter;
-        highlighter = instance;
-        resolve(instance);
-      })();
-    });
-    return highlighter;
-  }
+  highlighter ??= createHighlighter({
+    themes: [],
+    langs: ['text'],
+    engine: createJavaScriptRegexEngine(),
+  }) as Promise<PJSHighlighter>;
+
   const instance = isHighlighterLoading(highlighter)
     ? await highlighter
     : highlighter;
-  const loaders: Promise<void>[] = [];
+  highlighter = instance;
+
+  const languageLoaders: Promise<ResolvedLanguage>[] = [];
   for (const language of langs) {
-    const loadedOrLoading = loadedLanguages.get(language);
-    // We haven't loaded this language yet, so lets queue it up
-    if (loadedOrLoading == null) {
-      const promise = instance
-        .loadLanguage(language)
-        .then(() => void loadedLanguages.set(language, true));
-      loadedLanguages.set(language, promise);
-      loaders.push(promise);
-    }
-    // We are currently loading the language,
-    // so lets queue the existing promise
-    else if (loadedOrLoading !== true) {
-      loaders.push(loadedOrLoading);
+    if (language === 'text') continue;
+    const maybeResolvedLanguage = getResolvedOrResolveLanguage(language);
+    if ('then' in maybeResolvedLanguage) {
+      languageLoaders.push(maybeResolvedLanguage);
+    } else {
+      attachResolvedLanguages(maybeResolvedLanguage, instance);
     }
   }
+
+  const themeLoaders: Promise<ThemeRegistrationResolved>[] = [];
   for (const themeName of themes) {
-    const loadedOrLoading = loadedThemes.get(themeName);
-    // We haven't loaded this theme yet, so lets queue it up
-    if (loadedOrLoading == null) {
-      const customTheme = CustomThemes.get(themeName);
-      const promise = instance
-        .loadTheme(customTheme != null ? customTheme() : themeName)
-        .then(() => void loadedThemes.set(themeName, true));
-      loadedThemes.set(themeName, promise);
-      loaders.push(promise);
-    }
-    // We are currently loading the theme,
-    // so lets queue the existing promise
-    else if (loadedOrLoading !== true) {
-      loaders.push(loadedOrLoading);
+    const maybeResolvedTheme = getResolvedOrResolveTheme(themeName);
+    if ('then' in maybeResolvedTheme) {
+      themeLoaders.push(maybeResolvedTheme);
+    } else {
+      attachResolvedThemes(maybeResolvedTheme, highlighter);
     }
   }
-  if (loaders.length > 0) {
-    await Promise.all(loaders);
+
+  // If we need to load any languages or themes, lets do that now
+  if (languageLoaders.length > 0 || themeLoaders.length > 0) {
+    await Promise.all([
+      Promise.all(languageLoaders).then((languages) => {
+        attachResolvedLanguages(languages, instance);
+      }),
+      Promise.all(themeLoaders).then((themes) => {
+        attachResolvedThemes(themes, instance);
+      }),
+    ]);
   }
+
   return instance;
-}
-
-export function hasLoadedThemes(themes: PJSThemeNames[]): boolean {
-  for (const theme of themes) {
-    if (loadedThemes.get(theme) === true) {
-      continue;
-    }
-    return false;
-  }
-  return true;
-}
-
-export function hasLoadedLanguage(lang: SupportedLanguages): boolean {
-  return loadedLanguages.get(lang) === true;
 }
 
 export function isHighlighterLoaded(
   h: CachedOrLoadingHighlighterType = highlighter
 ): h is PJSHighlighter {
   return h != null && !('then' in h);
+}
+
+export function getHighlighterIfLoaded(): PJSHighlighter | undefined {
+  if (highlighter != null && !('then' in highlighter)) {
+    return highlighter;
+  }
+  return undefined;
 }
 
 export function isHighlighterLoading(
@@ -147,71 +115,7 @@ export async function preloadHighlighter(
 export async function disposeHighlighter(): Promise<void> {
   if (highlighter == null) return;
   (await highlighter).dispose();
-  loadedThemes.clear();
-  loadedLanguages.clear();
+  cleanUpResolvedLanguages();
+  cleanUpResolvedThemes();
   highlighter = undefined;
 }
-
-const CustomThemes = new Map<
-  string,
-  () => Promise<ThemeRegistrationResolved>
->();
-
-export function registerCustomTheme(
-  themeName: string,
-  loader: () => Promise<ThemeRegistrationResolved>
-): void {
-  if (CustomThemes.has(themeName)) {
-    console.error(
-      'SharedHighlight.registerCustomTheme: theme name already registered',
-      themeName
-    );
-    return;
-  }
-  CustomThemes.set(themeName, loader);
-}
-
-export function isCustomTheme(themeName: string): boolean {
-  return CustomThemes.has(themeName);
-}
-
-export async function resolveCustomTheme(
-  themeName: string
-): Promise<ThemeRegistrationResolved | undefined> {
-  const loader = CustomThemes.get(themeName);
-  if (loader == null) {
-    return undefined;
-  }
-  const result = await loader();
-  // Handle dynamic imports that return a module with default export
-  if ('default' in result) {
-    return result.default as ThemeRegistrationResolved;
-  }
-  return result;
-}
-
-export function registerResolvedTheme(
-  themeName: string,
-  themeData: ThemeRegistrationResolved
-): void {
-  if (CustomThemes.has(themeName)) {
-    return;
-  }
-  CustomThemes.set(themeName, () => Promise.resolve(themeData));
-}
-
-registerCustomTheme(
-  'pierre-dark',
-  () =>
-    import(
-      './themes/pierre-dark.json'
-    ) as unknown as Promise<ThemeRegistrationResolved>
-);
-
-registerCustomTheme(
-  'pierre-light',
-  () =>
-    import(
-      './themes/pierre-light.json'
-    ) as unknown as Promise<ThemeRegistrationResolved>
-);

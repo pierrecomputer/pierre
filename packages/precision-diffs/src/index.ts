@@ -10,6 +10,8 @@ export * from './ScrollSyncManager';
 export * from './SharedHighlighter';
 export * from './UniversalRenderer';
 export * from './constants';
+export * from './highlighter/languages';
+export * from './highlighter/themes';
 export * from './shiki-stream';
 export * from './utils/areThemesEqual';
 export * from './utils/cleanLastNewline';
