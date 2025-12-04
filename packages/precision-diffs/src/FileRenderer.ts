@@ -2,12 +2,10 @@ import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import {
-  getSharedHighlighter,
-  hasLoadedLanguage,
-  hasLoadedThemes,
-} from './SharedHighlighter';
 import { DEFAULT_THEMES } from './constants';
+import { hasResolvedLanguages } from './highlighter/languages';
+import { getSharedHighlighter } from './highlighter/shared_highlighter';
+import { hasResolvedThemes } from './highlighter/themes';
 import type {
   BaseCodeOptions,
   FileContents,
@@ -178,8 +176,8 @@ export class FileRenderer<LAnnotation = undefined> {
       if (
         // Reset highlighter if we no longer have the appropriate
         // themes or languages loaded...
-        !hasLoadedThemes(getThemes(options.theme)) ||
-        !hasLoadedLanguage(options.lang ?? this.computedLang)
+        !hasResolvedThemes(getThemes(options.theme)) ||
+        !hasResolvedLanguages(options.lang ?? this.computedLang)
       ) {
         this.highlighter = undefined;
       }
@@ -216,8 +214,8 @@ export class FileRenderer<LAnnotation = undefined> {
     this.computedLang = this.options.lang ?? getFiletypeFromFileName(file.name);
     if (
       this.highlighter != null &&
-      (!hasLoadedLanguage(this.computedLang) ||
-        !hasLoadedThemes(getThemes(this.options.theme)))
+      (!hasResolvedThemes(getThemes(this.options.theme)) ||
+        !hasResolvedLanguages(this.options.lang ?? this.computedLang))
     ) {
       this.highlighter = undefined;
     }

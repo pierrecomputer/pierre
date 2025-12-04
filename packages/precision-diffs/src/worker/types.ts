@@ -3,6 +3,7 @@ import type { ElementContent } from 'hast';
 import type {
   FileContents,
   FileDiffMetadata,
+  LanguageRegistration,
   PJSThemeNames,
   RenderDiffOptions,
   RenderFileOptions,
@@ -37,41 +38,45 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  options: RenderFileOptions;
+  options: Omit<RenderFileOptions, 'theme'>;
+  resolvedLanguages?: ResolvedLanguage[];
 }
 
-export interface RenderDiffMetadataRequest {
+export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  options: RenderDiffOptions;
+  options: Omit<RenderDiffOptions, 'theme'>;
+  resolvedLanguages?: ResolvedLanguage[];
 }
 
 export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
-  options: WorkerHighlighterOptions;
-  customThemes: ResolvedCustomTheme[];
+  theme: PJSThemeNames | ThemesType;
+  resolvedThemes: ThemeRegistrationResolved[];
+  resolvedLanguages?: ResolvedLanguage[];
 }
 
-export interface ResolvedCustomTheme {
-  name: string;
-  data: ThemeRegistrationResolved | undefined;
+export interface ResolvedLanguage {
+  name: Exclude<SupportedLanguages, 'text'>;
+  data: LanguageRegistration[];
 }
 
 export interface RegisterThemeWorkerRequest {
   type: 'register-theme';
   id: WorkerRequestId;
-  themes: ResolvedCustomTheme[];
+  theme: PJSThemeNames | ThemesType;
+  resolvedThemes: ThemeRegistrationResolved[];
 }
 
 export type SubmitRequest =
   | Omit<RenderFileRequest, 'id'>
-  | Omit<RenderDiffMetadataRequest, 'id'>;
+  | Omit<RenderDiffRequest, 'id'>;
 
 export type WorkerRequest =
   | RenderFileRequest
-  | RenderDiffMetadataRequest
+  | RenderDiffRequest
   | InitializeWorkerRequest
   | RegisterThemeWorkerRequest;
 
@@ -92,22 +97,16 @@ export interface RenderFileSuccessResponse {
   requestType: 'file';
   id: WorkerRequestId;
   result: ThemedFileResult;
+  options: RenderFileOptions;
   sentAt: number;
 }
 
 export interface RenderDiffSuccessResponse {
   type: 'success';
-  requestType: 'diff-files';
-  id: WorkerRequestId;
-  result: ThemedDiffResult;
-  sentAt: number;
-}
-
-export interface RenderDiffMetadataSuccessResponse {
-  type: 'success';
   requestType: 'diff';
   id: WorkerRequestId;
   result: ThemedDiffResult;
+  options: RenderDiffOptions;
   sentAt: number;
 }
 
@@ -134,8 +133,7 @@ export interface RenderErrorResponse {
 
 export type RenderSuccessResponse =
   | RenderFileSuccessResponse
-  | RenderDiffSuccessResponse
-  | RenderDiffMetadataSuccessResponse;
+  | RenderDiffSuccessResponse;
 
 export type WorkerResponse =
   | RenderSuccessResponse
@@ -179,10 +177,10 @@ export interface RenderFileTask {
   requestStart: number;
 }
 
-export interface RenderDiffMetadataTask {
+export interface RenderDiffTask {
   type: 'diff';
   id: WorkerRequestId;
-  request: RenderDiffMetadataRequest;
+  request: RenderDiffRequest;
   instance: DiffRendererInstance;
   requestStart: number;
 }
@@ -191,7 +189,7 @@ export type AllWorkerTasks =
   | InitializeWorkerTask
   | RegisterThemeWorkerTask
   | RenderFileTask
-  | RenderDiffMetadataTask;
+  | RenderDiffTask;
 
 export interface WorkerStats {
   totalWorkers: number;
