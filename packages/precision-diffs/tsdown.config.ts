@@ -58,6 +58,7 @@ const config: UserConfig = defineConfig([
     dts: { sourcemap: true },
     platform: 'neutral',
     format: 'esm',
+    treeshake: false,
   },
 ]);
 
