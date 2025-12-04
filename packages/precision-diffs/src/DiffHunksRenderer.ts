@@ -600,6 +600,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     deletionsAST,
     additionsAST,
   }: RenderCollapsedHunksProps) {
+    if (rangeSize <= 0) {
+      return;
+    }
     const { hunkSeparators, expandUnchanged, diffStyle, expansionLineCount } =
       this.getOptionsWithDefaults();
     const expandable =
@@ -767,7 +770,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       isFirstHunk: prevHunk == null,
       isLastHunk: false,
       lineIndex,
-      rangeSize: hunk.collapsedBefore,
+      rangeSize: Math.max(hunk.collapsedBefore, 0),
       unifiedAST,
     });
 
@@ -965,7 +968,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
 
-    if (isLastHunk && ast.newLines != null) {
+    if (isLastHunk && ast.newLines != null && ast.newLines.length > 0) {
       this.renderCollapsedHunks({
         additionLineNumber,
         additionsAST,
@@ -978,8 +981,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         isFirstHunk: false,
         isLastHunk: true,
         lineIndex,
-        rangeSize:
-          ast.newLines.length - (hunk.additionStart + hunk.additionCount - 1),
+        rangeSize: Math.max(
+          ast.newLines.length -
+            Math.max(hunk.additionStart + hunk.additionCount - 1, 0),
+          0
+        ),
         unifiedAST,
       });
     }
