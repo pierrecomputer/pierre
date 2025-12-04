@@ -42,7 +42,7 @@ export interface RenderFileRequest {
   resolvedLanguages?: ResolvedLanguage[];
 }
 
-export interface RenderDiffMetadataRequest {
+export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
@@ -70,11 +70,11 @@ export interface RegisterThemeWorkerRequest {
 
 export type SubmitRequest =
   | Omit<RenderFileRequest, 'id'>
-  | Omit<RenderDiffMetadataRequest, 'id'>;
+  | Omit<RenderDiffRequest, 'id'>;
 
 export type WorkerRequest =
   | RenderFileRequest
-  | RenderDiffMetadataRequest
+  | RenderDiffRequest
   | InitializeWorkerRequest
   | RegisterThemeWorkerRequest;
 
@@ -99,14 +99,6 @@ export interface RenderFileSuccessResponse {
 }
 
 export interface RenderDiffSuccessResponse {
-  type: 'success';
-  requestType: 'diff-files';
-  id: WorkerRequestId;
-  result: ThemedDiffResult;
-  sentAt: number;
-}
-
-export interface RenderDiffMetadataSuccessResponse {
   type: 'success';
   requestType: 'diff';
   id: WorkerRequestId;
@@ -137,8 +129,7 @@ export interface RenderErrorResponse {
 
 export type RenderSuccessResponse =
   | RenderFileSuccessResponse
-  | RenderDiffSuccessResponse
-  | RenderDiffMetadataSuccessResponse;
+  | RenderDiffSuccessResponse;
 
 export type WorkerResponse =
   | RenderSuccessResponse
@@ -182,10 +173,10 @@ export interface RenderFileTask {
   requestStart: number;
 }
 
-export interface RenderDiffMetadataTask {
+export interface RenderDiffTask {
   type: 'diff';
   id: WorkerRequestId;
-  request: RenderDiffMetadataRequest;
+  request: RenderDiffRequest;
   instance: DiffRendererInstance;
   requestStart: number;
 }
@@ -194,7 +185,7 @@ export type AllWorkerTasks =
   | InitializeWorkerTask
   | RegisterThemeWorkerTask
   | RenderFileTask
-  | RenderDiffMetadataTask;
+  | RenderDiffTask;
 
 export interface WorkerStats {
   totalWorkers: number;

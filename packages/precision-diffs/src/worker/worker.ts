@@ -18,8 +18,8 @@ import type {
   InitializeSuccessResponse,
   InitializeWorkerRequest,
   RegisterThemeWorkerRequest,
-  RenderDiffMetadataRequest,
-  RenderDiffMetadataSuccessResponse,
+  RenderDiffRequest,
+  RenderDiffSuccessResponse,
   RenderErrorResponse,
   RenderFileRequest,
   RenderFileSuccessResponse,
@@ -125,7 +125,7 @@ async function handleRenderDiffMetadata({
   options,
   diff,
   resolvedLanguages,
-}: RenderDiffMetadataRequest) {
+}: RenderDiffRequest) {
   const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
   // Load resolved languages if provided
   if (resolvedLanguages != null && resolvedLanguages.length > 0) {
@@ -165,7 +165,7 @@ function sendDiffMetadataSuccess(
     id,
     result,
     sentAt: Date.now(),
-  } satisfies RenderDiffMetadataSuccessResponse);
+  } satisfies RenderDiffSuccessResponse);
 }
 
 function sendError(id: WorkerRequestId, error: unknown) {

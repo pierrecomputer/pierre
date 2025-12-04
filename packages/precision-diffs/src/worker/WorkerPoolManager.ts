@@ -36,8 +36,8 @@ import type {
   FileRendererInstance,
   InitializeWorkerTask,
   RegisterThemeWorkerTask,
-  RenderDiffMetadataRequest,
-  RenderDiffMetadataTask,
+  RenderDiffRequest,
+  RenderDiffTask,
   RenderFileRequest,
   RenderFileTask,
   ResolvedLanguage,
@@ -387,7 +387,7 @@ export class WorkerPoolManager {
   ): void;
   private submitTask(
     instance: DiffRendererInstance,
-    request: Omit<RenderDiffMetadataRequest, 'id'>
+    request: Omit<RenderDiffRequest, 'id'>
   ): void;
   private submitTask(
     instance: FileRendererInstance | DiffRendererInstance,
@@ -399,7 +399,7 @@ export class WorkerPoolManager {
 
     const id = this.generateRequestId();
     const requestStart = Date.now();
-    const task: RenderFileTask | RenderDiffMetadataTask = (() => {
+    const task: RenderFileTask | RenderDiffTask = (() => {
       switch (request.type) {
         case 'file':
           return {
