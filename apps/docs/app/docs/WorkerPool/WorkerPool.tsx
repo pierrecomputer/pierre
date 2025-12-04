@@ -114,7 +114,7 @@ export function WorkerPool({
       <h4 data-toc-ignore>VS Code Webview Extension</h4>
       <p>
         VS Code webviews have special security restrictions that require a
-        different approach. You'll need to configure both the extension side (to
+        different approach. You’ll need to configure both the extension side (to
         expose the worker file) and the webview side (to load it via blob URL).
       </p>
       <p>
