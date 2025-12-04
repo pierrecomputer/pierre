@@ -1,10 +1,16 @@
-import {
-  getSharedHighlighter,
-  hasLoadedThemes,
-  isCustomTheme,
-  resolveCustomTheme,
-} from '../SharedHighlighter';
 import { DEFAULT_THEMES } from '../constants';
+import {
+  getResolvedLanguages,
+  hasResolvedLanguages,
+  resolveLanguages,
+} from '../highlighter/languages';
+import { getSharedHighlighter } from '../highlighter/shared_highlighter';
+import {
+  attachResolvedThemes,
+  getResolvedThemes,
+  hasResolvedThemes,
+  resolveThemes,
+} from '../highlighter/themes';
 import type {
   FileContents,
   FileDiffMetadata,
@@ -14,6 +20,7 @@ import type {
   RenderDiffOptions,
   RenderFileOptions,
   SupportedLanguages,
+  ThemeRegistrationResolved,
   ThemedDiffResult,
   ThemedFileResult,
   ThemesType,
@@ -29,11 +36,11 @@ import type {
   FileRendererInstance,
   InitializeWorkerTask,
   RegisterThemeWorkerTask,
-  RenderDiffMetadataRequest,
-  RenderDiffMetadataTask,
+  RenderDiffRequest,
+  RenderDiffTask,
   RenderFileRequest,
   RenderFileTask,
-  ResolvedCustomTheme,
+  ResolvedLanguage,
   SubmitRequest,
   WorkerHighlighterOptions,
   WorkerPoolOptions,
@@ -90,58 +97,42 @@ export class WorkerPoolManager {
     if (areThemesEqual(theme, this.currentTheme)) {
       return;
     }
-    const customThemes = this.resolveCustomThemes(getThemes(theme));
-    if (hasLoadedThemes(getThemes(theme)) && this.highlighter != null) {
-      if (customThemes.length > 0) {
-        await this.registerThemesOnWorkers(await Promise.all(customThemes));
-      }
+
+    const themeNames = getThemes(theme);
+    let resolvedThemes: ThemeRegistrationResolved[] = [];
+    if (hasResolvedThemes(themeNames)) {
+      resolvedThemes = getResolvedThemes(themeNames);
+    } else {
+      resolvedThemes = await resolveThemes(themeNames);
+    }
+
+    if (this.highlighter != null) {
+      attachResolvedThemes(resolvedThemes, this.highlighter);
+      await this.registerThemesOnWorkers(theme, resolvedThemes);
       this.currentTheme = theme;
     } else {
       const [highlighter] = await Promise.all([
-        getSharedHighlighter({
-          themes: getThemes(theme),
-          langs: ['text'],
-        }),
-        Promise.all(customThemes).then((resolvedThemes) =>
-          this.registerThemesOnWorkers(resolvedThemes)
-        ),
+        getSharedHighlighter({ themes: themeNames, langs: ['text'] }),
+        this.registerThemesOnWorkers(theme, resolvedThemes),
       ]);
       this.highlighter = highlighter;
       this.currentTheme = theme;
     }
+
     for (const instance of this.themeSubscribers) {
       instance.rerender();
     }
   }
 
-  private resolveCustomThemes(
-    themeNames: PJSThemeNames[]
-  ): Promise<ResolvedCustomTheme>[] {
-    const resolvedThemes: Promise<ResolvedCustomTheme>[] = [];
-    for (const themeName of themeNames) {
-      if (isCustomTheme(themeName)) {
-        resolvedThemes.push(
-          resolveCustomTheme(themeName).then((data) => ({
-            name: themeName,
-            data,
-          }))
-        );
-      }
-    }
-    return resolvedThemes;
-  }
-
   private async registerThemesOnWorkers(
-    themes: ResolvedCustomTheme[]
+    theme: PJSThemeNames | ThemesType,
+    resolvedThemes: ThemeRegistrationResolved[]
   ): Promise<void> {
-    if (themes.length === 0 || this.workersFailed) {
+    if (resolvedThemes.length === 0 || this.workersFailed) {
       return;
     }
     if (!this.isInitialized()) {
       await this.initialize();
-    }
-    if (this.workers.length === 0) {
-      return;
     }
     const registerPromises: Promise<void>[] = [];
     for (const managedWorker of this.workers) {
@@ -153,20 +144,16 @@ export class WorkerPoolManager {
       }
       registerPromises.push(
         new Promise<void>((resolve, reject) => {
-          const requestId = this.generateRequestId();
+          const id = this.generateRequestId();
           const task: RegisterThemeWorkerTask = {
             type: 'register-theme',
-            id: requestId,
-            request: {
-              type: 'register-theme',
-              id: requestId,
-              themes,
-            },
+            id,
+            request: { type: 'register-theme', id, theme, resolvedThemes },
             resolve,
             reject,
             requestStart: Date.now(),
           };
-          this.pendingTasks.set(requestId, task);
+          this.pendingTasks.set(id, task);
           managedWorker.worker.postMessage(task.request);
         })
       );
@@ -197,15 +184,30 @@ export class WorkerPoolManager {
         void (async () => {
           try {
             const themes = getThemes(this.highlighterOptions.theme);
+            let resolvedThemes: ThemeRegistrationResolved[] = [];
+            if (hasResolvedThemes(themes)) {
+              resolvedThemes = getResolvedThemes(themes);
+            } else {
+              resolvedThemes = await resolveThemes(themes);
+            }
+
+            const languages = this.highlighterOptions.langs ?? [];
+            let resolvedLanguages: ResolvedLanguage[] = [];
+            if (hasResolvedLanguages(languages)) {
+              resolvedLanguages = getResolvedLanguages(languages);
+            } else {
+              resolvedLanguages = await resolveLanguages(languages);
+            }
+
             const [highlighter] = await Promise.all([
-              getSharedHighlighter({
-                themes,
-                langs: ['text'],
-              }),
-              Promise.all(this.resolveCustomThemes(themes)).then(
-                (customThemes) => this.initializeWorkers(customThemes)
+              getSharedHighlighter({ themes, langs: ['text', ...languages] }),
+              this.initializeWorkers(
+                this.highlighterOptions.theme,
+                resolvedThemes,
+                resolvedLanguages
               ),
             ]);
+
             // If we were terminated while initializing, we should probably kill
             // any workers that may have been created
             if (this.initialized === false) {
@@ -231,7 +233,9 @@ export class WorkerPoolManager {
   }
 
   private async initializeWorkers(
-    customThemes: ResolvedCustomTheme[]
+    theme: PJSThemeNames | ThemesType,
+    resolvedThemes: ThemeRegistrationResolved[],
+    resolvedLanguages: ResolvedLanguage[]
   ): Promise<void> {
     this.workersFailed = false;
     const initPromises: Promise<unknown>[] = [];
@@ -244,7 +248,7 @@ export class WorkerPoolManager {
         worker,
         busy: false,
         initialized: false,
-        langs: new Set(['text', ...(this.highlighterOptions.langs ?? [])]),
+        langs: new Set(['text', ...resolvedLanguages.map(({ name }) => name)]),
       };
       worker.addEventListener(
         'message',
@@ -253,20 +257,21 @@ export class WorkerPoolManager {
         }
       );
       worker.addEventListener('error', (error) =>
-        console.error('Worker error:', error)
+        console.error('Worker error:', error, managedWorker)
       );
       this.workers.push(managedWorker);
       initPromises.push(
         new Promise<void>((resolve, reject) => {
-          const requestId = this.generateRequestId();
+          const id = this.generateRequestId();
           const task: InitializeWorkerTask = {
             type: 'initialize',
-            id: requestId,
+            id,
             request: {
               type: 'initialize',
-              id: requestId,
-              options: this.highlighterOptions,
-              customThemes,
+              id,
+              theme,
+              resolvedThemes,
+              resolvedLanguages,
             },
             resolve() {
               managedWorker.initialized = true;
@@ -275,7 +280,7 @@ export class WorkerPoolManager {
             reject,
             requestStart: Date.now(),
           };
-          this.pendingTasks.set(requestId, task);
+          this.pendingTasks.set(id, task);
           this.executeTask(managedWorker, task);
         })
       );
@@ -292,12 +297,13 @@ export class WorkerPoolManager {
     }
     while (this.taskQueue.length > 0) {
       const task = this.taskQueue[0];
-      const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
+      const langs = getLangsFromTask(task);
+      const availableWorker = this.getAvailableWorker(langs);
       if (availableWorker == null) {
         break;
       }
       this.taskQueue.shift();
-      this.executeTask(availableWorker, task);
+      void this.resolveLanguagesAndExecuteTask(availableWorker, task, langs);
     }
   };
 
@@ -306,11 +312,7 @@ export class WorkerPoolManager {
     file: FileContents,
     options: Omit<RenderFileOptions, 'theme'>
   ): void {
-    this.submitTask(instance, {
-      type: 'file',
-      file,
-      options: { ...options, theme: this.currentTheme },
-    });
+    this.submitTask(instance, { type: 'file', file, options });
   }
 
   getPlainFileAST(
@@ -334,11 +336,7 @@ export class WorkerPoolManager {
     diff: FileDiffMetadata,
     options: Omit<RenderDiffOptions, 'theme'>
   ): void {
-    this.submitTask(instance, {
-      type: 'diff',
-      diff,
-      options: { ...options, theme: this.currentTheme },
-    });
+    this.submitTask(instance, { type: 'diff', diff, options });
   }
 
   getPlainDiffAST(
@@ -387,7 +385,7 @@ export class WorkerPoolManager {
   ): void;
   private submitTask(
     instance: DiffRendererInstance,
-    request: Omit<RenderDiffMetadataRequest, 'id'>
+    request: Omit<RenderDiffRequest, 'id'>
   ): void;
   private submitTask(
     instance: FileRendererInstance | DiffRendererInstance,
@@ -399,7 +397,7 @@ export class WorkerPoolManager {
 
     const id = this.generateRequestId();
     const requestStart = Date.now();
-    const task: RenderFileTask | RenderDiffMetadataTask = (() => {
+    const task: RenderFileTask | RenderDiffTask = (() => {
       switch (request.type) {
         case 'file':
           return {
@@ -421,12 +419,32 @@ export class WorkerPoolManager {
     })();
 
     this.instanceRequestMap.set(instance, id);
-    const availableWorker = this.getAvailableWorker(getLangsFromTask(task));
-    if (availableWorker != null) {
-      this.executeTask(availableWorker, task);
-    } else {
-      this.taskQueue.push(task);
+    this.taskQueue.push(task);
+    this.queueDrain();
+  }
+
+  private async resolveLanguagesAndExecuteTask(
+    availableWorker: ManagedWorker,
+    task: AllWorkerTasks,
+    langs: SupportedLanguages[]
+  ): Promise<void> {
+    // Add resolved languages if required
+    if (task.type === 'file' || task.type === 'diff') {
+      const workerMissingLangs = langs.filter(
+        (lang) => !availableWorker.langs.has(lang)
+      );
+
+      if (workerMissingLangs.length > 0) {
+        if (hasResolvedLanguages(workerMissingLangs)) {
+          task.request.resolvedLanguages =
+            getResolvedLanguages(workerMissingLangs);
+        } else {
+          task.request.resolvedLanguages =
+            await resolveLanguages(workerMissingLangs);
+        }
+      }
     }
+    this.executeTask(availableWorker, task);
   }
 
   private handleWorkerMessage(
@@ -477,18 +495,18 @@ export class WorkerPoolManager {
             if (task.type !== 'file') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result } = response;
+            const { result, options } = response;
             const { instance, request } = task;
-            instance.onHighlightSuccess(request.file, result, request.options);
+            instance.onHighlightSuccess(request.file, result, options);
             break;
           }
           case 'diff': {
             if (task.type !== 'diff') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result } = response;
+            const { result, options } = response;
             const { instance, request } = task;
-            instance.onHighlightSuccess(request.diff, result, request.options);
+            instance.onHighlightSuccess(request.diff, result, options);
             break;
           }
         }

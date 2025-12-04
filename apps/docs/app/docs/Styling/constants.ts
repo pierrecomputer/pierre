@@ -2,6 +2,7 @@ import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  disableFileHeader: true,
 } as const;
 
 export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
@@ -72,8 +73,7 @@ export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
   options={{
     unsafeCSS: /* css */ \`[data-pjs] {
       border: 2px solid #C635E4;
-      border-bottom-left-radius: 8px;
-      border-bottom-right-radius: 8px; }\`
+      border-radius: 8px; }\`
   }}
   // ... other props
 />`,
@@ -82,7 +82,6 @@ export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
     ...options,
     unsafeCSS: `[data-pjs] {
       border: 2px solid #C635E4;
-      border-bottom-left-radius: 8px;
-      border-bottom-right-radius: 8px; }`,
+      border-radius: 8px; }`,
   },
 };

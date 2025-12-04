@@ -79,6 +79,13 @@ import {
   WORKER_POOL_HELPER_WEBPACK,
   WORKER_POOL_REACT_USAGE,
   WORKER_POOL_VANILLA_USAGE,
+  WORKER_POOL_VSCODE_BLOB_URL,
+  WORKER_POOL_VSCODE_CSP,
+  WORKER_POOL_VSCODE_FACTORY,
+  WORKER_POOL_VSCODE_GLOBAL,
+  WORKER_POOL_VSCODE_INLINE_SCRIPT,
+  WORKER_POOL_VSCODE_LOCAL_ROOTS,
+  WORKER_POOL_VSCODE_WORKER_URI,
 } from './WorkerPool/constants';
 
 export default function DocsPage() {
@@ -300,6 +307,13 @@ async function WorkerPoolSection() {
   const [
     helperVite,
     helperNextjs,
+    vscodeLocalRoots,
+    vscodeWorkerUri,
+    vscodeInlineScript,
+    vscodeCsp,
+    vscodeGlobal,
+    vscodeBlobUrl,
+    vscodeFactory,
     helperWebpack,
     helperEsbuild,
     helperStatic,
@@ -311,6 +325,13 @@ async function WorkerPoolSection() {
   ] = await Promise.all([
     preloadFile(WORKER_POOL_HELPER_VITE),
     preloadFile(WORKER_POOL_HELPER_NEXTJS),
+    preloadFile(WORKER_POOL_VSCODE_LOCAL_ROOTS),
+    preloadFile(WORKER_POOL_VSCODE_WORKER_URI),
+    preloadFile(WORKER_POOL_VSCODE_INLINE_SCRIPT),
+    preloadFile(WORKER_POOL_VSCODE_CSP),
+    preloadFile(WORKER_POOL_VSCODE_GLOBAL),
+    preloadFile(WORKER_POOL_VSCODE_BLOB_URL),
+    preloadFile(WORKER_POOL_VSCODE_FACTORY),
     preloadFile(WORKER_POOL_HELPER_WEBPACK),
     preloadFile(WORKER_POOL_HELPER_ESBUILD),
     preloadFile(WORKER_POOL_HELPER_STATIC),
@@ -324,6 +345,13 @@ async function WorkerPoolSection() {
     <WorkerPool
       helperVite={helperVite}
       helperNextJS={helperNextjs}
+      vscodeLocalRoots={vscodeLocalRoots}
+      vscodeWorkerUri={vscodeWorkerUri}
+      vscodeInlineScript={vscodeInlineScript}
+      vscodeCsp={vscodeCsp}
+      vscodeGlobal={vscodeGlobal}
+      vscodeBlobUrl={vscodeBlobUrl}
+      vscodeFactory={vscodeFactory}
       helperWebpack={helperWebpack}
       helperESBuild={helperEsbuild}
       helperStatic={helperStatic}
