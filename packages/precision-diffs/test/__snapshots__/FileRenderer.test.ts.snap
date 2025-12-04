@@ -7,8 +7,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "1",
+            "children": [
+              {
+                "type": "text",
+                "value": "1",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -171,8 +180,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "2",
+            "children": [
+              {
+                "type": "text",
+                "value": "2",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -212,8 +230,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "3",
+            "children": [
+              {
+                "type": "text",
+                "value": "3",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -298,8 +325,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "4",
+            "children": [
+              {
+                "type": "text",
+                "value": "4",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -436,8 +472,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "5",
+            "children": [
+              {
+                "type": "text",
+                "value": "5",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -561,8 +606,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "6",
+            "children": [
+              {
+                "type": "text",
+                "value": "6",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -634,8 +688,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "7",
+            "children": [
+              {
+                "type": "text",
+                "value": "7",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -694,8 +757,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "8",
+            "children": [
+              {
+                "type": "text",
+                "value": "8",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -780,8 +852,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "9",
+            "children": [
+              {
+                "type": "text",
+                "value": "9",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -866,8 +947,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "10",
+            "children": [
+              {
+                "type": "text",
+                "value": "10",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -965,8 +1055,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "11",
+            "children": [
+              {
+                "type": "text",
+                "value": "11",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -1051,8 +1150,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "12",
+            "children": [
+              {
+                "type": "text",
+                "value": "12",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -1111,8 +1219,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "13",
+            "children": [
+              {
+                "type": "text",
+                "value": "13",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -1210,8 +1327,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "14",
+            "children": [
+              {
+                "type": "text",
+                "value": "14",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -1257,8 +1383,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "15",
+            "children": [
+              {
+                "type": "text",
+                "value": "15",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
@@ -1512,8 +1647,17 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
       {
         "children": [
           {
-            "type": "text",
-            "value": "16",
+            "children": [
+              {
+                "type": "text",
+                "value": "16",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
           },
         ],
         "properties": {
