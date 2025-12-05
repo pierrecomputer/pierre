@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "vinxi dev",
     "build": "bun run build:deps && vinxi build",
-    "build:deps": "bun run build:deps:precision-diffs",
-    "build:deps:precision-diffs": "output=$(cd ../../packages/precision-diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
+    "build:deps": "bun run build:deps:diffs",
+    "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
     "start": "vinxi start",
     "tsc": "tsc --noEmit"
   },
