@@ -300,7 +300,6 @@ export class File<LAnnotation = undefined> {
         if (this.workerManager != null && !this.workerManager.isInitialized()) {
           void this.workerManager.initialize().then(() => this.rerender());
         }
-        // FIXME(amadeus): Probably figure out how to render a skeleton?
         return;
       }
       if (fileResult.headerAST != null) {

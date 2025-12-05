@@ -5,7 +5,9 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   ThemeRegistrationResolved,
+  ThemesType,
 } from '../types';
+import { getThemes } from '../utils/getThemes';
 import { isWorkerContext } from '../utils/isWorkerContext';
 
 const ResolvedThemes: Map<PJSThemeNames, ThemeRegistrationResolved> = new Map();
@@ -159,6 +161,15 @@ export function attachResolvedThemes(
     attachedThemes.add(themeRef);
     highlighter.loadThemeSync(resolvedTheme);
   }
+}
+
+export function areThemesAttached(themes: PJSThemeNames | ThemesType): boolean {
+  for (const theme of getThemes(themes)) {
+    if (!attachedThemes.has(theme)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function cleanUpResolvedThemes(): void {
