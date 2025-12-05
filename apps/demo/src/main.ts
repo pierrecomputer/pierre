@@ -308,8 +308,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
             console.error(error);
           },
         },
-        fileDiff,
-        { tokenizeMaxLineLength: 1000, lineDiffType: 'word-alt' }
+        fileDiff
       );
     }
   }

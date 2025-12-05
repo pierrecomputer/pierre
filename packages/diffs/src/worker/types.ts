@@ -2,6 +2,7 @@ import type {
   FileContents,
   FileDiffMetadata,
   LanguageRegistration,
+  LineDiffTypes,
   PJSThemeNames,
   RenderDiffOptions,
   RenderFileOptions,
@@ -13,6 +14,12 @@ import type {
 } from '../types';
 
 export type WorkerRequestId = string;
+
+export interface WorkerRenderingOptions {
+  theme: PJSThemeNames | ThemesType;
+  tokenizeMaxLineLength: number;
+  lineDiffType: LineDiffTypes;
+}
 
 export interface FileRendererInstance {
   onHighlightSuccess(
@@ -36,7 +43,6 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  options: Omit<RenderFileOptions, 'theme'>;
   resolvedLanguages?: ResolvedLanguage[];
 }
 
@@ -44,14 +50,13 @@ export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  options: Omit<RenderDiffOptions, 'theme'>;
   resolvedLanguages?: ResolvedLanguage[];
 }
 
 export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
-  theme: PJSThemeNames | ThemesType;
+  renderOptions: WorkerRenderingOptions;
   resolvedThemes: ThemeRegistrationResolved[];
   resolvedLanguages?: ResolvedLanguage[];
 }
@@ -132,8 +137,8 @@ export interface WorkerPoolOptions {
   poolSize?: number;
 }
 
-export interface WorkerHighlighterOptions {
-  theme: PJSThemeNames | ThemesType;
+export interface WorkerHighlighterOptions
+  extends Partial<WorkerRenderingOptions> {
   langs?: SupportedLanguages[];
 }
 

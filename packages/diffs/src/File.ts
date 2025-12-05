@@ -58,7 +58,6 @@ export interface FileOptions<LAnnotation>
   extends BaseCodeOptions,
     MouseEventManagerBaseOptions<'file'>,
     LineSelectionOptions {
-  startingLineNumber?: number;
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
   renderAnnotation?(
