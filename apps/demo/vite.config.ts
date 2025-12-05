@@ -26,7 +26,7 @@ function makeFilteredLogger(folder: string): Logger {
   return {
     ...base,
     info(msg, opts) {
-      if (msg.includes('packages/precision-diffs/dist/index.js')) {
+      if (msg.includes('packages/diffs/dist/index.js')) {
         base.info(
           '\x1b[32mpage reload\x1b[0m @pierre/precision-diffs update detected',
           opts
@@ -107,7 +107,7 @@ export default defineConfig(() => {
 
   return {
     plugins: [react(), htmlPlugin()],
-    customLogger: makeFilteredLogger('packages/precision-diffs'),
+    customLogger: makeFilteredLogger('packages/diffs'),
     build: {
       rollupOptions: {
         input: {

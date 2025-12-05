@@ -51,7 +51,7 @@ bun run diffs:update-snapshots
 **For Pierre team only.**
 
 ```sh
-cd packages/precision-diffs
+cd packages/diffs
 bun publish
 ```
 
