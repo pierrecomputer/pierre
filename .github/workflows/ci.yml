@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build precision-diffs
+      - name: Build diffs
         run: bun run diffs:build
 
       - name: Build storage-elements-next
@@ -44,7 +44,7 @@ jobs:
         with:
           name: build-output
           path: |
-            packages/precision-diffs/dist/
+            packages/diffs/dist/
             packages/storage-elements-next/dist/
             apps/docs/.source/
             apps/docs/.next/
@@ -197,7 +197,7 @@ jobs:
         with:
           name: build-output
 
-      - name: Type check - precision-diffs
+      - name: Type check - diffs
         run: bun run diffs:tsc
 
       - name: Type check - demo
