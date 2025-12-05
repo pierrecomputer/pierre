@@ -477,9 +477,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
-    const additionsAST: ElementContent[] = [];
-    const deletionsAST: ElementContent[] = [];
-    const unifiedAST: ElementContent[] = [];
+
+    let additionsAST: ElementContent[] | undefined = [];
+    let deletionsAST: ElementContent[] | undefined = [];
+    let unifiedAST: ElementContent[] | undefined = [];
 
     let hunkIndex = 0;
     const hunkData: HunkData[] = [];
@@ -509,23 +510,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       fileDiff.newLines?.length ?? 0,
       fileDiff.oldLines?.length ?? 0
     );
+
+    additionsAST =
+      !unified && additionsAST.length > 0 ? additionsAST : undefined;
+    deletionsAST =
+      !unified && deletionsAST.length > 0 ? deletionsAST : undefined;
+    unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
+
     const preNode = this.createPreElement(
-      !unified ? deletionsAST.length > 0 && additionsAST.length > 0 : false,
+      deletionsAST != null && additionsAST != null,
       totalLines,
       themeStyles,
       baseThemeType
     );
 
     return {
-      additionsAST:
-        !unified && (code.hunks != null || code.newLines.length > 0)
-          ? additionsAST
-          : undefined,
-      deletionsAST:
-        !unified && (code.hunks != null || code.oldLines.length > 0)
-          ? deletionsAST
-          : undefined,
-      unifiedAST: unifiedAST.length > 0 ? unifiedAST : undefined,
+      additionsAST,
+      deletionsAST,
+      unifiedAST,
       hunkData,
       preNode,
       themeStyles,
@@ -969,19 +971,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (!unified) {
           if (spanSize > 0) {
             if (aLen > dLen) {
-              deletionsAST.push(createEmptyRowBuffer(spanSize));
+              if (deletionsAST.length > 0) {
+                deletionsAST.push(createEmptyRowBuffer(spanSize));
+              }
             } else {
-              additionsAST.push(createEmptyRowBuffer(spanSize));
+              if (additionsAST.length > 0) {
+                additionsAST.push(createEmptyRowBuffer(spanSize));
+              }
             }
             spanSize = 0;
           }
-          if (hunkContent.noEOFCRDeletions) {
+          if (hunkContent.noEOFCRDeletions && deletionsAST.length > 0) {
             deletionsAST.push(createNoNewlineElement('change-deletion'));
             if (!hunkContent.noEOFCRAdditions) {
               additionsAST.push(createEmptyRowBuffer(1));
             }
           }
-          if (hunkContent.noEOFCRAdditions) {
+          if (hunkContent.noEOFCRAdditions && additionsAST.length > 0) {
             additionsAST.push(createNoNewlineElement('change-addition'));
             if (!hunkContent.noEOFCRDeletions) {
               deletionsAST.push(createEmptyRowBuffer(1));
