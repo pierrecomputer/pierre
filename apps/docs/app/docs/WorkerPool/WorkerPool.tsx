@@ -238,7 +238,7 @@ export function WorkerPool({
       <p>
         The worker pool can cache rendered AST results to avoid redundant
         highlighting work. When enabled, subsequent requests for the same file
-        or diff will return cached results immediately instead of re-processing
+        or diff will return cached results immediately instead of reprocessing
         through a worker. This works automatically for both React and Vanilla JS
         APIs — no additional code changes are required beyond enabling the
         option.
