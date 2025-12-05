@@ -1,9 +1,8 @@
-import type { ElementContent } from 'hast';
-
 import type {
   FileContents,
   FileDiffMetadata,
   LanguageRegistration,
+  LineDiffTypes,
   PJSThemeNames,
   RenderDiffOptions,
   RenderFileOptions,
@@ -15,6 +14,12 @@ import type {
 } from '../types';
 
 export type WorkerRequestId = string;
+
+export interface WorkerRenderingOptions {
+  theme: PJSThemeNames | ThemesType;
+  tokenizeMaxLineLength: number;
+  lineDiffType: LineDiffTypes;
+}
 
 export interface FileRendererInstance {
   onHighlightSuccess(
@@ -38,7 +43,6 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  options: Omit<RenderFileOptions, 'theme'>;
   resolvedLanguages?: ResolvedLanguage[];
 }
 
@@ -46,14 +50,13 @@ export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  options: Omit<RenderDiffOptions, 'theme'>;
   resolvedLanguages?: ResolvedLanguage[];
 }
 
 export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
-  theme: PJSThemeNames | ThemesType;
+  renderOptions: WorkerRenderingOptions;
   resolvedThemes: ThemeRegistrationResolved[];
   resolvedLanguages?: ResolvedLanguage[];
 }
@@ -79,18 +82,6 @@ export type WorkerRequest =
   | RenderDiffRequest
   | InitializeWorkerRequest
   | RegisterThemeWorkerRequest;
-
-export interface RenderDiffFilesResult {
-  oldLines: ElementContent[];
-  newLines: ElementContent[];
-  hunks?: undefined;
-}
-
-export interface RenderDiffHunksResult {
-  hunks: RenderDiffFilesResult[];
-  oldLines?: undefined;
-  newLines?: undefined;
-}
 
 export interface RenderFileSuccessResponse {
   type: 'success';
@@ -142,12 +133,40 @@ export type WorkerResponse =
   | RegisterThemeSuccessResponse;
 
 export interface WorkerPoolOptions {
+  /**
+   * Factory function that creates a new Web Worker instance for the pool.
+   * This is called once per worker in the pool during initialization.
+   */
   workerFactory: () => Worker;
+
+  /**
+   * Number of workers to create in the pool.
+   * @default 8
+   */
   poolSize?: number;
+
+  /**
+   * Enables caching of rendered file and diff AST results using an LRU cache.
+   *
+   * When enabled, the pool manager will store the highlighted AST results for
+   * files and diffs. Subsequent requests for the same file/diff content will
+   * return the cached result immediately instead of re-processing through a
+   * worker. This works automatically for both React and Vanilla JS APIs.
+   *
+   * The cache is automatically invalidated when:
+   * - The theme changes via `setTheme()`
+   * - The pool is terminated
+   *
+   * **Note:** This is an experimental feature and is disabled by default while
+   * it is being validated in production use cases.
+   *
+   * @default false
+   */
+  enableASTCache?: boolean;
 }
 
-export interface WorkerHighlighterOptions {
-  theme: PJSThemeNames | ThemesType;
+export interface WorkerHighlighterOptions
+  extends Partial<WorkerRenderingOptions> {
   langs?: SupportedLanguages[];
 }
 

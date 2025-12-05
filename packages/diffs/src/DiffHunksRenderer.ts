@@ -19,6 +19,8 @@ import type {
   Hunk,
   HunkData,
   PJSHighlighter,
+  RenderDiffFilesResult,
+  RenderDiffHunksResult,
   RenderDiffOptions,
   RenderDiffResult,
   RenderedDiffASTCache,
@@ -40,11 +42,7 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import { createHastElement } from './utils/hast_utils';
 import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
-import type {
-  RenderDiffFilesResult,
-  RenderDiffHunksResult,
-  WorkerPoolManager,
-} from './worker';
+import type { WorkerPoolManager } from './worker';
 
 const EXPANDED_REGION: ExpansionRegion = {
   fromStart: 0,
@@ -243,7 +241,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineDiffType,
       maxLineDiffLength,
       overflow,
-      theme: this.workerManager?.currentTheme ?? theme,
+      theme: this.workerManager?.getDiffRenderOptions().theme ?? theme,
       themeType,
       tokenizeMaxLineLength,
       useCSSClasses,
@@ -272,7 +270,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: undefined,
     };
     if (this.workerManager?.isWorkingPool() === true) {
-      this.workerManager.highlightDiffAST(this, this.diff, options);
+      this.workerManager.highlightDiffAST(this, this.diff);
     } else {
       void this.asyncHighlight(diff).then(({ result, options }) => {
         this.onHighlightSuccess(diff, result, options);
@@ -280,30 +278,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  private getRenderOptions(
-    diff: FileDiffMetadata,
-    forceText = false
-  ): GetRenderOptionsReturn {
-    const { lang } = this.options;
-    const { theme, tokenizeMaxLineLength, lineDiffType } =
-      this.getOptionsWithDefaults();
+  private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
+    const options: RenderDiffOptions = (() => {
+      if (this.workerManager?.isWorkingPool() === true) {
+        return this.workerManager.getDiffRenderOptions();
+      }
+      const { theme, tokenizeMaxLineLength, lineDiffType } =
+        this.getOptionsWithDefaults();
+      return { theme, tokenizeMaxLineLength, lineDiffType };
+    })();
+    this.getOptionsWithDefaults();
     const { renderCache } = this;
-    const options: RenderDiffOptions = {
-      lang: forceText ? 'text' : lang,
-      theme,
-      tokenizeMaxLineLength,
-      lineDiffType,
-    };
     if (renderCache?.result == null) {
       return { options, forceRender: true };
     }
     if (
       diff !== renderCache.diff ||
-      !areThemesEqual(options.theme, renderCache.options.theme) ||
-      options.lang !== renderCache.options.lang ||
-      options.tokenizeMaxLineLength !==
-        renderCache.options.tokenizeMaxLineLength ||
-      options.lineDiffType !== renderCache.options.lineDiffType
+      !areRenderOptionsEqual(options, renderCache.options)
     ) {
       return { options, forceRender: true };
     }
@@ -317,32 +308,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return undefined;
     }
     const { options, forceRender } = this.getRenderOptions(diff);
+    let cache = this.workerManager?.getDiffResultCache(diff);
+    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
+      cache = undefined;
+    }
     this.renderCache ??= {
       diff,
-      highlighted: false,
-      options,
-      result: undefined,
+      highlighted: cache != null ? true : false,
+      options: cache?.options ?? options,
+      result: cache?.result,
     };
     if (this.workerManager?.isWorkingPool() === true) {
-      this.renderCache.result ??= this.workerManager.getPlainDiffAST(
-        diff,
-        options.lineDiffType
-      );
-
-      // TODO(amadeus): Figure out how to only fire this on a per file
-      // basis... (maybe the workerManager can figure it out based on file name
-      // and file contents probably?)
+      this.renderCache.result ??= this.workerManager.getPlainDiffAST(diff);
       if (!this.renderCache.highlighted || forceRender) {
-        this.workerManager.highlightDiffAST(this, diff, options);
+        this.workerManager.highlightDiffAST(this, diff);
       }
     } else {
-      this.computedLang =
-        this.options.lang ?? getFiletypeFromFileName(diff.name);
+      this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =
-        this.highlighter != null &&
-        areLanguagesAttached(options.lang ?? this.computedLang);
+        this.highlighter != null && areLanguagesAttached(this.computedLang);
 
       // If we have any semblance of a highlighter with the correct theme(s)
       // attached, we can kick off some form of rendering.  If we don't have
@@ -415,13 +401,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private async asyncHighlight(
     diff: FileDiffMetadata
   ): Promise<RenderDiffResult> {
-    this.computedLang = this.options.lang ?? getFiletypeFromFileName(diff.name);
+    this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
     const hasThemes =
       this.highlighter != null &&
       areThemesAttached(this.options.theme ?? DEFAULT_THEMES);
     const hasLangs =
-      this.highlighter != null &&
-      areLanguagesAttached(this.options.lang ?? this.computedLang);
+      this.highlighter != null && areLanguagesAttached(this.computedLang);
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
@@ -433,10 +418,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private renderDiffWithHighlighter(
     diff: FileDiffMetadata,
     highlighter: PJSHighlighter,
-    forceText = false
+    plainText = false
   ): RenderDiffResult {
-    const { options } = this.getRenderOptions(diff, forceText);
-    const result = renderDiffWithHighlighter(diff, highlighter, options);
+    const { options } = this.getRenderOptions(diff);
+    const result = renderDiffWithHighlighter(
+      diff,
+      highlighter,
+      options,
+      plainText
+    );
     return { result, options };
   }
 
@@ -1131,6 +1121,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themeType: baseThemeType ?? themeType,
     });
   }
+}
+
+function areRenderOptionsEqual(
+  optionsA: RenderDiffOptions,
+  optionsB: RenderDiffOptions
+): boolean {
+  return (
+    areThemesEqual(optionsA.theme, optionsB.theme) &&
+    optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength &&
+    optionsA.lineDiffType === optionsB.lineDiffType
+  );
 }
 
 function getModifiedLinesString(lines: number) {

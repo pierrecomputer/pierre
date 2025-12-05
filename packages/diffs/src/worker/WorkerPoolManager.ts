@@ -1,3 +1,5 @@
+import { LRUMap } from 'lru_map';
+
 import { DEFAULT_THEMES } from '../constants';
 import {
   getResolvedLanguages,
@@ -14,11 +16,12 @@ import {
 import type {
   FileContents,
   FileDiffMetadata,
-  LineDiffTypes,
   PJSHighlighter,
   PJSThemeNames,
   RenderDiffOptions,
+  RenderDiffResult,
   RenderFileOptions,
+  RenderFileResult,
   SupportedLanguages,
   ThemeRegistrationResolved,
   ThemedDiffResult,
@@ -44,12 +47,18 @@ import type {
   SubmitRequest,
   WorkerHighlighterOptions,
   WorkerPoolOptions,
+  WorkerRenderingOptions,
   WorkerRequestId,
   WorkerResponse,
   WorkerStats,
 } from './types';
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
+
+interface GetCachesResult {
+  fileCache: LRUMap<FileContents, RenderFileResult>;
+  diffCache: LRUMap<FileDiffMetadata, RenderDiffResult>;
+}
 
 interface ManagedWorker {
   worker: Worker;
@@ -64,9 +73,7 @@ interface ThemeSubscriber {
 
 export class WorkerPoolManager {
   private highlighter: PJSHighlighter | undefined;
-
-  currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
-
+  private renderOptions: WorkerRenderingOptions;
   private initialized: Promise<void> | boolean = false;
   private workers: ManagedWorker[] = [];
   private taskQueue: AllWorkerTasks[] = [];
@@ -78,23 +85,48 @@ export class WorkerPoolManager {
     FileRendererInstance | DiffRendererInstance,
     string
   >();
+  private fileCache: LRUMap<FileContents, RenderFileResult> = new LRUMap(50);
+  private diffCache: LRUMap<FileDiffMetadata, RenderDiffResult> = new LRUMap(
+    50
+  );
 
   constructor(
     private options: WorkerPoolOptions,
-    private highlighterOptions: WorkerHighlighterOptions
+    {
+      langs,
+      theme = DEFAULT_THEMES,
+      lineDiffType = 'word-alt',
+      tokenizeMaxLineLength = 1000,
+    }: WorkerHighlighterOptions
   ) {
-    void this.initialize();
+    this.renderOptions = { theme, lineDiffType, tokenizeMaxLineLength };
+    void this.initialize(langs);
   }
 
   isWorkingPool(): boolean {
     return !this.workersFailed;
   }
 
+  getFileResultCache(file: FileContents): RenderFileResult | undefined {
+    return this.fileCache.get(file);
+  }
+
+  getDiffResultCache(diff: FileDiffMetadata): RenderDiffResult | undefined {
+    return this.diffCache.get(diff);
+  }
+
+  inspectCaches(): GetCachesResult {
+    const { fileCache, diffCache } = this;
+    return { fileCache, diffCache };
+  }
+
+  // FIXME(amadeus): Add an API to potentially change the other render options
+  // dynamically, or replace this method with that...
   async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    if (areThemesEqual(theme, this.currentTheme)) {
+    if (areThemesEqual(theme, this.renderOptions.theme)) {
       return;
     }
 
@@ -109,19 +141,31 @@ export class WorkerPoolManager {
     if (this.highlighter != null) {
       attachResolvedThemes(resolvedThemes, this.highlighter);
       await this.registerThemesOnWorkers(theme, resolvedThemes);
-      this.currentTheme = theme;
+      this.renderOptions.theme = theme;
     } else {
       const [highlighter] = await Promise.all([
         getSharedHighlighter({ themes: themeNames, langs: ['text'] }),
         this.registerThemesOnWorkers(theme, resolvedThemes),
       ]);
       this.highlighter = highlighter;
-      this.currentTheme = theme;
+      this.renderOptions.theme = theme;
     }
+
+    this.diffCache.clear();
+    this.fileCache.clear();
 
     for (const instance of this.themeSubscribers) {
       instance.rerender();
     }
+  }
+
+  getFileRenderOptions(): RenderFileOptions {
+    const { tokenizeMaxLineLength, theme } = this.renderOptions;
+    return { theme, tokenizeMaxLineLength };
+  }
+
+  getDiffRenderOptions(): RenderDiffOptions {
+    return { ...this.renderOptions };
   }
 
   private async registerThemesOnWorkers(
@@ -176,14 +220,14 @@ export class WorkerPoolManager {
     return this.initialized === true;
   }
 
-  async initialize(): Promise<void> {
+  async initialize(languages: SupportedLanguages[] = []): Promise<void> {
     if (this.initialized === true) {
       return;
     } else if (this.initialized === false) {
       this.initialized = new Promise((resolve, reject) => {
         void (async () => {
           try {
-            const themes = getThemes(this.highlighterOptions.theme);
+            const themes = getThemes(this.renderOptions.theme);
             let resolvedThemes: ThemeRegistrationResolved[] = [];
             if (hasResolvedThemes(themes)) {
               resolvedThemes = getResolvedThemes(themes);
@@ -191,7 +235,6 @@ export class WorkerPoolManager {
               resolvedThemes = await resolveThemes(themes);
             }
 
-            const languages = this.highlighterOptions.langs ?? [];
             let resolvedLanguages: ResolvedLanguage[] = [];
             if (hasResolvedLanguages(languages)) {
               resolvedLanguages = getResolvedLanguages(languages);
@@ -201,11 +244,7 @@ export class WorkerPoolManager {
 
             const [highlighter] = await Promise.all([
               getSharedHighlighter({ themes, langs: ['text', ...languages] }),
-              this.initializeWorkers(
-                this.highlighterOptions.theme,
-                resolvedThemes,
-                resolvedLanguages
-              ),
+              this.initializeWorkers(resolvedThemes, resolvedLanguages),
             ]);
 
             // If we were terminated while initializing, we should probably kill
@@ -215,9 +254,10 @@ export class WorkerPoolManager {
               reject();
               return;
             }
-            this.currentTheme = this.highlighterOptions.theme;
             this.highlighter = highlighter;
             this.initialized = true;
+            this.diffCache.clear();
+            this.fileCache.clear();
             this.drainQueue();
             resolve();
           } catch (e) {
@@ -233,7 +273,6 @@ export class WorkerPoolManager {
   }
 
   private async initializeWorkers(
-    theme: PJSThemeNames | ThemesType,
     resolvedThemes: ThemeRegistrationResolved[],
     resolvedLanguages: ResolvedLanguage[]
   ): Promise<void> {
@@ -269,7 +308,7 @@ export class WorkerPoolManager {
             request: {
               type: 'initialize',
               id,
-              theme,
+              renderOptions: this.renderOptions,
               resolvedThemes,
               resolvedLanguages,
             },
@@ -307,54 +346,45 @@ export class WorkerPoolManager {
     }
   };
 
-  highlightFileAST(
-    instance: FileRendererInstance,
-    file: FileContents,
-    options: Omit<RenderFileOptions, 'theme'>
-  ): void {
-    this.submitTask(instance, { type: 'file', file, options });
+  highlightFileAST(instance: FileRendererInstance, file: FileContents): void {
+    this.submitTask(instance, { type: 'file', file });
   }
 
-  getPlainFileAST(
-    file: FileContents,
-    startingLineNumber: number = 1
-  ): ThemedFileResult | undefined {
+  getPlainFileAST(file: FileContents): ThemedFileResult | undefined {
     if (this.highlighter == null) {
       void this.initialize();
       return undefined;
     }
-    return renderFileWithHighlighter(file, this.highlighter, {
-      lang: 'text',
-      startingLineNumber,
-      theme: this.currentTheme,
-      tokenizeMaxLineLength: 1000,
-    });
+    return renderFileWithHighlighter(
+      file,
+      this.highlighter,
+      this.renderOptions,
+      true
+    );
   }
 
   highlightDiffAST(
     instance: DiffRendererInstance,
-    diff: FileDiffMetadata,
-    options: Omit<RenderDiffOptions, 'theme'>
+    diff: FileDiffMetadata
   ): void {
-    this.submitTask(instance, { type: 'diff', diff, options });
+    this.submitTask(instance, { type: 'diff', diff });
   }
 
-  getPlainDiffAST(
-    diff: FileDiffMetadata,
-    lineDiffType: LineDiffTypes
-  ): ThemedDiffResult | undefined {
+  getPlainDiffAST(diff: FileDiffMetadata): ThemedDiffResult | undefined {
     return this.highlighter != null
-      ? renderDiffWithHighlighter(diff, this.highlighter, {
-          theme: this.currentTheme,
-          lang: 'text',
-          tokenizeMaxLineLength: 1000,
-          lineDiffType,
-        })
+      ? renderDiffWithHighlighter(
+          diff,
+          this.highlighter,
+          this.renderOptions,
+          true
+        )
       : undefined;
   }
 
   terminate(): void {
     this.terminateWorkers();
+    this.fileCache.clear();
+    this.diffCache.clear();
     this.instanceRequestMap.clear();
     this.taskQueue.length = 0;
     this.pendingTasks.clear();
@@ -497,6 +527,9 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
+            if (this.options.enableASTCache === true) {
+              this.fileCache.set(request.file, { result, options });
+            }
             instance.onHighlightSuccess(request.file, result, options);
             break;
           }
@@ -506,6 +539,9 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
+            if (this.options.enableASTCache === true) {
+              this.diffCache.set(request.diff, { result, options });
+            }
             instance.onHighlightSuccess(request.diff, result, options);
             break;
           }
@@ -587,20 +623,24 @@ function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
   if (task.type === 'initialize' || task.type === 'register-theme') {
     return [];
   }
-  const options = task.request.options ?? {};
-  if ('lang' in options && options.lang != null) {
-    langs.add(options.lang);
-  } else {
-    switch (task.type) {
-      case 'file': {
-        langs.add(getFiletypeFromFileName(task.request.file.name));
-        break;
-      }
-      case 'diff': {
-        langs.add(getFiletypeFromFileName(task.request.diff.name));
-        langs.add(getFiletypeFromFileName(task.request.diff.prevName ?? '-'));
-        break;
-      }
+  switch (task.type) {
+    case 'file': {
+      langs.add(
+        task.request.file.lang ??
+          getFiletypeFromFileName(task.request.file.name)
+      );
+      break;
+    }
+    case 'diff': {
+      langs.add(
+        task.request.diff.lang ??
+          getFiletypeFromFileName(task.request.diff.name)
+      );
+      langs.add(
+        task.request.diff.lang ??
+          getFiletypeFromFileName(task.request.diff.prevName ?? '-')
+      );
+      break;
     }
   }
   langs.delete('text');

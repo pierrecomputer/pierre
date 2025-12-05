@@ -5,6 +5,7 @@ import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
 import type {
   BaseCodeOptions,
   PJSHighlighter,
+  SupportedLanguages,
   ThemeTypes,
   ThemedToken,
 } from './types';
@@ -17,6 +18,7 @@ import { getHighlighterThemeStyles } from './utils/getHighlighterThemeStyles';
 import { setPreNodeProperties } from './utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
+  lang?: SupportedLanguages;
   startingLineIndex?: number;
 
   onPreRender?(instance: FileStream): unknown;

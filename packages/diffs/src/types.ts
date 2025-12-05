@@ -11,11 +11,10 @@ import type {
   ThemedToken,
 } from 'shiki';
 
-import type { RenderDiffFilesResult, RenderDiffHunksResult } from './worker';
-
 export interface FileContents {
   name: string;
   contents: string;
+  lang?: SupportedLanguages;
   // Technically our diff library can take a `header` property, but we don't
   // have any way of rendering it at the moment
   header?: string;
@@ -90,6 +89,7 @@ export interface Hunk {
 export interface FileDiffMetadata {
   name: string;
   prevName: string | undefined;
+  lang?: SupportedLanguages;
   type: ChangeTypes;
   hunks: Hunk[];
   splitLineCount: number;
@@ -123,8 +123,7 @@ export interface BaseCodeOptions {
   themeType?: ThemeTypes; // 'system' is default
   disableFileHeader?: boolean;
 
-  // Shiki config options
-  lang?: SupportedLanguages;
+  // Shiki config options, ignored if you're using a WorkerPoolManager
   useCSSClasses?: boolean;
   tokenizeMaxLineLength?: number;
 
@@ -298,6 +297,18 @@ export type AnnotationLineMap<LAnnotation> = Record<
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
+export interface RenderDiffFilesResult {
+  oldLines: ElementContent[];
+  newLines: ElementContent[];
+  hunks?: undefined;
+}
+
+export interface RenderDiffHunksResult {
+  hunks: RenderDiffFilesResult[];
+  oldLines?: undefined;
+  newLines?: undefined;
+}
+
 export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
@@ -311,14 +322,11 @@ export interface ThemedDiffResult {
 }
 
 export interface RenderFileOptions {
-  lang?: SupportedLanguages;
   theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
-  startingLineNumber: number;
   tokenizeMaxLineLength: number;
 }
 
 export interface RenderDiffOptions {
-  lang?: SupportedLanguages;
   theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
