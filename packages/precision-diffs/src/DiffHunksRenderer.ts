@@ -3,9 +3,12 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import { DEFAULT_THEMES } from './constants';
-import { hasResolvedLanguages } from './highlighter/languages';
-import { getSharedHighlighter } from './highlighter/shared_highlighter';
-import { hasResolvedThemes } from './highlighter/themes';
+import { areLanguagesAttached } from './highlighter/languages';
+import {
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from './highlighter/shared_highlighter';
+import { areThemesAttached } from './highlighter/themes';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
@@ -34,7 +37,6 @@ import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from './utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from './utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getThemes } from './utils/getThemes';
 import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import { createHastElement } from './utils/hast_utils';
 import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
@@ -147,7 +149,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     public options: BaseDiffOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
-  ) {}
+  ) {
+    if (workerManager?.isWorkingPool() !== true) {
+      this.highlighter = areThemesAttached(options.theme ?? DEFAULT_THEMES)
+        ? getHighlighterIfLoaded()
+        : undefined;
+    }
+  }
 
   cleanUp(): void {
     this.highlighter = undefined;
@@ -272,13 +280,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
+  private getRenderOptions(
+    diff: FileDiffMetadata,
+    forceText = false
+  ): GetRenderOptionsReturn {
     const { lang } = this.options;
     const { theme, tokenizeMaxLineLength, lineDiffType } =
       this.getOptionsWithDefaults();
     const { renderCache } = this;
     const options: RenderDiffOptions = {
-      lang,
+      lang: forceText ? 'text' : lang,
       theme,
       tokenizeMaxLineLength,
       lineDiffType,
@@ -327,29 +338,43 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } else {
       this.computedLang =
         this.options.lang ?? getFiletypeFromFileName(diff.name);
+      const hasThemes =
+        this.highlighter != null && areThemesAttached(options.theme);
+      const hasLangs =
+        this.highlighter != null &&
+        areLanguagesAttached(options.lang ?? this.computedLang);
+
+      // If we have any semblance of a highlighter with the correct theme(s)
+      // attached, we can kick off some form of rendering.  If we don't have
+      // the correct language, then we can render plain text and after kick off
+      // an async job to get the highlighted AST
       if (
-        // Reset highlighter if we do not have the appropriate
-        // themes or languages loaded...
-        !hasResolvedThemes(getThemes(options.theme)) ||
-        !hasResolvedLanguages(options.lang ?? this.computedLang)
+        this.highlighter != null &&
+        hasThemes &&
+        (forceRender ||
+          (!this.renderCache.highlighted && hasLangs) ||
+          this.renderCache.result == null)
       ) {
-        this.highlighter = undefined;
-      }
-      if (this.highlighter == null) {
-        void this.asyncHighlight(diff).then(({ result, options }) => {
-          this.onHighlightSuccess(diff, result, options);
-        });
-      } else if (forceRender || !this.renderCache.highlighted) {
         const { result, options } = this.renderDiffWithHighlighter(
           diff,
-          this.highlighter
+          this.highlighter,
+          !hasLangs
         );
         this.renderCache = {
           diff,
           options,
-          highlighted: true,
+          highlighted: hasLangs,
           result,
         };
+      }
+
+      // If we get in here it means we'll have to kick off an async highlight
+      // process which will involve initializing the highlighter with new themes
+      // and languages
+      if (!hasThemes || !hasLangs) {
+        void this.asyncHighlight(diff).then(({ result, options }) => {
+          this.onHighlightSuccess(diff, result, options);
+        });
       }
     }
     return this.renderCache.result != null
@@ -391,26 +416,26 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata
   ): Promise<RenderDiffResult> {
     this.computedLang = this.options.lang ?? getFiletypeFromFileName(diff.name);
-    // If we have changed theme or language on our diff instance, we need to
-    // double check the highlighter has loaded the appropriate languages and
-    // themes
-    if (
+    const hasThemes =
       this.highlighter != null &&
-      (!hasResolvedThemes(getThemes(this.options.theme)) ||
-        !hasResolvedLanguages(this.computedLang))
-    ) {
-      this.highlighter = undefined;
+      areThemesAttached(this.options.theme ?? DEFAULT_THEMES);
+    const hasLangs =
+      this.highlighter != null &&
+      areLanguagesAttached(this.options.lang ?? this.computedLang);
+    // If we don't have the required langs or themes, then we need to
+    // initialize the highlighter to load the appropriate languages and themes
+    if (this.highlighter == null || !hasThemes || !hasLangs) {
+      this.highlighter = await this.initializeHighlighter();
     }
-
-    this.highlighter ??= await this.initializeHighlighter();
     return this.renderDiffWithHighlighter(diff, this.highlighter);
   }
 
   private renderDiffWithHighlighter(
     diff: FileDiffMetadata,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    forceText = false
   ): RenderDiffResult {
-    const { options } = this.getRenderOptions(diff);
+    const { options } = this.getRenderOptions(diff, forceText);
     const result = renderDiffWithHighlighter(diff, highlighter, options);
     return { result, options };
   }
