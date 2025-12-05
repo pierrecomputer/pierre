@@ -136,6 +136,17 @@ export function attachResolvedLanguages(
   }
 }
 
+export function areLanguagesAttached(
+  languages: SupportedLanguages | SupportedLanguages[]
+): boolean {
+  for (const language of Array.isArray(languages) ? languages : [languages]) {
+    if (!attachedLanguages.has(language)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function cleanUpResolvedLanguages(): void {
   ResolvedLanguages.clear();
   attachedLanguages.clear();
