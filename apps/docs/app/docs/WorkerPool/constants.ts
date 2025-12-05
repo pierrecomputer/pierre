@@ -395,6 +395,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 // - poolOptions: WorkerPoolOptions
 //   - workerFactory: () => Worker - Function that creates a Worker instance
 //   - poolSize?: number (default: 8) - Number of workers
+//   - enableASTCache?: boolean (default: false) - Cache rendered AST results
 // - highlighterOptions: WorkerHighlighterOptions
 //   - theme: PJSThemeNames | ThemesType - Theme name or { dark, light } object
 //   - langs?: SupportedLanguages[] - Array of languages to preload
@@ -426,7 +427,45 @@ poolManager.terminate()
 // Terminates all workers and resets state
 
 poolManager.getStats()
-// Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }`,
+// Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }
+
+poolManager.inspectCaches()
+// Returns: { fileCache, diffCache } - LRU cache instances (when enableASTCache is true)`,
+  },
+  options,
+};
+
+export const WORKER_POOL_CACHING: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'caching-example.ts',
+    contents: `import {
+  getOrCreateWorkerPoolSingleton,
+} from '@pierre/precision-diffs/worker';
+import { workerFactory } from './utils/workerFactory';
+
+// Enable AST caching by setting enableASTCache to true
+const workerPool = getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    workerFactory,
+    enableASTCache: true, // <-- Enable caching
+  },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+});
+
+// With caching enabled:
+// - Rendered file and diff AST results are stored in an LRU cache
+// - Subsequent renders of the same file/diff return cached results instantly
+// - No worker processing required for cache hits
+// - Cache is automatically invalidated when:
+//   - The theme changes via setTheme()
+//   - The pool is terminated
+
+// Inspect cache contents (for debugging)
+const { fileCache, diffCache } = workerPool.inspectCaches();
+console.log('Cached files:', fileCache.size);
+console.log('Cached diffs:', diffCache.size);`,
   },
   options,
 };

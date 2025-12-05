@@ -133,8 +133,35 @@ export type WorkerResponse =
   | RegisterThemeSuccessResponse;
 
 export interface WorkerPoolOptions {
+  /**
+   * Factory function that creates a new Web Worker instance for the pool.
+   * This is called once per worker in the pool during initialization.
+   */
   workerFactory: () => Worker;
+
+  /**
+   * Number of workers to create in the pool.
+   * @default 8
+   */
   poolSize?: number;
+
+  /**
+   * Enables caching of rendered file and diff AST results using an LRU cache.
+   *
+   * When enabled, the pool manager will store the highlighted AST results for
+   * files and diffs. Subsequent requests for the same file/diff content will
+   * return the cached result immediately instead of re-processing through a
+   * worker. This works automatically for both React and Vanilla JS APIs.
+   *
+   * The cache is automatically invalidated when:
+   * - The theme changes via `setTheme()`
+   * - The pool is terminated
+   *
+   * **Note:** This is an experimental feature and is disabled by default while
+   * it is being validated in production use cases.
+   *
+   * @default false
+   */
   enableASTCache?: boolean;
 }
 
