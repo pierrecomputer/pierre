@@ -26,7 +26,7 @@ export function Hero() {
   };
 
   return (
-    <section className="flex max-w-3xl flex-col gap-2 py-20 lg:max-w-4xl">
+    <section className="flex max-w-3xl flex-col gap-3 py-20 lg:max-w-4xl">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="64"
@@ -46,12 +46,13 @@ export function Hero() {
       </svg>
 
       <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
-        Diffs, from Pierre
+        Better diffs and code
       </h1>
       <p className="text-md text-muted-foreground mb-2 md:text-lg lg:text-xl">
-        <code>@pierre/precision-diffs</code> is an open source diff and file
-        rendering library. It's built on Shiki, is super customizable, and
-        packed with features. Made with love by{' '}
+        <code>@pierre/precision-diffs</code> is an open source diff and code
+        rendering library. It's built on Shiki for syntax highlighting and
+        theming, is super customizable, and comes packed with features. Made
+        with love by{' '}
         <Link
           target="_blank"
           href="https://pierre.computer"

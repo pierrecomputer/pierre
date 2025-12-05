@@ -29,7 +29,7 @@ export function HeaderWrapper() {
   return (
     <Header
       ref={headerRef}
-      className={isStuck ? 'is-stuck' : ''}
+      className={`-mb-[1px] ${isStuck ? 'is-stuck' : 'border-b border-transparent'}`}
       logo={
         <Header.Logo href="/" subtitle={<>by The Pierre Computer Co.</>}>
           Diffs

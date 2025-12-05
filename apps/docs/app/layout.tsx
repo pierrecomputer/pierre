@@ -51,6 +51,14 @@ export const metadata: Metadata = {
   title: 'Diffs, from Pierre',
   description:
     'An open source diff and file rendering library by The Pierre Computer Company.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+    shortcut: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
