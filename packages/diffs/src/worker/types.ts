@@ -1,5 +1,3 @@
-import type { ElementContent } from 'hast';
-
 import type {
   FileContents,
   FileDiffMetadata,
@@ -79,18 +77,6 @@ export type WorkerRequest =
   | RenderDiffRequest
   | InitializeWorkerRequest
   | RegisterThemeWorkerRequest;
-
-export interface RenderDiffFilesResult {
-  oldLines: ElementContent[];
-  newLines: ElementContent[];
-  hunks?: undefined;
-}
-
-export interface RenderDiffHunksResult {
-  hunks: RenderDiffFilesResult[];
-  oldLines?: undefined;
-  newLines?: undefined;
-}
 
 export interface RenderFileSuccessResponse {
   type: 'success';

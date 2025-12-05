@@ -11,8 +11,6 @@ import type {
   ThemedToken,
 } from 'shiki';
 
-import type { RenderDiffFilesResult, RenderDiffHunksResult } from './worker';
-
 export interface FileContents {
   name: string;
   contents: string;
@@ -297,6 +295,18 @@ export type AnnotationLineMap<LAnnotation> = Record<
 >;
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
+
+export interface RenderDiffFilesResult {
+  oldLines: ElementContent[];
+  newLines: ElementContent[];
+  hunks?: undefined;
+}
+
+export interface RenderDiffHunksResult {
+  hunks: RenderDiffFilesResult[];
+  oldLines?: undefined;
+  newLines?: undefined;
+}
 
 export interface ThemedFileResult {
   code: ElementContent[];

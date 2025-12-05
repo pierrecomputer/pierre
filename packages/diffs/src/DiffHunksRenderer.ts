@@ -19,6 +19,8 @@ import type {
   Hunk,
   HunkData,
   PJSHighlighter,
+  RenderDiffFilesResult,
+  RenderDiffHunksResult,
   RenderDiffOptions,
   RenderDiffResult,
   RenderedDiffASTCache,
@@ -40,11 +42,7 @@ import { getLineAnnotationName } from './utils/getLineAnnotationName';
 import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
 import { createHastElement } from './utils/hast_utils';
 import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
-import type {
-  RenderDiffFilesResult,
-  RenderDiffHunksResult,
-  WorkerPoolManager,
-} from './worker';
+import type { WorkerPoolManager } from './worker';
 
 const EXPANDED_REGION: ExpansionRegion = {
   fromStart: 0,

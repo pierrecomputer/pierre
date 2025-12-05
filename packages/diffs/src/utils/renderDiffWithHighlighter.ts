@@ -11,10 +11,10 @@ import type {
   LineInfo,
   PJSHighlighter,
   PJSThemeNames,
+  RenderDiffFilesResult,
   RenderDiffOptions,
   ThemedDiffResult,
 } from '../types';
-import type { RenderDiffFilesResult } from '../worker';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
