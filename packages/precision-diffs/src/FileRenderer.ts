@@ -3,9 +3,12 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import { DEFAULT_THEMES } from './constants';
-import { hasResolvedLanguages } from './highlighter/languages';
-import { getSharedHighlighter } from './highlighter/shared_highlighter';
-import { hasResolvedThemes } from './highlighter/themes';
+import { areLanguagesAttached } from './highlighter/languages';
+import {
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from './highlighter/shared_highlighter';
+import { areThemesAttached, hasResolvedThemes } from './highlighter/themes';
 import type {
   BaseCodeOptions,
   FileContents,
@@ -35,6 +38,11 @@ type AnnotationLineMap<LAnnotation> = Record<
   LineAnnotation<LAnnotation>[] | undefined
 >;
 
+interface GetRenderOptionsReturn {
+  options: RenderFileOptions;
+  forceRender: boolean;
+}
+
 export interface FileRenderResult {
   codeAST: ElementContent[];
   preAST: HASTElement;
@@ -60,7 +68,13 @@ export class FileRenderer<LAnnotation = undefined> {
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
-  ) {}
+  ) {
+    if (workerManager?.isWorkingPool() !== true) {
+      this.highlighter = areThemesAttached(options.theme ?? DEFAULT_THEMES)
+        ? getHighlighterIfLoaded()
+        : undefined;
+    }
+  }
 
   setOptions(options: FileRendererOptions): void {
     this.options = options;
@@ -113,10 +127,10 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  private getRenderOptions(file: FileContents): {
-    options: RenderFileOptions;
-    forceRender: boolean;
-  } {
+  private getRenderOptions(
+    file: FileContents,
+    forceText = false
+  ): GetRenderOptionsReturn {
     const {
       lang,
       startingLineNumber = 1,
@@ -125,7 +139,7 @@ export class FileRenderer<LAnnotation = undefined> {
     } = this.options;
     const { renderCache } = this;
     const options: RenderFileOptions = {
-      lang,
+      lang: forceText ? 'text' : lang,
       theme: this.workerManager?.currentTheme ?? theme,
       tokenizeMaxLineLength,
       startingLineNumber,
@@ -173,30 +187,43 @@ export class FileRenderer<LAnnotation = undefined> {
     } else {
       this.computedLang =
         this.options.lang ?? getFiletypeFromFileName(file.name);
-      if (
-        // Reset highlighter if we no longer have the appropriate
-        // themes or languages loaded...
-        !hasResolvedThemes(getThemes(options.theme)) ||
-        !hasResolvedLanguages(options.lang ?? this.computedLang)
-      ) {
-        this.highlighter = undefined;
-      }
+      const hasThemes =
+        this.highlighter != null && areThemesAttached(options.theme);
+      const hasLangs =
+        this.highlighter != null &&
+        areLanguagesAttached(options.lang ?? this.computedLang);
 
-      if (this.highlighter == null) {
-        void this.asyncHighlight(file).then(({ result, options }) => {
-          this.onHighlightSuccess(file, result, options);
-        });
-      } else if (forceRender || !this.renderCache.highlighted) {
+      // If we have any semblance of a highlighter with the correct theme(s)
+      // attached, we can kick off some form of rendering.  If we don't have
+      // the correct language, then we can render plain text and after kick off
+      // an async job to get the highlighted AST
+      if (
+        this.highlighter != null &&
+        hasThemes &&
+        (forceRender ||
+          (!this.renderCache.highlighted && hasLangs) ||
+          this.renderCache.result == null)
+      ) {
         const { result, options } = this.renderFileWithHighlighter(
           file,
-          this.highlighter
+          this.highlighter,
+          !hasLangs
         );
         this.renderCache = {
           file,
           options,
-          highlighted: true,
+          highlighted: hasLangs,
           result,
         };
+      }
+
+      // If we get in here it means we'll have to kick off an async highlight
+      // process which will involve initializing the highlighter with new themes
+      // and languages
+      if (!hasThemes || !hasLangs) {
+        void this.asyncHighlight(file).then(({ result, options }) => {
+          this.onHighlightSuccess(file, result, options);
+        });
       }
     }
 
@@ -212,22 +239,26 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
     this.computedLang = this.options.lang ?? getFiletypeFromFileName(file.name);
-    if (
+    const hasThemes =
       this.highlighter != null &&
-      (!hasResolvedThemes(getThemes(this.options.theme)) ||
-        !hasResolvedLanguages(this.options.lang ?? this.computedLang))
-    ) {
-      this.highlighter = undefined;
+      hasResolvedThemes(getThemes(this.options.theme));
+    const hasLangs =
+      this.highlighter != null &&
+      areLanguagesAttached(this.options.lang ?? this.computedLang);
+    // If we don't have the required langs or themes, then we need to
+    // initialize the highlighter to load the appropriate languages and themes
+    if (this.highlighter == null || !hasThemes || !hasLangs) {
+      this.highlighter = await this.initializeHighlighter();
     }
-    this.highlighter ??= await this.initializeHighlighter();
     return this.renderFileWithHighlighter(file, this.highlighter);
   }
 
   private renderFileWithHighlighter(
     file: FileContents,
-    highlighter: PJSHighlighter
+    highlighter: PJSHighlighter,
+    forceText = false
   ): RenderFileResult {
-    const { options } = this.getRenderOptions(file);
+    const { options } = this.getRenderOptions(file, forceText);
     const result = renderFileWithHighlighter(file, highlighter, options);
     return { result, options };
   }
