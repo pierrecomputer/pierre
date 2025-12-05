@@ -27,8 +27,7 @@ export function workerFactory(): Worker {
     new URL(
       '@pierre/precision-diffs/worker/worker.js',
       import.meta.url
-    ),
-    { type: 'module' }
+    )
   );
 }`,
   },
