@@ -9,7 +9,7 @@
       "path": "apps/docs"
     },
     {
-      "path": "packages/precision-diffs"
+      "path": "packages/diffs"
     },
     {
       "path": "packages/storage-elements"

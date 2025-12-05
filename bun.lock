@@ -100,7 +100,7 @@
     "apps/solid-diff-demo": {
       "name": "@pierre/solid-diff-demo",
       "dependencies": {
-        "@pierre/precision-diffs": "0.5.5",
+        "@pierre/precision-diffs": "workspace:",
         "@solidjs/meta": "^0.29.4",
         "@solidjs/router": "^0.15.3",
         "@solidjs/start": "^1.0.14",
@@ -113,9 +113,9 @@
         "vite": "^6.0.5",
       },
     },
-    "packages/precision-diffs": {
+    "packages/diffs": {
       "name": "@pierre/precision-diffs",
-      "version": "0.5.7",
+      "version": "0.6.0-beta.5",
       "dependencies": {
         "@shikijs/core": "catalog:",
         "@shikijs/transformers": "catalog:",
@@ -636,7 +636,7 @@
 
     "@pierre/js-docs": ["@pierre/js-docs@workspace:apps/docs"],
 
-    "@pierre/precision-diffs": ["@pierre/precision-diffs@workspace:packages/precision-diffs"],
+    "@pierre/precision-diffs": ["@pierre/precision-diffs@workspace:packages/diffs"],
 
     "@pierre/solid-diff-demo": ["@pierre/solid-diff-demo@workspace:apps/solid-diff-demo"],
 

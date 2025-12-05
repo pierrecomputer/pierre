@@ -1,6 +1,6 @@
-# @pierre/precision-diffs
+# @pierre/diffs
 
-Docs at [https://pierrejs-docs.vercel.app/](https://pierrejs-docs.vercel.app/)
+Docs at [https://diffs.com](https://diffs.com)
 
 ## Development
 

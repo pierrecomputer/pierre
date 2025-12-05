@@ -10,7 +10,7 @@
   "exclude": ["node_modules"],
   "references": [
     {
-      "path": "../../packages/precision-diffs"
+      "path": "../../packages/diffs"
     },
     {
       "path": "../../packages/storage-elements-next"
