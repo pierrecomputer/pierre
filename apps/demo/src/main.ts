@@ -342,10 +342,8 @@ const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
   function handleClick() {
     void (async () => {
-      renderDiff(
-        parsedPatches ?? parsePatchFiles(await loadPatchContent()),
-        poolManager
-      );
+      parsedPatches ??= parsePatchFiles(await loadPatchContent());
+      renderDiff(parsedPatches, poolManager);
     })();
   }
   loadDiff.addEventListener('click', handleClick);
@@ -492,6 +490,7 @@ function toggleTheme() {
   }
 }
 
+const fileExample = { name: 'main.tsx', contents: FILE_NEW };
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
   renderFileButton.addEventListener('click', () => {
@@ -541,7 +540,7 @@ if (renderFileButton != null) {
     );
 
     void instance.render({
-      file: { name: 'main.tsx', contents: FILE_NEW },
+      file: fileExample,
       lineAnnotations: FAKE_LINE_ANNOTATIONS,
       fileContainer,
     });

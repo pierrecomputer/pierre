@@ -1,3 +1,5 @@
+import { LRUMap } from 'lru_map';
+
 import { DEFAULT_THEMES } from '../constants';
 import {
   getResolvedLanguages,
@@ -17,7 +19,9 @@ import type {
   PJSHighlighter,
   PJSThemeNames,
   RenderDiffOptions,
+  RenderDiffResult,
   RenderFileOptions,
+  RenderFileResult,
   SupportedLanguages,
   ThemeRegistrationResolved,
   ThemedDiffResult,
@@ -51,6 +55,11 @@ import type {
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 
+interface GetCachesResult {
+  fileCache: LRUMap<FileContents, RenderFileResult>;
+  diffCache: LRUMap<FileDiffMetadata, RenderDiffResult>;
+}
+
 interface ManagedWorker {
   worker: Worker;
   busy: boolean;
@@ -76,6 +85,10 @@ export class WorkerPoolManager {
     FileRendererInstance | DiffRendererInstance,
     string
   >();
+  private fileCache: LRUMap<FileContents, RenderFileResult> = new LRUMap(50);
+  private diffCache: LRUMap<FileDiffMetadata, RenderDiffResult> = new LRUMap(
+    50
+  );
 
   constructor(
     private options: WorkerPoolOptions,
@@ -92,6 +105,19 @@ export class WorkerPoolManager {
 
   isWorkingPool(): boolean {
     return !this.workersFailed;
+  }
+
+  getFileResultCache(file: FileContents): RenderFileResult | undefined {
+    return this.fileCache.get(file);
+  }
+
+  getDiffResultCache(diff: FileDiffMetadata): RenderDiffResult | undefined {
+    return this.diffCache.get(diff);
+  }
+
+  inspectCaches(): GetCachesResult {
+    const { fileCache, diffCache } = this;
+    return { fileCache, diffCache };
   }
 
   // FIXME(amadeus): Add an API to potentially change the other render options
@@ -124,6 +150,9 @@ export class WorkerPoolManager {
       this.highlighter = highlighter;
       this.renderOptions.theme = theme;
     }
+
+    this.diffCache.clear();
+    this.fileCache.clear();
 
     for (const instance of this.themeSubscribers) {
       instance.rerender();
@@ -227,6 +256,8 @@ export class WorkerPoolManager {
             }
             this.highlighter = highlighter;
             this.initialized = true;
+            this.diffCache.clear();
+            this.fileCache.clear();
             this.drainQueue();
             resolve();
           } catch (e) {
@@ -352,6 +383,8 @@ export class WorkerPoolManager {
 
   terminate(): void {
     this.terminateWorkers();
+    this.fileCache.clear();
+    this.diffCache.clear();
     this.instanceRequestMap.clear();
     this.taskQueue.length = 0;
     this.pendingTasks.clear();
@@ -494,6 +527,9 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
+            if (this.options.enableASTCache === true) {
+              this.fileCache.set(request.file, { result, options });
+            }
             instance.onHighlightSuccess(request.file, result, options);
             break;
           }
@@ -503,6 +539,9 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
+            if (this.options.enableASTCache === true) {
+              this.diffCache.set(request.diff, { result, options });
+            }
             instance.onHighlightSuccess(request.diff, result, options);
             break;
           }

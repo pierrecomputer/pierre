@@ -294,10 +294,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     if (
       diff !== renderCache.diff ||
-      !areThemesEqual(options.theme, renderCache.options.theme) ||
-      options.tokenizeMaxLineLength !==
-        renderCache.options.tokenizeMaxLineLength ||
-      options.lineDiffType !== renderCache.options.lineDiffType
+      !areRenderOptionsEqual(options, renderCache.options)
     ) {
       return { options, forceRender: true };
     }
@@ -311,11 +308,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return undefined;
     }
     const { options, forceRender } = this.getRenderOptions(diff);
+    let cache = this.workerManager?.getDiffResultCache(diff);
+    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
+      cache = undefined;
+    }
     this.renderCache ??= {
       diff,
-      highlighted: false,
-      options,
-      result: undefined,
+      highlighted: cache != null ? true : false,
+      options: cache?.options ?? options,
+      result: cache?.result,
     };
     if (this.workerManager?.isWorkingPool() === true) {
       this.renderCache.result ??= this.workerManager.getPlainDiffAST(diff);
@@ -1120,6 +1121,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themeType: baseThemeType ?? themeType,
     });
   }
+}
+
+function areRenderOptionsEqual(
+  optionsA: RenderDiffOptions,
+  optionsB: RenderDiffOptions
+): boolean {
+  return (
+    areThemesEqual(optionsA.theme, optionsB.theme) &&
+    optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength &&
+    optionsA.lineDiffType === optionsB.lineDiffType
+  );
 }
 
 function getModifiedLinesString(lines: number) {

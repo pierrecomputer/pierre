@@ -135,6 +135,7 @@ export type WorkerResponse =
 export interface WorkerPoolOptions {
   workerFactory: () => Worker;
   poolSize?: number;
+  enableASTCache?: boolean;
 }
 
 export interface WorkerHighlighterOptions

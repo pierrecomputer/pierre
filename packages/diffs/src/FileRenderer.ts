@@ -140,9 +140,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
     if (
       file !== renderCache.file ||
-      !areThemesEqual(options.theme, renderCache.options.theme) ||
-      options.tokenizeMaxLineLength !==
-        renderCache.options.tokenizeMaxLineLength
+      areRenderOptionsEqual(options, renderCache.options)
     ) {
       return { options, forceRender: true };
     }
@@ -156,11 +154,15 @@ export class FileRenderer<LAnnotation = undefined> {
       return undefined;
     }
     const { options, forceRender } = this.getRenderOptions(file);
+    let cache = this.workerManager?.getFileResultCache(file);
+    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
+      cache = undefined;
+    }
     this.renderCache ??= {
       file,
-      highlighted: false,
-      options,
-      result: undefined,
+      highlighted: cache != null ? true : false,
+      options: cache?.options ?? options,
+      result: cache?.result,
     };
     if (this.workerManager?.isWorkingPool() === true) {
       this.renderCache.result ??= this.workerManager.getPlainFileAST(file);
@@ -398,4 +400,14 @@ export class FileRenderer<LAnnotation = undefined> {
       totalLines,
     });
   }
+}
+
+function areRenderOptionsEqual(
+  optionsA: RenderFileOptions,
+  optionsB: RenderFileOptions
+): boolean {
+  return (
+    areThemesEqual(optionsA.theme, optionsB.theme) &&
+    optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength
+  );
 }
