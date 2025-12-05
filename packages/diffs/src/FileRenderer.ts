@@ -53,10 +53,8 @@ export interface FileRenderResult {
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
-export interface FileRendererOptions extends BaseCodeOptions {
-  startingLineNumber?: number;
-  tokenizeMaxLineLength?: number; // 1000 is default
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface FileRendererOptions extends BaseCodeOptions {}
 
 export class FileRenderer<LAnnotation = undefined> {
   private highlighter: PJSHighlighter | undefined;
@@ -119,7 +117,7 @@ export class FileRenderer<LAnnotation = undefined> {
       result: undefined,
     };
     if (this.workerManager?.isWorkingPool() === true) {
-      this.workerManager.highlightFileAST(this, file, options);
+      this.workerManager.highlightFileAST(this, file);
     } else {
       void this.asyncHighlight(file).then(({ result, options }) => {
         this.onHighlightSuccess(file, result, options);
@@ -127,33 +125,22 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  private getRenderOptions(
-    file: FileContents,
-    forceText = false
-  ): GetRenderOptionsReturn {
-    const {
-      lang,
-      startingLineNumber = 1,
-      theme = DEFAULT_THEMES,
-      tokenizeMaxLineLength = 1000,
-    } = this.options;
+  private getRenderOptions(file: FileContents): GetRenderOptionsReturn {
+    const options: RenderFileOptions = (() => {
+      if (this.workerManager?.isWorkingPool() === true) {
+        return this.workerManager.getFileRenderOptions();
+      }
+      const { theme = DEFAULT_THEMES, tokenizeMaxLineLength = 1000 } =
+        this.options;
+      return { theme, tokenizeMaxLineLength };
+    })();
     const { renderCache } = this;
-    const options: RenderFileOptions = {
-      lang: forceText ? 'text' : lang,
-      theme: this.workerManager?.currentTheme ?? theme,
-      tokenizeMaxLineLength,
-      startingLineNumber,
-    };
     if (renderCache?.result == null) {
       return { options, forceRender: true };
     }
     if (
       file !== renderCache.file ||
-      !areThemesEqual(options.theme, renderCache.options.theme) ||
-      options.lang !== renderCache.options.lang ||
-      options.startingLineNumber !== renderCache.options.startingLineNumber ||
-      options.tokenizeMaxLineLength !==
-        renderCache.options.tokenizeMaxLineLength
+      areRenderOptionsEqual(options, renderCache.options)
     ) {
       return { options, forceRender: true };
     }
@@ -167,31 +154,30 @@ export class FileRenderer<LAnnotation = undefined> {
       return undefined;
     }
     const { options, forceRender } = this.getRenderOptions(file);
+    let cache = this.workerManager?.getFileResultCache(file);
+    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
+      cache = undefined;
+    }
     this.renderCache ??= {
       file,
-      highlighted: false,
-      options,
-      result: undefined,
+      highlighted: cache != null ? true : false,
+      options: cache?.options ?? options,
+      result: cache?.result,
     };
     if (this.workerManager?.isWorkingPool() === true) {
-      this.renderCache.result ??= this.workerManager.getPlainFileAST(
-        file,
-        this.options.startingLineNumber
-      );
+      this.renderCache.result ??= this.workerManager.getPlainFileAST(file);
       // TODO(amadeus): Figure out how to only fire this on a per file
       // basis... (maybe the poolManager can figure it out based on file name
       // and file contents probably?)
       if (!this.renderCache.highlighted || forceRender) {
-        this.workerManager.highlightFileAST(this, file, options);
+        this.workerManager.highlightFileAST(this, file);
       }
     } else {
-      this.computedLang =
-        this.options.lang ?? getFiletypeFromFileName(file.name);
+      this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =
-        this.highlighter != null &&
-        areLanguagesAttached(options.lang ?? this.computedLang);
+        this.highlighter != null && areLanguagesAttached(this.computedLang);
 
       // If we have any semblance of a highlighter with the correct theme(s)
       // attached, we can kick off some form of rendering.  If we don't have
@@ -238,13 +224,12 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
-    this.computedLang = this.options.lang ?? getFiletypeFromFileName(file.name);
+    this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
     const hasThemes =
       this.highlighter != null &&
       hasResolvedThemes(getThemes(this.options.theme));
     const hasLangs =
-      this.highlighter != null &&
-      areLanguagesAttached(this.options.lang ?? this.computedLang);
+      this.highlighter != null && areLanguagesAttached(this.computedLang);
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
@@ -256,10 +241,15 @@ export class FileRenderer<LAnnotation = undefined> {
   private renderFileWithHighlighter(
     file: FileContents,
     highlighter: PJSHighlighter,
-    forceText = false
+    plainText = false
   ): RenderFileResult {
-    const { options } = this.getRenderOptions(file, forceText);
-    const result = renderFileWithHighlighter(file, highlighter, options);
+    const { options } = this.getRenderOptions(file);
+    const result = renderFileWithHighlighter(
+      file,
+      highlighter,
+      options,
+      plainText
+    );
     return { result, options };
   }
 
@@ -267,9 +257,9 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     result: ThemedFileResult
   ): FileRenderResult {
-    const { startingLineNumber = 1, disableFileHeader = false } = this.options;
+    const { disableFileHeader = false } = this.options;
     const codeAST: ElementContent[] = [];
-    let lineIndex = startingLineNumber;
+    let lineIndex = 1;
     for (const line of result.code) {
       codeAST.push(line);
       const annotations = this.lineAnnotations[lineIndex];
@@ -410,4 +400,14 @@ export class FileRenderer<LAnnotation = undefined> {
       totalLines,
     });
   }
+}
+
+function areRenderOptionsEqual(
+  optionsA: RenderFileOptions,
+  optionsB: RenderFileOptions
+): boolean {
+  return (
+    areThemesEqual(optionsA.theme, optionsB.theme) &&
+    optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength
+  );
 }

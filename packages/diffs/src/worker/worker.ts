@@ -7,14 +7,11 @@ import {
 import { attachResolvedThemes } from '../highlighter/themes';
 import type {
   PJSHighlighter,
-  PJSThemeNames,
   RenderDiffOptions,
   RenderFileOptions,
   ThemedDiffResult,
   ThemedFileResult,
-  ThemesType,
 } from '../types';
-import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
@@ -26,11 +23,16 @@ import type {
   RenderErrorResponse,
   RenderFileRequest,
   RenderFileSuccessResponse,
+  WorkerRenderingOptions,
   WorkerRequest,
   WorkerRequestId,
 } from './types';
 
-let currentTheme: PJSThemeNames | ThemesType = DEFAULT_THEMES;
+let renderOptions: WorkerRenderingOptions = {
+  theme: DEFAULT_THEMES,
+  tokenizeMaxLineLength: 1000,
+  lineDiffType: 'word-alt',
+};
 
 self.addEventListener('error', (event) => {
   console.error('[Shiki Worker] Unhandled error:', event.error);
@@ -68,7 +70,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
 
 async function handleInitialize({
   id,
-  theme,
+  renderOptions: options,
   resolvedThemes,
   resolvedLanguages,
 }: InitializeWorkerRequest) {
@@ -77,7 +79,7 @@ async function handleInitialize({
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
-  currentTheme = theme;
+  renderOptions = options;
   postMessage({
     type: 'success',
     id,
@@ -93,7 +95,7 @@ async function handleRegisterTheme({
 }: RegisterThemeWorkerRequest) {
   const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
   attachResolvedThemes(resolvedThemes, highlighter);
-  currentTheme = theme;
+  renderOptions.theme = theme;
   postMessage({
     type: 'success',
     id,
@@ -105,7 +107,6 @@ async function handleRegisterTheme({
 async function handleRenderFile({
   id,
   file,
-  options,
   resolvedLanguages,
 }: RenderFileRequest): Promise<void> {
   const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
@@ -115,18 +116,13 @@ async function handleRenderFile({
   }
   sendFileSuccess(
     id,
-    renderFileWithHighlighter(file, highlighter, {
-      ...options,
-      theme: currentTheme,
-      lang: options.lang ?? getFiletypeFromFileName(file.name),
-    }),
-    { ...options, theme: currentTheme }
+    renderFileWithHighlighter(file, highlighter, renderOptions),
+    renderOptions
   );
 }
 
 async function handleRenderDiffMetadata({
   id,
-  options,
   diff,
   resolvedLanguages,
 }: RenderDiffRequest) {
@@ -135,10 +131,8 @@ async function handleRenderDiffMetadata({
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
-
-  const _options = { ...options, theme: currentTheme };
-  const result = renderDiffWithHighlighter(diff, highlighter, _options);
-  sendDiffMetadataSuccess(id, result, _options);
+  const result = renderDiffWithHighlighter(diff, highlighter, renderOptions);
+  sendDiffMetadataSuccess(id, result, renderOptions);
 }
 
 async function getHighlighter(): Promise<PJSHighlighter> {

@@ -22,7 +22,6 @@ export const INSTALLATION_EXAMPLES: Record<
         contents: INSTALL_COMMANDS[pm],
       },
       options: {
-        startingLineNumber: 420,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         disableFileHeader: true,
       },

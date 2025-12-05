@@ -28,6 +28,7 @@ interface WorkerPoolProps {
   vanillaUsage: PreloadedFileResult<undefined>;
   reactUsage: PreloadedFileResult<undefined>;
   apiReference: PreloadedFileResult<undefined>;
+  cachingExample: PreloadedFileResult<undefined>;
   architectureASCII: PreloadedFileResult<undefined>;
 }
 
@@ -48,6 +49,7 @@ export function WorkerPool({
   vanillaUsage,
   reactUsage,
   apiReference,
+  cachingExample,
   architectureASCII,
 }: WorkerPoolProps) {
   return (
@@ -227,6 +229,29 @@ export function WorkerPool({
         <code>workerPool.setTheme(theme)</code> on the pool instance.
       </p>
       <DocsCodeExample {...vanillaUsage} />
+
+      <h3>Render Cache</h3>
+      <Notice variant="warning" icon={<IconCiWarningFill />}>
+        This is an experimental feature. It is disabled by default while being
+        validated in production use cases.
+      </Notice>
+      <p>
+        The worker pool can cache rendered AST results to avoid redundant
+        highlighting work. When enabled, subsequent requests for the same file
+        or diff will return cached results immediately instead of reprocessing
+        through a worker. This works automatically for both React and Vanilla JS
+        APIs — no additional code changes are required beyond enabling the
+        option.
+      </p>
+      <Notice icon={<IconInfoFill />}>
+        The cache uses <strong>referential equality</strong> to identify files
+        and diffs. You must keep your <code>FileContents</code> and{' '}
+        <code>FileDiffMetadata</code> objects stable (e.g., memoized or stored
+        in state) rather than recreating them on every render. If you pass new
+        object references each time, the cache will grow unexpectedly and
+        provide no benefit.
+      </Notice>
+      <DocsCodeExample {...cachingExample} />
 
       <h3>API Reference</h3>
       <p>

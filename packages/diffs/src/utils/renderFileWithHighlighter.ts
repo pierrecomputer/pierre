@@ -17,14 +17,13 @@ import { getLineNodes } from './getLineNodes';
 export function renderFileWithHighlighter(
   file: FileContents,
   highlighter: PJSHighlighter,
-  {
-    theme = DEFAULT_THEMES,
-    startingLineNumber = 1,
-    lang = getFiletypeFromFileName(file.name),
-    tokenizeMaxLineLength,
-  }: RenderFileOptions
+  { theme = DEFAULT_THEMES, tokenizeMaxLineLength }: RenderFileOptions,
+  forcePlainText = false
 ): ThemedFileResult {
   const { state, transformers } = createTransformerWithState();
+  const lang = forcePlainText
+    ? 'text'
+    : (file.lang ?? getFiletypeFromFileName(file.name));
   const baseThemeType = (() => {
     if (typeof theme === 'string') {
       return highlighter.getTheme(theme).type;
@@ -38,7 +37,7 @@ export function renderFileWithHighlighter(
   state.lineInfo = (shikiLineNumber: number) => ({
     type: 'context',
     lineIndex: shikiLineNumber - 1,
-    lineNumber: startingLineNumber + (shikiLineNumber - 1),
+    lineNumber: shikiLineNumber,
   });
   const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
     if (typeof theme === 'string') {

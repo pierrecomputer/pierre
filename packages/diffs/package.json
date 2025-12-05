@@ -63,6 +63,7 @@
     "diff": "catalog:",
     "fast-deep-equal": "catalog:",
     "hast-util-to-html": "catalog:",
+    "lru_map": "catalog:",
     "shiki": "catalog:"
   },
   "peerDependencies": {

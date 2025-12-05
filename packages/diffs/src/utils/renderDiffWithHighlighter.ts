@@ -11,10 +11,11 @@ import type {
   LineInfo,
   PJSHighlighter,
   PJSThemeNames,
+  RenderDiffFilesResult,
   RenderDiffOptions,
+  SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
-import type { RenderDiffFilesResult } from '../worker';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -29,7 +30,8 @@ import {
 export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
   highlighter: PJSHighlighter,
-  options: RenderDiffOptions
+  options: RenderDiffOptions,
+  forcePlainText = false
 ): ThemedDiffResult {
   const baseThemeType = (() => {
     const theme = options.theme ?? DEFAULT_THEMES;
@@ -76,6 +78,7 @@ export function renderDiffWithHighlighter(
 
       highlighter,
       options,
+      languageOverride: forcePlainText ? 'text' : diff.lang,
     });
     return { code, themeStyles, baseThemeType };
   }
@@ -116,6 +119,7 @@ export function renderDiffWithHighlighter(
 
         highlighter,
         options,
+        languageOverride: forcePlainText ? 'text' : diff.lang,
       })
     );
     lineIndex = newLineIndex;
@@ -400,6 +404,7 @@ interface RenderTwoFilesProps {
   newDecorations: DecorationItem[];
   options: RenderDiffOptions;
   highlighter: PJSHighlighter;
+  languageOverride: SupportedLanguages | undefined;
 }
 
 function renderTwoFiles({
@@ -410,10 +415,11 @@ function renderTwoFiles({
   highlighter,
   oldDecorations,
   newDecorations,
-  options: { theme: themeOrThemes = DEFAULT_THEMES, lang, ...options },
+  languageOverride,
+  options: { theme: themeOrThemes = DEFAULT_THEMES, ...options },
 }: RenderTwoFilesProps) {
-  const oldLang = lang ?? getFiletypeFromFileName(oldFile.name);
-  const newLang = lang ?? getFiletypeFromFileName(newFile.name);
+  const oldLang = languageOverride ?? getFiletypeFromFileName(oldFile.name);
+  const newLang = languageOverride ?? getFiletypeFromFileName(newFile.name);
   const { state, transformers } = createTransformerWithState();
   const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
     return typeof themeOrThemes === 'string'
