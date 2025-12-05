@@ -176,6 +176,9 @@
   .prose code {
     color: color-mix(in lab, var(--color-primary), currentcolor) !important;
   }
+  .prose section:first-child h2:first-child {
+    margin-top: 0 !important; /* temp fix for now */
+  }
 
   .no-scrollbar::-webkit-scrollbar {
     display: none;
