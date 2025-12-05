@@ -1,6 +1,6 @@
 'use client';
 
-import { type FileOptions } from '../File';
+import { type FileOptions } from '../components/File';
 import type { FileProps } from './types';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { templateRender } from './utils/templateRender';

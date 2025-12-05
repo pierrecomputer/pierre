@@ -1,4 +1,4 @@
-import type { ObservedAnnotationNodes, ObservedGridNodes } from './types';
+import type { ObservedAnnotationNodes, ObservedGridNodes } from '../types';
 
 export class ResizeManager {
   private observedNodes = new Map<

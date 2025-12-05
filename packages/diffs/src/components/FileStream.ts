@@ -1,21 +1,21 @@
-import { queueRender } from './UniversalRenderer';
-import { DEFAULT_THEMES } from './constants';
-import { getSharedHighlighter } from './highlighter/shared_highlighter';
-import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
+import { DEFAULT_THEMES } from '../constants';
+import { getSharedHighlighter } from '../highlighter/shared_highlighter';
+import { queueRender } from '../managers/UniversalRenderingManager';
+import { CodeToTokenTransformStream, type RecallToken } from '../shiki-stream';
 import type {
   BaseCodeOptions,
   PJSHighlighter,
   SupportedLanguages,
   ThemeTypes,
   ThemedToken,
-} from './types';
-import { createCodeNode } from './utils/createCodeNode';
-import { createRowNodes } from './utils/createRowNodes';
-import { createSpanFromToken } from './utils/createSpanNodeFromToken';
-import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
-import { getHighlighterOptions } from './utils/getHighlighterOptions';
-import { getHighlighterThemeStyles } from './utils/getHighlighterThemeStyles';
-import { setPreNodeProperties } from './utils/setWrapperNodeProps';
+} from '../types';
+import { createCodeNode } from '../utils/createCodeNode';
+import { createRowNodes } from '../utils/createRowNodes';
+import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
+import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
+import { getHighlighterOptions } from '../utils/getHighlighterOptions';
+import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
+import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
   lang?: SupportedLanguages;

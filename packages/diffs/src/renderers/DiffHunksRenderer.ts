@@ -2,13 +2,13 @@ import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { DEFAULT_THEMES } from './constants';
-import { areLanguagesAttached } from './highlighter/languages';
+import { DEFAULT_THEMES } from '../constants';
+import { areLanguagesAttached } from '../highlighter/languages';
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
-} from './highlighter/shared_highlighter';
-import { areThemesAttached } from './highlighter/themes';
+} from '../highlighter/shared_highlighter';
+import { areThemesAttached } from '../highlighter/themes';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
@@ -27,22 +27,22 @@ import type {
   SupportedLanguages,
   ThemeTypes,
   ThemedDiffResult,
-} from './types';
-import { areThemesEqual } from './utils/areThemesEqual';
-import { createAnnotationElement } from './utils/createAnnotationElement';
-import { createEmptyRowBuffer } from './utils/createEmptyRowBuffer';
-import { createFileHeaderElement } from './utils/createFileHeaderElement';
-import { createNoNewlineElement } from './utils/createNoNewlineElement';
-import { createPreElement } from './utils/createPreElement';
-import { createSeparator } from './utils/createSeparator';
-import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
-import { getHighlighterOptions } from './utils/getHighlighterOptions';
-import { getHunkSeparatorSlotName } from './utils/getHunkSeparatorSlotName';
-import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getTotalLineCountFromHunks } from './utils/getTotalLineCountFromHunks';
-import { createHastElement } from './utils/hast_utils';
-import { renderDiffWithHighlighter } from './utils/renderDiffWithHighlighter';
-import type { WorkerPoolManager } from './worker';
+} from '../types';
+import { areThemesEqual } from '../utils/areThemesEqual';
+import { createAnnotationElement } from '../utils/createAnnotationElement';
+import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
+import { createFileHeaderElement } from '../utils/createFileHeaderElement';
+import { createNoNewlineElement } from '../utils/createNoNewlineElement';
+import { createPreElement } from '../utils/createPreElement';
+import { createSeparator } from '../utils/createSeparator';
+import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
+import { getHighlighterOptions } from '../utils/getHighlighterOptions';
+import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
+import { createHastElement } from '../utils/hast_utils';
+import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
+import type { WorkerPoolManager } from '../worker';
 
 const EXPANDED_REGION: ExpansionRegion = {
   fromStart: 0,

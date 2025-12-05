@@ -1,5 +1,5 @@
-import type { FileDiffOptions } from '../../src/FileDiff';
-import { DiffHunksRenderer } from '../DiffHunksRenderer';
+import type { FileDiffOptions } from '../components/FileDiff';
+import { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
 import type {
   DiffLineAnnotation,
   FileContents,

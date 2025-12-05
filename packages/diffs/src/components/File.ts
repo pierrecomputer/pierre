@@ -2,43 +2,43 @@ import deepEquals from 'fast-deep-equal';
 import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { type FileRenderResult, FileRenderer } from './FileRenderer';
+import {
+  DEFAULT_THEMES,
+  HEADER_METADATA_SLOT_ID,
+  UNSAFE_CSS_ATTRIBUTE,
+} from '../constants';
 import {
   LineSelectionManager,
   type LineSelectionOptions,
   type SelectedLineRange,
   pluckLineSelectionOptions,
-} from './LineSelectionManager';
+} from '../managers/LineSelectionManager';
 import {
   type GetHoveredLineResult,
   MouseEventManager,
   type MouseEventManagerBaseOptions,
   pluckMouseEventOptions,
-} from './MouseEventManager';
-import { ResizeManager } from './ResizeManager';
-import {
-  DEFAULT_THEMES,
-  HEADER_METADATA_SLOT_ID,
-  UNSAFE_CSS_ATTRIBUTE,
-} from './constants';
-import { PJSContainerLoaded } from './custom-components/Container';
-import { SVGSpriteSheet } from './sprite';
+} from '../managers/MouseEventManager';
+import { ResizeManager } from '../managers/ResizeManager';
+import { type FileRenderResult, FileRenderer } from '../renderers/FileRenderer';
+import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
   RenderFileMetadata,
   ThemeTypes,
-} from './types';
-import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode';
-import { createCodeNode } from './utils/createCodeNode';
-import { createHoverContentNode } from './utils/createHoverContentNode';
-import { createUnsafeCSSStyleNode } from './utils/createUnsafeCSSStyleNode';
-import { wrapUnsafeCSS } from './utils/cssWrappers';
-import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
-import { setPreNodeProperties } from './utils/setWrapperNodeProps';
-import type { WorkerPoolManager } from './worker';
+} from '../types';
+import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
+import { createCodeNode } from '../utils/createCodeNode';
+import { createHoverContentNode } from '../utils/createHoverContentNode';
+import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
+import { wrapUnsafeCSS } from '../utils/cssWrappers';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
+import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+import type { WorkerPoolManager } from '../worker';
+import { PJSContainerLoaded } from './web-components';
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;

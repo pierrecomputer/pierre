@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Element, ElementContent } from 'hast';
 
-import { FileRenderer } from '../src/FileRenderer';
+import { FileRenderer } from '../src/renderers/FileRenderer';
 import { mockFiles } from './mocks';
 
 describe('FileRenderer AST Structure', () => {

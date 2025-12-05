@@ -7,9 +7,9 @@ import {
   useRef,
 } from 'react';
 
-import { File, type FileOptions } from '../../File';
-import type { SelectedLineRange } from '../../LineSelectionManager';
-import type { GetHoveredLineResult } from '../../MouseEventManager';
+import { File, type FileOptions } from '../../components/File';
+import type { SelectedLineRange } from '../../managers/LineSelectionManager';
+import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type { FileContents, LineAnnotation } from '../../types';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
