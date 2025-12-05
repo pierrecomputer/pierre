@@ -1,6 +1,6 @@
 import Footer from '@/components/Footer';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
-import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadFile, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
 import { CoreTypes } from './CoreTypes/CoreTypes';
 import {

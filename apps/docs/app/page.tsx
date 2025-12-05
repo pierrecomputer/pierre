@@ -6,10 +6,7 @@ import {
   IconBrandGithub,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import {
-  preloadFileDiff,
-  preloadMultiFileDiff,
-} from '@pierre/precision-diffs/ssr';
+import { preloadFileDiff, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 import Link from 'next/link';
 
 import { Hero } from './Hero';
@@ -54,10 +51,10 @@ export default function Home() {
       {/* TODO: add this back once we add the migration APIs
 
       <section className="max-w-4xl mx-auto px-8 py-12 space-y-4">
-        <h2 className="text-3xl font-bold">Migrate to @pierre/precision-diffs</h2>
+        <h2 className="text-3xl font-bold">Migrate to @pierre/diffs</h2>
         <p className="text-muted-foreground">
           Already using git-diff-viewer? Learn how to migrate your diff
-          rendering to @pierre/precision-diffs.
+          rendering to @pierre/diffs.
         </p>
       </section> */}
 
@@ -87,7 +84,7 @@ export default function Home() {
           </Button>
           <Button variant="outline" asChild>
             <Link
-              href="https://github.com/pierredotco/"
+              href="https://github.com/pierredotco/diffs"
               target="_blank"
               rel="noopener noreferrer"
             >

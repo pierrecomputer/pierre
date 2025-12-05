@@ -1,4 +1,4 @@
-import { File } from '@pierre/precision-diffs/react';
+import { File } from '@pierre/diffs/react';
 
 import { Examples } from './Examples';
 

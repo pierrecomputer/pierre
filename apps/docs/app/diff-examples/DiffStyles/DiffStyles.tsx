@@ -20,8 +20,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';

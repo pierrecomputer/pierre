@@ -28,7 +28,7 @@ function makeFilteredLogger(folder: string): Logger {
     info(msg, opts) {
       if (msg.includes('packages/diffs/dist/index.js')) {
         base.info(
-          '\x1b[32mpage reload\x1b[0m @pierre/precision-diffs update detected',
+          '\x1b[32mpage reload\x1b[0m @pierre/diffs update detected',
           opts
         );
       } else if (noisyMsg.test(msg)) {
@@ -113,11 +113,6 @@ export default defineConfig(() => {
         input: {
           main: resolve(__dirname, 'index.html'),
         },
-      },
-    },
-    resolve: {
-      alias: {
-        pierrejs: path.resolve(__dirname, './src/pierre-js/index.ts'),
       },
     },
   };

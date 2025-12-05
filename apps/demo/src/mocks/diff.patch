@@ -205,7 +205,7 @@ index 0000000..35973da
 +import { CodeRenderer, type CodeRendererProps } from './CodeRenderer';
 +import { createFakeContentStream } from '../utils/createFakeContentStream';
 +import type { BundledLanguage, BundledTheme } from 'shiki';
-+import { isHighlighterNull, preloadHighlighter } from 'pierrejs';
++import { isHighlighterNull, preloadHighlighter } from '@pierre/diffs';
 +
 +export function App() {
 +  const [codez, setCodez] = useState<CodeRendererProps[]>([]);
@@ -264,7 +264,7 @@ index 0000000..92d347f
 +import {
 +  CodeRenderer as CodeRendererClass,
 +  type CodeRendererOptions,
-+} from 'pierrejs';
++} from '@pierre/diffs';
 +import { useEffect, useRef, useState } from 'react';
 +
 +export type { CodeRendererOptions };
@@ -324,7 +324,7 @@ index 05040be..86be2f5 100644
 -] as const;
 +import { CodeConfigs, toggleTheme } from './test_files/';
 +import { createFakeContentStream } from './utils/createFakeContentStream';
-+import { CodeRenderer, isHighlighterNull, preloadHighlighter } from 'pierrejs';
++import { CodeRenderer, isHighlighterNull, preloadHighlighter } from '@pierre/diffs';
  
  async function startStreaming(event: MouseEvent) {
 -  const wrapper = document.getElementById('content');
@@ -727,7 +727,7 @@ index 0000000..dfcb5ae
 +  stringifyTokenStyle,
 +  type ThemedToken,
 +} from 'shiki';
-+import type { ThemesType } from 'pierrejs';
++import type { ThemesType } from '@pierre/diffs';
 +
 +interface ThemeVariant {
 +  themes?: never;
@@ -779,7 +779,7 @@ index 0000000..dfcb5ae
 +  // Clean out container
 +  pre.innerHTML = '';
 +  pre.tabIndex = 0;
-+  pre.dataset.pierrejs = '';
++  pre.dataset.diffs = '';
 +  setWrapperProps(props);
 +  const code = document.createElement('code');
 +  code.dataset.code = '';
@@ -897,7 +897,7 @@ index d096b05..953e276 100644
  }
  
 -[data-pre] {
-+[data-pierrejs] {
++[data-diffs] {
    overflow-y: auto;
    scrollbar-width: none;
    min-height: 0;
@@ -966,7 +966,7 @@ index d096b05..953e276 100644
 -[data-theme='light'] {
 -  background-color: var(--shiki-light-bg);
 -  color: var(--shiki-light);
-+[data-pierrejs] {
++[data-diffs] {
 +  background-color: var(--diffs-light-bg);
 +  color: var(--diffs-light);
  
@@ -982,7 +982,7 @@ index d096b05..953e276 100644
 +}
 +
 +@media (prefers-color-scheme: dark) {
-+  [data-pierrejs] {
++  [data-diffs] {
 +    background-color: var(--diffs-dark-bg);
 +    color: var(--diffs-dark);
 +
@@ -1108,7 +1108,7 @@ index 49441f1..7afd0e4 100644
 +++ b/src/utils/createHighlighterCleanup.ts
 @@ -1,4 +1,4 @@
 -import { disposeHighlighter } from '../SharedHighlighter';
-+import { disposeHighlighter } from 'pierrejs';
++import { disposeHighlighter } from '@pierre/diffs';
  
  let totalInstances = 0;
  let completed = 0;
@@ -1118,7 +1118,7 @@ index deae807..43002be 100644
 +++ b/src/utils/createScrollFixer.ts
 @@ -1,16 +1,23 @@
 -import type { CodeRenderer } from '../CodeRenderer';
-+import type { CodeRenderer } from 'pierrejs';
++import type { CodeRenderer } from '@pierre/diffs';
  
  export function createScrollFixer() {
    let isScrolledToBottom = false;
@@ -1224,7 +1224,7 @@ index 7a670d7..b96ccff 100644
 +    /* Path aliases */
 +    "baseUrl": ".",
 +    "paths": {
-+      "pierrejs": ["src/pierre-js"]
++      "@pierre/diffs": ["src/diffs"]
 +    },
 +
      /* Bundler mode */
@@ -1354,7 +1354,7 @@ index 0000000..ff38bc0
 +    },
 +    resolve: {
 +      alias: {
-+        pierrejs: path.resolve(__dirname, './src/pierre-js/index.ts'),
++        ['@pierre/diffs']: path.resolve(__dirname, './src/diffs/index.ts'),
 +      },
 +    },
 +  };

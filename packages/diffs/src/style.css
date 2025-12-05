@@ -345,9 +345,8 @@
     display: grid;
     grid-auto-flow: dense;
     grid-template-columns: var(--diffs-code-grid);
-    overflow-x: auto;
-    scrollbar-width: none;
-    overscroll-behavior-x: contain;
+    overflow: scroll clip;
+    overscroll-behavior-x: none;
     tab-size: var(--diffs-tab-size, 2);
     align-self: flex-start;
     padding-top: var(--diffs-gap-block, var(--diffs-gap-fallback));

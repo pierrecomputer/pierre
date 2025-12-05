@@ -3,7 +3,7 @@
 import { IconInfoFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
-import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
@@ -39,8 +39,8 @@ export function Utilities({
     <section className="space-y-4">
       <h2>Utilities</h2>
       <Notice icon={<IconInfoFill />}>
-        Import utility functions from <code>@pierre/precision-diffs</code>.
-        These can be used with any framework or rendering approach.
+        Import utility functions from <code>@pierre/diffs</code>. These can be
+        used with any framework or rendering approach.
       </Notice>
 
       <h3 data-toc-ignore>diffAcceptRejectHunk</h3>

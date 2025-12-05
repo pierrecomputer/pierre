@@ -2,8 +2,8 @@ import {
   type WorkerHighlighterOptions,
   type WorkerPoolManager,
   getOrCreateWorkerPoolSingleton,
-} from '@pierre/precision-diffs/worker';
-import WorkerUrl from '@pierre/precision-diffs/worker/worker.js?worker&url';
+} from '@pierre/diffs/worker';
+import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';
 
 export function createWorkerAPI(
   highlighterOptions: WorkerHighlighterOptions

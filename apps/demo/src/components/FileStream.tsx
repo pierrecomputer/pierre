@@ -1,7 +1,7 @@
 import {
   FileStream as FileStreamClass,
   type FileStreamOptions,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 import { useEffect, useRef, useState } from 'react';
 
 export type { FileStreamOptions };

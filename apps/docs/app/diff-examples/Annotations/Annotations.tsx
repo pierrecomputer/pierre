@@ -9,13 +9,13 @@ import {
   type GetHoveredLineResult,
   type SelectedLineRange,
   diffAcceptRejectHunk,
-} from '@pierre/precision-diffs';
-import { FileDiff, MultiFileDiff } from '@pierre/precision-diffs/react';
+} from '@pierre/diffs';
+import { FileDiff, MultiFileDiff } from '@pierre/diffs/react';
 import type {
   FileDiffMetadata,
   PreloadFileDiffResult,
   PreloadMultiFileDiffResult,
-} from '@pierre/precision-diffs/ssr';
+} from '@pierre/diffs/ssr';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -101,10 +101,10 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         title="Comments & Annotations"
         description={
           <>
-            <code>@pierre/precision-diffs</code> provide a flexible annotation
-            framework for injecting additional content and context. Use it to
-            render your own line comments, annotations from CI jobs, and other
-            third-party content.
+            <code>@pierre/diffs</code> provide a flexible annotation framework
+            for injecting additional content and context. Use it to render your
+            own line comments, annotations from CI jobs, and other third-party
+            content.
           </>
         }
       />

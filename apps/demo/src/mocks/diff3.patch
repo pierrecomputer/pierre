@@ -3572,7 +3572,7 @@ index 0000000..6a583d7
 ++import diffContent2 from './diff2.patch?raw';
 + import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 + import type { BundledLanguage } from 'shiki';
-+ import type { DiffDecorationItem, FileMetadata } from 'pierrejs';
++ import type { DiffDecorationItem, FileMetadata } from '@pierre/diffs';
 +@@ -45,6 +46,7 @@ export function toggleTheme() {
 + }
 + 
@@ -3592,7 +3592,7 @@ index 7acc506..c14b196 100644
 +import diffContent2 from './diff2.patch?raw';
  import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
  import type { BundledLanguage } from 'shiki';
- import type { DiffDecorationItem, FileMetadata } from 'pierrejs';
+ import type { DiffDecorationItem, FileMetadata } from '@pierre/diffs';
 @@ -45,6 +46,7 @@ export function toggleTheme() {
  }
  
@@ -3653,7 +3653,7 @@ index a2bffaf..d191334 100644
    parsePatchContent,
    type ParsedPatch,
 +  type FileMetadata,
- } from 'pierrejs';
+ } from '@pierre/diffs';
  
  function startStreaming() {
 @@ -52,6 +53,7 @@ function handlePreloadDiff() {

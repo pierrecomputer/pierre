@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
-    "@pierre/precision-diffs": "workspace:*",
+    "@pierre/diffs": "workspace:*",
     "@pierre/storage-elements-next": "workspace:*",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-dialog": "catalog:",

@@ -2,8 +2,8 @@
 
 import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';

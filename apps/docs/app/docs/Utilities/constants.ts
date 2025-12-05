@@ -1,5 +1,5 @@
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -13,7 +13,7 @@ export const HELPER_PARSE_DIFF_FROM_FILE: PreloadFileOptions<undefined> = {
     contents: `import {
   parseDiffFromFile,
   type FileDiffMetadata,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 // Parse a diff by comparing two versions of a file.
 // This is useful when you have the full file contents
@@ -51,7 +51,7 @@ export const HELPER_PARSE_PATCH_FILES: PreloadFileOptions<undefined> = {
     contents: `import {
   parsePatchFiles,
   type ParsedPatch,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 // Parse unified diff / patch file content.
 // Handles both single patches and multi-commit patch files
@@ -95,7 +95,7 @@ for (const patch of patches) {
 export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<undefined> = {
   file: {
     name: 'registerCustomTheme.ts',
-    contents: `import { registerCustomTheme } from '@pierre/precision-diffs';
+    contents: `import { registerCustomTheme } from '@pierre/diffs';
 
 // Register a custom Shiki theme before using it.
 // The theme name you register must match the 'name' field
@@ -131,7 +131,7 @@ registerCustomTheme('inline-theme', async () => ({
 export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<undefined> = {
   file: {
     name: 'disposeHighlighter.ts',
-    contents: `import { disposeHighlighter } from '@pierre/precision-diffs';
+    contents: `import { disposeHighlighter } from '@pierre/diffs';
 
 // Dispose the shared highlighter instance to free memory.
 // This is useful when you're done rendering diffs and want
@@ -148,7 +148,7 @@ disposeHighlighter();`,
 export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<undefined> = {
   file: {
     name: 'getSharedHighlighter.ts',
-    contents: `import { getSharedHighlighter } from '@pierre/precision-diffs';
+    contents: `import { getSharedHighlighter } from '@pierre/diffs';
 
 // Get the shared Shiki highlighter instance.
 // This is the same instance used internally by all FileDiff
@@ -171,7 +171,7 @@ const tokens = highlighter.codeToTokens('const x = 1;', {
 export const HELPER_PRELOAD_HIGHLIGHTER: PreloadFileOptions<undefined> = {
   file: {
     name: 'preloadHighlighter.ts',
-    contents: `import { preloadHighlighter } from '@pierre/precision-diffs';
+    contents: `import { preloadHighlighter } from '@pierre/diffs';
 
 // Preload specific themes and languages before rendering.
 // This ensures the highlighter is ready with the assets you
@@ -201,7 +201,7 @@ export const HELPER_SET_LANGUAGE_OVERRIDE: PreloadFileOptions<undefined> = {
   parsePatchFiles,
   type FileContents,
   type FileDiffMetadata,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 // setLanguageOverride creates a new FileContents or FileDiffMetadata
 // with the language explicitly set. This is useful when:
@@ -235,7 +235,7 @@ export const HELPER_DIFF_ACCEPT_REJECT: PreloadFileOptions<undefined> = {
   FileDiff,
   parseDiffFromFile,
   type FileDiffMetadata,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 // Parse a diff from two file versions
 let fileDiff: FileDiffMetadata = parseDiffFromFile(
@@ -279,8 +279,8 @@ export const HELPER_DIFF_ACCEPT_REJECT_REACT: PreloadFileOptions<undefined> = {
   type DiffLineAnnotation,
   type FileDiffMetadata,
   parseDiffFromFile,
-} from '@pierre/precision-diffs';
-import { FileDiff } from '@pierre/precision-diffs/react';
+} from '@pierre/diffs';
+import { FileDiff } from '@pierre/diffs/react';
 import { useState } from 'react';
 
 interface ChangeMetadata {

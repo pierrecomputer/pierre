@@ -2,7 +2,7 @@
 
 import { IconBulbFill, IconCiWarningFill } from '@/components/icons';
 import { Notice } from '@/components/ui/notice';
-import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 
@@ -30,7 +30,7 @@ export function SSR({
       <h2>SSR</h2>
 
       <Notice icon={<IconBulbFill />}>
-        Import SSR utilities from <code>@pierre/precision-diffs/ssr</code>.
+        Import SSR utilities from <code>@pierre/diffs/ssr</code>.
       </Notice>
       <p>
         The SSR API allows you to pre-render file diffs on the server with

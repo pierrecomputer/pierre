@@ -1,5 +1,5 @@
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -10,7 +10,7 @@ const options = {
 export const WORKER_POOL_HELPER_VITE: PreloadFileOptions<undefined> = {
   file: {
     name: 'utils/workerFactory.ts',
-    contents: `import WorkerUrl from '@pierre/precision-diffs/worker/worker.js?worker&url';
+    contents: `import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';
 
 export function workerFactory(): Worker {
   return new Worker(WorkerUrl, { type: 'module' });
@@ -27,7 +27,7 @@ export const WORKER_POOL_HELPER_NEXTJS: PreloadFileOptions<undefined> = {
 export function workerFactory(): Worker {
   return new Worker(
     new URL(
-      '@pierre/precision-diffs/worker/worker.js',
+      '@pierre/diffs/worker/worker.js',
       import.meta.url
     )
   );
@@ -48,7 +48,7 @@ export const WORKER_POOL_VSCODE_LOCAL_ROOTS: PreloadFileOptions<undefined> = {
         extensionUri,
         'node_modules',
         '@pierre',
-        'precision-diffs',
+        'diffs',
         'dist',
         'worker'
       ),
@@ -66,7 +66,7 @@ export const WORKER_POOL_VSCODE_WORKER_URI: PreloadFileOptions<undefined> = {
   this._extensionUri,
   'node_modules',
   '@pierre',
-  'precision-diffs',
+  'diffs',
   'dist',
   'worker',
   'worker-portable.js'
@@ -136,7 +136,7 @@ export const WORKER_POOL_HELPER_WEBPACK: PreloadFileOptions<undefined> = {
     contents: `export function workerFactory(): Worker {
   return new Worker(
     new URL(
-      '@pierre/precision-diffs/worker/worker.js',
+      '@pierre/diffs/worker/worker.js',
       import.meta.url
     ),
     { type: 'module' }
@@ -152,7 +152,7 @@ export const WORKER_POOL_HELPER_ESBUILD: PreloadFileOptions<undefined> = {
     contents: `export function workerFactory(): Worker {
   return new Worker(
     new URL(
-      '@pierre/precision-diffs/worker/worker.js',
+      '@pierre/diffs/worker/worker.js',
       import.meta.url
     ),
     { type: 'module' }
@@ -274,7 +274,7 @@ export const WORKER_POOL_REACT_USAGE: PreloadFileOptions<undefined> = {
 import {
   useWorkerPool,
   WorkerPoolContextProvider,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 import { workerFactory } from '@/utils/workerFactory';
 
@@ -337,11 +337,11 @@ function ThemeSwitcher() {
 export const WORKER_POOL_VANILLA_USAGE: PreloadFileOptions<undefined> = {
   file: {
     name: 'vanilla-worker-usage.ts',
-    contents: `import { FileDiff } from '@pierre/precision-diffs';
+    contents: `import { FileDiff } from '@pierre/diffs';
 import {
   getOrCreateWorkerPoolSingleton,
   terminateWorkerPoolSingleton,
-} from '@pierre/precision-diffs/worker';
+} from '@pierre/diffs/worker';
 import { workerFactory } from './utils/workerFactory';
 
 // Create a singleton worker pool instance using your workerFactory.
@@ -452,7 +452,7 @@ export const WORKER_POOL_CACHING: PreloadFileOptions<undefined> = {
     name: 'caching-example.ts',
     contents: `import {
   getOrCreateWorkerPoolSingleton,
-} from '@pierre/precision-diffs/worker';
+} from '@pierre/diffs/worker';
 import { workerFactory } from './utils/workerFactory';
 
 const workerPool = getOrCreateWorkerPoolSingleton({

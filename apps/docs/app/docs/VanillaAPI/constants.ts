@@ -1,5 +1,5 @@
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -14,7 +14,7 @@ const options = {
 export const VANILLA_API_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_diff_example.ts',
-    contents: `import { FileDiff, type FileContents } from '@pierre/precision-diffs';
+    contents: `import { FileDiff, type FileContents } from '@pierre/diffs';
 
 // Create the instance with options
 const instance = new FileDiff({
@@ -53,7 +53,7 @@ instance.cleanUp();`,
 export const VANILLA_API_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_example.ts',
-    contents: `import { File, type FileContents } from '@pierre/precision-diffs';
+    contents: `import { File, type FileContents } from '@pierre/diffs';
 
 // Create the instance with options
 const instance = new File({
@@ -94,7 +94,7 @@ instance.cleanUp();`,
 export const VANILLA_API_FILE_DIFF_PROPS: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_diff_props.ts',
-    contents: `import { FileDiff } from '@pierre/precision-diffs';
+    contents: `import { FileDiff } from '@pierre/diffs';
 
 // All available options for the FileDiff class
 const instance = new FileDiff({
@@ -298,7 +298,7 @@ instance.cleanUp();`,
 export const VANILLA_API_FILE_PROPS: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_props.ts',
-    contents: `import { File } from '@pierre/precision-diffs';
+    contents: `import { File } from '@pierre/diffs';
 
 // All available options for the File class
 const instance = new File({
@@ -445,7 +445,7 @@ instance.cleanUp();`,
 export const VANILLA_API_CUSTOM_HUNK_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'hunks_example.ts',
-    contents: `import { FileDiff } from '@pierre/precision-diffs';
+    contents: `import { FileDiff } from '@pierre/diffs';
 
 // A hunk separator that utilizes the existing grid to have
 // a number column and a content column where neither will
@@ -516,7 +516,7 @@ export const VANILLA_API_HUNKS_RENDERER_FILE: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
   type HunksRenderResult,
   parseDiffFromFile,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 const instance = new DiffHunksRenderer();
 
@@ -566,7 +566,7 @@ export const VANILLA_API_HUNKS_RENDERER_PATCH_FILE: PreloadFileOptions<undefined
   type FileDiffMetadata,
   type HunksRenderResult,
   parsePatchFiles,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 // If you have the string data for any github or git/unified
 // patch file, you can alternatively load that into parsePatchContent
@@ -642,7 +642,7 @@ export const VANILLA_API_FILE_RENDERER: PreloadFileOptions<undefined> = {
   FileRenderer,
   type FileContents,
   type FileRenderResult,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 const instance = new FileRenderer();
 

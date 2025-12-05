@@ -2180,7 +2180,7 @@ index 7acc506..d10aacb 100644
 +import diffContent2 from './diff2.patch?raw';
  import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
  import type { BundledLanguage } from 'shiki';
- import type { DiffDecorationItem, FileMetadata } from 'pierrejs';
+ import type { DiffDecorationItem, FileMetadata } from '@pierre/diffs';
 @@ -45,6 +46,7 @@ export function toggleTheme() {
  }
  

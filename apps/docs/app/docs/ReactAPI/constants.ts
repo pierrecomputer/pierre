@@ -1,5 +1,5 @@
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -16,7 +16,7 @@ export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
 // These options are shared by MultiFileDiff, PatchDiff, and FileDiff.
 // Pass them via the \`options\` prop.
 
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/diffs/react';
 
 <MultiFileDiff
   {...}
@@ -159,7 +159,7 @@ export const REACT_API_SHARED_DIFF_RENDER_PROPS: PreloadFileOptions<undefined> =
 // ============================================================
 // These props are shared by MultiFileDiff, PatchDiff, and FileDiff.
 
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/diffs/react';
 
 interface ThreadMetadata {
   threadId: string;
@@ -260,7 +260,7 @@ export const REACT_API_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
     contents: `import {
   type FileContents,
   MultiFileDiff,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 
 // MultiFileDiff compares two file versions directly.
 // Use this when you have the old and new file contents.
@@ -302,7 +302,7 @@ export function MyDiff() {
 export const REACT_API_PATCH_DIFF: PreloadFileOptions<undefined> = {
   file: {
     name: 'patch_diff.tsx',
-    contents: `import { PatchDiff } from '@pierre/precision-diffs/react';
+    contents: `import { PatchDiff } from '@pierre/diffs/react';
 
 // PatchDiff renders from a unified diff/patch string.
 // Use this when you have patch content (e.g., from git or GitHub).
@@ -343,7 +343,7 @@ export const REACT_API_FILE_DIFF: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
   FileDiff,
   parseDiffFromFile,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 
 // FileDiff takes a pre-parsed FileDiffMetadata object.
 // Use this when:
@@ -385,7 +385,7 @@ export const REACT_API_FILE: PreloadFileOptions<undefined> = {
   type FileContents,
   type LineAnnotation,
   File,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 
 // The File component renders a single code file with syntax highlighting.
 // Unlike the diff components, it doesn't show any changes - just the file
@@ -437,7 +437,7 @@ export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
 // ============================================================
 // Pass these via the \`options\` prop on the File component.
 
-import { File } from '@pierre/precision-diffs/react';
+import { File } from '@pierre/diffs/react';
 
 <File
   {...}
@@ -531,7 +531,7 @@ export const REACT_API_SHARED_FILE_RENDER_PROPS: PreloadFileOptions<undefined> =
 // ============================================================
 // These props are available on the File component.
 
-import { File } from '@pierre/precision-diffs/react';
+import { File } from '@pierre/diffs/react';
 
 interface CommentMetadata {
   commentId: string;

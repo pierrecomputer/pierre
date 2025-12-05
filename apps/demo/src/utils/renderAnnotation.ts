@@ -1,7 +1,4 @@
-import type {
-  DiffLineAnnotation,
-  LineAnnotation,
-} from '@pierre/precision-diffs';
+import type { DiffLineAnnotation, LineAnnotation } from '@pierre/diffs';
 
 import type { LineCommentMetadata } from '../mocks';
 

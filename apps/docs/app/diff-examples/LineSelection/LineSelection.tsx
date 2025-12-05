@@ -2,9 +2,9 @@
 
 import { IconXSquircle } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import type { SelectedLineRange } from '@pierre/precision-diffs';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { SelectedLineRange } from '@pierre/diffs';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';

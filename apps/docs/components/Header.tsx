@@ -138,7 +138,7 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <IconBrandDiscord />
         </IconLink>
 
-        <IconLink href="https://github.com/pierredotco/" label="GitHub">
+        <IconLink href="https://github.com/pierredotco/diffs" label="GitHub">
           <IconBrandGithub />
         </IconLink>
       </nav>

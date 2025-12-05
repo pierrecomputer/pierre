@@ -3,7 +3,7 @@
 import { IconInfoFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
-import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { type CSSProperties, useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
@@ -47,7 +47,7 @@ export function ReactAPI({
     <section className="space-y-4">
       <h2>React API</h2>
       <Notice icon={<IconInfoFill />}>
-        Import React components from <code>@pierre/precision-diffs/react</code>.
+        Import React components from <code>@pierre/diffs/react</code>.
       </Notice>
       <p>
         We offer a variety of components to render diffs and files. Many of them
