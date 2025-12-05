@@ -33,11 +33,11 @@ export function SidebarWrapper() {
 
   return (
     <>
-      <div className="from-background sticky top-[60px] z-50 bg-linear-to-b to-transparent md:hidden">
+      <div className="from-background sticky top-[60px] z-50 overflow-y-auto bg-linear-to-b to-transparent md:hidden">
         <Button
           variant="outline"
           onClick={toggleMobileMenu}
-          className="bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted w-full shadow-[0_2px_4px_rgba(0,0,0,0.05)]"
+          className="bg-background dark:bg-background hover:bg-muted dark:hover:bg-muted w-full py-5 shadow-[0_2px_4px_rgba(0,0,0,0.05)]"
         >
           <IconParagraph />
           Jump to…
