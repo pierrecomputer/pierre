@@ -29,7 +29,7 @@ if (
     }
     // Not sure if we need to do anything here yet...
     // connectedCallback() {
-    //   this.dataset.pjsContainer = '';
+    //   this.dataset.diffsContainer = '';
     // }
   }
 

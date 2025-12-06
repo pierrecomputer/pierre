@@ -2,63 +2,66 @@
 
 @layer base {
   :host {
-    --pjs-bg: #fff;
-    --pjs-fg: #000;
-    --pjs-font-fallback:
+    --diffs-bg: #fff;
+    --diffs-fg: #000;
+    --diffs-font-fallback:
       'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
       'Courier New', monospace;
-    --pjs-header-font-fallback:
+    --diffs-header-font-fallback:
       system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
       'Noto Sans', 'Liberation Sans', Arial, sans-serif;
 
-    --pjs-mixer: light-dark(black, white);
-    --pjs-gap-fallback: 8px;
+    --diffs-mixer: light-dark(black, white);
+    --diffs-gap-fallback: 8px;
 
     /*
     // Available CSS Color Overrides
-    --pjs-bg-buffer-override
-    --pjs-bg-hover-override
-    --pjs-bg-context-override
-    --pjs-bg-separator-override
+    --diffs-bg-buffer-override
+    --diffs-bg-hover-override
+    --diffs-bg-context-override
+    --diffs-bg-separator-override
 
-    --pjs-fg-number-override
-    --pjs-fg-number-addition-override
-    --pjs-fg-number-deletion-override
+    --diffs-fg-number-override
+    --diffs-fg-number-addition-override
+    --diffs-fg-number-deletion-override
 
-    --pjs-deletion-color-override
-    --pjs-addition-color-override
-    --pjs-modified-color-override
+    --diffs-deletion-color-override
+    --diffs-addition-color-override
+    --diffs-modified-color-override
 
-    --pjs-bg-deletion-override
-    --pjs-bg-deletion-number-override
-    --pjs-bg-deletion-hover-override
-    --pjs-bg-deletion-emphasis-override
+    --diffs-bg-deletion-override
+    --diffs-bg-deletion-number-override
+    --diffs-bg-deletion-hover-override
+    --diffs-bg-deletion-emphasis-override
 
-    --pjs-bg-addition-override
-    --pjs-bg-addition-number-override
-    --pjs-bg-addition-hover-override
-    --pjs-bg-addition-emphasis-override
+    --diffs-bg-addition-override
+    --diffs-bg-addition-number-override
+    --diffs-bg-addition-hover-override
+    --diffs-bg-addition-emphasis-override
 
     // Line Selection Color Overrides (for enableLineSelection)
-    --pjs-selection-color-override
-    --pjs-bg-selection-override
-    --pjs-bg-selection-number-override
-    --pjs-bg-selection-background-override
-    --pjs-bg-selection-number-background-override
+    --diffs-selection-color-override
+    --diffs-bg-selection-override
+    --diffs-bg-selection-number-override
+    --diffs-bg-selection-background-override
+    --diffs-bg-selection-number-background-override
 
     // Available CSS Layout Overrides
-    --pjs-gap-inline
-    --pjs-gap-block
-    --pjs-gap-style
-    --pjs-tab-size
+    --diffs-gap-inline
+    --diffs-gap-block
+    --diffs-gap-style
+    --diffs-tab-size
   */
 
     color-scheme: light dark;
     display: block;
-    font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
-    font-size: var(--pjs-font-size, 13px);
-    line-height: var(--pjs-line-height, 20px);
-    font-feature-settings: var(--pjs-font-features);
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
+    font-size: var(--diffs-font-size, 13px);
+    line-height: var(--diffs-line-height, 20px);
+    font-feature-settings: var(--diffs-font-features);
   }
 
   /* NOTE(mdo): Some semantic HTML elements (e.g. `pre`, `code`) have default
@@ -70,7 +73,7 @@
     padding: 0;
     display: block;
     outline: none;
-    font-family: var(--pjs-font-family, var(--pjs-font-fallback));
+    font-family: var(--diffs-font-family, var(--diffs-font-fallback));
   }
 
   *,
@@ -85,9 +88,12 @@
 
   /* NOTE(mdo): Headers and separators are within pre/code, so we need to reset
  * their font-family explicitly. */
-  [data-pjs-header],
+  [data-diffs-header],
   [data-separator] {
-    font-family: var(--pjs-header-font-family, var(--pjs-header-font-fallback));
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
   }
 
   [data-file-info] {
@@ -101,87 +107,87 @@
     border-block: 1px solid color-mix(in lab, var(--bg) 95%, var(--fg));
   }
 
-  [data-pjs-header],
-  [data-pjs],
+  [data-diffs-header],
+  [data-diffs],
   [data-error-wrapper] {
-    --pjs-bg: light-dark(var(--pjs-light-bg), var(--pjs-dark-bg));
+    --diffs-bg: light-dark(var(--diffs-light-bg), var(--diffs-dark-bg));
     /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
    * and vscode use an older build of chrome that appears to have a bug with
    * color-mix and 'in oklch', so use 'in lab' instead */
-    --pjs-bg-buffer: var(
-      --pjs-bg-buffer-override,
+    --diffs-bg-buffer: var(
+      --diffs-bg-buffer-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 92%, var(--pjs-mixer)),
-        color-mix(in lab, var(--pjs-bg) 92%, var(--pjs-mixer))
+        color-mix(in lab, var(--diffs-bg) 92%, var(--diffs-mixer)),
+        color-mix(in lab, var(--diffs-bg) 92%, var(--diffs-mixer))
       )
     );
-    --pjs-bg-hover: var(
-      --pjs-bg-hover-override,
+    --diffs-bg-hover: var(
+      --diffs-bg-hover-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 97%, var(--pjs-mixer)),
-        color-mix(in lab, var(--pjs-bg) 91%, var(--pjs-mixer))
+        color-mix(in lab, var(--diffs-bg) 97%, var(--diffs-mixer)),
+        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-mixer))
       )
     );
-    --pjs-bg-context: var(
-      --pjs-bg-context-override,
+    --diffs-bg-context: var(
+      --diffs-bg-context-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 98.5%, var(--pjs-mixer)),
-        color-mix(in lab, var(--pjs-bg) 92.5%, var(--pjs-mixer))
+        color-mix(in lab, var(--diffs-bg) 98.5%, var(--diffs-mixer)),
+        color-mix(in lab, var(--diffs-bg) 92.5%, var(--diffs-mixer))
       )
     );
-    --pjs-bg-separator: var(
-      --pjs-bg-separator-override,
+    --diffs-bg-separator: var(
+      --diffs-bg-separator-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 96%, var(--pjs-mixer)),
-        color-mix(in lab, var(--pjs-bg) 85%, var(--pjs-mixer))
-      )
-    );
-
-    --pjs-fg: light-dark(var(--pjs-light), var(--pjs-dark));
-    --pjs-fg-number: var(
-      --pjs-fg-number-override,
-      light-dark(
-        color-mix(in lab, var(--pjs-fg) 65%, var(--pjs-bg)),
-        color-mix(in lab, var(--pjs-fg) 65%, var(--pjs-bg))
+        color-mix(in lab, var(--diffs-bg) 96%, var(--diffs-mixer)),
+        color-mix(in lab, var(--diffs-bg) 85%, var(--diffs-mixer))
       )
     );
 
-    --pjs-deletion-base: var(
-      --pjs-deletion-color-override,
+    --diffs-fg: light-dark(var(--diffs-light), var(--diffs-dark));
+    --diffs-fg-number: var(
+      --diffs-fg-number-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg)),
+        color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg))
+      )
+    );
+
+    --diffs-deletion-base: var(
+      --diffs-deletion-color-override,
       light-dark(
         var(
-          --pjs-light-deletion-color,
-          var(--pjs-deletion-color, rgb(255, 0, 0))
+          --diffs-light-deletion-color,
+          var(--diffs-deletion-color, rgb(255, 0, 0))
         ),
         var(
-          --pjs-dark-deletion-color,
-          var(--pjs-deletion-color, rgb(255, 0, 0))
+          --diffs-dark-deletion-color,
+          var(--diffs-deletion-color, rgb(255, 0, 0))
         )
       )
     );
-    --pjs-addition-base: var(
-      --pjs-addition-color-override,
+    --diffs-addition-base: var(
+      --diffs-addition-color-override,
       light-dark(
         var(
-          --pjs-light-addition-color,
-          var(--pjs-addition-color, rgb(0, 255, 0))
+          --diffs-light-addition-color,
+          var(--diffs-addition-color, rgb(0, 255, 0))
         ),
         var(
-          --pjs-dark-addition-color,
-          var(--pjs-addition-color, rgb(0, 255, 0))
+          --diffs-dark-addition-color,
+          var(--diffs-addition-color, rgb(0, 255, 0))
         )
       )
     );
-    --pjs-modified-base: var(
-      --pjs-modified-color-override,
+    --diffs-modified-base: var(
+      --diffs-modified-color-override,
       light-dark(
         var(
-          --pjs-light-modified-color,
-          var(--pjs-modified-color, rgb(0, 0, 255))
+          --diffs-light-modified-color,
+          var(--diffs-modified-color, rgb(0, 0, 255))
         ),
         var(
-          --pjs-dark-modified-color,
-          var(--pjs-modified-color, rgb(0, 0, 255))
+          --diffs-dark-modified-color,
+          var(--diffs-modified-color, rgb(0, 0, 255))
         )
       )
     );
@@ -189,143 +195,143 @@
     /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
    * and vscode use an older build of chrome that appears to have a bug with
    * color-mix and 'in oklch', so use 'in lab' instead */
-    --pjs-bg-deletion: var(
-      --pjs-bg-deletion-override,
+    --diffs-bg-deletion: var(
+      --diffs-bg-deletion-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 88%, var(--pjs-deletion-base)),
-        color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-deletion-base))
+        color-mix(in lab, var(--diffs-bg) 88%, var(--diffs-deletion-base)),
+        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-deletion-base))
       )
     );
-    --pjs-bg-deletion-number: var(
-      --pjs-bg-deletion-number-override,
+    --diffs-bg-deletion-number: var(
+      --diffs-bg-deletion-number-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 91%, var(--pjs-deletion-base)),
-        color-mix(in lab, var(--pjs-bg) 85%, var(--pjs-deletion-base))
+        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-deletion-base)),
+        color-mix(in lab, var(--diffs-bg) 85%, var(--diffs-deletion-base))
       )
     );
-    --pjs-bg-deletion-hover: var(
-      --pjs-bg-deletion-hover-override,
+    --diffs-bg-deletion-hover: var(
+      --diffs-bg-deletion-hover-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-deletion-base)),
-        color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-deletion-base))
+        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-deletion-base)),
+        color-mix(in lab, var(--diffs-bg) 75%, var(--diffs-deletion-base))
       )
     );
-    --pjs-bg-deletion-emphasis: var(
-      --pjs-bg-deletion-emphasis-override,
+    --diffs-bg-deletion-emphasis: var(
+      --diffs-bg-deletion-emphasis-override,
       light-dark(
-        rgb(from var(--pjs-deletion-base) r g b / 0.15),
-        rgb(from var(--pjs-deletion-base) r g b / 0.2)
-      )
-    );
-
-    --pjs-bg-addition: var(
-      --pjs-bg-addition-override,
-      light-dark(
-        color-mix(in lab, var(--pjs-bg) 88%, var(--pjs-addition-base)),
-        color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-addition-base))
-      )
-    );
-    --pjs-bg-addition-number: var(
-      --pjs-bg-addition-number-override,
-      light-dark(
-        color-mix(in lab, var(--pjs-bg) 91%, var(--pjs-addition-base)),
-        color-mix(in lab, var(--pjs-bg) 85%, var(--pjs-addition-base))
-      )
-    );
-    --pjs-bg-addition-hover: var(
-      --pjs-bg-addition-hover-override,
-      light-dark(
-        color-mix(in lab, var(--pjs-bg) 80%, var(--pjs-addition-base)),
-        color-mix(in lab, var(--pjs-bg) 70%, var(--pjs-addition-base))
-      )
-    );
-    --pjs-bg-addition-emphasis: var(
-      --pjs-bg-addition-emphasis-override,
-      light-dark(
-        rgb(from var(--pjs-addition-base) r g b / 0.15),
-        rgb(from var(--pjs-addition-base) r g b / 0.2)
+        rgb(from var(--diffs-deletion-base) r g b / 0.15),
+        rgb(from var(--diffs-deletion-base) r g b / 0.2)
       )
     );
 
-    --pjs-selection-base: var(--pjs-modified-base);
-    --pjs-selection-number-fg: light-dark(
-      color-mix(in lab, var(--pjs-selection-base) 65%, var(--pjs-mixer)),
-      color-mix(in lab, var(--pjs-selection-base) 75%, var(--pjs-mixer))
-    );
-    --pjs-bg-selection: var(
-      --pjs-bg-selection-override,
+    --diffs-bg-addition: var(
+      --diffs-bg-addition-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 82%, var(--pjs-selection-base)),
-        color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base))
+        color-mix(in lab, var(--diffs-bg) 88%, var(--diffs-addition-base)),
+        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-addition-base))
       )
     );
-    --pjs-bg-selection-number: var(
-      --pjs-bg-selection-number-override,
+    --diffs-bg-addition-number: var(
+      --diffs-bg-addition-number-override,
       light-dark(
-        color-mix(in lab, var(--pjs-bg) 75%, var(--pjs-selection-base)),
-        color-mix(in lab, var(--pjs-bg) 60%, var(--pjs-selection-base))
+        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-addition-base)),
+        color-mix(in lab, var(--diffs-bg) 85%, var(--diffs-addition-base))
+      )
+    );
+    --diffs-bg-addition-hover: var(
+      --diffs-bg-addition-hover-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-addition-base)),
+        color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-addition-base))
+      )
+    );
+    --diffs-bg-addition-emphasis: var(
+      --diffs-bg-addition-emphasis-override,
+      light-dark(
+        rgb(from var(--diffs-addition-base) r g b / 0.15),
+        rgb(from var(--diffs-addition-base) r g b / 0.2)
       )
     );
 
-    background-color: var(--pjs-bg);
-    color: var(--pjs-fg);
+    --diffs-selection-base: var(--diffs-modified-base);
+    --diffs-selection-number-fg: light-dark(
+      color-mix(in lab, var(--diffs-selection-base) 65%, var(--diffs-mixer)),
+      color-mix(in lab, var(--diffs-selection-base) 75%, var(--diffs-mixer))
+    );
+    --diffs-bg-selection: var(
+      --diffs-bg-selection-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 82%, var(--diffs-selection-base)),
+        color-mix(in lab, var(--diffs-bg) 75%, var(--diffs-selection-base))
+      )
+    );
+    --diffs-bg-selection-number: var(
+      --diffs-bg-selection-number-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 75%, var(--diffs-selection-base)),
+        color-mix(in lab, var(--diffs-bg) 60%, var(--diffs-selection-base))
+      )
+    );
+
+    background-color: var(--diffs-bg);
+    color: var(--diffs-fg);
   }
 
-  [data-pjs] {
-    --pjs-code-grid: minmax(min-content, max-content) 1fr;
+  [data-diffs] {
+    --diffs-code-grid: minmax(min-content, max-content) 1fr;
 
     [data-column-content] span {
-      color: light-dark(var(--pjs-light), var(--pjs-dark));
-      font-weight: var(--pjs-light-font-weight);
-      font-style: var(--pjs-light-font-style);
+      color: light-dark(var(--diffs-light), var(--diffs-dark));
+      font-weight: var(--diffs-light-font-weight);
+      font-style: var(--diffs-light-font-style);
     }
   }
 
   [data-column-content] {
-    background-color: var(--pjs-line-bg, 'transparent');
+    background-color: var(--diffs-line-bg, 'transparent');
     grid-column: 2 / 3;
   }
 
-  [data-pjs][data-dehydrated] {
-    --pjs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
+  [data-diffs][data-dehydrated] {
+    --diffs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
   }
 
   @media (prefers-color-scheme: dark) {
-    [data-pjs-header],
-    [data-pjs] {
+    [data-diffs-header],
+    [data-diffs] {
       color-scheme: dark;
     }
 
-    [data-pjs] [data-column-content] span {
-      font-weight: var(--pjs-dark-font-weight);
-      font-style: var(--pjs-dark-font-style);
+    [data-diffs] [data-column-content] span {
+      font-weight: var(--diffs-dark-font-weight);
+      font-style: var(--diffs-dark-font-style);
     }
   }
 
-  [data-pjs-header][data-theme-type='light'],
-  [data-pjs][data-theme-type='light'] {
+  [data-diffs-header][data-theme-type='light'],
+  [data-diffs][data-theme-type='light'] {
     color-scheme: light;
   }
 
-  [data-pjs][data-theme-type='light'] [data-column-content] span {
-    font-weight: var(--pjs-light-font-weight);
-    font-style: var(--pjs-light-font-style);
+  [data-diffs][data-theme-type='light'] [data-column-content] span {
+    font-weight: var(--diffs-light-font-weight);
+    font-style: var(--diffs-light-font-style);
   }
 
-  [data-pjs-header][data-theme-type='dark'],
-  [data-pjs][data-theme-type='dark'] {
+  [data-diffs-header][data-theme-type='dark'],
+  [data-diffs][data-theme-type='dark'] {
     color-scheme: dark;
   }
 
-  [data-pjs][data-theme-type='dark'] [data-column-content] span {
-    font-weight: var(--pjs-dark-font-weight);
-    font-style: var(--pjs-dark-font-style);
+  [data-diffs][data-theme-type='dark'] [data-column-content] span {
+    font-weight: var(--diffs-dark-font-weight);
+    font-style: var(--diffs-dark-font-style);
   }
 
   [data-type='split'][data-overflow='wrap'] {
     display: grid;
     grid-auto-flow: dense;
-    grid-template-columns: repeat(2, var(--pjs-code-grid));
+    grid-template-columns: repeat(2, var(--diffs-code-grid));
   }
 
   [data-type='split'][data-overflow='scroll'] {
@@ -338,15 +344,16 @@
     display: block;
     display: grid;
     grid-auto-flow: dense;
-    grid-template-columns: var(--pjs-code-grid);
-    overflow: scroll clip;
-    overscroll-behavior-x: none;
-    tab-size: var(--pjs-tab-size, 2);
+    grid-template-columns: var(--diffs-code-grid);
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    tab-size: var(--diffs-tab-size, 2);
     align-self: flex-start;
-    padding-top: var(--pjs-gap-block, var(--pjs-gap-fallback));
+    padding-top: var(--diffs-gap-block, var(--diffs-gap-fallback));
     padding-bottom: max(
       0px,
-      calc(var(--pjs-gap-block, var(--pjs-gap-fallback)) - 6px)
+      calc(var(--diffs-gap-block, var(--diffs-gap-fallback)) - 6px)
     );
   }
 
@@ -366,8 +373,8 @@
     border-radius: 3px;
   }
 
-  [data-pjs]:hover [data-code]::-webkit-scrollbar-thumb {
-    background-color: var(--pjs-bg-context);
+  [data-diffs]:hover [data-code]::-webkit-scrollbar-thumb {
+    background-color: var(--diffs-bg-context);
   }
 
   [data-code]::-webkit-scrollbar-corner {
@@ -382,17 +389,17 @@
   @supports (-moz-appearance: none) {
     [data-code] {
       scrollbar-width: thin;
-      scrollbar-color: var(--pjs-bg-context) transparent;
-      padding-bottom: var(--pjs-gap-block, var(--pjs-gap-fallback));
+      scrollbar-color: var(--diffs-bg-context) transparent;
+      padding-bottom: var(--diffs-gap-block, var(--diffs-gap-fallback));
     }
   }
 
-  [data-pjs][data-type='split'][data-overflow='wrap'] {
-    padding-block: var(--pjs-gap-block, var(--pjs-gap-fallback));
+  [data-diffs][data-type='split'][data-overflow='wrap'] {
+    padding-block: var(--diffs-gap-block, var(--diffs-gap-fallback));
   }
 
-  [data-pjs-header] ~ [data-pjs] [data-code],
-  [data-pjs-header] ~ [data-pjs][data-overflow='wrap'] {
+  [data-diffs-header] ~ [data-diffs] [data-code],
+  [data-diffs-header] ~ [data-diffs][data-overflow='wrap'] {
     padding-top: 0;
   }
 
@@ -418,12 +425,12 @@
       top: 0;
       left: 0;
       display: block;
-      border-right: var(--pjs-gap-style, 1px solid var(--pjs-bg));
-      background-color: var(--pjs-bg-selection-number);
+      border-right: var(--diffs-gap-style, 1px solid var(--diffs-bg));
+      background-color: var(--diffs-bg-selection-number);
     }
 
     [data-annotation-content] {
-      background-color: var(--pjs-bg-selection);
+      background-color: var(--diffs-bg-selection);
     }
   }
 
@@ -441,11 +448,11 @@
       -45deg,
       transparent,
       transparent calc(3px * 1.414),
-      var(--pjs-bg-buffer) calc(3px * 1.414),
-      var(--pjs-bg-buffer) calc(4px * 1.414)
+      var(--diffs-bg-buffer) calc(3px * 1.414),
+      var(--diffs-bg-buffer) calc(4px * 1.414)
     );
     min-height: 1lh;
-    width: var(--pjs-column-width, auto);
+    width: var(--diffs-column-width, auto);
   }
 
   [data-separator] {
@@ -455,7 +462,7 @@
   [data-separator='metadata'],
   [data-separator]:empty {
     min-height: 4px;
-    background-color: var(--pjs-bg-separator);
+    background-color: var(--diffs-bg-separator);
     display: grid;
     grid-template-columns: subgrid;
   }
@@ -468,14 +475,14 @@
 
   [data-separator='metadata'] [data-separator-wrapper] {
     grid-column: 2 / 3;
-    width: var(--pjs-column-content-width);
+    width: var(--diffs-column-content-width);
     position: sticky;
-    left: var(--pjs-column-number-width);
+    left: var(--diffs-column-number-width);
     padding: 4px 1ch;
   }
 
   [data-separator='line-info'] {
-    margin-block: var(--pjs-gap-block, var(--pjs-gap-fallback));
+    margin-block: var(--diffs-gap-block, var(--diffs-gap-fallback));
   }
 
   [data-separator='line-info'][data-separator-first] {
@@ -492,7 +499,7 @@
     align-items: center;
     gap: 2px;
     width: auto;
-    width: calc(var(--pjs-column-width) - var(--pjs-gap-fallback));
+    width: calc(var(--diffs-column-width) - var(--diffs-gap-fallback));
     border-radius: 6px;
   }
 
@@ -526,7 +533,7 @@
   [data-separator-content] {
     display: flex;
     align-items: center;
-    background-color: var(--pjs-bg-separator);
+    background-color: var(--diffs-bg-separator);
   }
 
   [data-expand-button] {
@@ -590,12 +597,12 @@
     [data-code]
     [data-separator='line-info']
     [data-separator-wrapper] {
-    left: var(--pjs-gap-inline, var(--pjs-gap-fallback));
-    margin-left: var(--pjs-gap-inline, var(--pjs-gap-fallback));
-    margin-right: var(--pjs-gap-inline, var(--pjs-gap-fallback));
+    left: var(--diffs-gap-inline, var(--diffs-gap-fallback));
+    margin-left: var(--diffs-gap-inline, var(--diffs-gap-fallback));
+    margin-right: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     width: calc(
-      var(--pjs-column-width) -
-        (var(--pjs-gap-inline, var(--pjs-gap-fallback)) * 2)
+      var(--diffs-column-width) -
+        (var(--diffs-gap-inline, var(--diffs-gap-fallback)) * 2)
     );
   }
 
@@ -603,8 +610,8 @@
     [data-deletions]
     [data-separator='line-info']
     [data-separator-wrapper] {
-    left: var(--pjs-gap-fallback);
-    margin-left: var(--pjs-gap-fallback);
+    left: var(--diffs-gap-fallback);
+    margin-left: var(--diffs-gap-fallback);
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
   }
@@ -614,15 +621,15 @@
     [data-separator='line-info']
     [data-separator-wrapper] {
     left: 0;
-    margin-right: var(--pjs-gap-inline, var(--pjs-gap-fallback));
+    margin-right: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
     flex-direction: row-reverse;
   }
 
   [data-line] {
-    background-color: var(--pjs-bg);
-    color: var(--pjs-fg);
+    background-color: var(--diffs-bg);
+    color: var(--diffs-fg);
   }
 
   [data-type='split'][data-overflow='wrap'] [data-deletions] {
@@ -635,8 +642,8 @@
   }
 
   [data-line-annotation] {
-    min-height: var(--pjs-annotation-min-height, 0);
-    background-color: var(--pjs-bg-context);
+    min-height: var(--diffs-annotation-min-height, 0);
+    background-color: var(--diffs-bg-context);
     z-index: 3;
   }
 
@@ -679,12 +686,12 @@
 
     [data-line-type='change-addition'] [data-column-content]::before {
       content: '+';
-      color: var(--pjs-addition-base);
+      color: var(--diffs-addition-base);
     }
 
     [data-line-type='change-deletion'] [data-column-content]::before {
       content: '-';
-      color: var(--pjs-deletion-base);
+      color: var(--diffs-deletion-base);
     }
   }
 
@@ -704,8 +711,8 @@
     [data-line-type='change-deletion'] [data-column-number]::before {
       background-image: linear-gradient(
         0deg,
-        var(--pjs-bg-deletion) 50%,
-        var(--pjs-deletion-base) 50%
+        var(--diffs-bg-deletion) 50%,
+        var(--diffs-deletion-base) 50%
       );
       background-repeat: repeat;
       background-size: 2px 2px;
@@ -713,7 +720,7 @@
     }
 
     [data-line-type='change-addition'] [data-column-number]::before {
-      background-color: var(--pjs-addition-base);
+      background-color: var(--diffs-addition-base);
     }
   }
 
@@ -735,21 +742,21 @@
     position: sticky;
     left: 0;
     user-select: none;
-    background-color: var(--pjs-bg);
-    color: var(--pjs-fg-number);
+    background-color: var(--diffs-bg);
+    color: var(--diffs-fg-number);
     z-index: 1;
     min-width: var(
-      --pjs-min-number-column-width,
-      var(--pjs-min-number-column-width-default, 3ch)
+      --diffs-min-number-column-width,
+      var(--diffs-min-number-column-width-default, 3ch)
     );
     padding-left: 2ch;
-    border-right: var(--pjs-gap-style, 1px solid var(--pjs-bg));
+    border-right: var(--diffs-gap-style, 1px solid var(--diffs-bg));
   }
 
   [data-disable-line-numbers] {
     &[data-indicators='bars'] [data-column-number] {
       min-width: 4px;
-      border-right: var(--pjs-gap-style, 1px solid var(--pjs-bg));
+      border-right: var(--diffs-gap-style, 1px solid var(--diffs-bg));
     }
 
     [data-column-number] {
@@ -785,45 +792,51 @@
 
   [data-line-type='change-addition'] {
     [data-column-number] {
-      color: var(--pjs-fg-number-addition-override, var(--pjs-addition-base));
+      color: var(
+        --diffs-fg-number-addition-override,
+        var(--diffs-addition-base)
+      );
     }
 
     [data-diff-span] {
-      background-color: var(--pjs-bg-addition-emphasis);
+      background-color: var(--diffs-bg-addition-emphasis);
     }
   }
 
   [data-line-type='change-deletion'] {
     [data-column-number] {
-      color: var(--pjs-fg-number-deletion-override, var(--pjs-deletion-base));
+      color: var(
+        --diffs-fg-number-deletion-override,
+        var(--diffs-deletion-base)
+      );
     }
 
     [data-diff-span] {
-      background-color: var(--pjs-bg-deletion-emphasis);
+      background-color: var(--diffs-bg-deletion-emphasis);
     }
   }
 
   [data-background] [data-line-type='change-addition'] {
-    --pjs-line-bg: var(--pjs-bg-addition);
+    --diffs-line-bg: var(--diffs-bg-addition);
 
     [data-column-number] {
-      background-color: var(--pjs-bg-addition-number);
+      background-color: var(--diffs-bg-addition-number);
     }
   }
 
   [data-background] [data-line-type='change-deletion'] {
-    --pjs-line-bg: var(--pjs-bg-deletion);
+    --diffs-line-bg: var(--diffs-bg-deletion);
 
     [data-column-number] {
-      background-color: var(--pjs-bg-deletion-number);
+      background-color: var(--diffs-bg-deletion-number);
     }
   }
 
   [data-line-type='context-expanded'] {
-    --pjs-line-bg: var(--pjs-bg-context);
+    --diffs-line-bg: var(--diffs-bg-context);
 
     [data-column-number] {
-      background-color: var(--pjs-bg-context);
+      background-color: var(--diffs-bg-context);
     }
   }
 
@@ -833,30 +846,32 @@
     [data-line]:hover:not([data-selected-line]) {
       [data-column-number],
       [data-column-content] {
-        background-color: var(--pjs-bg-hover);
+        background-color: var(--diffs-bg-hover);
       }
     }
 
     [data-background] [data-line]:hover:not([data-selected-line]) {
       &[data-line-type='change-deletion'] [data-column-number],
       &[data-line-type='change-deletion'] [data-column-content] {
-        background-color: var(--pjs-bg-deletion-hover);
+        background-color: var(--diffs-bg-deletion-hover);
       }
 
       &[data-line-type='change-addition'] [data-column-number],
       &[data-line-type='change-addition'] [data-column-content] {
-        background-color: var(--pjs-bg-addition-hover);
+        background-color: var(--diffs-bg-addition-hover);
       }
     }
   }
 
-  [data-pjs-header] {
+  [data-diffs-header] {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: var(--pjs-gap-inline, var(--pjs-gap-fallback));
-    min-height: calc(1lh + (var(--pjs-gap-block, var(--pjs-gap-fallback)) * 3));
+    gap: var(--diffs-gap-inline, var(--diffs-gap-fallback));
+    min-height: calc(
+      1lh + (var(--diffs-gap-block, var(--diffs-gap-fallback)) * 3)
+    );
     padding-inline: 16px;
   }
 
@@ -864,7 +879,7 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: var(--pjs-gap-inline, var(--pjs-gap-fallback));
+    gap: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     min-width: 0;
     white-space: nowrap;
   }
@@ -888,21 +903,21 @@
     flex-grow: 0;
   }
 
-  [data-pjs-header] [data-metadata] {
+  [data-diffs-header] [data-metadata] {
     display: flex;
     align-items: center;
     gap: 1ch;
     white-space: nowrap;
   }
 
-  [data-pjs-header] [data-additions-count] {
-    font-family: var(--pjs-font-family, var(--pjs-font-fallback));
-    color: var(--pjs-addition-base);
+  [data-diffs-header] [data-additions-count] {
+    font-family: var(--diffs-font-family, var(--diffs-font-fallback));
+    color: var(--diffs-addition-base);
   }
 
-  [data-pjs-header] [data-deletions-count] {
-    font-family: var(--pjs-font-family, var(--pjs-font-fallback));
-    color: var(--pjs-deletion-base);
+  [data-diffs-header] [data-deletions-count] {
+    font-family: var(--diffs-font-family, var(--diffs-font-fallback));
+    color: var(--diffs-deletion-base);
   }
 
   [data-no-newline] {
@@ -915,9 +930,9 @@
 
   [data-annotation-content] {
     position: sticky;
-    left: var(--pjs-column-number-width, 0);
+    left: var(--diffs-column-number-width, 0);
     grid-column: 2 / -1;
-    width: var(--pjs-column-content-width, auto);
+    width: var(--diffs-column-content-width, auto);
     align-self: flex-start;
     z-index: 2;
     height: 100%;
@@ -938,15 +953,15 @@
   [data-change-icon='change'],
   [data-change-icon='rename-pure'],
   [data-change-icon='rename-changed'] {
-    color: var(--pjs-modified-base);
+    color: var(--diffs-modified-base);
   }
 
   [data-change-icon='new'] {
-    color: var(--pjs-addition-base);
+    color: var(--diffs-addition-base);
   }
 
   [data-change-icon='deleted'] {
-    color: var(--pjs-deletion-base);
+    color: var(--diffs-deletion-base);
   }
 
   [data-change-icon='file'] {
@@ -956,12 +971,12 @@
   /* Line selection highlighting */
   [data-line-type='context'][data-selected-line] {
     [data-column-number] {
-      color: var(--pjs-selection-number-fg);
-      background-color: var(--pjs-bg-selection-number);
+      color: var(--diffs-selection-number-fg);
+      background-color: var(--diffs-bg-selection-number);
     }
 
     [data-column-content] {
-      background-color: var(--pjs-bg-selection);
+      background-color: var(--diffs-bg-selection);
     }
   }
 
@@ -973,29 +988,29 @@
         background-color: light-dark(
           color-mix(
             in lab,
-            var(--pjs-line-bg, var(--pjs-bg)) 82%,
-            var(--pjs-selection-base)
+            var(--diffs-line-bg, var(--diffs-bg)) 82%,
+            var(--diffs-selection-base)
           ),
           color-mix(
             in lab,
-            var(--pjs-line-bg, var(--pjs-bg)) 75%,
-            var(--pjs-selection-base)
+            var(--diffs-line-bg, var(--diffs-bg)) 75%,
+            var(--diffs-selection-base)
           )
         );
       }
 
       [data-column-number] {
-        color: var(--pjs-selection-number-fg);
+        color: var(--diffs-selection-number-fg);
         background-color: light-dark(
           color-mix(
             in lab,
-            var(--pjs-line-bg, var(--pjs-bg)) 75%,
-            var(--pjs-selection-base)
+            var(--diffs-line-bg, var(--diffs-bg)) 75%,
+            var(--diffs-selection-base)
           ),
           color-mix(
             in lab,
-            var(--pjs-line-bg, var(--pjs-bg)) 60%,
-            var(--pjs-selection-base)
+            var(--diffs-line-bg, var(--diffs-bg)) 60%,
+            var(--diffs-selection-base)
           )
         );
       }
@@ -1004,19 +1019,19 @@
 
   [data-error-wrapper] {
     overflow: auto;
-    padding: var(--pjs-gap-block, var(--pjs-gap-fallback))
-      var(--pjs-gap-inline, var(--pjs-gap-fallback));
+    padding: var(--diffs-gap-block, var(--diffs-gap-fallback))
+      var(--diffs-gap-inline, var(--diffs-gap-fallback));
     max-height: 400px;
     scrollbar-width: none;
 
     [data-error-message] {
       font-weight: bold;
       font-size: 18px;
-      color: var(--pjs-deletion-base);
+      color: var(--diffs-deletion-base);
     }
 
     [data-error-stack] {
-      color: var(--pjs-fg-number);
+      color: var(--diffs-fg-number);
     }
   }
 }

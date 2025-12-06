@@ -162,10 +162,10 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
         className="diff-container"
         style={
           {
-            '--pjs-font-family': `var(${fontMap[selectedFont]})`,
-            '--pjs-font-size': selectedFontSize,
-            '--pjs-line-height': selectedLineHeight,
-            '--pjs-font-features': fontFeatureSettings,
+            '--diffs-font-family': `var(${fontMap[selectedFont]})`,
+            '--diffs-font-size': selectedFontSize,
+            '--diffs-line-height': selectedLineHeight,
+            '--diffs-font-features': fontFeatureSettings,
           } as React.CSSProperties
         }
       />

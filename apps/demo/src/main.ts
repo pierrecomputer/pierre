@@ -186,8 +186,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           //   const contentCol = document.createElement('div');
           //   contentCol.textContent = 'unmodified lines';
           //   contentCol.style.position = 'sticky';
-          //   contentCol.style.width = 'var(--pjs-column-content-width)';
-          //   contentCol.style.left = 'var(--pjs-column-number-width)';
+          //   contentCol.style.width = 'var(--diffs-column-content-width)';
+          //   contentCol.style.left = 'var(--diffs-column-number-width)';
           //   contentCol.style.backgroundColor = 'blue';
           //   contentCol.style.color = 'white';
           //   fragment.appendChild(contentCol);
@@ -227,7 +227,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           //   const contentCol = document.createElement('div');
           //   contentCol.textContent = `${hunkData.lines} unmodified lines`;
           //   contentCol.style.position = 'sticky';
-          //   contentCol.style.width = 'var(--pjs-column-width)';
+          //   contentCol.style.width = 'var(--diffs-column-width)';
           //   contentCol.style.left = '0';
           //   wrapper.appendChild(contentCol);
           //   return wrapper;
@@ -237,8 +237,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           //   wrapper.style.gridColumn = '2 / 3';
           //   wrapper.textContent = `${hunkData.lines} unmodified lines`;
           //   wrapper.style.position = 'sticky';
-          //   wrapper.style.width = 'var(--pjs-column-content-width)';
-          //   wrapper.style.left = 'var(--pjs-column-number-width)';
+          //   wrapper.style.width = 'var(--diffs-column-content-width)';
+          //   wrapper.style.left = 'var(--diffs-column-number-width)';
           //   return wrapper;
           // },
           onLineClick(props) {

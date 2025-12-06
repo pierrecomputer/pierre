@@ -90,7 +90,7 @@ describe('FileRenderer AST Structure', () => {
     const tokensWithCSSVars = styledTokens.filter(
       (node) =>
         node.style?.match(
-          /--pjs-dark:#[A-F0-9]{6};--pjs-light:#[A-F0-9]{6}/
+          /--diffs-dark:#[A-F0-9]{6};--diffs-light:#[A-F0-9]{6}/
         ) !== null
     );
     expect(tokensWithCSSVars.length).toBeGreaterThan(0);
@@ -100,7 +100,7 @@ describe('FileRenderer AST Structure', () => {
     expect(functionToken).toBeDefined();
     expect(functionToken!.style).toBeDefined();
     expect(functionToken!.style).toMatch(
-      /--pjs-dark:#[A-F0-9]{6};--pjs-light:#[A-F0-9]{6}/
+      /--diffs-dark:#[A-F0-9]{6};--diffs-light:#[A-F0-9]{6}/
     );
   });
 

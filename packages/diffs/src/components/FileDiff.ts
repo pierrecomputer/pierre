@@ -276,7 +276,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.pre = element;
         continue;
       }
-      if ('pjsHeader' in element.dataset) {
+      if ('diffsHeader' in element.dataset) {
         this.headerElement = element;
         continue;
       }

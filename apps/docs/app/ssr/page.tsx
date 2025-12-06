@@ -4,7 +4,7 @@ import {
 } from '@pierre/precision-diffs';
 import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 
-import { SsrPage } from './SsrPage';
+import { SSRPage } from './SSR_Page';
 import type { AnnotationMetadata } from './ssr_types';
 
 const OLD_FILE: FileContents = {
@@ -68,5 +68,5 @@ export default async function Ssr() {
     annotations,
   });
 
-  return <SsrPage preloadedFileDiff={preloadedFileDiff} />;
+  return <SSRPage preloadedFileDiff={preloadedFileDiff} />;
 }

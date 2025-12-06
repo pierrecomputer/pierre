@@ -1,18 +1,18 @@
 :root {
   color-scheme: light dark;
 
-  --pjs-font-family:
+  --diffs-font-family:
     'Berkeley Mono', 'JetBrains Mono', 'Fira Code', 'Source Code Pro',
     'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
     'Courier New', monospace;
 
-  --pjs-font-size: 14px;
-  --pjs-line-height: 20px;
+  --diffs-font-size: 14px;
+  --diffs-line-height: 20px;
 
   --fg: light-dark(#213547, #ffffff);
   --bg: light-dark(#ffffff, #213547);
 
-  font-family: var(--pjs-font-family);
+  font-family: var(--diffs-font-family);
   font-size: 14px;
   line-height: 20px;
 
@@ -208,7 +208,7 @@ diffs-container {
 .comment {
   margin: 8px;
   padding: 8px;
-  border: 1px solid var(--pjs-fg);
+  border: 1px solid var(--diffs-fg);
   border-radius: 4px;
   overflow: hidden;
   max-width: 600px;
