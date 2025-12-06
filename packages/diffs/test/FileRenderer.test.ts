@@ -9,6 +9,6 @@ describe('FileRenderer', () => {
     const result = await instance.asyncRender(mockFiles.file1);
 
     expect(result).toBeDefined();
-    expect(result?.codeAST).toMatchSnapshot();
+    expect(result.codeAST).toMatchSnapshot();
   });
 });

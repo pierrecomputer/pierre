@@ -502,9 +502,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
 
     additionsAST =
-      !unified && additionsAST.length > 0 ? additionsAST : undefined;
+      !unified && (code.hunks != null || code.newLines.length > 0)
+        ? additionsAST
+        : undefined;
     deletionsAST =
-      !unified && deletionsAST.length > 0 ? deletionsAST : undefined;
+      !unified && (code.hunks != null || code.oldLines.length > 0)
+        ? deletionsAST
+        : undefined;
     unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
 
     const preNode = this.createPreElement(
@@ -961,23 +965,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (!unified) {
           if (spanSize > 0) {
             if (aLen > dLen) {
-              if (deletionsAST.length > 0) {
-                deletionsAST.push(createEmptyRowBuffer(spanSize));
-              }
+              deletionsAST.push(createEmptyRowBuffer(spanSize));
             } else {
-              if (additionsAST.length > 0) {
-                additionsAST.push(createEmptyRowBuffer(spanSize));
-              }
+              additionsAST.push(createEmptyRowBuffer(spanSize));
             }
             spanSize = 0;
           }
-          if (hunkContent.noEOFCRDeletions && deletionsAST.length > 0) {
+          if (hunkContent.noEOFCRDeletions) {
             deletionsAST.push(createNoNewlineElement('change-deletion'));
             if (!hunkContent.noEOFCRAdditions) {
               additionsAST.push(createEmptyRowBuffer(1));
             }
           }
-          if (hunkContent.noEOFCRAdditions && additionsAST.length > 0) {
+          if (hunkContent.noEOFCRAdditions) {
             additionsAST.push(createNoNewlineElement('change-addition'));
             if (!hunkContent.noEOFCRDeletions) {
               deletionsAST.push(createEmptyRowBuffer(1));
