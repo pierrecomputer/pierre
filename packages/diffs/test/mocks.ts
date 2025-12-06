@@ -3,11 +3,11 @@ import type { FileContents } from '../src/types';
 export const mockFiles: Record<string, FileContents> = {
   file1: {
     name: 'file1.ts',
-    contents: `import type { PJSThemeNames, ThemesType } from '../types';
+    contents: `import type { DiffsThemeNames, ThemesType } from '../types';
 
 export function areThemesEqual(
-  themeA: PJSThemeNames | ThemesType | undefined,
-  themeB: PJSThemeNames | ThemesType | undefined
+  themeA: DiffsThemeNames | ThemesType | undefined,
+  themeB: DiffsThemeNames | ThemesType | undefined
 ): boolean {
   if (
     themeA == null ||

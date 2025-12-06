@@ -11,9 +11,9 @@ import {
 import { areThemesAttached, hasResolvedThemes } from '../highlighter/themes';
 import type {
   BaseCodeOptions,
+  DiffsHighlighter,
   FileContents,
   LineAnnotation,
-  PJSHighlighter,
   RenderFileOptions,
   RenderFileResult,
   RenderedFileASTCache,
@@ -57,7 +57,7 @@ export interface FileRenderResult {
 export interface FileRendererOptions extends BaseCodeOptions {}
 
 export class FileRenderer<LAnnotation = undefined> {
-  private highlighter: PJSHighlighter | undefined;
+  private highlighter: DiffsHighlighter | undefined;
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
@@ -247,7 +247,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private renderFileWithHighlighter(
     file: FileContents,
-    highlighter: PJSHighlighter,
+    highlighter: DiffsHighlighter,
     plainText = false
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
@@ -350,7 +350,7 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  async initializeHighlighter(): Promise<PJSHighlighter> {
+  async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );

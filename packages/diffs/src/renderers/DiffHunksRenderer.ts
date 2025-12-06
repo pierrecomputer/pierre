@@ -14,11 +14,11 @@ import type {
   AnnotationSpan,
   BaseDiffOptions,
   DiffLineAnnotation,
+  DiffsHighlighter,
   ExpansionDirections,
   FileDiffMetadata,
   Hunk,
   HunkData,
-  PJSHighlighter,
   RenderDiffFilesResult,
   RenderDiffHunksResult,
   RenderDiffOptions,
@@ -132,7 +132,7 @@ export interface HunksRenderResult {
 }
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
-  private highlighter: PJSHighlighter | undefined;
+  private highlighter: DiffsHighlighter | undefined;
   private diff: FileDiffMetadata | undefined;
 
   private expandedHunks = new Map<number, ExpansionRegion>();
@@ -248,7 +248,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  async initializeHighlighter(): Promise<PJSHighlighter> {
+  async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );
@@ -424,7 +424,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private renderDiffWithHighlighter(
     diff: FileDiffMetadata,
-    highlighter: PJSHighlighter,
+    highlighter: DiffsHighlighter,
     plainText = false
   ): RenderDiffResult {
     const { options } = this.getRenderOptions(diff);

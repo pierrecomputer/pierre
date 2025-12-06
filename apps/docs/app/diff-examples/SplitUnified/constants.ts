@@ -9,8 +9,8 @@ export const SPLIT_UNIFIED: PreloadMultiFileDiffOptions<undefined> = {
 import type {
   FileDiffMetadata,
   FileTypes,
-  PJSHighlighter,
-  PJSThemeNames,
+  DiffsHighlighter,
+  DiffsThemeNames,
   RenderCustomFileMetadata,
   ThemeTypes,
   ThemeRegistrationResolved,
@@ -42,9 +42,9 @@ export function createRow(line: number) {
 }
 
 interface SetupWrapperNodesProps {
-  theme?: PJSThemeNames | ThemesType;
+  theme?: DiffsThemeNames | ThemesType;
   pre: HTMLElement;
-  highlighter: PJSHighlighter;
+  highlighter: DiffsHighlighter;
   split: boolean;
   wrap: boolean;
   themed: boolean;
@@ -80,8 +80,8 @@ export function createHunkSeparator() {
 import type {
   FileDiffMetadata,
   FileTypes,
-  PJSHighlighter,
-  PJSThemeNames,
+  DiffsHighlighter,
+  DiffsThemeNames,
   RenderCustomFileMetadata,
   ThemeTypes,
   ThemeRegistrationResolved,
@@ -110,9 +110,9 @@ export function createRow(line: number) {
 }
 
 interface SetupWrapperNodesProps {
-  theme?: PJSThemeNames | ThemesType;
+  theme?: DiffsThemeNames | ThemesType;
   pre: HTMLElement;
-  highlighter: PJSHighlighter;
+  highlighter: DiffsHighlighter;
   split: boolean;
   wrap: boolean;
   themed: boolean;

@@ -48,7 +48,7 @@ import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
-import { PJSContainerLoaded } from './web-components';
+import { DiffsContainerLoaded } from './web-components';
 
 export interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -91,7 +91,7 @@ let instanceId = -1;
 export class FileDiff<LAnnotation = undefined> {
   // NOTE(amadeus): We sorta need this to ensure the web-component file is
   // properly loaded
-  static LoadedCustomComponent: boolean = PJSContainerLoaded;
+  static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: number = ++instanceId;
 

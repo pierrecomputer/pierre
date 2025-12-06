@@ -4,7 +4,7 @@ import { queueRender } from '../managers/UniversalRenderingManager';
 import { CodeToTokenTransformStream, type RecallToken } from '../shiki-stream';
 import type {
   BaseCodeOptions,
-  PJSHighlighter,
+  DiffsHighlighter,
   SupportedLanguages,
   ThemeTypes,
   ThemedToken,
@@ -31,7 +31,7 @@ export interface FileStreamOptions extends BaseCodeOptions {
 }
 
 export class FileStream {
-  private highlighter: PJSHighlighter | undefined;
+  private highlighter: DiffsHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;
   private fileContainer: HTMLElement | undefined;
@@ -67,7 +67,7 @@ export class FileStream {
     }
   }
 
-  private async initializeHighlighter(): Promise<PJSHighlighter> {
+  private async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.options.lang, this.options)
     );
@@ -99,7 +99,7 @@ export class FileStream {
   private setupStream(
     stream: ReadableStream<string>,
     wrapper: HTMLElement,
-    highlighter: PJSHighlighter
+    highlighter: DiffsHighlighter
   ): void {
     const {
       disableLineNumbers = false,

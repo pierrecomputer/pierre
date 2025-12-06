@@ -2,11 +2,11 @@ import {
   type BundledLanguage,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
+  type DiffsThemeNames,
   File,
   type FileContents,
   FileDiff,
   FileStream,
-  type PJSThemeNames,
   type ParsedPatch,
   type SupportedLanguages,
   getFiletypeFromFileName,
@@ -318,7 +318,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
 function handlePreload() {
   if (!isHighlighterNull()) return;
   const langs: BundledLanguage[] = [];
-  const themes: PJSThemeNames[] = [];
+  const themes: DiffsThemeNames[] = [];
   for (const item of CodeConfigs) {
     if ('lang' in item.options) {
       langs.push(item.options.lang);

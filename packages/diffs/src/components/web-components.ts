@@ -36,4 +36,4 @@ if (
   customElements.define(DIFFS_TAG_NAME, FileDiffContainer);
 }
 
-export const PJSContainerLoaded = true;
+export const DiffsContainerLoaded = true;
