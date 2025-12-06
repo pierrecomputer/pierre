@@ -10,11 +10,12 @@ describe('DiffHunksRenderer', () => {
       mockDiffs.diffRowBufferTest.oldFile,
       mockDiffs.diffRowBufferTest.newFile
     );
+    expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
     expect(result.additionsAST).toBeDefined();
     expect(result.deletionsAST).toBeDefined();
     expect(result.unifiedAST).toBeUndefined();
-    expect(result).toMatchSnapshot();
+    expect(result).toMatchSnapshot('rendered result');
   });
 
   test('proper buffers should be prepended to deletions colum in split style', async () => {
@@ -23,11 +24,12 @@ describe('DiffHunksRenderer', () => {
       mockDiffs.diffRowBufferTest.newFile,
       mockDiffs.diffRowBufferTest.oldFile
     );
+    expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
     expect(result.additionsAST).toBeDefined();
     expect(result.deletionsAST).toBeDefined();
     expect(result.unifiedAST).toBeUndefined();
-    expect(result).toMatchSnapshot();
+    expect(result).toMatchSnapshot('rendered result');
   });
 
   test('additions and deletions should be empty when unified', async () => {
@@ -39,10 +41,11 @@ describe('DiffHunksRenderer', () => {
       mockDiffs.diffRowBufferTest.oldFile,
       mockDiffs.diffRowBufferTest.newFile
     );
+    expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
     expect(result.additionsAST).toBeUndefined();
     expect(result.deletionsAST).toBeUndefined();
-    expect(result.unifiedAST).toBeDefined();
+    expect(result).toMatchSnapshot('rendered result');
   });
 
   test('a diff with only additions should have an empty deletions column', async () => {
@@ -51,12 +54,14 @@ describe('DiffHunksRenderer', () => {
       { ...mockDiffs.diffRowBufferTest.oldFile, contents: '' },
       mockDiffs.diffRowBufferTest.newFile
     );
+    expect(diff.hunks[0]?.collapsedBefore).toBe(0);
+    expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-type']).toBe('file');
     expect(result.additionsAST).toBeDefined();
     expect(result.deletionsAST).toBeUndefined();
     expect(result.unifiedAST).toBeUndefined();
-    expect(result).toMatchSnapshot();
+    expect(result).toMatchSnapshot('rendered result');
   });
 
   test('a diff with only deletions should have an empty additions column', async () => {
@@ -65,11 +70,13 @@ describe('DiffHunksRenderer', () => {
       ...mockDiffs.diffRowBufferTest.newFile,
       contents: '',
     });
+    expect(diff.hunks[0]?.collapsedBefore).toBe(0);
+    expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-type']).toBe('file');
     expect(result.deletionsAST).toBeDefined();
     expect(result.additionsAST).toBeUndefined();
     expect(result.unifiedAST).toBeUndefined();
-    expect(result).toMatchSnapshot();
+    expect(result).toMatchSnapshot('rendered result');
   });
 });
