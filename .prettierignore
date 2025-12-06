@@ -5,4 +5,6 @@ build
 bun.lock
 .next
 .source
+.vercel
 apps/docs/public/r/*
+apps/docs/next-env.d.ts
