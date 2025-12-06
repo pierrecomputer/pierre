@@ -13,6 +13,7 @@ export * from './managers/UniversalRenderingManager';
 export * from './renderers/DiffHunksRenderer';
 export * from './renderers/FileRenderer';
 export * from './shiki-stream';
+export * from './sprite';
 export * from './utils/areThemesEqual';
 export * from './utils/cleanLastNewline';
 export * from './utils/createAnnotationElement';
