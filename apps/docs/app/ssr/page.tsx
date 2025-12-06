@@ -4,7 +4,7 @@ import {
 } from '@pierre/precision-diffs';
 import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 
-import { SSRPage } from './SSR_Page';
+import { SSRPage } from './SSRPage';
 import type { AnnotationMetadata } from './ssr_types';
 
 const OLD_FILE: FileContents = {
