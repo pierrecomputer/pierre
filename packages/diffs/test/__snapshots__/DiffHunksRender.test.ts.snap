@@ -1,0 +1,2410 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`DiffHunksRenderer proper buffers should be prepended to additions colum 1`] = `
+{
+  "additionsAST": [
+    {
+      "children": [],
+      "properties": {
+        "data-buffer": "",
+        "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "1",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "import",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " IconSprite",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " from",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " './IconSprite'",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ";",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 1,
+        "data-line-index": 1,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "2",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "import",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " ",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "HeaderSimple",
+                    },
+                  ],
+                  "properties": {
+                    "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+                  },
+                  "tagName": "span",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "class": undefined,
+                "data-diff-span": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " from",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " '.",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "./components/HeaderSimple",
+                    },
+                  ],
+                  "properties": {
+                    "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+                  },
+                  "tagName": "span",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "class": undefined,
+                "data-diff-span": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "'",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ";",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 2,
+        "data-line-index": 2,
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "3",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "import",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " Hero",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " from",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " '../components/Hero'",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ";",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 3,
+        "data-line-index": 3,
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "4",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": 
+"
+"
+,
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 4,
+        "data-line-index": 4,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "5",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "export",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " default",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " function",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#D568EA;--pjs-light:#C635E4",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " Home",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#9D6AFB;--pjs-light:#7B43F8",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "()",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " {",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 5,
+        "data-line-index": 5,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "6",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "  return",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " (",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 6,
+        "data-line-index": 6,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "7",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    <",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "div",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF6762;--pjs-light:#D52C36",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ">",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 7,
+        "data-line-index": 7,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "8",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "      <",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "HeaderSimple",
+                    },
+                  ],
+                  "properties": {
+                    "style": "--pjs-dark:#D568EA;--pjs-light:#C635E4",
+                  },
+                  "tagName": "span",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "class": undefined,
+                "data-diff-span": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " />",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 8,
+        "data-line-index": 8,
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "9",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "      <",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "IconSprite",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#D568EA;--pjs-light:#C635E4",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " />",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 9,
+        "data-line-index": 9,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "10",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "      <",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "h1",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF6762;--pjs-light:#D52C36",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ">Hello!</",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "h1",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF6762;--pjs-light:#D52C36",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ">",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 10,
+        "data-line-index": 10,
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "11",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    </",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "div",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF6762;--pjs-light:#D52C36",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ">",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 11,
+        "data-line-index": 11,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "12",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "  );",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 12,
+        "data-line-index": 12,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "13",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "}",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 13,
+        "data-line-index": 13,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "baseThemeType": undefined,
+  "css": "",
+  "deletionsAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "1",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "import",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " *",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#68CDF2;--pjs-light:#1CA1C7",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " as",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " 'react'",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ";",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FBFBFB;--pjs-light:#070707",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 1,
+        "data-line-index": 0,
+        "data-line-type": "change-deletion",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "2",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "import",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " IconSprite",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " from",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " './IconSprite'",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ";",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 2,
+        "data-line-index": 1,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "3",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "import",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " ",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Header",
+                    },
+                  ],
+                  "properties": {
+                    "style": "--pjs-dark:#FFA359;--pjs-light:#D47628",
+                  },
+                  "tagName": "span",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "class": undefined,
+                "data-diff-span": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " from",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " './",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Header",
+                    },
+                  ],
+                  "properties": {
+                    "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+                  },
+                  "tagName": "span",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "class": undefined,
+                "data-diff-span": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "'",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#5ECC71;--pjs-light:#199F43",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ";",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 3,
+        "data-line-index": 2,
+        "data-line-type": "change-deletion",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [],
+      "properties": {
+        "data-buffer": "",
+        "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "4",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": 
+"
+"
+,
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 4,
+        "data-line-index": 4,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "5",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "export",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " default",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " function",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#D568EA;--pjs-light:#C635E4",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " Home",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#9D6AFB;--pjs-light:#7B43F8",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "()",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " {",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 5,
+        "data-line-index": 5,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "6",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "  return",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF678D;--pjs-light:#FC2B73",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " (",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 6,
+        "data-line-index": 6,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "7",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    <",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "div",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF6762;--pjs-light:#D52C36",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ">",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 7,
+        "data-line-index": 7,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "8",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "      <",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Header",
+                    },
+                  ],
+                  "properties": {
+                    "style": "--pjs-dark:#D568EA;--pjs-light:#C635E4",
+                  },
+                  "tagName": "span",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "class": undefined,
+                "data-diff-span": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " />",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 8,
+        "data-line-index": 8,
+        "data-line-type": "change-deletion",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "9",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "      <",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "IconSprite",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#D568EA;--pjs-light:#C635E4",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": " />",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 9,
+        "data-line-index": 9,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [],
+      "properties": {
+        "data-buffer": "",
+        "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "10",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    </",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "div",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#FF6762;--pjs-light:#D52C36",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": ">",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 10,
+        "data-line-index": 11,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "11",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "  );",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 11,
+        "data-line-index": 12,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "12",
+                },
+              ],
+              "properties": {
+                "data-line-number-content": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-number": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "}",
+                },
+              ],
+              "properties": {
+                "style": "--pjs-dark:#79797F;--pjs-light:#79797F",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 12,
+        "data-line-index": 13,
+        "data-line-type": "context",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "headerElement": {
+    "children": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "properties": {
+                  "href": "#pjs-icon-symbol-modified",
+                },
+                "tagName": "use",
+                "type": "element",
+              },
+            ],
+            "properties": {
+              "data-change-icon": "change",
+              "height": 16,
+              "viewBox": "0 0 16 16",
+              "width": 16,
+            },
+            "tagName": "svg",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "file.tsx",
+              },
+            ],
+            "properties": {
+              "data-title": "",
+            },
+            "tagName": "div",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-header-content": "",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "-3",
+              },
+            ],
+            "properties": {
+              "data-deletions-count": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "+4",
+              },
+            ],
+            "properties": {
+              "data-additions-count": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [],
+            "properties": {
+              "name": "header-metadata",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-metadata": "",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+    ],
+    "properties": {
+      "data-change-type": "change",
+      "data-pjs-header": "",
+      "data-theme-type": undefined,
+      "style": "--pjs-dark:#fbfbfb;--pjs-dark-bg:#070707;--pjs-dark-addition-color:#00cab1;--pjs-dark-deletion-color:#ff2e3f;--pjs-dark-modified-color:#009fff;--pjs-light:#070707;--pjs-light-bg:#ffffff;--pjs-light-addition-color:#00cab1;--pjs-light-deletion-color:#ff2e3f;--pjs-light-modified-color:#009fff;",
+    },
+    "tagName": "div",
+    "type": "element",
+  },
+  "hunkData": [],
+  "preNode": {
+    "children": [],
+    "properties": {
+      "data-background": "",
+      "data-disable-line-numbers": undefined,
+      "data-indicators": "bars",
+      "data-overflow": "scroll",
+      "data-pjs": "",
+      "data-theme-type": undefined,
+      "data-type": "split",
+      "style": "--pjs-dark:#fbfbfb;--pjs-dark-bg:#070707;--pjs-dark-addition-color:#00cab1;--pjs-dark-deletion-color:#ff2e3f;--pjs-dark-modified-color:#009fff;--pjs-light:#070707;--pjs-light-bg:#ffffff;--pjs-light-addition-color:#00cab1;--pjs-light-deletion-color:#ff2e3f;--pjs-light-modified-color:#009fff;--pjs-min-number-column-width-default:2ch;",
+      "tabIndex": 0,
+    },
+    "tagName": "pre",
+    "type": "element",
+  },
+  "themeStyles": "--pjs-dark:#fbfbfb;--pjs-dark-bg:#070707;--pjs-dark-addition-color:#00cab1;--pjs-dark-deletion-color:#ff2e3f;--pjs-dark-modified-color:#009fff;--pjs-light:#070707;--pjs-light-bg:#ffffff;--pjs-light-addition-color:#00cab1;--pjs-light-deletion-color:#ff2e3f;--pjs-light-modified-color:#009fff;",
+  "totalLines": 14,
+  "unifiedAST": undefined,
+}
+`;
