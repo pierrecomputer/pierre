@@ -1,4 +1,4 @@
-import { DEFAULT_THEMES } from '../constants';
+import { DEFAULT_THEMES, DIFFS_TAG_NAME } from '../constants';
 import { getSharedHighlighter } from '../highlighter/shared_highlighter';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import { CodeToTokenTransformStream, type RecallToken } from '../shiki-stream';
@@ -245,7 +245,8 @@ export class FileStream {
     ) {
       return this.fileContainer;
     }
-    this.fileContainer = fileContainer ?? document.createElement('file-diff');
+    this.fileContainer =
+      fileContainer ?? document.createElement(DIFFS_TAG_NAME);
     return this.fileContainer;
   }
 }

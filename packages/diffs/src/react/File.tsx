@@ -1,6 +1,7 @@
 'use client';
 
 import { type FileOptions } from '../components/File';
+import { DIFFS_TAG_NAME } from '../constants';
 import type { FileProps } from './types';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { templateRender } from './utils/templateRender';
@@ -36,8 +37,8 @@ export function File<LAnnotation = undefined>({
     getHoveredLine,
   });
   return (
-    <file-diff ref={ref} className={className} style={style}>
+    <DIFFS_TAG_NAME ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}
-    </file-diff>
+    </DIFFS_TAG_NAME>
   );
 }

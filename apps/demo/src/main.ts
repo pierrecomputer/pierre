@@ -1,6 +1,7 @@
 import {
   type BundledLanguage,
   DEFAULT_THEMES,
+  DIFFS_TAG_NAME,
   File,
   type FileContents,
   FileDiff,
@@ -258,7 +259,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         manager
       );
 
-      const fileContainer = document.createElement('file-diff');
+      const fileContainer = document.createElement(DIFFS_TAG_NAME);
       wrapper.appendChild(fileContainer);
       const start = Date.now();
       instance.render({
@@ -508,7 +509,7 @@ if (renderFileButton != null) {
     if (wrapper == null) return;
     cleanupInstances(wrapper);
 
-    const fileContainer = document.createElement('file-diff');
+    const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     const instance = new File<LineCommentMetadata>(
       {

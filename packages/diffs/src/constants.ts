@@ -1,5 +1,7 @@
 import type { ThemesType } from './types';
 
+export const DIFFS_TAG_NAME = 'diffs-container' as const;
+
 // Misc patch/content parsing regexes
 export const COMMIT_METADATA_SPLIT: RegExp = /(?=^From [a-f0-9]+ .+$)/m;
 export const GIT_DIFF_FILE_BREAK_REGEX: RegExp = /(?=^diff --git)/gm;

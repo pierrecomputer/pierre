@@ -52,7 +52,7 @@ src/
 ├── routes/
 │   └── index.tsx              # Demo page with annotation component
 ├── diff-data.ts               # Sample file contents for diff
-├── custom-elements.d.ts       # TypeScript declarations for <file-diff>
+├── custom-elements.d.ts       # TypeScript declarations for <diffs-container>
 ├── app.tsx                    # Root component
 ├── entry-client.tsx           # Client hydration entry
 └── entry-server.tsx           # SSR entry
@@ -132,10 +132,12 @@ bun add @pierre/precision-diffs
 Create `src/custom-elements.d.ts`:
 
 ```typescript
+import type { DIFFS_TAG_NAME } from '@pierre/precision-diffs';
+
 declare module 'solid-js' {
   namespace JSX {
     interface IntrinsicElements {
-      'file-diff': HTMLAttributes<HTMLElement>;
+      [DIFFS_TAG_NAME]: HTMLAttributes<HTMLElement>;
     }
   }
 }
@@ -259,7 +261,7 @@ const dispose = render(() => <Component />, slotElement);
 
 ### 4. Forgetting TypeScript Declarations
 
-**Problem:** TypeScript errors when using `<file-diff>` in TSX.
+**Problem:** TypeScript errors when using `<diffs-container>` in TSX.
 
 **Solution:** Create `custom-elements.d.ts` with the declaration (see Step 2).
 

@@ -187,7 +187,7 @@ code {
   flex-direction: row-reverse;
 }
 
-file-diff {
+diffs-container {
   content-visibility: auto;
   margin-top: 2px;
 }

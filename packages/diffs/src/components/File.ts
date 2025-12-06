@@ -4,6 +4,7 @@ import { toHtml } from 'hast-util-to-html';
 
 import {
   DEFAULT_THEMES,
+  DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
@@ -442,7 +443,7 @@ export class File<LAnnotation = undefined> {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
-      document.createElement('file-diff');
+      document.createElement(DIFFS_TAG_NAME);
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }

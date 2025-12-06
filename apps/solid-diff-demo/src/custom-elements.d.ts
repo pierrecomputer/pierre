@@ -1,3 +1,5 @@
+import type { DIFFS_TAG_NAME } from '@pierre/precision-diffs';
+
 /**
  * TypeScript declaration for the <file-diff> custom element.
  * This tells TypeScript that <file-diff> is a valid JSX element in SolidJS.
@@ -6,7 +8,7 @@
 declare module 'solid-js' {
   namespace JSX {
     interface IntrinsicElements {
-      'file-diff': HTMLAttributes<HTMLElement>;
+      [DIFFS_TAG_NAME]: HTMLAttributes<HTMLElement>;
     }
   }
 }
