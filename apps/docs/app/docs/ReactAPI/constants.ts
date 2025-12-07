@@ -104,11 +104,6 @@ interface DiffOptions {
   // Hide the file header with filename and stats
   disableFileHeader: false,
 
-  // Override automatic language detection (usually not needed
-  // because we detect language automatically based on file name)
-  // See: https://shiki.style/languages
-  // lang: 'typescript',
-
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
@@ -289,8 +284,6 @@ export function MyDiff() {
       oldFile={oldFile}
       newFile={newFile}
 
-      // Language is auto-detected from filename.
-      // Override with options.lang if needed.
       options={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         diffStyle: 'split',
@@ -415,8 +408,6 @@ export function CodeFile() {
       // Required: the file to display
       file={file}
 
-      // Language is auto-detected from filename.
-      // Override with options.lang if needed.
       options={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
       }}
@@ -484,11 +475,6 @@ interface FileOptions {
 
   // Hide the file header with filename
   disableFileHeader: false,
-
-  // Override automatic language detection (usually not needed
-  // because we detect language automatically based on file name)
-  // See: https://shiki.style/languages
-  // lang: 'typescript',
 
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,

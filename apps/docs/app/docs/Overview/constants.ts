@@ -79,8 +79,6 @@ function SingleDiff() {
   return (
     <MultiFileDiff
       // We automatically detect the language based on filename
-      // You can also provide 'lang' property in 'options' when
-      // rendering MultiFileDiff
       oldFile={oldFile}
       newFile={newFile}
       options={{ theme: 'pierre-dark' }}
