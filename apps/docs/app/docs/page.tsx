@@ -62,6 +62,7 @@ import {
   HELPER_PARSE_PATCH_FILES,
   HELPER_PRELOAD_HIGHLIGHTER,
   HELPER_REGISTER_CUSTOM_THEME,
+  HELPER_SET_LANGUAGE_OVERRIDE,
 } from './Utilities/constants';
 import { VanillaAPI } from './VanillaAPI/VanillaAPI';
 import {
@@ -264,6 +265,7 @@ async function UtilitiesSection() {
     parsePatchFiles,
     preloadHighlighter,
     registerCustomTheme,
+    setLanguageOverride,
   ] = await Promise.all([
     preloadFile(HELPER_DIFF_ACCEPT_REJECT),
     preloadFile(HELPER_DIFF_ACCEPT_REJECT_REACT),
@@ -273,6 +275,7 @@ async function UtilitiesSection() {
     preloadFile(HELPER_PARSE_PATCH_FILES),
     preloadFile(HELPER_PRELOAD_HIGHLIGHTER),
     preloadFile(HELPER_REGISTER_CUSTOM_THEME),
+    preloadFile(HELPER_SET_LANGUAGE_OVERRIDE),
   ]);
   return (
     <Utilities
@@ -284,6 +287,7 @@ async function UtilitiesSection() {
       parsePatchFiles={parsePatchFiles}
       preloadHighlighter={preloadHighlighter}
       registerCustomTheme={registerCustomTheme}
+      setLanguageOverride={setLanguageOverride}
     />
   );
 }
