@@ -19,8 +19,8 @@ export function CoreTypes({
     <section className="space-y-4">
       <h2>Core Types</h2>
       <p>
-        Before diving into the components, it&apos;s helpful to understand the
-        two core data structures used throughout the library.
+        Before diving into the components, it‘s helpful to understand the two
+        core data structures used throughout the library.
       </p>
 
       <h3>FileContents</h3>
@@ -41,13 +41,15 @@ export function CoreTypes({
       <DocsCodeExample {...fileDiffMetadataType} />
 
       <h3>Creating Diffs</h3>
-      <p>There are two ways to create a FileDiffMetadata:</p>
+      <p>
+        There are two ways to create a <code>FileDiffMetadata</code>.
+      </p>
 
       <h4 data-toc-ignore>From Two Files</h4>
       <p>
         Use <code>parseDiffFromFile</code> when you have both file versions.
-        This approach includes the full file contents, enabling the
-        &ldquo;expand unchanged&rdquo; feature.
+        This approach includes the full file contents, enabling the “expand
+        unchanged” feature.
       </p>
       <DocsCodeExample {...parseDiffFromFileExample} />
 
