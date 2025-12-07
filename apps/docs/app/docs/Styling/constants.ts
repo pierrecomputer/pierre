@@ -75,17 +75,34 @@ export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
     name: 'unsafe-css.tsx',
     contents: `<FileDiff
   options={{
-    unsafeCSS: /* css */ \`[data-pjs] {
-      border: 2px solid #C635E4;
-      border-radius: 8px; }\`
+    unsafeCSS: /* css */ \`
+[data-line-index='0'] {
+  border-top: 1px solid var(--pjs-bg-context);
+}
+
+[data-line] {
+  border-bottom: 1px solid var(--pjs-bg-context);
+}
+
+[data-column-number] {
+  border-right: 1px solid var(--pjs-bg-context);
+}\`
   }}
   // ... other props
 />`,
   },
   options: {
     ...options,
-    unsafeCSS: `[data-pjs] {
-      border: 2px solid #C635E4;
-      border-radius: 8px; }`,
+    unsafeCSS: `[data-line-index='0'] {
+  border-top: 1px solid var(--pjs-bg-context);
+}
+
+[data-line] {
+  border-bottom: 1px solid var(--pjs-bg-context);
+}
+
+[data-column-number] {
+  border-right: 1px solid var(--pjs-bg-context);
+}`,
   },
 };
