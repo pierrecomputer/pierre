@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export const LINE_SELECTION_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
@@ -83,5 +84,6 @@ export function Button({
   options: {
     theme: 'pierre-dark',
     diffStyle: 'split',
+    unsafeCSS: CustomScrollbarCSS,
   },
 };

@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
@@ -19,5 +20,6 @@ export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   options: {
     theme: 'pierre-dark',
     diffStyle: 'unified',
+    unsafeCSS: CustomScrollbarCSS,
   },
 };

@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export const SHIKI_THEMES: PreloadMultiFileDiffOptions<undefined> = {
@@ -37,5 +38,6 @@ export default function Home() {
   options: {
     diffStyle: 'split',
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    unsafeCSS: CustomScrollbarCSS,
   },
 };

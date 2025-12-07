@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
 
 export const PACKAGE_MANAGERS = ['npm', 'bun', 'pnpm', 'yarn'] as const;
@@ -24,6 +25,7 @@ export const INSTALLATION_EXAMPLES: Record<
       options: {
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         disableFileHeader: true,
+        unsafeCSS: CustomScrollbarCSS,
       },
     },
   ])

@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type {
   PreloadFileOptions,
   PreloadMultiFileDiffOptions,
@@ -6,6 +7,7 @@ import type {
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   disableFileHeader: true,
+  unsafeCSS: CustomScrollbarCSS,
 } as const;
 
 export const OVERVIEW_INITIAL_EXAMPLE: PreloadMultiFileDiffOptions<undefined> =
@@ -35,6 +37,7 @@ pub fn main() !void {
       diffStyle: 'split',
       diffIndicators: 'bars',
       overflow: 'wrap',
+      unsafeCSS: CustomScrollbarCSS,
     },
   };
 

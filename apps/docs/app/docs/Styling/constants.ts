@@ -1,8 +1,10 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   disableFileHeader: true,
+  unsafeCSS: CustomScrollbarCSS,
 } as const;
 
 export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
