@@ -67,7 +67,8 @@ interface FileDiffMetadata {
   splitLineCount: number;
   unifiedLineCount: number;
 
-  // Full file contents (when available, enables expansion around hunks)
+  // Full file contents (when generated using parseDiffFromFile,
+  // enables expansion around hunks)
   oldLines?: string[];
   newLines?: string[];
 }
