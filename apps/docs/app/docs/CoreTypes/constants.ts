@@ -75,13 +75,7 @@ interface FileDiffMetadata {
 // Hunk represents a single changed region in the diff
 // Think of it like the sections defined by the '@@' lines in patches
 interface Hunk {
-  // Line position information
-  splitLineStart: number;
-  splitLineCount: number;
-  unifiedLineStart: number;
-  unifiedLineCount: number;
-
-  // Addition/deletion counts
+  // Addition/deletion counts, parsed out from patch data
   additionCount: number;
   additionStart: number;
   additionLines: number;
@@ -94,12 +88,20 @@ interface Hunk {
 
   // Optional context shown in hunk headers (e.g., function name)
   hunkContext: string | undefined;
+
+  // Line position information, mostly used internally for 
+  // rendering optimizations
+  splitLineStart: number;
+  splitLineCount: number;
+  unifiedLineStart: number;
+  unifiedLineCount: number;
 }
 
 // ContextContent represents unchanged lines surrounding changes
 interface ContextContent {
   type: 'context';
   lines: string[];
+  // 'true' if the file does not have a blank newline at the end
   noEOFCR: boolean;
 }
 
@@ -108,6 +110,7 @@ interface ChangeContent {
   type: 'change';
   deletions: string[];
   additions: string[];
+  // 'true' if the file does not have a blank newline at the end
   noEOFCRDeletions: boolean;
   noEOFCRAdditions: boolean;
 }`,
