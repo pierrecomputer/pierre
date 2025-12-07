@@ -3,6 +3,13 @@ import Footer from '@/components/Footer';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 
+import { CoreTypes } from './CoreTypes/CoreTypes';
+import {
+  FILE_CONTENTS_TYPE,
+  FILE_DIFF_METADATA_TYPE,
+  PARSE_DIFF_FROM_FILE_EXAMPLE,
+  PARSE_PATCH_FILES_EXAMPLE,
+} from './CoreTypes/constants';
 import { HeadingAnchors } from './HeadingAnchors';
 import { Installation } from './Installation/Installation';
 import {
@@ -55,6 +62,7 @@ import {
   HELPER_PARSE_PATCH_FILES,
   HELPER_PRELOAD_HIGHLIGHTER,
   HELPER_REGISTER_CUSTOM_THEME,
+  HELPER_SET_LANGUAGE_OVERRIDE,
 } from './Utilities/constants';
 import { VanillaAPI } from './VanillaAPI/VanillaAPI';
 import {
@@ -100,6 +108,7 @@ export default function DocsPage() {
             <HeadingAnchors />
             <OverviewSection />
             <InstallationSection />
+            <CoreTypesSection />
             <ReactAPISection />
             <VanillaAPISection />
             <UtilitiesSection />
@@ -129,6 +138,28 @@ async function InstallationSection() {
     )
   );
   return <Installation installationExamples={installationExamples} />;
+}
+
+async function CoreTypesSection() {
+  const [
+    fileContentsType,
+    fileDiffMetadataType,
+    parseDiffFromFileExample,
+    parsePatchFilesExample,
+  ] = await Promise.all([
+    preloadFile(FILE_CONTENTS_TYPE),
+    preloadFile(FILE_DIFF_METADATA_TYPE),
+    preloadFile(PARSE_DIFF_FROM_FILE_EXAMPLE),
+    preloadFile(PARSE_PATCH_FILES_EXAMPLE),
+  ]);
+  return (
+    <CoreTypes
+      fileContentsType={fileContentsType}
+      fileDiffMetadataType={fileDiffMetadataType}
+      parseDiffFromFileExample={parseDiffFromFileExample}
+      parsePatchFilesExample={parsePatchFilesExample}
+    />
+  );
 }
 
 async function OverviewSection() {
@@ -234,6 +265,7 @@ async function UtilitiesSection() {
     parsePatchFiles,
     preloadHighlighter,
     registerCustomTheme,
+    setLanguageOverride,
   ] = await Promise.all([
     preloadFile(HELPER_DIFF_ACCEPT_REJECT),
     preloadFile(HELPER_DIFF_ACCEPT_REJECT_REACT),
@@ -243,6 +275,7 @@ async function UtilitiesSection() {
     preloadFile(HELPER_PARSE_PATCH_FILES),
     preloadFile(HELPER_PRELOAD_HIGHLIGHTER),
     preloadFile(HELPER_REGISTER_CUSTOM_THEME),
+    preloadFile(HELPER_SET_LANGUAGE_OVERRIDE),
   ]);
   return (
     <Utilities
@@ -254,6 +287,7 @@ async function UtilitiesSection() {
       parsePatchFiles={parsePatchFiles}
       preloadHighlighter={preloadHighlighter}
       registerCustomTheme={registerCustomTheme}
+      setLanguageOverride={setLanguageOverride}
     />
   );
 }

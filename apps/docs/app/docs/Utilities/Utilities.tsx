@@ -17,6 +17,7 @@ interface UtilitiesProps {
   parsePatchFiles: PreloadedFileResult<undefined>;
   preloadHighlighter: PreloadedFileResult<undefined>;
   registerCustomTheme: PreloadedFileResult<undefined>;
+  setLanguageOverride: PreloadedFileResult<undefined>;
 }
 
 export function Utilities({
@@ -28,6 +29,7 @@ export function Utilities({
   parsePatchFiles,
   preloadHighlighter,
   registerCustomTheme,
+  setLanguageOverride,
 }: UtilitiesProps) {
   const [acceptRejectType, setAcceptRejectType] = useState<'vanilla' | 'react'>(
     'vanilla'
@@ -114,6 +116,15 @@ export function Utilities({
         JSON file.
       </p>
       <DocsCodeExample {...registerCustomTheme} />
+
+      <h3 data-toc-ignore>setLanguageOverride</h3>
+      <p>
+        Override the syntax highlighting language for a{' '}
+        <code>FileContents</code> or <code>FileDiffMetadata</code> object. This
+        is useful when the filename doesn&apos;t have an extension or
+        doesn&apos;t match the actual language.
+      </p>
+      <DocsCodeExample {...setLanguageOverride} />
     </section>
   );
 }

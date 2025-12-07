@@ -176,10 +176,6 @@ const instance = new FileDiff({
   // Hide the file header with filename and stats
   disableFileHeader: false,
 
-  // Override automatic language detection (usually not needed)
-  // See: https://shiki.style/languages
-  // lang: 'typescript',
-
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
@@ -334,10 +330,6 @@ const instance = new File({
 
   // Hide the file header with filename
   disableFileHeader: false,
-
-  // Override automatic language detection (usually not needed)
-  // See: https://shiki.style/languages
-  // lang: 'typescript',
 
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,

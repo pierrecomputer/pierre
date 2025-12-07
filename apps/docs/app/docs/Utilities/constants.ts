@@ -186,6 +186,40 @@ await preloadHighlighter({
   options,
 };
 
+export const HELPER_SET_LANGUAGE_OVERRIDE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'setLanguageOverride.ts',
+    contents: `import {
+  setLanguageOverride,
+  parsePatchFiles,
+  type FileContents,
+  type FileDiffMetadata,
+} from '@pierre/precision-diffs';
+
+// setLanguageOverride creates a new FileContents or FileDiffMetadata
+// with the language explicitly set. This is useful when:
+// - The filename doesn't have an extension
+// - The extension doesn't match the actual language
+// - You're parsing patches and need to override the detected language
+
+// Example 1: Override language on a FileContents
+const file: FileContents = {
+  name: 'Dockerfile',  // No extension, would default to 'text'
+  contents: 'FROM node:20\\nRUN npm install',
+};
+const dockerFile = setLanguageOverride(file, 'dockerfile');
+
+// Example 2: Override language on a FileDiffMetadata
+const patches = parsePatchFiles(patchString);
+const diff: FileDiffMetadata = patches[0].files[0];
+const typescriptDiff = setLanguageOverride(diff, 'typescript');
+
+// The function returns a new object with the lang property set,
+// leaving the original unchanged (immutable operation).`,
+  },
+  options,
+};
+
 export const HELPER_DIFF_ACCEPT_REJECT: PreloadFileOptions<undefined> = {
   file: {
     name: 'diffAcceptRejectHunk.ts',

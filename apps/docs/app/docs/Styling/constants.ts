@@ -24,10 +24,12 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
   /* Override or customize any 'font-feature-settings'
    * for your code font */
   --pjs-font-features: normal;
-  /* Override the minimum width for the number column. Be default
-   * it should accomodate 4 numbers with padding at a value 
-   * of 7ch (the default) */
-  --pjs-min-number-column-width: 7ch;
+  /* Override the minimum width for the number column. By default
+   * it should take into account the number of digits required
+   * based on the lines in the file itself, but you can manually
+   * override if desired.  Generally we recommend using ch units
+   * because they work well with monospaced fonts */
+  --pjs-min-number-column-width: 3ch;
 
   /* By default we try to inherit the deletion/addition/modified
    * colors from the existing Shiki theme, however if you'd like
@@ -73,17 +75,34 @@ export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
     name: 'unsafe-css.tsx',
     contents: `<FileDiff
   options={{
-    unsafeCSS: /* css */ \`[data-pjs] {
-      border: 2px solid #C635E4;
-      border-radius: 8px; }\`
+    unsafeCSS: /* css */ \`
+[data-line-index='0'] {
+  border-top: 1px solid var(--pjs-bg-context);
+}
+
+[data-line] {
+  border-bottom: 1px solid var(--pjs-bg-context);
+}
+
+[data-column-number] {
+  border-right: 1px solid var(--pjs-bg-context);
+}\`
   }}
   // ... other props
 />`,
   },
   options: {
     ...options,
-    unsafeCSS: `[data-pjs] {
-      border: 2px solid #C635E4;
-      border-radius: 8px; }`,
+    unsafeCSS: `[data-line-index='0'] {
+  border-top: 1px solid var(--pjs-bg-context);
+}
+
+[data-line] {
+  border-bottom: 1px solid var(--pjs-bg-context);
+}
+
+[data-column-number] {
+  border-right: 1px solid var(--pjs-bg-context);
+}`,
   },
 };
