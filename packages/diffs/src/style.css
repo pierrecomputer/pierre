@@ -339,12 +339,52 @@
     display: grid;
     grid-auto-flow: dense;
     grid-template-columns: var(--pjs-code-grid);
-    overflow-x: auto;
-    scrollbar-width: none;
-    overscroll-behavior-x: contain;
+    overflow: scroll clip;
+    overscroll-behavior-x: none;
     tab-size: var(--pjs-tab-size, 2);
     align-self: flex-start;
-    padding-block: var(--pjs-gap-block, var(--pjs-gap-fallback));
+    padding-top: var(--pjs-gap-block, var(--pjs-gap-fallback));
+    padding-bottom: max(
+      0px,
+      calc(var(--pjs-gap-block, var(--pjs-gap-fallback)) - 6px)
+    );
+  }
+
+  [data-code]::-webkit-scrollbar {
+    width: 0;
+    height: 6px;
+  }
+
+  [data-code]::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  [data-code]::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border: 1px solid transparent;
+    background-clip: content-box;
+    border-radius: 3px;
+  }
+
+  [data-pjs]:hover [data-code]::-webkit-scrollbar-thumb {
+    background-color: var(--pjs-bg-context);
+  }
+
+  [data-code]::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
+
+  /*
+   * If we apply these rules globally it will mean that webkit will opt into the
+   * standards compliant version of custom css scrollbars, which we do not want
+   * because the custom stuff will look better
+  */
+  @supports (-moz-appearance: none) {
+    [data-code] {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-border15) transparent;
+      padding-bottom: var(--pjs-gap-block, var(--pjs-gap-fallback));
+    }
   }
 
   [data-pjs][data-type='split'][data-overflow='wrap'] {
