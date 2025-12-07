@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export const DIFF_STYLES: PreloadMultiFileDiffOptions<undefined> = {
@@ -41,5 +42,6 @@ pub fn main() !void {
     diffStyle: 'split',
     overflow: 'wrap',
     disableLineNumbers: false,
+    unsafeCSS: CustomScrollbarCSS,
   },
 };

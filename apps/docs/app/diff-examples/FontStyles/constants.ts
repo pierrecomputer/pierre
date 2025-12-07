@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export const FONT_STYLES: PreloadMultiFileDiffOptions<undefined> = {
@@ -26,5 +27,6 @@ export { greet };
   options: {
     theme: 'pierre-dark',
     diffStyle: 'unified',
+    unsafeCSS: CustomScrollbarCSS,
   },
 };

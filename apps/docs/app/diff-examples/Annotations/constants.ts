@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import {
   type DiffLineAnnotation,
   type FileContents,
@@ -57,6 +58,7 @@ export default function Home() {
     options: {
       theme: 'pierre-dark',
       diffStyle: 'unified',
+      unsafeCSS: CustomScrollbarCSS,
     },
     annotations: [
       {

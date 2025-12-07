@@ -1,3 +1,4 @@
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
 
 export const SPLIT_UNIFIED: PreloadMultiFileDiffOptions<undefined> = {
@@ -140,5 +141,9 @@ export function createHunkSeparator() {
 }
 `,
   },
-  options: { theme: 'pierre-dark', diffStyle: 'split' },
+  options: {
+    theme: 'pierre-dark',
+    diffStyle: 'split',
+    unsafeCSS: CustomScrollbarCSS,
+  },
 };
