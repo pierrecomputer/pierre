@@ -42,10 +42,7 @@ export function DocsSidebar({
       const parentIds: Record<number, string> = {};
 
       for (const element of headingElements) {
-        if (
-          !(element instanceof HTMLElement) ||
-          'tocIgnore' in element.dataset
-        ) {
+        if (!(element instanceof HTMLElement)) {
           continue;
         }
         const text = element.textContent ?? '';
@@ -68,12 +65,15 @@ export function DocsSidebar({
         // Set the ID on the element for anchor linking
         element.id = id;
 
-        headingItems.push({
-          id,
-          text,
-          level,
-          element: element,
-        });
+        // Only add to sidebar if not ignored
+        if (!('tocIgnore' in element.dataset)) {
+          headingItems.push({
+            id,
+            text,
+            level,
+            element: element,
+          });
+        }
       }
 
       setHeadings(headingItems);
