@@ -62,7 +62,7 @@ export function CoreTypes({
       <p className="text-muted-foreground text-sm">
         <strong>Tip:</strong> If you need to change the language after creating
         a <code>FileContents</code> or <code>FileDiffMetadata</code>, use the{' '}
-        <a href="#utilities">
+        <a href="#utilities-setlanguageoverride">
           <code>setLanguageOverride</code>
         </a>{' '}
         utility function.
