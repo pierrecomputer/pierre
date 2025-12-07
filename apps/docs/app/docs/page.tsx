@@ -3,6 +3,13 @@ import Footer from '@/components/Footer';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
 
+import { CoreTypes } from './CoreTypes/CoreTypes';
+import {
+  FILE_CONTENTS_TYPE,
+  FILE_DIFF_METADATA_TYPE,
+  PARSE_DIFF_FROM_FILE_EXAMPLE,
+  PARSE_PATCH_FILES_EXAMPLE,
+} from './CoreTypes/constants';
 import { HeadingAnchors } from './HeadingAnchors';
 import { Installation } from './Installation/Installation';
 import {
@@ -100,6 +107,7 @@ export default function DocsPage() {
             <HeadingAnchors />
             <OverviewSection />
             <InstallationSection />
+            <CoreTypesSection />
             <ReactAPISection />
             <VanillaAPISection />
             <UtilitiesSection />
@@ -129,6 +137,28 @@ async function InstallationSection() {
     )
   );
   return <Installation installationExamples={installationExamples} />;
+}
+
+async function CoreTypesSection() {
+  const [
+    fileContentsType,
+    fileDiffMetadataType,
+    parseDiffFromFileExample,
+    parsePatchFilesExample,
+  ] = await Promise.all([
+    preloadFile(FILE_CONTENTS_TYPE),
+    preloadFile(FILE_DIFF_METADATA_TYPE),
+    preloadFile(PARSE_DIFF_FROM_FILE_EXAMPLE),
+    preloadFile(PARSE_PATCH_FILES_EXAMPLE),
+  ]);
+  return (
+    <CoreTypes
+      fileContentsType={fileContentsType}
+      fileDiffMetadataType={fileDiffMetadataType}
+      parseDiffFromFileExample={parseDiffFromFileExample}
+      parsePatchFilesExample={parsePatchFilesExample}
+    />
+  );
 }
 
 async function OverviewSection() {
