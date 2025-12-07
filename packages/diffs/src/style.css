@@ -382,7 +382,7 @@
   @supports (-moz-appearance: none) {
     [data-code] {
       scrollbar-width: thin;
-      scrollbar-color: var(--color-border15) transparent;
+      scrollbar-color: var(--pjs-bg-context) transparent;
       padding-bottom: var(--pjs-gap-block, var(--pjs-gap-fallback));
     }
   }
