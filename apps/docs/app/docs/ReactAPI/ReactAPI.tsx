@@ -4,9 +4,13 @@ import { IconInfoFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
-import { useState } from 'react';
+import { type CSSProperties, useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+
+const NumberColumnWidthOverride = {
+  '--pjs-min-number-column-width': '3ch',
+} as CSSProperties;
 
 type ExampleTypes = 'multi-file-diff' | 'patch-diff' | 'file-diff' | 'file';
 type SharedPropsTypes =
@@ -117,13 +121,33 @@ export function ReactAPI({
       {(() => {
         switch (sharedProps) {
           case 'diff-options':
-            return <DocsCodeExample {...sharedDiffOptions} />;
+            return (
+              <DocsCodeExample
+                {...sharedDiffOptions}
+                style={NumberColumnWidthOverride}
+              />
+            );
           case 'diff-render-props':
-            return <DocsCodeExample {...sharedDiffRenderProps} />;
+            return (
+              <DocsCodeExample
+                {...sharedDiffRenderProps}
+                style={NumberColumnWidthOverride}
+              />
+            );
           case 'file-options':
-            return <DocsCodeExample {...sharedFileOptions} />;
+            return (
+              <DocsCodeExample
+                {...sharedFileOptions}
+                style={NumberColumnWidthOverride}
+              />
+            );
           case 'file-render-props':
-            return <DocsCodeExample {...sharedFileRenderProps} />;
+            return (
+              <DocsCodeExample
+                {...sharedFileRenderProps}
+                style={NumberColumnWidthOverride}
+              />
+            );
         }
       })()}
     </section>

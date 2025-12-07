@@ -25,9 +25,9 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
    * for your code font */
   --pjs-font-features: normal;
   /* Override the minimum width for the number column. Be default
-   * it should accomodate 4 numbers with padding at a value 
-   * of 7ch (the default) */
-  --pjs-min-number-column-width: 7ch;
+   * it should take into account the number of lines in the file
+   * itself, but you can manually override if desired */
+  --pjs-min-number-column-width: 3ch;
 
   /* By default we try to inherit the deletion/addition/modified
    * colors from the existing Shiki theme, however if you'd like
