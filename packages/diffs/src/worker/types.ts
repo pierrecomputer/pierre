@@ -1,9 +1,9 @@
 import type {
+  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
   LanguageRegistration,
   LineDiffTypes,
-  PJSThemeNames,
   RenderDiffOptions,
   RenderFileOptions,
   SupportedLanguages,
@@ -16,7 +16,7 @@ import type {
 export type WorkerRequestId = string;
 
 export interface WorkerRenderingOptions {
-  theme: PJSThemeNames | ThemesType;
+  theme: DiffsThemeNames | ThemesType;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
 }
@@ -69,7 +69,7 @@ export interface ResolvedLanguage {
 export interface RegisterThemeWorkerRequest {
   type: 'register-theme';
   id: WorkerRequestId;
-  theme: PJSThemeNames | ThemesType;
+  theme: DiffsThemeNames | ThemesType;
   resolvedThemes: ThemeRegistrationResolved[];
 }
 

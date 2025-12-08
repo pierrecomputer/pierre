@@ -789,7 +789,7 @@ index 0000000..dfcb5ae
 +
 +function setWrapperProps(
 +  { pre, highlighter, theme, themes }: SetupWrapperNodesProps,
-+  prefix = 'pjs' // probably should make this our own theme-ing variables
++  prefix = 'diffs' // probably should make this our own theme-ing variables
 +) {
 +  let styles = '';
 +  if (theme != null) {
@@ -908,7 +908,7 @@ index d096b05..953e276 100644
 -  background-color: color-mix(in srgb, var(--shiki-dark-bg) 95%, white);
 +  background-color: color-mix(
 +    in srgb,
-+    var(--pjs-light-bg, var(--pjs-bg)) 95%,
++    var(--diffs-light-bg, var(--diffs-bg)) 95%,
 +    black
 +  );
 +}
@@ -918,7 +918,7 @@ index d096b05..953e276 100644
 +  [data-line]:hover [data-column-content] {
 +    background-color: color-mix(
 +      in srgb,
-+      var(--pjs-dark-bg, var(--pjs-bg)) 95%,
++      var(--diffs-dark-bg, var(--diffs-bg)) 95%,
 +      white
 +    );
 +  }
@@ -929,7 +929,7 @@ index d096b05..953e276 100644
 -  background-color: color-mix(in srgb, var(--shiki-light-bg) 95%, black);
 +  background-color: color-mix(
 +    in srgb,
-+    var(--pjs-light-bg, var(--pjs-bg)) 95%,
++    var(--diffs-light-bg, var(--diffs-bg)) 95%,
 +    black
 +  );
 +}
@@ -938,7 +938,7 @@ index d096b05..953e276 100644
 +[data-theme='dark'] [data-line]:hover [data-column-content] {
 +  background-color: color-mix(
 +    in srgb,
-+    var(--pjs-dark-bg, var(--pjs-bg)) 95%,
++    var(--diffs-dark-bg, var(--diffs-bg)) 95%,
 +    white
 +  );
  }
@@ -967,62 +967,62 @@ index d096b05..953e276 100644
 -  background-color: var(--shiki-light-bg);
 -  color: var(--shiki-light);
 +[data-pierrejs] {
-+  background-color: var(--pjs-light-bg);
-+  color: var(--pjs-light);
++  background-color: var(--diffs-light-bg);
++  color: var(--diffs-light);
  
    & span {
 -    color: var(--shiki-light);
-+    color: var(--pjs-light);
++    color: var(--diffs-light);
    }
  
    & [data-column-number] {
 -    background-color: var(--shiki-light-bg);
-+    background-color: var(--pjs-light-bg);
++    background-color: var(--diffs-light-bg);
 +  }
 +}
 +
 +@media (prefers-color-scheme: dark) {
 +  [data-pierrejs] {
-+    background-color: var(--pjs-dark-bg);
-+    color: var(--pjs-dark);
++    background-color: var(--diffs-dark-bg);
++    color: var(--diffs-dark);
 +
 +    & span {
-+      color: var(--pjs-dark);
++      color: var(--diffs-dark);
 +    }
 +
 +    & [data-column-number] {
-+      background-color: var(--pjs-dark-bg);
++      background-color: var(--diffs-dark-bg);
 +    }
 +  }
 +}
 +
 +[data-theme='light'] {
-+  background-color: var(--pjs-light-bg);
-+  color: var(--pjs-light);
++  background-color: var(--diffs-light-bg);
++  color: var(--diffs-light);
 +
 +  & span {
-+    color: var(--pjs-light);
++    color: var(--diffs-light);
 +  }
 +
 +  & [data-column-number] {
-+    background-color: var(--pjs-light-bg);
++    background-color: var(--diffs-light-bg);
    }
  }
  
  [data-theme='dark'] {
 -  background-color: var(--shiki-dark-bg);
 -  color: var(--shiki-dark);
-+  background-color: var(--pjs-dark-bg);
-+  color: var(--pjs-dark);
++  background-color: var(--diffs-dark-bg);
++  color: var(--diffs-dark);
  
    & span {
 -    color: var(--shiki-dark);
-+    color: var(--pjs-dark);
++    color: var(--diffs-dark);
    }
  
    & [data-column-number] {
 -    background-color: var(--shiki-dark-bg);
-+    background-color: var(--pjs-dark-bg);
++    background-color: var(--diffs-dark-bg);
    }
  }
 diff --git a/src/tests/example2.txt b/src/test_files/example_md.txt

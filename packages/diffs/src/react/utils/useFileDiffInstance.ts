@@ -7,9 +7,9 @@ import {
   useRef,
 } from 'react';
 
-import { FileDiff, type FileDiffOptions } from '../../FileDiff';
-import type { SelectedLineRange } from '../../LineSelectionManager';
-import type { GetHoveredLineResult } from '../../MouseEventManager';
+import { FileDiff, type FileDiffOptions } from '../../components/FileDiff';
+import type { SelectedLineRange } from '../../managers/LineSelectionManager';
+import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type {
   DiffLineAnnotation,
   FileContents,

@@ -1,10 +1,10 @@
 import { DEFAULT_THEMES } from '../constants';
-import type { PJSThemeNames, ThemesType } from '../types';
+import type { DiffsThemeNames, ThemesType } from '../types';
 
 export function getThemes(
-  theme: PJSThemeNames | ThemesType = DEFAULT_THEMES
-): PJSThemeNames[] {
-  const themesArr: PJSThemeNames[] = [];
+  theme: DiffsThemeNames | ThemesType = DEFAULT_THEMES
+): DiffsThemeNames[] {
+  const themesArr: DiffsThemeNames[] = [];
   if (typeof theme === 'string') {
     themesArr.push(theme);
   } else {

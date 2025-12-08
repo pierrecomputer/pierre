@@ -2,18 +2,19 @@ import { bundledThemes } from 'shiki';
 import { normalizeTheme } from 'shiki/core';
 
 import type {
-  PJSHighlighter,
-  PJSThemeNames,
+  DiffsHighlighter,
+  DiffsThemeNames,
   ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 import { getThemes } from '../utils/getThemes';
 import { isWorkerContext } from '../utils/isWorkerContext';
 
-const ResolvedThemes: Map<PJSThemeNames, ThemeRegistrationResolved> = new Map();
+const ResolvedThemes: Map<DiffsThemeNames, ThemeRegistrationResolved> =
+  new Map();
 
 const ResolvingThemes: Map<
-  PJSThemeNames,
+  DiffsThemeNames,
   Promise<ThemeRegistrationResolved>
 > = new Map();
 
@@ -28,7 +29,7 @@ const attachedThemes = new Set<string>();
 // otherwise it will fail. The main intention is a helper to avoid an async
 // tick if we don't actually need it
 export function getResolvedThemes(
-  themeNames: PJSThemeNames[]
+  themeNames: DiffsThemeNames[]
 ): ThemeRegistrationResolved[] {
   const resolvedThemes: ThemeRegistrationResolved[] = [];
   for (const themeName of themeNames) {
@@ -44,12 +45,12 @@ export function getResolvedThemes(
 }
 
 export function getResolvedOrResolveTheme(
-  themeName: PJSThemeNames
+  themeName: DiffsThemeNames
 ): ThemeRegistrationResolved | Promise<ThemeRegistrationResolved> {
   return ResolvedThemes.get(themeName) ?? resolveTheme(themeName);
 }
 
-export function hasResolvedThemes(themeNames: PJSThemeNames[]): boolean {
+export function hasResolvedThemes(themeNames: DiffsThemeNames[]): boolean {
   for (const themeName of themeNames) {
     if (!ResolvedThemes.has(themeName)) {
       return false;
@@ -59,7 +60,7 @@ export function hasResolvedThemes(themeNames: PJSThemeNames[]): boolean {
 }
 
 export async function resolveTheme(
-  themeName: PJSThemeNames
+  themeName: DiffsThemeNames
 ): Promise<ThemeRegistrationResolved> {
   if (isWorkerContext()) {
     throw new Error(
@@ -106,7 +107,7 @@ export async function resolveTheme(
 }
 
 export async function resolveThemes(
-  themes: PJSThemeNames[]
+  themes: DiffsThemeNames[]
 ): Promise<ThemeRegistrationResolved[]> {
   const resolvedThemes: ThemeRegistrationResolved[] = [];
   const themesToResolve: Promise<ThemeRegistrationResolved | undefined>[] = [];
@@ -135,10 +136,10 @@ export async function resolveThemes(
 
 export function attachResolvedThemes(
   themes:
-    | PJSThemeNames
+    | DiffsThemeNames
     | ThemeRegistrationResolved
-    | (PJSThemeNames | ThemeRegistrationResolved)[],
-  highlighter: PJSHighlighter
+    | (DiffsThemeNames | ThemeRegistrationResolved)[],
+  highlighter: DiffsHighlighter
 ): void {
   themes = Array.isArray(themes) ? themes : [themes];
   for (let themeRef of themes) {
@@ -163,7 +164,9 @@ export function attachResolvedThemes(
   }
 }
 
-export function areThemesAttached(themes: PJSThemeNames | ThemesType): boolean {
+export function areThemesAttached(
+  themes: DiffsThemeNames | ThemesType
+): boolean {
   for (const theme of getThemes(themes)) {
     if (!attachedThemes.has(theme)) {
       return false;

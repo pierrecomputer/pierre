@@ -1,9 +1,9 @@
 import { DEFAULT_THEMES } from '../constants';
 import type {
   CodeToHastOptions,
+  DiffsHighlighter,
+  DiffsThemeNames,
   FileContents,
-  PJSHighlighter,
-  PJSThemeNames,
   RenderFileOptions,
   ThemedFileResult,
 } from '../types';
@@ -16,7 +16,7 @@ import { getLineNodes } from './getLineNodes';
 
 export function renderFileWithHighlighter(
   file: FileContents,
-  highlighter: PJSHighlighter,
+  highlighter: DiffsHighlighter,
   { theme = DEFAULT_THEMES, tokenizeMaxLineLength }: RenderFileOptions,
   forcePlainText = false
 ): ThemedFileResult {
@@ -39,7 +39,7 @@ export function renderFileWithHighlighter(
     lineIndex: shikiLineNumber - 1,
     lineNumber: shikiLineNumber,
   });
-  const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
+  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
     if (typeof theme === 'string') {
       return {
         lang,

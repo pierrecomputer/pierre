@@ -1,11 +1,12 @@
 import {
   type BundledLanguage,
   DEFAULT_THEMES,
+  DIFFS_TAG_NAME,
+  type DiffsThemeNames,
   File,
   type FileContents,
   FileDiff,
   FileStream,
-  type PJSThemeNames,
   type ParsedPatch,
   type SupportedLanguages,
   getFiletypeFromFileName,
@@ -185,8 +186,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           //   const contentCol = document.createElement('div');
           //   contentCol.textContent = 'unmodified lines';
           //   contentCol.style.position = 'sticky';
-          //   contentCol.style.width = 'var(--pjs-column-content-width)';
-          //   contentCol.style.left = 'var(--pjs-column-number-width)';
+          //   contentCol.style.width = 'var(--diffs-column-content-width)';
+          //   contentCol.style.left = 'var(--diffs-column-number-width)';
           //   contentCol.style.backgroundColor = 'blue';
           //   contentCol.style.color = 'white';
           //   fragment.appendChild(contentCol);
@@ -226,7 +227,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           //   const contentCol = document.createElement('div');
           //   contentCol.textContent = `${hunkData.lines} unmodified lines`;
           //   contentCol.style.position = 'sticky';
-          //   contentCol.style.width = 'var(--pjs-column-width)';
+          //   contentCol.style.width = 'var(--diffs-column-width)';
           //   contentCol.style.left = '0';
           //   wrapper.appendChild(contentCol);
           //   return wrapper;
@@ -236,8 +237,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           //   wrapper.style.gridColumn = '2 / 3';
           //   wrapper.textContent = `${hunkData.lines} unmodified lines`;
           //   wrapper.style.position = 'sticky';
-          //   wrapper.style.width = 'var(--pjs-column-content-width)';
-          //   wrapper.style.left = 'var(--pjs-column-number-width)';
+          //   wrapper.style.width = 'var(--diffs-column-content-width)';
+          //   wrapper.style.left = 'var(--diffs-column-number-width)';
           //   return wrapper;
           // },
           onLineClick(props) {
@@ -258,7 +259,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         manager
       );
 
-      const fileContainer = document.createElement('file-diff');
+      const fileContainer = document.createElement(DIFFS_TAG_NAME);
       wrapper.appendChild(fileContainer);
       const start = Date.now();
       instance.render({
@@ -317,7 +318,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
 function handlePreload() {
   if (!isHighlighterNull()) return;
   const langs: BundledLanguage[] = [];
-  const themes: PJSThemeNames[] = [];
+  const themes: DiffsThemeNames[] = [];
   for (const item of CodeConfigs) {
     if ('lang' in item.options) {
       langs.push(item.options.lang);
@@ -508,7 +509,7 @@ if (renderFileButton != null) {
     if (wrapper == null) return;
     cleanupInstances(wrapper);
 
-    const fileContainer = document.createElement('file-diff');
+    const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     const instance = new File<LineCommentMetadata>(
       {

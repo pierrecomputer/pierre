@@ -2,28 +2,31 @@ import deepEquals from 'fast-deep-equal';
 import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { DiffHunksRenderer, type HunksRenderResult } from './DiffHunksRenderer';
+import {
+  DEFAULT_THEMES,
+  DIFFS_TAG_NAME,
+  HEADER_METADATA_SLOT_ID,
+  UNSAFE_CSS_ATTRIBUTE,
+} from '../constants';
 import {
   LineSelectionManager,
   type LineSelectionOptions,
   type SelectedLineRange,
   pluckLineSelectionOptions,
-} from './LineSelectionManager';
+} from '../managers/LineSelectionManager';
 import {
   type GetHoveredLineResult,
   MouseEventManager,
   type MouseEventManagerBaseOptions,
   pluckMouseEventOptions,
-} from './MouseEventManager';
-import { ResizeManager } from './ResizeManager';
-import { ScrollSyncManager } from './ScrollSyncManager';
+} from '../managers/MouseEventManager';
+import { ResizeManager } from '../managers/ResizeManager';
+import { ScrollSyncManager } from '../managers/ScrollSyncManager';
 import {
-  DEFAULT_THEMES,
-  HEADER_METADATA_SLOT_ID,
-  UNSAFE_CSS_ATTRIBUTE,
-} from './constants';
-import { PJSContainerLoaded } from './custom-components/Container';
-import { SVGSpriteSheet } from './sprite';
+  DiffHunksRenderer,
+  type HunksRenderResult,
+} from '../renderers/DiffHunksRenderer';
+import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
@@ -34,17 +37,18 @@ import type {
   HunkSeparators,
   RenderHeaderMetadataCallback,
   ThemeTypes,
-} from './types';
-import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode';
-import { createCodeNode } from './utils/createCodeNode';
-import { createHoverContentNode } from './utils/createHoverContentNode';
-import { createUnsafeCSSStyleNode } from './utils/createUnsafeCSSStyleNode';
-import { wrapUnsafeCSS } from './utils/cssWrappers';
-import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { parseDiffFromFile } from './utils/parseDiffFromFile';
-import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
-import { setPreNodeProperties } from './utils/setWrapperNodeProps';
-import type { WorkerPoolManager } from './worker';
+} from '../types';
+import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
+import { createCodeNode } from '../utils/createCodeNode';
+import { createHoverContentNode } from '../utils/createHoverContentNode';
+import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
+import { wrapUnsafeCSS } from '../utils/cssWrappers';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
+import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+import type { WorkerPoolManager } from '../worker';
+import { DiffsContainerLoaded } from './web-components';
 
 export interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -87,7 +91,7 @@ let instanceId = -1;
 export class FileDiff<LAnnotation = undefined> {
   // NOTE(amadeus): We sorta need this to ensure the web-component file is
   // properly loaded
-  static LoadedCustomComponent: boolean = PJSContainerLoaded;
+  static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: number = ++instanceId;
 
@@ -272,7 +276,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.pre = element;
         continue;
       }
-      if ('pjsHeader' in element.dataset) {
+      if ('diffsHeader' in element.dataset) {
         this.headerElement = element;
         continue;
       }
@@ -505,7 +509,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
-      document.createElement('file-diff');
+      document.createElement(DIFFS_TAG_NAME);
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }

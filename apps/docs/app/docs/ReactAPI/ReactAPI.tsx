@@ -9,7 +9,7 @@ import { type CSSProperties, useState } from 'react';
 import { DocsCodeExample } from '../DocsCodeExample';
 
 const NumberColumnWidthOverride = {
-  '--pjs-min-number-column-width': '3ch',
+  '--diffs-min-number-column-width': '3ch',
 } as CSSProperties;
 
 type ExampleTypes = 'multi-file-diff' | 'patch-diff' | 'file-diff' | 'file';

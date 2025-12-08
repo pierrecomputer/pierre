@@ -14,10 +14,10 @@ import {
   resolveThemes,
 } from '../highlighter/themes';
 import type {
+  DiffsHighlighter,
+  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
-  PJSHighlighter,
-  PJSThemeNames,
   RenderDiffOptions,
   RenderDiffResult,
   RenderFileOptions,
@@ -72,7 +72,7 @@ interface ThemeSubscriber {
 }
 
 export class WorkerPoolManager {
-  private highlighter: PJSHighlighter | undefined;
+  private highlighter: DiffsHighlighter | undefined;
   private renderOptions: WorkerRenderingOptions;
   private initialized: Promise<void> | boolean = false;
   private workers: ManagedWorker[] = [];
@@ -134,7 +134,7 @@ export class WorkerPoolManager {
 
   // FIXME(amadeus): Add an API to potentially change the other render options
   // dynamically, or replace this method with that...
-  async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
+  async setTheme(theme: DiffsThemeNames | ThemesType): Promise<void> {
     if (!this.isInitialized()) {
       await this.initialize();
     }
@@ -181,7 +181,7 @@ export class WorkerPoolManager {
   }
 
   private async registerThemesOnWorkers(
-    theme: PJSThemeNames | ThemesType,
+    theme: DiffsThemeNames | ThemesType,
     resolvedThemes: ThemeRegistrationResolved[]
   ): Promise<void> {
     if (resolvedThemes.length === 0 || this.workersFailed) {

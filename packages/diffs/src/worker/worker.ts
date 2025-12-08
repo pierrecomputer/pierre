@@ -6,7 +6,7 @@ import {
 } from '../highlighter/shared_highlighter';
 import { attachResolvedThemes } from '../highlighter/themes';
 import type {
-  PJSHighlighter,
+  DiffsHighlighter,
   RenderDiffOptions,
   RenderFileOptions,
   ThemedDiffResult,
@@ -139,7 +139,7 @@ async function handleRenderDiffMetadata({
   sendDiffMetadataSuccess(id, result, renderOptions);
 }
 
-async function getHighlighter(): Promise<PJSHighlighter> {
+async function getHighlighter(): Promise<DiffsHighlighter> {
   return await getSharedHighlighter({ themes: [], langs: ['text'] });
 }
 

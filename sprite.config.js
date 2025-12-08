@@ -20,7 +20,7 @@ export const spriteConfig = {
 
   output: {
     file: 'packages/diffs/src/sprite.ts',
-    symbolPrefix: 'pjs-icon-',
+    symbolPrefix: 'diffs-icon-',
   },
 
   source: {
