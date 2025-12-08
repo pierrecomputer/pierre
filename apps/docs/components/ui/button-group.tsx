@@ -41,7 +41,10 @@ function ButtonGroup({
       }}
     >
       <div
-        className={cn('bg-secondary inline-flex rounded-lg p-[2px]', className)}
+        className={cn(
+          'bg-secondary inline-flex self-start rounded-lg p-[2px]',
+          className
+        )}
         role="group"
         {...props}
       >
