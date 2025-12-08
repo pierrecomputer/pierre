@@ -1,10 +1,9 @@
+import { createJavaScriptRegexEngine } from '@shikijs/engine-javascript';
+import { createHighlighterCoreSync } from 'shiki/core';
+
 import { DEFAULT_THEMES } from '../constants';
-import { attachResolvedLanguages } from '../highlighter/languages';
-import {
-  getHighlighterIfLoaded,
-  getSharedHighlighter,
-} from '../highlighter/shared_highlighter';
-import { attachResolvedThemes } from '../highlighter/themes';
+import { attachResolvedLanguages } from '../highlighter/languages/attachResolvedLanguages';
+import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
 import type {
   DiffsHighlighter,
   RenderDiffOptions,
@@ -28,6 +27,7 @@ import type {
   WorkerRequestId,
 } from './types';
 
+let highlighter: DiffsHighlighter | undefined;
 let renderOptions: WorkerRenderingOptions = {
   theme: DEFAULT_THEMES,
   tokenizeMaxLineLength: 1000,
@@ -39,23 +39,22 @@ self.addEventListener('error', (event) => {
 });
 
 // Handle incoming messages from the main thread
-// eslint-disable-next-line @typescript-eslint/no-misused-promises
-self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
+self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
 
   try {
     switch (request.type) {
       case 'initialize':
-        await handleInitialize(request);
+        handleInitialize(request);
         break;
       case 'register-theme':
-        await handleRegisterTheme(request);
+        handleRegisterTheme(request);
         break;
       case 'file':
-        await handleRenderFile(request);
+        handleRenderFile(request);
         break;
       case 'diff':
-        await handleRenderDiffMetadata(request);
+        handleRenderDiffMetadata(request);
         break;
       default:
         throw new Error(
@@ -68,13 +67,13 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
   }
 });
 
-async function handleInitialize({
+function handleInitialize({
   id,
   renderOptions: options,
   resolvedThemes,
   resolvedLanguages,
 }: InitializeWorkerRequest) {
-  const highlighter = await getHighlighter();
+  const highlighter = getHighlighter();
   attachResolvedThemes(resolvedThemes, highlighter);
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
@@ -88,12 +87,12 @@ async function handleInitialize({
   } satisfies InitializeSuccessResponse);
 }
 
-async function handleRegisterTheme({
+function handleRegisterTheme({
   id,
   theme,
   resolvedThemes,
 }: RegisterThemeWorkerRequest) {
-  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  const highlighter = getHighlighter();
   attachResolvedThemes(resolvedThemes, highlighter);
   renderOptions.theme = theme;
   postMessage({
@@ -104,12 +103,8 @@ async function handleRegisterTheme({
   });
 }
 
-async function handleRenderFile({
-  id,
-  file,
-  resolvedLanguages,
-}: RenderFileRequest): Promise<void> {
-  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+function handleRenderFile({ id, file, resolvedLanguages }: RenderFileRequest) {
+  const highlighter = getHighlighter();
   // Load resolved languages if provided
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
@@ -121,12 +116,12 @@ async function handleRenderFile({
   );
 }
 
-async function handleRenderDiffMetadata({
+function handleRenderDiffMetadata({
   id,
   diff,
   resolvedLanguages,
 }: RenderDiffRequest) {
-  const highlighter = getHighlighterIfLoaded() ?? (await getHighlighter());
+  const highlighter = getHighlighter();
   // Load resolved languages if provided
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
@@ -135,8 +130,13 @@ async function handleRenderDiffMetadata({
   sendDiffMetadataSuccess(id, result, renderOptions);
 }
 
-async function getHighlighter(): Promise<DiffsHighlighter> {
-  return await getSharedHighlighter({ themes: [], langs: ['text'] });
+function getHighlighter(): DiffsHighlighter {
+  highlighter ??= createHighlighterCoreSync({
+    themes: [],
+    langs: [],
+    engine: createJavaScriptRegexEngine(),
+  }) as DiffsHighlighter;
+  return highlighter;
 }
 
 function sendFileSuccess(

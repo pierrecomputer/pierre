@@ -59,6 +59,7 @@
   },
   "dependencies": {
     "@shikijs/core": "catalog:",
+    "@shikijs/engine-javascript": "catalog:",
     "@shikijs/transformers": "catalog:",
     "diff": "catalog:",
     "fast-deep-equal": "catalog:",
