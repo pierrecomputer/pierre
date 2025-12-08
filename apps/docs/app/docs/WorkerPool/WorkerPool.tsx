@@ -276,7 +276,7 @@ export function WorkerPool({
         className="inline-block"
         style={
           {
-            '--pjs-line-height': '15px',
+            '--diffs-line-height': '15px',
           } as CSSProperties
         }
       />

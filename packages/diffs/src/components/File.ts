@@ -2,43 +2,44 @@ import deepEquals from 'fast-deep-equal';
 import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { type FileRenderResult, FileRenderer } from './FileRenderer';
+import {
+  DEFAULT_THEMES,
+  DIFFS_TAG_NAME,
+  HEADER_METADATA_SLOT_ID,
+  UNSAFE_CSS_ATTRIBUTE,
+} from '../constants';
 import {
   LineSelectionManager,
   type LineSelectionOptions,
   type SelectedLineRange,
   pluckLineSelectionOptions,
-} from './LineSelectionManager';
+} from '../managers/LineSelectionManager';
 import {
   type GetHoveredLineResult,
   MouseEventManager,
   type MouseEventManagerBaseOptions,
   pluckMouseEventOptions,
-} from './MouseEventManager';
-import { ResizeManager } from './ResizeManager';
-import {
-  DEFAULT_THEMES,
-  HEADER_METADATA_SLOT_ID,
-  UNSAFE_CSS_ATTRIBUTE,
-} from './constants';
-import { PJSContainerLoaded } from './custom-components/Container';
-import { SVGSpriteSheet } from './sprite';
+} from '../managers/MouseEventManager';
+import { ResizeManager } from '../managers/ResizeManager';
+import { type FileRenderResult, FileRenderer } from '../renderers/FileRenderer';
+import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
   RenderFileMetadata,
   ThemeTypes,
-} from './types';
-import { createAnnotationWrapperNode } from './utils/createAnnotationWrapperNode';
-import { createCodeNode } from './utils/createCodeNode';
-import { createHoverContentNode } from './utils/createHoverContentNode';
-import { createUnsafeCSSStyleNode } from './utils/createUnsafeCSSStyleNode';
-import { wrapUnsafeCSS } from './utils/cssWrappers';
-import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { prerenderHTMLIfNecessary } from './utils/prerenderHTMLIfNecessary';
-import { setPreNodeProperties } from './utils/setWrapperNodeProps';
-import type { WorkerPoolManager } from './worker';
+} from '../types';
+import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
+import { createCodeNode } from '../utils/createCodeNode';
+import { createHoverContentNode } from '../utils/createHoverContentNode';
+import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
+import { wrapUnsafeCSS } from '../utils/cssWrappers';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
+import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+import type { WorkerPoolManager } from '../worker';
+import { DiffsContainerLoaded } from './web-components';
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -71,7 +72,7 @@ export interface FileOptions<LAnnotation>
 let instanceId = -1;
 
 export class File<LAnnotation = undefined> {
-  static LoadedCustomComponent: boolean = PJSContainerLoaded;
+  static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: number = ++instanceId;
   private fileContainer: HTMLElement | undefined;
@@ -227,7 +228,7 @@ export class File<LAnnotation = undefined> {
         this.unsafeCSSStyle = element;
         continue;
       }
-      if ('pjsHeader' in element.dataset) {
+      if ('diffsHeader' in element.dataset) {
         this.headerElement = element;
         continue;
       }
@@ -442,7 +443,7 @@ export class File<LAnnotation = undefined> {
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
-      document.createElement('file-diff');
+      document.createElement(DIFFS_TAG_NAME);
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }

@@ -1,4 +1,4 @@
-import type { ObservedAnnotationNodes, ObservedGridNodes } from './types';
+import type { ObservedAnnotationNodes, ObservedGridNodes } from '../types';
 
 export class ResizeManager {
   private observedNodes = new Map<
@@ -156,11 +156,11 @@ export class ResizeManager {
         if (newHeight !== item.currentHeight) {
           item.currentHeight = Math.max(newHeight, 0);
           item.column1.container.style.setProperty(
-            '--pjs-annotation-min-height',
+            '--diffs-annotation-min-height',
             `${item.currentHeight}px`
           );
           item.column2.container.style.setProperty(
-            '--pjs-annotation-min-height',
+            '--diffs-annotation-min-height',
             `${item.currentHeight}px`
           );
         }
@@ -169,11 +169,11 @@ export class ResizeManager {
           if (specs.inlineSize !== item.codeWidth) {
             item.codeWidth = specs.inlineSize;
             item.codeElement.style.setProperty(
-              '--pjs-column-content-width',
+              '--diffs-column-content-width',
               `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
             );
             item.codeElement.style.setProperty(
-              '--pjs-column-width',
+              '--diffs-column-width',
               `${item.codeWidth}px`
             );
           }
@@ -181,14 +181,14 @@ export class ResizeManager {
           if (specs.inlineSize !== item.numberWidth) {
             item.numberWidth = specs.inlineSize;
             item.codeElement.style.setProperty(
-              '--pjs-column-number-width',
+              '--diffs-column-number-width',
               `${item.numberWidth}px`
             );
             // We probably need to update code width variable if
             // `numberWidth` changed
             if (item.codeWidth !== 'auto') {
               item.codeElement.style.setProperty(
-                '--pjs-column-content-width',
+                '--diffs-column-content-width',
                 `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
               );
             }

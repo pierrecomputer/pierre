@@ -1,21 +1,21 @@
-import { queueRender } from './UniversalRenderer';
-import { DEFAULT_THEMES } from './constants';
-import { getSharedHighlighter } from './highlighter/shared_highlighter';
-import { CodeToTokenTransformStream, type RecallToken } from './shiki-stream';
+import { DEFAULT_THEMES, DIFFS_TAG_NAME } from '../constants';
+import { getSharedHighlighter } from '../highlighter/shared_highlighter';
+import { queueRender } from '../managers/UniversalRenderingManager';
+import { CodeToTokenTransformStream, type RecallToken } from '../shiki-stream';
 import type {
   BaseCodeOptions,
-  PJSHighlighter,
+  DiffsHighlighter,
   SupportedLanguages,
   ThemeTypes,
   ThemedToken,
-} from './types';
-import { createCodeNode } from './utils/createCodeNode';
-import { createRowNodes } from './utils/createRowNodes';
-import { createSpanFromToken } from './utils/createSpanNodeFromToken';
-import { formatCSSVariablePrefix } from './utils/formatCSSVariablePrefix';
-import { getHighlighterOptions } from './utils/getHighlighterOptions';
-import { getHighlighterThemeStyles } from './utils/getHighlighterThemeStyles';
-import { setPreNodeProperties } from './utils/setWrapperNodeProps';
+} from '../types';
+import { createCodeNode } from '../utils/createCodeNode';
+import { createRowNodes } from '../utils/createRowNodes';
+import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
+import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
+import { getHighlighterOptions } from '../utils/getHighlighterOptions';
+import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
+import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
   lang?: SupportedLanguages;
@@ -31,7 +31,7 @@ export interface FileStreamOptions extends BaseCodeOptions {
 }
 
 export class FileStream {
-  private highlighter: PJSHighlighter | undefined;
+  private highlighter: DiffsHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;
   private fileContainer: HTMLElement | undefined;
@@ -67,7 +67,7 @@ export class FileStream {
     }
   }
 
-  private async initializeHighlighter(): Promise<PJSHighlighter> {
+  private async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.options.lang, this.options)
     );
@@ -99,7 +99,7 @@ export class FileStream {
   private setupStream(
     stream: ReadableStream<string>,
     wrapper: HTMLElement,
-    highlighter: PJSHighlighter
+    highlighter: DiffsHighlighter
   ): void {
     const {
       disableLineNumbers = false,
@@ -245,7 +245,8 @@ export class FileStream {
     ) {
       return this.fileContainer;
     }
-    this.fileContainer = fileContainer ?? document.createElement('file-diff');
+    this.fileContainer =
+      fileContainer ?? document.createElement(DIFFS_TAG_NAME);
     return this.fileContainer;
   }
 }

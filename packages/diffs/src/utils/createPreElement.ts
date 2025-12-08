@@ -21,7 +21,7 @@ export function createPreWrapperProperties({
   totalLines,
 }: PrePropertiesConfig): Properties {
   const properties: Properties = {
-    'data-pjs': '',
+    'data-diffs': '',
     'data-type': split ? 'split' : 'file',
     'data-overflow': overflow,
     'data-disable-line-numbers': disableLineNumbers ? '' : undefined,
@@ -36,7 +36,7 @@ export function createPreWrapperProperties({
     style: themeStyles,
     tabIndex: 0,
   };
-  properties.style += `--pjs-min-number-column-width-default:${`${totalLines}`.length}ch;`;
+  properties.style += `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`;
 
   return properties;
 }

@@ -22,7 +22,7 @@ function createExpandButton(type: ExpansionDirections) {
     tagName: 'div',
     children: [
       createIconElement({
-        name: type === 'both' ? 'pjs-icon-expand-all' : 'pjs-icon-expand',
+        name: type === 'both' ? 'diffs-icon-expand-all' : 'diffs-icon-expand',
         properties: { 'data-icon': '' },
       }),
     ],

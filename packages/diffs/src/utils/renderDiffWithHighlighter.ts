@@ -4,13 +4,13 @@ import { DEFAULT_THEMES } from '../constants';
 import type {
   CodeToHastOptions,
   DecorationItem,
+  DiffsHighlighter,
+  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
   Hunk,
   LineDiffTypes,
   LineInfo,
-  PJSHighlighter,
-  PJSThemeNames,
   RenderDiffFilesResult,
   RenderDiffOptions,
   SupportedLanguages,
@@ -29,7 +29,7 @@ import {
 
 export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
-  highlighter: PJSHighlighter,
+  highlighter: DiffsHighlighter,
   options: RenderDiffOptions,
   forcePlainText = false
 ): ThemedDiffResult {
@@ -403,7 +403,7 @@ interface RenderTwoFilesProps {
   oldDecorations: DecorationItem[];
   newDecorations: DecorationItem[];
   options: RenderDiffOptions;
-  highlighter: PJSHighlighter;
+  highlighter: DiffsHighlighter;
   languageOverride: SupportedLanguages | undefined;
 }
 
@@ -421,7 +421,7 @@ function renderTwoFiles({
   const oldLang = languageOverride ?? getFiletypeFromFileName(oldFile.name);
   const newLang = languageOverride ?? getFiletypeFromFileName(newFile.name);
   const { state, transformers } = createTransformerWithState();
-  const hastConfig: CodeToHastOptions<PJSThemeNames> = (() => {
+  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
     return typeof themeOrThemes === 'string'
       ? {
           ...options,

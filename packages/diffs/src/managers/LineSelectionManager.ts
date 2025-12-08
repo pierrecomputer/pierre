@@ -1,6 +1,6 @@
 import deepEquals from 'fast-deep-equal';
 
-import type { AnnotationSide } from './types';
+import type { AnnotationSide } from '../types';
 
 export type SelectionSide = AnnotationSide;
 

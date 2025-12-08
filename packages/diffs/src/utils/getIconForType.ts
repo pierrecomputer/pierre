@@ -5,23 +5,23 @@ export function getIconForType(
   type: ChangeTypes | 'file'
 ): Extract<
   SVGSpriteNames,
-  | 'pjs-icon-file-code'
-  | 'pjs-icon-symbol-modified'
-  | 'pjs-icon-symbol-deleted'
-  | 'pjs-icon-symbol-added'
-  | 'pjs-icon-symbol-moved'
+  | 'diffs-icon-file-code'
+  | 'diffs-icon-symbol-modified'
+  | 'diffs-icon-symbol-deleted'
+  | 'diffs-icon-symbol-added'
+  | 'diffs-icon-symbol-moved'
 > {
   switch (type) {
     case 'file':
-      return 'pjs-icon-file-code';
+      return 'diffs-icon-file-code';
     case 'change':
-      return 'pjs-icon-symbol-modified';
+      return 'diffs-icon-symbol-modified';
     case 'new':
-      return 'pjs-icon-symbol-added';
+      return 'diffs-icon-symbol-added';
     case 'deleted':
-      return 'pjs-icon-symbol-deleted';
+      return 'diffs-icon-symbol-deleted';
     case 'rename-pure':
     case 'rename-changed':
-      return 'pjs-icon-symbol-moved';
+      return 'diffs-icon-symbol-moved';
   }
 }
