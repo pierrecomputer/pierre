@@ -1,5 +1,5 @@
 import Footer from '@/components/Footer';
-import { preloadFile, preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadFile, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
 import { CoreTypes } from './CoreTypes/CoreTypes';
 import {

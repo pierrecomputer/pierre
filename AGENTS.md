@@ -6,7 +6,7 @@
 - Since we use `bun` we can natively run typescript without compilation. So even local scripts we run can be .ts files.
 - We use bun's `catalog` feature for dependencies in order to reduce differences in dependencies across monorepo packages.
   - When adding a new dependency, we typically will add the exact most recent version to the root `package.json` file in the `catalog` and then in our individual packages we'd use the `"catalog:"` version instead of a specific version.
-  - This rule is sometimes broken in packages that are published, in order to make sure that end-users aren't forced to our specific version. `apps/docs` would use the catalog version and `precision-diffs` _may_ choose to use a range.
+  - This rule is sometimes broken in packages that are published, in order to make sure that end-users aren't forced to our specific version. `apps/docs` would use the catalog version and `diffs` _may_ choose to use a range.
 - npm "scripts" should work from inside the folder of the given package, but common scripts are often "mirrored" into the root `package.json`. In general the root scripts should not do something different than the package level script, it's simply a shortcut to calling it from the root.
 
 ## Linting
@@ -44,7 +44,7 @@ We use Bun's built-in testing framework for unit tests. Tests are located in a `
 
 ### Running Tests
 
-For the precision-diffs package:
+For the diffs package:
 
 ```bash
 # From the package directory

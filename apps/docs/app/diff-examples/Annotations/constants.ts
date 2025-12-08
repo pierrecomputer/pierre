@@ -3,11 +3,11 @@ import {
   type DiffLineAnnotation,
   type FileContents,
   parseDiffFromFile,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 import type {
   PreloadFileDiffOptions,
   PreloadMultiFileDiffOptions,
-} from '@pierre/precision-diffs/ssr';
+} from '@pierre/diffs/ssr';
 
 export interface AnnotationMetadata {
   key: string;

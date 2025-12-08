@@ -1,4 +1,4 @@
-import { disposeHighlighter } from '@pierre/precision-diffs';
+import { disposeHighlighter } from '@pierre/diffs';
 
 let totalInstances = 0;
 let completed = 0;

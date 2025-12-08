@@ -1,4 +1,4 @@
-import type { DiffLineAnnotation } from '@pierre/precision-diffs';
+import type { DiffLineAnnotation } from '@pierre/diffs';
 import { Title } from '@solidjs/meta';
 import { createAsync } from '@solidjs/router';
 import { Show, createSignal } from 'solid-js';
@@ -12,7 +12,7 @@ interface AnnotationMetadata {
 /**
  * Sample annotation component demonstrating SolidJS reactivity in shadow DOM.
  * This component uses createSignal() to manage a counter, proving that full
- * SolidJS reactivity works inside precision-diffs annotation slots.
+ * SolidJS reactivity works inside diffs annotation slots.
  *
  * IMPORTANT: Must use on:click (native events) instead of onClick (delegated events)
  * because delegated events don't work with shadow DOM boundaries.

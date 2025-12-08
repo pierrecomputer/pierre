@@ -14,8 +14,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InputWithIcon } from '@/components/ui/input-group';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -49,9 +49,8 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
           title="Bring your own fonts"
           description={
             <>
-              <code>@pierre/precision-diffs</code> adapts to any{' '}
-              <code>font</code>, <code>font-size</code>,{' '}
-              <code>line-height</code>, and even{' '}
+              <code>@pierre/diffs</code> adapts to any <code>font</code>,{' '}
+              <code>font-size</code>, <code>line-height</code>, and even{' '}
               <code>font-feature-settings</code> you may have set. Configure
               font options with your preferred CSS method globally or on a
               per-component basis.

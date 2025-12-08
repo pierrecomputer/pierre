@@ -1,7 +1,7 @@
 'use client';
 
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
@@ -20,7 +20,7 @@ export function Installation({ installationExamples }: InstallationProps) {
       <p>
         Diffs is{' '}
         <a
-          href="https://www.npmjs.com/package/@pierre/precision-diffs"
+          href="https://www.npmjs.com/package/@pierre/diffs"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -53,7 +53,7 @@ export function Installation({ installationExamples }: InstallationProps) {
         <tbody>
           <tr>
             <td>
-              <code>@pierre/precision-diffs</code>
+              <code>@pierre/diffs</code>
             </td>
             <td>
               <a href="#vanilla-js-api">Vanilla JS components</a> and{' '}
@@ -63,7 +63,7 @@ export function Installation({ installationExamples }: InstallationProps) {
           </tr>
           <tr>
             <td>
-              <code>@pierre/precision-diffs/react</code>
+              <code>@pierre/diffs/react</code>
             </td>
             <td>
               <a href="#react-api">React components</a> for rendering diffs with
@@ -72,7 +72,7 @@ export function Installation({ installationExamples }: InstallationProps) {
           </tr>
           <tr>
             <td>
-              <code>@pierre/precision-diffs/ssr</code>
+              <code>@pierre/diffs/ssr</code>
             </td>
             <td>
               <a href="#ssr">Server-side rendering utilities</a> for
@@ -81,7 +81,7 @@ export function Installation({ installationExamples }: InstallationProps) {
           </tr>
           <tr>
             <td>
-              <code>@pierre/precision-diffs/worker</code>
+              <code>@pierre/diffs/worker</code>
             </td>
             <td>
               <a href="#worker-pool">Worker pool utilities</a> for offloading

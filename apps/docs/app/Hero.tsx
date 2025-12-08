@@ -17,7 +17,7 @@ export function Hero() {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText('bun i @pierre/precision-diffs');
+      await navigator.clipboard.writeText('bun i @pierre/diffs');
       setCopied(true);
       setTimeout(() => setCopied(false), 5000);
     } catch (err) {
@@ -49,10 +49,9 @@ export function Hero() {
         A diff rendering library
       </h1>
       <p className="text-md text-muted-foreground mb-2 md:text-lg lg:text-xl">
-        <code>@pierre/precision-diffs</code> is an open source diff and code
-        rendering library. It's built on Shiki for syntax highlighting and
-        theming, is super customizable, and comes packed with features. Made
-        with love by{' '}
+        <code>@pierre/diffs</code> is an open source diff and code rendering
+        library. It's built on Shiki for syntax highlighting and theming, is
+        super customizable, and comes packed with features. Made with love by{' '}
         <Link
           target="_blank"
           href="https://pierre.computer"
@@ -70,7 +69,7 @@ export function Hero() {
               onClick={() => void copyToClipboard()}
               className="inline-flex items-center gap-4 rounded-lg bg-gray-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-gray-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
             >
-              <span className="text-[95%]">bun i @pierre/precision-diffs</span>
+              <span className="text-[95%]">bun i @pierre/diffs</span>
               {copied ? (
                 <IconCheck className="ml-auto" />
               ) : (

@@ -1,14 +1,14 @@
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-import type { PreloadFileOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 export const PACKAGE_MANAGERS = ['npm', 'bun', 'pnpm', 'yarn'] as const;
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 const INSTALL_COMMANDS: Record<PackageManager, string> = {
-  npm: 'npm install @pierre/precision-diffs',
-  bun: 'bun add @pierre/precision-diffs',
-  pnpm: 'pnpm add @pierre/precision-diffs',
-  yarn: 'yarn add @pierre/precision-diffs',
+  npm: 'npm install @pierre/diffs',
+  bun: 'bun add @pierre/diffs',
+  pnpm: 'pnpm add @pierre/diffs',
+  yarn: 'yarn add @pierre/diffs',
 };
 
 export const INSTALLATION_EXAMPLES: Record<
