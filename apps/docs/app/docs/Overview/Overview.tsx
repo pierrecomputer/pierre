@@ -3,11 +3,11 @@
 import { IconCiWarningFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
+import { MultiFileDiff } from '@pierre/diffs/react';
 import type {
   PreloadMultiFileDiffResult,
   PreloadedFileResult,
-} from '@pierre/precision-diffs/ssr';
+} from '@pierre/diffs/ssr';
 import Link from 'next/link';
 import { useState } from 'react';
 

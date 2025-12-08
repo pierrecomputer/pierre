@@ -1,8 +1,5 @@
-import {
-  type DiffLineAnnotation,
-  type FileContents,
-} from '@pierre/precision-diffs';
-import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import { type DiffLineAnnotation, type FileContents } from '@pierre/diffs';
+import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
 import { SSRPage } from './SSRPage';
 import type { AnnotationMetadata } from './ssr_types';

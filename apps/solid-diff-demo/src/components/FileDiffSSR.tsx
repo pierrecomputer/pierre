@@ -1,5 +1,5 @@
-import { DIFFS_TAG_NAME, FileDiff } from '@pierre/precision-diffs';
-import type { DiffLineAnnotation, FileContents } from '@pierre/precision-diffs';
+import { DIFFS_TAG_NAME, FileDiff } from '@pierre/diffs';
+import type { DiffLineAnnotation, FileContents } from '@pierre/diffs';
 import { For, type JSX, createSignal, onCleanup, onMount } from 'solid-js';
 import { Dynamic, isServer, render } from 'solid-js/web';
 
@@ -26,7 +26,7 @@ interface FileDiffSSRProps<T = unknown> {
 /**
  * FileDiffSSR - Server-side rendered file diff component for SolidStart.
  *
- * This component demonstrates how to integrate precision-diffs with SolidStart's SSR:
+ * This component demonstrates how to integrate diffs with SolidStart's SSR:
  * 1. Server renders static HTML with declarative shadow DOM using preloadMultiFileDiff()
  * 2. Client hydrates by connecting FileDiff instance to existing DOM (no re-render)
  * 3. Annotation slots are replaced with interactive SolidJS components on the client

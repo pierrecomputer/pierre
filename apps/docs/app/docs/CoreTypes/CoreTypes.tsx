@@ -1,4 +1,4 @@
-import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 

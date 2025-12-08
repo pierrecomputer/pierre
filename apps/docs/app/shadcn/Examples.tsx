@@ -9,7 +9,7 @@ import {
   type RepositoryData,
   type SyncedRepo,
 } from '@/registry/new-york/blocks/git-platform-sync/components/git-platform-sync';
-import { File } from '@pierre/precision-diffs/react';
+import { File } from '@pierre/diffs/react';
 import { Lollipop, Menu } from 'lucide-react';
 import { Fragment, useState } from 'react';
 

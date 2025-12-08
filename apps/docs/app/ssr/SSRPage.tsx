@@ -3,10 +3,9 @@
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { IconBell } from '@/components/icons';
-import type { DiffLineAnnotation } from '@pierre/precision-diffs';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import '@pierre/precision-diffs/ssr';
-import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+import type { DiffLineAnnotation } from '@pierre/diffs';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import type { AnnotationMetadata } from './ssr_types';

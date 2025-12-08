@@ -1,4 +1,4 @@
-import { queueRender } from '@pierre/precision-diffs';
+import { queueRender } from '@pierre/diffs';
 
 export function createFakeContentStream(data: string, letterByLetter = false) {
   return new ReadableStream<string>({

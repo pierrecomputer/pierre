@@ -1,6 +1,6 @@
 # Diffs, from Pierre
 
-`@pierre/precision-diffs` is an open source diff and file rendering library built on [Shiki](https://shiki.style/). It's super customizable and packed with the features you need. Made with love by [The Pierre Computer Company](https://pierre.computer). Available as vanilla JavaScript and React components.
+`@pierre/diffs` is an open source diff and file rendering library built on [Shiki](https://shiki.style/). It's super customizable and packed with the features you need. Made with love by [The Pierre Computer Company](https://pierre.computer). Available as vanilla JavaScript and React components.
 
 **View examples and read documentation on [Diffs.com](https://diffs.com).**
 
@@ -19,7 +19,7 @@
 ## Install
 
 ```bash
-bun i @pierre/precision-diffs
+bun i @pierre/diffs
 ```
 
 ## Dev
@@ -36,7 +36,7 @@ bun run dev
 
 ## Testing
 
-Run tests for the precision-diffs package:
+Run tests for the diffs package:
 
 ```bash
 # Run tests

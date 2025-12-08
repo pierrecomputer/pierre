@@ -1,5 +1,5 @@
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-import type { PreloadMultiFileDiffOptions } from '@pierre/precision-diffs/ssr';
+import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 export const LINE_SELECTION_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {

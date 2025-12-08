@@ -7,7 +7,7 @@ import {
   type FileOptions,
   type FileProps,
   type LineAnnotation,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 
 import { CopyCodeButton } from './CopyCodeButton';
 

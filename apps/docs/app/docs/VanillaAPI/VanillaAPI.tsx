@@ -3,7 +3,7 @@
 import { IconInfoFill } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
-import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
@@ -45,7 +45,7 @@ export function VanillaAPI({
 
       <Notice icon={<IconInfoFill />}>
         Import vanilla JavaScript classes, components, and methods from{' '}
-        <code>@pierre/precision-diffs</code>.
+        <code>@pierre/diffs</code>.
       </Notice>
 
       <h3>Components</h3>

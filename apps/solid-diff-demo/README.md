@@ -1,6 +1,6 @@
 # Diffs × SolidStart SSR Demo
 
-This demo shows that **`@pierre/precision-diffs`** works seamlessly with **SolidStart's server-side rendering (SSR)**, including support for interactive SolidJS components inside annotation slots within shadow DOM.
+This demo shows that **`@pierre/diffs`** works seamlessly with **SolidStart's server-side rendering (SSR)**, including support for interactive SolidJS components inside annotation slots within shadow DOM.
 
 ## What This Demonstrates
 
@@ -12,7 +12,7 @@ This demo shows that **`@pierre/precision-diffs`** works seamlessly with **Solid
 
 ## Why This Matters
 
-Precision-diffs uses web components with shadow DOM, which can be tricky to integrate with SSR frameworks. This demo solves the key challenges:
+Diffs uses web components with shadow DOM, which can be tricky to integrate with SSR frameworks. This demo solves the key challenges:
 
 1. **Avoiding hydration mismatches** between server and client
 2. **Enabling framework reactivity** inside shadow DOM slots
@@ -62,7 +62,7 @@ src/
 
 ### Declarative Shadow DOM
 
-Precision-diffs uses the **declarative shadow DOM** (DSD) feature for SSR:
+Diffs uses the **declarative shadow DOM** (DSD) feature for SSR:
 
 ```tsx
 <template shadowrootmode="open">
@@ -124,7 +124,7 @@ This two-phase approach avoids hydration mismatches while enabling full SolidJS 
 ### Step 1: Install Diffs
 
 ```bash
-bun add @pierre/precision-diffs
+bun add @pierre/diffs
 ```
 
 ### Step 2: Add TypeScript Declarations
@@ -132,7 +132,7 @@ bun add @pierre/precision-diffs
 Create `src/custom-elements.d.ts`:
 
 ```typescript
-import type { DIFFS_TAG_NAME } from '@pierre/precision-diffs';
+import type { DIFFS_TAG_NAME } from '@pierre/diffs';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -152,7 +152,7 @@ Create a cached server function to preload diffs (e.g., `src/lib/preload-diff.ts
 ```typescript
 'use server';
 
-import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 import { cache } from '@solidjs/router';
 
 export const getPreloadedDiff = cache(async (oldFile, newFile) => {
@@ -295,12 +295,12 @@ const dispose = render(() => <Component />, slotElement);
 
 - **Server**: Diff generation happens once and is cached with SolidStart's `cache()`
 - **Client**: No re-rendering during hydration - existing DOM is reused
-- **Bundle size**: Precision-diffs includes syntax highlighting; consider code splitting for large apps
+- **Bundle size**: Diffs includes syntax highlighting; consider code splitting for large apps
 
 ## Browser Support
 
 - Declarative Shadow DOM: Chrome 90+, Edge 91+, Safari 16.4+, Firefox 123+
-- For older browsers, precision-diffs automatically falls back to client-side rendering
+- For older browsers, diffs automatically falls back to client-side rendering
 
 ## Learn More
 

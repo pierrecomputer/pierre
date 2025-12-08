@@ -1,4 +1,4 @@
-import type { FileContents } from '@pierre/precision-diffs';
+import type { FileContents } from '@pierre/diffs';
 
 /**
  * Sample diff data for demonstration purposes.

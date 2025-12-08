@@ -1,7 +1,7 @@
 'use server';
 
-import type { DiffLineAnnotation } from '@pierre/precision-diffs';
-import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+import type { DiffLineAnnotation } from '@pierre/diffs';
+import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 import { cache } from '@solidjs/router';
 
 import { NEW_FILE, OLD_FILE } from '../diff-data';
@@ -30,7 +30,7 @@ const annotations: DiffLineAnnotation<AnnotationMetadata>[] = [
 
 /**
  * SolidStart cached server function that preloads the diff on the server.
- * Uses precision-diffs SSR API to generate HTML with declarative shadow DOM.
+ * Uses diffs SSR API to generate HTML with declarative shadow DOM.
  *
  * @returns Preloaded diff data including prerendered HTML and configuration
  */

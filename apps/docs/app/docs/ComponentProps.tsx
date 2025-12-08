@@ -1,4 +1,4 @@
-import type { FileContents } from '@pierre/precision-diffs';
+import type { FileContents } from '@pierre/diffs';
 
 import { DocsCodeExample } from './DocsCodeExample';
 
