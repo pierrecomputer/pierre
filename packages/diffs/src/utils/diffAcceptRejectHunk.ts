@@ -10,6 +10,11 @@ export function diffAcceptRejectHunk(
     hunks: [...diff.hunks],
     oldLines: diff.oldLines != null ? [...diff.oldLines] : undefined,
     newLines: diff.newLines != null ? [...diff.newLines] : undefined,
+    // Automatically update cacheKey if it exists, since content is changing
+    cacheKey:
+      diff.cacheKey != null
+        ? `${diff.cacheKey}:${type[0]}-${hunkIndex}`
+        : undefined,
   };
   // Fix the content lines
   const { newLines, oldLines } = diff;

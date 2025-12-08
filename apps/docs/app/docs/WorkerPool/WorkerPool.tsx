@@ -232,24 +232,22 @@ export function WorkerPool({
 
       <h3>Render Cache</h3>
       <Notice variant="warning" icon={<IconCiWarningFill />}>
-        This is an experimental feature. It is disabled by default while being
-        validated in production use cases.
+        This is an experimental feature being validated in production use cases.
+        The API is subject to change.
       </Notice>
       <p>
         The worker pool can cache rendered AST results to avoid redundant
-        highlighting work. When enabled, subsequent requests for the same file
-        or diff will return cached results immediately instead of reprocessing
-        through a worker. This works automatically for both React and Vanilla JS
-        APIs — no additional code changes are required beyond enabling the
-        option.
+        highlighting work. When a file or diff has a <code>cacheKey</code>,
+        subsequent requests with the same key will return cached results
+        immediately instead of reprocessing through a worker. This works
+        automatically for both React and Vanilla JS APIs.
       </p>
       <Notice icon={<IconInfoFill />}>
-        The cache uses <strong>referential equality</strong> to identify files
-        and diffs. You must keep your <code>FileContents</code> and{' '}
-        <code>FileDiffMetadata</code> objects stable (e.g., memoized or stored
-        in state) rather than recreating them on every render. If you pass new
-        object references each time, the cache will grow unexpectedly and
-        provide no benefit.
+        Caching is enabled per-file/diff by setting a <code>cacheKey</code>{' '}
+        property. Files and diffs without a <code>cacheKey</code> will not be
+        cached. The cache also validates against render options — if options
+        like theme or line diff type change, the cached result is skipped and
+        re-rendered.
       </Notice>
       <DocsCodeExample {...cachingExample} />
 

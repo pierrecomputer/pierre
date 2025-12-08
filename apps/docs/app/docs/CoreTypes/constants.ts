@@ -23,12 +23,19 @@ interface FileContents {
   // Optional: Override the detected language for syntax highlighting
   // See: https://shiki.style/languages
   lang?: SupportedLanguages;
+
+  // Optional: Cache key for AST caching in Worker Pool.
+  // When provided, rendered AST results are cached and reused.
+  // IMPORTANT: The key must change whenever the content, filename
+  // or lang changes!
+  cacheKey?: string;
 }
 
 // Example usage
 const file: FileContents = {
   name: 'example.tsx',
   contents: 'export function Hello() { return <div>Hello</div>; }',
+  cacheKey: 'example-file-v1', // Must change if contents change
 };
 
 // With explicit language override
@@ -36,6 +43,7 @@ const jsonFile: FileContents = {
   name: 'config', // No extension, so we specify lang
   contents: '{ "key": "value" }',
   lang: 'json',
+  cacheKey: 'config-file',
 };`,
   },
   options,
@@ -71,6 +79,11 @@ interface FileDiffMetadata {
   // enables expansion around hunks)
   oldLines?: string[];
   newLines?: string[];
+
+  // Optional: Cache key for AST caching in Worker Pool.
+  // When provided, rendered diff AST results are cached and reused.
+  // IMPORTANT: The key must change whenever the diff changes!
+  cacheKey?: string;
 }
 
 // Hunk represents a single changed region in the diff
@@ -132,18 +145,22 @@ export const PARSE_DIFF_FROM_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
 const oldFile: FileContents = {
   name: 'greeting.ts',
   contents: 'export const greeting = "Hello";',
+  cacheKey: 'greeting-old', // Optional: enables AST caching
 };
 
 const newFile: FileContents = {
   name: 'greeting.ts',
   contents: 'export const greeting = "Hello, World!";',
+  cacheKey: 'greeting-new',
 };
 
 // Generate the diff metadata
 const diff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile);
 
 // The resulting diff includes oldLines and newLines,
-// which enables "expand unchanged" functionality in the UI`,
+// which enables "expand unchanged" functionality in the UI.
+// If both files have cacheKey, the diff will have a combined
+// cacheKey of "greeting-old:greeting-new" for AST caching.`,
   },
   options,
 };
@@ -167,10 +184,15 @@ const patchString = \`--- a/file.ts
  const z = 4;\`;
 
 // Returns an array of ParsedPatch objects (one per commit in the patch)
-const patches: ParsedPatch[] = parsePatchFiles(patchString);
+// Pass an optional cacheKeyPrefix to enable AST caching with Worker Pool
+const patches: ParsedPatch[] = parsePatchFiles(patchString, 'my-patch-key');
 
 // Each ParsedPatch contains an array of FileDiffMetadata
 const files: FileDiffMetadata[] = patches[0].files;
+
+// With cacheKeyPrefix, each diff gets a cacheKey like "my-patch-0",
+// "my-patch-1", etc.
+// This enables AST caching in Worker Pool for parsed patches.
 
 // Note: Diffs from patch files don't include oldLines/newLines,
 // so "expand unchanged" won't work unless you add them manually`,
