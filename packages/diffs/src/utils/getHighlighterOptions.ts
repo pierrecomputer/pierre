@@ -1,13 +1,13 @@
-import type { PJSThemeNames, SupportedLanguages, ThemesType } from '../types';
+import type { DiffsThemeNames, SupportedLanguages, ThemesType } from '../types';
 import { getThemes } from './getThemes';
 
 interface HighlighterOptionsShape {
-  theme?: PJSThemeNames | ThemesType;
+  theme?: DiffsThemeNames | ThemesType;
 }
 
 interface GetHighlighterOptionsReturn {
   langs: SupportedLanguages[];
-  themes: PJSThemeNames[];
+  themes: DiffsThemeNames[];
 }
 
 export function getHighlighterOptions(

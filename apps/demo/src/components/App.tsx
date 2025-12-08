@@ -1,6 +1,6 @@
 import {
   type BundledLanguage,
-  type PJSThemeNames,
+  type DiffsThemeNames,
   isHighlighterNull,
   preloadHighlighter,
 } from '@pierre/precision-diffs';
@@ -27,7 +27,7 @@ export function App() {
   const handlePreload = useCallback(() => {
     if (isHighlighterNull()) {
       const langs: BundledLanguage[] = [];
-      const themes: PJSThemeNames[] = [];
+      const themes: DiffsThemeNames[] = [];
       for (const item of CodeConfigs) {
         if ('lang' in item.options) {
           langs.push(item.options.lang);

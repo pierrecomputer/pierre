@@ -1,8 +1,8 @@
-import type { PJSThemeNames, ThemesType } from '../types';
+import type { DiffsThemeNames, ThemesType } from '../types';
 
 export function areThemesEqual(
-  themeA: PJSThemeNames | ThemesType | undefined,
-  themeB: PJSThemeNames | ThemesType | undefined
+  themeA: DiffsThemeNames | ThemesType | undefined,
+  themeB: DiffsThemeNames | ThemesType | undefined
 ): boolean {
   if (
     themeA == null ||

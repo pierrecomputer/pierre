@@ -2,36 +2,36 @@ import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { DEFAULT_THEMES } from './constants';
-import { areLanguagesAttached } from './highlighter/languages';
+import { DEFAULT_THEMES } from '../constants';
+import { areLanguagesAttached } from '../highlighter/languages';
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
-} from './highlighter/shared_highlighter';
-import { areThemesAttached, hasResolvedThemes } from './highlighter/themes';
+} from '../highlighter/shared_highlighter';
+import { areThemesAttached, hasResolvedThemes } from '../highlighter/themes';
 import type {
   BaseCodeOptions,
+  DiffsHighlighter,
   FileContents,
   LineAnnotation,
-  PJSHighlighter,
   RenderFileOptions,
   RenderFileResult,
   RenderedFileASTCache,
   SupportedLanguages,
   ThemeTypes,
   ThemedFileResult,
-} from './types';
-import { areThemesEqual } from './utils/areThemesEqual';
-import { createAnnotationElement } from './utils/createAnnotationElement';
-import { createFileHeaderElement } from './utils/createFileHeaderElement';
-import { createPreElement } from './utils/createPreElement';
-import { getFiletypeFromFileName } from './utils/getFiletypeFromFileName';
-import { getHighlighterOptions } from './utils/getHighlighterOptions';
-import { getLineAnnotationName } from './utils/getLineAnnotationName';
-import { getThemes } from './utils/getThemes';
-import { createHastElement } from './utils/hast_utils';
-import { renderFileWithHighlighter } from './utils/renderFileWithHighlighter';
-import type { WorkerPoolManager } from './worker';
+} from '../types';
+import { areThemesEqual } from '../utils/areThemesEqual';
+import { createAnnotationElement } from '../utils/createAnnotationElement';
+import { createFileHeaderElement } from '../utils/createFileHeaderElement';
+import { createPreElement } from '../utils/createPreElement';
+import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
+import { getHighlighterOptions } from '../utils/getHighlighterOptions';
+import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getThemes } from '../utils/getThemes';
+import { createHastElement } from '../utils/hast_utils';
+import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import type { WorkerPoolManager } from '../worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -57,7 +57,7 @@ export interface FileRenderResult {
 export interface FileRendererOptions extends BaseCodeOptions {}
 
 export class FileRenderer<LAnnotation = undefined> {
-  private highlighter: PJSHighlighter | undefined;
+  private highlighter: DiffsHighlighter | undefined;
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
@@ -247,7 +247,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private renderFileWithHighlighter(
     file: FileContents,
-    highlighter: PJSHighlighter,
+    highlighter: DiffsHighlighter,
     plainText = false
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
@@ -350,7 +350,7 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  async initializeHighlighter(): Promise<PJSHighlighter> {
+  async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );

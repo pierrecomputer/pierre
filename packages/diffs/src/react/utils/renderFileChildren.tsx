@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
-import type { GetHoveredLineResult } from '../../MouseEventManager';
 import { HEADER_METADATA_SLOT_ID } from '../../constants';
+import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type { FileContents } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { HoverSlotStyles } from '../constants';

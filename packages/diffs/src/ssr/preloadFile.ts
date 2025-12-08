@@ -1,5 +1,5 @@
-import type { FileOptions } from '../../src/File';
-import { FileRenderer } from '../FileRenderer';
+import type { FileOptions } from '../components/File';
+import { FileRenderer } from '../renderers/FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import { createStyleElement } from '../utils/createStyleElement';
 import { renderHTML } from './renderHTML';

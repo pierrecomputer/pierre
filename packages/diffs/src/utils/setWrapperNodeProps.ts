@@ -41,13 +41,13 @@ export function setPreNodeProperties({
   }
   pre.dataset.type = split ? 'split' : 'file';
   pre.dataset.overflow = overflow;
-  pre.dataset.pjs = '';
+  pre.dataset.diffs = '';
   pre.tabIndex = 0;
   // Set theme color custom properties as inline styles on pre element
   pre.style = themeStyles;
   // Set CSS custom property for line number column width
   pre.style.setProperty(
-    '--pjs-min-number-column-width-default',
+    '--diffs-min-number-column-width-default',
     `${`${totalLines}`.length}ch`
   );
   return pre;

@@ -1,7 +1,7 @@
-import { FileDiff } from '@pierre/precision-diffs';
+import { DIFFS_TAG_NAME, FileDiff } from '@pierre/precision-diffs';
 import type { DiffLineAnnotation, FileContents } from '@pierre/precision-diffs';
 import { For, type JSX, createSignal, onCleanup, onMount } from 'solid-js';
-import { isServer, render } from 'solid-js/web';
+import { Dynamic, isServer, render } from 'solid-js/web';
 
 /**
  * Props for the FileDiffSSR component.
@@ -91,7 +91,8 @@ export function FileDiffSSR(props: FileDiffSSRProps) {
   return (
     <div>
       {/* Custom element that will contain the file diff */}
-      <file-diff
+      <Dynamic
+        component={DIFFS_TAG_NAME}
         ref={fileDiffRef}
         id="ssr-diff"
         class="overflow-hidden rounded-lg border border-gray-700"
@@ -117,7 +118,7 @@ export function FileDiffSSR(props: FileDiffSSRProps) {
             </For>
           </>
         )}
-      </file-diff>
+      </Dynamic>
 
       {/* Hydration status indicator */}
       <p style={{ 'margin-top': '10px', 'font-size': '14px', color: '#888' }}>

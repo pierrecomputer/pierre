@@ -1,15 +1,15 @@
 import { DEFAULT_THEMES } from '../constants';
 import type {
-  PJSHighlighter,
-  PJSThemeNames,
+  DiffsHighlighter,
+  DiffsThemeNames,
   ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 
 interface GetHighlighterThemeStylesProps {
-  theme?: PJSThemeNames | ThemesType;
-  highlighter: PJSHighlighter;
+  theme?: DiffsThemeNames | ThemesType;
+  highlighter: DiffsHighlighter;
   prefix?: string;
 }
 

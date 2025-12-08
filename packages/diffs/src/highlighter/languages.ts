@@ -1,6 +1,6 @@
 import { bundledLanguages } from 'shiki';
 
-import type { PJSHighlighter, SupportedLanguages } from '../types';
+import type { DiffsHighlighter, SupportedLanguages } from '../types';
 import { isWorkerContext } from '../utils/isWorkerContext';
 import type { ResolvedLanguage } from '../worker';
 
@@ -118,7 +118,7 @@ export async function resolveLanguages(
 
 export function attachResolvedLanguages(
   resolvedLanguages: ResolvedLanguage | ResolvedLanguage[],
-  highlighter: PJSHighlighter
+  highlighter: DiffsHighlighter
 ): void {
   resolvedLanguages = Array.isArray(resolvedLanguages)
     ? resolvedLanguages

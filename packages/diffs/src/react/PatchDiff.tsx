@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 
+import { DIFFS_TAG_NAME } from '../constants';
 import type { FileDiffMetadata } from '../types';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import type { DiffBasePropsReact } from './types';
@@ -43,9 +44,9 @@ export function PatchDiff<LAnnotation = undefined>({
     getHoveredLine,
   });
   return (
-    <file-diff ref={ref} className={className} style={style}>
+    <DIFFS_TAG_NAME ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}
-    </file-diff>
+    </DIFFS_TAG_NAME>
   );
 }
 

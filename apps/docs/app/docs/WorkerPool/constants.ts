@@ -401,7 +401,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
 // - highlighterOptions: WorkerHighlighterOptions
-//   - theme: PJSThemeNames | ThemesType - Theme name or { dark, light } object
+//   - theme: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - langs?: SupportedLanguages[] - Array of languages to preload
 //   - preferWasmHighlighter?: boolean - Use WASM highlighter
 
