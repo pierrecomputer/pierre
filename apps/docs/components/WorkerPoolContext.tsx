@@ -4,13 +4,13 @@ import {
   type WorkerHighlighterOptions,
   WorkerPoolContextProvider,
   type WorkerPoolOptions,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
 const PoolOptions: WorkerPoolOptions = {
   workerFactory() {
     return new Worker(
-      new URL('@pierre/precision-diffs/worker/worker.js', import.meta.url)
+      new URL('@pierre/diffs/worker/worker.js', import.meta.url)
     );
   },
 };

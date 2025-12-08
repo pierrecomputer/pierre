@@ -1,7 +1,7 @@
 'use client';
 
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -21,8 +21,8 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
         description={
           <>
             In addition to rendering standard Git diffs and patches, you can
-            pass any two files in <code>@pierre/precision-diffs</code> and get a
-            diff between them. This is especially useful when comparing across
+            pass any two files in <code>@pierre/diffs</code> and get a diff
+            between them. This is especially useful when comparing across
             generative snapshots where linear history isn't always available.
             Edit the css below to see the diff.
           </>

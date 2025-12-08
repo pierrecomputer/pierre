@@ -26,7 +26,7 @@
     "vite": "catalog:"
   },
   "dependencies": {
-    "@pierre/precision-diffs": "workspace:*",
+    "@pierre/diffs": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shiki": "catalog:"

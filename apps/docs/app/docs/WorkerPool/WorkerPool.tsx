@@ -6,7 +6,7 @@ import {
   IconInfoFill,
 } from '@/components/icons';
 import { Notice } from '@/components/ui/notice';
-import type { PreloadedFileResult } from '@pierre/precision-diffs/ssr';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import type { CSSProperties } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
@@ -60,8 +60,7 @@ export function WorkerPool({
         may be bugs and the API is subject to change.
       </Notice>
       <Notice icon={<IconBulbFill />}>
-        Import worker utilities from <code>@pierre/precision-diffs/worker</code>
-        .
+        Import worker utilities from <code>@pierre/diffs/worker</code>.
       </Notice>
       <p>
         By default, syntax highlighting runs on the main thread using Shiki. If
@@ -198,9 +197,9 @@ export function WorkerPool({
       <h4 data-toc-ignore>React</h4>
       <p>
         Wrap your component tree with <code>WorkerPoolContextProvider</code>{' '}
-        from <code>@pierre/precision-diffs/react</code>. All{' '}
-        <code>FileDiff</code> and <code>File</code> components nested within
-        will automatically use the worker pool for syntax highlighting.
+        from <code>@pierre/diffs/react</code>. All <code>FileDiff</code> and{' '}
+        <code>File</code> components nested within will automatically use the
+        worker pool for syntax highlighting.
       </p>
       <p>
         The <code>WorkerPoolContextProvider</code> will automatically spin up or

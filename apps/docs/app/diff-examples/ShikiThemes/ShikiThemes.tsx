@@ -16,12 +16,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { preloadHighlighter } from '@pierre/precision-diffs';
-import { MultiFileDiff } from '@pierre/precision-diffs/react';
-import type {
-  PreloadMultiFileDiffResult,
-  ThemesType,
-} from '@pierre/precision-diffs/ssr';
+import { preloadHighlighter } from '@pierre/diffs';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult, ThemesType } from '@pierre/diffs/ssr';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -137,10 +134,9 @@ export function ShikiThemes({
         title="Adapts to any Shiki theme"
         description={
           <>
-            We built <code>@pierre/precision-diffs</code> on top of Shiki for
-            syntax highlighting and general theming. Our components
-            automatically adapt to blend in with your theme selection, including
-            across color modes.
+            We built <code>@pierre/diffs</code> on top of Shiki for syntax
+            highlighting and general theming. Our components automatically adapt
+            to blend in with your theme selection, including across color modes.
           </>
         }
       />

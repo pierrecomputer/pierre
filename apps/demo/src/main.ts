@@ -14,8 +14,8 @@ import {
   parseDiffFromFile,
   parsePatchFiles,
   preloadHighlighter,
-} from '@pierre/precision-diffs';
-import type { WorkerPoolManager } from '@pierre/precision-diffs/worker';
+} from '@pierre/diffs';
+import type { WorkerPoolManager } from '@pierre/diffs/worker';
 
 import {
   CodeConfigs,

@@ -2,7 +2,7 @@ import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type {
   PreloadFileOptions,
   PreloadMultiFileDiffOptions,
-} from '@pierre/precision-diffs/ssr';
+} from '@pierre/diffs/ssr';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -47,7 +47,7 @@ export const OVERVIEW_REACT_SINGLE_FILE: PreloadFileOptions<undefined> = {
     contents: `import {
   type FileContents,
   MultiFileDiff,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 
 // Store file objects in variables rather than inlining them.
 // The React components use reference equality to detect changes
@@ -96,7 +96,7 @@ export const OVERVIEW_REACT_PATCH_FILE: PreloadFileOptions<undefined> = {
   type ParsedPatch,
   FileDiff,
   parsePatchFiles,
-} from '@pierre/precision-diffs/react';
+} from '@pierre/diffs/react';
 
 // If you consume a patch file, then you'll need to spawn multiple
 // renderers for each file in the patches
@@ -152,7 +152,7 @@ export const OVERVIEW_VANILLA_SINGLE_FILE: PreloadFileOptions<undefined> = {
     contents: `import {
   type FileContents,
   FileDiff,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 // Store file objects in variables rather than inlining them.
 // FileDiff uses reference equality to detect changes and skip
@@ -202,7 +202,7 @@ export const OVERVIEW_VANILLA_PATCH_FILE: PreloadFileOptions<undefined> = {
   FileDiff,
   ParsedPatch,
   parsePatchFiles,
-} from '@pierre/precision-diffs';
+} from '@pierre/diffs';
 
 // This is a fake function to fetch a GitHub PR patch file,
 // not an actual api

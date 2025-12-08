@@ -1,4 +1,4 @@
-import type { FileContents } from '@pierre/precision-diffs';
+import type { FileContents } from '@pierre/diffs';
 
 import { DocsCodeExample } from './DocsCodeExample';
 
@@ -12,7 +12,7 @@ FileDiffMetadata,
 OnLineClickProps,
 OnLineEnterProps,
 OnLineLeaveProps,
-} from '@pierre/precision-diffs';`,
+} from '@pierre/diffs';`,
 };
 
 export function TypescriptSupport() {

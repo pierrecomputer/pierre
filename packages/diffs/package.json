@@ -1,6 +1,6 @@
 {
-  "name": "@pierre/precision-diffs",
-  "version": "0.6.0",
+  "name": "@pierre/diffs",
+  "version": "1.0.0-beta.1",
   "type": "module",
   "license": "apache-2.0",
   "scripts": {
@@ -69,5 +69,8 @@
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",
     "react-dom": "^18.3.1 || ^19.0.0"
+  },
+  "publishConfig": {
+    "tag": "beta"
   }
 }
