@@ -1,0 +1,104 @@
+.docs-prose {
+  --gap: 1.25rem;
+  --font-size: 14px;
+  --content-width: 72ch;
+  --font-weight-semi: 600;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 100%;
+  font-size: var(--font-size);
+  line-height: 1.6;
+
+  @media (width >= 768px) {
+    --font-size: 16px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin-bottom: calc(var(--gap) / -2);
+    font-weight: 600;
+    scroll-margin-top: 8rem;
+
+    &:not(:first-child) {
+      margin-top: var(--gap);
+    }
+  }
+
+  h1 {
+    font-size: clamp(2rem, 1.5rem + 1.875vw, 2.5rem);
+    line-height: 1.2;
+  }
+  h2 {
+    font-size: clamp(1.75rem, 1.3rem + 1vw, 2rem);
+    line-height: calc(3 / 2.25);
+  }
+  h3 {
+    font-size: clamp(1.5rem, 1.1rem + 0.75vw, 1.75rem);
+    line-height: calc(2.5 / 1.75);
+  }
+  h4 {
+    font-size: clamp(1.25rem, 1rem + 0.625vw, 1.5rem);
+    line-height: 1.5;
+  }
+
+  p {
+    margin-block: 0;
+  }
+
+  > p {
+    max-width: var(--content-width);
+  }
+
+  ul,
+  ol {
+    max-width: var(--content-width);
+    margin-block: 0;
+    padding-inline-start: 2em;
+  }
+
+  ul {
+    list-style-type: disc;
+  }
+
+  ol {
+    list-style-type: decimal;
+  }
+
+  li + li {
+    margin-top: 0.25em;
+  }
+
+  a:not([class]) {
+    font-weight: var(--font-weight-semi);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.25em;
+    text-decoration-color: color-mix(in lab, var(--color-primary), transparent);
+    color: var(--color-primary);
+
+    &:hover {
+      text-decoration-color: currentcolor;
+      color: var(--color-muted-foreground);
+    }
+  }
+
+  strong {
+    font-weight: var(--font-weight-semi);
+  }
+
+  th,
+  td {
+    padding-block: 0.75em;
+    padding-inline-end: 1em;
+    vertical-align: top;
+    border-bottom: 1px solid var(--color-border);
+  }
+  th {
+    text-align: inherit;
+    border-bottom-color: currentcolor;
+  }
+}

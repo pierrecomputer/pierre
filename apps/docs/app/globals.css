@@ -1,8 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-@plugin '@tailwindcss/typography';
-
 @custom-variant light (&:is(.light *));
 @custom-variant dark (&:is(.dark *));
 
@@ -134,8 +132,8 @@
   }
   code {
     font-family: var(--pjs-font-family);
-    font-size: 95% !important;
-    font-weight: 500 !important;
+    font-size: 95%;
+    font-weight: 500;
     color: var(--color-primary);
     letter-spacing: -0.02em;
   }
@@ -173,7 +171,7 @@
     @apply opacity-75;
   }
 
-  .prose code {
+  .docs-prose code {
     color: color-mix(in lab, var(--color-primary), currentcolor) !important;
   }
   .prose section:first-child h2:first-child {

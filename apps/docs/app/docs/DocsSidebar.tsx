@@ -23,23 +23,11 @@ export function DocsSidebar({
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [activeHeading, setActiveHeading] = useState<string>('');
 
-  // Generate ID from heading text
-  const generateId = (text: string): string => {
-    return text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .trim();
-  };
-
   // Extract headings from the page content
   useLayoutEffect(() => {
     const timeoutId = setTimeout(() => {
-      const headingElements = document.querySelectorAll('h2, h3, h4');
+      const headingElements = document.querySelectorAll('h2, h3');
       const headingItems: HeadingItem[] = [];
-
-      // Track parent headings at each level for hierarchical IDs
-      const parentIds: Record<number, string> = {};
 
       for (const element of headingElements) {
         if (
@@ -48,25 +36,13 @@ export function DocsSidebar({
         ) {
           continue;
         }
+
+        // IDs are already set by rehype-slug at build time
+        const id = element.id;
+        if (id === '') continue;
+
         const text = element.textContent ?? '';
         const level = parseInt(element.tagName.charAt(1));
-        const baseId = generateId(text);
-
-        // Build hierarchical ID from parent headings
-        let id = baseId;
-        if (level > 2 && parentIds[level - 1] != null) {
-          id = `${parentIds[level - 1]}-${baseId}`;
-        }
-
-        // Store this heading's ID for child headings
-        parentIds[level] = id;
-        // Clear child levels when we encounter a new parent
-        for (let i = level + 1; i <= 4; i++) {
-          delete parentIds[i];
-        }
-
-        // Set the ID on the element for anchor linking
-        element.id = id;
 
         headingItems.push({
           id,
@@ -141,7 +117,8 @@ export function DocsSidebar({
         className={`bg-background border-border fixed top-0 left-0 z-60 h-screen w-72 -translate-x-full transform overflow-y-auto border-r p-5 shadow-xl transition-transform duration-300 ease-in-out md:pointer-events-auto md:relative md:top-auto md:left-auto md:z-auto md:block md:h-auto md:w-auto md:translate-x-0 md:transform-none md:overflow-visible md:border-none md:bg-transparent md:px-0 md:py-0 md:opacity-100 md:shadow-none md:transition-none ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} `}
       >
         <nav
-          className="top-0 max-h-[calc(100vh-120px)] space-y-0.5 overflow-y-auto md:sticky md:top-22"
+          className="top-0 max-h-[calc(100vh-120px)] space-y-0.25 overflow-y-auto md:sticky md:top-22"
+          style={{ scrollbarWidth: 'thin' }}
           onClick={onMobileClose}
         >
           {headings.map((heading) => (
