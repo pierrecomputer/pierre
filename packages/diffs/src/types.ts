@@ -12,6 +12,7 @@ import type {
 } from 'shiki';
 
 export interface FileContents {
+  cacheKey?: string;
   name: string;
   contents: string;
   lang?: SupportedLanguages;
@@ -98,6 +99,7 @@ export interface FileDiffMetadata {
   mode?: string;
   oldLines?: string[];
   newLines?: string[];
+  cacheKey?: string;
 }
 
 export type SupportedLanguages = BundledLanguage | 'text';

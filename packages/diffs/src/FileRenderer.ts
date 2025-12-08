@@ -108,15 +108,22 @@ export class FileRenderer<LAnnotation = undefined> {
 
   hydrate(file: FileContents): void {
     const { options } = this.getRenderOptions(file);
+    let cache = this.workerManager?.getFileResultCache(file);
+    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
+      cache = undefined;
+    }
     this.renderCache ??= {
       file,
       options,
       // NOTE(amadeus): If we're hydrating, we can assume there was
       // pre-rendered HTML, otherwise one should not be hydrating
       highlighted: true,
-      result: undefined,
+      result: cache?.result,
     };
-    if (this.workerManager?.isWorkingPool() === true) {
+    if (
+      this.workerManager?.isWorkingPool() === true &&
+      this.renderCache.result == null
+    ) {
       this.workerManager.highlightFileAST(this, file);
     } else {
       void this.asyncHighlight(file).then(({ result, options }) => {

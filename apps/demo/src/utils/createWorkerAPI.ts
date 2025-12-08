@@ -14,7 +14,6 @@ export function createWorkerAPI(
         return new Worker(WorkerUrl, { type: 'module' });
       },
       poolSize: 8,
-      enableASTCache: true,
     },
     highlighterOptions,
   });
