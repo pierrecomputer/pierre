@@ -124,6 +124,14 @@ export class WorkerPoolManager {
     return { fileCache, diffCache };
   }
 
+  evictFileFromCache(cacheKey: string): boolean {
+    return this.fileCache.delete(cacheKey) !== undefined;
+  }
+
+  evictDiffFromCache(cacheKey: string): boolean {
+    return this.diffCache.delete(cacheKey) !== undefined;
+  }
+
   // FIXME(amadeus): Add an API to potentially change the other render options
   // dynamically, or replace this method with that...
   async setTheme(theme: PJSThemeNames | ThemesType): Promise<void> {
