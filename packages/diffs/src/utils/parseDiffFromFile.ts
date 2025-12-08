@@ -4,6 +4,12 @@ import { SPLIT_WITH_NEWLINES } from '../constants';
 import type { FileContents, FileDiffMetadata } from '../types';
 import { parsePatchFiles } from './parsePatchFiles';
 
+/**
+ * Parses a diff from two file contents objects.
+ *
+ * If both `oldFile` and `newFile` have a `cacheKey`, the resulting diff will
+ * automatically get a combined cache key in the format `oldKey:newKey`.
+ */
 export function parseDiffFromFile(
   oldFile: FileContents,
   newFile: FileContents

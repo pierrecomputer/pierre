@@ -92,13 +92,28 @@ export function Utilities({
         <code>FileDiffMetadata</code> structure. Use this when you have the full
         contents of both file versions rather than a patch string.
       </p>
+      <p>
+        If both <code>oldFile</code> and <code>newFile</code> have a{' '}
+        <code>cacheKey</code>, the resulting <code>FileDiffMetadata</code> will
+        automatically receive a combined cache key (format:{' '}
+        <code>oldKey:newKey</code>). See{' '}
+        <a href="#worker-pool-render-cache">Render Cache</a> for more
+        information.
+      </p>
       <DocsCodeExample {...parseDiffFromFile} />
 
       <h3 data-toc-ignore>parsePatchFiles</h3>
       <p>
         Parse unified diff / patch file content into structured data. Handles
         both single patches and multi-commit patch files (like those from GitHub
-        pull request <code>.patch</code> URLs).
+        pull request <code>.patch</code> URLs). An optional second parameter{' '}
+        <code>cacheKeyPrefix</code> can be provided to generate cache keys for
+        each file in the patch (format: <code>prefix-patchIndex-fileIndex</code>
+        ), enabling{' '}
+        <a href="#worker-pool-render-cache">
+          caching of rendered diff results
+        </a>{' '}
+        in the worker pool.
       </p>
       <DocsCodeExample {...parsePatchFiles} />
 

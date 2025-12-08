@@ -38,6 +38,18 @@ export function CoreTypes({
         files. It contains the hunks (changed regions), line counts, and
         optionally the full file contents for expansion.
       </p>
+      <p className="text-muted-foreground">
+        <strong>Tip:</strong> You can generate <code>FileDiffMetadata</code>{' '}
+        using{' '}
+        <a href="#utilities-parsedifffromfile">
+          <code>parseDiffFromFile</code>
+        </a>{' '}
+        (from two file versions) or{' '}
+        <a href="#utilities-parsepatchfiles">
+          <code>parsePatchFiles</code>
+        </a>{' '}
+        (from a patch string).
+      </p>
       <DocsCodeExample {...fileDiffMetadataType} />
 
       <h3>Creating Diffs</h3>
