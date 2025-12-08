@@ -434,7 +434,15 @@ poolManager.getStats()
 // Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }
 
 poolManager.inspectCaches()
-// Returns: { fileCache, diffCache } - LRU cache instances for debugging`,
+// Returns: { fileCache, diffCache } - LRU cache instances for debugging
+
+poolManager.evictFileFromCache(cacheKey)
+// Returns: boolean - Evicts a file from the cache by its cacheKey
+// Returns true if the item was evicted, false if it wasn't in the cache
+
+poolManager.evictDiffFromCache(cacheKey)
+// Returns: boolean - Evicts a diff from the cache by its cacheKey
+// Returns true if the item was evicted, false if it wasn't in the cache`,
   },
   options,
 };
@@ -499,7 +507,12 @@ const fileV2 = { name: 'file.ts', contents: 'v2', cacheKey: 'file-v2' };
 // Inspect cache contents (for debugging)
 const { fileCache, diffCache } = workerPool.inspectCaches();
 console.log('Cached files:', fileCache.size);
-console.log('Cached diffs:', diffCache.size);`,
+console.log('Cached diffs:', diffCache.size);
+
+// Evict specific items from the cache when content is invalidated
+// (e.g., user edits a file, new commit is pushed)
+workerPool.evictFileFromCache('file-abc123');
+workerPool.evictDiffFromCache('diff-xyz789');`,
   },
   options,
 };
