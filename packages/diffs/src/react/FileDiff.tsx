@@ -1,5 +1,6 @@
 'use client';
 
+import { DIFFS_TAG_NAME } from '../constants';
 import type { FileDiffMetadata } from '../types';
 import type { DiffBasePropsReact } from './types';
 import { renderDiffChildren } from './utils/renderDiffChildren';
@@ -41,8 +42,8 @@ export function FileDiff<LAnnotation = undefined>({
     getHoveredLine,
   });
   return (
-    <file-diff ref={ref} className={className} style={style}>
+    <DIFFS_TAG_NAME ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}
-    </file-diff>
+    </DIFFS_TAG_NAME>
   );
 }

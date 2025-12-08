@@ -6,7 +6,6 @@ import { IconBell } from '@/components/icons';
 import type { DiffLineAnnotation } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
 import '@pierre/precision-diffs/ssr';
-import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
 import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
 import { useState } from 'react';
 
@@ -34,11 +33,11 @@ function ErrorAnnotation({ message }: { message: string }) {
   );
 }
 
-interface SsrPageProps {
+interface SSRPageProps {
   preloadedFileDiff: PreloadMultiFileDiffResult<AnnotationMetadata>;
 }
 
-export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
+export function SSRPage({ preloadedFileDiff }: SSRPageProps) {
   const [diffStyle, setDiffStyle] = useState(
     preloadedFileDiff.options?.diffStyle ?? 'split'
   );
@@ -50,7 +49,7 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
       className="mx-auto min-h-screen max-w-5xl px-5"
       style={
         {
-          '--pjs-font-family': `var(--font-berkeley-mono)`,
+          '--diffs-font-family': `var(--font-berkeley-mono)`,
         } as React.CSSProperties
       }
     >
@@ -61,17 +60,19 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
       </h1>
 
       <div className="flex flex-col gap-20">
-        <div>
-          <h2 className="text-2xl font-medium tracking-tight md:text-2xl">
-            Static Test
-          </h2>
-          <FileDiffSsr<AnnotationMetadata>
-            prerenderedHTML={preloadedFileDiff.prerenderedHTML}
-            className="overflow-hidden rounded-lg border"
-            annotations={preloadedFileDiff.annotations}
-            renderAnnotation={renderAnnotation}
-          />
-        </div>
+        {/* This export is currently hidden since it's not an approved API
+            and we need to get it properly supported before opening it up */}
+        {/* <div> */}
+        {/*   <h2 className="text-2xl font-medium tracking-tight md:text-2xl"> */}
+        {/*     Static Test */}
+        {/*   </h2> */}
+        {/*   <FileDiffSSR<AnnotationMetadata> */}
+        {/*     prerenderedHTML={preloadedFileDiff.prerenderedHTML} */}
+        {/*     className="overflow-hidden rounded-lg border" */}
+        {/*     annotations={preloadedFileDiff.annotations} */}
+        {/*     renderAnnotation={renderAnnotation} */}
+        {/*   /> */}
+        {/* </div> */}
 
         <div>
           <div className="flex justify-between">

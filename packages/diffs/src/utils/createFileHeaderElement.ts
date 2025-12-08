@@ -27,7 +27,7 @@ export function createFileHeaderElement({
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
-    'data-pjs-header': '',
+    'data-diffs-header': '',
     'data-change-type': fileDiff?.type,
     'data-theme-type': themeType !== 'system' ? themeType : undefined,
     style: themeStyles,
@@ -76,7 +76,7 @@ function createHeaderElement({
     );
     children.push(
       createIconElement({
-        name: 'pjs-icon-arrow-right-short',
+        name: 'diffs-icon-arrow-right-short',
         properties: {
           'data-rename-icon': '',
         },

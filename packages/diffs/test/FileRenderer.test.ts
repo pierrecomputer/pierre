@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { FileRenderer } from '../src/FileRenderer';
+import { FileRenderer } from '../src/renderers/FileRenderer';
 import { mockFiles } from './mocks';
 
 describe('FileRenderer', () => {

@@ -31,17 +31,17 @@ export type {
   ThemedToken,
 };
 
-export type PJSThemeNames =
+export type DiffsThemeNames =
   | BundledTheme
   | 'pierre-dark'
   | 'pierre-light'
   | (string & {});
 
-export type ThemesType = Record<'dark' | 'light', PJSThemeNames>;
+export type ThemesType = Record<'dark' | 'light', DiffsThemeNames>;
 
-export type PJSHighlighter = HighlighterGeneric<
+export type DiffsHighlighter = HighlighterGeneric<
   SupportedLanguages,
-  PJSThemeNames
+  DiffsThemeNames
 >;
 
 export type ChangeTypes =
@@ -119,7 +119,7 @@ export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
 export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
 
 export interface BaseCodeOptions {
-  theme?: PJSThemeNames | ThemesType;
+  theme?: DiffsThemeNames | ThemesType;
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
@@ -324,12 +324,12 @@ export interface ThemedDiffResult {
 }
 
 export interface RenderFileOptions {
-  theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   tokenizeMaxLineLength: number;
 }
 
 export interface RenderDiffOptions {
-  theme: PJSThemeNames | Record<'dark' | 'light', PJSThemeNames>;
+  theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
 }

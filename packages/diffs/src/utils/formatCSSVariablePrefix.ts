@@ -1,3 +1,3 @@
-export function formatCSSVariablePrefix(prefix: string = 'pjs') {
+export function formatCSSVariablePrefix(prefix: string = 'diffs') {
   return `--${prefix}-`;
 }

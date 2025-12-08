@@ -3,7 +3,7 @@ import type {
   DiffLineEventBaseProps,
   ExpansionDirections,
   LineEventBaseProps,
-} from './types';
+} from '../types';
 
 export type LogTypes = 'click' | 'move' | 'both' | 'none';
 

@@ -1,8 +1,8 @@
 import { createHighlighter, createJavaScriptRegexEngine } from 'shiki';
 
 import type {
-  PJSHighlighter,
-  PJSThemeNames,
+  DiffsHighlighter,
+  DiffsThemeNames,
   SupportedLanguages,
   ThemeRegistrationResolved,
 } from '../types';
@@ -19,26 +19,26 @@ import {
 } from './themes';
 
 type CachedOrLoadingHighlighterType =
-  | Promise<PJSHighlighter>
-  | PJSHighlighter
+  | Promise<DiffsHighlighter>
+  | DiffsHighlighter
   | undefined;
 
 let highlighter: CachedOrLoadingHighlighterType;
 
 interface HighlighterOptions {
-  themes: PJSThemeNames[];
+  themes: DiffsThemeNames[];
   langs: SupportedLanguages[];
 }
 
 export async function getSharedHighlighter({
   themes,
   langs,
-}: HighlighterOptions): Promise<PJSHighlighter> {
+}: HighlighterOptions): Promise<DiffsHighlighter> {
   highlighter ??= createHighlighter({
     themes: [],
     langs: ['text'],
     engine: createJavaScriptRegexEngine(),
-  }) as Promise<PJSHighlighter>;
+  }) as Promise<DiffsHighlighter>;
 
   const instance = isHighlighterLoading(highlighter)
     ? await highlighter
@@ -83,11 +83,11 @@ export async function getSharedHighlighter({
 
 export function isHighlighterLoaded(
   h: CachedOrLoadingHighlighterType = highlighter
-): h is PJSHighlighter {
+): h is DiffsHighlighter {
   return h != null && !('then' in h);
 }
 
-export function getHighlighterIfLoaded(): PJSHighlighter | undefined {
+export function getHighlighterIfLoaded(): DiffsHighlighter | undefined {
   if (highlighter != null && !('then' in highlighter)) {
     return highlighter;
   }
@@ -96,7 +96,7 @@ export function getHighlighterIfLoaded(): PJSHighlighter | undefined {
 
 export function isHighlighterLoading(
   h: CachedOrLoadingHighlighterType = highlighter
-): h is Promise<PJSHighlighter> {
+): h is Promise<DiffsHighlighter> {
   return h != null && 'then' in h;
 }
 

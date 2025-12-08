@@ -1,10 +1,11 @@
+import { DIFFS_TAG_NAME } from '../constants';
 import styles from '../style.css';
 
 // If HTMLElement is undefined it usually means we are in a server environment
 // so best to just not do anything
 if (
   typeof HTMLElement !== 'undefined' &&
-  customElements.get('file-diff') == null
+  customElements.get(DIFFS_TAG_NAME) == null
 ) {
   let sheet: CSSStyleSheet | undefined;
 
@@ -28,11 +29,11 @@ if (
     }
     // Not sure if we need to do anything here yet...
     // connectedCallback() {
-    //   this.dataset.pjsContainer = '';
+    //   this.dataset.diffsContainer = '';
     // }
   }
 
-  customElements.define('file-diff', FileDiffContainer);
+  customElements.define(DIFFS_TAG_NAME, FileDiffContainer);
 }
 
-export const PJSContainerLoaded = true;
+export const DiffsContainerLoaded = true;

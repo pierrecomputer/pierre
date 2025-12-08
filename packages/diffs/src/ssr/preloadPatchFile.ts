@@ -1,4 +1,4 @@
-import type { FileDiffOptions } from '../FileDiff';
+import type { FileDiffOptions } from '../components/FileDiff';
 import { parsePatchFiles } from '../utils/parsePatchFiles';
 import { type PreloadFileDiffResult, preloadFileDiff } from './preloadDiffs';
 

@@ -4,6 +4,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
+import { DIFFS_TAG_NAME } from '../constants';
 import type { DiffLineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 
@@ -35,7 +36,7 @@ function serializeStyle(style: CSSProperties): string {
     .join(';');
 }
 
-export function FileDiffSsr<LAnnotation>({
+export function FileDiffSSR<LAnnotation>({
   prerenderedHTML,
   annotations,
   className,
@@ -71,7 +72,7 @@ export function FileDiffSsr<LAnnotation>({
             .join('')
         : '';
 
-    const fullHTML = `<file-diff${classAttr}${styleAttr}><template shadowrootmode="open">${prerenderedHTML}</template>${annotationSlots}</file-diff>`;
+    const fullHTML = `<${DIFFS_TAG_NAME}${classAttr}${styleAttr}><template shadowrootmode="open">${prerenderedHTML}</template>${annotationSlots}</${DIFFS_TAG_NAME}>`;
 
     htmlObjectRef.current = { __html: fullHTML };
   }
@@ -83,7 +84,7 @@ export function FileDiffSsr<LAnnotation>({
       annotations !== undefined &&
       !hydratedRef.current
     ) {
-      const fileElement = wrapperRef.current.querySelector('file-diff');
+      const fileElement = wrapperRef.current.querySelector(DIFFS_TAG_NAME);
 
       if (fileElement !== null) {
         Array.from(fileElement.children).forEach((slotElement) => {
