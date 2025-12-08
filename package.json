@@ -24,7 +24,7 @@
     "solid:build": "(cd apps/solid-diff-demo && bun run build)",
     "solid:start": "(cd apps/solid-diff-demo && bun run start)",
     "solid:tsc": "(cd apps/solid-diff-demo && bun run tsc)",
-    "clean": "rm -rf {packages,apps}/*/dist && rm -rf {packages,apps}/*/tsconfig.tsbuildinfo && rm -rf {packages,apps}/demo/node_modules/.vite && rm -rf {packages,apps}/demo/node_modules/.vite-temp && rm -rf apps/docs/.next",
+    "clean": "rm -rf node_modules {packages,apps}/*/node_modules {packages,apps}/*/dist {packages,apps}/*/tsconfig.tsbuildinfo apps/docs/.next",
     "update-themes": "node update-themes.js",
     "icons:build": "node scripts/build-icons.js && bun run format",
     "icons:sprite": "node scripts/build-sprite.js && bun run format",
