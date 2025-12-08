@@ -1,7 +1,7 @@
 'use client';
 
-import { HeaderWrapper } from '@/app/HeaderWrapper';
 import Footer from '@/components/Footer';
+import { Header } from '@/components/Header';
 import { IconBell } from '@/components/icons';
 import type { DiffLineAnnotation } from '@pierre/precision-diffs';
 import { MultiFileDiff } from '@pierre/precision-diffs/react';
@@ -54,7 +54,7 @@ export function SsrPage({ preloadedFileDiff }: SsrPageProps) {
         } as React.CSSProperties
       }
     >
-      <HeaderWrapper />
+      <Header className="-mb-[1px]" />
 
       <h1 className="py-8 text-3xl font-medium tracking-tight md:text-4xl">
         SSR Demos

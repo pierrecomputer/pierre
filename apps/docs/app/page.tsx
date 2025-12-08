@@ -1,4 +1,5 @@
 import Footer from '@/components/Footer';
+import { Header } from '@/components/Header';
 import {
   IconArrowUpRight,
   IconBrandDiscord,
@@ -11,7 +12,6 @@ import {
 } from '@pierre/precision-diffs/ssr';
 import Link from 'next/link';
 
-import { HeaderWrapper } from './HeaderWrapper';
 import { Hero } from './Hero';
 import {
   AcceptRejectExample,
@@ -37,7 +37,7 @@ import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
 export default function Home() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
-      <HeaderWrapper />
+      <Header className="-mb-[1px]" />
       <Hero />
       <section className="space-y-12 pb-8">
         <SplitUnifiedSection />
