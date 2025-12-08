@@ -7,16 +7,13 @@ import type {
   ThemeRegistrationResolved,
 } from '../types';
 import type { ResolvedLanguage } from '../worker/types';
-import {
-  attachResolvedLanguages,
-  cleanUpResolvedLanguages,
-  getResolvedOrResolveLanguage,
-} from './languages';
-import {
-  attachResolvedThemes,
-  cleanUpResolvedThemes,
-  getResolvedOrResolveTheme,
-} from './themes';
+import { attachResolvedLanguages } from './languages/attachResolvedLanguages';
+import { cleanUpResolvedLanguages } from './languages/cleanUpResolvedLanguages';
+import { getResolvedOrResolveLanguage } from './languages/getResolvedOrResolveLanguage';
+import { attachResolvedThemes } from './themes/attachResolvedThemes';
+import { cleanUpResolvedThemes } from './themes/cleanUpResolvedThemes';
+import { getResolvedOrResolveTheme } from './themes/getResolvedOrResolveTheme';
+import { registerCustomTheme } from './themes/registerCustomTheme';
 
 type CachedOrLoadingHighlighterType =
   | Promise<DiffsHighlighter>
@@ -119,3 +116,15 @@ export async function disposeHighlighter(): Promise<void> {
   cleanUpResolvedThemes();
   highlighter = undefined;
 }
+
+registerCustomTheme('pierre-dark', () => {
+  return import(
+    '../themes/pierre-dark.json'
+  ) as unknown as Promise<ThemeRegistrationResolved>;
+});
+
+registerCustomTheme('pierre-light', () => {
+  return import(
+    '../themes/pierre-light.json'
+  ) as unknown as Promise<ThemeRegistrationResolved>;
+});

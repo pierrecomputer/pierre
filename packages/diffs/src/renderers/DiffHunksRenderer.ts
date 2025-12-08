@@ -3,12 +3,12 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import { DEFAULT_THEMES } from '../constants';
-import { areLanguagesAttached } from '../highlighter/languages';
+import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
 } from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes';
+import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type {
   AnnotationLineMap,
   AnnotationSpan,

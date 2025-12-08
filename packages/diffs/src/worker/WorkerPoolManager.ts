@@ -1,18 +1,14 @@
 import { LRUMap } from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
-import {
-  getResolvedLanguages,
-  hasResolvedLanguages,
-  resolveLanguages,
-} from '../highlighter/languages';
+import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
+import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
+import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
 import { getSharedHighlighter } from '../highlighter/shared_highlighter';
-import {
-  attachResolvedThemes,
-  getResolvedThemes,
-  hasResolvedThemes,
-  resolveThemes,
-} from '../highlighter/themes';
+import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
+import { getResolvedThemes } from '../highlighter/themes/getResolvedThemes';
+import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
+import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
   DiffsHighlighter,
   DiffsThemeNames,
