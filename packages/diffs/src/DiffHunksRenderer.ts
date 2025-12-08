@@ -261,15 +261,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     this.diff = diff;
     const { options } = this.getRenderOptions(diff);
+    let cache = this.workerManager?.getDiffResultCache(diff);
+    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
+      cache = undefined;
+    }
     this.renderCache ??= {
       diff,
       // NOTE(amadeus): If we're hydrating, we can assume there was
       // pre-rendered HTML, otherwise one should not be hydrating
       highlighted: true,
       options,
-      result: undefined,
+      result: cache?.result,
     };
-    if (this.workerManager?.isWorkingPool() === true) {
+    if (
+      this.workerManager?.isWorkingPool() === true &&
+      this.renderCache.result == null
+    ) {
       this.workerManager.highlightDiffAST(this, this.diff);
     } else {
       void this.asyncHighlight(diff).then(({ result, options }) => {

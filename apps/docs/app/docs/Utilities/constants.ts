@@ -247,6 +247,8 @@ instance.render({
 
 // Accept a hunk - keeps the new (additions) version.
 // The hunk is converted to context lines (no longer shows as a change).
+// Note: If the diff has a cacheKey, it's automatically updated by 
+// this function.
 fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'accept');
 
 // Or reject a hunk - reverts to the old (deletions) version.
@@ -293,6 +295,7 @@ export function AcceptRejectExample() {
   const [fileDiff, setFileDiff] = useState<FileDiffMetadata>(initialDiff);
   const [annotations, setAnnotations] = useState(initialAnnotations);
 
+  // Note: diffAcceptRejectHunk automatically updates the cacheKey if present
   const handleAccept = (hunkIndex: number) => {
     setFileDiff((prev) => diffAcceptRejectHunk(prev, hunkIndex, 'accept'));
     // Remove the annotation after accepting

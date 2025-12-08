@@ -56,8 +56,8 @@ import type {
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 
 interface GetCachesResult {
-  fileCache: LRUMap<FileContents, RenderFileResult>;
-  diffCache: LRUMap<FileDiffMetadata, RenderDiffResult>;
+  fileCache: LRUMap<string, RenderFileResult>;
+  diffCache: LRUMap<string, RenderDiffResult>;
 }
 
 interface ManagedWorker {
@@ -85,10 +85,8 @@ export class WorkerPoolManager {
     FileRendererInstance | DiffRendererInstance,
     string
   >();
-  private fileCache: LRUMap<FileContents, RenderFileResult> = new LRUMap(50);
-  private diffCache: LRUMap<FileDiffMetadata, RenderDiffResult> = new LRUMap(
-    50
-  );
+  private fileCache: LRUMap<string, RenderFileResult>;
+  private diffCache: LRUMap<string, RenderDiffResult>;
 
   constructor(
     private options: WorkerPoolOptions,
@@ -100,6 +98,8 @@ export class WorkerPoolManager {
     }: WorkerHighlighterOptions
   ) {
     this.renderOptions = { theme, lineDiffType, tokenizeMaxLineLength };
+    this.fileCache = new LRUMap(options.totalASTLRUCacheSize ?? 100);
+    this.diffCache = new LRUMap(options.totalASTLRUCacheSize ?? 100);
     void this.initialize(langs);
   }
 
@@ -108,16 +108,28 @@ export class WorkerPoolManager {
   }
 
   getFileResultCache(file: FileContents): RenderFileResult | undefined {
-    return this.fileCache.get(file);
+    return file.cacheKey != null
+      ? this.fileCache.get(file.cacheKey)
+      : undefined;
   }
 
   getDiffResultCache(diff: FileDiffMetadata): RenderDiffResult | undefined {
-    return this.diffCache.get(diff);
+    return diff.cacheKey != null
+      ? this.diffCache.get(diff.cacheKey)
+      : undefined;
   }
 
   inspectCaches(): GetCachesResult {
     const { fileCache, diffCache } = this;
     return { fileCache, diffCache };
+  }
+
+  evictFileFromCache(cacheKey: string): boolean {
+    return this.fileCache.delete(cacheKey) !== undefined;
+  }
+
+  evictDiffFromCache(cacheKey: string): boolean {
+    return this.diffCache.delete(cacheKey) !== undefined;
   }
 
   // FIXME(amadeus): Add an API to potentially change the other render options
@@ -527,8 +539,8 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
-            if (this.options.enableASTCache === true) {
-              this.fileCache.set(request.file, { result, options });
+            if (request.file.cacheKey != null) {
+              this.fileCache.set(request.file.cacheKey, { result, options });
             }
             instance.onHighlightSuccess(request.file, result, options);
             break;
@@ -539,8 +551,8 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
-            if (this.options.enableASTCache === true) {
-              this.diffCache.set(request.diff, { result, options });
+            if (request.diff.cacheKey != null) {
+              this.diffCache.set(request.diff.cacheKey, { result, options });
             }
             instance.onHighlightSuccess(request.diff, result, options);
             break;

@@ -20,7 +20,7 @@ import type {
 import { cleanLastNewline } from './cleanLastNewline';
 import { parseLineType } from './parseLineType';
 
-function processPatch(data: string): ParsedPatch {
+function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
   const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
   const rawFiles = data.split(
     isGitDiff ? GIT_DIFF_FILE_BREAK_REGEX : UNIFIED_DIFF_FILE_BREAK_REGEX
@@ -72,6 +72,10 @@ function processPatch(data: string): ParsedPatch {
           hunks: [],
           splitLineCount: 0,
           unifiedLineCount: 0,
+          cacheKey:
+            cacheKeyPrefix != null
+              ? `${cacheKeyPrefix}-${files.length}`
+              : undefined,
         };
         // Push that first line back into the group of lines so we can properly
         // parse it out
@@ -256,13 +260,23 @@ function processPatch(data: string): ParsedPatch {
   return { patchMetadata, files };
 }
 
-export function parsePatchFiles(data: string): ParsedPatch[] {
+export function parsePatchFiles(
+  data: string,
+  cacheKeyPrefix?: string
+): ParsedPatch[] {
   // NOTE(amadeus): This function is pretty forgiving in that it can accept a
   // patch file that includes commit metdata, multiple commits, or not
   const patches: ParsedPatch[] = [];
   for (const patch of data.split(COMMIT_METADATA_SPLIT)) {
     try {
-      patches.push(processPatch(patch));
+      patches.push(
+        processPatch(
+          patch,
+          cacheKeyPrefix != null
+            ? `${cacheKeyPrefix}-${patches.length}`
+            : undefined
+        )
+      );
     } catch (error) {
       console.error(error);
     }

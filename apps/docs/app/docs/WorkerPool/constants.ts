@@ -397,7 +397,9 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 // - poolOptions: WorkerPoolOptions
 //   - workerFactory: () => Worker - Function that creates a Worker instance
 //   - poolSize?: number (default: 8) - Number of workers
-//   - enableASTCache?: boolean (default: false) - Cache rendered AST results
+//   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
+//     (Two separate LRU caches are maintained: one for files, one for diffs.
+//      Each cache has this limit, so total cached items can be 2x this value.)
 // - highlighterOptions: WorkerHighlighterOptions
 //   - theme: PJSThemeNames | ThemesType - Theme name or { dark, light } object
 //   - langs?: SupportedLanguages[] - Array of languages to preload
@@ -432,7 +434,15 @@ poolManager.getStats()
 // Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }
 
 poolManager.inspectCaches()
-// Returns: { fileCache, diffCache } - LRU cache instances (when enableASTCache is true)`,
+// Returns: { fileCache, diffCache } - LRU cache instances for debugging
+
+poolManager.evictFileFromCache(cacheKey)
+// Returns: boolean - Evicts a file from the cache by its cacheKey
+// Returns true if the item was evicted, false if it wasn't in the cache
+
+poolManager.evictDiffFromCache(cacheKey)
+// Returns: boolean - Evicts a diff from the cache by its cacheKey
+// Returns true if the item was evicted, false if it wasn't in the cache`,
   },
   options,
 };
@@ -445,29 +455,64 @@ export const WORKER_POOL_CACHING: PreloadFileOptions<undefined> = {
 } from '@pierre/precision-diffs/worker';
 import { workerFactory } from './utils/workerFactory';
 
-// Enable AST caching by setting enableASTCache to true
 const workerPool = getOrCreateWorkerPoolSingleton({
   poolOptions: {
     workerFactory,
-    enableASTCache: true, // <-- Enable caching
+    // Optional: configure cache size per cache (default: 100)
+    // Two separate LRU caches are maintained: one for files,
+    // one for diffs, so combined cache size will be double
+    totalASTLRUCacheSize: 200,
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
   },
 });
 
-// With caching enabled:
-// - Rendered file and diff AST results are stored in an LRU cache
-// - Subsequent renders of the same file/diff return cached results instantly
+// Caching is enabled automatically when files/diffs have a cacheKey.
+// Files and diffs without cacheKey will not be cached.
+
+const fileWithCaching = {
+  name: 'example.ts',
+  contents: 'const x = 42;',
+  cacheKey: 'file-abc123', // <-- Enables caching for this file
+};
+
+const fileWithoutCaching = {
+  name: 'other.ts',
+  contents: 'const y = 1;',
+  // No cacheKey - will not be cached
+};
+
+// IMPORTANT: The cacheKey must change whenever the content changes!
+// If content changes but the key stays the same, stale cached results
+// will be returned. Use content hashes or version numbers in your keys.
+const fileV1 = { name: 'file.ts', contents: 'v1', cacheKey: 'file-v1' };
+const fileV2 = { name: 'file.ts', contents: 'v2', cacheKey: 'file-v2' };
+
+// Cache key best practices:
+// - DON'T use file contents as the key - large strings potentially
+//   waste memory
+// - DON'T rely solely on filenames - they may not be unique or stable
+// - DO use stable identifiers like commit SHAs, file IDs, or version numbers
+// - DO combine identifiers when needed: \`\${fileId}-\${version}\`
+
+// How caching works:
+// - Files/diffs with cacheKey are stored in an LRU cache after rendering
+// - Subsequent renders with the same cacheKey return cached results instantly
 // - No worker processing required for cache hits
-// - Cache is automatically invalidated when:
-//   - The theme changes via setTheme()
-//   - The pool is terminated
+// - Cache is validated against render options (e.g., theme, lineDiffType)
+// - If options changed, cached result is skipped and re-rendered
+// - Cache is cleared when the pool is terminated
 
 // Inspect cache contents (for debugging)
 const { fileCache, diffCache } = workerPool.inspectCaches();
 console.log('Cached files:', fileCache.size);
-console.log('Cached diffs:', diffCache.size);`,
+console.log('Cached diffs:', diffCache.size);
+
+// Evict specific items from the cache when content is invalidated
+// (e.g., user edits a file, new commit is pushed)
+workerPool.evictFileFromCache('file-abc123');
+workerPool.evictDiffFromCache('diff-xyz789');`,
   },
   options,
 };

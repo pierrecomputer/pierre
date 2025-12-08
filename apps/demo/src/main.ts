@@ -2,6 +2,7 @@ import {
   type BundledLanguage,
   DEFAULT_THEMES,
   File,
+  type FileContents,
   FileDiff,
   FileStream,
   type PJSThemeNames,
@@ -97,8 +98,7 @@ let parsedPatches: ParsedPatch[] | undefined;
 async function handlePreloadDiff() {
   if (parsedPatches != null || !isHighlighterNull()) return;
   const content = await loadPatchContent();
-  parsedPatches = parsePatchFiles(content);
-  console.log('Parsed File:', parsedPatches);
+  parsedPatches = parsePatchFiles(content, 'parsed-patch');
   const langs = new Set<SupportedLanguages>();
   for (const parsedPatch of parsedPatches) {
     for (const file of parsedPatch.files) {
@@ -342,7 +342,10 @@ const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
   function handleClick() {
     void (async () => {
-      parsedPatches ??= parsePatchFiles(await loadPatchContent());
+      parsedPatches ??= parsePatchFiles(
+        await loadPatchContent(),
+        'parsed-patch'
+      );
       renderDiff(parsedPatches, poolManager);
     })();
   }
@@ -430,17 +433,20 @@ if (diff2Files != null) {
     const render = document.createElement('button');
     render.innerText = 'Render Diff';
     render.addEventListener('click', () => {
-      const oldFile = {
+      const oldFile: FileContents = {
         name: fileOldName.value,
         contents: fileOldContents.value,
+        cacheKey: `old-${fileOldContents.value}`,
       };
       const newFile = {
         name: fileNewName.value,
         contents: fileNewContents.value,
+        cacheKey: `new-${fileNewContents.value}`,
       };
 
       lastWrapper?.parentNode?.removeChild(lastWrapper);
       const parsed = parseDiffFromFile(oldFile, newFile);
+      console.log('ZZZZZ - parsed', parsed);
       renderDiff([{ files: [parsed] }], poolManager);
     });
     bottomWrapper.appendChild(render);
@@ -490,7 +496,11 @@ function toggleTheme() {
   }
 }
 
-const fileExample = { name: 'main.tsx', contents: FILE_NEW };
+const fileExample: FileContents = {
+  name: 'main.tsx',
+  contents: FILE_NEW,
+  cacheKey: 'file',
+};
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
   renderFileButton.addEventListener('click', () => {
@@ -551,7 +561,7 @@ if (renderFileButton != null) {
 const workerRenderButton = document.getElementById('worker-load-diff');
 workerRenderButton?.addEventListener('click', () => {
   void (async () => {
-    const patches = parsePatchFiles(await loadPatchContent());
+    const patches = parsePatchFiles(await loadPatchContent(), 'parsed-patch');
     workerRenderDiff(patches);
   })();
 });
