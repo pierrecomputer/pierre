@@ -55,6 +55,10 @@ export function WorkerPool({
   return (
     <section className="space-y-4">
       <h2>Worker Pool</h2>
+      <Notice variant="warning" icon={<IconCiWarningFill />}>
+        This feature is experimental and undergoing active delevopment. There
+        may be bugs and the API is subject to change.
+      </Notice>
       <Notice icon={<IconBulbFill />}>
         Import worker utilities from <code>@pierre/precision-diffs/worker</code>
         .
