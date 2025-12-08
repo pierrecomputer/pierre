@@ -5,7 +5,7 @@ import * as React from 'react';
 const noticeVariants = cva('text-md flex gap-2 rounded-md border p-4', {
   variants: {
     variant: {
-      default: 'bg-secondary/50 border text-primary text-muted-foreground',
+      default: 'bg-secondary/50 text-muted-foreground',
       info: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
       warning:
         'border-yellow-500/20 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300',
