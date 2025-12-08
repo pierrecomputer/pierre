@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 
 export interface HeaderProps {
-  onMobileMenuToggle?: (isOpen: boolean) => void;
+  onMobileMenuToggle?: () => void;
   className?: string;
 }
 
@@ -71,7 +71,6 @@ function IconLink({ href, label, children }: IconLinkProps) {
 
 export function Header({ onMobileMenuToggle, className }: HeaderProps) {
   const pathname = usePathname();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isStuck, setIsStuck] = useState(false);
 
   useEffect(() => {
@@ -91,12 +90,6 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const toggleMobileMenu = () => {
-    const newState = !isMobileMenuOpen;
-    setIsMobileMenuOpen(newState);
-    onMobileMenuToggle?.(newState);
-  };
 
   return (
     <header
@@ -122,7 +115,7 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
       {pathname === '/docs' && (
         <div className="mr-auto flex items-center gap-1 md:hidden">
           <IconChevronFlat size={16} className="text-border" />
-          <Button variant="ghost" size="icon" onClick={toggleMobileMenu}>
+          <Button variant="ghost" size="icon" onClick={onMobileMenuToggle}>
             <IconParagraph />
           </Button>
         </div>

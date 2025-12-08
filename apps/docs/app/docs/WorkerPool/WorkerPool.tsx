@@ -53,10 +53,10 @@ export function WorkerPool({
   architectureASCII,
 }: WorkerPoolProps) {
   return (
-    <section className="space-y-4 contain-layout">
+    <>
       <h2>Worker Pool</h2>
       <Notice variant="warning" icon={<IconCiWarningFill />}>
-        This feature is experimental and undergoing active delevopment. There
+        This feature is experimental and undergoing active development. There
         may be bugs and the API is subject to change.
       </Notice>
       <Notice icon={<IconBulbFill />}>
@@ -279,6 +279,6 @@ export function WorkerPool({
           } as CSSProperties
         }
       />
-    </section>
+    </>
   );
 }

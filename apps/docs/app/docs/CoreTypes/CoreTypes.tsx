@@ -16,7 +16,7 @@ export function CoreTypes({
   parsePatchFilesExample,
 }: CoreTypesProps) {
   return (
-    <section className="space-y-4 contain-layout">
+    <>
       <h2>Core Types</h2>
       <p>
         Before diving into the components, it‘s helpful to understand the two
@@ -81,6 +81,6 @@ export function CoreTypes({
         </a>{' '}
         utility function.
       </p>
-    </section>
+    </>
   );
 }

@@ -36,7 +36,7 @@ export function Utilities({
   );
 
   return (
-    <section className="space-y-4 contain-layout">
+    <>
       <h2>Utilities</h2>
       <Notice icon={<IconInfoFill />}>
         Import utility functions from <code>@pierre/diffs</code>. These can be
@@ -140,6 +140,6 @@ export function Utilities({
         doesn&apos;t match the actual language.
       </p>
       <DocsCodeExample {...setLanguageOverride} />
-    </section>
+    </>
   );
 }

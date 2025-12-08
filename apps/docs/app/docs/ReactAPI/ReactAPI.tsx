@@ -44,7 +44,7 @@ export function ReactAPI({
   const [sharedProps, setSharedProps] =
     useState<SharedPropsTypes>('diff-options');
   return (
-    <section className="space-y-4 contain-layout">
+    <>
       <h2>React API</h2>
       <Notice icon={<IconInfoFill />}>
         Import React components from <code>@pierre/diffs/react</code>.
@@ -154,6 +154,6 @@ export function ReactAPI({
             );
         }
       })()}
-    </section>
+    </>
   );
 }

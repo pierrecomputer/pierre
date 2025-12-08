@@ -15,7 +15,7 @@ export function Installation({ installationExamples }: InstallationProps) {
   const [selectedPm, setSelectedPm] = useState<PackageManager>('npm');
 
   return (
-    <section className="space-y-4 contain-layout">
+    <>
       <h2>Installation</h2>
       <p>
         Diffs is{' '}
@@ -90,6 +90,6 @@ export function Installation({ installationExamples }: InstallationProps) {
           </tr>
         </tbody>
       </table>
-    </section>
+    </>
   );
 }
