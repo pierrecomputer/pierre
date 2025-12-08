@@ -2,6 +2,7 @@
 
 exports[`DiffHunksRenderer proper buffers should be prepended to additions colum in split style: parsed diff 1`] = `
 {
+  "cacheKey": undefined,
   "hunks": [
     {
       "additionCount": 13,
@@ -2669,6 +2670,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
 
 exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum in split style: parsed diff 1`] = `
 {
+  "cacheKey": undefined,
   "hunks": [
     {
       "additionCount": 12,
@@ -5336,6 +5338,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
 
 exports[`DiffHunksRenderer additions and deletions should be empty when unified: parsed diff 1`] = `
 {
+  "cacheKey": undefined,
   "hunks": [
     {
       "additionCount": 13,
@@ -7269,6 +7272,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
 
 exports[`DiffHunksRenderer a diff with only additions should have an empty deletions column: parsed diff 1`] = `
 {
+  "cacheKey": undefined,
   "hunks": [
     {
       "additionCount": 13,
@@ -8644,6 +8648,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
 
 exports[`DiffHunksRenderer a diff with only deletions should have an empty additions column: parsed diff 1`] = `
 {
+  "cacheKey": undefined,
   "hunks": [
     {
       "additionCount": 0,
