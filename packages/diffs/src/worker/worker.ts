@@ -16,12 +16,12 @@ import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
   InitializeSuccessResponse,
   InitializeWorkerRequest,
-  RegisterThemeWorkerRequest,
   RenderDiffRequest,
   RenderDiffSuccessResponse,
   RenderErrorResponse,
   RenderFileRequest,
   RenderFileSuccessResponse,
+  RenderOptionsWorkerRequest,
   WorkerRenderingOptions,
   WorkerRequest,
   WorkerRequestId,
@@ -47,14 +47,14 @@ self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
       case 'initialize':
         handleInitialize(request);
         break;
-      case 'register-theme':
-        handleRegisterTheme(request);
+      case 'set-render-options':
+        handleSetRenderOptions(request);
         break;
       case 'file':
         handleRenderFile(request);
         break;
       case 'diff':
-        handleRenderDiffMetadata(request);
+        handleRenderDiff(request);
         break;
       default:
         throw new Error(
@@ -87,18 +87,18 @@ function handleInitialize({
   } satisfies InitializeSuccessResponse);
 }
 
-function handleRegisterTheme({
+function handleSetRenderOptions({
   id,
-  theme,
+  renderOptions: options,
   resolvedThemes,
-}: RegisterThemeWorkerRequest) {
+}: RenderOptionsWorkerRequest) {
   const highlighter = getHighlighter();
   attachResolvedThemes(resolvedThemes, highlighter);
-  renderOptions.theme = theme;
+  renderOptions = options;
   postMessage({
     type: 'success',
     id,
-    requestType: 'register-theme',
+    requestType: 'set-render-options',
     sentAt: Date.now(),
   });
 }
@@ -120,18 +120,14 @@ function handleRenderFile({ id, file, resolvedLanguages }: RenderFileRequest) {
   );
 }
 
-function handleRenderDiffMetadata({
-  id,
-  diff,
-  resolvedLanguages,
-}: RenderDiffRequest) {
+function handleRenderDiff({ id, diff, resolvedLanguages }: RenderDiffRequest) {
   const highlighter = getHighlighter();
   // Load resolved languages if provided
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
   const result = renderDiffWithHighlighter(diff, highlighter, renderOptions);
-  sendDiffMetadataSuccess(id, result, renderOptions);
+  sendDiffSuccess(id, result, renderOptions);
 }
 
 function getHighlighter(): DiffsHighlighter {
@@ -158,7 +154,7 @@ function sendFileSuccess(
   } satisfies RenderFileSuccessResponse);
 }
 
-function sendDiffMetadataSuccess(
+function sendDiffSuccess(
   id: WorkerRequestId,
   result: ThemedDiffResult,
   options: RenderDiffOptions

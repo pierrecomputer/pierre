@@ -11,7 +11,6 @@ import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
   DiffsHighlighter,
-  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
   RenderDiffOptions,
@@ -22,7 +21,6 @@ import type {
   ThemeRegistrationResolved,
   ThemedDiffResult,
   ThemedFileResult,
-  ThemesType,
 } from '../types';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
@@ -34,14 +32,14 @@ import type {
   DiffRendererInstance,
   FileRendererInstance,
   InitializeWorkerTask,
-  RegisterThemeWorkerTask,
   RenderDiffRequest,
   RenderDiffTask,
   RenderFileRequest,
   RenderFileTask,
+  RenderOptionsWorkerTask,
   ResolvedLanguage,
   SubmitRequest,
-  WorkerHighlighterOptions,
+  WorkerInitializationRenderOptions,
   WorkerPoolOptions,
   WorkerRenderingOptions,
   WorkerRequestId,
@@ -91,7 +89,7 @@ export class WorkerPoolManager {
       theme = DEFAULT_THEMES,
       lineDiffType = 'word-alt',
       tokenizeMaxLineLength = 1000,
-    }: WorkerHighlighterOptions
+    }: WorkerInitializationRenderOptions
   ) {
     this.renderOptions = { theme, lineDiffType, tokenizeMaxLineLength };
     this.fileCache = new LRUMap(options.totalASTLRUCacheSize ?? 100);
@@ -128,37 +126,54 @@ export class WorkerPoolManager {
     return this.diffCache.delete(cacheKey) !== undefined;
   }
 
-  // FIXME(amadeus): Add an API to potentially change the other render options
-  // dynamically, or replace this method with that...
-  async setTheme(theme: DiffsThemeNames | ThemesType): Promise<void> {
+  async setRenderOptions({
+    theme = DEFAULT_THEMES,
+    lineDiffType = 'word-alt',
+    tokenizeMaxLineLength = 1000,
+  }: Partial<WorkerRenderingOptions>): Promise<void> {
+    const newRenderOptions: WorkerRenderingOptions = {
+      theme,
+      lineDiffType,
+      tokenizeMaxLineLength,
+    };
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    if (areThemesEqual(theme, this.renderOptions.theme)) {
+    const themesEqual = areThemesEqual(
+      newRenderOptions.theme,
+      this.renderOptions.theme
+    );
+    if (
+      themesEqual &&
+      newRenderOptions.lineDiffType === this.renderOptions.lineDiffType &&
+      newRenderOptions.tokenizeMaxLineLength ===
+        this.renderOptions.tokenizeMaxLineLength
+    ) {
       return;
     }
 
     const themeNames = getThemes(theme);
     let resolvedThemes: ThemeRegistrationResolved[] = [];
-    if (hasResolvedThemes(themeNames)) {
-      resolvedThemes = getResolvedThemes(themeNames);
-    } else {
-      resolvedThemes = await resolveThemes(themeNames);
+    if (!themesEqual) {
+      if (hasResolvedThemes(themeNames)) {
+        resolvedThemes = getResolvedThemes(themeNames);
+      } else {
+        resolvedThemes = await resolveThemes(themeNames);
+      }
     }
 
     if (this.highlighter != null) {
       attachResolvedThemes(resolvedThemes, this.highlighter);
-      await this.registerThemesOnWorkers(theme, resolvedThemes);
-      this.renderOptions.theme = theme;
+      await this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes);
     } else {
       const [highlighter] = await Promise.all([
         getSharedHighlighter({ themes: themeNames, langs: ['text'] }),
-        this.registerThemesOnWorkers(theme, resolvedThemes),
+        this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes),
       ]);
       this.highlighter = highlighter;
-      this.renderOptions.theme = theme;
     }
 
+    this.renderOptions = newRenderOptions;
     this.diffCache.clear();
     this.fileCache.clear();
 
@@ -176,31 +191,36 @@ export class WorkerPoolManager {
     return { ...this.renderOptions };
   }
 
-  private async registerThemesOnWorkers(
-    theme: DiffsThemeNames | ThemesType,
+  private async setRenderOptionsOnWorkers(
+    renderOptions: WorkerRenderingOptions,
     resolvedThemes: ThemeRegistrationResolved[]
   ): Promise<void> {
-    if (resolvedThemes.length === 0 || this.workersFailed) {
+    if (this.workersFailed) {
       return;
     }
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    const registerPromises: Promise<void>[] = [];
+    const taskPromises: Promise<void>[] = [];
     for (const managedWorker of this.workers) {
       if (!managedWorker.initialized) {
         console.log({ managedWorker });
         throw new Error(
-          'registerThemesOnWorkers: Somehow we have an uninitialized worker'
+          'setRenderOptionsOnWorkers: Somehow we have an uninitialized worker'
         );
       }
-      registerPromises.push(
+      taskPromises.push(
         new Promise<void>((resolve, reject) => {
           const id = this.generateRequestId();
-          const task: RegisterThemeWorkerTask = {
-            type: 'register-theme',
+          const task: RenderOptionsWorkerTask = {
+            type: 'set-render-options',
             id,
-            request: { type: 'register-theme', id, theme, resolvedThemes },
+            request: {
+              type: 'set-render-options',
+              id,
+              renderOptions,
+              resolvedThemes,
+            },
             resolve,
             reject,
             requestStart: Date.now(),
@@ -210,7 +230,7 @@ export class WorkerPoolManager {
         })
       );
     }
-    await Promise.all(registerPromises);
+    await Promise.all(taskPromises);
   }
 
   subscribeToThemeChanges(instance: ThemeSubscriber): () => void {
@@ -523,8 +543,8 @@ export class WorkerPoolManager {
             }
             task.resolve();
             break;
-          case 'register-theme':
-            if (task.type !== 'register-theme') {
+          case 'set-render-options':
+            if (task.type !== 'set-render-options') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
             task.resolve();
@@ -628,7 +648,7 @@ export class WorkerPoolManager {
 
 function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
   const langs = new Set<SupportedLanguages>();
-  if (task.type === 'initialize' || task.type === 'register-theme') {
+  if (task.type === 'initialize' || task.type === 'set-render-options') {
     return [];
   }
   switch (task.type) {
