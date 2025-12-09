@@ -8,6 +8,7 @@ import {
 import type { ReactNode } from 'react';
 
 const PoolOptions: WorkerPoolOptions = {
+  poolSize: Math.max(1, navigator.hardwareConcurrency - 1),
   workerFactory() {
     return new Worker(
       new URL('@pierre/precision-diffs/worker/worker.js', import.meta.url)

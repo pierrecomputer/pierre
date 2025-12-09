@@ -1,4 +1,3 @@
-import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -449,7 +448,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const triggerRenderUpdate =
       this.renderCache.diff !== diff ||
       !this.renderCache.highlighted ||
-      !deepEqual(this.renderCache.options, options);
+      !areRenderOptionsEqual(this.renderCache.options, options);
 
     this.renderCache = {
       diff,

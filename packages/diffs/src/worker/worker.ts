@@ -114,10 +114,14 @@ async function handleRenderFile({
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
+  const fileOptions = {
+    theme: renderOptions.theme,
+    tokenizeMaxLineLength: renderOptions.tokenizeMaxLineLength,
+  };
   sendFileSuccess(
     id,
-    renderFileWithHighlighter(file, highlighter, renderOptions),
-    renderOptions
+    renderFileWithHighlighter(file, highlighter, fileOptions),
+    fileOptions
   );
 }
 

@@ -1,4 +1,3 @@
-import deepEqual from 'fast-deep-equal';
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -147,7 +146,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
     if (
       file !== renderCache.file ||
-      areRenderOptionsEqual(options, renderCache.options)
+      !areRenderOptionsEqual(options, renderCache.options)
     ) {
       return { options, forceRender: true };
     }
@@ -368,7 +367,7 @@ export class FileRenderer<LAnnotation = undefined> {
     const triggerRenderUpdate =
       this.renderCache.file !== file ||
       !this.renderCache.highlighted ||
-      !deepEqual(options, this.renderCache.options);
+      !areRenderOptionsEqual(options, this.renderCache.options);
 
     this.renderCache = {
       file,
