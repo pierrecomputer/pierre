@@ -205,3 +205,30 @@
 [data-slot='header'].is-stuck {
   @apply border-border;
 }
+
+/* Docs sidebar */
+.docs-sidebar {
+  /* Mobile: fixed dropdown panel */
+  @apply bg-background fixed top-16 right-4 left-4 z-[60];
+  @apply max-h-[80dvh] overflow-y-auto;
+  @apply -translate-y-2;
+  @apply rounded-xl border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-4;
+  @apply opacity-0 shadow-2xl;
+  @apply pointer-events-none transition-all duration-200 ease-out;
+
+  /* Scrollbar styling */
+  @apply [scrollbar-color:transparent_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin];
+  @apply hover:[scrollbar-color:auto];
+
+  /* Desktop: static sticky sidebar */
+  @apply md:pointer-events-auto md:relative md:z-auto;
+  @apply md:top-auto md:right-auto md:left-auto;
+  @apply md:translate-y-0 md:transform-none;
+  @apply md:rounded-none md:border-none md:bg-transparent;
+  @apply md:p-0 md:opacity-100 md:shadow-none md:transition-none;
+  @apply md:sticky md:top-22 md:max-h-[calc(100vh-112px)];
+
+  &.is-open {
+    @apply pointer-events-auto translate-y-0 opacity-100;
+  }
+}
