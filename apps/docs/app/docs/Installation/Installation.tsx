@@ -5,8 +5,8 @@ import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
-import { PACKAGE_MANAGERS, type PackageManager } from './constants';
 import { ProseWrapper } from '../ProseWrapper';
+import { PACKAGE_MANAGERS, type PackageManager } from './constants';
 
 interface InstallationProps {
   installationExamples: Record<PackageManager, PreloadedFileResult<undefined>>;

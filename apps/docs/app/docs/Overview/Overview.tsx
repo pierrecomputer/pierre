@@ -12,8 +12,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
-import type { DocsExampleTypes } from '../types';
 import { ProseWrapper } from '../ProseWrapper';
+import type { DocsExampleTypes } from '../types';
 
 interface OverviewProps {
   initialDiffProps: PreloadMultiFileDiffResult<undefined>;

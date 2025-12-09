@@ -100,19 +100,19 @@ export function DocsSidebar({
   // Handle scroll-based active heading detection
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 100; // Offset for better UX
       let foundActive = false;
 
       for (let i = headings.length - 1; i >= 0; i--) {
         const heading = headings[i];
-        if (heading.element.offsetTop <= scrollPosition) {
+        const rect = heading.element.getBoundingClientRect();
+        if (rect.top <= 100) {
           setActiveHeading(heading.id);
           foundActive = true;
           break;
         }
       }
 
-      // If no heading is active (e.g., at the very top), default to the first one
+      // If no heading is active, default to the first one
       if (!foundActive && headings.length > 0) {
         setActiveHeading(headings[0].id);
       }

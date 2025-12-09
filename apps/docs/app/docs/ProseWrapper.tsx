@@ -5,9 +5,5 @@ interface ProseWrapperProps {
 }
 
 export function ProseWrapper({ children }: ProseWrapperProps) {
-  return (
-    <section className="docs-prose space-y-4 contain-layout">
-      {children}
-    </section>
-  );
+  return <section className="docs-prose contain-layout">{children}</section>;
 }
