@@ -110,11 +110,6 @@ export default function DocsPage() {
           <StylingSection />
           <WorkerPoolSection />
           <SSRSection />
-          {/* <ComponentProps /> */}
-          {/* <RendererOptions /> */}
-          {/* <EventHandlers /> */}
-          {/* <CompleteExample /> */}
-          {/* <TypescriptSupport /> */}
         </div>
       </DocsLayout>
       <Footer />

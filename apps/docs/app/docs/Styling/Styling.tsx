@@ -18,7 +18,7 @@ export function Styling({
   stylingUnsafe,
 }: StylingProps) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 contain-layout">
       <h2>Styling</h2>
       <p>
         Diff and code components are rendered using shadow DOM APIs, allowing

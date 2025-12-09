@@ -53,7 +53,7 @@ export function WorkerPool({
   architectureASCII,
 }: WorkerPoolProps) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 contain-layout">
       <h2>Worker Pool</h2>
       <Notice variant="warning" icon={<IconCiWarningFill />}>
         This feature is experimental and undergoing active delevopment. There

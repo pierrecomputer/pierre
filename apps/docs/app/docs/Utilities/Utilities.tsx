@@ -36,7 +36,7 @@ export function Utilities({
   );
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 contain-layout">
       <h2>Utilities</h2>
       <Notice icon={<IconInfoFill />}>
         Import utility functions from <code>@pierre/diffs</code>. These can be
@@ -67,9 +67,9 @@ export function Utilities({
         <ButtonGroupItem value="react">React Example</ButtonGroupItem>
       </ButtonGroup>
       {acceptRejectType === 'vanilla' ? (
-        <DocsCodeExample {...diffAcceptReject} />
+        <DocsCodeExample {...diffAcceptReject} key={acceptRejectType} />
       ) : (
-        <DocsCodeExample {...diffAcceptRejectReact} />
+        <DocsCodeExample {...diffAcceptRejectReact} key={acceptRejectType} />
       )}
 
       <h3 data-toc-ignore>disposeHighlighter</h3>
