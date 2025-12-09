@@ -67,9 +67,9 @@ export function Utilities({
         <ButtonGroupItem value="react">React Example</ButtonGroupItem>
       </ButtonGroup>
       {acceptRejectType === 'vanilla' ? (
-        <DocsCodeExample {...diffAcceptReject} />
+        <DocsCodeExample {...diffAcceptReject} key={acceptRejectType} />
       ) : (
-        <DocsCodeExample {...diffAcceptRejectReact} />
+        <DocsCodeExample {...diffAcceptRejectReact} key={acceptRejectType} />
       )}
 
       <h3 data-toc-ignore>disposeHighlighter</h3>

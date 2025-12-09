@@ -85,13 +85,13 @@ export function ReactAPI({
       {(() => {
         switch (example) {
           case 'multi-file-diff':
-            return <DocsCodeExample {...reactAPIMultiFileDiff} />;
+            return <DocsCodeExample {...reactAPIMultiFileDiff} key={example} />;
           case 'file-diff':
-            return <DocsCodeExample {...reactAPIFileDiff} />;
+            return <DocsCodeExample {...reactAPIFileDiff} key={example} />;
           case 'patch-diff':
-            return <DocsCodeExample {...reactAPIPatch} />;
+            return <DocsCodeExample {...reactAPIPatch} key={example} />;
           case 'file':
-            return <DocsCodeExample {...reactAPIFile} />;
+            return <DocsCodeExample {...reactAPIFile} key={example} />;
         }
       })()}
 
@@ -125,6 +125,7 @@ export function ReactAPI({
               <DocsCodeExample
                 {...sharedDiffOptions}
                 style={NumberColumnWidthOverride}
+                key={sharedProps}
               />
             );
           case 'diff-render-props':
@@ -132,6 +133,7 @@ export function ReactAPI({
               <DocsCodeExample
                 {...sharedDiffRenderProps}
                 style={NumberColumnWidthOverride}
+                key={sharedProps}
               />
             );
           case 'file-options':
@@ -139,6 +141,7 @@ export function ReactAPI({
               <DocsCodeExample
                 {...sharedFileOptions}
                 style={NumberColumnWidthOverride}
+                key={sharedProps}
               />
             );
           case 'file-render-props':
@@ -146,6 +149,7 @@ export function ReactAPI({
               <DocsCodeExample
                 {...sharedFileRenderProps}
                 style={NumberColumnWidthOverride}
+                key={sharedProps}
               />
             );
         }

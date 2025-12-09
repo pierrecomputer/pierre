@@ -138,7 +138,7 @@ export function Overview({
           </ButtonGroupItem>
         </ButtonGroup>
       </div>
-      <DocsCodeExample {...file} />
+      <DocsCodeExample {...file} key={`${type}-${example}`} />
     </section>
   );
 }

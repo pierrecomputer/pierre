@@ -38,7 +38,7 @@ export function Installation({ installationExamples }: InstallationProps) {
           </ButtonGroupItem>
         ))}
       </ButtonGroup>
-      <DocsCodeExample {...installationExamples[selectedPm]} />
+      <DocsCodeExample {...installationExamples[selectedPm]} key={selectedPm} />
 
       <h3>Package Exports</h3>
       <p>The package provides several entry points for different use cases:</p>
