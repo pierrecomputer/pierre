@@ -138,10 +138,10 @@ export function DocsSidebar({
       )}
 
       <aside
-        className={`bg-background fixed top-16 right-4 left-4 z-[60] max-h-[70vh] -translate-y-2 transform overflow-y-auto rounded-xl border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-4 opacity-0 shadow-2xl transition-all duration-200 ease-out md:pointer-events-auto md:relative md:top-auto md:right-auto md:left-auto md:z-auto md:block md:max-h-none md:translate-y-0 md:transform-none md:overflow-visible md:rounded-none md:border-none md:bg-transparent md:p-0 md:opacity-100 md:shadow-none md:transition-none ${isMobileOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none'}`}
+        className={`bg-background fixed top-16 right-4 left-4 z-[60] max-h-[80dvh] -translate-y-2 transform rounded-xl border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-4 opacity-0 shadow-2xl transition-all duration-200 ease-out md:pointer-events-auto md:relative md:top-auto md:right-auto md:left-auto md:z-auto md:block md:max-h-none md:translate-y-0 md:transform-none md:rounded-none md:border-none md:bg-transparent md:p-0 md:opacity-100 md:shadow-none md:transition-none ${isMobileOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none'}`}
       >
         <nav
-          className="max-h-[calc(100vh-65px)] overflow-y-auto pr-[2px] [scrollbar-color:transparent_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] hover:[scrollbar-color:auto] md:sticky md:top-22"
+          className="max-h-[calc(100vh-112px)] overflow-y-auto pr-[2px] [scrollbar-color:transparent_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] hover:[scrollbar-color:auto] md:sticky md:top-22"
           onClick={onMobileClose}
         >
           {headings.map((heading) => (
