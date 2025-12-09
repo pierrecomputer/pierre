@@ -1,3 +1,4 @@
+import '@/app/prose.css';
 import Footer from '@/components/Footer';
 import { preloadFile, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
@@ -99,7 +100,7 @@ export default function DocsPage() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <DocsLayout>
-        <div className="prose prose-sm md:prose-base prose-neutral prose-headings:font-semibold prose-a:underline-offset-3 prose-a:hover:underline-offset-4 prose-code:before:content-none prose-code:after:content-none dark:prose-invert prose-li:mt-0 prose-li:mb-1 prose-li:last:mb-0 prose-headings:scroll-mt-28 md:prose-headings:scroll-mt-24 prose-headings:mb-2 w-full max-w-full min-w-0 pb-6 md:pt-6 md:pb-0 md:leading-[1.6] [&_p]:max-w-[48em]">
+        <div className="space-y-8">
           <HeadingAnchors />
           <OverviewSection />
           <InstallationSection />

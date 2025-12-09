@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 import type { DocsExampleTypes } from '../types';
 
 interface OverviewProps {
@@ -48,7 +49,7 @@ export function Overview({
     }
   })();
   return (
-    <section className="space-y-4 contain-layout">
+    <ProseWrapper>
       <h2>Overview</h2>
       <Notice variant="warning" icon={<IconCiWarningFill />}>
         Diffs is in early active development—APIs are subject to change.
@@ -104,41 +105,26 @@ export function Overview({
         You can see examples of these approaches below, in both JavaScript and
         React.
       </p>
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-wrap gap-2">
         <ButtonGroup
-          className="flex-1 sm:flex-initial"
+          className="sm:flex-initial"
           value={type}
           onValueChange={(value) => setType(value as 'vanilla' | 'react')}
         >
-          <ButtonGroupItem className="flex-1 sm:flex-initial" value="vanilla">
-            Vanilla JS
-          </ButtonGroupItem>
-          <ButtonGroupItem className="flex-1 sm:flex-initial" value="react">
-            React
-          </ButtonGroupItem>
+          <ButtonGroupItem value="vanilla">Vanilla JS</ButtonGroupItem>
+          <ButtonGroupItem value="react">React</ButtonGroupItem>
         </ButtonGroup>
         <ButtonGroup
-          className="flex-1 sm:flex-initial"
           value={example}
           onValueChange={(value) =>
             setExample(value as 'single-file' | 'patch-file')
           }
         >
-          <ButtonGroupItem
-            className="flex-1 sm:flex-initial"
-            value="single-file"
-          >
-            Single file
-          </ButtonGroupItem>
-          <ButtonGroupItem
-            className="flex-1 sm:flex-initial"
-            value="patch-file"
-          >
-            Patch file
-          </ButtonGroupItem>
+          <ButtonGroupItem value="single-file">Single file</ButtonGroupItem>
+          <ButtonGroupItem value="patch-file">Patch file</ButtonGroupItem>
         </ButtonGroup>
       </div>
       <DocsCodeExample {...file} key={`${type}-${example}`} />
-    </section>
+    </ProseWrapper>
   );
 }

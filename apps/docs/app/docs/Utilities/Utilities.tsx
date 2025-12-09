@@ -7,6 +7,7 @@ import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 
 interface UtilitiesProps {
   diffAcceptReject: PreloadedFileResult<undefined>;
@@ -36,7 +37,7 @@ export function Utilities({
   );
 
   return (
-    <section className="space-y-4 contain-layout">
+    <ProseWrapper>
       <h2>Utilities</h2>
       <Notice icon={<IconInfoFill />}>
         Import utility functions from <code>@pierre/diffs</code>. These can be
@@ -140,6 +141,6 @@ export function Utilities({
         doesn&apos;t match the actual language.
       </p>
       <DocsCodeExample {...setLanguageOverride} />
-    </section>
+    </ProseWrapper>
   );
 }

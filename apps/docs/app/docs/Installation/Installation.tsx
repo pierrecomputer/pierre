@@ -5,6 +5,7 @@ import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 import { PACKAGE_MANAGERS, type PackageManager } from './constants';
 
 interface InstallationProps {
@@ -15,7 +16,7 @@ export function Installation({ installationExamples }: InstallationProps) {
   const [selectedPm, setSelectedPm] = useState<PackageManager>('npm');
 
   return (
-    <section className="space-y-4 contain-layout">
+    <ProseWrapper>
       <h2>Installation</h2>
       <p>
         Diffs is{' '}
@@ -90,6 +91,6 @@ export function Installation({ installationExamples }: InstallationProps) {
           </tr>
         </tbody>
       </table>
-    </section>
+    </ProseWrapper>
   );
 }

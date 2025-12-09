@@ -12,8 +12,8 @@ export interface DocsLayoutProps {
 export function DocsLayout({ children }: DocsLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleMobileMenuToggle = (isOpen: boolean) => {
-    setIsMobileMenuOpen(isOpen);
+  const handleMobileMenuToggle = () => {
+    setIsMobileMenuOpen((prev) => !prev);
   };
 
   const handleMobileMenuClose = () => {

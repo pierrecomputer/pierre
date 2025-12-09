@@ -7,6 +7,7 @@ import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 
 type ComponentType = 'file-diff' | 'file';
 type PropsType = 'file-diff' | 'file';
@@ -40,7 +41,7 @@ export function VanillaAPI({
     useState<DiffHunksType>('from-file');
 
   return (
-    <section className="space-y-4 contain-layout">
+    <ProseWrapper>
       <h2>Vanilla JS API</h2>
 
       <Notice icon={<IconInfoFill />}>
@@ -149,6 +150,6 @@ export function VanillaAPI({
         rendering single files without any diff context.
       </p>
       <DocsCodeExample {...fileRenderer} />
-    </section>
+    </ProseWrapper>
   );
 }
