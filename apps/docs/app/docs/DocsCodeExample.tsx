@@ -26,7 +26,10 @@ export function DocsCodeExample<LAnnotation = undefined>(
   return (
     <File
       {...props}
-      className={cn('overflow-hidden rounded-md border-1', props.className)}
+      className={cn(
+        'overflow-hidden rounded-md border-1 contain-layout contain-paint',
+        props.className
+      )}
       renderHeaderMetadata={(file) => (
         <CopyCodeButton content={file.contents} />
       )}

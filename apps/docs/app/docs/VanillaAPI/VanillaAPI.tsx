@@ -40,7 +40,7 @@ export function VanillaAPI({
     useState<DiffHunksType>('from-file');
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 contain-layout">
       <h2>Vanilla JS API</h2>
 
       <Notice icon={<IconInfoFill />}>
@@ -65,9 +65,15 @@ export function VanillaAPI({
         <ButtonGroupItem value="file">File</ButtonGroupItem>
       </ButtonGroup>
       {componentType === 'file-diff' ? (
-        <DocsCodeExample {...fileDiffExample} />
+        <DocsCodeExample
+          {...fileDiffExample}
+          key={`component-type-${componentType}`}
+        />
       ) : (
-        <DocsCodeExample {...fileExample} />
+        <DocsCodeExample
+          {...fileExample}
+          key={`component-type-${componentType}`}
+        />
       )}
 
       <h3 id="vanilla-js-api-props">Props</h3>
@@ -86,9 +92,9 @@ export function VanillaAPI({
         <ButtonGroupItem value="file">File Props</ButtonGroupItem>
       </ButtonGroup>
       {propsType === 'file-diff' ? (
-        <DocsCodeExample {...fileDiffProps} />
+        <DocsCodeExample {...fileDiffProps} key={`props-type-${propsType}`} />
       ) : (
-        <DocsCodeExample {...fileProps} />
+        <DocsCodeExample {...fileProps} key={`props-type-${propsType}`} />
       )}
 
       <h4 data-toc-ignore>Custom Hunk Separators</h4>
@@ -132,9 +138,9 @@ export function VanillaAPI({
         <ButtonGroupItem value="from-patch">Patch File</ButtonGroupItem>
       </ButtonGroup>
       {diffHunksType === 'from-file' ? (
-        <DocsCodeExample {...diffHunksRenderer} />
+        <DocsCodeExample {...diffHunksRenderer} key={diffHunksType} />
       ) : (
-        <DocsCodeExample {...diffHunksRendererPatch} />
+        <DocsCodeExample {...diffHunksRendererPatch} key={diffHunksType} />
       )}
       <h4 data-toc-ignore>FileRenderer</h4>
       <p>
