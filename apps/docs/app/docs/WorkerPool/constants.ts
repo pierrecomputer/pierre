@@ -318,18 +318,25 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
 
 // ---
 
-// To change themes dynamically, use the useWorkerPool hook:
+// To change render options dynamically, use the useWorkerPool hook:
 function ThemeSwitcher() {
   const workerPool = useWorkerPool();
 
   const switchToGitHub = () => {
-    void workerPool?.setTheme({ dark: 'github-dark', light: 'github-light' });
+    // setRenderOptions accepts a Partial<WorkerRenderingOptions>.
+    // Any omitted options will use defaults:
+    // - theme: { dark: 'pierre-dark', light: 'pierre-light' }
+    // - lineDiffType: 'word-alt'
+    // - tokenizeMaxLineLength: 1000
+    void workerPool?.setRenderOptions({
+      theme: { dark: 'github-dark', light: 'github-light' },
+    });
   };
 
   return <button onClick={switchToGitHub}>Switch to GitHub theme</button>;
 }
-// All connected File, FileDiff, MultiFileDiff, and PatchDiff instances
-// will automatically re-render with the new theme once it has loaded.`,
+// WARNING: Changing render options will force all mounted components
+// to re-render and will clear the render cache.`,
   },
   options,
 };
@@ -374,10 +381,16 @@ const newFile = { name: 'example.ts', contents: 'const x = 2;' };
 
 instance.render({ oldFile, newFile, containerWrapper: document.body });
 
-// To change themes dynamically, call setTheme on the worker pool:
-await workerPool.setTheme({ dark: 'github-dark', light: 'github-light' });
-// All connected File and FileDiff instances will automatically re-render
-// with the new theme once it has loaded.
+// To change render options dynamically, call setRenderOptions on the worker pool.
+// It accepts a Partial<WorkerRenderingOptions>. Any omitted options will use defaults:
+// - theme: { dark: 'pierre-dark', light: 'pierre-light' }
+// - lineDiffType: 'word-alt'
+// - tokenizeMaxLineLength: 1000
+await workerPool.setRenderOptions({
+  theme: { dark: 'github-dark', light: 'github-light' },
+});
+// WARNING: Changing render options will force all mounted components
+// to re-render and will clear the render cache.
 
 // Optional: terminate workers when no longer needed (e.g., SPA navigation)
 // Page unload automatically cleans up workers, but for SPAs you may want
@@ -400,10 +413,11 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
-// - highlighterOptions: WorkerHighlighterOptions
-//   - theme: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
+// - highlighterOptions: WorkerInitializationRenderOptions
+//   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
+//   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
+//   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
 //   - langs?: SupportedLanguages[] - Array of languages to preload
-//   - preferWasmHighlighter?: boolean - Use WASM highlighter
 
 // Methods:
 poolManager.initialize()
@@ -412,8 +426,17 @@ poolManager.initialize()
 poolManager.isInitialized()
 // Returns: boolean
 
-poolManager.setTheme(theme)
-// Returns: Promise<void> - Changes the active theme
+poolManager.setRenderOptions(options)
+// Returns: Promise<void> - Changes render options dynamically
+// Accepts: Partial<WorkerRenderingOptions>
+//   - theme?: DiffsThemeNames | ThemesType
+//   - lineDiffType?: 'word' | 'word-alt' | 'char'
+//   - tokenizeMaxLineLength?: number
+// Omitted options will use defaults. WARNING: This forces all mounted
+// components to re-render and clears the render cache.
+
+poolManager.getRenderOptions()
+// Returns: WorkerRenderingOptions - Current render options (copy)
 
 poolManager.highlightFileAST(fileInstance, file, options)
 // Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
