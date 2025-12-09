@@ -10,6 +10,7 @@ import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import type { CSSProperties } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 
 interface WorkerPoolProps {
   helperVite: PreloadedFileResult<undefined>;
@@ -53,7 +54,7 @@ export function WorkerPool({
   architectureASCII,
 }: WorkerPoolProps) {
   return (
-    <>
+    <ProseWrapper>
       <h2>Worker Pool</h2>
       <Notice variant="warning" icon={<IconCiWarningFill />}>
         This feature is experimental and undergoing active development. There
@@ -279,6 +280,6 @@ export function WorkerPool({
           } as CSSProperties
         }
       />
-    </>
+    </ProseWrapper>
   );
 }

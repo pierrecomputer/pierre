@@ -7,6 +7,7 @@ import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { type CSSProperties, useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 
 const NumberColumnWidthOverride = {
   '--diffs-min-number-column-width': '3ch',
@@ -44,7 +45,7 @@ export function ReactAPI({
   const [sharedProps, setSharedProps] =
     useState<SharedPropsTypes>('diff-options');
   return (
-    <>
+    <ProseWrapper>
       <h2>React API</h2>
       <Notice icon={<IconInfoFill />}>
         Import React components from <code>@pierre/diffs/react</code>.
@@ -154,6 +155,6 @@ export function ReactAPI({
             );
         }
       })()}
-    </>
+    </ProseWrapper>
   );
 }

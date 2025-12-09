@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 import { PACKAGE_MANAGERS, type PackageManager } from './constants';
+import { ProseWrapper } from '../ProseWrapper';
 
 interface InstallationProps {
   installationExamples: Record<PackageManager, PreloadedFileResult<undefined>>;
@@ -15,7 +16,7 @@ export function Installation({ installationExamples }: InstallationProps) {
   const [selectedPm, setSelectedPm] = useState<PackageManager>('npm');
 
   return (
-    <>
+    <ProseWrapper>
       <h2>Installation</h2>
       <p>
         Diffs is{' '}
@@ -90,6 +91,6 @@ export function Installation({ installationExamples }: InstallationProps) {
           </tr>
         </tbody>
       </table>
-    </>
+    </ProseWrapper>
   );
 }

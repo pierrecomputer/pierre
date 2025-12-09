@@ -13,6 +13,7 @@ import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 import type { DocsExampleTypes } from '../types';
+import { ProseWrapper } from '../ProseWrapper';
 
 interface OverviewProps {
   initialDiffProps: PreloadMultiFileDiffResult<undefined>;
@@ -48,7 +49,7 @@ export function Overview({
     }
   })();
   return (
-    <>
+    <ProseWrapper>
       <h2>Overview</h2>
       <Notice variant="warning" icon={<IconCiWarningFill />}>
         Diffs is in early active development—APIs are subject to change.
@@ -123,7 +124,7 @@ export function Overview({
           <ButtonGroupItem value="patch-file">Patch file</ButtonGroupItem>
         </ButtonGroup>
       </div>
-      <DocsCodeExample {...file} />
-    </>
+      <DocsCodeExample {...file} key={`${type}-${example}`} />
+    </ProseWrapper>
   );
 }

@@ -5,6 +5,7 @@ import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 
 interface SSRProps {
   usageServer: PreloadedFileResult<undefined>;
@@ -26,7 +27,7 @@ export function SSR({
   preloadPatchFile,
 }: SSRProps) {
   return (
-    <>
+    <ProseWrapper>
       <h2>SSR</h2>
 
       <Notice icon={<IconBulbFill />}>
@@ -104,6 +105,6 @@ export function SSR({
         into a <code>FileDiff</code> component.
       </p>
       <DocsCodeExample {...preloadPatchFile} />
-    </>
+    </ProseWrapper>
   );
 }

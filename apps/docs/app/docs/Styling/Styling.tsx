@@ -5,6 +5,7 @@ import { Notice } from '@/components/ui/notice';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ProseWrapper } from '../ProseWrapper';
 
 interface StylingProps {
   stylingGlobal: PreloadedFileResult<undefined>;
@@ -18,7 +19,7 @@ export function Styling({
   stylingUnsafe,
 }: StylingProps) {
   return (
-    <>
+    <ProseWrapper>
       <h2>Styling</h2>
       <p>
         Diff and code components are rendered using shadow DOM APIs, allowing
@@ -54,6 +55,6 @@ export function Styling({
         styles.
       </Notice>
       <DocsCodeExample {...stylingUnsafe} />
-    </>
+    </ProseWrapper>
   );
 }
