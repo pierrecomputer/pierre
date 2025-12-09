@@ -100,19 +100,19 @@ export function DocsSidebar({
   // Handle scroll-based active heading detection
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 100; // Offset for better UX
       let foundActive = false;
 
       for (let i = headings.length - 1; i >= 0; i--) {
         const heading = headings[i];
-        if (heading.element.offsetTop <= scrollPosition) {
+        const rect = heading.element.getBoundingClientRect();
+        if (rect.top <= 100) {
           setActiveHeading(heading.id);
           foundActive = true;
           break;
         }
       }
 
-      // If no heading is active (e.g., at the very top), default to the first one
+      // If no heading is active, default to the first one
       if (!foundActive && headings.length > 0) {
         setActiveHeading(headings[0].id);
       }
@@ -132,36 +132,26 @@ export function DocsSidebar({
     <>
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-51 bg-black/50 md:hidden"
+          className="fixed inset-0 z-[50] bg-black/30 backdrop-blur-sm transition-opacity duration-200 md:hidden"
           onClick={onMobileClose}
         />
       )}
 
-      <aside
-        className={`bg-background border-border fixed top-0 left-0 z-60 h-screen w-72 -translate-x-full transform overflow-y-auto border-r p-5 shadow-xl transition-transform duration-300 ease-in-out md:pointer-events-auto md:relative md:top-auto md:left-auto md:z-auto md:block md:h-auto md:w-auto md:translate-x-0 md:transform-none md:overflow-visible md:border-none md:bg-transparent md:px-0 md:py-0 md:opacity-100 md:shadow-none md:transition-none ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} `}
+      <nav
+        className={`docs-sidebar ${isMobileOpen ? 'is-open' : ''}`}
+        onClick={onMobileClose}
       >
-        <nav
-          className="top-0 max-h-[calc(100vh-65px)] space-y-0.5 overflow-y-auto pt-6 pr-[2px] [scrollbar-color:transparent_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] hover:[scrollbar-color:auto] md:sticky md:top-16"
-          onClick={onMobileClose}
-        >
-          {headings.map((heading) => (
-            <NavLink
-              key={heading.id}
-              href={`#${heading.id}`}
-              active={activeHeading === heading.id}
-              className={
-                heading.level === 3
-                  ? 'ml-4'
-                  : heading.level === 4
-                    ? 'ml-8'
-                    : undefined
-              }
-            >
-              {heading.text}
-            </NavLink>
-          ))}
-        </nav>
-      </aside>
+        {headings.map((heading) => (
+          <NavLink
+            key={heading.id}
+            href={`#${heading.id}`}
+            active={activeHeading === heading.id}
+            className={`mr-[2px] ${heading.level === 3 ? 'ml-4' : ''}`}
+          >
+            {heading.text}
+          </NavLink>
+        ))}
+      </nav>
     </>
   );
 }
