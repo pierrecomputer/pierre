@@ -48,7 +48,7 @@ export function Overview({
     }
   })();
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 contain-layout">
       <h2>Overview</h2>
       <Notice variant="warning" icon={<IconCiWarningFill />}>
         Diffs is in early active development—APIs are subject to change.
@@ -65,7 +65,7 @@ export function Overview({
       </p>
       <MultiFileDiff
         {...initialDiffProps}
-        className="overflow-hidden rounded-md border-1"
+        className="overflow-hidden rounded-md border-1 contain-layout contain-paint"
       />
       <p>
         We have an opinionated stance in our architecture:{' '}

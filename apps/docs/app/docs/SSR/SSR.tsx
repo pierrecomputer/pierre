@@ -26,7 +26,7 @@ export function SSR({
   preloadPatchFile,
 }: SSRProps) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 contain-layout">
       <h2>SSR</h2>
 
       <Notice icon={<IconBulbFill />}>

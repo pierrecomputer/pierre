@@ -40,7 +40,7 @@ export function VanillaAPI({
     useState<DiffHunksType>('from-file');
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 contain-layout">
       <h2>Vanilla JS API</h2>
 
       <Notice icon={<IconInfoFill />}>
