@@ -26,7 +26,7 @@ export function DocsLayout({ children }: DocsLayoutProps) {
         onMobileMenuToggle={handleMobileMenuToggle}
         className="-mb-[1px]"
       />
-      <div className="relative gap-6 pt-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
+      <div className="relative gap-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
         <SidebarWrapper
           isMobileMenuOpen={isMobileMenuOpen}
           onMobileMenuClose={handleMobileMenuClose}

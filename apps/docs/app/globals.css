@@ -226,7 +226,7 @@
   @apply md:translate-y-0 md:transform-none;
   @apply md:rounded-none md:border-none md:bg-transparent;
   @apply md:p-0 md:opacity-100 md:shadow-none md:transition-none;
-  @apply md:sticky md:top-22 md:max-h-[calc(100vh-112px)];
+  @apply md:sticky md:top-15 md:max-h-[calc(100vh-60px)] md:pt-7 md:pb-2 md:contain-strict;
 
   &.is-open {
     @apply pointer-events-auto translate-y-0 opacity-100;

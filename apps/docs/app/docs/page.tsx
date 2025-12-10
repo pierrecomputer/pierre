@@ -93,7 +93,7 @@ export default function DocsPage() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <DocsLayout>
-        <div className="space-y-8">
+        <div className="space-y-8 pt-6">
           <HeadingAnchors />
           <OverviewSection />
           <InstallationSection />
