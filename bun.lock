@@ -95,6 +95,7 @@
       "devDependencies": {
         "@tailwindcss/postcss": "catalog:",
         "@types/hast": "catalog:",
+        "@types/mdast": "catalog:",
         "@types/node": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
@@ -235,6 +236,7 @@
     "@trivago/prettier-plugin-sort-imports": "6.0.0",
     "@types/bun": "1.3.2",
     "@types/hast": "3.0.4",
+    "@types/mdast": "4.0.4",
     "@types/node": "^20",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",

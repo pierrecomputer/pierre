@@ -84,9 +84,7 @@ export default function rehypeHierarchicalSlug(options: Options = {}) {
         delete parentSlugs[i];
       }
 
-      if (node.properties == null) {
-        node.properties = {};
-      }
+      node.properties ??= {};
       node.properties.id = slug;
     });
   };
