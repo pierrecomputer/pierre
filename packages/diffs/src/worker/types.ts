@@ -66,7 +66,7 @@ export interface ResolvedLanguage {
   data: LanguageRegistration[];
 }
 
-export interface RenderOptionsWorkerRequest {
+export interface SetRenderOptionsWorkerRequest {
   type: 'set-render-options';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
@@ -81,7 +81,7 @@ export type WorkerRequest =
   | RenderFileRequest
   | RenderDiffRequest
   | InitializeWorkerRequest
-  | RenderOptionsWorkerRequest;
+  | SetRenderOptionsWorkerRequest;
 
 export interface RenderFileSuccessResponse {
   type: 'success';
@@ -162,10 +162,10 @@ export interface InitializeWorkerTask {
   requestStart: number;
 }
 
-export interface RenderOptionsWorkerTask {
+export interface SetRenderOptionsWorkerTask {
   type: 'set-render-options';
   id: WorkerRequestId;
-  request: RenderOptionsWorkerRequest;
+  request: SetRenderOptionsWorkerRequest;
   resolve(value?: undefined): void;
   reject(error: Error): void;
   requestStart: number;
@@ -189,7 +189,7 @@ export interface RenderDiffTask {
 
 export type AllWorkerTasks =
   | InitializeWorkerTask
-  | RenderOptionsWorkerTask
+  | SetRenderOptionsWorkerTask
   | RenderFileTask
   | RenderDiffTask;
 

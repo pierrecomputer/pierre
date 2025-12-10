@@ -36,8 +36,8 @@ import type {
   RenderDiffTask,
   RenderFileRequest,
   RenderFileTask,
-  RenderOptionsWorkerTask,
   ResolvedLanguage,
+  SetRenderOptionsWorkerTask,
   SubmitRequest,
   WorkerInitializationRenderOptions,
   WorkerPoolOptions,
@@ -212,7 +212,7 @@ export class WorkerPoolManager {
       taskPromises.push(
         new Promise<void>((resolve, reject) => {
           const id = this.generateRequestId();
-          const task: RenderOptionsWorkerTask = {
+          const task: SetRenderOptionsWorkerTask = {
             type: 'set-render-options',
             id,
             request: {

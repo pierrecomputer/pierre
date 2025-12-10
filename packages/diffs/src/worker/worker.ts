@@ -21,7 +21,7 @@ import type {
   RenderErrorResponse,
   RenderFileRequest,
   RenderFileSuccessResponse,
-  RenderOptionsWorkerRequest,
+  SetRenderOptionsWorkerRequest,
   WorkerRenderingOptions,
   WorkerRequest,
   WorkerRequestId,
@@ -91,7 +91,7 @@ function handleSetRenderOptions({
   id,
   renderOptions: options,
   resolvedThemes,
-}: RenderOptionsWorkerRequest) {
+}: SetRenderOptionsWorkerRequest) {
   const highlighter = getHighlighter();
   attachResolvedThemes(resolvedThemes, highlighter);
   renderOptions = options;
