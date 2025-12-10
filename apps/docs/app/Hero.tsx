@@ -46,7 +46,7 @@ export function Hero() {
       </svg>
 
       <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
-        Better diffs and code
+        A diff rendering library
       </h1>
       <p className="text-md text-muted-foreground mb-2 md:text-lg lg:text-xl">
         <code>@pierre/diffs</code> is an open source diff and code rendering
