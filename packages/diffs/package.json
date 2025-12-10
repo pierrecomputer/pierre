@@ -62,7 +62,6 @@
     "@shikijs/engine-javascript": "catalog:",
     "@shikijs/transformers": "catalog:",
     "diff": "catalog:",
-    "fast-deep-equal": "catalog:",
     "hast-util-to-html": "catalog:",
     "lru_map": "catalog:",
     "shiki": "catalog:"

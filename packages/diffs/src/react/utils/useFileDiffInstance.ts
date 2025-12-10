@@ -1,4 +1,3 @@
-import deepEqual from 'fast-deep-equal';
 import {
   useCallback,
   useContext,
@@ -15,6 +14,7 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../../types';
+import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
@@ -79,7 +79,7 @@ export function useFileDiffInstance<LAnnotation>({
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
     const instance = instanceRef.current;
-    const forceRender = !deepEqual(instance.options, options);
+    const forceRender = !areOptionsEqual(instance.options, options);
     instance.setOptions(options);
     void instance.render({
       forceRender,

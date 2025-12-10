@@ -1,4 +1,3 @@
-import deepEqual from 'fast-deep-equal';
 import {
   useCallback,
   useContext,
@@ -11,6 +10,7 @@ import { File, type FileOptions } from '../../components/File';
 import type { SelectedLineRange } from '../../managers/LineSelectionManager';
 import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type { FileContents, LineAnnotation } from '../../types';
+import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
@@ -66,7 +66,7 @@ export function useFileInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
-    const forceRender = !deepEqual(instanceRef.current.options, options);
+    const forceRender = !areOptionsEqual(instanceRef.current.options, options);
     instanceRef.current.setOptions(options);
     void instanceRef.current.render({ file, lineAnnotations, forceRender });
     if (selectedLines !== undefined) {

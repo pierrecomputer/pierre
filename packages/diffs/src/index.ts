@@ -32,6 +32,8 @@ export * from './renderers/FileRenderer';
 export * from './shiki-stream';
 export * from './sprite';
 export * from './utils/areFilesEqual';
+export * from './utils/areObjectsEqual';
+export * from './utils/areOptionsEqual';
 export * from './utils/areSelectionsEqual';
 export * from './utils/areThemesEqual';
 export * from './utils/cleanLastNewline';
