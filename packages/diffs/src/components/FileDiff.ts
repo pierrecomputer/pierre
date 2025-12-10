@@ -1,4 +1,3 @@
-import deepEquals from 'fast-deep-equal';
 import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -38,6 +37,7 @@ import type {
   RenderHeaderMetadataCallback,
   ThemeTypes,
 } from '../types';
+import { areFilesEqual } from '../utils/areFilesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createCodeNode } from '../utils/createCodeNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
@@ -358,8 +358,8 @@ export class FileDiff<LAnnotation = undefined> {
     const filesDidChange =
       oldFile != null &&
       newFile != null &&
-      (!deepEquals(oldFile, this.oldFile) ||
-        !deepEquals(newFile, this.newFile));
+      (!areFilesEqual(oldFile, this.oldFile) ||
+        !areFilesEqual(newFile, this.newFile));
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
