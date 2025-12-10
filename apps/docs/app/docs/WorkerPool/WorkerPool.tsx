@@ -187,13 +187,12 @@ export function WorkerPool({
       </p>
 
       <Notice icon={<IconInfoFill />} variant="warning">
-        When using the worker pool, the following render options{' '}
-        <code>theme</code>, <code>lineDiffType</code>, and{' '}
-        <code>tokenizeMaxLineLength</code> are controlled by the{' '}
-        <code>WorkerPoolManager</code>, not individual components. Any of those
-        options passed into component instances will be ignored. To change
-        render options after the WorkerPoolManager is instantiated, use the{' '}
-        <code>setRenderOptions()</code> method on the{' '}
+        When using the worker pool, the <code>theme</code>,{' '}
+        <code>lineDiffType</code>, and <code>tokenizeMaxLineLength</code> render
+        options are controlled by <code>WorkerPoolManager</code>, not individual
+        components. Passing these options into component instances will be
+        ignored. To change render options after WorkerPoolManager instantiates,
+        use the <code>setRenderOptions()</code> method on the{' '}
         <code>WorkerPoolManager</code>. <strong>Note:</strong> Changing render
         options will force all mounted components to re-render and will clear
         the render cache.
