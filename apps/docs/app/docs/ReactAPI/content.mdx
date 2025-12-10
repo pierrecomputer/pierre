@@ -1,0 +1,41 @@
+## React API
+
+<Notice icon={<IconInfoFill />}>
+  Import React components from `@pierre/diffs/react`.
+</Notice>
+
+We offer a variety of components to render diffs and files. Many of them
+share similar types of props, which you can find documented in
+[Shared Props](#react-api-shared-props).
+
+### Components
+
+The React API exposes four main components:
+
+- `MultiFileDiff` compares two file versions
+- `PatchDiff` renders from a patch string
+- `FileDiff` renders a pre-parsed `FileDiffMetadata`
+- `File` renders a single code file without a diff
+
+<ComponentTabs
+  reactAPIMultiFileDiff={reactAPIMultiFileDiff}
+  reactAPIFileDiff={reactAPIFileDiff}
+  reactAPIPatch={reactAPIPatch}
+  reactAPIFile={reactAPIFile}
+/>
+
+### Shared Props
+
+The three diff components (`MultiFileDiff`,
+`PatchDiff`, and `FileDiff`) share a common set of
+props for configuration, annotations, and styling. The `File`
+component has similar props, but uses `LineAnnotation`
+instead of `DiffLineAnnotation` (no `side`
+property).
+
+<SharedPropTabs
+  sharedDiffOptions={sharedDiffOptions}
+  sharedDiffRenderProps={sharedDiffRenderProps}
+  sharedFileOptions={sharedFileOptions}
+  sharedFileRenderProps={sharedFileRenderProps}
+/>

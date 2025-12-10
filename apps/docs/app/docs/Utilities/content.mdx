@@ -1,0 +1,89 @@
+## Utilities
+
+<Notice icon={<IconInfoFill />}>
+  Import utility functions from `@pierre/diffs`. These can be used with any
+  framework or rendering approach.
+</Notice>
+
+<h3 data-toc-ignore>diffAcceptRejectHunk</h3>
+
+Programmatically accept or reject individual hunks in a diff. This is
+useful for building interactive code review interfaces, AI-assisted
+coding tools, or any workflow where users need to selectively apply
+changes.
+
+When you **accept** a hunk, the new (additions) version is
+kept and the hunk is converted to context lines. When you
+**reject** a hunk, the old (deletions) version is restored.
+The function returns a new `FileDiffMetadata` object with all
+line numbers properly adjusted for subsequent hunks.
+
+<AcceptRejectTabs
+  diffAcceptReject={diffAcceptReject}
+  diffAcceptRejectReact={diffAcceptRejectReact}
+/>
+
+<h3 data-toc-ignore>disposeHighlighter</h3>
+
+Dispose the shared Shiki highlighter instance to free memory. Useful
+when cleaning up resources in single-page applications.
+
+<DocsCodeExample {...disposeHighlighter} />
+
+<h3 data-toc-ignore>getSharedHighlighter</h3>
+
+Get direct access to the shared Shiki highlighter instance used
+internally by all components. Useful for custom highlighting operations.
+
+<DocsCodeExample {...getSharedHighlighter} />
+
+<h3 data-toc-ignore>parseDiffFromFile</h3>
+
+Compare two versions of a file and generate a
+`FileDiffMetadata` structure. Use this when you have the full
+contents of both file versions rather than a patch string.
+
+If both `oldFile` and `newFile` have a
+`cacheKey`, the resulting `FileDiffMetadata` will
+automatically receive a combined cache key (format:
+`oldKey:newKey`). See
+[Render Cache](#worker-pool-render-cache) for more
+information.
+
+<DocsCodeExample {...parseDiffFromFile} />
+
+<h3 data-toc-ignore>parsePatchFiles</h3>
+
+Parse unified diff / patch file content into structured data. Handles
+both single patches and multi-commit patch files (like those from GitHub
+pull request `.patch` URLs). An optional second parameter
+`cacheKeyPrefix` can be provided to generate cache keys for
+each file in the patch (format: `prefix-patchIndex-fileIndex`),
+enabling [caching of rendered diff results](#worker-pool-render-cache)
+in the worker pool.
+
+<DocsCodeExample {...parsePatchFiles} />
+
+<h3 data-toc-ignore>preloadHighlighter</h3>
+
+Preload specific themes and languages before rendering to ensure instant
+highlighting with no async loading delay.
+
+<DocsCodeExample {...preloadHighlighter} />
+
+<h3 data-toc-ignore>registerCustomTheme</h3>
+
+Register a custom Shiki theme for use with any component. The theme name
+you register must match the `name` field inside your theme
+JSON file.
+
+<DocsCodeExample {...registerCustomTheme} />
+
+<h3 data-toc-ignore>setLanguageOverride</h3>
+
+Override the syntax highlighting language for a
+`FileContents` or `FileDiffMetadata` object. This
+is useful when the filename doesn't have an extension or
+doesn't match the actual language.
+
+<DocsCodeExample {...setLanguageOverride} />

@@ -1,8 +1,8 @@
 import '@/app/prose.css';
 import Footer from '@/components/Footer';
+import { renderMDX } from '@/lib/mdx';
 import { preloadFile, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
-import { CoreTypes } from './CoreTypes/CoreTypes';
 import {
   FILE_CONTENTS_TYPE,
   FILE_DIFF_METADATA_TYPE,
@@ -11,12 +11,10 @@ import {
 } from './CoreTypes/constants';
 import { DocsLayout } from './DocsLayout';
 import { HeadingAnchors } from './HeadingAnchors';
-import { Installation } from './Installation/Installation';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
 } from './Installation/constants';
-import { Overview } from './Overview/Overview';
 import {
   OVERVIEW_INITIAL_EXAMPLE,
   OVERVIEW_REACT_PATCH_FILE,
@@ -24,7 +22,7 @@ import {
   OVERVIEW_VANILLA_PATCH_FILE,
   OVERVIEW_VANILLA_SINGLE_FILE,
 } from './Overview/constants';
-import { ReactAPI } from './ReactAPI/ReactAPI';
+import { ProseWrapper } from './ProseWrapper';
 import {
   REACT_API_FILE,
   REACT_API_FILE_DIFF,
@@ -35,7 +33,6 @@ import {
   REACT_API_SHARED_FILE_OPTIONS,
   REACT_API_SHARED_FILE_RENDER_PROPS,
 } from './ReactAPI/constants';
-import { SSR } from './SSR/SSR';
 import {
   SSR_PRELOAD_FILE,
   SSR_PRELOAD_FILE_DIFF,
@@ -45,13 +42,11 @@ import {
   SSR_USAGE_CLIENT,
   SSR_USAGE_SERVER,
 } from './SSR/constants';
-import { Styling } from './Styling/Styling';
 import {
   STYLING_CODE_GLOBAL,
   STYLING_CODE_INLINE,
   STYLING_CODE_UNSAFE,
 } from './Styling/constants';
-import { Utilities } from './Utilities/Utilities';
 import {
   HELPER_DIFF_ACCEPT_REJECT,
   HELPER_DIFF_ACCEPT_REJECT_REACT,
@@ -63,7 +58,6 @@ import {
   HELPER_REGISTER_CUSTOM_THEME,
   HELPER_SET_LANGUAGE_OVERRIDE,
 } from './Utilities/constants';
-import { VanillaAPI } from './VanillaAPI/VanillaAPI';
 import {
   VANILLA_API_CUSTOM_HUNK_FILE,
   VANILLA_API_FILE_DIFF_EXAMPLE,
@@ -74,7 +68,6 @@ import {
   VANILLA_API_HUNKS_RENDERER_FILE,
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
 } from './VanillaAPI/constants';
-import { WorkerPool } from './WorkerPool/WorkerPool';
 import {
   WORKER_POOL_API_REFERENCE,
   WORKER_POOL_ARCHITECTURE_ASCII,
@@ -127,7 +120,11 @@ async function InstallationSection() {
       ])
     )
   );
-  return <Installation installationExamples={installationExamples} />;
+  const content = await renderMDX({
+    filePath: 'docs/Installation/content.mdx',
+    scope: { installationExamples },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function CoreTypesSection() {
@@ -142,14 +139,16 @@ async function CoreTypesSection() {
     preloadFile(PARSE_DIFF_FROM_FILE_EXAMPLE),
     preloadFile(PARSE_PATCH_FILES_EXAMPLE),
   ]);
-  return (
-    <CoreTypes
-      fileContentsType={fileContentsType}
-      fileDiffMetadataType={fileDiffMetadataType}
-      parseDiffFromFileExample={parseDiffFromFileExample}
-      parsePatchFilesExample={parsePatchFilesExample}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/CoreTypes/content.mdx',
+    scope: {
+      fileContentsType,
+      fileDiffMetadataType,
+      parseDiffFromFileExample,
+      parsePatchFilesExample,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function OverviewSection() {
@@ -166,22 +165,24 @@ async function OverviewSection() {
     preloadFile(OVERVIEW_VANILLA_SINGLE_FILE),
     preloadFile(OVERVIEW_VANILLA_PATCH_FILE),
   ]);
-  return (
-    <Overview
-      initialDiffProps={initialDiffProps}
-      reactSingleFile={reactSingleFile}
-      reactPatchFile={reactPatchFile}
-      vanillaSingleFile={vanillaSingleFile}
-      vanillaPatchFile={vanillaPatchFile}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/Overview/content.mdx',
+    scope: {
+      initialDiffProps,
+      reactSingleFile,
+      reactPatchFile,
+      vanillaSingleFile,
+      vanillaPatchFile,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function ReactAPISection() {
   const [
-    reactAPIDiff,
+    reactAPIMultiFileDiff,
     reactAPIFile,
-    reactAPIFilePatch,
+    reactAPIPatch,
     reactAPIFileDiff,
     sharedDiffOptions,
     sharedDiffRenderProps,
@@ -197,18 +198,20 @@ async function ReactAPISection() {
     preloadFile(REACT_API_SHARED_FILE_OPTIONS),
     preloadFile(REACT_API_SHARED_FILE_RENDER_PROPS),
   ]);
-  return (
-    <ReactAPI
-      reactAPIMultiFileDiff={reactAPIDiff}
-      reactAPIPatch={reactAPIFilePatch}
-      reactAPIFileDiff={reactAPIFileDiff}
-      reactAPIFile={reactAPIFile}
-      sharedDiffOptions={sharedDiffOptions}
-      sharedDiffRenderProps={sharedDiffRenderProps}
-      sharedFileOptions={sharedFileOptions}
-      sharedFileRenderProps={sharedFileRenderProps}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/ReactAPI/content.mdx',
+    scope: {
+      reactAPIMultiFileDiff,
+      reactAPIPatch,
+      reactAPIFileDiff,
+      reactAPIFile,
+      sharedDiffOptions,
+      sharedDiffRenderProps,
+      sharedFileOptions,
+      sharedFileRenderProps,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function VanillaAPISection() {
@@ -231,18 +234,20 @@ async function VanillaAPISection() {
     preloadFile(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
     preloadFile(VANILLA_API_FILE_RENDERER),
   ]);
-  return (
-    <VanillaAPI
-      fileDiffExample={fileDiffExample}
-      fileExample={fileExample}
-      fileDiffProps={fileDiffProps}
-      fileProps={fileProps}
-      customHunk={customHunk}
-      diffHunksRenderer={diffHunksRenderer}
-      diffHunksRendererPatch={diffHunksRendererPatch}
-      fileRenderer={fileRenderer}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/VanillaAPI/content.mdx',
+    scope: {
+      fileDiffExample,
+      fileExample,
+      fileDiffProps,
+      fileProps,
+      customHunk,
+      diffHunksRenderer,
+      diffHunksRendererPatch,
+      fileRenderer,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function UtilitiesSection() {
@@ -267,19 +272,21 @@ async function UtilitiesSection() {
     preloadFile(HELPER_REGISTER_CUSTOM_THEME),
     preloadFile(HELPER_SET_LANGUAGE_OVERRIDE),
   ]);
-  return (
-    <Utilities
-      diffAcceptReject={diffAcceptReject}
-      diffAcceptRejectReact={diffAcceptRejectReact}
-      disposeHighlighter={disposeHighlighter}
-      getSharedHighlighter={getSharedHighlighter}
-      parseDiffFromFile={parseDiffFromFile}
-      parsePatchFiles={parsePatchFiles}
-      preloadHighlighter={preloadHighlighter}
-      registerCustomTheme={registerCustomTheme}
-      setLanguageOverride={setLanguageOverride}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/Utilities/content.mdx',
+    scope: {
+      diffAcceptReject,
+      diffAcceptRejectReact,
+      disposeHighlighter,
+      getSharedHighlighter,
+      parseDiffFromFile,
+      parsePatchFiles,
+      preloadHighlighter,
+      registerCustomTheme,
+      setLanguageOverride,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function StylingSection() {
@@ -288,13 +295,15 @@ async function StylingSection() {
     preloadFile(STYLING_CODE_INLINE),
     preloadFile(STYLING_CODE_UNSAFE),
   ]);
-  return (
-    <Styling
-      stylingGlobal={stylingGlobal}
-      stylingInline={stylingInline}
-      stylingUnsafe={stylingUnsafe}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/Styling/content.mdx',
+    scope: {
+      stylingGlobal,
+      stylingInline,
+      stylingUnsafe,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function SSRSection() {
@@ -315,23 +324,25 @@ async function SSRSection() {
     preloadFile(SSR_PRELOAD_FILE),
     preloadFile(SSR_PRELOAD_PATCH_FILE),
   ]);
-  return (
-    <SSR
-      usageServer={usageServer}
-      usageClient={usageClient}
-      preloadFileDiff={preloadFileDiff}
-      preloadMultiFileDiff={preloadMultiFileDiff}
-      preloadPatchDiff={preloadPatchDiff}
-      preloadFile={preloadFileResult}
-      preloadPatchFile={preloadPatchFile}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/SSR/content.mdx',
+    scope: {
+      usageServer,
+      usageClient,
+      preloadFileDiff,
+      preloadMultiFileDiff,
+      preloadPatchDiff,
+      preloadFileResult,
+      preloadPatchFile,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function WorkerPoolSection() {
   const [
     helperVite,
-    helperNextjs,
+    helperNextJS,
     vscodeLocalRoots,
     vscodeWorkerUri,
     vscodeInlineScript,
@@ -340,7 +351,7 @@ async function WorkerPoolSection() {
     vscodeBlobUrl,
     vscodeFactory,
     helperWebpack,
-    helperEsbuild,
+    helperESBuild,
     helperStatic,
     helperVanilla,
     vanillaUsage,
@@ -368,26 +379,28 @@ async function WorkerPoolSection() {
     preloadFile(WORKER_POOL_CACHING),
     preloadFile(WORKER_POOL_ARCHITECTURE_ASCII),
   ]);
-  return (
-    <WorkerPool
-      helperVite={helperVite}
-      helperNextJS={helperNextjs}
-      vscodeLocalRoots={vscodeLocalRoots}
-      vscodeWorkerUri={vscodeWorkerUri}
-      vscodeInlineScript={vscodeInlineScript}
-      vscodeCsp={vscodeCsp}
-      vscodeGlobal={vscodeGlobal}
-      vscodeBlobUrl={vscodeBlobUrl}
-      vscodeFactory={vscodeFactory}
-      helperWebpack={helperWebpack}
-      helperESBuild={helperEsbuild}
-      helperStatic={helperStatic}
-      helperVanilla={helperVanilla}
-      vanillaUsage={vanillaUsage}
-      reactUsage={reactUsage}
-      apiReference={apiReference}
-      cachingExample={cachingExample}
-      architectureASCII={architectureASCII}
-    />
-  );
+  const content = await renderMDX({
+    filePath: 'docs/WorkerPool/content.mdx',
+    scope: {
+      helperVite,
+      helperNextJS,
+      vscodeLocalRoots,
+      vscodeWorkerUri,
+      vscodeInlineScript,
+      vscodeCsp,
+      vscodeGlobal,
+      vscodeBlobUrl,
+      vscodeFactory,
+      helperWebpack,
+      helperESBuild,
+      helperStatic,
+      helperVanilla,
+      vanillaUsage,
+      reactUsage,
+      apiReference,
+      cachingExample,
+      architectureASCII,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
