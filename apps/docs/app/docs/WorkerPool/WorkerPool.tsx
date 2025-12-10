@@ -235,7 +235,7 @@ export function WorkerPool({
       </p>
       <p>
         To change themes or other render options dynamically, call{' '}
-        <code>workerPool.setRenderOptions(options)</code> on the pool instance.
+        <code>setRenderOptions(options)</code> on the pool instance.
       </p>
       <DocsCodeExample {...vanillaUsage} />
 
