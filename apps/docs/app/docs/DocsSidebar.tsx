@@ -23,78 +23,49 @@ export function DocsSidebar({
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [activeHeading, setActiveHeading] = useState<string>('');
 
-  // Generate ID from heading text
-  const generateId = (text: string): string => {
-    return text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .trim();
-  };
-
   // Extract headings from the page content
+  // IDs are set server-side by rehype-hierarchical-slug during MDX compilation
   useLayoutEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const headingElements = document.querySelectorAll('h2, h3, h4');
-      const headingItems: HeadingItem[] = [];
+    const headingElements = document.querySelectorAll('h2[id], h3[id]');
+    const headingItems: HeadingItem[] = [];
 
-      // Track parent headings at each level for hierarchical IDs
-      const parentIds: Record<number, string> = {};
-
-      for (const element of headingElements) {
-        if (!(element instanceof HTMLElement)) {
-          continue;
-        }
-        const text = element.textContent ?? '';
-        const level = parseInt(element.tagName.charAt(1));
-        const baseId = generateId(text);
-
-        // Build hierarchical ID from parent headings
-        let id = baseId;
-        if (level > 2 && parentIds[level - 1] != null) {
-          id = `${parentIds[level - 1]}-${baseId}`;
-        }
-
-        // Store this heading's ID for child headings
-        parentIds[level] = id;
-        // Clear child levels when we encounter a new parent
-        for (let i = level + 1; i <= 4; i++) {
-          delete parentIds[i];
-        }
-
-        // Set the ID on the element for anchor linking
-        element.id = id;
-
-        // Only add to sidebar if not ignored
-        if (!('tocIgnore' in element.dataset)) {
-          headingItems.push({
-            id,
-            text,
-            level,
-            element: element,
-          });
-        }
+    for (const element of headingElements) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
       }
 
-      setHeadings(headingItems);
-
-      // Set first heading as active by default
-      if (headingItems.length > 0 && window.location.hash.trim() === '') {
-        setActiveHeading(headingItems[0].id);
+      // Skip headings marked to be ignored in TOC
+      if ('tocIgnore' in element.dataset) {
+        continue;
       }
 
-      // After setting IDs, scroll to hash if present (browser couldn't do it earlier)
-      if (window.location.hash.trim() !== '') {
-        const id = window.location.hash.slice(1);
-        const element = document.getElementById(id);
-        if (element != null) {
-          element.scrollIntoView({ behavior: 'instant', block: 'start' });
-        }
+      const text = element.textContent ?? '';
+      const level = parseInt(element.tagName.charAt(1));
+      const id = element.id;
+
+      headingItems.push({
+        id,
+        text,
+        level,
+        element,
+      });
+    }
+
+    setHeadings(headingItems);
+
+    // Set first heading as active by default
+    if (headingItems.length > 0 && window.location.hash.trim() === '') {
+      setActiveHeading(headingItems[0].id);
+    }
+
+    // Scroll to hash if present
+    if (window.location.hash.trim() !== '') {
+      const id = window.location.hash.slice(1);
+      const element = document.getElementById(id);
+      if (element != null) {
+        element.scrollIntoView({ behavior: 'instant', block: 'start' });
       }
-    }, 100);
-    return () => {
-      clearTimeout(timeoutId);
-    };
+    }
   }, []);
 
   // Handle scroll-based active heading detection
@@ -132,7 +103,7 @@ export function DocsSidebar({
     <>
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-[50] bg-black/30 backdrop-blur-sm transition-opacity duration-200 md:hidden"
+          className="bg-background/50 fixed inset-0 z-[50] backdrop-blur-sm transition-opacity duration-200 md:hidden"
           onClick={onMobileClose}
         />
       )}
