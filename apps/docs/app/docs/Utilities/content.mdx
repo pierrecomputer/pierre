@@ -7,16 +7,14 @@
 
 ### diffAcceptRejectHunk [toc-ignore]
 
-Programmatically accept or reject individual hunks in a diff. This is
-useful for building interactive code review interfaces, AI-assisted
-coding tools, or any workflow where users need to selectively apply
-changes.
+Programmatically accept or reject individual hunks in a diff. This is useful for
+building interactive code review interfaces, AI-assisted coding tools, or any
+workflow where users need to selectively apply changes.
 
-When you **accept** a hunk, the new (additions) version is
-kept and the hunk is converted to context lines. When you
-**reject** a hunk, the old (deletions) version is restored.
-The function returns a new `FileDiffMetadata` object with all
-line numbers properly adjusted for subsequent hunks.
+When you **accept** a hunk, the new (additions) version is kept and the hunk is
+converted to context lines. When you **reject** a hunk, the old (deletions)
+version is restored. The function returns a new `FileDiffMetadata` object with
+all line numbers properly adjusted for subsequent hunks.
 
 <AcceptRejectTabs
   diffAcceptReject={diffAcceptReject}
@@ -25,42 +23,40 @@ line numbers properly adjusted for subsequent hunks.
 
 ### disposeHighlighter [toc-ignore]
 
-Dispose the shared Shiki highlighter instance to free memory. Useful
-when cleaning up resources in single-page applications.
+Dispose the shared Shiki highlighter instance to free memory. Useful when
+cleaning up resources in single-page applications.
 
 <DocsCodeExample {...disposeHighlighter} />
 
 ### getSharedHighlighter [toc-ignore]
 
-Get direct access to the shared Shiki highlighter instance used
-internally by all components. Useful for custom highlighting operations.
+Get direct access to the shared Shiki highlighter instance used internally by
+all components. Useful for custom highlighting operations.
 
 <DocsCodeExample {...getSharedHighlighter} />
 
 ### parseDiffFromFile [toc-ignore]
 
-Compare two versions of a file and generate a
-`FileDiffMetadata` structure. Use this when you have the full
-contents of both file versions rather than a patch string.
+Compare two versions of a file and generate a `FileDiffMetadata` structure. Use
+this when you have the full contents of both file versions rather than a patch
+string.
 
-If both `oldFile` and `newFile` have a
-`cacheKey`, the resulting `FileDiffMetadata` will
-automatically receive a combined cache key (format:
-`oldKey:newKey`). See
-[Render Cache](#worker-pool-render-cache) for more
+If both `oldFile` and `newFile` have a `cacheKey`, the resulting
+`FileDiffMetadata` will automatically receive a combined cache key (format:
+`oldKey:newKey`). See [Render Cache](#worker-pool-render-cache) for more
 information.
 
 <DocsCodeExample {...parseDiffFromFile} />
 
 ### parsePatchFiles [toc-ignore]
 
-Parse unified diff / patch file content into structured data. Handles
-both single patches and multi-commit patch files (like those from GitHub
-pull request `.patch` URLs). An optional second parameter
-`cacheKeyPrefix` can be provided to generate cache keys for
-each file in the patch (format: `prefix-patchIndex-fileIndex`),
-enabling [caching of rendered diff results](#worker-pool-render-cache)
-in the worker pool.
+Parse unified diff / patch file content into structured data. Handles both
+single patches and multi-commit patch files (like those from GitHub pull request
+`.patch` URLs). An optional second parameter `cacheKeyPrefix` can be provided to
+generate cache keys for each file in the patch (format:
+`prefix-patchIndex-fileIndex`), enabling
+[caching of rendered diff results](#worker-pool-render-cache) in the worker
+pool.
 
 <DocsCodeExample {...parsePatchFiles} />
 
@@ -73,17 +69,15 @@ highlighting with no async loading delay.
 
 ### registerCustomTheme [toc-ignore]
 
-Register a custom Shiki theme for use with any component. The theme name
-you register must match the `name` field inside your theme
-JSON file.
+Register a custom Shiki theme for use with any component. The theme name you
+register must match the `name` field inside your theme JSON file.
 
 <DocsCodeExample {...registerCustomTheme} />
 
 ### setLanguageOverride [toc-ignore]
 
-Override the syntax highlighting language for a
-`FileContents` or `FileDiffMetadata` object. This
-is useful when the filename doesn't have an extension or
-doesn't match the actual language.
+Override the syntax highlighting language for a `FileContents` or
+`FileDiffMetadata` object. This is useful when the filename doesn't have an
+extension or doesn't match the actual language.
 
 <DocsCodeExample {...setLanguageOverride} />

@@ -1,27 +1,26 @@
 ## Styling
 
-Diff and code components are rendered using shadow DOM APIs, allowing
-styles to be well-isolated from your page's existing CSS. However, it
-also means you may have to utilize some custom CSS variables to override
-default styles. These can be done in your global CSS, as style props on
-parent components, or on the `FileDiff` component directly.
+Diff and code components are rendered using shadow DOM APIs, allowing styles to
+be well-isolated from your page's existing CSS. However, it also means you may
+have to utilize some custom CSS variables to override default styles. These can
+be done in your global CSS, as style props on parent components, or on the
+`FileDiff` component directly.
 
 <DocsCodeExample {...stylingGlobal} />
 <DocsCodeExample {...stylingInline} />
 
 ### Advanced: Unsafe CSS [toc-ignore]
 
-For advanced customization, you can inject arbitrary CSS into the shadow
-DOM using the `unsafeCSS` option. This CSS will be wrapped in
-an `@layer unsafe` block, giving it the highest priority in
-the cascade. Use this sparingly and with caution, as it bypasses the
-normal style isolation.
+For advanced customization, you can inject arbitrary CSS into the shadow DOM
+using the `unsafeCSS` option. This CSS will be wrapped in an `@layer unsafe`
+block, giving it the highest priority in the cascade. Use this sparingly and
+with caution, as it bypasses the normal style isolation.
 
-We also recommend that any CSS you apply uses simple, direct selectors
-targeting the existing data attributes. Avoid structural selectors like
-`:first-child`, `:last-child`, `:nth-child()`, sibling combinators (`+` or `~`),
-deeply nested descendant selectors, or bare tag selectors—these are susceptible
-to breaking in future versions or in edge cases that may be difficult to anticipate.
+We also recommend that any CSS you apply uses simple, direct selectors targeting
+the existing data attributes. Avoid structural selectors like `:first-child`,
+`:last-child`, `:nth-child()`, sibling combinators (`+` or `~`), deeply nested
+descendant selectors, or bare tag selectors—these are susceptible to breaking in
+future versions or in edge cases that may be difficult to anticipate.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   We cannot currently guarantee backwards compatibility for this feature across
