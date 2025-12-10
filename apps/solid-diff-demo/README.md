@@ -1,18 +1,21 @@
 # Diffs × SolidStart SSR Demo
 
-This demo shows that **`@pierre/diffs`** works seamlessly with **SolidStart's server-side rendering (SSR)**, including support for interactive SolidJS components inside annotation slots within shadow DOM.
+This demo shows that **`@pierre/diffs`** works seamlessly with **SolidStart's
+server-side rendering (SSR)**, including support for interactive SolidJS
+components inside annotation slots within shadow DOM.
 
 ## What This Demonstrates
 
-✅ **Server-side rendering** of file diffs using declarative shadow DOM
-✅ **Client-side hydration** without content duplication
-✅ **SolidJS reactivity** (signals, effects) inside annotation slots
-✅ **Event handling** in shadow DOM contexts (critical gotcha documented)
-✅ **Zero-JavaScript fallback** - the diff renders even with JS disabled
+✅ **Server-side rendering** of file diffs using declarative shadow DOM ✅
+**Client-side hydration** without content duplication ✅ **SolidJS reactivity**
+(signals, effects) inside annotation slots ✅ **Event handling** in shadow DOM
+contexts (critical gotcha documented) ✅ **Zero-JavaScript fallback** - the diff
+renders even with JS disabled
 
 ## Why This Matters
 
-Diffs uses web components with shadow DOM, which can be tricky to integrate with SSR frameworks. This demo solves the key challenges:
+Diffs uses web components with shadow DOM, which can be tricky to integrate with
+SSR frameworks. This demo solves the key challenges:
 
 1. **Avoiding hydration mismatches** between server and client
 2. **Enabling framework reactivity** inside shadow DOM slots
@@ -38,7 +41,8 @@ bun run start
 Open [http://localhost:3000](http://localhost:3000) and try:
 
 - Viewing the SSR-rendered diff (works with JavaScript disabled!)
-- Clicking the counter button in the annotation (proves SolidJS reactivity works)
+- Clicking the counter button in the annotation (proves SolidJS reactivity
+  works)
 - Selecting lines in the diff (FileDiff event handlers work)
 
 ## Project Structure
@@ -70,7 +74,8 @@ Diffs uses the **declarative shadow DOM** (DSD) feature for SSR:
 </template>
 ```
 
-Browsers automatically parse this and create a shadow root before JavaScript runs, enabling true SSR for web components.
+Browsers automatically parse this and create a shadow root before JavaScript
+runs, enabling true SSR for web components.
 
 ### SSR Hydration Flow
 
@@ -80,11 +85,14 @@ Browsers automatically parse this and create a shadow root before JavaScript run
 4. **Client**: Creates FileDiff instance and connects to existing DOM
 5. **Client**: Clears annotation slots and mounts interactive SolidJS components
 
-**Critical**: We don't call `FileDiff.hydrate()` because that would re-render content. Instead, we just set `fileDiffInstance.fileContainer` to attach event handlers to the existing DOM.
+**Critical**: We don't call `FileDiff.hydrate()` because that would re-render
+content. Instead, we just set `fileDiffInstance.fileContainer` to attach event
+handlers to the existing DOM.
 
 ### Event Handling in Shadow DOM
 
-**IMPORTANT GOTCHA**: SolidJS's default event handling doesn't work in shadow DOM.
+**IMPORTANT GOTCHA**: SolidJS's default event handling doesn't work in shadow
+DOM.
 
 ```tsx
 // ❌ WRONG - onClick uses event delegation (doesn't work in shadow DOM)
@@ -98,13 +106,18 @@ Browsers automatically parse this and create a shadow root before JavaScript run
 </button>
 ```
 
-**Why?** SolidJS's `onClick` uses event delegation - it attaches a single listener to `document` and relies on event bubbling. Events fired inside shadow DOM don't bubble past the shadow boundary, so the document-level listener never receives them.
+**Why?** SolidJS's `onClick` uses event delegation - it attaches a single
+listener to `document` and relies on event bubbling. Events fired inside shadow
+DOM don't bubble past the shadow boundary, so the document-level listener never
+receives them.
 
-**Solution:** Use the `on:` prefix (e.g., `on:click`, `on:input`) to attach native event listeners directly to elements.
+**Solution:** Use the `on:` prefix (e.g., `on:click`, `on:input`) to attach
+native event listeners directly to elements.
 
 ### Annotation Slots
 
-Annotations are rendered into **named slots** that project content into the shadow DOM:
+Annotations are rendered into **named slots** that project content into the
+shadow DOM:
 
 ```tsx
 // Server renders static content
@@ -117,7 +130,8 @@ slotElement.innerHTML = '';
 const dispose = render(() => <ErrorAnnotation />, slotElement);
 ```
 
-This two-phase approach avoids hydration mismatches while enabling full SolidJS reactivity.
+This two-phase approach avoids hydration mismatches while enabling full SolidJS
+reactivity.
 
 ## Integration Guide
 
@@ -147,7 +161,8 @@ export {};
 
 ### Step 3: Create Server Function
 
-Create a cached server function to preload diffs (e.g., `src/lib/preload-diff.ts`):
+Create a cached server function to preload diffs (e.g.,
+`src/lib/preload-diff.ts`):
 
 ```typescript
 'use server';
@@ -229,15 +244,18 @@ function YourAnnotationComponent({ metadata }) {
 
 ### 1. Using onClick Instead of on:click
 
-**Problem:** Buttons/interactive elements in annotations don't respond to clicks.
+**Problem:** Buttons/interactive elements in annotations don't respond to
+clicks.
 
-**Solution:** Always use `on:click`, `on:input`, etc. (native events) instead of `onClick`, `onInput` (delegated events) inside annotation components.
+**Solution:** Always use `on:click`, `on:input`, etc. (native events) instead of
+`onClick`, `onInput` (delegated events) inside annotation components.
 
 ### 2. Calling FileDiff.hydrate() on Client
 
 **Problem:** Content appears twice after hydration.
 
-**Solution:** Don't call `hydrate()`. Just create the instance and set `fileContainer`:
+**Solution:** Don't call `hydrate()`. Just create the instance and set
+`fileContainer`:
 
 ```typescript
 // ✅ CORRECT
@@ -250,7 +268,8 @@ await fileDiffInstance.hydrate({ oldFile, newFile, options });
 
 ### 3. Hydrating Annotation Slots Normally
 
-**Problem:** `Error: Hydration Mismatch` when trying to hydrate annotation slots.
+**Problem:** `Error: Hydration Mismatch` when trying to hydrate annotation
+slots.
 
 **Solution:** Clear slots and use `render()` to mount fresh components:
 
@@ -269,7 +288,8 @@ const dispose = render(() => <Component />, slotElement);
 
 ### Diff doesn't render with JavaScript disabled
 
-- Check that declarative shadow DOM is enabled (it's supported in all modern browsers)
+- Check that declarative shadow DOM is enabled (it's supported in all modern
+  browsers)
 - Verify `preloadedHTML` contains the full diff content
 - Ensure `<template shadowrootmode="open">` is present in server-rendered HTML
 
@@ -293,9 +313,11 @@ const dispose = render(() => <Component />, slotElement);
 
 ## Performance Notes
 
-- **Server**: Diff generation happens once and is cached with SolidStart's `cache()`
+- **Server**: Diff generation happens once and is cached with SolidStart's
+  `cache()`
 - **Client**: No re-rendering during hydration - existing DOM is reused
-- **Bundle size**: Diffs includes syntax highlighting; consider code splitting for large apps
+- **Bundle size**: Diffs includes syntax highlighting; consider code splitting
+  for large apps
 
 ## Browser Support
 
