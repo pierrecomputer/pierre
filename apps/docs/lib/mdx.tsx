@@ -26,15 +26,16 @@ import {
   VanillaPropTabs,
 } from '../app/docs/VanillaAPI/ComponentTabs';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
+import remarkTocIgnore from './remark-toc-ignore';
 
 function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
   const href = props.href;
 
-  if (href != null && href.startsWith('/')) {
+  if (href?.startsWith('/') === true) {
     return <Link {...props} href={href} />;
   }
 
-  if (href != null && href.startsWith('#')) {
+  if (href?.startsWith('#') === true) {
     return <a {...props} />;
   }
 
@@ -82,7 +83,7 @@ export async function renderMDX({ filePath, scope = {} }: RenderMDXOptions) {
     options: {
       parseFrontmatter: true,
       mdxOptions: {
-        remarkPlugins: [remarkGfm],
+        remarkPlugins: [remarkGfm, remarkTocIgnore],
         rehypePlugins: [[rehypeHierarchicalSlug, { levels: [2, 3, 4] }]],
       },
       scope,

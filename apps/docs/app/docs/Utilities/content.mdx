@@ -5,7 +5,7 @@
   framework or rendering approach.
 </Notice>
 
-### diffAcceptRejectHunk
+### diffAcceptRejectHunk [toc-ignore]
 
 Programmatically accept or reject individual hunks in a diff. This is
 useful for building interactive code review interfaces, AI-assisted
@@ -23,21 +23,21 @@ line numbers properly adjusted for subsequent hunks.
   diffAcceptRejectReact={diffAcceptRejectReact}
 />
 
-### disposeHighlighter
+### disposeHighlighter [toc-ignore]
 
 Dispose the shared Shiki highlighter instance to free memory. Useful
 when cleaning up resources in single-page applications.
 
 <DocsCodeExample {...disposeHighlighter} />
 
-### getSharedHighlighter
+### getSharedHighlighter [toc-ignore]
 
 Get direct access to the shared Shiki highlighter instance used
 internally by all components. Useful for custom highlighting operations.
 
 <DocsCodeExample {...getSharedHighlighter} />
 
-### parseDiffFromFile
+### parseDiffFromFile [toc-ignore]
 
 Compare two versions of a file and generate a
 `FileDiffMetadata` structure. Use this when you have the full
@@ -52,7 +52,7 @@ information.
 
 <DocsCodeExample {...parseDiffFromFile} />
 
-### parsePatchFiles
+### parsePatchFiles [toc-ignore]
 
 Parse unified diff / patch file content into structured data. Handles
 both single patches and multi-commit patch files (like those from GitHub
@@ -64,14 +64,14 @@ in the worker pool.
 
 <DocsCodeExample {...parsePatchFiles} />
 
-### preloadHighlighter
+### preloadHighlighter [toc-ignore]
 
 Preload specific themes and languages before rendering to ensure instant
 highlighting with no async loading delay.
 
 <DocsCodeExample {...preloadHighlighter} />
 
-### registerCustomTheme
+### registerCustomTheme [toc-ignore]
 
 Register a custom Shiki theme for use with any component. The theme name
 you register must match the `name` field inside your theme
@@ -79,7 +79,7 @@ JSON file.
 
 <DocsCodeExample {...registerCustomTheme} />
 
-### setLanguageOverride
+### setLanguageOverride [toc-ignore]
 
 Override the syntax highlighting language for a
 `FileContents` or `FileDiffMetadata` object. This

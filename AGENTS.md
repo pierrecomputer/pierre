@@ -5,7 +5,10 @@
 - We exclusively use `bun` to run commands and install packages. Don't use `npm` or `pnpm` or `npx` or other variants unless there's a specific reason to break from the norm.
 - Since we use `bun` we can natively run typescript without compilation. So even local scripts we run can be .ts files.
 - We use bun's `catalog` feature for dependencies in order to reduce differences in dependencies across monorepo packages.
-  - When adding a new dependency, we typically will add the exact most recent version to the root `package.json` file in the `catalog` and then in our individual packages we'd use the `"catalog:"` version instead of a specific version.
+  - **CRITICAL: NEVER add a version number directly to a package's package.json.** Always follow this two-step process:
+    1. First, add the dependency with its exact version to the root `package.json` file inside `workspaces.catalog` (e.g., `"new-package": "1.2.3"`)
+    2. Then, in the individual package's `package.json`, reference it using `"catalog:"` (e.g., `"new-package": "catalog:"`)
+  - **NEVER run `bun add <package>` inside a package directory** - this will add a version number directly which breaks our catalog pattern.
   - This rule is sometimes broken in packages that are published, in order to make sure that end-users aren't forced to our specific version. `apps/docs` would use the catalog version and `diffs` _may_ choose to use a range.
 - npm "scripts" should work from inside the folder of the given package, but common scripts are often "mirrored" into the root `package.json`. In general the root scripts should not do something different than the package level script, it's simply a shortcut to calling it from the root.
 
