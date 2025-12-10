@@ -4,15 +4,14 @@
   Import SSR utilities from `@pierre/diffs/ssr`.
 </Notice>
 
-The SSR API allows you to pre-render file diffs on the server with
-syntax highlighting, then hydrate them on the client for full
-interactivity.
+The SSR API allows you to pre-render file diffs on the server with syntax
+highlighting, then hydrate them on the client for full interactivity.
 
 ### Usage
 
-Each preload function returns an object containing the original inputs
-plus a `prerenderedHTML` string. This object can be spread
-directly into the corresponding React component for automatic hydration.
+Each preload function returns an object containing the original inputs plus a
+`prerenderedHTML` string. This object can be spread directly into the
+corresponding React component for automatic hydration.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Inputs used for pre-rendering must exactly match what's rendered in the client
@@ -31,46 +30,44 @@ directly into the corresponding React component for automatic hydration.
 
 ### Preloaders
 
-We provide several preload functions to handle different input formats.
-Choose the one that matches your data source.
+We provide several preload functions to handle different input formats. Choose
+the one that matches your data source.
 
 #### preloadFile
 
-Preloads a single file with syntax highlighting (no diff). Use this when
-you want to render a file without any diff context. Spread into the
-`File` component.
+Preloads a single file with syntax highlighting (no diff). Use this when you
+want to render a file without any diff context. Spread into the `File`
+component.
 
 <DocsCodeExample {...preloadFileResult} />
 
 #### preloadFileDiff
 
-Preloads a diff from a `FileDiffMetadata` object. Use this
-when you already have parsed diff metadata (e.g., from
-`parseDiffFromFile` or `parsePatchFiles`). Spread
-into the `FileDiff` component.
+Preloads a diff from a `FileDiffMetadata` object. Use this when you already have
+parsed diff metadata (e.g., from `parseDiffFromFile` or `parsePatchFiles`).
+Spread into the `FileDiff` component.
 
 <DocsCodeExample {...preloadFileDiff} />
 
 #### preloadMultiFileDiff
 
-Preloads a diff directly from old and new file contents. This is the
-simplest option when you have the raw file contents and want to generate
-a diff. Spread into the `MultiFileDiff` component.
+Preloads a diff directly from old and new file contents. This is the simplest
+option when you have the raw file contents and want to generate a diff. Spread
+into the `MultiFileDiff` component.
 
 <DocsCodeExample {...preloadMultiFileDiff} />
 
 #### preloadPatchDiff
 
-Preloads a diff from a unified patch string for a single file. Use this
-when you have a patch in unified diff format. Spread into the
-`PatchDiff` component.
+Preloads a diff from a unified patch string for a single file. Use this when you
+have a patch in unified diff format. Spread into the `PatchDiff` component.
 
 <DocsCodeExample {...preloadPatchDiff} />
 
 #### preloadPatchFile
 
-Preloads multiple diffs from a multi-file patch string. Returns an array
-of results, one for each file in the patch. Each result can be spread
-into a `FileDiff` component.
+Preloads multiple diffs from a multi-file patch string. Returns an array of
+results, one for each file in the patch. Each result can be spread into a
+`FileDiff` component.
 
 <DocsCodeExample {...preloadPatchFile} />

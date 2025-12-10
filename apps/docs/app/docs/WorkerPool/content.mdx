@@ -9,27 +9,25 @@
   Import worker utilities from `@pierre/diffs/worker`.
 </Notice>
 
-By default, syntax highlighting runs on the main thread using Shiki. If
-you're rendering large files or many diffs, this can cause a bottleneck
-on your JavaScript thread resulting in jank or unresponsiveness. To work
-around this, we've provided some APIs to run all syntax highlighting in
-worker threads. The main thread will still attempt to render plain text
-synchronously and then apply the syntax highlighting when we get a
-response from the worker threads.
+By default, syntax highlighting runs on the main thread using Shiki. If you're
+rendering large files or many diffs, this can cause a bottleneck on your
+JavaScript thread resulting in jank or unresponsiveness. To work around this,
+we've provided some APIs to run all syntax highlighting in worker threads. The
+main thread will still attempt to render plain text synchronously and then apply
+the syntax highlighting when we get a response from the worker threads.
 
-Basic usage differs a bit depending on if you're using React or Vanilla
-JS APIs, so continue reading for more details.
+Basic usage differs a bit depending on if you're using React or Vanilla JS APIs,
+so continue reading for more details.
 
 ### Setup
 
-One unfortunate side effect of using Web Workers is that different
-bundlers and environments require slightly different approaches to
-create a Web Worker. You'll need to create a function that spawns a
-worker that's appropriate for your environment and bundler and then pass
-that function to our provided APIs.
+One unfortunate side effect of using Web Workers is that different bundlers and
+environments require slightly different approaches to create a Web Worker.
+You'll need to create a function that spawns a worker that's appropriate for
+your environment and bundler and then pass that function to our provided APIs.
 
-Lets begin with the `workerFactory` function. We've provided
-some examples for common use cases below.
+Lets begin with the `workerFactory` function. We've provided some examples for
+common use cases below.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Only the Vite and NextJS examples have been tested by us. Additional examples
@@ -38,9 +36,8 @@ some examples for common use cases below.
 
 #### Vite
 
-You may need to explicitly set the `worker.format` option in
-your [Vite Config](https://vite.dev/config/worker-options#worker-format)
-to `'es'`.
+You may need to explicitly set the `worker.format` option in your
+[Vite Config](https://vite.dev/config/worker-options#worker-format) to `'es'`.
 
 <DocsCodeExample {...helperVite} />
 
@@ -55,19 +52,18 @@ to `'es'`.
 
 #### VS Code Webview Extension
 
-VS Code webviews have special security restrictions that require a
-different approach. You'll need to configure both the extension side (to
-expose the worker file) and the webview side (to load it via blob URL).
+VS Code webviews have special security restrictions that require a different
+approach. You'll need to configure both the extension side (to expose the worker
+file) and the webview side (to load it via blob URL).
 
-**Extension side:** Add the worker directory to
-`localResourceRoots` in your `getWebviewOptions()`:
+**Extension side:** Add the worker directory to `localResourceRoots` in your
+`getWebviewOptions()`:
 
 <DocsCodeExample {...vscodeLocalRoots} />
 
-Create the worker URI in `_getHtmlForWebview()`. Note: use
-`worker-portable.js` instead of `worker.js` — the
-portable version is designed for environments where ES modules aren't
-supported in web workers.
+Create the worker URI in `_getHtmlForWebview()`. Note: use `worker-portable.js`
+instead of `worker.js` — the portable version is designed for environments where
+ES modules aren't supported in web workers.
 
 <DocsCodeExample {...vscodeWorkerUri} />
 
@@ -75,8 +71,7 @@ Pass the URI to the webview via an inline script in your HTML:
 
 <DocsCodeExample {...vscodeInlineScript} />
 
-Your Content Security Policy must include `worker-src` and
-`connect-src`:
+Your Content Security Policy must include `worker-src` and `connect-src`:
 
 <DocsCodeExample {...vscodeCsp} />
 
@@ -102,8 +97,8 @@ Create the `workerFactory` function:
 
 #### Rollup / Static Files
 
-If your bundler doesn't have special worker support, build and serve the
-worker file statically:
+If your bundler doesn't have special worker support, build and serve the worker
+file statically:
 
 <DocsCodeExample {...helperStatic} />
 
@@ -116,14 +111,12 @@ reference it directly:
 
 ### Usage
 
-With your `workerFactory` function created, you can integrate
-it with our provided APIs. In React, you'll want to pass this
-`workerFactory` to a
-`<WorkerPoolContextProvider>` so all components can
-inherit the pool automatically. If you're using the Vanilla JS APIs, we
-provide a `getOrCreateWorkerPoolSingleton` helper that
-ensures a single pool instance that you can then manually pass to all
-your File/FileDiff instances.
+With your `workerFactory` function created, you can integrate it with our
+provided APIs. In React, you'll want to pass this `workerFactory` to a
+`<WorkerPoolContextProvider>` so all components can inherit the pool
+automatically. If you're using the Vanilla JS APIs, we provide a
+`getOrCreateWorkerPoolSingleton` helper that ensures a single pool instance that
+you can then manually pass to all your File/FileDiff instances.
 
 <Notice icon={<IconInfoFill />} variant="warning">
   When using the worker pool, the `theme`, `lineDiffType`, and
@@ -137,32 +130,30 @@ your File/FileDiff instances.
 
 #### React
 
-Wrap your component tree with `WorkerPoolContextProvider`
-from `@pierre/diffs/react`. All `FileDiff` and
-`File` components nested within will automatically use the
-worker pool for syntax highlighting.
+Wrap your component tree with `WorkerPoolContextProvider` from
+`@pierre/diffs/react`. All `FileDiff` and `File` components nested within will
+automatically use the worker pool for syntax highlighting.
 
-The `WorkerPoolContextProvider` will automatically spin up or
-shut down the worker pool based on its react lifecycle. If you have
-multiple context providers, they will all share the same pool, and
-termination won't occur until all contexts are unmounted.
+The `WorkerPoolContextProvider` will automatically spin up or shut down the
+worker pool based on its react lifecycle. If you have multiple context
+providers, they will all share the same pool, and termination won't occur until
+all contexts are unmounted.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Workers only work in client components. Ensure your function has the `'use
   client'` directive if using App Router.
 </Notice>
 
-To change themes or other render options dynamically, use the `useWorkerPool()` hook
-to access the pool manager and call `setRenderOptions()`.
+To change themes or other render options dynamically, use the `useWorkerPool()`
+hook to access the pool manager and call `setRenderOptions()`.
 
 <DocsCodeExample {...reactUsage} />
 
 #### Vanilla JS
 
-Use `getOrCreateWorkerPoolSingleton` to spin up a singleton
-worker pool. Then pass that as the second argument to `File`
-and/or `FileDiff`. When you are done with the worker pool,
-you can use `terminateWorkerPoolSingleton` to free up
+Use `getOrCreateWorkerPoolSingleton` to spin up a singleton worker pool. Then
+pass that as the second argument to `File` and/or `FileDiff`. When you are done
+with the worker pool, you can use `terminateWorkerPoolSingleton` to free up
 resources.
 
 To change themes or other render options dynamically, call
@@ -177,11 +168,10 @@ To change themes or other render options dynamically, call
   API is subject to change.
 </Notice>
 
-The worker pool can cache rendered AST results to avoid redundant
-highlighting work. When a file or diff has a `cacheKey`,
-subsequent requests with the same key will return cached results
-immediately instead of reprocessing through a worker. This works
-automatically for both React and Vanilla JS APIs.
+The worker pool can cache rendered AST results to avoid redundant highlighting
+work. When a file or diff has a `cacheKey`, subsequent requests with the same
+key will return cached results immediately instead of reprocessing through a
+worker. This works automatically for both React and Vanilla JS APIs.
 
 <Notice icon={<IconInfoFill />}>
   Caching is enabled per-file/diff by setting a `cacheKey` property. Files and
@@ -194,19 +184,17 @@ automatically for both React and Vanilla JS APIs.
 
 ### API Reference
 
-These methods are exposed for advanced use cases. In most scenarios, you
-should use the `WorkerPoolContextProvider` for React or pass
-the pool instance via the `workerPool` option for Vanilla JS
-rather than calling these methods directly.
+These methods are exposed for advanced use cases. In most scenarios, you should
+use the `WorkerPoolContextProvider` for React or pass the pool instance via the
+`workerPool` option for Vanilla JS rather than calling these methods directly.
 
 <DocsCodeExample {...apiReference} />
 
 ### Architecture
 
-The worker pool manages a configurable number of worker threads that
-each initialize their own Shiki highlighter instance. Tasks are
-distributed across available workers, with queuing when all workers are
-busy.
+The worker pool manages a configurable number of worker threads that each
+initialize their own Shiki highlighter instance. Tasks are distributed across
+available workers, with queuing when all workers are busy.
 
 <DocsCodeExample
   {...architectureASCII}

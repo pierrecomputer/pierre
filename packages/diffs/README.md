@@ -23,4 +23,5 @@ bun test --update-snapshots
 bun run tsc
 ```
 
-Tests are located in the `test/` folder and use Bun's native testing framework with snapshot support.
+Tests are located in the `test/` folder and use Bun's native testing framework
+with snapshot support.
