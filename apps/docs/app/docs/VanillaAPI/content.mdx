@@ -29,7 +29,7 @@ options, but excludes diff-specific settings and uses
 
 <VanillaPropTabs fileDiffProps={fileDiffProps} fileProps={fileProps} />
 
-<h4 data-toc-ignore>Custom Hunk Separators</h4>
+#### Custom Hunk Separators
 
 If you want to render custom hunk separators that won't scroll with the
 content, there are a few tricks you will need to employ. See the
@@ -52,7 +52,7 @@ access to the rendered output as
 [HAST](https://github.com/syntax-tree/hast)
 nodes or HTML strings for custom rendering pipelines.
 
-<h4 data-toc-ignore>DiffHunksRenderer</h4>
+#### DiffHunksRenderer
 
 Takes a `FileDiffMetadata` data structure and renders out the
 raw HAST (Hypertext Abstract Syntax Tree) elements for diff hunks. You
@@ -65,7 +65,7 @@ functions.
   diffHunksRendererPatch={diffHunksRendererPatch}
 />
 
-<h4 data-toc-ignore>FileRenderer</h4>
+#### FileRenderer
 
 Takes a `FileContents` object (just a filename and contents
 string) and renders syntax-highlighted code as HAST elements. Useful for

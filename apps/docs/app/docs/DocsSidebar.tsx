@@ -26,7 +26,7 @@ export function DocsSidebar({
   // Extract headings from the page content
   // IDs are set server-side by rehype-hierarchical-slug during MDX compilation
   useLayoutEffect(() => {
-    const headingElements = document.querySelectorAll('h2[id], h3[id], h4[id]');
+    const headingElements = document.querySelectorAll('h2[id], h3[id]');
     const headingItems: HeadingItem[] = [];
 
     for (const element of headingElements) {
