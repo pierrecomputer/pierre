@@ -12,14 +12,14 @@ import {
 
 import {
   type SetupWorkerPoolProps,
-  type WorkerHighlighterOptions,
+  type WorkerInitializationRenderOptions,
   type WorkerPoolManager,
   type WorkerPoolOptions,
   getOrCreateWorkerPoolSingleton,
   terminateWorkerPoolSingleton,
 } from '../worker';
 
-export type { WorkerPoolOptions, WorkerHighlighterOptions };
+export type { WorkerPoolOptions, WorkerInitializationRenderOptions };
 
 export const WorkerPoolContext: Context<WorkerPoolManager | undefined> =
   createContext<WorkerPoolManager | undefined>(undefined);

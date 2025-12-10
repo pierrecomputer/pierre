@@ -1,11 +1,14 @@
 import { WorkerPoolManager } from './WorkerPoolManager';
-import type { WorkerHighlighterOptions, WorkerPoolOptions } from './types';
+import type {
+  WorkerInitializationRenderOptions,
+  WorkerPoolOptions,
+} from './types';
 
 let workerPoolSingletone: WorkerPoolManager | undefined;
 
 export interface SetupWorkerPoolProps {
   poolOptions: WorkerPoolOptions;
-  highlighterOptions: WorkerHighlighterOptions;
+  highlighterOptions: WorkerInitializationRenderOptions;
 }
 
 export function getOrCreateWorkerPoolSingleton({

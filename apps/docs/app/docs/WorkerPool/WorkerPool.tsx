@@ -186,13 +186,16 @@ export function WorkerPool({
         your File/FileDiff instances.
       </p>
 
-      <Notice icon={<IconInfoFill />}>
-        When using the worker pool, theme settings are controlled by the pool
-        manager, not individual component props. Any <code>theme</code> options
-        passed to <code>File</code> or <code>FileDiff</code> components will be
-        ignored. To change the theme, use the <code>setTheme()</code> method on
-        the pool manager. All connected instances will automatically re-render
-        with the new theme.
+      <Notice icon={<IconInfoFill />} variant="warning">
+        When using the worker pool, the <code>theme</code>,{' '}
+        <code>lineDiffType</code>, and <code>tokenizeMaxLineLength</code> render
+        options are controlled by <code>WorkerPoolManager</code>, not individual
+        components. Passing these options into component instances will be
+        ignored. To change render options after WorkerPoolManager instantiates,
+        use the <code>setRenderOptions()</code> method on the{' '}
+        <code>WorkerPoolManager</code>. <strong>Note:</strong> Changing render
+        options will force all mounted components to re-render and will clear
+        the render cache.
       </Notice>
 
       <h4 data-toc-ignore>React</h4>
@@ -215,8 +218,9 @@ export function WorkerPool({
       </Notice>
 
       <p>
-        To change themes dynamically, use the <code>useWorkerPool()</code> hook
-        to access the pool manager and call <code>setTheme()</code>.
+        To change themes or other render options dynamically, use the{' '}
+        <code>useWorkerPool()</code> hook to access the pool manager and call{' '}
+        <code>setRenderOptions()</code>.
       </p>
       <DocsCodeExample {...reactUsage} />
 
@@ -229,8 +233,8 @@ export function WorkerPool({
         resources.
       </p>
       <p>
-        To change themes dynamically, call{' '}
-        <code>workerPool.setTheme(theme)</code> on the pool instance.
+        To change themes or other render options dynamically, call{' '}
+        <code>setRenderOptions(options)</code> on the pool instance.
       </p>
       <DocsCodeExample {...vanillaUsage} />
 
