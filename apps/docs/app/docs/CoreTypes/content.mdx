@@ -1,22 +1,21 @@
 ## Core Types
 
-Before diving into the components, it's helpful to understand the two
-core data structures used throughout the library.
+Before diving into the components, it's helpful to understand the two core data
+structures used throughout the library.
 
 ### FileContents
 
-`FileContents` represents a single file. Use it when
-rendering a file with the `<File>` component, or pass
-two of them as `oldFile` and `newFile` to diff
+`FileContents` represents a single file. Use it when rendering a file with the
+`<File>` component, or pass two of them as `oldFile` and `newFile` to diff
 components.
 
 <DocsCodeExample {...fileContentsType} />
 
 ### FileDiffMetadata
 
-`FileDiffMetadata` represents the differences between two
-files. It contains the hunks (changed regions), line counts, and
-optionally the full file contents for expansion.
+`FileDiffMetadata` represents the differences between two files. It contains the
+hunks (changed regions), line counts, and optionally the full file contents for
+expansion.
 
 **Tip:** You can generate `FileDiffMetadata` using
 [`parseDiffFromFile`](#utilities-parsedifffromfile) (from two file versions) or
@@ -30,20 +29,18 @@ There are two ways to create a `FileDiffMetadata`.
 
 #### From Two Files
 
-Use `parseDiffFromFile` when you have both file versions.
-This approach includes the full file contents, enabling the "expand
-unchanged" feature.
+Use `parseDiffFromFile` when you have both file versions. This approach includes
+the full file contents, enabling the "expand unchanged" feature.
 
 <DocsCodeExample {...parseDiffFromFileExample} />
 
 #### From a Patch String
 
-Use `parsePatchFiles` when you have a unified diff or patch
-file. This is useful when working with git output or patch files from
-APIs.
+Use `parsePatchFiles` when you have a unified diff or patch file. This is useful
+when working with git output or patch files from APIs.
 
 <DocsCodeExample {...parsePatchFilesExample} />
 
-**Tip:** If you need to change the language after creating
-a `FileContents` or `FileDiffMetadata`, use the
+**Tip:** If you need to change the language after creating a `FileContents` or
+`FileDiffMetadata`, use the
 [`setLanguageOverride`](#utilities-setlanguageoverride) utility function.

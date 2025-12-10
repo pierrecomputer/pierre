@@ -7,12 +7,11 @@
 
 ### Components
 
-The Vanilla JS API exposes two core components: `FileDiff`
-(compare two file versions or render a pre-parsed
-`FileDiffMetadata`) and `File` (render a single
-code file without diff). Typically you'll want to interface with these
-as they'll handle all the complicated aspects of syntax highlighting,
-theming, and full interactivity for you.
+The Vanilla JS API exposes two core components: `FileDiff` (compare two file
+versions or render a pre-parsed `FileDiffMetadata`) and `File` (render a single
+code file without diff). Typically you'll want to interface with these as
+they'll handle all the complicated aspects of syntax highlighting, theming, and
+full interactivity for you.
 
 <VanillaComponentTabs
   fileDiffExample={fileDiffExample}
@@ -21,19 +20,16 @@ theming, and full interactivity for you.
 
 ### Props
 
-Both `FileDiff` and `File` accept an options
-object in their constructor. The `File` component has similar
-options, but excludes diff-specific settings and uses
-`LineAnnotation` instead of `DiffLineAnnotation`
-(no `side` property).
+Both `FileDiff` and `File` accept an options object in their constructor. The
+`File` component has similar options, but excludes diff-specific settings and
+uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
 <VanillaPropTabs fileDiffProps={fileDiffProps} fileProps={fileProps} />
 
 #### Custom Hunk Separators
 
-If you want to render custom hunk separators that won't scroll with the
-content, there are a few tricks you will need to employ. See the
-following code snippet:
+If you want to render custom hunk separators that won't scroll with the content,
+there are a few tricks you will need to employ. See the following code snippet:
 
 <DocsCodeExample {...customHunk} />
 
@@ -46,18 +42,16 @@ following code snippet:
   for advanced use cases.
 </Notice>
 
-These renderer classes handle the low-level work of parsing and
-rendering code with syntax highlighting. Useful when you need direct
-access to the rendered output as
-[HAST](https://github.com/syntax-tree/hast)
-nodes or HTML strings for custom rendering pipelines.
+These renderer classes handle the low-level work of parsing and rendering code
+with syntax highlighting. Useful when you need direct access to the rendered
+output as [HAST](https://github.com/syntax-tree/hast) nodes or HTML strings for
+custom rendering pipelines.
 
 #### DiffHunksRenderer
 
-Takes a `FileDiffMetadata` data structure and renders out the
-raw HAST (Hypertext Abstract Syntax Tree) elements for diff hunks. You
-can generate `FileDiffMetadata` via
-`parseDiffFromFile` or `parsePatchFiles` utility
+Takes a `FileDiffMetadata` data structure and renders out the raw HAST
+(Hypertext Abstract Syntax Tree) elements for diff hunks. You can generate
+`FileDiffMetadata` via `parseDiffFromFile` or `parsePatchFiles` utility
 functions.
 
 <DiffHunksTabs
@@ -67,8 +61,8 @@ functions.
 
 #### FileRenderer
 
-Takes a `FileContents` object (just a filename and contents
-string) and renders syntax-highlighted code as HAST elements. Useful for
-rendering single files without any diff context.
+Takes a `FileContents` object (just a filename and contents string) and renders
+syntax-highlighted code as HAST elements. Useful for rendering single files
+without any diff context.
 
 <DocsCodeExample {...fileRenderer} />
