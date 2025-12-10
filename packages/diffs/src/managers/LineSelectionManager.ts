@@ -1,6 +1,5 @@
-import deepEquals from 'fast-deep-equal';
-
 import type { AnnotationSide } from '../types';
+import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 
 export type SelectionSide = AnnotationSide;
 
@@ -89,7 +88,8 @@ export class LineSelectionManager {
 
   setSelection(range: SelectedLineRange | null): void {
     const isRangeChange = !(
-      range === this.selectedRange || deepEquals(range, this.selectedRange)
+      range === this.selectedRange ||
+      areSelectionsEqual(range ?? undefined, this.selectedRange ?? undefined)
     );
     if (!this.isDirty() && !isRangeChange) return;
     this.selectedRange = range;

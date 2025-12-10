@@ -1,4 +1,3 @@
-import deepEquals from 'fast-deep-equal';
 import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -30,6 +29,7 @@ import type {
   RenderFileMetadata,
   ThemeTypes,
 } from '../types';
+import { areFilesEqual } from '../utils/areFilesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createCodeNode } from '../utils/createCodeNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
@@ -269,7 +269,7 @@ export class File<LAnnotation = undefined> {
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
-    if (!forceRender && deepEquals(this.file, file) && !annotationsChanged) {
+    if (!forceRender && areFilesEqual(this.file, file) && !annotationsChanged) {
       return;
     }
 
