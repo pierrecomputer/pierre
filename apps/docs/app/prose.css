@@ -19,12 +19,13 @@
   h2,
   h3,
   h4 {
+    --margin-top: var(--gap);
     margin-bottom: calc(var(--gap) / -2);
     font-weight: 600;
-    scroll-margin-top: 6rem;
+    scroll-margin-top: 5.5rem;
 
     &:not(:first-child) {
-      margin-top: var(--gap);
+      margin-top: var(--margin-top);
     }
   }
 
@@ -33,15 +34,17 @@
     line-height: 1.2;
   }
   h2 {
-    font-size: clamp(1.75rem, 1.3rem + 1vw, 2rem);
+    font-size: clamp(1.5rem, 1.25rem + 1vw, 2rem);
     line-height: calc(3 / 2.25);
   }
   h3 {
-    font-size: clamp(1.5rem, 1.1rem + 0.75vw, 1.75rem);
+    --margin-top: calc(var(--gap) / 2);
+    font-size: clamp(1.25rem, 1rem + 0.75vw, 1.5rem);
     line-height: calc(2.5 / 1.75);
   }
   h4 {
-    font-size: clamp(1.25rem, 1rem + 0.625vw, 1.5rem);
+    --margin-top: 0;
+    font-size: clamp(1.125rem, 0.875rem + 0.625vw, 1.25rem);
     line-height: 1.5;
   }
 

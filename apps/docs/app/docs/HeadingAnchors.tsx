@@ -7,41 +7,36 @@ const HASH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="currentcolo
 
 /**
  * Adds permalink anchors to all headings with IDs.
- * Shows a clickable hash symbol on hover that updates the URL.
+ * IDs are set server-side by rehype-hierarchical-slug during MDX compilation.
+ * Shows a clickable hash symbol on hover that copies the URL.
  */
 export function HeadingAnchors() {
   useEffect(() => {
-    // Wait for DocsSidebar to set IDs on headings
-    const timeoutId = setTimeout(() => {
-      const headings = document.querySelectorAll('h2[id], h3[id], h4[id]');
+    const headings = document.querySelectorAll('h2[id], h3[id], h4[id]');
 
-      for (const heading of headings) {
-        if (!(heading instanceof HTMLElement)) continue;
+    for (const heading of headings) {
+      if (!(heading instanceof HTMLElement)) continue;
 
-        if (heading.querySelector('.heading-anchor') != null) continue;
+      // Skip if anchor already exists
+      if (heading.querySelector('.heading-anchor') != null) continue;
 
-        // Create anchor element
-        const anchor = document.createElement('a');
-        anchor.href = `#${heading.id}`;
-        anchor.className = 'heading-anchor';
-        anchor.ariaLabel = 'Link to this section';
-        anchor.innerHTML = HASH_ICON_SVG;
+      // Create anchor element
+      const anchor = document.createElement('a');
+      anchor.href = `#${heading.id}`;
+      anchor.className = 'heading-anchor';
+      anchor.ariaLabel = 'Link to this section';
+      anchor.innerHTML = HASH_ICON_SVG;
 
-        anchor.addEventListener('click', () => {
-          const url = `${window.location.origin}${window.location.pathname}#${heading.id}`;
+      anchor.addEventListener('click', () => {
+        const url = `${window.location.origin}${window.location.pathname}#${heading.id}`;
 
-          void navigator.clipboard.writeText(url).catch((err) => {
-            console.warn('Failed to copy to clipboard:', err);
-          });
+        void navigator.clipboard.writeText(url).catch((err) => {
+          console.warn('Failed to copy to clipboard:', err);
         });
+      });
 
-        heading.appendChild(anchor);
-      }
-    }, 150);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
+      heading.appendChild(anchor);
+    }
   }, []);
 
   return null;
