@@ -1,12 +1,9 @@
 'use client';
 
 import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 
 interface SplitUnifiedProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
@@ -18,31 +15,40 @@ export function SplitUnified({
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   return (
     <div className="scroll-mt-[20px] space-y-5" id="layout">
-      <FeatureHeader
-        title="Diff layout styles"
-        description="Choose from stacked (unified) or split (side-by-side). Both use CSS Grid and Shadow DOM under the hood, meaning fewer DOM nodes and faster rendering."
-      />
-      <ButtonGroup
-        value={diffStyle}
-        onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
-      >
-        <ButtonGroupItem value="split">
-          <IconDiffSplit />
-          Split
-        </ButtonGroupItem>
-        <ButtonGroupItem value="unified">
-          <IconDiffUnified />
-          Stacked
-        </ButtonGroupItem>
-      </ButtonGroup>
-
       <MultiFileDiff
         {...props}
         className="diff-container"
         options={{
           theme: options?.theme ?? 'pierre-dark',
           diffStyle,
+          enableLineSelection: true,
         }}
+        renderHeaderMetadata={() => (
+          <div className="-mr-2 inline-flex gap-2">
+            <button
+              onClick={() => setDiffStyle('split')}
+              className={
+                diffStyle === 'split'
+                  ? 'border-border bg-background hover:bg-background cursor-pointer rounded-md border p-1 text-white transition-colors'
+                  : 'text-muted-foreground hover:text-foreground cursor-pointer rounded-md border border-transparent bg-transparent p-1 transition-colors'
+              }
+              aria-label="Split view"
+            >
+              <IconDiffSplit />
+            </button>
+            <button
+              onClick={() => setDiffStyle('unified')}
+              className={
+                diffStyle === 'unified'
+                  ? 'border-border bg-background hover:bg-background cursor-pointer rounded-md border p-1 text-white transition-colors'
+                  : 'text-muted-foreground hover:text-foreground cursor-pointer rounded-md border border-transparent bg-transparent p-1 transition-colors'
+              }
+              aria-label="Unified view"
+            >
+              <IconDiffUnified />
+            </button>
+          </div>
+        )}
       />
     </div>
   );

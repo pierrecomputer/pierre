@@ -26,7 +26,7 @@ export function Hero() {
   };
 
   return (
-    <section className="flex max-w-3xl flex-col gap-3 py-20 lg:max-w-4xl">
+    <section className="flex max-w-3xl flex-col gap-3 pt-20 pb-5 lg:max-w-4xl">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="64"
@@ -61,7 +61,6 @@ export function Hero() {
         </Link>
         .
       </p>
-
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -92,10 +91,17 @@ export function Hero() {
             Documentation
           </Link>
         </Button>
+        <p className="text-muted-foreground text-center text-sm md:text-left">
+          <a
+            href="https://www.npmjs.com/package/@pierre/diffs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline"
+          >
+            v{packageJson.version}
+          </a>
+        </p>
       </div>
-      <p className="text-muted-foreground mt-2 text-center text-sm md:text-left">
-        Currently v{packageJson.version}
-      </p>
     </section>
   );
 }
