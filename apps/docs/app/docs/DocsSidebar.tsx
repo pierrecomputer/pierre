@@ -103,7 +103,7 @@ export function DocsSidebar({
     <>
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-[50] bg-black/30 backdrop-blur-sm transition-opacity duration-200 md:hidden"
+          className="bg-background/50 fixed inset-0 z-[50] backdrop-blur-sm transition-opacity duration-200 md:hidden"
           onClick={onMobileClose}
         />
       )}
