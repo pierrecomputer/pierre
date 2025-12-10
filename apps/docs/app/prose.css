@@ -22,7 +22,7 @@
     --margin-top: var(--gap);
     margin-bottom: calc(var(--gap) / -2);
     font-weight: 600;
-    scroll-margin-top: 6rem;
+    scroll-margin-top: 5.5rem;
 
     &:not(:first-child) {
       margin-top: var(--margin-top);
