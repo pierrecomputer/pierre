@@ -1,6 +1,6 @@
 {
   "name": "@pierre/diffs",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "type": "module",
   "license": "apache-2.0",
   "scripts": {
