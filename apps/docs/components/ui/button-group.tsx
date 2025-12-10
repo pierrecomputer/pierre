@@ -42,7 +42,7 @@ function ButtonGroup({
     >
       <div
         className={cn(
-          'bg-secondary inline-flex self-start rounded-lg p-[2px]',
+          'bg-secondary inline-flex self-start rounded-lg',
           className
         )}
         role="group"
@@ -68,9 +68,6 @@ function ButtonGroupItem({
 }: ButtonGroupItemProps) {
   const context = React.useContext(ButtonGroupContext);
   const isSelected = context.selectedValue === value;
-  // const isFirst = React.useContext(ButtonGroupPositionContext) === 'first';
-  // const isLast = React.useContext(ButtonGroupPositionContext) === 'last';
-  // const isMiddle = React.useContext(ButtonGroupPositionContext) === 'middle';
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     context.onValueChange?.(value);
@@ -80,9 +77,8 @@ function ButtonGroupItem({
   return (
     <Button
       className={cn(
-        'text-muted-foreground border-transparent bg-transparent select-none hover:cursor-pointer',
-        isSelected &&
-          'bg-background border-border text-accent-foreground hover:bg-background hover:border-border',
+        'text-muted-foreground rounded-[calc(var(--radius-lg)-1px)]',
+        isSelected && 'text-foreground pointer-events-none shadow-xs',
         className
       )}
       variant={isSelected ? 'outline' : 'ghost'}

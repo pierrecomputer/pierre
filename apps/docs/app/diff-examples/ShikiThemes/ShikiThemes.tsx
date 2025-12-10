@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { preloadHighlighter } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
-import type { PreloadMultiFileDiffResult, ThemesType } from '@pierre/diffs/ssr';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -112,18 +112,13 @@ export function ShikiThemes({
     });
   }, []);
 
+  const themeObj = typeof options?.theme === 'object' ? options.theme : null;
   const [selectedLightTheme, setSelectedLightTheme] = useState<
     (typeof LIGHT_THEMES)[number]
-  >(
-    ((options?.theme as ThemesType | undefined)?.light as 'pierre-light') ??
-      'pierre-light'
-  );
+  >((themeObj?.light as 'pierre-light') ?? 'pierre-light');
   const [selectedDarkTheme, setSelectedDarkTheme] = useState<
     (typeof DARK_THEMES)[number]
-  >(
-    ((options?.theme as ThemesType | undefined)?.dark as 'pierre-dark') ??
-      'pierre-dark'
-  );
+  >((themeObj?.dark as 'pierre-dark') ?? 'pierre-dark');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');
@@ -140,14 +135,11 @@ export function ShikiThemes({
           </>
         }
       />
-      <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
-        <div className="bg-secondary rounded-lg p-[2px]">
+      <div className="flex flex-wrap gap-3 md:items-center">
+        <div className="flex w-full gap-3 md:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start md:w-auto"
-              >
+              <Button variant="outline" className="flex-1 justify-start">
                 <IconColorLight />
                 {selectedLightTheme}
                 <IconChevronSm className="text-muted-foreground ml-auto" />
@@ -173,15 +165,10 @@ export function ShikiThemes({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
 
-        <div className="bg-secondary rounded-lg p-[2px]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start md:w-auto"
-              >
+              <Button variant="outline" className="flex-1 justify-start">
                 <IconColorDark />
                 {selectedDarkTheme}
                 <IconChevronSm className="text-muted-foreground ml-auto" />
@@ -215,6 +202,7 @@ export function ShikiThemes({
         </div>
 
         <ButtonGroup
+          className="w-full md:w-auto"
           value={selectedColorMode}
           onValueChange={(value) =>
             setSelectedColorMode(value as 'system' | 'light' | 'dark')
