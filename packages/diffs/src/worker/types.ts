@@ -66,10 +66,10 @@ export interface ResolvedLanguage {
   data: LanguageRegistration[];
 }
 
-export interface RegisterThemeWorkerRequest {
-  type: 'register-theme';
+export interface SetRenderOptionsWorkerRequest {
+  type: 'set-render-options';
   id: WorkerRequestId;
-  theme: DiffsThemeNames | ThemesType;
+  renderOptions: WorkerRenderingOptions;
   resolvedThemes: ThemeRegistrationResolved[];
 }
 
@@ -81,7 +81,7 @@ export type WorkerRequest =
   | RenderFileRequest
   | RenderDiffRequest
   | InitializeWorkerRequest
-  | RegisterThemeWorkerRequest;
+  | SetRenderOptionsWorkerRequest;
 
 export interface RenderFileSuccessResponse {
   type: 'success';
@@ -110,7 +110,7 @@ export interface InitializeSuccessResponse {
 
 export interface RegisterThemeSuccessResponse {
   type: 'success';
-  requestType: 'register-theme';
+  requestType: 'set-render-options';
   id: WorkerRequestId;
   sentAt: number;
 }
@@ -148,7 +148,7 @@ export interface WorkerPoolOptions {
   totalASTLRUCacheSize?: number;
 }
 
-export interface WorkerHighlighterOptions
+export interface WorkerInitializationRenderOptions
   extends Partial<WorkerRenderingOptions> {
   langs?: SupportedLanguages[];
 }
@@ -162,10 +162,10 @@ export interface InitializeWorkerTask {
   requestStart: number;
 }
 
-export interface RegisterThemeWorkerTask {
-  type: 'register-theme';
+export interface SetRenderOptionsWorkerTask {
+  type: 'set-render-options';
   id: WorkerRequestId;
-  request: RegisterThemeWorkerRequest;
+  request: SetRenderOptionsWorkerRequest;
   resolve(value?: undefined): void;
   reject(error: Error): void;
   requestStart: number;
@@ -189,7 +189,7 @@ export interface RenderDiffTask {
 
 export type AllWorkerTasks =
   | InitializeWorkerTask
-  | RegisterThemeWorkerTask
+  | SetRenderOptionsWorkerTask
   | RenderFileTask
   | RenderDiffTask;
 

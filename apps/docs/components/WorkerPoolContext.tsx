@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  type WorkerHighlighterOptions,
+  type WorkerInitializationRenderOptions,
   WorkerPoolContextProvider,
   type WorkerPoolOptions,
 } from '@pierre/diffs/react';
@@ -16,7 +16,7 @@ const PoolOptions: WorkerPoolOptions = {
   },
 };
 
-const HighlighterOptions: WorkerHighlighterOptions = {
+const HighlighterOptions: WorkerInitializationRenderOptions = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   langs: ['zig', 'typescript', 'tsx', 'css', 'sh'],
 };

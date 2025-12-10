@@ -1,12 +1,12 @@
 import {
-  type WorkerHighlighterOptions,
+  type WorkerInitializationRenderOptions,
   type WorkerPoolManager,
   getOrCreateWorkerPoolSingleton,
 } from '@pierre/diffs/worker';
 import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';
 
 export function createWorkerAPI(
-  highlighterOptions: WorkerHighlighterOptions
+  highlighterOptions: WorkerInitializationRenderOptions
 ): WorkerPoolManager {
   return getOrCreateWorkerPoolSingleton({
     poolOptions: {
