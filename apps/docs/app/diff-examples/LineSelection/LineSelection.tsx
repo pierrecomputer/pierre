@@ -100,6 +100,52 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           >
             <IconXSquircle className="text-muted-foreground" />
           </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setDiffStyle((current) =>
+                current === 'split' ? 'unified' : 'split'
+              )
+            }
+            title={
+              diffStyle === 'split' ? 'Switch to unified' : 'Switch to split'
+            }
+            aria-label="Toggle diff view style"
+          >
+            {diffStyle === 'split' ? (
+              <IconDiffSplit size={16} />
+            ) : (
+              <IconDiffUnified size={16} />
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setDisableBackground((current) => !current)}
+            title={
+              disableBackground ? 'Enable background' : 'Disable background'
+            }
+            aria-label="Toggle background colors"
+          >
+            {disableBackground ? (
+              <IconCodeStyleBars size={16} />
+            ) : (
+              <IconCodeStyleBg size={16} />
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setThemeType((current) => (current === 'dark' ? 'light' : 'dark'))
+            }
+            title={themeType === 'dark' ? 'Switch to light' : 'Switch to dark'}
+            aria-label="Toggle color theme"
+          >
+            {themeType === 'dark' ? (
+              <IconMoon size={16} />
+            ) : (
+              <IconSun size={16} />
+            )}
+          </Button>
         </div>
       </div>
 
@@ -115,67 +161,6 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           onLineSelected(range) {
             setSelectedRange(range);
           },
-        }}
-        renderHeaderMetadata={() => {
-          return (
-            <div className="-mr-1.5 flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() =>
-                  setDiffStyle((current) =>
-                    current === 'split' ? 'unified' : 'split'
-                  )
-                }
-                className="cursor-pointer p-1 opacity-60 hover:opacity-100"
-                title={
-                  diffStyle === 'split'
-                    ? 'Switch to unified'
-                    : 'Switch to split'
-                }
-                aria-label="Toggle diff view style"
-              >
-                {diffStyle === 'split' ? (
-                  <IconDiffSplit size={16} />
-                ) : (
-                  <IconDiffUnified size={16} />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDisableBackground((current) => !current)}
-                className="cursor-pointer p-1 opacity-60 hover:opacity-100"
-                title={
-                  disableBackground ? 'Enable background' : 'Disable background'
-                }
-                aria-label="Toggle background colors"
-              >
-                {disableBackground ? (
-                  <IconCodeStyleBars size={16} />
-                ) : (
-                  <IconCodeStyleBg size={16} />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setThemeType((current) =>
-                    current === 'dark' ? 'light' : 'dark'
-                  )
-                }
-                className="cursor-pointer p-1 opacity-60 hover:opacity-100"
-                title={
-                  themeType === 'dark' ? 'Switch to light' : 'Switch to dark'
-                }
-                aria-label="Toggle color theme"
-              >
-                {themeType === 'dark' ? (
-                  <IconMoon size={16} />
-                ) : (
-                  <IconSun size={16} />
-                )}
-              </button>
-            </div>
-          );
         }}
       />
     </div>
