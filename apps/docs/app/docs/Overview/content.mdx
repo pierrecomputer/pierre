@@ -11,7 +11,7 @@ highlighting on top of [Shiki](https://shiki.style/) which provides a lot of
 great theme and language support.
 
 <MultiFileDiff
-  {...initialDiffProps}
+  {...props.initialDiffProps}
   className="overflow-hidden rounded-md border-1 contain-layout contain-paint"
 />
 
@@ -45,8 +45,8 @@ There are two ways to render diffs with `FileDiff`:
 You can see examples of these approaches below, in both JavaScript and React.
 
 <CodeToggle
-  reactSingleFile={reactSingleFile}
-  reactPatchFile={reactPatchFile}
-  vanillaSingleFile={vanillaSingleFile}
-  vanillaPatchFile={vanillaPatchFile}
+  reactSingleFile={props.reactSingleFile}
+  reactPatchFile={props.reactPatchFile}
+  vanillaSingleFile={props.vanillaSingleFile}
+  vanillaPatchFile={props.vanillaPatchFile}
 />

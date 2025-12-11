@@ -14,8 +14,8 @@ they'll handle all the complicated aspects of syntax highlighting, theming, and
 full interactivity for you.
 
 <VanillaComponentTabs
-  fileDiffExample={fileDiffExample}
-  fileExample={fileExample}
+  fileDiffExample={props.fileDiffExample}
+  fileExample={props.fileExample}
 />
 
 ### Props
@@ -24,14 +24,17 @@ Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
-<VanillaPropTabs fileDiffProps={fileDiffProps} fileProps={fileProps} />
+<VanillaPropTabs
+  fileDiffProps={props.fileDiffProps}
+  fileProps={props.fileProps}
+/>
 
 #### Custom Hunk Separators
 
 If you want to render custom hunk separators that won't scroll with the content,
 there are a few tricks you will need to employ. See the following code snippet:
 
-<DocsCodeExample {...customHunk} />
+<DocsCodeExample {...props.customHunk} />
 
 ### Renderers
 
@@ -55,8 +58,8 @@ Takes a `FileDiffMetadata` data structure and renders out the raw HAST
 functions.
 
 <DiffHunksTabs
-  diffHunksRenderer={diffHunksRenderer}
-  diffHunksRendererPatch={diffHunksRendererPatch}
+  diffHunksRenderer={props.diffHunksRenderer}
+  diffHunksRendererPatch={props.diffHunksRendererPatch}
 />
 
 #### FileRenderer
@@ -65,4 +68,4 @@ Takes a `FileContents` object (just a filename and contents string) and renders
 syntax-highlighted code as HAST elements. Useful for rendering single files
 without any diff context.
 
-<DocsCodeExample {...fileRenderer} />
+<DocsCodeExample {...props.fileRenderer} />

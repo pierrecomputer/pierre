@@ -17,8 +17,8 @@ version is restored. The function returns a new `FileDiffMetadata` object with
 all line numbers properly adjusted for subsequent hunks.
 
 <AcceptRejectTabs
-  diffAcceptReject={diffAcceptReject}
-  diffAcceptRejectReact={diffAcceptRejectReact}
+  diffAcceptReject={props.diffAcceptReject}
+  diffAcceptRejectReact={props.diffAcceptRejectReact}
 />
 
 ### disposeHighlighter [toc-ignore]
@@ -26,14 +26,14 @@ all line numbers properly adjusted for subsequent hunks.
 Dispose the shared Shiki highlighter instance to free memory. Useful when
 cleaning up resources in single-page applications.
 
-<DocsCodeExample {...disposeHighlighter} />
+<DocsCodeExample {...props.disposeHighlighter} />
 
 ### getSharedHighlighter [toc-ignore]
 
 Get direct access to the shared Shiki highlighter instance used internally by
 all components. Useful for custom highlighting operations.
 
-<DocsCodeExample {...getSharedHighlighter} />
+<DocsCodeExample {...props.getSharedHighlighter} />
 
 ### parseDiffFromFile [toc-ignore]
 
@@ -46,7 +46,7 @@ If both `oldFile` and `newFile` have a `cacheKey`, the resulting
 `oldKey:newKey`). See [Render Cache](#worker-pool-render-cache) for more
 information.
 
-<DocsCodeExample {...parseDiffFromFile} />
+<DocsCodeExample {...props.parseDiffFromFile} />
 
 ### parsePatchFiles [toc-ignore]
 
@@ -58,21 +58,21 @@ generate cache keys for each file in the patch (format:
 [caching of rendered diff results](#worker-pool-render-cache) in the worker
 pool.
 
-<DocsCodeExample {...parsePatchFiles} />
+<DocsCodeExample {...props.parsePatchFiles} />
 
 ### preloadHighlighter [toc-ignore]
 
 Preload specific themes and languages before rendering to ensure instant
 highlighting with no async loading delay.
 
-<DocsCodeExample {...preloadHighlighter} />
+<DocsCodeExample {...props.preloadHighlighter} />
 
 ### registerCustomTheme [toc-ignore]
 
 Register a custom Shiki theme for use with any component. The theme name you
 register must match the `name` field inside your theme JSON file.
 
-<DocsCodeExample {...registerCustomTheme} />
+<DocsCodeExample {...props.registerCustomTheme} />
 
 ### setLanguageOverride [toc-ignore]
 
@@ -80,4 +80,4 @@ Override the syntax highlighting language for a `FileContents` or
 `FileDiffMetadata` object. This is useful when the filename doesn't have an
 extension or doesn't match the actual language.
 
-<DocsCodeExample {...setLanguageOverride} />
+<DocsCodeExample {...props.setLanguageOverride} />

@@ -39,7 +39,7 @@ common use cases below.
 You may need to explicitly set the `worker.format` option in your
 [Vite Config](https://vite.dev/config/worker-options#worker-format) to `'es'`.
 
-<DocsCodeExample {...helperVite} />
+<DocsCodeExample {...props.helperVite} />
 
 #### NextJS
 
@@ -48,7 +48,7 @@ You may need to explicitly set the `worker.format` option in your
   client'` directive if using App Router.
 </Notice>
 
-<DocsCodeExample {...helperNextJS} />
+<DocsCodeExample {...props.helperNextJS} />
 
 #### VS Code Webview Extension
 
@@ -59,55 +59,55 @@ file) and the webview side (to load it via blob URL).
 **Extension side:** Add the worker directory to `localResourceRoots` in your
 `getWebviewOptions()`:
 
-<DocsCodeExample {...vscodeLocalRoots} />
+<DocsCodeExample {...props.vscodeLocalRoots} />
 
 Create the worker URI in `_getHtmlForWebview()`. Note: use `worker-portable.js`
 instead of `worker.js` — the portable version is designed for environments where
 ES modules aren't supported in web workers.
 
-<DocsCodeExample {...vscodeWorkerUri} />
+<DocsCodeExample {...props.vscodeWorkerUri} />
 
 Pass the URI to the webview via an inline script in your HTML:
 
-<DocsCodeExample {...vscodeInlineScript} />
+<DocsCodeExample {...props.vscodeInlineScript} />
 
 Your Content Security Policy must include `worker-src` and `connect-src`:
 
-<DocsCodeExample {...vscodeCsp} />
+<DocsCodeExample {...props.vscodeCsp} />
 
 **Webview side:** Declare the global type for the URI:
 
-<DocsCodeExample {...vscodeGlobal} />
+<DocsCodeExample {...props.vscodeGlobal} />
 
 Fetch the worker code and create a blob URL:
 
-<DocsCodeExample {...vscodeBlobUrl} />
+<DocsCodeExample {...props.vscodeBlobUrl} />
 
 Create the `workerFactory` function:
 
-<DocsCodeExample {...vscodeFactory} />
+<DocsCodeExample {...props.vscodeFactory} />
 
 #### Webpack 5
 
-<DocsCodeExample {...helperWebpack} />
+<DocsCodeExample {...props.helperWebpack} />
 
 #### esbuild
 
-<DocsCodeExample {...helperESBuild} />
+<DocsCodeExample {...props.helperESBuild} />
 
 #### Rollup / Static Files
 
 If your bundler doesn't have special worker support, build and serve the worker
 file statically:
 
-<DocsCodeExample {...helperStatic} />
+<DocsCodeExample {...props.helperStatic} />
 
 #### Vanilla JS (No Bundler)
 
 For projects without a bundler, host the worker file on your server and
 reference it directly:
 
-<DocsCodeExample {...helperVanilla} />
+<DocsCodeExample {...props.helperVanilla} />
 
 ### Usage
 
@@ -147,7 +147,7 @@ all contexts are unmounted.
 To change themes or other render options dynamically, use the `useWorkerPool()`
 hook to access the pool manager and call `setRenderOptions()`.
 
-<DocsCodeExample {...reactUsage} />
+<DocsCodeExample {...props.reactUsage} />
 
 #### Vanilla JS
 
@@ -159,7 +159,7 @@ resources.
 To change themes or other render options dynamically, call
 `setRenderOptions(options)` on the pool instance.
 
-<DocsCodeExample {...vanillaUsage} />
+<DocsCodeExample {...props.vanillaUsage} />
 
 ### Render Cache
 
@@ -180,7 +180,7 @@ worker. This works automatically for both React and Vanilla JS APIs.
   cached result is skipped and re-rendered.
 </Notice>
 
-<DocsCodeExample {...cachingExample} />
+<DocsCodeExample {...props.cachingExample} />
 
 ### API Reference
 
@@ -188,7 +188,7 @@ These methods are exposed for advanced use cases. In most scenarios, you should
 use the `WorkerPoolContextProvider` for React or pass the pool instance via the
 `workerPool` option for Vanilla JS rather than calling these methods directly.
 
-<DocsCodeExample {...apiReference} />
+<DocsCodeExample {...props.apiReference} />
 
 ### Architecture
 
@@ -197,7 +197,7 @@ initialize their own Shiki highlighter instance. Tasks are distributed across
 available workers, with queuing when all workers are busy.
 
 <DocsCodeExample
-  {...architectureASCII}
+  {...props.architectureASCII}
   className="inline-block"
   style={{
     '--diffs-line-height': '15px',

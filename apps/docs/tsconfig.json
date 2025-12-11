@@ -4,8 +4,10 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "**/*.mdx",
     ".next/types/**/*.ts",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    "mdx-components.tsx"
   ],
   "exclude": ["node_modules"],
   "references": [

@@ -9,7 +9,7 @@ structures used throughout the library.
 `<File>` component, or pass two of them as `oldFile` and `newFile` to diff
 components.
 
-<DocsCodeExample {...fileContentsType} />
+<DocsCodeExample {...props.fileContentsType} />
 
 ### FileDiffMetadata
 
@@ -21,7 +21,7 @@ expansion.
 [`parseDiffFromFile`](#utilities-parsedifffromfile) (from two file versions) or
 [`parsePatchFiles`](#utilities-parsepatchfiles) (from a patch string).
 
-<DocsCodeExample {...fileDiffMetadataType} />
+<DocsCodeExample {...props.fileDiffMetadataType} />
 
 ### Creating Diffs
 
@@ -32,14 +32,14 @@ There are two ways to create a `FileDiffMetadata`.
 Use `parseDiffFromFile` when you have both file versions. This approach includes
 the full file contents, enabling the "expand unchanged" feature.
 
-<DocsCodeExample {...parseDiffFromFileExample} />
+<DocsCodeExample {...props.parseDiffFromFileExample} />
 
 #### From a Patch String
 
 Use `parsePatchFiles` when you have a unified diff or patch file. This is useful
 when working with git output or patch files from APIs.
 
-<DocsCodeExample {...parsePatchFilesExample} />
+<DocsCodeExample {...props.parsePatchFilesExample} />
 
 **Tip:** If you need to change the language after creating a `FileContents` or
 `FileDiffMetadata`, use the

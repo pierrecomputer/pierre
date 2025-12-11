@@ -18,10 +18,10 @@ The React API exposes four main components:
 - `File` renders a single code file without a diff
 
 <ComponentTabs
-  reactAPIMultiFileDiff={reactAPIMultiFileDiff}
-  reactAPIFileDiff={reactAPIFileDiff}
-  reactAPIPatch={reactAPIPatch}
-  reactAPIFile={reactAPIFile}
+  reactAPIMultiFileDiff={props.reactAPIMultiFileDiff}
+  reactAPIFileDiff={props.reactAPIFileDiff}
+  reactAPIPatch={props.reactAPIPatch}
+  reactAPIFile={props.reactAPIFile}
 />
 
 ### Shared Props
@@ -32,8 +32,8 @@ component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
 
 <SharedPropTabs
-  sharedDiffOptions={sharedDiffOptions}
-  sharedDiffRenderProps={sharedDiffRenderProps}
-  sharedFileOptions={sharedFileOptions}
-  sharedFileRenderProps={sharedFileRenderProps}
+  sharedDiffOptions={props.sharedDiffOptions}
+  sharedDiffRenderProps={props.sharedDiffRenderProps}
+  sharedFileOptions={props.sharedFileOptions}
+  sharedFileRenderProps={props.sharedFileRenderProps}
 />

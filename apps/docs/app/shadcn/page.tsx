@@ -1,3 +1,5 @@
+'use client';
+
 import { File } from '@pierre/diffs/react';
 
 import { Examples } from './Examples';

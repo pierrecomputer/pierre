@@ -28,7 +28,8 @@ export default function remarkTocIgnore() {
       lastChild.value = lastChild.value.replace(TOC_IGNORE_PATTERN, '');
 
       // Add hProperties so rehype will add the data attribute
-      const data = node.data ?? (node.data = {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: any = node.data ?? (node.data = {});
       const hProperties = (data.hProperties ??
         (data.hProperties = {})) as Record<string, unknown>;
       hProperties['data-toc-ignore'] = true;

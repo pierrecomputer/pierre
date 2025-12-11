@@ -6,8 +6,8 @@ have to utilize some custom CSS variables to override default styles. These can
 be done in your global CSS, as style props on parent components, or on the
 `FileDiff` component directly.
 
-<DocsCodeExample {...stylingGlobal} />
-<DocsCodeExample {...stylingInline} />
+<DocsCodeExample {...props.stylingGlobal} />
+<DocsCodeExample {...props.stylingInline} />
 
 ### Advanced: Unsafe CSS [toc-ignore]
 
@@ -28,4 +28,4 @@ future versions or in edge cases that may be difficult to anticipate.
   that we can discuss a more permanent solution for modifying styles.
 </Notice>
 
-<DocsCodeExample {...stylingUnsafe} />
+<DocsCodeExample {...props.stylingUnsafe} />
