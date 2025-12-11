@@ -262,7 +262,7 @@ function Thread() {
           author: 'You',
           timestamp: '3h',
           content:
-            'Good lord, I refuse to look at diffs ever again after this.',
+            'Should we validate the role parameter? We could restrict it to a set of allowed values.',
           avatarUrl:
             'https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg',
           isYou: true,
@@ -271,14 +271,15 @@ function Thread() {
           {
             author: 'Amadeus',
             timestamp: '2h',
-            content: 'Wait, how long have we been working on this?',
+            content: 'Good idea, maybe use a Literal type or an enum.',
             avatarUrl:
               'https://db.heypierre.app/storage/v1/object/public/avatars/Evzotboe_400x400.jpg',
           },
           {
             author: 'Mark',
             timestamp: '2h',
-            content: '*checks notes*… it’s not been a short amount of time.',
+            content:
+              'Agreed, we should also update verify_token to return the role.',
             avatarUrl:
               'https://db.heypierre.app/storage/v1/object/public/avatars/BET9cPgr_400x400.jpg',
           },

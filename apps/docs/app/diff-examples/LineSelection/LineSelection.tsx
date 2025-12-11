@@ -14,19 +14,18 @@ interface LineSelectionProps {
 }
 
 export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
-  // Store the selected line range in state
-  // This can be a single line (first === last) or a range (first < last)
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
     null
   );
-
-  // Store the current theme
-  const [theme, setTheme] = useState<'pierre-dark' | 'pierre-light'>(
-    'pierre-dark'
+  const [themeType, setThemeType] = useState<'dark' | 'light'>(
+    prerenderedDiff.options?.themeType === 'light' ? 'light' : 'dark'
   );
-
-  // Store the background toggle state
-  const [disableBackground, setDisableBackground] = useState(false);
+  const [disableBackground, setDisableBackground] = useState(
+    prerenderedDiff.options?.disableBackground ?? false
+  );
+  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
+    prerenderedDiff.options?.diffStyle ?? 'split'
+  );
 
   return (
     <div className="space-y-5">
@@ -38,6 +37,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             When enabled, clicking a line number will select that line. Click
             and drag to select multiple lines, or hold Shift and click to extend
             your selection. You can also control the selection programmatically.
+            Also selections will elegantly manage the differences between{' '}
+            <code>split</code> and <code>unified</code> views.
           </>
         }
       />
@@ -61,28 +62,35 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           <Button
             variant="outline"
             onClick={() => {
-              setSelectedRange({ start: 6, end: 6 });
+              setSelectedRange({ start: 23, side: 'additions', end: 23 });
             }}
+            title="{ start: 23, side: 'additions', end: 23 }"
           >
-            Select line 6
+            Select line 23
           </Button>
           <Button
             variant="outline"
             onClick={() => {
-              setSelectedRange({ start: 15, end: 29 });
+              setSelectedRange({
+                start: 32,
+                side: 'deletions',
+                end: 41,
+                endSide: 'additions',
+              });
             }}
+            title="{ start: 32, side: 'deletions', end: 41, endSide: 'additions' }"
           >
-            Select lines 15-29
+            Select lines 32-41
           </Button>
           <Button
             variant="outline"
             onClick={() => {
-              setTheme((current) =>
-                current === 'pierre-dark' ? 'pierre-light' : 'pierre-dark'
+              setThemeType((current) =>
+                current === 'dark' ? 'light' : 'dark'
               );
             }}
           >
-            Toggle theme ({theme === 'pierre-dark' ? 'Dark' : 'Light'})
+            Toggle theme ({themeType === 'dark' ? 'Dark' : 'Light'})
           </Button>
           <Button
             variant="outline"
@@ -91,6 +99,16 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             }}
           >
             Background: {disableBackground ? 'Off' : 'On'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setDiffStyle((current) =>
+                current === 'split' ? 'unified' : 'split'
+              );
+            }}
+          >
+            Toggle Split
           </Button>
           <Button
             variant="outline"
@@ -109,24 +127,15 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
       <MultiFileDiff
         {...prerenderedDiff}
         className="overflow-hidden rounded-lg border dark:border-neutral-800"
-        // Control selection programmatically (two-way binding with state)
         selectedLines={selectedRange}
         options={{
           ...prerenderedDiff.options,
-          // Use the dynamic theme from state
-          theme: theme,
-          // Toggle background
-          disableBackground: disableBackground,
-          // Enable interactive line selection
-          enableLineSelection: true,
-          // Listen to selection changes from user interactions
+          themeType,
+          diffStyle,
+          disableBackground,
           onLineSelected(range) {
             setSelectedRange(range);
           },
-          // Optional: Use onLineSelectionStart and onLineSelectionEnd to
-          // differentiate between in-progress and final selections
-          // onLineSelectionStart: (range) => console.log('Started:', range),
-          // onLineSelectionEnd: (range) => console.log('Completed:', range),
         }}
       />
     </div>
