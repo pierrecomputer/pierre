@@ -320,6 +320,10 @@ function processLines({
           hunkContent.deletions.length
         );
         let i = 0;
+        // NOTE(amadeus): Since we iterate through deletions and additions
+        // simultaneously, we have to create a secondary iterator for
+        // unifiedLineIndex, and then when we're done, add the combined lengths
+        // of additions/deletions to the main variable
         let _unifiedLineIndex = unifiedLineIndex;
         while (i < len) {
           const oldLine = hunkContent.deletions[i];
