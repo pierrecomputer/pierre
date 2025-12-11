@@ -46,3 +46,6 @@ public/r/**/*.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# mdx typecheck generated file
+app/mdx-typecheck.generated.tsx

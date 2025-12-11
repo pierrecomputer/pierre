@@ -43,7 +43,7 @@ function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
 }
 
 /** Default components available in all MDX content */
-const defaultComponents = {
+export const defaultComponents = {
   a: MdxLink,
   Notice,
   IconCiWarningFill,

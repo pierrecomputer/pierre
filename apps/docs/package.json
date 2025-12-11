@@ -14,7 +14,8 @@
     "dev:deps:diffs": "(cd ../../packages/diffs && bun run dev)",
     "prod": "bun run build && next start",
     "start": "next start",
-    "tsc": "bun run build:deps && tsc --noEmit --pretty"
+    "tsc": "bun run build:deps && tsc --noEmit --pretty",
+    "typecheck:mdx": "bun run scripts/typecheck-mdx.ts"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
@@ -60,6 +61,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@mdx-js/mdx": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@types/hast": "catalog:",
     "@types/mdast": "catalog:",
