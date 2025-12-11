@@ -129,7 +129,10 @@ export class LineSelectionManager {
     event.preventDefault();
     const { lineNumber, eventSide, lineIndex } = mouseEventData;
     if (event.shiftKey && this.selectedRange != null) {
-      const range = this.deriveRowRangeFromDOM(this.selectedRange);
+      const range = this.deriveRowRangeFromDOM(
+        this.selectedRange,
+        this.pre?.dataset.type === 'split'
+      );
       if (range == null) return;
       const useStart =
         range.start <= range.end
@@ -237,7 +240,8 @@ export class LineSelectionManager {
         'LineSelectionManager.applySelectionToDOM: Somehow there are more than 2 code elements...'
       );
     }
-    const rowRange = this.deriveRowRangeFromDOM(this.selectedRange);
+    const split = this.pre.dataset.type === 'split';
+    const rowRange = this.deriveRowRangeFromDOM(this.selectedRange, split);
     if (rowRange == null) {
       console.error({ rowRange, selectedRange: this.selectedRange });
       throw new Error(
@@ -250,7 +254,7 @@ export class LineSelectionManager {
     for (const code of codeElements) {
       for (const element of code.children) {
         if (!(element instanceof HTMLElement)) continue;
-        const lineIndex = this.getLineIndex(element);
+        const lineIndex = this.getLineIndex(element, split);
         if ((lineIndex ?? 0) > last) break;
         if (lineIndex == null || lineIndex < first) continue;
         let attributeValue = isSingle
@@ -291,24 +295,31 @@ export class LineSelectionManager {
   };
 
   private deriveRowRangeFromDOM(
-    range: SelectedLineRange
+    range: SelectedLineRange,
+    split: boolean
   ): { start: number; end: number } | undefined {
     if (range == null) return undefined;
-    const start = this.findRowIndexForLineNumber(range.start, range.side);
+    const start = this.findRowIndexForLineNumber(
+      range.start,
+      range.side,
+      split
+    );
     const end =
       range.end === range.start &&
       (range.endSide == null || range.endSide === range.side)
         ? start
         : this.findRowIndexForLineNumber(
             range.end,
-            range.endSide ?? range.side
+            range.endSide ?? range.side,
+            split
           );
     return start != null && end != null ? { start, end } : undefined;
   }
 
   private findRowIndexForLineNumber(
     lineNumber: number,
-    targetSide: SelectionSide = 'additions'
+    targetSide: SelectionSide = 'additions',
+    split: boolean
   ): number | undefined {
     if (this.pre == null) return undefined;
     const elements = Array.from(
@@ -329,9 +340,9 @@ export class LineSelectionManager {
       }
       const side = this.getLineSideFromElement(element);
       if (side === targetSide) {
-        return this.getLineIndex(element);
+        return this.getLineIndex(element, split);
       } else if (parseInt(element.dataset.altLine ?? '') === lineNumber) {
-        return this.getLineIndex(element);
+        return this.getLineIndex(element, split);
       }
     }
     console.error(
@@ -378,15 +389,18 @@ export class LineSelectionManager {
         continue;
       }
       if (element.hasAttribute('data-line')) {
-        lineNumber = parseInt(element.dataset.line ?? '', 10);
-        lineIndex = parseInt(element.dataset.lineIndex ?? '', 10);
+        lineNumber = this.getLineNumber(element);
+        lineIndex = this.getLineIndex(
+          element,
+          this.pre?.dataset.type === 'split'
+        );
         if (element.dataset.lineType === 'change-deletion') {
           eventSide = 'deletions';
         } else if (element.dataset.lineType === 'change-additions') {
           eventSide = 'additions';
         }
         // if we can't pull out an index or line number, we can't do anything.
-        if (Number.isNaN(lineIndex) || Number.isNaN(lineNumber)) {
+        if (lineIndex == null || lineNumber == null) {
           lineIndex = undefined;
           lineNumber = undefined;
           break;
@@ -426,9 +440,26 @@ export class LineSelectionManager {
     };
   }
 
-  private getLineIndex(element: HTMLElement): number | undefined {
-    const lineIndex = parseInt(element.dataset.lineIndex ?? '', 10);
-    return !Number.isNaN(lineIndex) ? lineIndex : undefined;
+  private getLineNumber(element: HTMLElement): number | undefined {
+    const lineNumber = parseInt(element.dataset.line ?? '', 10);
+    return !Number.isNaN(lineNumber) ? lineNumber : undefined;
+  }
+
+  private getLineIndex(
+    element: HTMLElement,
+    split: boolean
+  ): number | undefined {
+    const lineIndexes = (element.dataset.lineIndex ?? '')
+      .split(',')
+      .map((value) => parseInt(value))
+      .filter((value) => !Number.isNaN(value));
+
+    if (split && lineIndexes.length === 2) {
+      return lineIndexes[1];
+    } else if (!split) {
+      return lineIndexes[0];
+    }
+    return undefined;
   }
 
   private getLineSideFromElement(element: HTMLElement): SelectionSide {

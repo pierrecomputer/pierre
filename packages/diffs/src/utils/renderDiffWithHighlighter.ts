@@ -83,13 +83,9 @@ export function renderDiffWithHighlighter(
     return { code, themeStyles, baseThemeType };
   }
   const hunks: RenderDiffFilesResult[] = [];
-  let lineIndex = 0;
+  let splitLineIndex = 0;
+  let unifiedLineIndex = 0;
   for (const hunk of diff.hunks) {
-    const result = processLines({
-      hunks: [hunk],
-      lineIndex,
-      lineDiffType: options.lineDiffType,
-    });
     const {
       oldContent,
       newContent,
@@ -97,8 +93,14 @@ export function renderDiffWithHighlighter(
       newInfo,
       oldDecorations,
       newDecorations,
-      lineIndex: newLineIndex,
-    } = result;
+      splitLineIndex: newSplitLineIndex,
+      unifiedLineIndex: newUnifiedLineIndex,
+    } = processLines({
+      hunks: [hunk],
+      splitLineIndex,
+      unifiedLineIndex,
+      lineDiffType: options.lineDiffType,
+    });
     const oldFile = {
       name: diff.prevName ?? diff.name,
       contents: oldContent,
@@ -122,7 +124,8 @@ export function renderDiffWithHighlighter(
         languageOverride: forcePlainText ? 'text' : diff.lang,
       })
     );
-    lineIndex = newLineIndex;
+    splitLineIndex = newSplitLineIndex;
+    unifiedLineIndex = newUnifiedLineIndex;
   }
 
   const code = (() => {
@@ -229,7 +232,8 @@ interface ProcessLinesProps {
   hunks: Hunk[];
   oldLines?: string[];
   newLines?: string[];
-  lineIndex?: number;
+  splitLineIndex?: number;
+  unifiedLineIndex?: number;
   newLineIndex?: number;
   oldLineIndex?: number;
   lineDiffType: LineDiffTypes;
@@ -239,7 +243,8 @@ function processLines({
   hunks,
   oldLines,
   newLines,
-  lineIndex = 0,
+  splitLineIndex = 0,
+  unifiedLineIndex = 0,
   lineDiffType,
 }: ProcessLinesProps) {
   const oldInfo: Record<number, LineInfo | undefined> = {};
@@ -263,12 +268,14 @@ function processLines({
       oldInfo[oldLineIndex] = {
         type: 'context-expanded',
         lineNumber: oldLineNumber,
-        lineIndex,
+        altLineNumber: newLineNumber,
+        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
       newInfo[newLineIndex] = {
         type: 'context-expanded',
         lineNumber: newLineNumber,
-        lineIndex,
+        altLineNumber: oldLineNumber,
+        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
       oldContent += oldLines[oldLineIndex - 1];
       newContent += newLines[newLineIndex - 1];
@@ -276,7 +283,8 @@ function processLines({
       newLineIndex++;
       oldLineNumber++;
       newLineNumber++;
-      lineIndex++;
+      splitLineIndex++;
+      unifiedLineIndex++;
     }
     oldLineNumber = hunk.deletionStart;
     newLineNumber = hunk.additionStart;
@@ -288,12 +296,14 @@ function processLines({
           oldInfo[oldLineIndex] = {
             type: 'context',
             lineNumber: oldLineNumber,
-            lineIndex,
+            altLineNumber: newLineNumber,
+            lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
           newInfo[newLineIndex] = {
             type: 'context',
             lineNumber: newLineNumber,
-            lineIndex,
+            altLineNumber: oldLineNumber,
+            lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
           oldContent += line;
           newContent += line;
@@ -301,7 +311,8 @@ function processLines({
           newLineIndex++;
           newLineNumber++;
           oldLineNumber++;
-          lineIndex++;
+          splitLineIndex++;
+          unifiedLineIndex++;
         }
       } else {
         const len = Math.max(
@@ -309,6 +320,11 @@ function processLines({
           hunkContent.deletions.length
         );
         let i = 0;
+        // NOTE(amadeus): Since we iterate through deletions and additions
+        // simultaneously, we have to create a secondary iterator for
+        // unifiedLineIndex, and then when we're done, add the combined lengths
+        // of additions/deletions to the main variable
+        let _unifiedLineIndex = unifiedLineIndex;
         while (i < len) {
           const oldLine = hunkContent.deletions[i];
           const newLine = hunkContent.additions[i];
@@ -325,7 +341,7 @@ function processLines({
             oldInfo[oldLineIndex] = {
               type: 'change-deletion',
               lineNumber: oldLineNumber,
-              lineIndex,
+              lineIndex: `${_unifiedLineIndex},${splitLineIndex}`,
             };
             oldContent += oldLine;
             oldLineIndex++;
@@ -335,15 +351,18 @@ function processLines({
             newInfo[newLineIndex] = {
               type: 'change-addition',
               lineNumber: newLineNumber,
-              lineIndex,
+              lineIndex: `${_unifiedLineIndex + hunkContent.deletions.length},${splitLineIndex}`,
             };
             newContent += newLine;
             newLineIndex++;
             newLineNumber++;
           }
-          lineIndex++;
+          splitLineIndex++;
+          _unifiedLineIndex++;
           i++;
         }
+        unifiedLineIndex +=
+          hunkContent.additions.length + hunkContent.deletions.length;
       }
     }
 
@@ -365,7 +384,8 @@ function processLines({
         oldInfo[oldLineIndex] = {
           type: 'context-expanded',
           lineNumber: oldLineNumber,
-          lineIndex,
+          altLineNumber: newLineNumber,
+          lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
         };
         oldContent += oldLine;
         oldLineIndex++;
@@ -375,13 +395,15 @@ function processLines({
         newInfo[newLineIndex] = {
           type: 'context-expanded',
           lineNumber: newLineNumber,
-          lineIndex,
+          altLineNumber: oldLineNumber,
+          lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
         };
         newContent += newLine;
         newLineIndex++;
         newLineNumber++;
       }
-      lineIndex++;
+      splitLineIndex++;
+      unifiedLineIndex++;
     }
   }
   return {
@@ -391,7 +413,8 @@ function processLines({
     newInfo,
     oldDecorations,
     newDecorations,
-    lineIndex,
+    splitLineIndex,
+    unifiedLineIndex,
   };
 }
 
