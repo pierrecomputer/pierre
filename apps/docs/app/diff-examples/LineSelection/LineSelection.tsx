@@ -132,6 +132,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
                     ? 'Switch to unified'
                     : 'Switch to split'
                 }
+                aria-label="Toggle diff view style"
               >
                 {diffStyle === 'split' ? (
                   <IconDiffSplit size={16} />
@@ -146,6 +147,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
                 title={
                   disableBackground ? 'Enable background' : 'Disable background'
                 }
+                aria-label="Toggle background colors"
               >
                 {disableBackground ? (
                   <IconCodeStyleBars size={16} />
@@ -164,6 +166,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
                 title={
                   themeType === 'dark' ? 'Switch to light' : 'Switch to dark'
                 }
+                aria-label="Toggle color theme"
               >
                 {themeType === 'dark' ? (
                   <IconMoon size={16} />
