@@ -95,57 +95,68 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             onClick={() => {
               setSelectedRange(null);
             }}
-            className="gap-1"
+            className="aspect-square px-0"
             disabled={selectedRange == null}
           >
             <IconXSquircle className="text-muted-foreground" />
           </Button>
-          <Button
-            variant="outline"
-            onClick={() =>
-              setDiffStyle((current) =>
-                current === 'split' ? 'unified' : 'split'
-              )
-            }
-            title={
-              diffStyle === 'split' ? 'Switch to unified' : 'Switch to split'
-            }
-            aria-label="Toggle diff view style"
-          >
-            {diffStyle === 'split' ? (
-              <IconDiffSplit size={16} />
-            ) : (
-              <IconDiffUnified size={16} />
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setDisableBackground((current) => !current)}
-            title={
-              disableBackground ? 'Enable background' : 'Disable background'
-            }
-            aria-label="Toggle background colors"
-          >
-            {disableBackground ? (
-              <IconCodeStyleBars size={16} />
-            ) : (
-              <IconCodeStyleBg size={16} />
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() =>
-              setThemeType((current) => (current === 'dark' ? 'light' : 'dark'))
-            }
-            title={themeType === 'dark' ? 'Switch to light' : 'Switch to dark'}
-            aria-label="Toggle color theme"
-          >
-            {themeType === 'dark' ? (
-              <IconMoon size={16} />
-            ) : (
-              <IconSun size={16} />
-            )}
-          </Button>
+
+          <div className="bg-border my-1 h-[1px] w-full md:my-auto md:block md:h-6 md:w-[1px]" />
+          <div className="flex min-w-0 flex-wrap gap-1">
+            <Button
+              variant="outline"
+              onClick={() =>
+                setDiffStyle((current) =>
+                  current === 'split' ? 'unified' : 'split'
+                )
+              }
+              title={
+                diffStyle === 'split' ? 'Switch to unified' : 'Switch to split'
+              }
+              aria-label="Toggle diff view style"
+              className="aspect-square px-0"
+            >
+              {diffStyle === 'split' ? (
+                <IconDiffSplit size={16} />
+              ) : (
+                <IconDiffUnified size={16} />
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setDisableBackground((current) => !current)}
+              title={
+                disableBackground ? 'Enable background' : 'Disable background'
+              }
+              aria-label="Toggle background colors"
+              className="aspect-square px-0"
+            >
+              {disableBackground ? (
+                <IconCodeStyleBars size={16} />
+              ) : (
+                <IconCodeStyleBg size={16} />
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setThemeType((current) =>
+                  current === 'dark' ? 'light' : 'dark'
+                )
+              }
+              title={
+                themeType === 'dark' ? 'Switch to light' : 'Switch to dark'
+              }
+              aria-label="Toggle color theme"
+              className="aspect-square px-0"
+            >
+              {themeType === 'dark' ? (
+                <IconMoon size={16} />
+              ) : (
+                <IconSun size={16} />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
