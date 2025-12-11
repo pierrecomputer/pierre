@@ -80,7 +80,7 @@ export function SharedPropTabs({
       <ButtonGroup
         value={sharedProps}
         onValueChange={(value) => setSharedProps(value as SharedPropsTypes)}
-        className="no-scrollbar max-w-full overflow-x-auto"
+        className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
         <ButtonGroupItem value="diff-options">Diff Options</ButtonGroupItem>
         <ButtonGroupItem value="diff-render-props">

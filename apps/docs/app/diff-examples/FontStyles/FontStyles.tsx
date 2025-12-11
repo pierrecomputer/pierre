@@ -59,101 +59,91 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
         />
         <div className="flex flex-col flex-wrap gap-3 sm:flex-row md:items-center">
           <div className="flex flex-wrap gap-3">
-            <div className="bg-secondary flex-1 rounded-lg p-[2px]">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full min-w-[140px] justify-start"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full min-w-[140px] flex-1 justify-start"
+                >
+                  <IconType className="h-4 w-4" />
+                  {selectedFont}
+                  <IconChevronSm className="text-muted-foreground ml-auto" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-40">
+                {Object.keys(fontMap).map((font) => (
+                  <DropdownMenuItem
+                    key={font}
+                    onClick={() => {
+                      setSelectedFont(font);
+                      if (font === 'Berkeley Mono') {
+                        setFontFeatureSettings('"aalt" 1');
+                      } else {
+                        setFontFeatureSettings('');
+                      }
+                    }}
                   >
-                    <IconType className="h-4 w-4" />
-                    {selectedFont}
-                    <IconChevronSm className="text-muted-foreground ml-auto" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-40">
-                  {Object.keys(fontMap).map((font) => (
-                    <DropdownMenuItem
-                      key={font}
-                      onClick={() => {
-                        setSelectedFont(font);
-                        if (font === 'Berkeley Mono') {
-                          setFontFeatureSettings('"aalt" 1');
-                        } else {
-                          setFontFeatureSettings('');
-                        }
-                      }}
-                    >
-                      {font}
-                      {selectedFont === font && (
-                        <IconCheck className="ml-auto" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                    {font}
+                    {selectedFont === font && <IconCheck className="ml-auto" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            <div className="bg-secondary rounded-lg p-[2px]">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="min-w-[80px]">
-                    {selectedFontSize}
-                    <IconChevronSm className="text-muted-foreground ml-auto" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {fontSizes.map((size) => (
-                    <DropdownMenuItem
-                      key={size}
-                      onClick={() => setSelectedFontSize(size)}
-                    >
-                      {size}
-                      {selectedFontSize === size && (
-                        <IconCheck className="ml-auto" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="min-w-[80px]">
+                  {selectedFontSize}
+                  <IconChevronSm className="text-muted-foreground ml-auto" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {fontSizes.map((size) => (
+                  <DropdownMenuItem
+                    key={size}
+                    onClick={() => setSelectedFontSize(size)}
+                  >
+                    {size}
+                    {selectedFontSize === size && (
+                      <IconCheck className="ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            <div className="bg-secondary rounded-lg p-[2px]">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="min-w-[80px]">
-                    {selectedLineHeight}
-                    <IconChevronSm className="text-muted-foreground ml-auto" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {lineHeights.map((height) => (
-                    <DropdownMenuItem
-                      key={height}
-                      onClick={() => setSelectedLineHeight(height)}
-                    >
-                      {height}
-                      {selectedLineHeight === height && (
-                        <IconCheck className="ml-auto" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="min-w-[80px]">
+                  {selectedLineHeight}
+                  <IconChevronSm className="text-muted-foreground ml-auto" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {lineHeights.map((height) => (
+                  <DropdownMenuItem
+                    key={height}
+                    onClick={() => setSelectedLineHeight(height)}
+                  >
+                    {height}
+                    {selectedLineHeight === height && (
+                      <IconCheck className="ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
-          <div className="bg-secondary rounded-lg p-[2px]">
-            <InputWithIcon
-              value={fontFeatureSettings}
-              onChange={({ currentTarget }) =>
-                setFontFeatureSettings(currentTarget.value)
-              }
-              icon={<IconFunction className="h-4 w-4" />}
-              placeholder="Font feature settings"
-              className="md:max-w-xs"
-            />
-          </div>
+          <InputWithIcon
+            value={fontFeatureSettings}
+            onChange={({ currentTarget }) =>
+              setFontFeatureSettings(currentTarget.value)
+            }
+            icon={<IconFunction className="h-4 w-4" />}
+            placeholder="Font feature settings"
+            className="text-sm md:max-w-sm"
+          />
         </div>
       </div>
       <MultiFileDiff

@@ -48,7 +48,7 @@ export function Hero() {
       <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
         A diff rendering library
       </h1>
-      <p className="text-md text-muted-foreground mb-2 md:text-lg lg:text-xl">
+      <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
         <code>@pierre/diffs</code> is an open source diff and code rendering
         library. It's built on Shiki for syntax highlighting and theming, is
         super customizable, and comes packed with features. Made with love by{' '}
@@ -67,7 +67,7 @@ export function Hero() {
           <TooltipTrigger asChild>
             <button
               onClick={() => void copyToClipboard()}
-              className="inline-flex items-center gap-4 rounded-lg bg-gray-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-gray-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
+              className="inline-flex items-center gap-4 rounded-lg bg-neutral-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-neutral-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
             >
               <span className="text-[95%]">bun i @pierre/diffs</span>
               {copied ? (

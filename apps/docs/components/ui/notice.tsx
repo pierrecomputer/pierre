@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 import { type VariantProps, cva } from 'class-variance-authority';
 import * as React from 'react';
 
-const noticeVariants = cva('text-md flex gap-2 rounded-md border p-4', {
+const noticeVariants = cva('text-md flex gap-2 rounded-lg border p-4', {
   variants: {
     variant: {
       default: 'bg-secondary/50 text-muted-foreground',

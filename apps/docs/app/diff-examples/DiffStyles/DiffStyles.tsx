@@ -102,45 +102,43 @@ export function DiffStyles({
             ))}
           </ButtonGroup>
 
-          <div className="bg-secondary rounded-lg p-[2px]">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start md:w-auto"
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start md:w-auto"
+              >
+                <IconCodeStyleInline />
+                {}
+                {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
+                  ?.label ?? lineDiffStyle}
+                <IconChevronSm className="text-muted-foreground ml-auto" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-82">
+              {diffStyleOptions.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => setLineDiffStyle(option.value)}
+                  className="flex items-start gap-2 py-2"
                 >
-                  <IconCodeStyleInline />
-                  {}
-                  {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
-                    ?.label ?? lineDiffStyle}
-                  <IconChevronSm className="text-muted-foreground ml-auto" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-82">
-                {diffStyleOptions.map((option) => (
-                  <DropdownMenuItem
-                    key={option.value}
-                    onClick={() => setLineDiffStyle(option.value)}
-                    className="flex items-start gap-2 py-2"
-                  >
-                    {lineDiffStyle === option.value ? (
-                      <IconCheckLg className="mt-[1px]" />
-                    ) : (
-                      <div className="h-4 w-4" />
-                    )}
-                    <div className="flex w-full flex-col items-start">
-                      <span className="font-medium">{option.label}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {option.description}
-                      </span>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                  {lineDiffStyle === option.value ? (
+                    <IconCheckLg className="mt-[1px]" />
+                  ) : (
+                    <div className="h-4 w-4" />
+                  )}
+                  <div className="flex w-full flex-col items-start">
+                    <span className="font-medium">{option.label}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {option.description}
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          <div className="bg-secondary gridstack rounded-lg p-[2px]">
+          <div className="gridstack">
             <Button
               variant="outline"
               className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
@@ -161,7 +159,7 @@ export function DiffStyles({
             />
           </div>
 
-          <div className="bg-secondary gridstack rounded-lg p-[2px]">
+          <div className="gridstack">
             <Button
               variant="outline"
               className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
@@ -183,7 +181,7 @@ export function DiffStyles({
               className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>
-          <div className="bg-secondary gridstack rounded-lg p-[2px]">
+          <div className="gridstack">
             <Button
               variant="outline"
               className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
