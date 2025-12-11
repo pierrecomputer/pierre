@@ -103,7 +103,7 @@ const ACCEPT_REJECT_OLD_FILE: FileContents = {
     <p>Thanks for visiting</p>
   </header>
   <footer>
-    <p>&copy; 2024 Acme Inc.</p>
+    <p>&copy; Acme Inc.</p>
   </footer>
 </body>
 </html>
@@ -125,7 +125,7 @@ const ACCEPT_REJECT_NEW_FILE: FileContents = {
     <a href="/about" class="btn">Learn More</a>
   </header>
   <footer>
-    <p>&copy; 2024 Acme Inc.</p>
+    <p>&copy; Acme Inc.</p>
   </footer>
 </body>
 </html>
