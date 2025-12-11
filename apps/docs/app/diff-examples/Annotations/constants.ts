@@ -17,42 +17,54 @@ export interface AnnotationMetadata {
 export const ANNOTATION_EXAMPLE: PreloadMultiFileDiffOptions<AnnotationMetadata> =
   {
     oldFile: {
-      name: 'file.tsx',
-      contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
+      name: 'auth.py',
+      contents: `import jwt
+import time
+from typing import Optional
 
-export default function Home() {
-  return (
-    <div>
-      <h1>
-        Code Storage is a fully managed version control system built to meet the highest standards of speed, scale, and reliability.
-      </h1>
-      <Header />
-      <IconSprite />
-    </div>
-  );
-}
+SECRET_KEY = "your-secret-key"
+
+def create_token(user_id: str, expires_in: int = 3600) -> str:
+    payload = {
+        "sub": user_id,
+        "exp": time.time() + expires_in
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+def verify_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        if payload["exp"] < time.time():
+            return None
+        return payload["sub"]
+    except jwt.InvalidTokenError:
+        return None
 `,
     },
     newFile: {
-      name: 'file.tsx',
-      contents: `import IconSprite from './IconSprite';
-import HeaderSimple from '../components/HeaderSimple';
-import Hero from '../components/Hero';
+      name: 'auth.py',
+      contents: `import jwt
+import time
+from typing import Optional
 
-export default function Home() {
-  return (
-    <div>
-      <h1>
-        Code Storage is a fully managed version control system built to meet the highest standards of speed, scale, and reliability.
-      </h1>
-      <HeaderSimple />
-      <IconSprite />
-      <h1>Hello!</h1>
-    </div>
-  );
-}
+SECRET_KEY = "your-secret-key"
+
+def create_token(user_id: str, role: str = "user", expires_in: int = 3600) -> str:
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": time.time() + expires_in
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+def verify_token(token: str) -> Optional[dict]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        if payload["exp"] < time.time():
+            return None
+        return {"user_id": payload["sub"], "role": payload["role"]}
+    except jwt.InvalidTokenError:
+        return None
 `,
     },
     options: {
@@ -63,9 +75,9 @@ export default function Home() {
     annotations: [
       {
         side: 'additions',
-        lineNumber: 12,
+        lineNumber: 20,
         metadata: {
-          key: 'additions-8',
+          key: 'additions-20',
           isThread: true,
         },
       },
@@ -77,51 +89,52 @@ export interface AcceptRejectMetadata {
   accepted?: boolean;
 }
 
-export const ACCEPT_REJECT_OLD_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
-
-export default function Home() {
-  return (
-    <div>
-      {/* todo: add header and icon sprite */}
-      <ul>
-        <li>Item 1</li>
-        <li>Item 2</li>
-        <li>Item 3</li>
-      </ul>
-    </div>
-  );
-}
+const ACCEPT_REJECT_OLD_FILE: FileContents = {
+  name: 'index.html',
+  contents: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome</title>
+</head>
+<body>
+  <header>
+    <h1>Welcome</h1>
+    <p>Thanks for visiting</p>
+  </header>
+  <footer>
+    <p>&copy; Acme Inc.</p>
+  </footer>
+</body>
+</html>
 `,
 };
 
-export const ACCEPT_REJECT_NEW_FILE: FileContents = {
-  name: 'file.tsx',
-  contents: `import * as 'react';
-import IconSprite from './IconSprite';
-import Header from './Header';
-
-export default function Home() {
-  return (
-    <div>
-      <Header />
-      <IconSprite />
-      <ul>
-        <li>Item 1</li>
-        <li>Item 2</li>
-        <li>Item 3</li>
-      </ul>
-    </div>
-  );
-}
+const ACCEPT_REJECT_NEW_FILE: FileContents = {
+  name: 'index.html',
+  contents: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome</title>
+</head>
+<body>
+  <header>
+    <h1>Welcome to Our Site</h1>
+    <p>We're glad you're here</p>
+    <a href="/about" class="btn">Learn More</a>
+  </header>
+  <footer>
+    <p>&copy; Acme Inc.</p>
+  </footer>
+</body>
+</html>
 `,
 };
 
-export const ACCEPT_REJECT_ANNOTATIONS: DiffLineAnnotation<AcceptRejectMetadata>[] =
-  [{ side: 'additions', lineNumber: 9, metadata: { key: 'del-1' } }];
+const ACCEPT_REJECT_ANNOTATIONS: DiffLineAnnotation<AcceptRejectMetadata>[] = [
+  { side: 'additions', lineNumber: 11, metadata: { key: 'del-11' } },
+];
 
 export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<AcceptRejectMetadata> =
   {

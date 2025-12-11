@@ -3,7 +3,7 @@ import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 export const SPLIT_UNIFIED: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {
-    name: 'example_old.tsx',
+    name: 'utils.ts',
     contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
 
 import type {
@@ -74,7 +74,7 @@ export function createHunkSeparator() {
 `,
   },
   newFile: {
-    name: 'example_new.tsx',
+    name: 'code_utils.ts',
     contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
 
 import type {
