@@ -218,7 +218,7 @@ export interface LineInfo {
   type: LineTypes;
   lineNumber: number;
   altLineNumber?: number;
-  lineIndex: number;
+  lineIndex: number | `${number},${number}`;
 }
 
 export interface SharedRenderState {

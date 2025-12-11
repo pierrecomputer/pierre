@@ -47,8 +47,7 @@ export function processLine(
       'data-line': lineInfo.lineNumber,
       'data-alt-line': lineInfo.altLineNumber,
       'data-line-type': lineInfo.type,
-      'data-line-index':
-        lineInfo.lineIndex >= 0 ? lineInfo.lineIndex : undefined,
+      'data-line-index': lineInfo.lineIndex,
     },
   });
 }
