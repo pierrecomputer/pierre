@@ -210,10 +210,7 @@ function CommentForm({
             <div className="flex gap-2">
               <div className="relative -mt-0.5 flex-shrink-0">
                 <Avatar className="h-6 w-6">
-                  <AvatarImage
-                    src="https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg"
-                    alt="You"
-                  />
+                  <AvatarImage src="/avatars/avatar_fat.jpg" alt="You" />
                   <AvatarFallback>Y</AvatarFallback>
                 </Avatar>
               </div>
@@ -263,8 +260,7 @@ function Thread() {
           timestamp: '3h',
           content:
             'Should we validate the role parameter? We could restrict it to a set of allowed values.',
-          avatarUrl:
-            'https://db.heypierre.app/storage/v1/object/public/avatars/i8UHRtQf_400x400.jpg',
+          avatarUrl: '/avatars/avatar_fat.jpg',
           isYou: true,
         }}
         replies={[
@@ -272,16 +268,14 @@ function Thread() {
             author: 'Amadeus',
             timestamp: '2h',
             content: 'Good idea, maybe use a Literal type or an enum.',
-            avatarUrl:
-              'https://db.heypierre.app/storage/v1/object/public/avatars/Evzotboe_400x400.jpg',
+            avatarUrl: '/avatars/avatar_amadeus.jpg',
           },
           {
             author: 'Mark',
             timestamp: '2h',
             content:
               'Agreed, we should also update verify_token to return the role.',
-            avatarUrl:
-              'https://db.heypierre.app/storage/v1/object/public/avatars/BET9cPgr_400x400.jpg',
+            avatarUrl: '/avatars/avatar_mdo.jpg',
           },
         ]}
         onAddReply={() => console.log('Add reply clicked')}
