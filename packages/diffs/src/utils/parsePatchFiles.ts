@@ -143,6 +143,13 @@ function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
       } else {
         let currentContent: ContextContent | ChangeContent | undefined;
         let lastLineType: 'context' | 'addition' | 'deletion' | undefined;
+        // Strip trailing bare newlines (format-patch separators between commits)
+        while (
+          lines.length > 0 &&
+          (lines[lines.length - 1] === '\n' || lines[lines.length - 1] === '')
+        ) {
+          lines.pop();
+        }
         for (const rawLine of lines) {
           const parsedLine = parseLineType(rawLine);
           if (parsedLine == null) {
@@ -201,10 +208,10 @@ function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
         splitLineStart: 0,
         unifiedLineCount: lines.length,
         unifiedLineStart: 0,
-        additionCount: parseInt(match[4] ?? '0'),
+        additionCount: parseInt(match[4] ?? '1'),
         additionStart: parseInt(match[3]),
         additionLines,
-        deletionCount: parseInt(match[2] ?? '0'),
+        deletionCount: parseInt(match[2] ?? '1'),
         deletionStart: parseInt(match[1]),
         deletionLines,
         hunkContent,
