@@ -25,7 +25,7 @@ export async function resolveLanguage(
     const loader = bundledLanguages[lang];
     if (loader == null) {
       throw new Error(
-        'resolveLanguage: "${lang}" not found in bundled languages'
+        `resolveLanguage: "${lang}" not found in bundled languages`
       );
     }
 
