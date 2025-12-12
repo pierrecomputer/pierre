@@ -660,11 +660,11 @@ index a681f5d50..cdf55a48a 100644
  ├── app.tsx                    # Root component
  ├── entry-client.tsx           # Client hydration entry
  └── entry-server.tsx           # SSR entry
-@@ -132,10 +132,12 @@ bun add @pierre/precision-diffs
+@@ -132,10 +132,12 @@ bun add @pierre/diffs
  Create `src/custom-elements.d.ts`:
  
  ```typescript
-+import type { DIFFS_TAG_NAME } from '@pierre/precision-diffs';
++import type { DIFFS_TAG_NAME } from '@pierre/diffs';
 +
  declare module 'solid-js' {
    namespace JSX {
@@ -688,9 +688,9 @@ index 5ee2fbb72..d0db2eaab 100644
 --- a/apps/solid-diff-demo/src/components/FileDiffSSR.tsx
 +++ b/apps/solid-diff-demo/src/components/FileDiffSSR.tsx
 @@ -1,7 +1,7 @@
--import { FileDiff } from '@pierre/precision-diffs';
-+import { DIFFS_TAG_NAME, FileDiff } from '@pierre/precision-diffs';
- import type { DiffLineAnnotation, FileContents } from '@pierre/precision-diffs';
+-import { FileDiff } from '@pierre/diffs';
++import { DIFFS_TAG_NAME, FileDiff } from '@pierre/diffs';
+ import type { DiffLineAnnotation, FileContents } from '@pierre/diffs';
  import { For, type JSX, createSignal, onCleanup, onMount } from 'solid-js';
 -import { isServer, render } from 'solid-js/web';
 +import { Dynamic, isServer, render } from 'solid-js/web';
@@ -721,7 +721,7 @@ index 9d4c30dd3..97cd27241 100644
 --- a/apps/solid-diff-demo/src/custom-elements.d.ts
 +++ b/apps/solid-diff-demo/src/custom-elements.d.ts
 @@ -1,3 +1,5 @@
-+import type { DIFFS_TAG_NAME } from '@pierre/precision-diffs';
++import type { DIFFS_TAG_NAME } from '@pierre/diffs';
 +
  /**
   * TypeScript declaration for the <file-diff> custom element.
@@ -1372,11 +1372,11 @@ index 3d9425fa1..ea845cf30 100644
 --- a/apps/docs/app/ssr/SsrPage.tsx
 +++ b/apps/docs/app/ssr/SSR_Page.tsx
 @@ -6,7 +6,6 @@ import { IconBell } from '@/components/icons';
- import type { DiffLineAnnotation } from '@pierre/precision-diffs';
- import { MultiFileDiff } from '@pierre/precision-diffs/react';
- import '@pierre/precision-diffs/ssr';
--import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
- import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+ import type { DiffLineAnnotation } from '@pierre/diffs';
+ import { MultiFileDiff } from '@pierre/diffs/react';
+ import '@pierre/diffs/ssr';
+-import { FileDiffSsr } from '@pierre/diffs/ssr';
+ import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
  import { useState } from 'react';
  
 @@ -34,11 +33,11 @@ function ErrorAnnotation({ message }: { message: string }) {
@@ -1438,8 +1438,8 @@ index e6b9aa562..65a8a01e7 100644
 --- a/apps/docs/app/ssr/page.tsx
 +++ b/apps/docs/app/ssr/page.tsx
 @@ -4,7 +4,7 @@ import {
- } from '@pierre/precision-diffs';
- import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+ } from '@pierre/diffs';
+ import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
  
 -import { SsrPage } from './SsrPage';
 +import { SSRPage } from './SSR_Page';
@@ -2853,7 +2853,7 @@ index 17622f93c..bda6d32aa 100644
 +  type DiffsThemeNames,
    isHighlighterNull,
    preloadHighlighter,
- } from '@pierre/precision-diffs';
+ } from '@pierre/diffs';
 @@ -27,7 +27,7 @@ export function App() {
    const handlePreload = useCallback(() => {
      if (isHighlighterNull()) {
@@ -7405,8 +7405,8 @@ index 65a8a01e7..b89a0545c 100644
 --- a/apps/docs/app/ssr/page.tsx
 +++ b/apps/docs/app/ssr/page.tsx
 @@ -4,7 +4,7 @@ import {
- } from '@pierre/precision-diffs';
- import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+ } from '@pierre/diffs';
+ import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
  
 -import { SSRPage } from './SSR_Page';
 +import { SSRPage } from './SSRPage';

@@ -3549,7 +3549,7 @@ Subject: [PATCH 1/9] Bunch of much needed file organization
               {
                 "additions": [
                   
-"import type { DIFFS_TAG_NAME } from '@pierre/precision-diffs';
+"import type { DIFFS_TAG_NAME } from '@pierre/diffs';
 "
 ,
                   
@@ -3616,9 +3616,9 @@ Subject: [PATCH 1/9] Bunch of much needed file organization
                 "type": "context",
               },
             ],
-            "hunkContext": "bun add @pierre/precision-diffs",
+            "hunkContext": "bun add @pierre/diffs",
             "hunkSpecs": 
-"@@ -132,10 +132,12 @@ bun add @pierre/precision-diffs
+"@@ -132,10 +132,12 @@ bun add @pierre/diffs
 "
 ,
             "splitLineCount": 12,
@@ -3722,13 +3722,13 @@ Subject: [PATCH 1/9] Bunch of much needed file organization
               {
                 "additions": [
                   
-"import { DIFFS_TAG_NAME, FileDiff } from '@pierre/precision-diffs';
+"import { DIFFS_TAG_NAME, FileDiff } from '@pierre/diffs';
 "
 ,
                 ],
                 "deletions": [
                   
-"import { FileDiff } from '@pierre/precision-diffs';
+"import { FileDiff } from '@pierre/diffs';
 "
 ,
                 ],
@@ -3739,7 +3739,7 @@ Subject: [PATCH 1/9] Bunch of much needed file organization
               {
                 "lines": [
                   
-"import type { DiffLineAnnotation, FileContents } from '@pierre/precision-diffs';
+"import type { DiffLineAnnotation, FileContents } from '@pierre/diffs';
 "
 ,
                   
@@ -3969,7 +3969,7 @@ Subject: [PATCH 1/9] Bunch of much needed file organization
               {
                 "additions": [
                   
-"import type { DIFFS_TAG_NAME } from '@pierre/precision-diffs';
+"import type { DIFFS_TAG_NAME } from '@pierre/diffs';
 "
 ,
                   
@@ -8203,15 +8203,15 @@ Subject: [PATCH 3/9] Add sprite to export, bcuz y not
               {
                 "lines": [
                   
-"import type { DiffLineAnnotation } from '@pierre/precision-diffs';
+"import type { DiffLineAnnotation } from '@pierre/diffs';
 "
 ,
                   
-"import { MultiFileDiff } from '@pierre/precision-diffs/react';
+"import { MultiFileDiff } from '@pierre/diffs/react';
 "
 ,
                   
-"import '@pierre/precision-diffs/ssr';
+"import '@pierre/diffs/ssr';
 "
 ,
                 ],
@@ -8222,7 +8222,7 @@ Subject: [PATCH 3/9] Add sprite to export, bcuz y not
                 "additions": [],
                 "deletions": [
                   
-"import { FileDiffSsr } from '@pierre/precision-diffs/ssr';
+"import { FileDiffSsr } from '@pierre/diffs/ssr';
 "
 ,
                 ],
@@ -8233,7 +8233,7 @@ Subject: [PATCH 3/9] Add sprite to export, bcuz y not
               {
                 "lines": [
                   
-"import type { PreloadMultiFileDiffResult } from '@pierre/precision-diffs/ssr';
+"import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 "
 ,
                   
@@ -8624,11 +8624,11 @@ Subject: [PATCH 3/9] Add sprite to export, bcuz y not
               {
                 "lines": [
                   
-"} from '@pierre/precision-diffs';
+"} from '@pierre/diffs';
 "
 ,
                   
-"import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+"import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 "
 ,
                   
@@ -17914,7 +17914,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
                   
-"} from '@pierre/precision-diffs';
+"} from '@pierre/diffs';
 "
 ,
                 ],
@@ -53850,11 +53850,11 @@ Subject: [PATCH 7/9] Update test snapshots
               {
                 "lines": [
                   
-"} from '@pierre/precision-diffs';
+"} from '@pierre/diffs';
 "
 ,
                   
-"import { preloadMultiFileDiff } from '@pierre/precision-diffs/ssr';
+"import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 "
 ,
                   
