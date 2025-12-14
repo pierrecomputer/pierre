@@ -1,0 +1,53 @@
+name: Report a bug
+description: Tell us about a bug or issue you may have identified in Diffs.
+title: 'Bug: '
+labels: [bug]
+body:
+  - type: checkboxes
+    attributes:
+      label: Prerequisites
+      description: Please confirm the following before submitting.
+      options:
+        - label: I have
+            [searched](https://github.com/pierre-computer/diffs/issues?q=is%3Aissue)
+            for duplicate or closed issues
+          required: true
+        - label: I have read the [contributing
+            guidelines](https://github.com/pierre-computer/diffs/blob/main/CONTRIBUTING.md)
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Describe the issue
+      description:
+        Provide a summary of the issue and what you expected to happen,
+        including specific steps to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: reduced-test-case
+    attributes:
+      label: Reproduction
+      description:
+        Please provide a minimal reproduction — a CodeSandbox, StackBlitz, or
+        GitHub repo that demonstrates the issue.
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: What browser(s) are you seeing the problem on?
+      multiple: true
+      options:
+        - Chrome
+        - Safari
+        - Firefox
+        - Microsoft Edge
+        - Other
+  - type: input
+    id: version
+    attributes:
+      label: What version of @pierre/diffs are you using?
+      placeholder: 'e.g., 1.0.0'
+    validations:
+      required: true

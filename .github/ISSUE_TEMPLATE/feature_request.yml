@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest new or updated features to include in Diffs.
+title: 'Feature: '
+labels: [enhancement]
+body:
+  - type: checkboxes
+    attributes:
+      label: Prerequisites
+      description: Please confirm the following before submitting.
+      options:
+        - label: I have
+            [searched](https://github.com/pierre-computer/diffs/issues?q=is%3Aissue)
+            for duplicate or closed feature requests
+          required: true
+        - label: I have read the [contributing
+            guidelines](https://github.com/pierre-computer/diffs/blob/main/CONTRIBUTING.md)
+          required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description:
+        Describe the feature you'd like to see, including relevant use cases,
+        screenshots, or examples.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation and context
+      description:
+        Tell us why this change is needed or helpful, and what problems it may
+        help solve.
+    validations:
+      required: true
