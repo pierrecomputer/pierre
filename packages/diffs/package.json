@@ -41,7 +41,7 @@
   },
   "files": [
     "dist",
-    "LICENSE.txt",
+    "LICENSE.md",
     "README.md"
   ],
   "devDependencies": {
