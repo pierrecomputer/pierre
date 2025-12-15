@@ -58,7 +58,7 @@
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@shikijs/core": "catalog:",
+    "@shikijs/core": "^3.0.0",
     "@shikijs/engine-javascript": "catalog:",
     "@shikijs/transformers": "catalog:",
     "diff": "catalog:",
