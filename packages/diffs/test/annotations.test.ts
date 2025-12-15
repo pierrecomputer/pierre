@@ -159,8 +159,8 @@ describe('Annotation Rendering', () => {
         'annotation-additions-8': 'change-addition',
         'annotation-deletions-44': 'change-deletion',
         'annotation-additions-15': 'context-expanded',
-        // Final expanded content region, since that code is rendered a bit
-        // diff
+        // Final expanded content region, since that code is rendered through a
+        // slightly different code page
         'annotation-additions-600': 'context-expanded',
       };
       const annotations: DiffLineAnnotation<LineTypes>[] = [
