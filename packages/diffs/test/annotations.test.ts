@@ -188,7 +188,7 @@ describe('Annotation Rendering', () => {
         )
           continue;
         const slots = findHastSlotElements(unifiedAST[i] as HASTElement);
-        const slotName = slots[0].properties?.name?.toString();
+        const slotName = slots[0]?.properties?.name?.toString();
         if (slots.length === 0 || slotName == null) {
           throw new Error('there should always be slots in unifiedAST');
         }
