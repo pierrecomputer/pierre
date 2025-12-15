@@ -5,6 +5,7 @@ import { DiffHunksRenderer, parseDiffFromFile } from '../src';
 import type { DiffLineAnnotation, LineTypes } from '../src/types';
 import { fileNew, fileOld } from './mocks';
 import {
+  assertDefined,
   countHastAnnotationElements,
   findHastSlotElements,
   getHastAnnotationIndex,
@@ -34,24 +35,21 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const result = await renderer.asyncRender(diff);
-
-      if (result.unifiedAST == null) {
-        throw new Error('unifiedAST does not exist on result');
-      }
+      const { unifiedAST } = await renderer.asyncRender(diff);
+      assertDefined(unifiedAST, 'unifiedAST should be defined');
 
       let foundAnnotationCount = 0;
       let lastElement: ElementContent | undefined;
       // Iterate through flat array and verify each annotation follows its line
-      for (const node of result.unifiedAST) {
+      for (const node of unifiedAST) {
         if (!isHastAnnotationElement(node) || !isHastElement(node)) {
           lastElement = node;
           continue;
         }
 
         const annotationIndex = getHastAnnotationIndex(node);
-        expect(annotationIndex).toBeDefined();
-        const [, lineIdx] = annotationIndex!.split(',');
+        assertDefined(annotationIndex, 'annotationIndex should be defined');
+        const [, lineIdx] = annotationIndex.split(',');
         const slots = findHastSlotElements(node);
         foundAnnotationCount += slots.length;
 
@@ -61,14 +59,14 @@ describe('Annotation Rendering', () => {
         // The previous element should be the line this annotation belongs to
         expect(isHastLineElement(lastElement)).toBe(true);
         const prevLineIndex = getHastLineIndex(lastElement);
-        expect(prevLineIndex).toBeDefined();
+        assertDefined(prevLineIndex, 'prevLineIndex should be defined');
         // In unified, the first value of data-line-index is the unified index
-        const [unifiedIdx] = prevLineIndex!.split(',');
+        const [unifiedIdx] = prevLineIndex.split(',');
         expect(unifiedIdx).toBe(lineIdx);
         lastElement = node;
       }
       expect(foundAnnotationCount).toBe(annotations.length);
-      expect(result.unifiedAST).toMatchSnapshot('unified with annotations');
+      expect(unifiedAST).toMatchSnapshot('unified with annotations');
     });
 
     test('annotation lineIndex matches preceding line in split style', async () => {
@@ -89,19 +87,15 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const result = await renderer.asyncRender(diff);
-
-      expect(result.additionsAST).toBeDefined();
-      expect(result.deletionsAST).toBeDefined();
-      if (result.additionsAST == null || result.deletionsAST == null) {
-        throw new Error('additionsAST or deletionsAST is undefined');
-      }
+      const { additionsAST, deletionsAST } = await renderer.asyncRender(diff);
+      assertDefined(additionsAST, 'additionsAST should be defined');
+      assertDefined(deletionsAST, 'deletionsAST should be defined');
 
       const additionsAnnotationIndices = new Set<string>();
       const deletionsAnnotationIndices = new Set<string>();
 
-      for (const ast of [result.additionsAST, result.deletionsAST]) {
-        const isAdditions = ast === result.additionsAST;
+      for (const ast of [additionsAST, deletionsAST]) {
+        const isAdditions = ast === additionsAST;
         const expectedCount = isAdditions ? totalAdditions : totalDeletions;
         const indicesSet = isAdditions
           ? additionsAnnotationIndices
@@ -116,10 +110,7 @@ describe('Annotation Rendering', () => {
           }
 
           const annotationIndex = getHastAnnotationIndex(node);
-          expect(annotationIndex).toBeDefined();
-          if (annotationIndex == null) {
-            throw new Error('annotationIndex is not defined on node');
-          }
+          assertDefined(annotationIndex, 'annotationIndex should be defined');
           if (indicesSet.has(annotationIndex)) {
             throw new Error(`Duplicate annotation index: ${annotationIndex}`);
           }
@@ -135,15 +126,11 @@ describe('Annotation Rendering', () => {
 
           const [, lineIdx] = annotationIndex.split(',');
 
-          if (lastNode == null) {
-            throw new Error('lastNode is undefined');
-          }
+          assertDefined(lastNode, 'lastNode should be defined');
           expect(isHastLineElement(lastNode)).toBe(true);
 
           const prevLineIndex = getHastLineIndex(lastNode);
-          if (prevLineIndex == null) {
-            throw new Error('lastNode has no line index');
-          }
+          assertDefined(prevLineIndex, 'prevLineIndex should be defined');
           const [, splitIdx] = prevLineIndex.split(',');
           expect(splitIdx).toBe(lineIdx);
           lastNode = node;
@@ -158,12 +145,8 @@ describe('Annotation Rendering', () => {
       expect(additionsAnnotationIndices.size).toBe(
         deletionsAnnotationIndices.size
       );
-      expect(result.additionsAST).toMatchSnapshot(
-        'split additions with annotations'
-      );
-      expect(result.deletionsAST).toMatchSnapshot(
-        'split deletions with annotations'
-      );
+      expect(additionsAST).toMatchSnapshot('split additions with annotations');
+      expect(deletionsAST).toMatchSnapshot('split deletions with annotations');
     });
   });
 
@@ -193,13 +176,8 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const result = await renderer.asyncRender(diff);
-
-      const { unifiedAST } = result;
-      expect(unifiedAST).toBeDefined();
-      if (unifiedAST == null) {
-        throw new Error('No unified AST rendered');
-      }
+      const { unifiedAST } = await renderer.asyncRender(diff);
+      assertDefined(unifiedAST, 'unifiedAST should be defined');
       expect(countHastAnnotationElements(unifiedAST)).toBe(annotations.length);
 
       // Iterate and verify each annotation's preceding line type
@@ -246,18 +224,14 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const result = await renderer.asyncRender(diff);
-
-      expect(result.additionsAST).toBeDefined();
-      expect(result.deletionsAST).toBeDefined();
-      if (result.additionsAST == null || result.deletionsAST == null) {
-        throw new Error('additionsAST or deletionsAST is undefined');
-      }
+      const { deletionsAST, additionsAST } = await renderer.asyncRender(diff);
+      assertDefined(additionsAST, 'additionsAST should be defined');
+      assertDefined(deletionsAST, 'deletionsAST should be defined');
 
       // Check additions AST
       let additionsAnnotationCount = 0;
-      for (let i = 1; i < result.additionsAST.length; i++) {
-        const node = result.additionsAST[i];
+      for (let i = 1; i < additionsAST.length; i++) {
+        const node = additionsAST[i];
         if (!isHastAnnotationElement(node) || !isHastElement(node)) continue;
         const slots = findHastSlotElements(node);
         if (slots.length === 0) continue; // Skip empty annotation wrappers
@@ -266,7 +240,7 @@ describe('Annotation Rendering', () => {
           throw new Error('slot should have a name');
         }
         additionsAnnotationCount++;
-        const prevLineType = getHastLineType(result.additionsAST[i - 1]);
+        const prevLineType = getHastLineType(additionsAST[i - 1]);
         expect(prevLineType).toBe(additionsExpectedTypes[slotName]);
       }
       expect(additionsAnnotationCount).toBe(
@@ -275,8 +249,8 @@ describe('Annotation Rendering', () => {
 
       // Check deletions AST
       let deletionsAnnotationCount = 0;
-      for (let i = 1; i < result.deletionsAST.length; i++) {
-        const node = result.deletionsAST[i];
+      for (let i = 1; i < deletionsAST.length; i++) {
+        const node = deletionsAST[i];
         if (!isHastAnnotationElement(node) || !isHastElement(node)) continue;
         const slots = findHastSlotElements(node);
         if (slots.length === 0) continue; // Skip empty annotation wrappers
@@ -285,7 +259,7 @@ describe('Annotation Rendering', () => {
           throw new Error('slot should have a name');
         }
         deletionsAnnotationCount++;
-        const prevLineType = getHastLineType(result.deletionsAST[i - 1]);
+        const prevLineType = getHastLineType(deletionsAST[i - 1]);
         expect(prevLineType).toBe(deletionsExpectedTypes[slotName]);
       }
       expect(deletionsAnnotationCount).toBe(
@@ -311,23 +285,15 @@ describe('Annotation Rendering', () => {
 
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'unified' });
       renderer.setLineAnnotations(annotations);
-      const result = await renderer.asyncRender(diff);
-
-      const { unifiedAST } = result;
-      expect(unifiedAST).toBeDefined();
-      if (unifiedAST == null) {
-        throw new Error('unifiedAST must be defined');
-      }
+      const { unifiedAST } = await renderer.asyncRender(diff);
+      assertDefined(unifiedAST, 'unifiedAST should be defined');
 
       // Should only have 1 annotation element
       expect(countHastAnnotationElements(unifiedAST)).toBe(1);
 
       // Find the annotation and verify it has 2 slots
       const annotationEl = unifiedAST.find(isHastAnnotationElement);
-      expect(annotationEl).toBeDefined();
-      if (annotationEl == null) {
-        throw new Error('annotationEl must be defined');
-      }
+      assertDefined(annotationEl, 'annotationEl should be defined');
       expect(isHastElement(annotationEl)).toBe(true);
 
       const slots = findHastSlotElements(annotationEl as HASTElement);
@@ -354,25 +320,19 @@ describe('Annotation Rendering', () => {
 
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
       renderer.setLineAnnotations(annotations);
-      const result = await renderer.asyncRender(diff);
-
-      expect(result.additionsAST).toBeDefined();
-      expect(result.deletionsAST).toBeDefined();
+      const { additionsAST, deletionsAST } = await renderer.asyncRender(diff);
+      assertDefined(additionsAST, 'additionsAST should be defined');
+      assertDefined(deletionsAST, 'deletionsAST should be defined');
 
       // Each side should have 1 annotation
-      expect(countHastAnnotationElements(result.additionsAST!)).toBe(1);
-      expect(countHastAnnotationElements(result.deletionsAST!)).toBe(1);
+      expect(countHastAnnotationElements(additionsAST)).toBe(1);
+      expect(countHastAnnotationElements(deletionsAST)).toBe(1);
 
       // Find annotations and verify each has 1 slot
-      const additionAnnotation = result.additionsAST!.find(
-        isHastAnnotationElement
-      );
-      const deletionAnnotation = result.deletionsAST!.find(
-        isHastAnnotationElement
-      );
-
-      expect(additionAnnotation).toBeDefined();
-      expect(deletionAnnotation).toBeDefined();
+      const additionAnnotation = additionsAST.find(isHastAnnotationElement);
+      const deletionAnnotation = deletionsAST.find(isHastAnnotationElement);
+      assertDefined(additionAnnotation, 'additionAnnotation should be defined');
+      assertDefined(deletionAnnotation, 'deletionAnnotation should be defined');
 
       const additionSlots = findHastSlotElements(
         additionAnnotation as HASTElement

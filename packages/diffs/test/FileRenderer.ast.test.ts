@@ -3,14 +3,12 @@ import type { Element, ElementContent } from 'hast';
 
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { mockFiles } from './mocks';
+import { assertDefined } from './testUtils';
 
 describe('FileRenderer AST Structure', () => {
   test('should generate correct AST structure for JavaScript file', async () => {
     const instance = new FileRenderer();
-    const result = await instance.asyncRender(mockFiles.file2);
-
-    expect(result).toBeDefined();
-    const { codeAST, totalLines } = result;
+    const { codeAST, totalLines } = await instance.asyncRender(mockFiles.file2);
 
     // Verify line count matches
     const inputLines = mockFiles.file2.contents.split('\n').length;
@@ -26,13 +24,19 @@ describe('FileRenderer AST Structure', () => {
       expect(lineElement.tagName).toBe('div');
 
       // Each line should have the correct properties
-      expect(lineElement.properties).toBeDefined();
+      assertDefined(
+        lineElement.properties,
+        'lineElement.properties should be defined'
+      );
       expect(lineElement.properties['data-line']).toBe(i + 1);
       expect(lineElement.properties['data-line-type']).toBe('context');
       expect(lineElement.properties['data-line-index']).toBe(i);
 
       // Each line should have two child spans: column-number and column-content
-      expect(lineElement.children).toBeDefined();
+      assertDefined(
+        lineElement.children,
+        'lineElement.children should be defined'
+      );
       expect(lineElement.children.length).toBe(2);
 
       const [numberColumn, contentColumn] = lineElement.children as Element[];
@@ -51,10 +55,7 @@ describe('FileRenderer AST Structure', () => {
 
   test('should apply syntax highlighting with CSS variables', async () => {
     const instance = new FileRenderer();
-    const result = await instance.asyncRender(mockFiles.file2);
-
-    expect(result).toBeDefined();
-    const { codeAST } = result;
+    const { codeAST } = await instance.asyncRender(mockFiles.file2);
 
     // Helper to recursively find all text nodes with their parent styles
     const findTextNodesWithStyles = (
@@ -97,9 +98,9 @@ describe('FileRenderer AST Structure', () => {
 
     // Verify specific keyword exists and is highlighted
     const functionToken = textNodes.find((node) => node.text === 'function');
-    expect(functionToken).toBeDefined();
-    expect(functionToken!.style).toBeDefined();
-    expect(functionToken!.style).toMatch(
+    assertDefined(functionToken, 'functionToken should be defined');
+    assertDefined(functionToken.style, 'functionToken.style should be defined');
+    expect(functionToken.style).toMatch(
       /--diffs-dark:#[A-F0-9]{6};--diffs-light:#[A-F0-9]{6}/
     );
   });
@@ -109,13 +110,11 @@ describe('FileRenderer AST Structure', () => {
 
     // Test file1 (TypeScript)
     const result1 = await instance.asyncRender(mockFiles.file1);
-    expect(result1).toBeDefined();
     const file1Lines = mockFiles.file1.contents.split('\n').length;
     expect(result1.totalLines).toBe(file1Lines);
 
     // Test file2 (JavaScript)
     const result2 = await instance.asyncRender(mockFiles.file2);
-    expect(result2).toBeDefined();
     const file2Lines = mockFiles.file2.contents.split('\n').length;
     expect(result2.totalLines).toBe(file2Lines);
   });
@@ -123,22 +122,16 @@ describe('FileRenderer AST Structure', () => {
   test('should include CSS property in result', async () => {
     const instance = new FileRenderer();
     const result = await instance.asyncRender(mockFiles.file2);
-
-    expect(result).toBeDefined();
-    expect(result.css).toBeDefined();
-    expect(typeof result.css).toBe('string');
+    assertDefined(result.css, 'result.css should be defined');
+    expect(result.css).toBeString();
     // CSS may be empty string depending on theme configuration
   });
 
   test('should create preNode with correct properties', async () => {
     const instance = new FileRenderer();
-    const result = await instance.asyncRender(mockFiles.file2);
-
-    expect(result).toBeDefined();
-    const { preAST } = result;
-
+    const { preAST } = await instance.asyncRender(mockFiles.file2);
     expect(preAST.type).toBe('element');
     expect(preAST.tagName).toBe('pre');
-    expect(preAST.properties).toBeDefined();
+    assertDefined(preAST.properties, 'preAST.properties should be defined');
   });
 });

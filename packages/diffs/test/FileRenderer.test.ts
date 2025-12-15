@@ -6,9 +6,7 @@ import { mockFiles } from './mocks';
 describe('FileRenderer', () => {
   test('should render TypeScript code to AST matching snapshot', async () => {
     const instance = new FileRenderer();
-    const result = await instance.asyncRender(mockFiles.file1);
-
-    expect(result).toBeDefined();
-    expect(result.codeAST).toMatchSnapshot();
+    const { codeAST } = await instance.asyncRender(mockFiles.file1);
+    expect(codeAST).toMatchSnapshot();
   });
 });

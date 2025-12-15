@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { DiffHunksRenderer, parseDiffFromFile } from 'src';
 
 import { mockDiffs } from './mocks';
+import { assertDefined } from './testUtils';
 
 describe('DiffHunksRenderer', () => {
   test('proper buffers should be prepended to additions colum in split style', async () => {
@@ -12,8 +13,8 @@ describe('DiffHunksRenderer', () => {
     );
     expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
-    expect(result.additionsAST).toBeDefined();
-    expect(result.deletionsAST).toBeDefined();
+    assertDefined(result.additionsAST, 'result.additionsAST should be defined');
+    assertDefined(result.deletionsAST, 'result.deletionsAST should be defined');
     expect(result.unifiedAST).toBeUndefined();
     expect(result).toMatchSnapshot('rendered result');
   });
@@ -26,8 +27,8 @@ describe('DiffHunksRenderer', () => {
     );
     expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
-    expect(result.additionsAST).toBeDefined();
-    expect(result.deletionsAST).toBeDefined();
+    assertDefined(result.additionsAST, 'result.additionsAST should be defined');
+    assertDefined(result.deletionsAST, 'result.deletionsAST should be defined');
     expect(result.unifiedAST).toBeUndefined();
     expect(result).toMatchSnapshot('rendered result');
   });
@@ -45,6 +46,7 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     expect(result.additionsAST).toBeUndefined();
     expect(result.deletionsAST).toBeUndefined();
+    assertDefined(result.unifiedAST, 'result.unifiedAST should be defined');
     expect(result).toMatchSnapshot('rendered result');
   });
 
@@ -58,7 +60,7 @@ describe('DiffHunksRenderer', () => {
     expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-type']).toBe('file');
-    expect(result.additionsAST).toBeDefined();
+    assertDefined(result.additionsAST, 'result.additionsAST should be defined');
     expect(result.deletionsAST).toBeUndefined();
     expect(result.unifiedAST).toBeUndefined();
     expect(result).toMatchSnapshot('rendered result');
@@ -74,7 +76,7 @@ describe('DiffHunksRenderer', () => {
     expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-type']).toBe('file');
-    expect(result.deletionsAST).toBeDefined();
+    assertDefined(result.deletionsAST, 'result.deletionsAST should be defined');
     expect(result.additionsAST).toBeUndefined();
     expect(result.unifiedAST).toBeUndefined();
     expect(result).toMatchSnapshot('rendered result');

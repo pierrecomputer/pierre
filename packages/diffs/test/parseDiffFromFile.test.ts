@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { fileNew, fileOld } from './mocks';
-import { verifyFileDiffHunkValues } from './testUtils';
+import { assertDefined, verifyFileDiffHunkValues } from './testUtils';
 
 describe('parseDiffFromFile', () => {
   const result = parseDiffFromFile(
@@ -24,15 +24,15 @@ describe('parseDiffFromFile', () => {
   });
 
   test('should correctly set oldLines and newLines', () => {
-    expect(result.oldLines).toBeDefined();
-    expect(result.newLines).toBeDefined();
+    assertDefined(result.oldLines, 'result.oldLines should be defined');
+    assertDefined(result.newLines, 'result.newLines should be defined');
 
     // oldLines should match the split of fileOld
     const expectedOldLineCount = fileOld.split(/(?<=\n)/).length;
-    expect(result.oldLines?.length).toBe(expectedOldLineCount);
+    expect(result.oldLines.length).toBe(expectedOldLineCount);
 
     // newLines should match the split of fileNew
     const expectedNewLineCount = fileNew.split(/(?<=\n)/).length;
-    expect(result.newLines?.length).toBe(expectedNewLineCount);
+    expect(result.newLines.length).toBe(expectedNewLineCount);
   });
 });

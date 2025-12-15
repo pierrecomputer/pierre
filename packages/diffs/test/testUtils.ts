@@ -2,6 +2,19 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 
 import type { FileDiffMetadata, ParsedPatch } from '../src/types';
 
+// Assertion helpers
+
+export function assertDefined<T>(
+  value: T | undefined | null,
+  message: string
+): asserts value is T {
+  if (value == null) {
+    throw new Error(message);
+  }
+}
+
+// HAST element helpers
+
 export function isHastElement(node: ElementContent): node is HASTElement {
   return node.type === 'element';
 }
