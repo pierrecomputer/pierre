@@ -8,11 +8,13 @@ body:
       label: Prerequisites
       description: Please confirm the following before submitting.
       options:
-        - label: I have
+        - label:
+            I have
             [searched](https://github.com/pierre-computer/diffs/issues?q=is%3Aissue)
             for duplicate or closed feature requests
           required: true
-        - label: I have read the [contributing
+        - label:
+            I have read the [contributing
             guidelines](https://github.com/pierre-computer/diffs/blob/main/CONTRIBUTING.md)
           required: true
   - type: textarea
