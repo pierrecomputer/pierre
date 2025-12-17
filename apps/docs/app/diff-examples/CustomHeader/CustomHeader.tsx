@@ -21,6 +21,8 @@ import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
 
+type HunkSeparatorOption = 'simple' | 'metadata' | 'line-info';
+
 interface CustomHeaderProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
@@ -135,6 +137,8 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
     prerenderedDiff.options?.diffStyle ?? 'unified'
   );
+  const [hunkSeparators, setHunkSeparators] =
+    useState<HunkSeparatorOption>('line-info');
 
   const fileDiff = prerenderedDiff.fileDiff;
   const additions = fileDiff.hunks.reduce(
@@ -155,12 +159,14 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
   return (
     <div className="scroll-mt-[20px] space-y-5" id="full-custom-header">
       <FeatureHeader
-        title="Fully Custom Header"
+        title="Fully Custom Header & Footer"
         description={
           <>
             Use <code>disableFileHeader: true</code> to completely remove the
-            built-in header and render your own. This gives you full control
-            over the header&apos;s layout, styling, and functionality.
+            built-in header and render your own. Wrap the diff component to add
+            custom footers, toolbars, or any surrounding UI. You can also
+            customize hunk separators via the <code>hunkSeparators</code>{' '}
+            option.
           </>
         }
       />
@@ -264,9 +270,61 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
             ...prerenderedDiff.options,
             themeType,
             diffStyle,
+            hunkSeparators,
             disableFileHeader: true,
           }}
         />
+        {/* Custom footer */}
+        <div
+          className={`flex items-center justify-between gap-4 border-t px-4 py-2.5 text-xs ${
+            themeType === 'dark'
+              ? 'border-neutral-800 bg-neutral-900 text-neutral-400'
+              : 'border-neutral-200 bg-neutral-50 text-neutral-500'
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <span>
+              {fileDiff.hunks.length} hunk{fileDiff.hunks.length !== 1 && 's'}
+            </span>
+            <select
+              value={hunkSeparators}
+              onChange={(e) =>
+                setHunkSeparators(e.target.value as HunkSeparatorOption)
+              }
+              className={`cursor-pointer rounded border px-2 py-1 text-xs ${
+                themeType === 'dark'
+                  ? 'border-neutral-700 bg-neutral-800 text-neutral-300'
+                  : 'border-neutral-300 bg-white text-neutral-700'
+              }`}
+            >
+              <option value="line-info">Line info separators</option>
+              <option value="simple">Simple separators</option>
+              <option value="metadata">Metadata separators</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-3 opacity-70">
+            <span className="flex items-center gap-1.5">
+              <kbd
+                className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                  themeType === 'dark' ? 'bg-neutral-800' : 'bg-neutral-200'
+                }`}
+              >
+                ↑↓
+              </kbd>
+              <span>navigate</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <kbd
+                className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                  themeType === 'dark' ? 'bg-neutral-800' : 'bg-neutral-200'
+                }`}
+              >
+                ⌘C
+              </kbd>
+              <span>copy</span>
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
