@@ -72,22 +72,7 @@ export function truncate(str: string, maxLength: number): string {
   return str.slice(0, maxLength) + '...';
 }
 
-export function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
 // Array utilities
-export function chunk<T>(array: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size));
-  }
-  return chunks;
-}
-
 export function unique<T>(array: T[]): T[] {
   return [...new Set(array)];
 }
@@ -108,14 +93,6 @@ export function pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
     result[key] = obj[key];
   }
   return result;
-}
-
-export function omit<T, K extends keyof T>(obj: T, keys: K[]): Omit<T, K> {
-  const result = { ...obj };
-  for (const key of keys) {
-    delete result[key];
-  }
-  return result as Omit<T, K>;
 }
 `,
 };
@@ -133,22 +110,7 @@ export function truncate(str: string, maxLength: number): string {
   return str.slice(0, maxLength) + '...';
 }
 
-export function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
 // Array utilities
-export function chunk<T>(array: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size));
-  }
-  return chunks;
-}
-
 export function unique<T>(array: T[]): T[] {
   return [...new Set(array)];
 }
@@ -162,20 +124,6 @@ export function shuffle<T>(array: T[]): T[] {
   return result;
 }
 
-export function groupBy<T, K extends string | number>(
-  array: T[],
-  keyFn: (item: T) => K
-): Record<K, T[]> {
-  return array.reduce(
-    (acc, item) => {
-      const key = keyFn(item);
-      (acc[key] ??= []).push(item);
-      return acc;
-    },
-    {} as Record<K, T[]>
-  );
-}
-
 // Object utilities
 export function pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
   const result = {} as Pick<T, K>;
@@ -183,14 +131,6 @@ export function pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
     result[key] = obj[key];
   }
   return result;
-}
-
-export function omit<T, K extends keyof T>(obj: T, keys: K[]): Omit<T, K> {
-  const result = { ...obj };
-  for (const key of keys) {
-    delete result[key];
-  }
-  return result as Omit<T, K>;
 }
 
 export function deepClone<T>(obj: T): T {
