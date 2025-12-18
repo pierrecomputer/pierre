@@ -235,18 +235,20 @@ export function countRenderedLines(ast: ElementContent[]): number {
 // Count rows in split mode by looking at line-index values
 // Each unique line-index represents one visual row in split view
 export function countSplitRows(result: HunksRenderResult): number {
-  const lineIndices = new Set<string>();
+  const lineIndices = new Set<number>();
   const additionsAST = result.additionsAST ?? [];
   const deletionsAST = result.deletionsAST ?? [];
 
-  for (const node of [...additionsAST, ...deletionsAST]) {
-    if (isHastElement(node)) {
-      const lineIndex = node.properties?.['data-line-index'];
-      if (typeof lineIndex === 'string') {
-        // data-line-index format is "unifiedIndex,splitIndex"
-        const splitIndex = lineIndex.split(',')[1];
-        if (splitIndex != null) {
-          lineIndices.add(splitIndex);
+  for (const nodes of [additionsAST, deletionsAST]) {
+    for (const node of nodes) {
+      if (isHastElement(node)) {
+        const lineIndex = node.properties?.['data-line-index'];
+        if (typeof lineIndex === 'string') {
+          // data-line-index format is "unifiedIndex,splitIndex"
+          const splitIndex = Number.parseInt(lineIndex.split(',')[1], 10);
+          if (!isNaN(splitIndex)) {
+            lineIndices.add(splitIndex);
+          }
         }
       }
     }
