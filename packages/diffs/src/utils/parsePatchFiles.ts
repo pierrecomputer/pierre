@@ -206,7 +206,7 @@ function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
         collapsedBefore: 0,
         splitLineCount: 0,
         splitLineStart: 0,
-        unifiedLineCount: lines.length,
+        unifiedLineCount: 0,
         unifiedLineStart: 0,
         additionCount: parseInt(match[4] ?? '1'),
         additionStart: parseInt(match[3]),
@@ -233,10 +233,21 @@ function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
       );
       currentFile.hunks.push(hunkData);
       lastHunkEnd = hunkData.additionStart + hunkData.additionCount - 1;
-      hunkData.splitLineCount = Math.max(
-        hunkData.additionCount,
-        hunkData.deletionCount
-      );
+      hunkData.splitLineCount = hunkContent.reduce((lineCount, content) => {
+        if (content.type === 'context') {
+          return lineCount + content.lines.length;
+        }
+        return (
+          lineCount +
+          Math.max(content.additions.length, content.deletions.length)
+        );
+      }, 0);
+      hunkData.unifiedLineCount = hunkContent.reduce((lineCount, content) => {
+        if (content.type === 'context') {
+          return lineCount + content.lines.length;
+        }
+        return lineCount + content.additions.length + content.deletions.length;
+      }, 0);
       hunkData.splitLineStart = currentFile.splitLineCount;
       hunkData.unifiedLineStart = currentFile.unifiedLineCount;
 
