@@ -1,7 +1,6 @@
-import type { FileDiffOptions } from 'src/components/FileDiff';
-import { DEFAULT_THEMES } from 'src/constants';
-import type { FileOptions } from 'src/react';
-
+import type { FileDiffOptions } from '../components/FileDiff';
+import { DEFAULT_THEMES } from '../constants';
+import type { FileOptions } from '../react';
 import { areObjectsEqual } from './areObjectsEqual';
 import { areThemesEqual } from './areThemesEqual';
 

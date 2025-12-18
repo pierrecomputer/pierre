@@ -56,7 +56,11 @@ export interface FileRenderResult {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface FileRendererOptions extends BaseCodeOptions {}
 
+let instanceId = -1;
+
 export class FileRenderer<LAnnotation = undefined> {
+  readonly __id: string = `file-renderer:${++instanceId}`;
+
   private highlighter: DiffsHighlighter | undefined;
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';

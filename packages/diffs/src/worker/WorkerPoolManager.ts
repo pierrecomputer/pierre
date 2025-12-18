@@ -22,6 +22,7 @@ import type {
   ThemedDiffResult,
   ThemedFileResult,
 } from '../types';
+import { areFilesEqual } from '../utils/areFilesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
@@ -244,6 +245,22 @@ export class WorkerPoolManager {
     this.themeSubscribers.delete(instance);
   }
 
+  cleanUpPendingTasks(
+    instance: FileRendererInstance | DiffRendererInstance
+  ): void {
+    this.taskQueue = this.taskQueue.filter((task) => {
+      if ('instance' in task) {
+        return task.instance !== instance;
+      }
+      return true;
+    });
+    for (const [id, task] of Array.from(this.pendingTasks)) {
+      if ('instance' in task && task.instance === instance) {
+        this.pendingTasks.delete(id);
+      }
+    }
+  }
+
   isInitialized(): boolean {
     return this.initialized === true;
   }
@@ -375,6 +392,22 @@ export class WorkerPoolManager {
   };
 
   highlightFileAST(instance: FileRendererInstance, file: FileContents): void {
+    const computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+    if (computedLang === 'text') return;
+    // If we already have a task in progress for this same file content, we
+    // should drop it
+    for (const tasks of [this.taskQueue, this.pendingTasks.values()]) {
+      for (const task of tasks) {
+        if (
+          'instance' in task &&
+          task.instance === instance &&
+          task.request.type === 'file' &&
+          areFilesEqual(file, task.request.file)
+        ) {
+          return;
+        }
+      }
+    }
     this.submitTask(instance, { type: 'file', file });
   }
 
@@ -395,6 +428,23 @@ export class WorkerPoolManager {
     instance: DiffRendererInstance,
     diff: FileDiffMetadata
   ): void {
+    // NOTE(amadeus): Is this the best way to do this? Probably not...
+    const computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+    if (computedLang === 'text') return;
+    // If we already have a task in progress for this same diff content, we
+    // should ignore executing it again
+    for (const tasks of [this.taskQueue, this.pendingTasks.values()]) {
+      for (const task of tasks) {
+        if (
+          'instance' in task &&
+          task.instance === instance &&
+          task.request.type === 'diff' &&
+          task.request.diff === diff
+        ) {
+          return;
+        }
+      }
+    }
     this.submitTask(instance, { type: 'diff', diff });
   }
 
@@ -512,9 +562,9 @@ export class WorkerPoolManager {
     const task = this.pendingTasks.get(response.id);
     try {
       if (task == null) {
-        throw new Error(
-          'handleWorkerMessage: Received response for unknown task'
-        );
+        // If we can't find a task for this response, it probably means the
+        // component has been unmounted, so we should silently ignore it
+        throw IGNORE_RESPONSE;
       } else if (response.type === 'error') {
         const error = new Error(response.error);
         if (response.stack) {
