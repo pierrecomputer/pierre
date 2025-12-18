@@ -176,7 +176,7 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
           className={`flex items-center justify-between gap-4 border-b p-3 ${
             themeType === 'dark'
               ? 'border-neutral-800 bg-neutral-900 text-neutral-200'
-              : 'border-neutral-100 bg-neutral-50 text-neutral-900'
+              : 'border-neutral-200 bg-neutral-50 text-neutral-900'
           }`}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -219,7 +219,15 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
               </span>
               <DiffstatSquares additions={additions} deletions={deletions} />
             </div>
-            <div className="bg-border mx-2 h-4 w-[1px] dark:bg-neutral-700" />
+            <div
+              className="mx-2 h-4 w-[1px]"
+              style={{
+                backgroundColor:
+                  themeType === 'dark'
+                    ? 'rgb(255 255 255 / 0.25)'
+                    : 'rgb(0 0 0 / 0.15)',
+              }}
+            />
             <button
               type="button"
               onClick={() =>
@@ -278,11 +286,11 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
         <div
           className={`flex items-center justify-between gap-4 border-t px-4 py-2.5 text-xs ${
             themeType === 'dark'
-              ? 'border-neutral-800 bg-neutral-900 text-neutral-400'
-              : 'border-neutral-200 bg-neutral-50 text-neutral-500'
+              ? 'text-muted-foreground border-neutral-800 bg-neutral-900'
+              : 'text-muted-foreground border-neutral-200 bg-neutral-50'
           }`}
         >
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <span>
               {fileDiff.hunks.length} hunk{fileDiff.hunks.length !== 1 && 's'}
             </span>
@@ -291,37 +299,39 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
               onChange={(e) =>
                 setHunkSeparators(e.target.value as HunkSeparatorOption)
               }
-              className={`cursor-pointer rounded border px-2 py-1 text-xs ${
-                themeType === 'dark'
-                  ? 'border-neutral-700 bg-neutral-800 text-neutral-300'
-                  : 'border-neutral-300 bg-white text-neutral-700'
-              }`}
+              className={`text-muted-foreground w-auto cursor-pointer appearance-none rounded bg-transparent py-1 pr-5 text-xs outline-none`}
+              style={{
+                backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgb(255 255 255 / 0.35)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                backgroundPosition: 'right 8px center',
+                backgroundRepeat: 'no-repeat',
+                backgroundSize: '16px',
+              }}
             >
               <option value="line-info">Line info separators</option>
               <option value="simple">Simple separators</option>
               <option value="metadata">Metadata separators</option>
             </select>
           </div>
-          <div className="flex items-center gap-3 opacity-70">
-            <span className="flex items-center gap-1.5">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
               <kbd
-                className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                className={`rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground${
                   themeType === 'dark' ? 'bg-neutral-800' : 'bg-neutral-200'
                 }`}
               >
                 ↑↓
               </kbd>
-              <span>navigate</span>
+              <span>Navigate</span>
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
               <kbd
-                className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                className={`rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground${
                   themeType === 'dark' ? 'bg-neutral-800' : 'bg-neutral-200'
                 }`}
               >
                 ⌘C
               </kbd>
-              <span>copy</span>
+              <span>Copy</span>
             </span>
           </div>
         </div>
