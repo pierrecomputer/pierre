@@ -233,21 +233,19 @@ function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
       );
       currentFile.hunks.push(hunkData);
       lastHunkEnd = hunkData.additionStart + hunkData.additionCount - 1;
-      hunkData.splitLineCount = hunkContent.reduce((lineCount, content) => {
+      for (const content of hunkContent) {
         if (content.type === 'context') {
-          return lineCount + content.lines.length;
+          hunkData.splitLineCount += content.lines.length;
+          hunkData.unifiedLineCount += content.lines.length;
+        } else {
+          hunkData.splitLineCount += Math.max(
+            content.additions.length,
+            content.deletions.length
+          );
+          hunkData.unifiedLineCount +=
+            content.deletions.length + content.additions.length;
         }
-        return (
-          lineCount +
-          Math.max(content.additions.length, content.deletions.length)
-        );
-      }, 0);
-      hunkData.unifiedLineCount = hunkContent.reduce((lineCount, content) => {
-        if (content.type === 'context') {
-          return lineCount + content.lines.length;
-        }
-        return lineCount + content.additions.length + content.deletions.length;
-      }, 0);
+      }
       hunkData.splitLineStart = currentFile.splitLineCount;
       hunkData.unifiedLineStart = currentFile.unifiedLineCount;
 
