@@ -44,6 +44,14 @@ export function renderDiffWithHighlighter(
     theme: options.theme,
     highlighter,
   });
+  // If we have a large file and we are rendering the plain diff ast, then we
+  // should remove the lineDiffType to make sure things render quickly
+  const lineDiffType =
+    forcePlainText &&
+    // Think about this max line count thing... is 1000 right?
+    (diff.unifiedLineCount > 1000 || diff.splitLineCount > 1000)
+      ? 'none'
+      : options.lineDiffType;
   // If we've received a diff with both files
   if (diff.newLines != null && diff.oldLines != null) {
     const {
@@ -57,7 +65,7 @@ export function renderDiffWithHighlighter(
       hunks: diff.hunks,
       oldLines: diff.oldLines,
       newLines: diff.newLines,
-      lineDiffType: options.lineDiffType,
+      lineDiffType,
     });
     const oldFile = {
       name: diff.prevName ?? diff.name,
@@ -86,6 +94,8 @@ export function renderDiffWithHighlighter(
   let splitLineIndex = 0;
   let unifiedLineIndex = 0;
   for (const hunk of diff.hunks) {
+    splitLineIndex += hunk.collapsedBefore;
+    unifiedLineIndex += hunk.collapsedBefore;
     const {
       oldContent,
       newContent,
@@ -99,7 +109,7 @@ export function renderDiffWithHighlighter(
       hunks: [hunk],
       splitLineIndex,
       unifiedLineIndex,
-      lineDiffType: options.lineDiffType,
+      lineDiffType,
     });
     const oldFile = {
       name: diff.prevName ?? diff.name,

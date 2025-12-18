@@ -74,7 +74,8 @@ let instanceId = -1;
 export class File<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
-  readonly __id: number = ++instanceId;
+  readonly __id: string = `file:${++instanceId}`;
+
   private fileContainer: HTMLElement | undefined;
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;

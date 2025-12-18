@@ -1,6 +1,8 @@
+export * from './components/BigBoiVirtualizer';
 export * from './components/File';
 export * from './components/FileDiff';
 export * from './components/FileStream';
+export * from './components/VirtualizedFileDiff';
 export * from './constants';
 export * from './highlighter/languages/areLanguagesAttached';
 export * from './highlighter/languages/attachResolvedLanguages';
@@ -34,6 +36,7 @@ export * from './sprite';
 export * from './utils/areFilesEqual';
 export * from './utils/areObjectsEqual';
 export * from './utils/areOptionsEqual';
+export * from './utils/areRenderRangesEqual';
 export * from './utils/areSelectionsEqual';
 export * from './utils/areThemesEqual';
 export * from './utils/cleanLastNewline';
