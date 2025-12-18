@@ -10,7 +10,6 @@ import {
   IconDiffSplit,
   IconDiffUnified,
   IconExpandRow,
-  IconFileCode,
   IconHunkDivider,
   IconMoon,
   IconSquircleLgFill,
