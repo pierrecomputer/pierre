@@ -94,6 +94,10 @@ export function pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
   }
   return result;
 }
+
+export function deepClone<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
 `,
 };
 
@@ -105,23 +109,14 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-export function truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength) + '...';
+export function truncate(str: string, max: number, ellipsis = '…'): string {
+  if (str.length <= max) return str;
+  return str.slice(0, max) + ellipsis;
 }
 
 // Array utilities
 export function unique<T>(array: T[]): T[] {
   return [...new Set(array)];
-}
-
-export function shuffle<T>(array: T[]): T[] {
-  const result = [...array];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
 }
 
 // Object utilities
@@ -134,7 +129,7 @@ export function pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
 }
 
 export function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
+  return structuredClone(obj);
 }
 `,
 };

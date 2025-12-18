@@ -191,12 +191,13 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
   return (
     <div className="scroll-mt-[20px] space-y-5" id="custom-header">
       <FeatureHeader
-        title="Custom Header Components"
+        title="Custom header metadata"
         description={
           <>
-            Use <code>renderHeaderMetadata</code> to inject custom controls into
-            the file header. Perfect for adding view toggles, theme switchers,
-            copy buttons, or any other file-level actions.
+            Use <code>renderHeaderMetadata</code> to inject custom content and
+            components into the file header. Perfect for adding view toggles,
+            theme switchers, copy buttons, or any other file-level actions while
+            preserving the built-in header.
           </>
         }
       />
@@ -303,19 +304,16 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
   return (
     <div className="scroll-mt-[20px] space-y-5" id="full-custom-header">
       <FeatureHeader
-        title="Fully Custom Header & Footer"
+        title="Customizing even more…"
         description={
           <>
             Use <code>disableFileHeader: true</code> to completely remove the
             built-in header and render your own. Wrap the diff component to add
-            custom footers, toolbars, or any surrounding UI. You can also
-            customize hunk separators via the <code>hunkSeparators</code>{' '}
-            option.
+            custom footers, toolbars, or any surrounding UI.
           </>
         }
       />
       <div className="overflow-hidden rounded-lg border dark:border-neutral-800">
-        {/* Custom Header */}
         <div
           className={`flex items-center justify-between gap-4 border-b p-3 ${containerClasses}`}
         >
@@ -386,7 +384,6 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
           </div>
         </div>
 
-        {/* Diff */}
         <FileDiff
           {...prerenderedDiff}
           options={{
@@ -398,9 +395,8 @@ export function FullCustomHeader({ prerenderedDiff }: FullCustomHeaderProps) {
           }}
         />
 
-        {/* Custom Footer */}
         <div
-          className={`flex items-center justify-between gap-4 border-t px-2 py-2 text-xs ${footerClasses}`}
+          className={`flex items-center justify-between gap-4 border-t py-2 pr-3 pl-2 text-xs ${footerClasses}`}
         >
           <div className="flex items-center gap-3">
             <SegmentedButtonGroup
