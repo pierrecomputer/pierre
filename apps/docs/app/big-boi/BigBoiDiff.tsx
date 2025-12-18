@@ -1,11 +1,10 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { parsePatchFiles } from '@pierre/precision-diffs';
-import { useStableCallback } from '@pierre/precision-diffs/react';
+import { BigBoiVirtualizer, parsePatchFiles } from '@pierre/diffs';
+import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
 
-import { BigBoiVirtualizer } from './BigBoiVirtualizer';
 import styles from './big-boi.module.css';
 
 interface SubmitButtonProps {
@@ -31,6 +30,7 @@ function SubmitButton({ children, disabled = false }: SubmitButtonProps) {
 }
 
 export function BigBoiDiff() {
+  const workerPool = useWorkerPool();
   const [fetching, setFetching] = useState(false);
   // The BIG BOI
   const [url, setURL] = useState('https://github.com/nodejs/node/pull/59805');
@@ -61,7 +61,11 @@ export function BigBoiDiff() {
           console.error('No valid container to run the virtualizer with');
           return;
         }
-        bigBoiRef.current ??= new BigBoiVirtualizer(ref.current);
+        bigBoiRef.current ??= new BigBoiVirtualizer(
+          ref.current,
+          undefined,
+          workerPool
+        );
         bigBoiRef.current.reset();
         console.time('--     request time');
         const response = await fetch(
@@ -80,7 +84,11 @@ export function BigBoiDiff() {
         console.timeEnd('--     parsing json');
 
         console.time('--  parsing patches');
-        const parsedPatches = parsePatchFiles(data.content);
+        const parsedPatches = parsePatchFiles(
+          data.content,
+          // Use the url as a cache key
+          encodeURIComponent(parsedURL.pathname)
+        );
         console.timeEnd('--  parsing patches');
 
         console.time('-- computing layout');
