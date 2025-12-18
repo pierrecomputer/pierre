@@ -344,7 +344,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "@@ -2,43 +2,43 @@ import deepEquals from 'fast-deep-equal';
 "
 ,
-            "splitLineCount": 43,
+            "splitLineCount": 48,
             "splitLineStart": 0,
             "unifiedLineCount": 64,
             "unifiedLineStart": 0,
@@ -353,7 +353,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "mode": "100644",
         "name": "packages/diffs/src/components/File.ts",
         "prevName": "packages/diffs/src/File.ts",
-        "splitLineCount": 43,
+        "splitLineCount": 48,
         "type": "rename-changed",
         "unifiedLineCount": 64,
       },
@@ -605,7 +605,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "@@ -2,28 +2,30 @@ import deepEquals from 'fast-deep-equal';
 "
 ,
-            "splitLineCount": 30,
+            "splitLineCount": 32,
             "splitLineStart": 0,
             "unifiedLineCount": 41,
             "unifiedLineStart": 0,
@@ -763,7 +763,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "
 ,
             "splitLineCount": 18,
-            "splitLineStart": 30,
+            "splitLineStart": 32,
             "unifiedLineCount": 29,
             "unifiedLineStart": 41,
           },
@@ -771,7 +771,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "mode": "100644",
         "name": "packages/diffs/src/components/FileDiff.ts",
         "prevName": "packages/diffs/src/FileDiff.ts",
-        "splitLineCount": 48,
+        "splitLineCount": 50,
         "type": "rename-changed",
         "unifiedLineCount": 70,
       },
@@ -1135,7 +1135,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "@@ -1,17 +1,17 @@
 "
 ,
-            "splitLineCount": 17,
+            "splitLineCount": 24,
             "splitLineStart": 0,
             "unifiedLineCount": 27,
             "unifiedLineStart": 0,
@@ -1208,7 +1208,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "
 ,
             "splitLineCount": 8,
-            "splitLineStart": 17,
+            "splitLineStart": 24,
             "unifiedLineCount": 8,
             "unifiedLineStart": 27,
           },
@@ -1276,7 +1276,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 25,
+            "splitLineStart": 32,
             "unifiedLineCount": 7,
             "unifiedLineStart": 35,
           },
@@ -1284,7 +1284,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "mode": "100644",
         "name": "packages/diffs/src/index.ts",
         "prevName": undefined,
-        "splitLineCount": 32,
+        "splitLineCount": 39,
         "type": "change",
         "unifiedLineCount": 42,
       },
@@ -1810,7 +1810,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "@@ -1,7 +1,7 @@
 "
 ,
-            "splitLineCount": 7,
+            "splitLineCount": 8,
             "splitLineStart": 0,
             "unifiedLineCount": 8,
             "unifiedLineStart": 0,
@@ -1819,7 +1819,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "mode": "100644",
         "name": "packages/diffs/src/react/utils/renderDiffChildren.tsx",
         "prevName": undefined,
-        "splitLineCount": 7,
+        "splitLineCount": 8,
         "type": "change",
         "unifiedLineCount": 8,
       },
@@ -1907,7 +1907,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
 "@@ -1,7 +1,7 @@
 "
 ,
-            "splitLineCount": 7,
+            "splitLineCount": 8,
             "splitLineStart": 0,
             "unifiedLineCount": 8,
             "unifiedLineStart": 0,
@@ -1916,7 +1916,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "mode": "100644",
         "name": "packages/diffs/src/react/utils/renderFileChildren.tsx",
         "prevName": undefined,
-        "splitLineCount": 7,
+        "splitLineCount": 8,
         "type": "change",
         "unifiedLineCount": 8,
       },
@@ -17833,7 +17833,7 @@ Subject: [PATCH 4/9] Rename all 'pjs' and 'pjs-' prefix stuff related to css
 ,
             "splitLineCount": 6,
             "splitLineStart": 0,
-            "unifiedLineCount": 8,
+            "unifiedLineCount": 7,
             "unifiedLineStart": 0,
           },
         ],
@@ -17842,7 +17842,7 @@ Subject: [PATCH 4/9] Rename all 'pjs' and 'pjs-' prefix stuff related to css
         "prevName": undefined,
         "splitLineCount": 6,
         "type": "change",
-        "unifiedLineCount": 8,
+        "unifiedLineCount": 7,
       },
     ],
     "patchMetadata": 
@@ -18113,7 +18113,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "@@ -2,11 +2,11 @@ import {
 "
 ,
-            "splitLineCount": 11,
+            "splitLineCount": 12,
             "splitLineStart": 0,
             "unifiedLineCount": 12,
             "unifiedLineStart": 0,
@@ -18187,7 +18187,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 11,
+            "splitLineStart": 12,
             "unifiedLineCount": 8,
             "unifiedLineStart": 12,
           },
@@ -18195,7 +18195,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
         "mode": "100644",
         "name": "apps/demo/src/main.ts",
         "prevName": undefined,
-        "splitLineCount": 18,
+        "splitLineCount": 19,
         "type": "change",
         "unifiedLineCount": 20,
       },
@@ -20769,7 +20769,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "@@ -14,11 +14,11 @@ import type {
 "
 ,
-            "splitLineCount": 11,
+            "splitLineCount": 12,
             "splitLineStart": 0,
             "unifiedLineCount": 12,
             "unifiedLineStart": 0,
@@ -20843,7 +20843,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 11,
+            "splitLineStart": 12,
             "unifiedLineCount": 8,
             "unifiedLineStart": 12,
           },
@@ -20916,7 +20916,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 18,
+            "splitLineStart": 19,
             "unifiedLineCount": 8,
             "unifiedLineStart": 20,
           },
@@ -20989,7 +20989,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 25,
+            "splitLineStart": 26,
             "unifiedLineCount": 8,
             "unifiedLineStart": 28,
           },
@@ -20997,7 +20997,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
         "mode": "100644",
         "name": "packages/diffs/src/renderers/DiffHunksRenderer.ts",
         "prevName": undefined,
-        "splitLineCount": 32,
+        "splitLineCount": 33,
         "type": "change",
         "unifiedLineCount": 36,
       },
@@ -21093,7 +21093,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "@@ -11,9 +11,9 @@ import {
 "
 ,
-            "splitLineCount": 9,
+            "splitLineCount": 10,
             "splitLineStart": 0,
             "unifiedLineCount": 10,
             "unifiedLineStart": 0,
@@ -21167,7 +21167,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 9,
+            "splitLineStart": 10,
             "unifiedLineCount": 8,
             "unifiedLineStart": 10,
           },
@@ -21240,7 +21240,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 16,
+            "splitLineStart": 17,
             "unifiedLineCount": 8,
             "unifiedLineStart": 18,
           },
@@ -21313,7 +21313,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 23,
+            "splitLineStart": 24,
             "unifiedLineCount": 8,
             "unifiedLineStart": 26,
           },
@@ -21321,7 +21321,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
         "mode": "100644",
         "name": "packages/diffs/src/renderers/FileRenderer.ts",
         "prevName": undefined,
-        "splitLineCount": 30,
+        "splitLineCount": 31,
         "type": "change",
         "unifiedLineCount": 34,
       },
@@ -22314,7 +22314,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "@@ -4,13 +4,13 @@ import { DEFAULT_THEMES } from '../constants';
 "
 ,
-            "splitLineCount": 13,
+            "splitLineCount": 15,
             "splitLineStart": 0,
             "unifiedLineCount": 15,
             "unifiedLineStart": 0,
@@ -22388,7 +22388,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 13,
+            "splitLineStart": 15,
             "unifiedLineCount": 8,
             "unifiedLineStart": 15,
           },
@@ -22461,7 +22461,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 20,
+            "splitLineStart": 22,
             "unifiedLineCount": 8,
             "unifiedLineStart": 23,
           },
@@ -22534,7 +22534,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 27,
+            "splitLineStart": 29,
             "unifiedLineCount": 8,
             "unifiedLineStart": 31,
           },
@@ -22542,7 +22542,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
         "mode": "100644",
         "name": "packages/diffs/src/utils/renderDiffWithHighlighter.ts",
         "prevName": undefined,
-        "splitLineCount": 34,
+        "splitLineCount": 36,
         "type": "change",
         "unifiedLineCount": 39,
       },
@@ -22642,7 +22642,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "@@ -1,9 +1,9 @@
 "
 ,
-            "splitLineCount": 9,
+            "splitLineCount": 11,
             "splitLineStart": 0,
             "unifiedLineCount": 11,
             "unifiedLineStart": 0,
@@ -22716,7 +22716,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 9,
+            "splitLineStart": 11,
             "unifiedLineCount": 8,
             "unifiedLineStart": 11,
           },
@@ -22789,7 +22789,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 16,
+            "splitLineStart": 18,
             "unifiedLineCount": 8,
             "unifiedLineStart": 19,
           },
@@ -22797,7 +22797,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
         "mode": "100644",
         "name": "packages/diffs/src/utils/renderFileWithHighlighter.ts",
         "prevName": undefined,
-        "splitLineCount": 23,
+        "splitLineCount": 25,
         "type": "change",
         "unifiedLineCount": 27,
       },
@@ -22901,7 +22901,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "@@ -14,10 +14,10 @@ import {
 "
 ,
-            "splitLineCount": 10,
+            "splitLineCount": 12,
             "splitLineStart": 0,
             "unifiedLineCount": 12,
             "unifiedLineStart": 0,
@@ -22975,7 +22975,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 10,
+            "splitLineStart": 12,
             "unifiedLineCount": 8,
             "unifiedLineStart": 12,
           },
@@ -23048,7 +23048,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 17,
+            "splitLineStart": 19,
             "unifiedLineCount": 8,
             "unifiedLineStart": 20,
           },
@@ -23121,7 +23121,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 24,
+            "splitLineStart": 26,
             "unifiedLineCount": 8,
             "unifiedLineStart": 28,
           },
@@ -23129,7 +23129,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
         "mode": "100644",
         "name": "packages/diffs/src/worker/WorkerPoolManager.ts",
         "prevName": undefined,
-        "splitLineCount": 31,
+        "splitLineCount": 33,
         "type": "change",
         "unifiedLineCount": 36,
       },
@@ -23225,7 +23225,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "@@ -1,9 +1,9 @@
 "
 ,
-            "splitLineCount": 9,
+            "splitLineCount": 10,
             "splitLineStart": 0,
             "unifiedLineCount": 10,
             "unifiedLineStart": 0,
@@ -23299,7 +23299,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 9,
+            "splitLineStart": 10,
             "unifiedLineCount": 8,
             "unifiedLineStart": 10,
           },
@@ -23372,7 +23372,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 16,
+            "splitLineStart": 17,
             "unifiedLineCount": 8,
             "unifiedLineStart": 18,
           },
@@ -23380,7 +23380,7 @@ Subject: [PATCH 5/9] Prettier ignore some files
         "mode": "100644",
         "name": "packages/diffs/src/worker/types.ts",
         "prevName": undefined,
-        "splitLineCount": 23,
+        "splitLineCount": 24,
         "type": "change",
         "unifiedLineCount": 26,
       },
@@ -30251,7 +30251,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "@@ -2650,19 +2650,19 @@ exports[\`DiffHunksRenderer proper buffers should be prepended to additions colum
 "
 ,
-            "splitLineCount": 19,
+            "splitLineCount": 20,
             "splitLineStart": 611,
             "unifiedLineCount": 22,
             "unifiedLineStart": 699,
@@ -30325,7 +30325,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 630,
+            "splitLineStart": 631,
             "unifiedLineCount": 8,
             "unifiedLineStart": 721,
           },
@@ -30398,7 +30398,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 637,
+            "splitLineStart": 638,
             "unifiedLineCount": 8,
             "unifiedLineStart": 729,
           },
@@ -30471,7 +30471,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 644,
+            "splitLineStart": 645,
             "unifiedLineCount": 8,
             "unifiedLineStart": 737,
           },
@@ -30544,7 +30544,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 651,
+            "splitLineStart": 652,
             "unifiedLineCount": 8,
             "unifiedLineStart": 745,
           },
@@ -30617,7 +30617,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 658,
+            "splitLineStart": 659,
             "unifiedLineCount": 8,
             "unifiedLineStart": 753,
           },
@@ -30690,7 +30690,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 665,
+            "splitLineStart": 666,
             "unifiedLineCount": 8,
             "unifiedLineStart": 761,
           },
@@ -30763,7 +30763,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 672,
+            "splitLineStart": 673,
             "unifiedLineCount": 8,
             "unifiedLineStart": 769,
           },
@@ -30836,7 +30836,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 679,
+            "splitLineStart": 680,
             "unifiedLineCount": 8,
             "unifiedLineStart": 777,
           },
@@ -30909,7 +30909,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 686,
+            "splitLineStart": 687,
             "unifiedLineCount": 8,
             "unifiedLineStart": 785,
           },
@@ -30982,7 +30982,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 693,
+            "splitLineStart": 694,
             "unifiedLineCount": 8,
             "unifiedLineStart": 793,
           },
@@ -31055,7 +31055,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 700,
+            "splitLineStart": 701,
             "unifiedLineCount": 8,
             "unifiedLineStart": 801,
           },
@@ -31128,7 +31128,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 707,
+            "splitLineStart": 708,
             "unifiedLineCount": 8,
             "unifiedLineStart": 809,
           },
@@ -31201,7 +31201,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 714,
+            "splitLineStart": 715,
             "unifiedLineCount": 8,
             "unifiedLineStart": 817,
           },
@@ -31274,7 +31274,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 721,
+            "splitLineStart": 722,
             "unifiedLineCount": 8,
             "unifiedLineStart": 825,
           },
@@ -31347,7 +31347,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 728,
+            "splitLineStart": 729,
             "unifiedLineCount": 8,
             "unifiedLineStart": 833,
           },
@@ -31420,7 +31420,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 735,
+            "splitLineStart": 736,
             "unifiedLineCount": 8,
             "unifiedLineStart": 841,
           },
@@ -31493,7 +31493,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 742,
+            "splitLineStart": 743,
             "unifiedLineCount": 8,
             "unifiedLineStart": 849,
           },
@@ -31566,7 +31566,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 749,
+            "splitLineStart": 750,
             "unifiedLineCount": 8,
             "unifiedLineStart": 857,
           },
@@ -31639,7 +31639,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 756,
+            "splitLineStart": 757,
             "unifiedLineCount": 8,
             "unifiedLineStart": 865,
           },
@@ -31712,7 +31712,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 763,
+            "splitLineStart": 764,
             "unifiedLineCount": 8,
             "unifiedLineStart": 873,
           },
@@ -31785,7 +31785,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 770,
+            "splitLineStart": 771,
             "unifiedLineCount": 8,
             "unifiedLineStart": 881,
           },
@@ -31858,7 +31858,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 777,
+            "splitLineStart": 778,
             "unifiedLineCount": 8,
             "unifiedLineStart": 889,
           },
@@ -31931,7 +31931,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 784,
+            "splitLineStart": 785,
             "unifiedLineCount": 8,
             "unifiedLineStart": 897,
           },
@@ -32004,7 +32004,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 791,
+            "splitLineStart": 792,
             "unifiedLineCount": 8,
             "unifiedLineStart": 905,
           },
@@ -32077,7 +32077,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 798,
+            "splitLineStart": 799,
             "unifiedLineCount": 8,
             "unifiedLineStart": 913,
           },
@@ -32150,7 +32150,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 805,
+            "splitLineStart": 806,
             "unifiedLineCount": 8,
             "unifiedLineStart": 921,
           },
@@ -32223,7 +32223,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 812,
+            "splitLineStart": 813,
             "unifiedLineCount": 8,
             "unifiedLineStart": 929,
           },
@@ -32296,7 +32296,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 819,
+            "splitLineStart": 820,
             "unifiedLineCount": 8,
             "unifiedLineStart": 937,
           },
@@ -32369,7 +32369,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 826,
+            "splitLineStart": 827,
             "unifiedLineCount": 8,
             "unifiedLineStart": 945,
           },
@@ -32442,7 +32442,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 833,
+            "splitLineStart": 834,
             "unifiedLineCount": 8,
             "unifiedLineStart": 953,
           },
@@ -32515,7 +32515,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 840,
+            "splitLineStart": 841,
             "unifiedLineCount": 8,
             "unifiedLineStart": 961,
           },
@@ -32588,7 +32588,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 847,
+            "splitLineStart": 848,
             "unifiedLineCount": 8,
             "unifiedLineStart": 969,
           },
@@ -32661,7 +32661,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 854,
+            "splitLineStart": 855,
             "unifiedLineCount": 8,
             "unifiedLineStart": 977,
           },
@@ -32734,7 +32734,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 861,
+            "splitLineStart": 862,
             "unifiedLineCount": 8,
             "unifiedLineStart": 985,
           },
@@ -32807,7 +32807,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 868,
+            "splitLineStart": 869,
             "unifiedLineCount": 8,
             "unifiedLineStart": 993,
           },
@@ -32880,7 +32880,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 875,
+            "splitLineStart": 876,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1001,
           },
@@ -32953,7 +32953,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 882,
+            "splitLineStart": 883,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1009,
           },
@@ -33026,7 +33026,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 889,
+            "splitLineStart": 890,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1017,
           },
@@ -33099,7 +33099,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 896,
+            "splitLineStart": 897,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1025,
           },
@@ -33172,7 +33172,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 903,
+            "splitLineStart": 904,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1033,
           },
@@ -33245,7 +33245,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 910,
+            "splitLineStart": 911,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1041,
           },
@@ -33318,7 +33318,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 917,
+            "splitLineStart": 918,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1049,
           },
@@ -33391,7 +33391,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 924,
+            "splitLineStart": 925,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1057,
           },
@@ -33464,7 +33464,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 931,
+            "splitLineStart": 932,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1065,
           },
@@ -33537,7 +33537,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 938,
+            "splitLineStart": 939,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1073,
           },
@@ -33610,7 +33610,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 945,
+            "splitLineStart": 946,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1081,
           },
@@ -33683,7 +33683,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 952,
+            "splitLineStart": 953,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1089,
           },
@@ -33756,7 +33756,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 959,
+            "splitLineStart": 960,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1097,
           },
@@ -33829,7 +33829,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 966,
+            "splitLineStart": 967,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1105,
           },
@@ -33902,7 +33902,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 973,
+            "splitLineStart": 974,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1113,
           },
@@ -33975,7 +33975,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 980,
+            "splitLineStart": 981,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1121,
           },
@@ -34048,7 +34048,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 987,
+            "splitLineStart": 988,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1129,
           },
@@ -34121,7 +34121,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 994,
+            "splitLineStart": 995,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1137,
           },
@@ -34194,7 +34194,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1001,
+            "splitLineStart": 1002,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1145,
           },
@@ -34267,7 +34267,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1008,
+            "splitLineStart": 1009,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1153,
           },
@@ -34340,7 +34340,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1015,
+            "splitLineStart": 1016,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1161,
           },
@@ -34413,7 +34413,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1022,
+            "splitLineStart": 1023,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1169,
           },
@@ -34486,7 +34486,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1029,
+            "splitLineStart": 1030,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1177,
           },
@@ -34559,7 +34559,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1036,
+            "splitLineStart": 1037,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1185,
           },
@@ -34632,7 +34632,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1043,
+            "splitLineStart": 1044,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1193,
           },
@@ -34705,7 +34705,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1050,
+            "splitLineStart": 1051,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1201,
           },
@@ -34778,7 +34778,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1057,
+            "splitLineStart": 1058,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1209,
           },
@@ -34851,7 +34851,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1064,
+            "splitLineStart": 1065,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1217,
           },
@@ -34924,7 +34924,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1071,
+            "splitLineStart": 1072,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1225,
           },
@@ -34997,7 +34997,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1078,
+            "splitLineStart": 1079,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1233,
           },
@@ -35070,7 +35070,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1085,
+            "splitLineStart": 1086,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1241,
           },
@@ -35143,7 +35143,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1092,
+            "splitLineStart": 1093,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1249,
           },
@@ -35216,7 +35216,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1099,
+            "splitLineStart": 1100,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1257,
           },
@@ -35289,7 +35289,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1106,
+            "splitLineStart": 1107,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1265,
           },
@@ -35362,7 +35362,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1113,
+            "splitLineStart": 1114,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1273,
           },
@@ -35435,7 +35435,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1120,
+            "splitLineStart": 1121,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1281,
           },
@@ -35508,7 +35508,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1127,
+            "splitLineStart": 1128,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1289,
           },
@@ -35581,7 +35581,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1134,
+            "splitLineStart": 1135,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1297,
           },
@@ -35654,7 +35654,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1141,
+            "splitLineStart": 1142,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1305,
           },
@@ -35727,7 +35727,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1148,
+            "splitLineStart": 1149,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1313,
           },
@@ -35800,7 +35800,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1155,
+            "splitLineStart": 1156,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1321,
           },
@@ -35873,7 +35873,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1162,
+            "splitLineStart": 1163,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1329,
           },
@@ -35946,7 +35946,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1169,
+            "splitLineStart": 1170,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1337,
           },
@@ -36019,7 +36019,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1176,
+            "splitLineStart": 1177,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1345,
           },
@@ -36092,7 +36092,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1183,
+            "splitLineStart": 1184,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1353,
           },
@@ -36165,7 +36165,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1190,
+            "splitLineStart": 1191,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1361,
           },
@@ -36238,7 +36238,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1197,
+            "splitLineStart": 1198,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1369,
           },
@@ -36311,7 +36311,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1204,
+            "splitLineStart": 1205,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1377,
           },
@@ -36384,7 +36384,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1211,
+            "splitLineStart": 1212,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1385,
           },
@@ -36457,7 +36457,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1218,
+            "splitLineStart": 1219,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1393,
           },
@@ -36530,7 +36530,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1225,
+            "splitLineStart": 1226,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1401,
           },
@@ -36630,7 +36630,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 9,
-            "splitLineStart": 1232,
+            "splitLineStart": 1233,
             "unifiedLineCount": 11,
             "unifiedLineStart": 1409,
           },
@@ -36801,8 +36801,8 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "@@ -5318,19 +5318,19 @@ exports[\`DiffHunksRenderer proper buffers should be prepended to deletions colum
 "
 ,
-            "splitLineCount": 19,
-            "splitLineStart": 1241,
+            "splitLineCount": 20,
+            "splitLineStart": 1242,
             "unifiedLineCount": 22,
             "unifiedLineStart": 1420,
           },
@@ -36875,7 +36875,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1260,
+            "splitLineStart": 1262,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1442,
           },
@@ -36975,7 +36975,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 9,
-            "splitLineStart": 1267,
+            "splitLineStart": 1269,
             "unifiedLineCount": 11,
             "unifiedLineStart": 1450,
           },
@@ -37146,8 +37146,8 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "@@ -5703,19 +5703,19 @@ exports[\`DiffHunksRenderer additions and deletions should be empty when unified:
 "
 ,
-            "splitLineCount": 19,
-            "splitLineStart": 1276,
+            "splitLineCount": 20,
+            "splitLineStart": 1278,
             "unifiedLineCount": 22,
             "unifiedLineStart": 1461,
           },
@@ -37220,7 +37220,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1295,
+            "splitLineStart": 1298,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1483,
           },
@@ -37293,7 +37293,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1302,
+            "splitLineStart": 1305,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1491,
           },
@@ -37366,7 +37366,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1309,
+            "splitLineStart": 1312,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1499,
           },
@@ -37439,7 +37439,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1316,
+            "splitLineStart": 1319,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1507,
           },
@@ -37512,7 +37512,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1323,
+            "splitLineStart": 1326,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1515,
           },
@@ -37585,7 +37585,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1330,
+            "splitLineStart": 1333,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1523,
           },
@@ -37658,7 +37658,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1337,
+            "splitLineStart": 1340,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1531,
           },
@@ -37731,7 +37731,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1344,
+            "splitLineStart": 1347,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1539,
           },
@@ -37804,7 +37804,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1351,
+            "splitLineStart": 1354,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1547,
           },
@@ -37877,7 +37877,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1358,
+            "splitLineStart": 1361,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1555,
           },
@@ -37950,7 +37950,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1365,
+            "splitLineStart": 1368,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1563,
           },
@@ -38023,7 +38023,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1372,
+            "splitLineStart": 1375,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1571,
           },
@@ -38096,7 +38096,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1379,
+            "splitLineStart": 1382,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1579,
           },
@@ -38169,7 +38169,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1386,
+            "splitLineStart": 1389,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1587,
           },
@@ -38242,7 +38242,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1393,
+            "splitLineStart": 1396,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1595,
           },
@@ -38315,7 +38315,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1400,
+            "splitLineStart": 1403,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1603,
           },
@@ -38388,7 +38388,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1407,
+            "splitLineStart": 1410,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1611,
           },
@@ -38461,7 +38461,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1414,
+            "splitLineStart": 1417,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1619,
           },
@@ -38534,7 +38534,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1421,
+            "splitLineStart": 1424,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1627,
           },
@@ -38607,7 +38607,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1428,
+            "splitLineStart": 1431,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1635,
           },
@@ -38680,7 +38680,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1435,
+            "splitLineStart": 1438,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1643,
           },
@@ -38753,7 +38753,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1442,
+            "splitLineStart": 1445,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1651,
           },
@@ -38826,7 +38826,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1449,
+            "splitLineStart": 1452,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1659,
           },
@@ -38899,7 +38899,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1456,
+            "splitLineStart": 1459,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1667,
           },
@@ -38972,7 +38972,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1463,
+            "splitLineStart": 1466,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1675,
           },
@@ -39045,7 +39045,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1470,
+            "splitLineStart": 1473,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1683,
           },
@@ -39118,7 +39118,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1477,
+            "splitLineStart": 1480,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1691,
           },
@@ -39191,7 +39191,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1484,
+            "splitLineStart": 1487,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1699,
           },
@@ -39264,7 +39264,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1491,
+            "splitLineStart": 1494,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1707,
           },
@@ -39337,7 +39337,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1498,
+            "splitLineStart": 1501,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1715,
           },
@@ -39410,7 +39410,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1505,
+            "splitLineStart": 1508,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1723,
           },
@@ -39483,7 +39483,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1512,
+            "splitLineStart": 1515,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1731,
           },
@@ -39556,7 +39556,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1519,
+            "splitLineStart": 1522,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1739,
           },
@@ -39629,7 +39629,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1526,
+            "splitLineStart": 1529,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1747,
           },
@@ -39702,7 +39702,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1533,
+            "splitLineStart": 1536,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1755,
           },
@@ -39775,7 +39775,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1540,
+            "splitLineStart": 1543,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1763,
           },
@@ -39848,7 +39848,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1547,
+            "splitLineStart": 1550,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1771,
           },
@@ -39921,7 +39921,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1554,
+            "splitLineStart": 1557,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1779,
           },
@@ -39994,7 +39994,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1561,
+            "splitLineStart": 1564,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1787,
           },
@@ -40067,7 +40067,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1568,
+            "splitLineStart": 1571,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1795,
           },
@@ -40140,7 +40140,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1575,
+            "splitLineStart": 1578,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1803,
           },
@@ -40213,7 +40213,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1582,
+            "splitLineStart": 1585,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1811,
           },
@@ -40286,7 +40286,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1589,
+            "splitLineStart": 1592,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1819,
           },
@@ -40359,7 +40359,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1596,
+            "splitLineStart": 1599,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1827,
           },
@@ -40432,7 +40432,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1603,
+            "splitLineStart": 1606,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1835,
           },
@@ -40505,7 +40505,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1610,
+            "splitLineStart": 1613,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1843,
           },
@@ -40578,7 +40578,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1617,
+            "splitLineStart": 1620,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1851,
           },
@@ -40651,7 +40651,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1624,
+            "splitLineStart": 1627,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1859,
           },
@@ -40724,7 +40724,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1631,
+            "splitLineStart": 1634,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1867,
           },
@@ -40797,7 +40797,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1638,
+            "splitLineStart": 1641,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1875,
           },
@@ -40870,7 +40870,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1645,
+            "splitLineStart": 1648,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1883,
           },
@@ -40943,7 +40943,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1652,
+            "splitLineStart": 1655,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1891,
           },
@@ -41016,7 +41016,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1659,
+            "splitLineStart": 1662,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1899,
           },
@@ -41089,7 +41089,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1666,
+            "splitLineStart": 1669,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1907,
           },
@@ -41162,7 +41162,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1673,
+            "splitLineStart": 1676,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1915,
           },
@@ -41235,7 +41235,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1680,
+            "splitLineStart": 1683,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1923,
           },
@@ -41308,7 +41308,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1687,
+            "splitLineStart": 1690,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1931,
           },
@@ -41381,7 +41381,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1694,
+            "splitLineStart": 1697,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1939,
           },
@@ -41454,7 +41454,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1701,
+            "splitLineStart": 1704,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1947,
           },
@@ -41527,7 +41527,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1708,
+            "splitLineStart": 1711,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1955,
           },
@@ -41600,7 +41600,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1715,
+            "splitLineStart": 1718,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1963,
           },
@@ -41673,7 +41673,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1722,
+            "splitLineStart": 1725,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1971,
           },
@@ -41746,7 +41746,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1729,
+            "splitLineStart": 1732,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1979,
           },
@@ -41819,7 +41819,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1736,
+            "splitLineStart": 1739,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1987,
           },
@@ -41892,7 +41892,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1743,
+            "splitLineStart": 1746,
             "unifiedLineCount": 8,
             "unifiedLineStart": 1995,
           },
@@ -41965,7 +41965,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1750,
+            "splitLineStart": 1753,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2003,
           },
@@ -42038,7 +42038,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1757,
+            "splitLineStart": 1760,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2011,
           },
@@ -42111,7 +42111,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1764,
+            "splitLineStart": 1767,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2019,
           },
@@ -42184,7 +42184,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1771,
+            "splitLineStart": 1774,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2027,
           },
@@ -42257,7 +42257,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1778,
+            "splitLineStart": 1781,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2035,
           },
@@ -42330,7 +42330,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1785,
+            "splitLineStart": 1788,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2043,
           },
@@ -42403,7 +42403,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1792,
+            "splitLineStart": 1795,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2051,
           },
@@ -42476,7 +42476,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1799,
+            "splitLineStart": 1802,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2059,
           },
@@ -42549,7 +42549,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1806,
+            "splitLineStart": 1809,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2067,
           },
@@ -42622,7 +42622,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1813,
+            "splitLineStart": 1816,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2075,
           },
@@ -42695,7 +42695,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1820,
+            "splitLineStart": 1823,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2083,
           },
@@ -42768,7 +42768,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1827,
+            "splitLineStart": 1830,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2091,
           },
@@ -42841,7 +42841,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1834,
+            "splitLineStart": 1837,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2099,
           },
@@ -42914,7 +42914,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1841,
+            "splitLineStart": 1844,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2107,
           },
@@ -42987,7 +42987,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1848,
+            "splitLineStart": 1851,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2115,
           },
@@ -43060,7 +43060,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1855,
+            "splitLineStart": 1858,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2123,
           },
@@ -43133,7 +43133,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1862,
+            "splitLineStart": 1865,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2131,
           },
@@ -43206,7 +43206,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1869,
+            "splitLineStart": 1872,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2139,
           },
@@ -43279,7 +43279,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1876,
+            "splitLineStart": 1879,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2147,
           },
@@ -43352,7 +43352,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1883,
+            "splitLineStart": 1886,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2155,
           },
@@ -43425,7 +43425,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1890,
+            "splitLineStart": 1893,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2163,
           },
@@ -43498,7 +43498,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1897,
+            "splitLineStart": 1900,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2171,
           },
@@ -43571,7 +43571,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1904,
+            "splitLineStart": 1907,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2179,
           },
@@ -43644,7 +43644,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1911,
+            "splitLineStart": 1914,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2187,
           },
@@ -43717,7 +43717,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1918,
+            "splitLineStart": 1921,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2195,
           },
@@ -43790,7 +43790,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1925,
+            "splitLineStart": 1928,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2203,
           },
@@ -43863,7 +43863,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1932,
+            "splitLineStart": 1935,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2211,
           },
@@ -43936,7 +43936,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1939,
+            "splitLineStart": 1942,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2219,
           },
@@ -44009,7 +44009,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1946,
+            "splitLineStart": 1949,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2227,
           },
@@ -44082,7 +44082,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1953,
+            "splitLineStart": 1956,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2235,
           },
@@ -44155,7 +44155,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1960,
+            "splitLineStart": 1963,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2243,
           },
@@ -44228,7 +44228,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1967,
+            "splitLineStart": 1970,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2251,
           },
@@ -44301,7 +44301,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1974,
+            "splitLineStart": 1977,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2259,
           },
@@ -44374,7 +44374,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1981,
+            "splitLineStart": 1984,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2267,
           },
@@ -44447,7 +44447,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1988,
+            "splitLineStart": 1991,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2275,
           },
@@ -44520,7 +44520,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 1995,
+            "splitLineStart": 1998,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2283,
           },
@@ -44593,7 +44593,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2002,
+            "splitLineStart": 2005,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2291,
           },
@@ -44666,7 +44666,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2009,
+            "splitLineStart": 2012,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2299,
           },
@@ -44739,7 +44739,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2016,
+            "splitLineStart": 2019,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2307,
           },
@@ -44839,7 +44839,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 9,
-            "splitLineStart": 2023,
+            "splitLineStart": 2026,
             "unifiedLineCount": 11,
             "unifiedLineStart": 2315,
           },
@@ -45010,8 +45010,8 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "@@ -8628,19 +8628,19 @@ exports[\`DiffHunksRenderer a diff with only additions should have an empty delet
 "
 ,
-            "splitLineCount": 19,
-            "splitLineStart": 2032,
+            "splitLineCount": 20,
+            "splitLineStart": 2035,
             "unifiedLineCount": 22,
             "unifiedLineStart": 2326,
           },
@@ -45084,7 +45084,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2051,
+            "splitLineStart": 2055,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2348,
           },
@@ -45157,7 +45157,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2058,
+            "splitLineStart": 2062,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2356,
           },
@@ -45230,7 +45230,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2065,
+            "splitLineStart": 2069,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2364,
           },
@@ -45303,7 +45303,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2072,
+            "splitLineStart": 2076,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2372,
           },
@@ -45376,7 +45376,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2079,
+            "splitLineStart": 2083,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2380,
           },
@@ -45449,7 +45449,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2086,
+            "splitLineStart": 2090,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2388,
           },
@@ -45522,7 +45522,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2093,
+            "splitLineStart": 2097,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2396,
           },
@@ -45595,7 +45595,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2100,
+            "splitLineStart": 2104,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2404,
           },
@@ -45668,7 +45668,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2107,
+            "splitLineStart": 2111,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2412,
           },
@@ -45741,7 +45741,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2114,
+            "splitLineStart": 2118,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2420,
           },
@@ -45814,7 +45814,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2121,
+            "splitLineStart": 2125,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2428,
           },
@@ -45887,7 +45887,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2128,
+            "splitLineStart": 2132,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2436,
           },
@@ -45960,7 +45960,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2135,
+            "splitLineStart": 2139,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2444,
           },
@@ -46033,7 +46033,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2142,
+            "splitLineStart": 2146,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2452,
           },
@@ -46106,7 +46106,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2149,
+            "splitLineStart": 2153,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2460,
           },
@@ -46179,7 +46179,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2156,
+            "splitLineStart": 2160,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2468,
           },
@@ -46252,7 +46252,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2163,
+            "splitLineStart": 2167,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2476,
           },
@@ -46325,7 +46325,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2170,
+            "splitLineStart": 2174,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2484,
           },
@@ -46398,7 +46398,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2177,
+            "splitLineStart": 2181,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2492,
           },
@@ -46471,7 +46471,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2184,
+            "splitLineStart": 2188,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2500,
           },
@@ -46544,7 +46544,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2191,
+            "splitLineStart": 2195,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2508,
           },
@@ -46617,7 +46617,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2198,
+            "splitLineStart": 2202,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2516,
           },
@@ -46690,7 +46690,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2205,
+            "splitLineStart": 2209,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2524,
           },
@@ -46763,7 +46763,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2212,
+            "splitLineStart": 2216,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2532,
           },
@@ -46836,7 +46836,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2219,
+            "splitLineStart": 2223,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2540,
           },
@@ -46909,7 +46909,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2226,
+            "splitLineStart": 2230,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2548,
           },
@@ -46982,7 +46982,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2233,
+            "splitLineStart": 2237,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2556,
           },
@@ -47055,7 +47055,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2240,
+            "splitLineStart": 2244,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2564,
           },
@@ -47128,7 +47128,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2247,
+            "splitLineStart": 2251,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2572,
           },
@@ -47201,7 +47201,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2254,
+            "splitLineStart": 2258,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2580,
           },
@@ -47274,7 +47274,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2261,
+            "splitLineStart": 2265,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2588,
           },
@@ -47347,7 +47347,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2268,
+            "splitLineStart": 2272,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2596,
           },
@@ -47420,7 +47420,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2275,
+            "splitLineStart": 2279,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2604,
           },
@@ -47493,7 +47493,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2282,
+            "splitLineStart": 2286,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2612,
           },
@@ -47566,7 +47566,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2289,
+            "splitLineStart": 2293,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2620,
           },
@@ -47639,7 +47639,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2296,
+            "splitLineStart": 2300,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2628,
           },
@@ -47712,7 +47712,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2303,
+            "splitLineStart": 2307,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2636,
           },
@@ -47785,7 +47785,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 7,
-            "splitLineStart": 2310,
+            "splitLineStart": 2314,
             "unifiedLineCount": 8,
             "unifiedLineStart": 2644,
           },
@@ -47885,7 +47885,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "
 ,
             "splitLineCount": 9,
-            "splitLineStart": 2317,
+            "splitLineStart": 2321,
             "unifiedLineCount": 11,
             "unifiedLineStart": 2652,
           },
@@ -48056,8 +48056,8 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
 "@@ -9888,19 +9888,19 @@ exports[\`DiffHunksRenderer a diff with only deletions should have an empty addit
 "
 ,
-            "splitLineCount": 19,
-            "splitLineStart": 2326,
+            "splitLineCount": 20,
+            "splitLineStart": 2330,
             "unifiedLineCount": 22,
             "unifiedLineStart": 2663,
           },
@@ -48065,7 +48065,7 @@ Subject: [PATCH 6/9] Remove various PJS references in TS/JS
         "mode": "100644",
         "name": "packages/diffs/test/__snapshots__/DiffHunksRender.test.ts.snap",
         "prevName": undefined,
-        "splitLineCount": 2345,
+        "splitLineCount": 2350,
         "type": "change",
         "unifiedLineCount": 2685,
       },
@@ -58398,7 +58398,7 @@ Subject: [PATCH 8/9] Fix the SSRPage name
 ,
             "splitLineCount": 4,
             "splitLineStart": 390,
-            "unifiedLineCount": 6,
+            "unifiedLineCount": 5,
             "unifiedLineStart": 484,
           },
         ],
@@ -58407,7 +58407,7 @@ Subject: [PATCH 8/9] Fix the SSRPage name
         "prevName": undefined,
         "splitLineCount": 394,
         "type": "change",
-        "unifiedLineCount": 490,
+        "unifiedLineCount": 489,
       },
       {
         "cacheKey": undefined,
@@ -71141,18 +71141,18 @@ exports[`parsePatchFiles should warn on malformed patch with bare newline in hun
 "@@ -1,87 +0,0 @@
 "
 ,
-            "splitLineCount": 87,
+            "splitLineCount": 86,
             "splitLineStart": 0,
-            "unifiedLineCount": 87,
+            "unifiedLineCount": 86,
             "unifiedLineStart": 0,
           },
         ],
         "mode": "100644",
         "name": "apps/docs/app/docs/CoreTypes/CoreTypes.tsx",
         "prevName": undefined,
-        "splitLineCount": 87,
+        "splitLineCount": 86,
         "type": "deleted",
-        "unifiedLineCount": 87,
+        "unifiedLineCount": 86,
       },
     ],
     "patchMetadata": undefined,

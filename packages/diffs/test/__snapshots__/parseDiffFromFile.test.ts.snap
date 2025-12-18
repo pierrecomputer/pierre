@@ -1483,7 +1483,7 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -231,35 +214,125 @@
 "
 ,
-      "splitLineCount": 125,
+      "splitLineCount": 130,
       "splitLineStart": 108,
       "unifiedLineCount": 130,
       "unifiedLineStart": 114,
@@ -1693,7 +1693,7 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 27,
-      "splitLineStart": 233,
+      "splitLineStart": 238,
       "unifiedLineCount": 31,
       "unifiedLineStart": 244,
     },
@@ -1843,7 +1843,7 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 18,
-      "splitLineStart": 260,
+      "splitLineStart": 265,
       "unifiedLineCount": 20,
       "unifiedLineStart": 275,
     },
@@ -1993,7 +1993,7 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 18,
-      "splitLineStart": 278,
+      "splitLineStart": 283,
       "unifiedLineCount": 20,
       "unifiedLineStart": 295,
     },
@@ -2621,8 +2621,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -349,53 +425,94 @@
 "
 ,
-      "splitLineCount": 94,
-      "splitLineStart": 296,
+      "splitLineCount": 123,
+      "splitLineStart": 301,
       "unifiedLineCount": 136,
       "unifiedLineStart": 315,
     },
@@ -2770,7 +2770,7 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 27,
-      "splitLineStart": 390,
+      "splitLineStart": 424,
       "unifiedLineCount": 27,
       "unifiedLineStart": 451,
     },
@@ -2954,7 +2954,7 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 36,
-      "splitLineStart": 417,
+      "splitLineStart": 451,
       "unifiedLineCount": 36,
       "unifiedLineStart": 478,
     },
@@ -7997,7 +7997,7 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 ,
   ],
   "prevName": "fileOld.txt",
-  "splitLineCount": 453,
+  "splitLineCount": 487,
   "type": "rename-changed",
   "unifiedLineCount": 514,
 }
