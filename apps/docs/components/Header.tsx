@@ -124,6 +124,7 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
       <nav className="flex items-center">
         <NavLink href="/">Home</NavLink>
         <NavLink href="/docs">Docs</NavLink>
+        <NavLink href="/examples">Examples</NavLink>
 
         <div className="border-border mx-2 h-5 w-px border-l" />
 
