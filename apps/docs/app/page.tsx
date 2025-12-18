@@ -84,7 +84,7 @@ export default function Home() {
           </Button>
           <Button variant="outline" asChild>
             <Link
-              href="https://github.com/pierredotco/diffs"
+              href="https://github.com/pierrecomputer/pierre"
               target="_blank"
               rel="noopener noreferrer"
             >
