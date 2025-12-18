@@ -357,3 +357,8 @@ export interface RenderedDiffASTCache {
   options: RenderDiffOptions;
   result: ThemedDiffResult | undefined;
 }
+
+export interface RenderRange {
+  startingLine: number;
+  endingLine: number;
+}

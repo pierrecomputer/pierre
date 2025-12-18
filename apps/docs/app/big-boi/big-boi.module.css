@@ -2,13 +2,16 @@
   position: relative;
   margin-inline: 8px;
   margin-top: 8px;
+  overflow-anchor: none;
 }
 
-.wrapper file-diff {
+.wrapper diffs-container {
+  contain: layout paint;
   position: absolute;
   width: 100%;
   overflow: clip;
   border-radius: 8px;
+  box-shadow: 0 0 0 1px red;
   /* Need to percolate on this because
    * it will cause cause things to register
    * 0 height until the browser is scrolled close to them scrollability-wise. But
