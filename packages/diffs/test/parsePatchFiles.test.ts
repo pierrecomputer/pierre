@@ -68,7 +68,7 @@ describe('parsePatchFiles', () => {
         const renderer = new DiffHunksRenderer({ diffStyle: 'unified' });
         const { unifiedAST } = await renderer.asyncRender(file);
         assertDefined(unifiedAST, 'unifiedAST should be defined');
-        // In 'unified' style we we stack all output as context, deletions,
+        // In 'unified' style we stack all output as context, deletions,
         // additions. Lets ensure we are mathing correctly and rendering to
         // this math
         expect(file.unifiedLineCount).toBe(countRenderedLines(unifiedAST));
