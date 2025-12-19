@@ -84,6 +84,7 @@ function ButtonGroupItem({
       variant={isSelected ? 'outline' : 'ghost'}
       size={context.size}
       onClick={handleClick}
+      title={value}
       {...props}
     >
       {children}
