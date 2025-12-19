@@ -1,4 +1,5 @@
 .wrapper {
+  overscroll-behavior-x: none;
   position: relative;
   contain: layout style size;
   margin-inline: 8px;
@@ -23,7 +24,7 @@
   width: 100%;
   overflow: clip;
   border-radius: 8px;
-  box-shadow: 0 0 0 1px red;
+  box-shadow: 0 0 0 2px red;
   /* Need to percolate on this because
    * it will cause cause things to register
    * 0 height until the browser is scrolled close to them scrollability-wise. But

@@ -91,7 +91,7 @@ interface RenderCollapsedHunksProps {
 
 const DEFAULT_RENDER_RANGE: RenderRange = {
   startingLine: 0,
-  endingLine: Infinity,
+  totalLines: Infinity,
 };
 
 interface RenderHunkProps {
@@ -526,10 +526,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       renderRange,
     };
     for (const hunk of fileDiff.hunks) {
-      if (
-        state.renderedLineCount >=
-        renderRange.endingLine - renderRange.startingLine
-      ) {
+      if (state.renderedLineCount >= renderRange.totalLines) {
         break;
       }
       this.renderHunks({
@@ -901,20 +898,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // Render hunk/diff content
     for (const hunkContent of hunk.hunkContent) {
-      if (
-        state.renderedLineCount >=
-        state.renderRange.endingLine - state.renderRange.startingLine
-      ) {
+      if (state.renderedLineCount >= state.renderRange.totalLines) {
         break;
       }
       let brokeEarly = false;
       if (hunkContent.type === 'context') {
         const { length: len } = hunkContent.lines;
         for (let i = 0; i < len; i++) {
-          if (
-            state.renderedLineCount >=
-            state.renderRange.endingLine - state.renderRange.startingLine
-          ) {
+          if (state.renderedLineCount >= state.renderRange.totalLines) {
             brokeEarly = true;
             break;
           }
@@ -985,10 +976,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const len = unified ? dLen + aLen : Math.max(dLen, aLen);
         let spanSize = 0;
         for (let i = 0; i < len; i++) {
-          if (
-            state.renderedLineCount >=
-            state.renderRange.endingLine - state.renderRange.startingLine
-          ) {
+          if (state.renderedLineCount >= state.renderRange.totalLines) {
             brokeEarly = true;
             break;
           }
