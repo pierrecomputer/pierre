@@ -117,6 +117,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           enableLineSelection: !hasOpenCommentForm,
           enableHoverUtility: !hasOpenCommentForm,
           onLineSelectionEnd: handleLineSelectionEnd,
+          disableLineNumbers: true,
         }}
         renderHoverUtility={renderHoverUtility}
         lineAnnotations={annotations}

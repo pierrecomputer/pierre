@@ -2,7 +2,8 @@ import type { CSSProperties } from 'react';
 
 export const HoverSlotStyles: CSSProperties = {
   position: 'absolute',
-  top: 0,
-  bottom: 0,
+  inset: '0',
+  // insetBlockStart: '0',
+  // insetBlockEnd: '0',
   textAlign: 'center',
 };
