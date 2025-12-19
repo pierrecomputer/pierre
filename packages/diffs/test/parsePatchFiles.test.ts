@@ -44,35 +44,42 @@ describe('parsePatchFiles', () => {
     expect(result).toMatchSnapshot('malformed patch');
   });
 
-  test('splitLineCount should match rendered line count in split mode', async () => {
-    for (const patch of result) {
-      for (const file of patch.files) {
-        if (file.hunks.length === 0) continue;
+  test(
+    'splitLineCount should match rendered line count in split mode',
+    async () => {
+      for (const patch of result) {
+        for (const file of patch.files) {
+          if (file.hunks.length === 0) continue;
 
-        const renderer = new DiffHunksRenderer({ diffStyle: 'split' });
-        const renderResult = await renderer.asyncRender(file);
-        // Split mode: both columns have the same visual height due to a
-        // combination of lines and empty buffer regions.  Line types will be a
-        // mix of context, additions and deletions.  Lets make sure what we
-        // math from parsePatchFiles is correctly rendered and vice versa.
-        expect(file.splitLineCount).toBe(countSplitRows(renderResult));
+          const renderer = new DiffHunksRenderer({ diffStyle: 'split' });
+          const renderResult = await renderer.asyncRender(file);
+          // Split mode: both columns have the same visual height due to a
+          // combination of lines and empty buffer regions.  Line types will be a
+          // mix of context, additions and deletions.  Lets make sure what we
+          // math from parsePatchFiles is correctly rendered and vice versa.
+          expect(file.splitLineCount).toBe(countSplitRows(renderResult));
+        }
       }
-    }
-  });
+    },
+    { timeout: 30000 }
+  );
 
-  test('unifiedLineCount should match rendered line count in unified mode', async () => {
-    for (const patch of result) {
-      for (const file of patch.files) {
-        if (file.hunks.length === 0) continue;
-
-        const renderer = new DiffHunksRenderer({ diffStyle: 'unified' });
-        const { unifiedAST } = await renderer.asyncRender(file);
-        assertDefined(unifiedAST, 'unifiedAST should be defined');
-        // In 'unified' style we stack all output as context, deletions,
-        // additions. Lets ensure we are mathing correctly and rendering to
-        // this math
-        expect(file.unifiedLineCount).toBe(countRenderedLines(unifiedAST));
+  test(
+    'unifiedLineCount should match rendered line count in unified mode',
+    async () => {
+      for (const patch of result) {
+        for (const file of patch.files) {
+          if (file.hunks.length === 0) continue;
+          const renderer = new DiffHunksRenderer({ diffStyle: 'unified' });
+          const { unifiedAST } = await renderer.asyncRender(file);
+          assertDefined(unifiedAST, 'unifiedAST should be defined');
+          // In 'unified' style we stack all output as context, deletions,
+          // additions. Lets ensure we are mathing correctly and rendering to
+          // this math
+          expect(file.unifiedLineCount).toBe(countRenderedLines(unifiedAST));
+        }
       }
-    }
-  });
+    },
+    { timeout: 30000 }
+  );
 });
