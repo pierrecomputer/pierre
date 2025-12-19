@@ -1,88 +1,24 @@
 .wrapper {
   position: relative;
+  contain: layout style size;
   margin-inline: 8px;
   margin-top: 8px;
   overflow-anchor: none;
-  --skeleton-content-color: light-dark(
-    rgb(0 0 0 / 0.1),
-    rgb(255 255 255 / 0.1)
-  );
-  --skeleton-number-color: light-dark(
-    rgb(0 0 0 / 0.1),
-    rgb(255 255 255 / 0.08)
-  );
-  /* Unified pattern, do not remove */
-  /* background-image: */
-  /*   repeating-linear-gradient( */
-  /*     to bottom, */
-  /*     transparent 0, */
-  /*     transparent 1px, */
-  /*     var(--skeleton-number-color) 1px, */
-  /*     var(--skeleton-number-color) 19px, */
-  /*     transparent 19px, */
-  /*     transparent 20px */
-  /*   ), */
-  /*   repeating-linear-gradient( */
-  /*     to bottom, */
-  /*     transparent 0, */
-  /*     transparent 1px, */
-  /*     var(--skeleton-content-color) 1px, */
-  /*     var(--skeleton-content-color) 19px, */
-  /*     transparent 19px, */
-  /*     transparent 20px */
-  /*   ); */
+  /* WOW, fucked up chrome hack to prevent blanking, we have to render a dual
+   * layer linear gradient, in this case something that doesnt render anything */
   background-image:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 1px,
-      var(--skeleton-number-color) 1px,
-      var(--skeleton-number-color) 19px,
-      transparent 19px,
-      transparent 20px
-    ),
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 1px,
-      var(--skeleton-content-color) 1px,
-      var(--skeleton-content-color) 19px,
-      transparent 19px,
-      transparent 20px
-    ),
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 1px,
-      var(--skeleton-number-color) 1px,
-      var(--skeleton-number-color) 19px,
-      transparent 19px,
-      transparent 20px
-    ),
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 1px,
-      var(--skeleton-content-color) 1px,
-      var(--skeleton-content-color) 19px,
-      transparent 19px,
-      transparent 20px
-    );
-  background-size:
-    40px 100%,
-    calc(50% - 43px) 100%,
-    40px 100%,
-    calc(50% - 43px) 100%;
-  background-position:
-    left 0 top 0,
-    left 42px top 0,
-    right calc(50% - 21px) top 0,
-    right 0 top 0;
+    repeating-linear-gradient(to bottom, transparent 0, transparent 0),
+    repeating-linear-gradient(to bottom, transparent 0, transparent 0);
+  background-size: 0 0;
   background-repeat: no-repeat;
+  /* By using background-attachment: fixed, we force compositing to be
+   * synchronous... which prevents blanking. Only seems to work in 
+   * chrome tho */
+  background-attachment: fixed;
 }
 
 .wrapper diffs-container {
-  contain: layout paint;
+  contain: layout paint style;
   position: absolute;
   width: 100%;
   overflow: clip;
