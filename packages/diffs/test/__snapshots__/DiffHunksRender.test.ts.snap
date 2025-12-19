@@ -141,7 +141,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
 "@@ -1,12 +1,13 @@
 "
 ,
-      "splitLineCount": 13,
+      "splitLineCount": 14,
       "splitLineStart": 0,
       "unifiedLineCount": 16,
       "unifiedLineStart": 0,
@@ -253,7 +253,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
 ,
   ],
   "prevName": undefined,
-  "splitLineCount": 13,
+  "splitLineCount": 14,
   "type": "change",
   "unifiedLineCount": 16,
 }
@@ -2809,7 +2809,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
 "@@ -1,13 +1,12 @@
 "
 ,
-      "splitLineCount": 13,
+      "splitLineCount": 14,
       "splitLineStart": 0,
       "unifiedLineCount": 16,
       "unifiedLineStart": 0,
@@ -2921,7 +2921,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
 ,
   ],
   "prevName": undefined,
-  "splitLineCount": 13,
+  "splitLineCount": 14,
   "type": "change",
   "unifiedLineCount": 16,
 }
@@ -5477,7 +5477,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
 "@@ -1,12 +1,13 @@
 "
 ,
-      "splitLineCount": 13,
+      "splitLineCount": 14,
       "splitLineStart": 0,
       "unifiedLineCount": 16,
       "unifiedLineStart": 0,
@@ -5589,7 +5589,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
 ,
   ],
   "prevName": undefined,
-  "splitLineCount": 13,
+  "splitLineCount": 14,
   "type": "change",
   "unifiedLineCount": 16,
 }

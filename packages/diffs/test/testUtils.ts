@@ -1,5 +1,6 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
+import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
 import type { FileDiffMetadata, ParsedPatch } from '../src/types';
 
 // Assertion helpers
@@ -128,14 +129,29 @@ export function verifyHunkLineValues(
       );
     }
 
-    // Verify splitLineCount = max(additionCount, deletionCount)
-    const expectedSplitLineCount = Math.max(
-      hunk.additionCount,
-      hunk.deletionCount
-    );
+    // Verify splitLineCount = sum of (context lines + max(additions, deletions) per change block)
+    const expectedSplitLineCount = hunk.hunkContent.reduce((acc, content) => {
+      if (content.type === 'context') {
+        return acc + content.lines.length;
+      }
+      return acc + Math.max(content.additions.length, content.deletions.length);
+    }, 0);
     if (hunk.splitLineCount !== expectedSplitLineCount) {
       errors.push(
-        `${hunkPrefix}: splitLineCount (${hunk.splitLineCount}) !== max(additionCount, deletionCount) (${expectedSplitLineCount})`
+        `${hunkPrefix}: splitLineCount (${hunk.splitLineCount}) !== calculated from hunkContent (${expectedSplitLineCount})`
+      );
+    }
+
+    // Verify unifiedLineCount = sum of (context lines + additions + deletions per change block)
+    const expectedUnifiedLineCount = hunk.hunkContent.reduce((acc, content) => {
+      if (content.type === 'context') {
+        return acc + content.lines.length;
+      }
+      return acc + content.additions.length + content.deletions.length;
+    }, 0);
+    if (hunk.unifiedLineCount !== expectedUnifiedLineCount) {
+      errors.push(
+        `${hunkPrefix}: unifiedLineCount (${hunk.unifiedLineCount}) !== calculated from hunkContent (${expectedUnifiedLineCount})`
       );
     }
 
@@ -208,4 +224,34 @@ export function verifyPatchHunkValues(patches: ParsedPatch[]): VerifyResult {
 export function verifyFileDiffHunkValues(diff: FileDiffMetadata): VerifyResult {
   const errors = verifyHunkLineValues(diff);
   return { valid: errors.length === 0, errors };
+}
+
+export function countRenderedLines(ast: ElementContent[]): number {
+  return ast.filter(
+    (node) => isHastElement(node) && node.properties?.['data-line'] != null
+  ).length;
+}
+
+// Count rows in split mode by looking at line-index values
+// Each unique line-index represents one visual row in split view
+export function countSplitRows(result: HunksRenderResult): number {
+  const lineIndices = new Set<number>();
+  const additionsAST = result.additionsAST ?? [];
+  const deletionsAST = result.deletionsAST ?? [];
+
+  for (const nodes of [additionsAST, deletionsAST]) {
+    for (const node of nodes) {
+      if (isHastElement(node)) {
+        const lineIndex = node.properties?.['data-line-index'];
+        if (typeof lineIndex === 'string') {
+          // data-line-index format is "unifiedIndex,splitIndex"
+          const splitIndex = Number.parseInt(lineIndex.split(',')[1], 10);
+          if (!isNaN(splitIndex)) {
+            lineIndices.add(splitIndex);
+          }
+        }
+      }
+    }
+  }
+  return lineIndices.size;
 }
