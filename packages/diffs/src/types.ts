@@ -360,5 +360,5 @@ export interface RenderedDiffASTCache {
 
 export interface RenderRange {
   startingLine: number;
-  endingLine: number;
+  totalLines: number;
 }
