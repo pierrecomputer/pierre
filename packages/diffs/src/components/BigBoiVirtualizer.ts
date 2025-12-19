@@ -178,7 +178,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
     if (this.scrollY === scrollY) return;
     this.scrollY = scrollY;
     if (this.files.length === 0) return;
-    this._render();
+    queueRender(this._render);
   };
 
   handleResize = (): void => {
