@@ -12,12 +12,12 @@ export default function Footer() {
           >
             Home
           </Link>
-          {/* <Link
+          <Link
             href="/playground"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
             Playground
-          </Link> */}
+          </Link>
           <Link
             href="/docs"
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
