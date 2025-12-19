@@ -71,7 +71,6 @@ def verify_token(token: str) -> Optional[dict]:
       theme: 'pierre-dark',
       diffStyle: 'unified',
       unsafeCSS: CustomScrollbarCSS,
-      disableLineNumbers: true,
     },
     annotations: [
       {
