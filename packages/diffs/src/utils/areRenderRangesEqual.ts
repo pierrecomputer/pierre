@@ -6,6 +6,6 @@ export function areRenderRangesEqual(
 ): boolean {
   return (
     renderRangeA?.startingLine === renderRangeB?.startingLine &&
-    renderRangeA?.endingLine === renderRangeB?.endingLine
+    renderRangeA?.totalLines === renderRangeB?.totalLines
   );
 }

@@ -227,23 +227,27 @@ function createWindowFromScrollPosition({
   const windowHeight = height * OVERSCROLL_MULTIPLIER;
   if (windowHeight > scrollHeight || fitPerfectly) {
     return {
-      top: scrollY - containerOffset,
-      bottom: scrollY + height - containerOffset,
+      top: Math.max(scrollY - containerOffset, 0),
+      bottom:
+        scrollY + (fitPerfectly ? height : windowHeight) - containerOffset,
     };
   }
-  let top = scrollY + height / 2 - windowHeight / 2;
+  const scrollCenter = scrollY + height / 2;
+  let top = scrollCenter - windowHeight / 2;
   let bottom = top + windowHeight;
   if (top < 0) {
     top = 0;
-    bottom = windowHeight;
-  } else if (top + windowHeight > scrollHeight) {
+    bottom = Math.min(windowHeight, scrollHeight);
+  } else if (bottom > scrollHeight) {
     bottom = scrollHeight;
-    top = bottom - windowHeight;
+    top = Math.max(bottom - windowHeight, 0);
   }
-
+  top = Math.floor(Math.max(top - containerOffset, 0));
   return {
-    top: Math.max(top, 0) - containerOffset,
-    bottom: Math.min(bottom, scrollHeight) - containerOffset,
+    top,
+    bottom: Math.ceil(
+      Math.max(Math.min(bottom, scrollHeight) - containerOffset, top)
+    ),
   };
 }
 
