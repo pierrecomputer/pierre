@@ -61,7 +61,7 @@ describe('parsePatchFiles', () => {
         }
       }
     },
-    { timeout: 30000 }
+    { timeout: 15000 }
   );
 
   test(
@@ -80,6 +80,6 @@ describe('parsePatchFiles', () => {
         }
       }
     },
-    { timeout: 30000 }
+    { timeout: 15000 }
   );
 });
