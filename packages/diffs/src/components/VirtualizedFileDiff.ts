@@ -151,7 +151,7 @@ export class VirtualizedFileDiff<
         this.fileDiff.name
       );
       return {
-        renderRange: { startingLine: -1, endingLine: -1 },
+        renderRange: { startingLine: 0, totalLines: 0 },
         containerOffset: 0,
       };
     }
@@ -159,7 +159,7 @@ export class VirtualizedFileDiff<
     // Whole file is under LINE_HUNK_COUNT, just render it all
     if (lineCount <= LINE_HUNK_COUNT) {
       return {
-        renderRange: { startingLine: 0, endingLine: Infinity },
+        renderRange: { startingLine: 0, totalLines: Infinity },
         containerOffset: 0,
       };
     }
@@ -169,7 +169,7 @@ export class VirtualizedFileDiff<
     let currentLine = 0;
     const containerOffsets: number[] = [];
     let startingLine: number | undefined;
-    let endingLine: number | undefined;
+    let endingLine = 0;
     outerLoop: for (const hunk of this.fileDiff.hunks) {
       let hunkGap = 0;
       if (hunk.additionStart > 1 || hunk.deletionStart > 1) {
@@ -194,9 +194,10 @@ export class VirtualizedFileDiff<
           currentLineTop < bottom
         ) {
           startingLine = currentLine;
+          endingLine = startingLine + 1;
         } else if (startingLine != null && currentLineTop < bottom) {
-          endingLine = currentLine;
-        } else if (startingLine != null) {
+          endingLine++;
+        } else if (startingLine != null || currentLine > bottom) {
           break outerLoop;
         }
         currentLine++;
@@ -206,19 +207,18 @@ export class VirtualizedFileDiff<
 
     if (startingLine == null) {
       return {
-        renderRange: { startingLine: -1, endingLine: -1 },
+        renderRange: { startingLine: 0, totalLines: 0 },
         containerOffset: 0,
       };
     }
 
     startingLine = Math.floor(startingLine / LINE_HUNK_COUNT) * LINE_HUNK_COUNT;
-    endingLine =
-      endingLine != null
-        ? Math.ceil(endingLine / LINE_HUNK_COUNT) * LINE_HUNK_COUNT
-        : startingLine + LINE_HUNK_COUNT;
+    const totalLines =
+      Math.ceil((endingLine - startingLine) / LINE_HUNK_COUNT) *
+      LINE_HUNK_COUNT;
 
     return {
-      renderRange: { startingLine, endingLine },
+      renderRange: { startingLine, totalLines },
       containerOffset: containerOffsets[startingLine / LINE_HUNK_COUNT] ?? 0,
     };
   }
