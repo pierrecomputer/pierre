@@ -92,6 +92,8 @@ interface RenderCollapsedHunksProps {
 const DEFAULT_RENDER_RANGE: RenderRange = {
   startingLine: 0,
   totalLines: Infinity,
+  bufferBefore: 0,
+  bufferAfter: 0,
 };
 
 interface RenderHunkProps {
@@ -558,6 +560,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         ? deletionsAST
         : undefined;
     unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
+
+    if (renderRange.bufferBefore > 0) {
+      const element = createHastElement({
+        tagName: 'div',
+        properties: {
+          'data-virtualized-buffer': 'before',
+          style: `height: ${renderRange.bufferBefore}px`,
+        },
+      });
+      unifiedAST?.unshift(element);
+      deletionsAST?.unshift(element);
+      additionsAST?.unshift(element);
+    }
+    if (renderRange.bufferAfter > 0) {
+      const element = createHastElement({
+        tagName: 'div',
+        properties: {
+          'data-virtualized-buffer': 'after',
+          style: `height: ${renderRange.bufferAfter}px`,
+        },
+      });
+      unifiedAST?.push(element);
+      deletionsAST?.push(element);
+      additionsAST?.push(element);
+    }
 
     const preNode = this.createPreElement(
       deletionsAST != null && additionsAST != null,
