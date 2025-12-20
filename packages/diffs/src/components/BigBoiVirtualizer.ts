@@ -18,7 +18,7 @@ const OVERSCROLL_MULTIPLIER = 1;
 
 const DIFF_OPTIONS = {
   theme: 'pierre-dark',
-  diffStyle: 'unified',
+  diffStyle: 'split',
 } as const;
 const ENABLE_RENDERING = true;
 
