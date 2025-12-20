@@ -14,11 +14,11 @@ declare global {
   }
 }
 
-const OVERSCROLL_MULTIPLIER = 1;
+const OVERSCROLL_MULTIPLIER = 2;
 
 const DIFF_OPTIONS = {
   theme: 'pierre-dark',
-  diffStyle: 'split',
+  diffStyle: 'unified',
 } as const;
 const ENABLE_RENDERING = true;
 
