@@ -7,48 +7,62 @@ import type {
 
 export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {
-    name: 'config.ts',
-    contents: `import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+    name: 'AppConfig.swift',
+    contents: `import Foundation
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 3000,
-    open: true
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: true
-  }
-});
+struct AppConfig {
+    static let shared = AppConfig()
+
+    let apiBaseURL: URL
+    let timeout: TimeInterval
+    let maxRetries: Int
+
+    private init() {
+        self.apiBaseURL = URL(string: "https://api.example.com")!
+        self.timeout = 30.0
+        self.maxRetries = 3
+    }
+
+    func headers() -> [String: String] {
+        return [
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        ]
+    }
+}
 `,
   },
   newFile: {
-    name: 'config.ts',
-    contents: `import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
+    name: 'AppConfig.swift',
+    contents: `import Foundation
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-    },
-  },
-  server: {
-    port: 3000,
-    open: true,
-    cors: true,
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
-    minify: 'terser',
-  },
-});
+struct AppConfig {
+    static let shared = AppConfig()
+
+    let apiBaseURL: URL
+    let timeout: TimeInterval
+    let maxRetries: Int
+    let enableLogging: Bool
+
+    private init() {
+        self.apiBaseURL = URL(string: "https://api.example.com/v2")!
+        self.timeout = 60.0
+        self.maxRetries = 5
+        self.enableLogging = true
+    }
+
+    func headers(token: String? = nil) -> [String: String] {
+        var headers = [
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-API-Version": "2.0"
+        ]
+        if let token = token {
+            headers["Authorization"] = "Bearer \\(token)"
+        }
+        return headers
+    }
+}
 `,
   },
   options: {
