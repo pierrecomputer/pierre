@@ -1,15 +1,24 @@
-import { DIFFS_TAG_NAME } from '../constants';
+import { DIFFS_TAG_NAME, FILE_GAP } from '../constants';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import type { ParsedPatch } from '../types';
 import type { WorkerPoolManager } from '../worker';
 import type { FileDiffOptions } from './FileDiff';
 import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 
-const OVERSCROLL_MULTIPLIER = 2;
+// FIXME(amadeus): REMOVE ME
+declare global {
+  interface Window {
+    __LOL?: BigBoiVirtualizer;
+    TOGGLE?: () => void;
+    STOP?: boolean;
+  }
+}
+
+const OVERSCROLL_MULTIPLIER = 1;
 
 const DIFF_OPTIONS = {
   theme: 'pierre-dark',
-  diffStyle: 'split',
+  diffStyle: 'unified',
 } as const;
 const ENABLE_RENDERING = true;
 
@@ -45,6 +54,15 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
       this.container.getBoundingClientRect().top + this.scrollY;
     // @ts-expect-error lol
     window.__LOL = this;
+
+    window.TOGGLE = () => {
+      if (window.STOP === true) {
+        window.STOP = false;
+        queueRender(this._render);
+      } else {
+        window.STOP = true;
+      }
+    };
   }
 
   reset(): void {
@@ -77,8 +95,8 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
         );
 
         this.files.push(vFileDiff);
-        this.totalHeightUnified += vFileDiff.unifiedHeight;
-        this.totalHeightSplit += vFileDiff.splitHeight;
+        this.totalHeightUnified += vFileDiff.unifiedHeight + FILE_GAP;
+        this.totalHeightSplit += vFileDiff.splitHeight + FILE_GAP;
       }
     }
   }
@@ -90,8 +108,6 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
   }
 
   _render = (): void => {
-    // @ts-expect-error probably remove this in the future, but useful for
-    // debugging
     if (this.files.length === 0 || window.STOP === true) {
       return;
     }

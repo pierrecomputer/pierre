@@ -1052,4 +1052,8 @@
       color: var(--diffs-fg-number);
     }
   }
+
+  [data-virtualized-buffer] {
+    grid-column: 1 / 3;
+  }
 }
