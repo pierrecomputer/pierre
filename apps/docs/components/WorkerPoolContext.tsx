@@ -9,7 +9,10 @@ import type { ReactNode } from 'react';
 
 const PoolOptions: WorkerPoolOptions = {
   // We really shouldn't let the pool get too big...
-  poolSize: Math.min(Math.max(1, navigator.hardwareConcurrency - 1), 4),
+  poolSize: Math.min(
+    Math.max(1, (global.navigator?.hardwareConcurrency ?? 1) - 1),
+    4
+  ),
   workerFactory() {
     return new Worker(
       new URL('@pierre/diffs/worker/worker.js', import.meta.url)
