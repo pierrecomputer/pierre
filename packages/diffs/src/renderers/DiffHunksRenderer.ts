@@ -313,16 +313,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff == null) {
       return undefined;
     }
-    const { options, forceRender } = this.getRenderOptions(diff);
-    let cache = this.workerManager?.getDiffResultCache(diff);
-    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
-      cache = undefined;
+    const cache = this.workerManager?.getDiffResultCache(diff);
+    if (cache != null && this.renderCache == null) {
+      this.renderCache = { diff, highlighted: true, ...cache };
     }
+    const { options, forceRender } = this.getRenderOptions(diff);
     this.renderCache ??= {
       diff,
-      highlighted: cache != null ? true : false,
-      options: cache?.options ?? options,
-      result: cache?.result,
+      highlighted: false,
+      options,
+      result: undefined,
     };
     if (this.workerManager?.isWorkingPool() === true) {
       this.renderCache.result ??= this.workerManager.getPlainDiffAST(diff);
