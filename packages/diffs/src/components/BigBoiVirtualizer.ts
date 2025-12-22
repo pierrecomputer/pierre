@@ -109,6 +109,9 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
           this.workerManager
         );
 
+        // NOTE(amadeus): I hate this, lol... probably should figure out a way
+        // to not immediately subscribe
+        vFileDiff.cleanUp(true);
         this.files.push(vFileDiff);
         this.totalHeightUnified += vFileDiff.unifiedHeight + FILE_GAP;
         this.totalHeightSplit += vFileDiff.splitHeight + FILE_GAP;

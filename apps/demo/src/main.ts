@@ -293,6 +293,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
       const start = Date.now();
       poolManager?.highlightDiffAST(
         {
+          __id: 'hack',
           onHighlightSuccess(_diff, { code }) {
             if (code.hunks == null) {
               console.log(
