@@ -57,7 +57,7 @@ interface GetCachesResult {
 
 interface ManagedWorker {
   worker: Worker;
-  busy: boolean;
+  request_id: string | undefined;
   initialized: boolean;
   langs: Set<SupportedLanguages>;
 }
@@ -80,8 +80,10 @@ export class WorkerPoolManager {
     FileRendererInstance | DiffRendererInstance,
     string
   >();
+  private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
   private fileCache: LRUMap<string, RenderFileResult>;
   private diffCache: LRUMap<string, RenderDiffResult>;
+  private _queuedBroadcast: number | undefined;
 
   constructor(
     private options: WorkerPoolOptions,
@@ -120,11 +122,19 @@ export class WorkerPoolManager {
   }
 
   evictFileFromCache(cacheKey: string): boolean {
-    return this.fileCache.delete(cacheKey) !== undefined;
+    try {
+      return this.fileCache.delete(cacheKey) !== undefined;
+    } finally {
+      this.queueBroadcastStateChanges();
+    }
   }
 
   evictDiffFromCache(cacheKey: string): boolean {
-    return this.diffCache.delete(cacheKey) !== undefined;
+    try {
+      return this.diffCache.delete(cacheKey) !== undefined;
+    } finally {
+      this.queueBroadcastStateChanges();
+    }
   }
 
   async setRenderOptions({
@@ -226,6 +236,9 @@ export class WorkerPoolManager {
             reject,
             requestStart: Date.now(),
           };
+          // NOTE(amadeus): We intentionally ignore the normal pending requests
+          // infra because these tasks should technically interrupt the normal
+          // flow and should be processed by the worker when ready immediately
           this.pendingTasks.set(id, task);
           managedWorker.worker.postMessage(task.request);
         })
@@ -236,14 +249,43 @@ export class WorkerPoolManager {
 
   subscribeToThemeChanges(instance: ThemeSubscriber): () => void {
     this.themeSubscribers.add(instance);
+    this.queueBroadcastStateChanges();
     return () => {
       this.unsubscribeToThemeChanges(instance);
+      this.queueBroadcastStateChanges();
     };
   }
 
   unsubscribeToThemeChanges(instance: ThemeSubscriber): void {
     this.themeSubscribers.delete(instance);
+    this.queueBroadcastStateChanges();
   }
+
+  subscribeToStatChanges(
+    callback: (stats: WorkerStats) => unknown
+  ): () => void {
+    this.statSubscribers.add(callback);
+    callback(this.getStats());
+    return () => {
+      this.statSubscribers.delete(callback);
+    };
+  }
+
+  private queueBroadcastStateChanges() {
+    if (this._queuedBroadcast != null) return;
+    this._queuedBroadcast = requestAnimationFrame(this._broadcastStateChanges);
+  }
+
+  private _broadcastStateChanges = () => {
+    if (this._queuedBroadcast != null) {
+      cancelAnimationFrame(this._queuedBroadcast);
+      this._queuedBroadcast = undefined;
+    }
+    const stats = this.getStats();
+    for (const callback of this.statSubscribers) {
+      callback(stats);
+    }
+  };
 
   cleanUpPendingTasks(
     instance: FileRendererInstance | DiffRendererInstance
@@ -259,6 +301,7 @@ export class WorkerPoolManager {
         this.pendingTasks.delete(id);
       }
     }
+    this.queueBroadcastStateChanges();
   }
 
   isInitialized(): boolean {
@@ -296,22 +339,26 @@ export class WorkerPoolManager {
             // any workers that may have been created
             if (this.initialized === false) {
               this.terminateWorkers();
-              reject();
-              return;
+              throw new Error(
+                'WorkerPoolManager: workers failed to initialize'
+              );
             }
             this.highlighter = highlighter;
             this.initialized = true;
             this.diffCache.clear();
             this.fileCache.clear();
             this.drainQueue();
+            this.queueBroadcastStateChanges();
             resolve();
           } catch (e) {
             this.initialized = false;
             this.workersFailed = true;
+            this.queueBroadcastStateChanges();
             reject(e);
           }
         })();
       });
+      this.queueBroadcastStateChanges();
     } else {
       return this.initialized;
     }
@@ -330,7 +377,7 @@ export class WorkerPoolManager {
       const worker = this.options.workerFactory();
       const managedWorker: ManagedWorker = {
         worker,
-        busy: false,
+        request_id: undefined,
         initialized: false,
         langs: new Set(['text', ...resolvedLanguages.map(({ name }) => name)]),
       };
@@ -386,9 +433,11 @@ export class WorkerPoolManager {
       if (availableWorker == null) {
         break;
       }
+      this.assignWorkerToTask(task, availableWorker);
       this.taskQueue.shift();
       void this.resolveLanguagesAndExecuteTask(availableWorker, task, langs);
     }
+    this.queueBroadcastStateChanges();
   };
 
   highlightFileAST(instance: FileRendererInstance, file: FileContents): void {
@@ -469,6 +518,7 @@ export class WorkerPoolManager {
     this.highlighter = undefined;
     this.initialized = false;
     this.workersFailed = false;
+    this.queueBroadcastStateChanges();
   }
 
   private terminateWorkers() {
@@ -480,10 +530,23 @@ export class WorkerPoolManager {
 
   getStats(): WorkerStats {
     return {
+      managerState: (() => {
+        if (this.initialized === false) {
+          return 'waiting';
+        }
+        if (this.initialized !== true) {
+          return 'initializing';
+        }
+        return 'initialized';
+      })(),
       totalWorkers: this.workers.length,
-      busyWorkers: this.workers.filter((w) => w.busy).length,
+      workersFailed: this.workersFailed,
+      busyWorkers: this.workers.filter((w) => w.request_id != null).length,
       queuedTasks: this.taskQueue.length,
       pendingTasks: this.pendingTasks.size,
+      themeSubscribers: this.themeSubscribers.size,
+      fileCacheSize: this.fileCache.size,
+      diffCacheSize: this.diffCache.size,
     };
   }
 
@@ -639,7 +702,8 @@ export class WorkerPoolManager {
       this.instanceRequestMap.delete(task.instance);
     }
     this.pendingTasks.delete(response.id);
-    managedWorker.busy = false;
+    managedWorker.request_id = undefined;
+    this.queueBroadcastStateChanges();
     if (this.taskQueue.length > 0) {
       // We queue drain so that potentially multiple workers can free up
       // allowing for better language matches if possible
@@ -651,18 +715,39 @@ export class WorkerPoolManager {
   private queueDrain() {
     if (this._queuedDrain != null) return;
     this._queuedDrain = Promise.resolve().then(this.drainQueue);
+    this.queueBroadcastStateChanges();
+  }
+
+  private assignWorkerToTask(
+    task: AllWorkerTasks,
+    managedWorker: ManagedWorker
+  ) {
+    managedWorker.request_id = task.id;
+    this.pendingTasks.set(task.id, task);
   }
 
   private executeTask(
     managedWorker: ManagedWorker,
     task: AllWorkerTasks
   ): void {
-    managedWorker.busy = true;
-    this.pendingTasks.set(task.id, task);
+    this.assignWorkerToTask(task, managedWorker);
     for (const lang of getLangsFromTask(task)) {
       managedWorker.langs.add(lang);
     }
-    managedWorker.worker.postMessage(task.request);
+    try {
+      managedWorker.worker.postMessage(task.request);
+    } catch (error) {
+      // If postMessage fails, clean up the worker state
+      managedWorker.request_id = undefined;
+      this.pendingTasks.delete(task.id);
+      console.error('Failed to post message to worker:', error);
+      if ('instance' in task) {
+        task.instance.onHighlightError(error);
+      } else if ('reject' in task) {
+        task.reject(error as Error);
+      }
+    }
+    this.queueBroadcastStateChanges();
   }
 
   private getAvailableWorker(
@@ -670,7 +755,7 @@ export class WorkerPoolManager {
   ): ManagedWorker | undefined {
     let worker: ManagedWorker | undefined;
     for (const managedWorker of this.workers) {
-      if (managedWorker.busy || !managedWorker.initialized) {
+      if (managedWorker.request_id != null || !managedWorker.initialized) {
         continue;
       }
       worker = managedWorker;

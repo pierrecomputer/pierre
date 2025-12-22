@@ -5,6 +5,7 @@ import { BigBoiVirtualizer, parsePatchFiles } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
 
+import { WorkerPoolStatus } from './WorkerPoolState';
 import styles from './big-boi.module.css';
 
 interface SubmitButtonProps {
@@ -119,6 +120,7 @@ export function BigBoiDiff() {
         <p className="text-sm">The bigger the better ;)</p>
       </div>
       <div ref={ref} className={styles.wrapper} />
+      <WorkerPoolStatus />
     </>
   );
 }

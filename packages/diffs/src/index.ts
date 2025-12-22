@@ -39,6 +39,7 @@ export * from './utils/areOptionsEqual';
 export * from './utils/areRenderRangesEqual';
 export * from './utils/areSelectionsEqual';
 export * from './utils/areThemesEqual';
+export * from './utils/areWorkerStatsEqual';
 export * from './utils/cleanLastNewline';
 export * from './utils/createAnnotationElement';
 export * from './utils/createAnnotationWrapperNode';
