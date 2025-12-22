@@ -1,34 +1,28 @@
 .wrapper {
   overscroll-behavior-x: none;
   position: relative;
-  contain: layout style size;
   margin-inline: 8px;
   margin-top: 8px;
   overflow-anchor: none;
-  /* WOW, fucked up chrome hack to prevent blanking, we have to render a dual
-   * layer linear gradient, in this case something that doesnt render anything */
-  background-image:
-    repeating-linear-gradient(to bottom, transparent 0, transparent 0),
-    repeating-linear-gradient(to bottom, transparent 0, transparent 0);
-  background-size: 0 0;
-  background-repeat: no-repeat;
-  /* By using background-attachment: fixed, we force compositing to be
-   * synchronous... which prevents blanking. Only seems to work in 
-   * chrome tho */
-  background-attachment: fixed;
 }
 
 .wrapper diffs-container {
   contain: layout paint style;
-  position: absolute;
-  width: 100%;
   overflow: clip;
   border-radius: 8px;
-  box-shadow: 0 0 0 2px red;
+  /* box-shadow: 0 0 0 2px red; */
+  margin-bottom: 8px;
   /* Need to percolate on this because
    * it will cause cause things to register
    * 0 height until the browser is scrolled close to them scrollability-wise. But
    * it's also super effective as a way to optimized the browser, we we probably
    * want it on at some point. */
   /* content-visibility: auto; */
+}
+
+.stickyWrapper {
+  contain: strict;
+  position: sticky;
+  width: 100%;
+  /* background-color: yellow; */
 }
