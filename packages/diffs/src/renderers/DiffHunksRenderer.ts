@@ -561,30 +561,33 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         : undefined;
     unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
 
-    if (renderRange.bufferBefore > 0) {
-      const element = createHastElement({
-        tagName: 'div',
-        properties: {
-          'data-virtualized-buffer': 'before',
-          style: `height: ${renderRange.bufferBefore}px`,
-        },
-      });
-      unifiedAST?.unshift(element);
-      deletionsAST?.unshift(element);
-      additionsAST?.unshift(element);
-    }
-    if (renderRange.bufferAfter > 0) {
-      const element = createHastElement({
-        tagName: 'div',
-        properties: {
-          'data-virtualized-buffer': 'after',
-          style: `height: ${renderRange.bufferAfter}px`,
-        },
-      });
-      unifiedAST?.push(element);
-      deletionsAST?.push(element);
-      additionsAST?.push(element);
-    }
+    // FIXME(amadeus): this version of virtualization is probably more
+    // applicable to normie scenarios, so keeping this around for that.  Will
+    // need to figure out how to create these different sorts of APIs
+    // if (renderRange.bufferBefore > 0) {
+    //   const element = createHastElement({
+    //     tagName: 'div',
+    //     properties: {
+    //       'data-virtualized-buffer': 'before',
+    //       style: `height: ${renderRange.bufferBefore}px`,
+    //     },
+    //   });
+    //   unifiedAST?.unshift(element);
+    //   deletionsAST?.unshift(element);
+    //   additionsAST?.unshift(element);
+    // }
+    // if (renderRange.bufferAfter > 0) {
+    //   const element = createHastElement({
+    //     tagName: 'div',
+    //     properties: {
+    //       'data-virtualized-buffer': 'after',
+    //       style: `height: ${renderRange.bufferAfter}px`,
+    //     },
+    //   });
+    //   unifiedAST?.push(element);
+    //   deletionsAST?.push(element);
+    //   additionsAST?.push(element);
+    // }
 
     const preNode = this.createPreElement(
       deletionsAST != null && additionsAST != null,
