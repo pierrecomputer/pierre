@@ -42,7 +42,7 @@ export class VirtualizedFileDiff<
   public splitHeight: number = 0;
 
   override fileDiff: FileDiffMetadata;
-  private previousRenderRange: RenderRange | undefined;
+  public renderedRange: RenderRange | undefined;
 
   constructor(
     { unifiedTop, splitTop, fileDiff }: PositionProps,
@@ -54,6 +54,11 @@ export class VirtualizedFileDiff<
     this.unifiedTop = unifiedTop;
     this.splitTop = splitTop;
     this.computeSize();
+  }
+
+  override cleanUp(recycle = false): void {
+    super.cleanUp(recycle);
+    this.renderedRange = undefined;
   }
 
   private computeSize() {
@@ -95,21 +100,17 @@ export class VirtualizedFileDiff<
   }
 
   virtaulizedRender({ renderWindow, fileContainer }: RenderProps): void {
-    const {
-      options: { diffStyle = 'split' },
-      fileDiff,
-    } = this;
+    const { fileDiff } = this;
     const renderRange = this.computeRenderRangeFromWindow(renderWindow);
     if (
       this.fileContainer != null &&
-      areRenderRangesEqual(renderRange, this.previousRenderRange)
+      areRenderRangesEqual(renderRange, this.renderedRange)
     ) {
       return;
     }
-    this.previousRenderRange = renderRange;
+    this.renderedRange = renderRange;
     fileContainer = this.getOrCreateFileContainer(fileContainer);
     this.render({ fileDiff, fileContainer, renderRange });
-    fileContainer.style.top = `${diffStyle === 'split' ? this.splitTop : this.unifiedTop}px`;
   }
 
   private computeRenderRangeFromWindow({
@@ -186,7 +187,7 @@ export class VirtualizedFileDiff<
       return {
         startingLine: 0,
         totalLines: 0,
-        bufferBefore: 0,
+        bufferBefore: fileHeight - headerRegion,
         bufferAfter: 0,
       };
     }

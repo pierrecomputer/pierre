@@ -8,16 +8,21 @@ import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 // FIXME(amadeus): REMOVE ME
 declare global {
   interface Window {
-    __LOL?: BigBoiVirtualizer;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    __LOL?: BigBoiVirtualizer<any>;
     TOGGLE?: () => void;
     STOP?: boolean;
   }
 }
 
-const OVERSCROLL_MULTIPLIER = 2;
+const OVERSCROLL_MULTIPLIER = 1.2;
 
 const DIFF_OPTIONS = {
   theme: 'pierre-dark',
+  // FIXME(amadeus): 'unified' is pretty great, 'split' definitely runs a bit
+  // slower due to the heavier dome load.  May be worth dynamically changing
+  // overscroll based on the type?  Also should debug more closely to figure
+  // out the potential layout/css pain points with 'split'
   diffStyle: 'unified',
 } as const;
 const ENABLE_RENDERING = true;
@@ -43,16 +48,25 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
   private scrollHeight: number = 0;
   private initialized = false;
 
+  private stickyContainer: HTMLElement;
+  private stickyOffset: HTMLElement;
+
   constructor(
     private container: HTMLElement,
     private fileOptions: FileDiffOptions<LAnnotations> = DIFF_OPTIONS,
     private workerManager?: WorkerPoolManager | undefined
   ) {
+    this.stickyOffset = document.createElement('div');
+    this.stickyContainer = document.createElement('div');
+    this.stickyContainer.style.contain = 'strict';
+    this.stickyContainer.style.position = 'sticky';
+    this.stickyContainer.style.width = '100%';
+    this.container.appendChild(this.stickyOffset);
+    this.container.appendChild(this.stickyContainer);
     this.handleScroll();
     this.handleResize();
     this.containerOffset =
       this.container.getBoundingClientRect().top + this.scrollY;
-    // @ts-expect-error lol
     window.__LOL = this;
 
     window.TOGGLE = () => {
@@ -73,7 +87,8 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
       cleanupRenderedItem(item);
     }
     this.rendered.clear();
-    this.container.innerHTML = '';
+    this.stickyContainer.innerHTML = '';
+    this.stickyOffset.style.height = '';
     this.initialized = false;
     this.container.style.height = '';
     this.scrollHeight = 0;
@@ -138,6 +153,9 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
         this.rendered.delete(renderedInstance);
       }
     }
+    let prevElement: HTMLElement | undefined;
+    let firstInstance: VirtualizedFileDiff<LAnnotations> | undefined;
+    let lastInstance: VirtualizedFileDiff<LAnnotations> | undefined;
     for (const instance of this.files) {
       // We can stop iterating when we get to elements after the window
       if (getInstanceSpecs(instance, diffStyle).top > bottom) {
@@ -154,7 +172,11 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
         const fileContainer = document.createElement(DIFFS_TAG_NAME);
         // NOTE(amadeus): We gotta append first to ensure file ordering is
         // correct... but i guess maybe doesn't matter because we are positioning shit
-        this.container.appendChild(fileContainer);
+        if (prevElement == null) {
+          this.stickyContainer.prepend(fileContainer);
+        } else if (prevElement.nextSibling !== fileContainer) {
+          prevElement.after(fileContainer);
+        }
         instance.virtualizedSetup();
 
         this.rendered.set(instance, {
@@ -165,11 +187,40 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
           fileContainer,
           renderWindow: { top, bottom },
         });
+        prevElement = fileContainer;
       } else {
+        prevElement = rendered.element;
         rendered.instance.virtaulizedRender({
           renderWindow: { top, bottom },
         });
       }
+      firstInstance ??= instance;
+      lastInstance = instance;
+    }
+
+    if (
+      firstInstance?.renderedRange != null &&
+      lastInstance?.renderedRange != null
+    ) {
+      const firstSpecs = getInstanceSpecs(firstInstance, diffStyle);
+      const lastSpecs = getInstanceSpecs(lastInstance, diffStyle);
+      const stickyTop = Math.max(
+        Math.min(firstSpecs.top + firstInstance.renderedRange.bufferBefore),
+        0
+      );
+      const lastBuffer =
+        lastInstance.renderedRange.totalLines === 0
+          ? lastInstance.renderedRange.bufferBefore
+          : lastInstance.renderedRange.bufferAfter;
+      const stickyBottom = Math.max(
+        0,
+        lastSpecs.top + lastSpecs.height - lastBuffer
+      );
+      const totalHeight = stickyBottom - stickyTop;
+      this.stickyOffset.style.height = `${stickyTop}px`;
+      this.stickyContainer.style.top = `${-totalHeight + height}px`;
+      this.stickyContainer.style.bottom = `${-totalHeight + height}px`;
+      this.stickyContainer.style.height = `${totalHeight}px`;
     }
 
     if (fitPerfectly) {
