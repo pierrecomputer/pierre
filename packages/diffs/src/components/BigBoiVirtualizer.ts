@@ -221,7 +221,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
       );
       const totalHeight = stickyBottom - stickyTop;
       this.stickyOffset.style.height = `${stickyTop}px`;
-      this.stickyContainer.style.top = `${-totalHeight + height}px`;
+      this.stickyContainer.style.top = `${-totalHeight + height + FILE_GAP}px`;
       this.stickyContainer.style.bottom = `${-totalHeight + height}px`;
       this.stickyContainer.style.height = `${totalHeight}px`;
     }
