@@ -63,11 +63,7 @@ export function WorkerPoolStatus() {
       });
     }
   }, [pool]);
-  return (
-    <div className="fixed right-0 bottom-0 pr-4 pb-4">
-      {stats == null ? 'initializing' : <StatsDisplay stats={stats} />}
-    </div>
-  );
+  return stats != null && <StatsDisplay stats={stats} />;
 }
 
 interface StatItemProps {
@@ -91,8 +87,8 @@ interface StatsDisplayProps {
 }
 
 function StatsDisplay({ stats }: StatsDisplayProps) {
-  const [isScrolling, setIsScrolling] = useState(false);
-  const [scrollTester] = useState(() => new AutoScrollTester(setIsScrolling));
+  const [isBrrt, setIsBrrt] = useState(false);
+  const [scrollTester] = useState(() => new AutoScrollTester(setIsBrrt));
 
   const getStatusColor = () => {
     if (stats.workersFailed) return 'bg-red-500';
@@ -101,15 +97,9 @@ function StatsDisplay({ stats }: StatsDisplayProps) {
     return 'bg-gray-500';
   };
 
-  const getStatusText = () => {
-    if (stats.workersFailed) return 'failed';
-    if (stats.managerState === 'initialized') return 'ready';
-    return stats.managerState;
-  };
-
   return (
     <div
-      className="rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-lg"
+      className="fixed right-0 bottom-0 mr-4 mb-4 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-lg"
       style={{ fontFamily: 'var(--font-berkeley-mono)' }}
     >
       <div className="mb-3 flex items-center justify-between gap-2 border-b border-gray-700 pb-2">
@@ -118,13 +108,12 @@ function StatsDisplay({ stats }: StatsDisplayProps) {
           <span className="font-medium text-gray-300">Worker Pool</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-gray-500">({getStatusText()})</span>
           <button
             onClick={scrollTester.toggleState}
-            className="-mr-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-400 hover:bg-gray-700 hover:text-white"
-            title={isScrolling ? 'Pause autoscroll' : 'Start autoscroll'}
+            className="-mr-1 flex h-5 cursor-pointer items-center justify-center rounded p-2 text-gray-400 hover:bg-gray-700 hover:text-white"
+            title={isBrrt ? 'Pause autoscroll' : 'Start autoscroll'}
           >
-            {isScrolling ? '⏸' : '▶'}
+            {isBrrt ? 'no' : 'go'} brrt {isBrrt ? '⏸' : '▶'}
           </button>
         </div>
       </div>
