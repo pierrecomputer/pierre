@@ -5,7 +5,7 @@ import { BigBoiVirtualizer, parsePatchFiles } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
 
-import { WorkerPoolStatus } from './WorkerPoolState';
+import { WorkerPoolStatus } from './WorkerPoolStatus';
 import styles from './big-boi.module.css';
 
 interface SubmitButtonProps {
