@@ -11,7 +11,7 @@ const PoolOptions: WorkerPoolOptions = {
   // We really shouldn't let the pool get too big...
   poolSize: Math.min(
     Math.max(1, (global.navigator?.hardwareConcurrency ?? 1) - 1),
-    4
+    3
   ),
   workerFactory() {
     return new Worker(
