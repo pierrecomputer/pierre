@@ -1,9 +1,49 @@
 'use client';
 
-import { areWorkerStatsEqual } from '@pierre/diffs';
+import { areWorkerStatsEqual, queueRender } from '@pierre/diffs';
 import { useWorkerPool } from '@pierre/diffs/react';
 import type { WorkerStats } from '@pierre/diffs/worker';
 import { useEffect, useState } from 'react';
+
+class AutoScrollTester {
+  static SPEED = 1000;
+
+  private running = false;
+  private direction = 1;
+
+  constructor(private onStateChange?: (running: boolean) => unknown) {}
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.onStateChange?.(true);
+    this.render();
+  }
+
+  render = () => {
+    if (!this.running) return;
+    const { scrollY, innerHeight } = window;
+    const { scrollHeight } = document.documentElement;
+    if (scrollY <= 0 || scrollY >= scrollHeight - innerHeight) {
+      this.direction *= -1;
+    }
+    window.scrollTo({ top: scrollY + AutoScrollTester.SPEED * this.direction });
+    queueRender(this.render);
+  };
+
+  stop() {
+    this.running = false;
+    this.onStateChange?.(false);
+  }
+
+  toggleState = () => {
+    if (this.running) {
+      this.stop();
+    } else {
+      this.start();
+    }
+  };
+}
 
 export function WorkerPoolStatus() {
   const pool = useWorkerPool();
@@ -51,6 +91,9 @@ interface StatsDisplayProps {
 }
 
 function StatsDisplay({ stats }: StatsDisplayProps) {
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [scrollTester] = useState(() => new AutoScrollTester(setIsScrolling));
+
   const getStatusColor = () => {
     if (stats.workersFailed) return 'bg-red-500';
     if (stats.managerState === 'initialized') return 'bg-green-500';
@@ -60,6 +103,7 @@ function StatsDisplay({ stats }: StatsDisplayProps) {
 
   const getStatusText = () => {
     if (stats.workersFailed) return 'failed';
+    if (stats.managerState === 'initialized') return 'ready';
     return stats.managerState;
   };
 
@@ -73,7 +117,16 @@ function StatsDisplay({ stats }: StatsDisplayProps) {
           <div className={`h-2 w-2 rounded-full ${getStatusColor()}`}></div>
           <span className="font-medium text-gray-300">Worker Pool</span>
         </div>
-        <span className="text-gray-500">({getStatusText()})</span>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">({getStatusText()})</span>
+          <button
+            onClick={scrollTester.toggleState}
+            className="-mr-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-400 hover:bg-gray-700 hover:text-white"
+            title={isScrolling ? 'Pause autoscroll' : 'Start autoscroll'}
+          >
+            {isScrolling ? '⏸' : '▶'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
