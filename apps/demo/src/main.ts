@@ -8,8 +8,6 @@ import {
   FileDiff,
   FileStream,
   type ParsedPatch,
-  type SupportedLanguages,
-  getFiletypeFromFileName,
   isHighlighterNull,
   parseDiffFromFile,
   parsePatchFiles,
@@ -97,22 +95,10 @@ function startStreaming() {
 
 let parsedPatches: ParsedPatch[] | undefined;
 async function handlePreloadDiff() {
-  if (parsedPatches != null || !isHighlighterNull()) return;
+  if (parsedPatches != null) return;
   const content = await loadPatchContent();
   parsedPatches = parsePatchFiles(content, 'parsed-patch');
-  const langs = new Set<SupportedLanguages>();
-  for (const parsedPatch of parsedPatches) {
-    for (const file of parsedPatch.files) {
-      const lang = getFiletypeFromFileName(file.name);
-      if (lang != null) {
-        langs.add(lang);
-      }
-    }
-  }
-  void preloadHighlighter({
-    langs: Array.from(langs),
-    themes: ['tokyo-night', 'solarized-light'],
-  });
+  console.log('preloaded diff', parsedPatches);
 }
 
 function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
@@ -352,7 +338,7 @@ if (loadDiff != null) {
     })();
   }
   loadDiff.addEventListener('click', handleClick);
-  loadDiff.addEventListener('pointerenter', () => void handlePreloadDiff);
+  loadDiff.addEventListener('pointerenter', () => void handlePreloadDiff());
 }
 
 const wrapCheckbox = document.getElementById('wrap-lines');

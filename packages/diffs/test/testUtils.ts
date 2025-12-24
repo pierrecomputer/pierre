@@ -92,10 +92,10 @@ export function verifyHunkLineValues(
 
     for (const content of hunk.hunkContent) {
       if (content.type === 'context') {
-        contextLines += content.lines.length;
+        contextLines += content.lines;
       } else if (content.type === 'change') {
-        additionLines += content.additions.length;
-        deletionLines += content.deletions.length;
+        additionLines += content.additions;
+        deletionLines += content.deletions;
       }
     }
 
@@ -132,9 +132,9 @@ export function verifyHunkLineValues(
     // Verify splitLineCount = sum of (context lines + max(additions, deletions) per change block)
     const expectedSplitLineCount = hunk.hunkContent.reduce((acc, content) => {
       if (content.type === 'context') {
-        return acc + content.lines.length;
+        return acc + content.lines;
       }
-      return acc + Math.max(content.additions.length, content.deletions.length);
+      return acc + Math.max(content.additions, content.deletions);
     }, 0);
     if (hunk.splitLineCount !== expectedSplitLineCount) {
       errors.push(
@@ -145,9 +145,9 @@ export function verifyHunkLineValues(
     // Verify unifiedLineCount = sum of (context lines + additions + deletions per change block)
     const expectedUnifiedLineCount = hunk.hunkContent.reduce((acc, content) => {
       if (content.type === 'context') {
-        return acc + content.lines.length;
+        return acc + content.lines;
       }
-      return acc + content.additions.length + content.deletions.length;
+      return acc + content.additions + content.deletions;
     }, 0);
     if (hunk.unifiedLineCount !== expectedUnifiedLineCount) {
       errors.push(
