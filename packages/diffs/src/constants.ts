@@ -27,3 +27,11 @@ export const DEFAULT_THEMES: ThemesType = {
 
 export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';
 export const CORE_CSS_ATTRIBUTE = 'data-core-css';
+
+// FIXME(amadeus): This will need to be configurable
+export const LINE_HUNK_COUNT = 10;
+export const LINE_HEIGHT = 20;
+export const DIFF_HEADER_HEIGHT = 44;
+export const HUNK_SEPARATOR_HEIGHT = 32;
+export const FILE_GAP = 8;
+// FIXME(amadeus): Add math logic for .noEOFCR

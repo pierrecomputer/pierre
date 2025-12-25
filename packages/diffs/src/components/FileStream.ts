@@ -30,7 +30,11 @@ export interface FileStreamOptions extends BaseCodeOptions {
   onStreamAbort?(reason: unknown): unknown;
 }
 
+let instanceId = -1;
+
 export class FileStream {
+  readonly __id: string = `file-stream:${++instanceId}`;
+
   private highlighter: DiffsHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;

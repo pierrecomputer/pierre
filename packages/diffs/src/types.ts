@@ -58,30 +58,38 @@ export interface ParsedPatch {
 
 export interface ContextContent {
   type: 'context';
-  lines: string[];
+  lines: number;
   noEOFCR: boolean;
 }
 
 export interface ChangeContent {
   type: 'change';
-  deletions: string[];
-  additions: string[];
+  deletions: number;
+  additions: number;
   noEOFCRDeletions: boolean;
   noEOFCRAdditions: boolean;
 }
 
 export interface Hunk {
   collapsedBefore: number;
+
   splitLineStart: number;
   splitLineCount: number;
+
   unifiedLineStart: number;
   unifiedLineCount: number;
+
   additionCount: number;
   additionStart: number;
   additionLines: number;
+
   deletionCount: number;
   deletionStart: number;
   deletionLines: number;
+
+  oldLinesIndex: number;
+  newLinesIndex: number;
+
   hunkContent: (ContextContent | ChangeContent)[];
   hunkContext: string | undefined;
   hunkSpecs: string | undefined;
@@ -97,8 +105,9 @@ export interface FileDiffMetadata {
   unifiedLineCount: number;
   oldMode?: string;
   mode?: string;
-  oldLines?: string[];
-  newLines?: string[];
+  isPartial: boolean;
+  oldLines: string[];
+  newLines: string[];
   cacheKey?: string;
 }
 
@@ -299,26 +308,19 @@ export type AnnotationLineMap<LAnnotation> = Record<
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
-export interface RenderDiffFilesResult {
-  oldLines: ElementContent[];
-  newLines: ElementContent[];
-  hunks?: undefined;
-}
-
-export interface RenderDiffHunksResult {
-  hunks: RenderDiffFilesResult[];
-  oldLines?: undefined;
-  newLines?: undefined;
-}
-
 export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
+export interface RenderDiffFilesResult {
+  oldLines: ElementContent[];
+  newLines: ElementContent[];
+}
+
 export interface ThemedDiffResult {
-  code: RenderDiffFilesResult | RenderDiffHunksResult;
+  code: RenderDiffFilesResult;
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
@@ -356,4 +358,11 @@ export interface RenderedDiffASTCache {
   highlighted: boolean;
   options: RenderDiffOptions;
   result: ThemedDiffResult | undefined;
+}
+
+export interface RenderRange {
+  startingLine: number;
+  totalLines: number;
+  bufferBefore: number;
+  bufferAfter: number;
 }
