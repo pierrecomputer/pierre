@@ -14,7 +14,7 @@ export interface OnLineClickProps extends LineEventBaseProps {
 }
 
 export interface OnLineEnterLeaveProps extends LineEventBaseProps {
-  event: MouseEvent;
+  event: PointerEvent;
 }
 
 export interface OnDiffLineClickProps extends DiffLineEventBaseProps {
@@ -22,12 +22,12 @@ export interface OnDiffLineClickProps extends DiffLineEventBaseProps {
 }
 
 export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
-  event: MouseEvent;
+  event: PointerEvent;
 }
 
 type HandleMouseEventProps =
-  | { eventType: 'click'; event: MouseEvent }
-  | { eventType: 'move'; event: MouseEvent };
+  | { eventType: 'click'; event: PointerEvent }
+  | { eventType: 'move'; event: PointerEvent };
 
 type EventClickProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
   ? OnLineClickProps
@@ -114,8 +114,8 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
 
   cleanUp(): void {
     this.pre?.removeEventListener('click', this.handleMouseClick);
-    this.pre?.removeEventListener('mousemove', this.handleMouseMove);
-    this.pre?.removeEventListener('mouseout', this.handleMouseLeave);
+    this.pre?.removeEventListener('pointermove', this.handleMouseMove);
+    this.pre?.removeEventListener('pointerout', this.handleMouseLeave);
     delete this.pre?.dataset.interactiveLines;
     delete this.pre?.dataset.interactiveLineNumbers;
     this.pre = undefined;
@@ -179,17 +179,17 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       );
     }
     if (onLineEnter != null || onLineLeave != null || enableHoverUtility) {
-      pre.addEventListener('mousemove', this.handleMouseMove);
+      pre.addEventListener('pointermove', this.handleMouseMove);
       debugLogIfEnabled(
         __debugMouseEvents,
         'move',
-        'FileDiff.DEBUG.attachEventListeners: Attaching mouse move event'
+        'FileDiff.DEBUG.attachEventListeners: Attaching pointer move event'
       );
-      pre.addEventListener('mouseleave', this.handleMouseLeave);
+      pre.addEventListener('pointerleave', this.handleMouseLeave);
       debugLogIfEnabled(
         __debugMouseEvents,
         'move',
-        'FileDiff.DEBUG.attachEventListeners: Attaching mouse leave event'
+        'FileDiff.DEBUG.attachEventListeners: Attaching pointer leave event'
       );
     }
   }
@@ -211,7 +211,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     return undefined;
   };
 
-  handleMouseClick = (event: MouseEvent): void => {
+  handleMouseClick = (event: PointerEvent): void => {
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
       'click',
@@ -221,7 +221,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     this.handleMouseEvent({ eventType: 'click', event });
   };
 
-  handleMouseMove = (event: MouseEvent): void => {
+  handleMouseMove = (event: PointerEvent): void => {
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
       'move',
@@ -231,7 +231,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     this.handleMouseEvent({ eventType: 'move', event });
   };
 
-  handleMouseLeave = (event: MouseEvent): void => {
+  handleMouseLeave = (event: PointerEvent): void => {
     const { __debugMouseEvents } = this.options;
     debugLogIfEnabled(
       __debugMouseEvents,

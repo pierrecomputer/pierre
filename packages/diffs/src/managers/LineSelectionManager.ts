@@ -107,17 +107,17 @@ export class LineSelectionManager {
     if (this.pre == null) return;
     // Lets run a cleanup, just in case
     this.removeEventListeners();
-    this.pre.addEventListener('mousedown', this.handleMouseDown);
+    this.pre.addEventListener('pointerdown', this.handleMouseDown);
   }
 
   private removeEventListeners(): void {
     if (this.pre == null) return;
-    this.pre.removeEventListener('mousedown', this.handleMouseDown);
-    document.removeEventListener('mousemove', this.handleMouseMove);
-    document.removeEventListener('mouseup', this.handleMouseUp);
+    this.pre.removeEventListener('pointerdown', this.handleMouseDown);
+    document.removeEventListener('pointermove', this.handleMouseMove);
+    document.removeEventListener('pointerup', this.handleMouseUp);
   }
 
-  private handleMouseDown = (event: MouseEvent): void => {
+  private handleMouseDown = (event: PointerEvent): void => {
     // Only handle left mouse button
     const mouseEventData =
       event.button === 0
@@ -165,11 +165,11 @@ export class LineSelectionManager {
       this.notifySelectionStart(this.selectedRange);
     }
 
-    document.addEventListener('mousemove', this.handleMouseMove);
-    document.addEventListener('mouseup', this.handleMouseUp);
+    document.addEventListener('pointermove', this.handleMouseMove);
+    document.addEventListener('pointerup', this.handleMouseUp);
   };
 
-  private handleMouseMove = (event: MouseEvent): void => {
+  private handleMouseMove = (event: PointerEvent): void => {
     const mouseEventData = this.getMouseEventDataForPath(
       event.composedPath(),
       'move'
@@ -181,8 +181,8 @@ export class LineSelectionManager {
 
   private handleMouseUp = (): void => {
     this.anchor = undefined;
-    document.removeEventListener('mousemove', this.handleMouseMove);
-    document.removeEventListener('mouseup', this.handleMouseUp);
+    document.removeEventListener('pointermove', this.handleMouseMove);
+    document.removeEventListener('pointerup', this.handleMouseUp);
     this.notifySelectionEnd(this.selectedRange);
     this.notifySelectionChange();
   };

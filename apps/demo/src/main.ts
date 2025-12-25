@@ -165,7 +165,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           //     event.stopPropagation();
           //     console.log('ZZZZ - clicked', getHoveredLine());
           //   });
-          //   el.addEventListener('mousedown', (event) => {
+          //   el.addEventListener('pointerdown', (event) => {
           //     event.stopPropagation();
           //   });
           //   return el;
@@ -336,7 +336,7 @@ document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);
 const streamCode = document.getElementById('stream-code');
 if (streamCode != null) {
   streamCode.addEventListener('click', startStreaming);
-  streamCode.addEventListener('mouseenter', handlePreload);
+  streamCode.addEventListener('pointerenter', handlePreload);
 }
 
 const loadDiff = document.getElementById('load-diff');
@@ -351,7 +351,7 @@ if (loadDiff != null) {
     })();
   }
   loadDiff.addEventListener('click', handleClick);
-  loadDiff.addEventListener('mouseenter', () => void handlePreloadDiff);
+  loadDiff.addEventListener('pointerenter', () => void handlePreloadDiff);
 }
 
 const wrapCheckbox = document.getElementById('wrap-lines');

@@ -47,7 +47,7 @@ export function App() {
   return (
     <>
       <div className="tools">
-        <button onClick={handleStartStreaming} onMouseEnter={handlePreload}>
+        <button onClick={handleStartStreaming} onPointerEnter={handlePreload}>
           Stream Code
         </button>
         <div>
