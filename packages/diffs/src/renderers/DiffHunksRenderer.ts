@@ -549,8 +549,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const totalLines = Math.max(
       getTotalLineCountFromHunks(fileDiff.hunks),
-      fileDiff.newLines?.length ?? 0,
-      fileDiff.oldLines?.length ?? 0
+      fileDiff.additionLines.length ?? 0,
+      fileDiff.deletionLines.length ?? 0
     );
 
     additionsAST =
