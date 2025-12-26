@@ -102,7 +102,7 @@ export interface FileDiffMetadata {
   hunks: Hunk[];
   splitLineCount: number;
   unifiedLineCount: number;
-  oldMode?: string;
+  prevMode?: string;
   mode?: string;
   isPartial: boolean;
   deletionLines: string[];
