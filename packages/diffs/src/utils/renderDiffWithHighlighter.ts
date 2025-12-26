@@ -195,8 +195,7 @@ function computeLineDiffDecorations({
     if (span[0] === 1) {
       deletionDecorations.push(
         createDiffSpanDecoration({
-          // Decoration indexes start at 0
-          line: deletionLineIndex - 1,
+          line: deletionLineIndex,
           spanStart: spanIndex,
           spanLength: span[1].length,
         })
@@ -209,8 +208,7 @@ function computeLineDiffDecorations({
     if (span[0] === 1) {
       additionDecorations.push(
         createDiffSpanDecoration({
-          // Decoration indexes start at 0
-          line: additionLineIndex - 1,
+          line: additionLineIndex,
           spanStart: spanIndex,
           spanLength: span[1].length,
         })
@@ -243,8 +241,8 @@ function processLines({
   const additionInfo: Record<number, LineInfo | undefined> = {};
   const deletionDecorations: DecorationItem[] = [];
   const additionDecorations: DecorationItem[] = [];
-  let deletionLineIndex = 1;
-  let additionLineIndex = 1;
+  let deletionLineIndex = 0;
+  let additionLineIndex = 0;
   let additionLineNumber = 1;
   let deletionLineNumber = 1;
   let deletionContent = '';
@@ -254,23 +252,25 @@ function processLines({
     // lets fill it up
     while (
       !isPartial &&
-      additionLineIndex - 1 < hunk.additionLineIndex &&
-      deletionLineIndex - 1 < hunk.deletionLineIndex
+      additionLineIndex < hunk.additionLineIndex &&
+      deletionLineIndex < hunk.deletionLineIndex
     ) {
-      deletionInfo[deletionLineIndex] = {
+      // Shiki line numbers start at 1
+      deletionInfo[deletionLineIndex + 1] = {
         type: 'context-expanded',
         lineNumber: deletionLineNumber,
         altLineNumber: additionLineNumber,
         lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
-      additionInfo[additionLineIndex] = {
+      // Shiki line numbers start at 1
+      additionInfo[additionLineIndex + 1] = {
         type: 'context-expanded',
         lineNumber: additionLineNumber,
         altLineNumber: deletionLineNumber,
         lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
-      deletionContent += deletionLines[deletionLineIndex - 1];
-      additionContent += additionLines[additionLineIndex - 1];
+      deletionContent += deletionLines[deletionLineIndex];
+      additionContent += additionLines[additionLineIndex];
       deletionLineIndex++;
       additionLineIndex++;
       deletionLineNumber++;
@@ -286,20 +286,22 @@ function processLines({
       if (hunkContent.type === 'context') {
         let index = 0;
         while (index < hunkContent.lines) {
-          deletionInfo[deletionLineIndex] = {
+          // Shiki line numbers start at 1
+          deletionInfo[deletionLineIndex + 1] = {
             type: 'context',
             lineNumber: deletionLineNumber,
             altLineNumber: additionLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
-          additionInfo[additionLineIndex] = {
+          // Shiki line numbers start at 1
+          additionInfo[additionLineIndex + 1] = {
             type: 'context',
             lineNumber: additionLineNumber,
             altLineNumber: deletionLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
-          deletionContent += deletionLines[deletionLineIndex - 1];
-          additionContent += additionLines[additionLineIndex - 1];
+          deletionContent += deletionLines[deletionLineIndex];
+          additionContent += additionLines[additionLineIndex];
           deletionLineIndex++;
           additionLineIndex++;
           additionLineNumber++;
@@ -319,11 +321,11 @@ function processLines({
         while (i < len) {
           const deletionLine =
             i < hunkContent.deletions
-              ? deletionLines[deletionLineIndex - 1]
+              ? deletionLines[deletionLineIndex]
               : undefined;
           const additionLine =
             i < hunkContent.additions
-              ? additionLines[additionLineIndex - 1]
+              ? additionLines[additionLineIndex]
               : undefined;
           computeLineDiffDecorations({
             additionLine,
@@ -335,7 +337,8 @@ function processLines({
             lineDiffType,
           });
           if (deletionLine != null) {
-            deletionInfo[deletionLineIndex] = {
+            // Shiki line numbers start at 1
+            deletionInfo[deletionLineIndex + 1] = {
               type: 'change-deletion',
               lineNumber: deletionLineNumber,
               lineIndex: `${_unifiedLineIndex},${splitLineIndex}`,
@@ -345,7 +348,8 @@ function processLines({
             deletionLineNumber++;
           }
           if (additionLine != null) {
-            additionInfo[additionLineIndex] = {
+            // Shiki line numbers start at 1
+            additionInfo[additionLineIndex + 1] = {
               type: 'change-addition',
               lineNumber: additionLineNumber,
               lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${splitLineIndex}`,
@@ -366,16 +370,17 @@ function processLines({
     // If we are on the last hunk, we should fully iterate through the rest
     // of the lines
     while (
-      deletionLineIndex <= deletionLines.length ||
-      additionLineIndex <= additionLines.length
+      deletionLineIndex < deletionLines.length ||
+      additionLineIndex < additionLines.length
     ) {
-      const deletionLine = deletionLines[deletionLineIndex - 1];
-      const additionLine = additionLines[additionLineIndex - 1];
+      const deletionLine = deletionLines[deletionLineIndex];
+      const additionLine = additionLines[additionLineIndex];
       if (deletionLine == null && additionLine == null) {
         break;
       }
       if (deletionLine != null) {
-        deletionInfo[deletionLineIndex] = {
+        // Shiki line numbers start at 1
+        deletionInfo[deletionLineIndex + 1] = {
           type: 'context-expanded',
           lineNumber: deletionLineNumber,
           altLineNumber: additionLineNumber,
@@ -386,7 +391,8 @@ function processLines({
         deletionLineNumber++;
       }
       if (additionLine != null) {
-        additionInfo[additionLineIndex] = {
+        // Shiki line numbers start at 1
+        additionInfo[additionLineIndex + 1] = {
           type: 'context-expanded',
           lineNumber: additionLineNumber,
           altLineNumber: deletionLineNumber,
