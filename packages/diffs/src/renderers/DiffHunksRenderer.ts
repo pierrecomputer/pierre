@@ -19,7 +19,6 @@ import type {
   Hunk,
   HunkData,
   RenderDiffFilesResult,
-  RenderDiffHunksResult,
   RenderDiffOptions,
   RenderDiffResult,
   RenderRange,
@@ -75,7 +74,7 @@ interface PushLineWithAnnotation {
 }
 
 interface RenderCollapsedHunksProps {
-  ast: RenderDiffFilesResult | RenderDiffHunksResult;
+  ast: RenderDiffFilesResult;
   hunk: Hunk;
   hunkData: HunkData[];
   hunkSpecs: string | undefined;
@@ -87,6 +86,7 @@ interface RenderCollapsedHunksProps {
   deletionsAST: ElementContent[];
   unifiedAST: ElementContent[];
   state: DiffRenderState;
+  isPartial: boolean;
 }
 
 const DEFAULT_RENDER_RANGE: RenderRange = {
@@ -100,13 +100,14 @@ interface RenderHunkProps {
   hunk: Hunk;
   hunkData: HunkData[];
 
-  ast: RenderDiffFilesResult | RenderDiffHunksResult;
+  ast: RenderDiffFilesResult;
   unifiedAST: ElementContent[];
   deletionsAST: ElementContent[];
   additionsAST: ElementContent[];
   isLastHunk: boolean;
 
   state: DiffRenderState;
+  isPartial: boolean;
 }
 
 interface DiffRenderState {
@@ -540,6 +541,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         deletionsAST,
         unifiedAST,
         hunkData,
+        isPartial: fileDiff.isPartial,
       });
       state.hunkIndex++;
       state.prevHunk = hunk;
@@ -552,13 +554,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
 
     additionsAST =
-      !unified && (code.hunks != null || code.newLines.length > 0)
-        ? additionsAST
-        : undefined;
+      !unified && code.newLines.length > 0 ? additionsAST : undefined;
     deletionsAST =
-      !unified && (code.hunks != null || code.oldLines.length > 0)
-        ? deletionsAST
-        : undefined;
+      !unified && code.oldLines.length > 0 ? deletionsAST : undefined;
     unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
 
     // FIXME(amadeus): this version of virtualization is probably more
@@ -694,14 +692,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     deletionsAST,
     additionsAST,
     state,
+    isPartial,
   }: RenderCollapsedHunksProps) {
     if (rangeSize <= 0) {
       return;
     }
     const { hunkSeparators, expandUnchanged, diffStyle, expansionLineCount } =
       this.getOptionsWithDefaults();
-    const expandable =
-      ast.hunks == null && ast.newLines.length > 0 && ast.oldLines.length > 0;
+    const isExpandable = !isPartial;
     const expandedRegion =
       this.expandedHunks.get(state.hunkIndex) ?? EXPANDED_REGION;
     const chunked = rangeSize > expansionLineCount;
@@ -719,7 +717,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           createSeparator({
             type: hunkSeparators,
             content: getModifiedLinesString(collapsedLines),
-            expandIndex: expandable ? state.hunkIndex : undefined,
+            expandIndex: isExpandable ? state.hunkIndex : undefined,
             chunked,
             slotName,
             isFirstHunk,
@@ -731,12 +729,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           hunkIndex: state.hunkIndex,
           lines: collapsedLines,
           type,
-          expandable: expandable
-            ? {
-                up: expandable && !isFirstHunk,
-                down: expandable,
-                chunked,
-              }
+          expandable: isExpandable
+            ? { up: !isFirstHunk, down: true, chunked }
             : undefined,
         });
       } else if (hunkSeparators === 'metadata' && hunkSpecs != null) {
@@ -821,7 +815,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     };
 
-    if (expandable) {
+    if (isExpandable) {
       const { additionLineNumber, deletionLineNumber } = (() => {
         if (isLastHunk) {
           return {
@@ -880,6 +874,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     additionsAST,
     unifiedAST,
     state,
+    isPartial,
   }: RenderHunkProps) {
     const { diffStyle } = this.getOptionsWithDefaults();
     const unified = diffStyle === 'unified';
@@ -897,34 +892,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       isLastHunk: false,
       rangeSize: Math.max(hunk.collapsedBefore, 0),
       unifiedAST,
+      isPartial,
     });
     state.lineIndex = startingLineIndex + hunk.collapsedBefore;
 
-    let additionLineNumber = hunk.additionStart - 1;
-    let deletionLineNumber = hunk.deletionStart - 1;
-    let { oldLines, newLines, oldIndex, newIndex } = (() => {
-      if (ast.hunks != null) {
-        const lineHunk = ast.hunks[state.hunkIndex];
-        if (lineHunk == null) {
-          console.error({ ast, hunkIndex: state.hunkIndex });
-          throw new Error(
-            `DiffHunksRenderer.renderHunks: lineHunk doesn't exist`
-          );
-        }
-        return {
-          oldLines: lineHunk.oldLines,
-          newLines: lineHunk.newLines,
-          oldIndex: 0,
-          newIndex: 0,
-        };
-      }
-      return {
-        oldLines: ast.oldLines,
-        newLines: ast.newLines,
-        oldIndex: deletionLineNumber,
-        newIndex: additionLineNumber,
-      };
-    })();
+    const { oldLines, newLines } = ast;
+    let { oldLinesIndex: deletionLineIndex, newLinesIndex: additionLineIndex } =
+      hunk;
 
     // Render hunk/diff content
     for (const hunkContent of hunk.hunkContent) {
@@ -933,18 +907,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
       let brokeEarly = false;
       if (hunkContent.type === 'context') {
-        const { length: len } = hunkContent.lines;
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < hunkContent.lines; i++) {
           if (state.renderedLineCount >= state.renderRange.totalLines) {
             brokeEarly = true;
             break;
           }
-          const oldLine = oldLines[oldIndex];
-          const newLine = newLines[newIndex];
-          oldIndex++;
-          newIndex++;
-          additionLineNumber++;
-          deletionLineNumber++;
+          const oldLine = oldLines[deletionLineIndex];
+          const newLine = newLines[additionLineIndex];
+          additionLineIndex++;
+          deletionLineIndex++;
           if (state.lineCounter < state.renderRange.startingLine) {
             state.lineCounter++;
             state.lineIndex++;
@@ -961,8 +932,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               unifiedAST,
               unifiedSpan: this.getAnnotations(
                 'unified',
-                deletionLineNumber,
-                additionLineNumber,
+                deletionLineIndex,
+                additionLineIndex,
                 state.hunkIndex,
                 state.lineIndex
               ),
@@ -980,8 +951,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               additionsAST,
               ...this.getAnnotations(
                 'split',
-                deletionLineNumber,
-                additionLineNumber,
+                deletionLineIndex,
+                additionLineIndex,
                 state.hunkIndex,
                 state.lineIndex
               ),
@@ -1001,8 +972,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
         }
       } else {
-        const { length: dLen } = hunkContent.deletions;
-        const { length: aLen } = hunkContent.additions;
+        const dLen = hunkContent.deletions;
+        const aLen = hunkContent.additions;
         const len = unified ? dLen + aLen : Math.max(dLen, aLen);
         let spanSize = 0;
         for (let i = 0; i < len; i++) {
@@ -1011,8 +982,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             break;
           }
           const { oldLine, newLine } = (() => {
-            let oldLine: ElementContent | undefined = oldLines[oldIndex];
-            let newLine: ElementContent | undefined = newLines[newIndex];
+            let oldLine: ElementContent | undefined =
+              oldLines[deletionLineIndex];
+            let newLine: ElementContent | undefined =
+              newLines[additionLineIndex];
             if (unified) {
               if (i < dLen) {
                 newLine = undefined;
@@ -1037,12 +1010,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           })();
 
           if (oldLine != null) {
-            oldIndex++;
-            deletionLineNumber++;
+            deletionLineIndex++;
           }
           if (newLine != null) {
-            newIndex++;
-            additionLineNumber++;
+            additionLineIndex++;
           }
 
           if (state.lineCounter < state.renderRange.startingLine) {
@@ -1058,8 +1029,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               unifiedAST,
               unifiedSpan: this.getAnnotations(
                 'unified',
-                oldLine != null ? deletionLineNumber : undefined,
-                newLine != null ? additionLineNumber : undefined,
+                oldLine != null ? deletionLineIndex : undefined,
+                newLine != null ? additionLineIndex : undefined,
                 state.hunkIndex,
                 state.lineIndex
               ),
@@ -1070,8 +1041,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             }
             const annotationSpans = this.getAnnotations(
               'split',
-              oldLine != null ? deletionLineNumber : undefined,
-              newLine != null ? additionLineNumber : undefined,
+              oldLine != null ? deletionLineIndex : undefined,
+              newLine != null ? additionLineIndex : undefined,
               state.hunkIndex,
               state.lineIndex
             );
@@ -1127,14 +1098,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunk.collapsedBefore +
       (unified ? hunk.unifiedLineCount : hunk.splitLineCount);
 
-    if (isLastHunk && ast.newLines != null && ast.newLines.length > 0) {
+    if (isLastHunk && !isPartial) {
       state.hunkIndex++;
       this.renderCollapsedHunks({
         hunk,
-        additionsAST,
         ast,
-        deletionsAST,
         hunkData,
+        deletionsAST,
+        additionsAST,
         state,
         hunkSpecs: undefined,
         isFirstHunk: false,
@@ -1145,6 +1116,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           0
         ),
         unifiedAST,
+        isPartial: false,
       });
     }
   }
