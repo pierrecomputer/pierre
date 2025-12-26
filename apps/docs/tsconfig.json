@@ -4,6 +4,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "app/docs/**/*.mdx",
     ".next/types/**/*.ts",
     "types/**/*.d.ts"
   ],
@@ -38,5 +39,8 @@
     "paths": {
       "@/*": ["./*"]
     }
+  },
+  "mdx": {
+    "checkMdx": true
   }
 }
