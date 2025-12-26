@@ -86,7 +86,7 @@ interface RenderCollapsedHunksProps {
   deletionsAST: ElementContent[];
   unifiedAST: ElementContent[];
   state: DiffRenderState;
-  isPartial: boolean;
+  isExpandable: boolean;
 }
 
 const DEFAULT_RENDER_RANGE: RenderRange = {
@@ -692,14 +692,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     deletionsAST,
     additionsAST,
     state,
-    isPartial,
+    isExpandable,
   }: RenderCollapsedHunksProps) {
     if (rangeSize <= 0) {
       return;
     }
     const { hunkSeparators, expandUnchanged, diffStyle, expansionLineCount } =
       this.getOptionsWithDefaults();
-    const isExpandable = !isPartial;
     const expandedRegion =
       this.expandedHunks.get(state.hunkIndex) ?? EXPANDED_REGION;
     const chunked = rangeSize > expansionLineCount;
@@ -892,7 +891,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       isLastHunk: false,
       rangeSize: Math.max(hunk.collapsedBefore, 0),
       unifiedAST,
-      isPartial,
+      isExpandable: !isPartial,
     });
     state.lineIndex = startingLineIndex + hunk.collapsedBefore;
 
@@ -1115,7 +1114,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           0
         ),
         unifiedAST,
-        isPartial: false,
+        isExpandable: true,
       });
     }
   }
