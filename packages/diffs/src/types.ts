@@ -176,8 +176,8 @@ export interface PrePropertiesConfig
 }
 
 export interface RenderHeaderMetadataProps {
-  oldFile?: FileContents;
-  newFile?: FileContents;
+  deletionFile?: FileContents;
+  additionFile?: FileContents;
   fileDiff?: FileDiffMetadata;
 }
 
@@ -314,8 +314,8 @@ export interface ThemedFileResult {
 }
 
 export interface RenderDiffFilesResult {
-  oldLines: ElementContent[];
-  newLines: ElementContent[];
+  deletionLines: ElementContent[];
+  additionLines: ElementContent[];
 }
 
 export interface ThemedDiffResult {

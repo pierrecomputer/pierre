@@ -118,8 +118,8 @@ export class FileDiff<LAnnotation = undefined> {
   protected annotationElements: HTMLElement[] = [];
   protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
 
-  protected oldFile: FileContents | undefined;
-  protected newFile: FileContents | undefined;
+  protected deletionFile: FileContents | undefined;
+  protected additionFile: FileContents | undefined;
   protected fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
 
@@ -272,8 +272,8 @@ export class FileDiff<LAnnotation = undefined> {
       this.workerManager = undefined;
       // Clean up the data
       this.fileDiff = undefined;
-      this.oldFile = undefined;
-      this.newFile = undefined;
+      this.deletionFile = undefined;
+      this.additionFile = undefined;
     }
 
     this.enabled = false;
@@ -324,8 +324,8 @@ export class FileDiff<LAnnotation = undefined> {
       delete this.pre.dataset.dehydrated;
 
       this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
-      this.newFile = newFile;
-      this.oldFile = oldFile;
+      this.additionFile = newFile;
+      this.deletionFile = oldFile;
       this.fileDiff =
         fileDiff ??
         (oldFile != null && newFile != null
@@ -350,13 +350,15 @@ export class FileDiff<LAnnotation = undefined> {
   rerender(): void {
     if (
       !this.enabled ||
-      (this.fileDiff == null && this.newFile == null && this.oldFile == null)
+      (this.fileDiff == null &&
+        this.additionFile == null &&
+        this.deletionFile == null)
     ) {
       return;
     }
     this.render({
-      oldFile: this.oldFile,
-      newFile: this.newFile,
+      oldFile: this.deletionFile,
+      newFile: this.additionFile,
       fileDiff: this.fileDiff,
       forceRender: true,
       renderRange: this.renderRange,
@@ -395,8 +397,8 @@ export class FileDiff<LAnnotation = undefined> {
     const filesDidChange =
       oldFile != null &&
       newFile != null &&
-      (!areFilesEqual(oldFile, this.oldFile) ||
-        !areFilesEqual(newFile, this.newFile));
+      (!areFilesEqual(oldFile, this.deletionFile) ||
+        !areFilesEqual(newFile, this.additionFile));
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
@@ -417,8 +419,8 @@ export class FileDiff<LAnnotation = undefined> {
     }
 
     this.renderRange = renderRange;
-    this.oldFile = oldFile;
-    this.newFile = newFile;
+    this.deletionFile = oldFile;
+    this.additionFile = newFile;
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
     } else if (oldFile != null && newFile != null && filesDidChange) {
@@ -613,8 +615,8 @@ export class FileDiff<LAnnotation = undefined> {
     }
     const content =
       renderHeaderMetadata?.({
-        oldFile: this.oldFile,
-        newFile: this.newFile,
+        deletionFile: this.deletionFile,
+        additionFile: this.additionFile,
         fileDiff: this.fileDiff,
       }) ?? undefined;
     if (content != null) {

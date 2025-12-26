@@ -61,8 +61,8 @@ interface RenderRangeProps {
 }
 
 interface PushLineWithAnnotation {
-  newLine?: ElementContent;
-  oldLine?: ElementContent;
+  deletionLine?: ElementContent;
+  additionLine?: ElementContent;
 
   unifiedAST?: ElementContent[];
   deletionsAST?: ElementContent[];
@@ -554,9 +554,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
 
     additionsAST =
-      !unified && code.newLines.length > 0 ? additionsAST : undefined;
+      !unified && code.additionLines.length > 0 ? additionsAST : undefined;
     deletionsAST =
-      !unified && code.oldLines.length > 0 ? deletionsAST : undefined;
+      !unified && code.deletionLines.length > 0 ? deletionsAST : undefined;
     unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
 
     // FIXME(amadeus): this version of virtualization is probably more
@@ -755,7 +755,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionLineNumber,
       deletionLineNumber,
     }: RenderRangeProps) => {
-      if (ast.newLines == null || ast.oldLines == null) {
+      if (ast.additionLines == null || ast.deletionLines == null) {
         return;
       }
 
@@ -765,12 +765,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       let lIndex = state.lineIndex + offset;
 
       for (let i = 0; i < rangeLen; i++) {
-        const oldLine = ast.oldLines[dLineNumber];
-        const newLine = ast.newLines[aLineNumber];
-        if (oldLine == null || newLine == null) {
+        const deletionLine = ast.deletionLines[dLineNumber];
+        const additionLine = ast.additionLines[aLineNumber];
+        if (deletionLine == null || additionLine == null) {
           console.error({ aLineNumber, dLineNumber, offset });
           throw new Error(
-            'DiffHunksRenderer.renderHunks prefill context invalid. Must include data for old and new lines'
+            'DiffHunksRenderer.renderHunks prefill context invalid. Must include data for deletion and addition lines'
           );
         }
         dLineNumber++;
@@ -784,7 +784,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
         if (diffStyle === 'unified') {
           this.pushLineWithAnnotation({
-            newLine,
+            additionLine,
             unifiedAST,
             unifiedSpan: this.getAnnotations(
               'unified',
@@ -796,8 +796,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           });
         } else {
           this.pushLineWithAnnotation({
-            newLine,
-            oldLine,
+            additionLine,
+            deletionLine,
             additionsAST,
             deletionsAST,
             ...this.getAnnotations(
@@ -896,7 +896,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     });
     state.lineIndex = startingLineIndex + hunk.collapsedBefore;
 
-    const { oldLines, newLines } = ast;
+    const { deletionLines, additionLines } = ast;
     let { deletionLineIndex, additionLineIndex } = hunk;
 
     // Render hunk/diff content
@@ -911,8 +911,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             brokeEarly = true;
             break;
           }
-          const oldLine = oldLines[deletionLineIndex];
-          const newLine = newLines[additionLineIndex];
+          const deletionLine = deletionLines[deletionLineIndex];
+          const additionLine = additionLines[additionLineIndex];
           additionLineIndex++;
           deletionLineIndex++;
           if (state.lineCounter < state.renderRange.startingLine) {
@@ -921,13 +921,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             continue;
           }
           if (unified) {
-            if (newLine == null) {
+            if (additionLine == null) {
               throw new Error(
-                'DiffHunksRenderer.renderHunks: newLine doesnt exist for context...'
+                'DiffHunksRenderer.renderHunks: additionLine doesnt exist for context...'
               );
             }
             this.pushLineWithAnnotation({
-              newLine,
+              additionLine,
               unifiedAST,
               unifiedSpan: this.getAnnotations(
                 'unified',
@@ -938,14 +938,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               ),
             });
           } else {
-            if (newLine == null || oldLine == null) {
+            if (additionLine == null || deletionLine == null) {
               throw new Error(
-                'DiffHunksRenderer.renderHunks: newLine or oldLine doesnt exist for context...'
+                'DiffHunksRenderer.renderHunks: additionLine or deletionLine dont exist for context...'
               );
             }
             this.pushLineWithAnnotation({
-              oldLine,
-              newLine,
+              deletionLine,
+              additionLine,
               deletionsAST,
               additionsAST,
               ...this.getAnnotations(
@@ -980,38 +980,38 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             brokeEarly = true;
             break;
           }
-          const { oldLine, newLine } = (() => {
-            let oldLine: ElementContent | undefined =
-              oldLines[deletionLineIndex];
-            let newLine: ElementContent | undefined =
-              newLines[additionLineIndex];
+          const { deletionLine, additionLine } = (() => {
+            let deletionLine: ElementContent | undefined =
+              deletionLines[deletionLineIndex];
+            let additionLine: ElementContent | undefined =
+              additionLines[additionLineIndex];
             if (unified) {
               if (i < dLen) {
-                newLine = undefined;
+                additionLine = undefined;
               } else {
-                oldLine = undefined;
+                deletionLine = undefined;
               }
             } else {
               if (i >= dLen) {
-                oldLine = undefined;
+                deletionLine = undefined;
               }
               if (i >= aLen) {
-                newLine = undefined;
+                additionLine = undefined;
               }
             }
-            if (oldLine == null && newLine == null) {
+            if (deletionLine == null && additionLine == null) {
               console.error({ i, len, ast, hunkContent });
               throw new Error(
-                'renderHunks: oldLine and newLine are null, something is wrong'
+                'renderHunks: deletionLine and additionLine are null, something is wrong'
               );
             }
-            return { oldLine, newLine };
+            return { deletionLine, additionLine };
           })();
 
-          if (oldLine != null) {
+          if (deletionLine != null) {
             deletionLineIndex++;
           }
-          if (newLine != null) {
+          if (additionLine != null) {
             additionLineIndex++;
           }
 
@@ -1023,25 +1023,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
           if (unified) {
             this.pushLineWithAnnotation({
-              oldLine,
-              newLine,
+              deletionLine,
+              additionLine,
               unifiedAST,
               unifiedSpan: this.getAnnotations(
                 'unified',
-                oldLine != null ? deletionLineIndex : undefined,
-                newLine != null ? additionLineIndex : undefined,
+                deletionLine != null ? deletionLineIndex : undefined,
+                additionLine != null ? additionLineIndex : undefined,
                 state.hunkIndex,
                 state.lineIndex
               ),
             });
           } else {
-            if (oldLine == null || newLine == null) {
+            if (deletionLine == null || additionLine == null) {
               spanSize++;
             }
             const annotationSpans = this.getAnnotations(
               'split',
-              oldLine != null ? deletionLineIndex : undefined,
-              newLine != null ? additionLineIndex : undefined,
+              deletionLine != null ? deletionLineIndex : undefined,
+              additionLine != null ? additionLineIndex : undefined,
               state.hunkIndex,
               state.lineIndex
             );
@@ -1056,8 +1056,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               }
             }
             this.pushLineWithAnnotation({
-              newLine,
-              oldLine,
+              additionLine,
+              deletionLine,
               deletionsAST,
               additionsAST,
               ...annotationSpans,
@@ -1110,7 +1110,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         isFirstHunk: false,
         isLastHunk: true,
         rangeSize: Math.max(
-          ast.newLines.length -
+          ast.additionLines.length -
             Math.max(hunk.additionStart + hunk.additionCount - 1, 0),
           0
         ),
@@ -1121,8 +1121,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private pushLineWithAnnotation({
-    newLine,
-    oldLine,
+    deletionLine,
+    additionLine,
     unifiedAST,
     additionsAST,
     deletionsAST,
@@ -1131,20 +1131,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     additionSpan,
   }: PushLineWithAnnotation) {
     if (unifiedAST != null) {
-      if (oldLine != null) {
-        unifiedAST.push(oldLine);
-      } else if (newLine != null) {
-        unifiedAST.push(newLine);
+      if (deletionLine != null) {
+        unifiedAST.push(deletionLine);
+      } else if (additionLine != null) {
+        unifiedAST.push(additionLine);
       }
       if (unifiedSpan != null) {
         unifiedAST.push(createAnnotationElement(unifiedSpan));
       }
     } else if (deletionsAST != null && additionsAST != null) {
-      if (oldLine != null) {
-        deletionsAST.push(oldLine);
+      if (deletionLine != null) {
+        deletionsAST.push(deletionLine);
       }
-      if (newLine != null) {
-        additionsAST.push(newLine);
+      if (additionLine != null) {
+        additionsAST.push(additionLine);
       }
       if (deletionSpan != null) {
         deletionsAST.push(createAnnotationElement(deletionSpan));
@@ -1157,22 +1157,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private getAnnotations(
     type: 'unified',
-    oldLineNumber: number | undefined,
-    newLineNumber: number | undefined,
+    deletionLineNumber: number | undefined,
+    additionLineNumber: number | undefined,
     hunkIndex: number,
     lineIndex: number
   ): AnnotationSpan | undefined;
   private getAnnotations(
     type: 'split',
-    oldLineNumber: number | undefined,
-    newLineNumber: number | undefined,
+    deletionLineNumber: number | undefined,
+    additionLineNumber: number | undefined,
     hunkIndex: number,
     lineIndex: number
   ): { deletionSpan: AnnotationSpan; additionSpan: AnnotationSpan } | undefined;
   private getAnnotations(
     type: 'unified' | 'split',
-    oldLineNumber: number | undefined,
-    newLineNumber: number | undefined,
+    deletionLineNumber: number | undefined,
+    additionLineNumber: number | undefined,
     hunkIndex: number,
     lineIndex: number
   ):
@@ -1185,8 +1185,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineIndex,
       annotations: [],
     };
-    if (oldLineNumber != null) {
-      for (const anno of this.deletionAnnotations[oldLineNumber] ?? []) {
+    if (deletionLineNumber != null) {
+      for (const anno of this.deletionAnnotations[deletionLineNumber] ?? []) {
         deletionSpan.annotations.push(getLineAnnotationName(anno));
       }
     }
@@ -1196,8 +1196,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineIndex,
       annotations: [],
     };
-    if (newLineNumber != null) {
-      for (const anno of this.additionAnnotations[newLineNumber] ?? []) {
+    if (additionLineNumber != null) {
+      for (const anno of this.additionAnnotations[additionLineNumber] ?? []) {
         (type === 'unified' ? deletionSpan : additionSpan).annotations.push(
           getLineAnnotationName(anno)
         );
