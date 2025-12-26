@@ -2,7 +2,111 @@
 
 exports[`DiffHunksRenderer proper buffers should be prepended to additions colum in split style: parsed diff 1`] = `
 {
+  "additionLines": [
+    
+"import IconSprite from './IconSprite';
+"
+,
+    
+"import HeaderSimple from '../components/HeaderSimple';
+"
+,
+    
+"import Hero from '../components/Hero';
+"
+,
+    
+"
+"
+,
+    
+"export default function Home() {
+"
+,
+    
+"  return (
+"
+,
+    
+"    <div>
+"
+,
+    
+"      <HeaderSimple />
+"
+,
+    
+"      <IconSprite />
+"
+,
+    
+"      <h1>Hello!</h1>
+"
+,
+    
+"    </div>
+"
+,
+    
+"  );
+"
+,
+    
+"}
+"
+,
+  ],
   "cacheKey": undefined,
+  "deletionLines": [
+    
+"import * as 'react';
+"
+,
+    
+"import IconSprite from './IconSprite';
+"
+,
+    
+"import Header from './Header';
+"
+,
+    
+"
+"
+,
+    
+"export default function Home() {
+"
+,
+    
+"  return (
+"
+,
+    
+"    <div>
+"
+,
+    
+"      <Header />
+"
+,
+    
+"      <IconSprite />
+"
+,
+    
+"    </div>
+"
+,
+    
+"  );
+"
+,
+    
+"}
+"
+,
+  ],
   "hunks": [
     {
       "additionCount": 13,
@@ -77,110 +181,6 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
   ],
   "isPartial": false,
   "name": "file.tsx",
-  "newLines": [
-    
-"import IconSprite from './IconSprite';
-"
-,
-    
-"import HeaderSimple from '../components/HeaderSimple';
-"
-,
-    
-"import Hero from '../components/Hero';
-"
-,
-    
-"
-"
-,
-    
-"export default function Home() {
-"
-,
-    
-"  return (
-"
-,
-    
-"    <div>
-"
-,
-    
-"      <HeaderSimple />
-"
-,
-    
-"      <IconSprite />
-"
-,
-    
-"      <h1>Hello!</h1>
-"
-,
-    
-"    </div>
-"
-,
-    
-"  );
-"
-,
-    
-"}
-"
-,
-  ],
-  "oldLines": [
-    
-"import * as 'react';
-"
-,
-    
-"import IconSprite from './IconSprite';
-"
-,
-    
-"import Header from './Header';
-"
-,
-    
-"
-"
-,
-    
-"export default function Home() {
-"
-,
-    
-"  return (
-"
-,
-    
-"    <div>
-"
-,
-    
-"      <Header />
-"
-,
-    
-"      <IconSprite />
-"
-,
-    
-"    </div>
-"
-,
-    
-"  );
-"
-,
-    
-"}
-"
-,
-  ],
   "prevName": undefined,
   "splitLineCount": 14,
   "type": "change",
@@ -2599,7 +2599,111 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
 
 exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum in split style: parsed diff 1`] = `
 {
+  "additionLines": [
+    
+"import * as 'react';
+"
+,
+    
+"import IconSprite from './IconSprite';
+"
+,
+    
+"import Header from './Header';
+"
+,
+    
+"
+"
+,
+    
+"export default function Home() {
+"
+,
+    
+"  return (
+"
+,
+    
+"    <div>
+"
+,
+    
+"      <Header />
+"
+,
+    
+"      <IconSprite />
+"
+,
+    
+"    </div>
+"
+,
+    
+"  );
+"
+,
+    
+"}
+"
+,
+  ],
   "cacheKey": undefined,
+  "deletionLines": [
+    
+"import IconSprite from './IconSprite';
+"
+,
+    
+"import HeaderSimple from '../components/HeaderSimple';
+"
+,
+    
+"import Hero from '../components/Hero';
+"
+,
+    
+"
+"
+,
+    
+"export default function Home() {
+"
+,
+    
+"  return (
+"
+,
+    
+"    <div>
+"
+,
+    
+"      <HeaderSimple />
+"
+,
+    
+"      <IconSprite />
+"
+,
+    
+"      <h1>Hello!</h1>
+"
+,
+    
+"    </div>
+"
+,
+    
+"  );
+"
+,
+    
+"}
+"
+,
+  ],
   "hunks": [
     {
       "additionCount": 12,
@@ -2674,110 +2778,6 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
   ],
   "isPartial": false,
   "name": "file.tsx",
-  "newLines": [
-    
-"import * as 'react';
-"
-,
-    
-"import IconSprite from './IconSprite';
-"
-,
-    
-"import Header from './Header';
-"
-,
-    
-"
-"
-,
-    
-"export default function Home() {
-"
-,
-    
-"  return (
-"
-,
-    
-"    <div>
-"
-,
-    
-"      <Header />
-"
-,
-    
-"      <IconSprite />
-"
-,
-    
-"    </div>
-"
-,
-    
-"  );
-"
-,
-    
-"}
-"
-,
-  ],
-  "oldLines": [
-    
-"import IconSprite from './IconSprite';
-"
-,
-    
-"import HeaderSimple from '../components/HeaderSimple';
-"
-,
-    
-"import Hero from '../components/Hero';
-"
-,
-    
-"
-"
-,
-    
-"export default function Home() {
-"
-,
-    
-"  return (
-"
-,
-    
-"    <div>
-"
-,
-    
-"      <HeaderSimple />
-"
-,
-    
-"      <IconSprite />
-"
-,
-    
-"      <h1>Hello!</h1>
-"
-,
-    
-"    </div>
-"
-,
-    
-"  );
-"
-,
-    
-"}
-"
-,
-  ],
   "prevName": undefined,
   "splitLineCount": 14,
   "type": "change",
@@ -5196,7 +5196,111 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
 
 exports[`DiffHunksRenderer additions and deletions should be empty when unified: parsed diff 1`] = `
 {
+  "additionLines": [
+    
+"import IconSprite from './IconSprite';
+"
+,
+    
+"import HeaderSimple from '../components/HeaderSimple';
+"
+,
+    
+"import Hero from '../components/Hero';
+"
+,
+    
+"
+"
+,
+    
+"export default function Home() {
+"
+,
+    
+"  return (
+"
+,
+    
+"    <div>
+"
+,
+    
+"      <HeaderSimple />
+"
+,
+    
+"      <IconSprite />
+"
+,
+    
+"      <h1>Hello!</h1>
+"
+,
+    
+"    </div>
+"
+,
+    
+"  );
+"
+,
+    
+"}
+"
+,
+  ],
   "cacheKey": undefined,
+  "deletionLines": [
+    
+"import * as 'react';
+"
+,
+    
+"import IconSprite from './IconSprite';
+"
+,
+    
+"import Header from './Header';
+"
+,
+    
+"
+"
+,
+    
+"export default function Home() {
+"
+,
+    
+"  return (
+"
+,
+    
+"    <div>
+"
+,
+    
+"      <Header />
+"
+,
+    
+"      <IconSprite />
+"
+,
+    
+"    </div>
+"
+,
+    
+"  );
+"
+,
+    
+"}
+"
+,
+  ],
   "hunks": [
     {
       "additionCount": 13,
@@ -5271,110 +5375,6 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
   ],
   "isPartial": false,
   "name": "file.tsx",
-  "newLines": [
-    
-"import IconSprite from './IconSprite';
-"
-,
-    
-"import HeaderSimple from '../components/HeaderSimple';
-"
-,
-    
-"import Hero from '../components/Hero';
-"
-,
-    
-"
-"
-,
-    
-"export default function Home() {
-"
-,
-    
-"  return (
-"
-,
-    
-"    <div>
-"
-,
-    
-"      <HeaderSimple />
-"
-,
-    
-"      <IconSprite />
-"
-,
-    
-"      <h1>Hello!</h1>
-"
-,
-    
-"    </div>
-"
-,
-    
-"  );
-"
-,
-    
-"}
-"
-,
-  ],
-  "oldLines": [
-    
-"import * as 'react';
-"
-,
-    
-"import IconSprite from './IconSprite';
-"
-,
-    
-"import Header from './Header';
-"
-,
-    
-"
-"
-,
-    
-"export default function Home() {
-"
-,
-    
-"  return (
-"
-,
-    
-"    <div>
-"
-,
-    
-"      <Header />
-"
-,
-    
-"      <IconSprite />
-"
-,
-    
-"    </div>
-"
-,
-    
-"  );
-"
-,
-    
-"}
-"
-,
-  ],
   "prevName": undefined,
   "splitLineCount": 14,
   "type": "change",
@@ -7059,41 +7059,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
 
 exports[`DiffHunksRenderer a diff with only additions should have an empty deletions column: parsed diff 1`] = `
 {
-  "cacheKey": undefined,
-  "hunks": [
-    {
-      "additionCount": 13,
-      "additionLineIndex": 0,
-      "additionLines": 13,
-      "additionStart": 1,
-      "collapsedBefore": 0,
-      "deletionCount": 0,
-      "deletionLineIndex": -1,
-      "deletionLines": 0,
-      "deletionStart": 0,
-      "hunkContent": [
-        {
-          "additions": 13,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -0,0 +1,13 @@
-"
-,
-      "splitLineCount": 13,
-      "splitLineStart": 0,
-      "unifiedLineCount": 13,
-      "unifiedLineStart": 0,
-    },
-  ],
-  "isPartial": false,
-  "name": "file.tsx",
-  "newLines": [
+  "additionLines": [
     
 "import IconSprite from './IconSprite';
 "
@@ -7147,9 +7113,43 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
 "
 ,
   ],
-  "oldLines": [
+  "cacheKey": undefined,
+  "deletionLines": [
     "",
   ],
+  "hunks": [
+    {
+      "additionCount": 13,
+      "additionLineIndex": 0,
+      "additionLines": 13,
+      "additionStart": 1,
+      "collapsedBefore": 0,
+      "deletionCount": 0,
+      "deletionLineIndex": -1,
+      "deletionLines": 0,
+      "deletionStart": 0,
+      "hunkContent": [
+        {
+          "additions": 13,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -0,0 +1,13 @@
+"
+,
+      "splitLineCount": 13,
+      "splitLineStart": 0,
+      "unifiedLineCount": 13,
+      "unifiedLineStart": 0,
+    },
+  ],
+  "isPartial": false,
+  "name": "file.tsx",
   "prevName": undefined,
   "splitLineCount": 13,
   "type": "change",
@@ -8385,44 +8385,11 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
 
 exports[`DiffHunksRenderer a diff with only deletions should have an empty additions column: parsed diff 1`] = `
 {
-  "cacheKey": undefined,
-  "hunks": [
-    {
-      "additionCount": 0,
-      "additionLineIndex": -1,
-      "additionLines": 0,
-      "additionStart": 0,
-      "collapsedBefore": 0,
-      "deletionCount": 12,
-      "deletionLineIndex": 0,
-      "deletionLines": 12,
-      "deletionStart": 1,
-      "hunkContent": [
-        {
-          "additions": 0,
-          "deletions": 12,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -1,12 +0,0 @@
-"
-,
-      "splitLineCount": 12,
-      "splitLineStart": 0,
-      "unifiedLineCount": 12,
-      "unifiedLineStart": 0,
-    },
-  ],
-  "isPartial": false,
-  "name": "file.tsx",
-  "newLines": [
+  "additionLines": [
     "",
   ],
-  "oldLines": [
+  "cacheKey": undefined,
+  "deletionLines": [
     
 "import * as 'react';
 "
@@ -8472,6 +8439,39 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
 "
 ,
   ],
+  "hunks": [
+    {
+      "additionCount": 0,
+      "additionLineIndex": -1,
+      "additionLines": 0,
+      "additionStart": 0,
+      "collapsedBefore": 0,
+      "deletionCount": 12,
+      "deletionLineIndex": 0,
+      "deletionLines": 12,
+      "deletionStart": 1,
+      "hunkContent": [
+        {
+          "additions": 0,
+          "deletions": 12,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -1,12 +0,0 @@
+"
+,
+      "splitLineCount": 12,
+      "splitLineStart": 0,
+      "unifiedLineCount": 12,
+      "unifiedLineStart": 0,
+    },
+  ],
+  "isPartial": false,
+  "name": "file.tsx",
   "prevName": undefined,
   "splitLineCount": 12,
   "type": "change",
