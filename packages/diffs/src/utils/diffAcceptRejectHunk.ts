@@ -8,8 +8,10 @@ export function diffAcceptRejectHunk(
   diff = {
     ...diff,
     hunks: [...diff.hunks],
-    oldLines: type === 'accept' ? [...diff.oldLines] : diff.oldLines,
-    newLines: type === 'reject' ? [...diff.newLines] : diff.newLines,
+    deletionLines:
+      type === 'accept' ? [...diff.deletionLines] : diff.deletionLines,
+    additionLines:
+      type === 'reject' ? [...diff.additionLines] : diff.additionLines,
     // Automatically update cacheKey if it exists, since content is changing
     cacheKey:
       diff.cacheKey != null
@@ -17,8 +19,8 @@ export function diffAcceptRejectHunk(
         : undefined,
   };
   // Fix the content lines
-  const { newLines, oldLines } = diff;
-  if (newLines != null && oldLines != null) {
+  const { additionLines, deletionLines } = diff;
+  if (additionLines != null && deletionLines != null) {
     const hunk = diff.hunks[hunkIndex];
     if (hunk == null) {
       console.error({ diff, hunkIndex });
@@ -27,19 +29,19 @@ export function diffAcceptRejectHunk(
       );
     }
     if (type === 'reject') {
-      newLines.splice(
+      additionLines.splice(
         hunk.additionLineIndex,
         hunk.additionCount,
-        ...oldLines.slice(
+        ...deletionLines.slice(
           hunk.deletionLineIndex,
           hunk.deletionLineIndex + hunk.deletionCount
         )
       );
     } else {
-      oldLines.splice(
+      deletionLines.splice(
         hunk.deletionLineIndex,
         hunk.deletionCount,
-        ...newLines.slice(
+        ...additionLines.slice(
           hunk.additionLineIndex,
           hunk.additionLineIndex + hunk.additionCount
         )

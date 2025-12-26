@@ -2,834 +2,7 @@
 
 exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match snapshot 1`] = `
 {
-  "cacheKey": undefined,
-  "hunks": [
-    {
-      "additionCount": 9,
-      "additionLineIndex": 3,
-      "additionLines": 1,
-      "additionStart": 4,
-      "collapsedBefore": 3,
-      "deletionCount": 8,
-      "deletionLineIndex": 3,
-      "deletionLines": 0,
-      "deletionStart": 4,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -4,8 +4,9 @@
-"
-,
-      "splitLineCount": 9,
-      "splitLineStart": 0,
-      "unifiedLineCount": 9,
-      "unifiedLineStart": 0,
-    },
-    {
-      "additionCount": 15,
-      "additionLineIndex": 18,
-      "additionLines": 7,
-      "additionStart": 19,
-      "collapsedBefore": 6,
-      "deletionCount": 8,
-      "deletionLineIndex": 17,
-      "deletionLines": 0,
-      "deletionStart": 18,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 7,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -18,8 +19,15 @@
-"
-,
-      "splitLineCount": 15,
-      "splitLineStart": 9,
-      "unifiedLineCount": 15,
-      "unifiedLineStart": 9,
-    },
-    {
-      "additionCount": 8,
-      "additionLineIndex": 47,
-      "additionLines": 0,
-      "additionStart": 48,
-      "collapsedBefore": 14,
-      "deletionCount": 10,
-      "deletionLineIndex": 39,
-      "deletionLines": 2,
-      "deletionStart": 40,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -40,10 +48,8 @@
-"
-,
-      "splitLineCount": 10,
-      "splitLineStart": 24,
-      "unifiedLineCount": 10,
-      "unifiedLineStart": 24,
-    },
-    {
-      "additionCount": 13,
-      "additionLineIndex": 105,
-      "additionLines": 3,
-      "additionStart": 106,
-      "collapsedBefore": 50,
-      "deletionCount": 19,
-      "deletionLineIndex": 99,
-      "deletionLines": 9,
-      "deletionStart": 100,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 3,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 5,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -100,19 +106,13 @@
-"
-,
-      "splitLineCount": 19,
-      "splitLineStart": 34,
-      "unifiedLineCount": 22,
-      "unifiedLineStart": 34,
-    },
-    {
-      "additionCount": 17,
-      "additionLineIndex": 119,
-      "additionLines": 3,
-      "additionStart": 120,
-      "collapsedBefore": 1,
-      "deletionCount": 18,
-      "deletionLineIndex": 119,
-      "deletionLines": 4,
-      "deletionStart": 120,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 5,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -120,18 +120,17 @@
-"
-,
-      "splitLineCount": 18,
-      "splitLineStart": 53,
-      "unifiedLineCount": 21,
-      "unifiedLineStart": 56,
-    },
-    {
-      "additionCount": 8,
-      "additionLineIndex": 147,
-      "additionLines": 0,
-      "additionStart": 148,
-      "collapsedBefore": 11,
-      "deletionCount": 9,
-      "deletionLineIndex": 148,
-      "deletionLines": 1,
-      "deletionStart": 149,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -149,9 +148,8 @@
-"
-,
-      "splitLineCount": 9,
-      "splitLineStart": 71,
-      "unifiedLineCount": 9,
-      "unifiedLineStart": 77,
-    },
-    {
-      "additionCount": 13,
-      "additionLineIndex": 156,
-      "additionLines": 0,
-      "additionStart": 157,
-      "collapsedBefore": 1,
-      "deletionCount": 28,
-      "deletionLineIndex": 158,
-      "deletionLines": 15,
-      "deletionStart": 159,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 11,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 5,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 4,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -159,28 +157,13 @@
-"
-,
-      "splitLineCount": 28,
-      "splitLineStart": 80,
-      "unifiedLineCount": 28,
-      "unifiedLineStart": 86,
-    },
-    {
-      "additionCount": 125,
-      "additionLineIndex": 213,
-      "additionLines": 95,
-      "additionStart": 214,
-      "collapsedBefore": 44,
-      "deletionCount": 35,
-      "deletionLineIndex": 230,
-      "deletionLines": 5,
-      "deletionStart": 231,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 5,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 55,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 2,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 2,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 5,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 0,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 2,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 37,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -231,35 +214,125 @@
-"
-,
-      "splitLineCount": 130,
-      "splitLineStart": 108,
-      "unifiedLineCount": 130,
-      "unifiedLineStart": 114,
-    },
-    {
-      "additionCount": 27,
-      "additionLineIndex": 348,
-      "additionLines": 5,
-      "additionStart": 349,
-      "collapsedBefore": 10,
-      "deletionCount": 26,
-      "deletionLineIndex": 275,
-      "deletionLines": 4,
-      "deletionStart": 276,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 5,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 3,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 6,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 2,
-          "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -276,26 +349,27 @@
-"
-,
-      "splitLineCount": 27,
-      "splitLineStart": 238,
-      "unifiedLineCount": 31,
-      "unifiedLineStart": 244,
-    },
-    {
-      "additionCount": 18,
-      "additionLineIndex": 382,
-      "additionLines": 3,
-      "additionStart": 383,
-      "collapsedBefore": 7,
-      "deletionCount": 17,
-      "deletionLineIndex": 308,
-      "deletionLines": 2,
-      "deletionStart": 309,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 6,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -309,17 +383,18 @@
-"
-,
-      "splitLineCount": 18,
-      "splitLineStart": 265,
-      "unifiedLineCount": 20,
-      "unifiedLineStart": 275,
-    },
-    {
-      "additionCount": 18,
-      "additionLineIndex": 401,
-      "additionLines": 3,
-      "additionStart": 402,
-      "collapsedBefore": 1,
-      "deletionCount": 17,
-      "deletionLineIndex": 326,
-      "deletionLines": 2,
-      "deletionStart": 327,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 6,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -327,17 +402,18 @@
-"
-,
-      "splitLineCount": 18,
-      "splitLineStart": 283,
-      "unifiedLineCount": 20,
-      "unifiedLineStart": 295,
-    },
-    {
-      "additionCount": 94,
-      "additionLineIndex": 424,
-      "additionLines": 83,
-      "additionStart": 425,
-      "collapsedBefore": 5,
-      "deletionCount": 53,
-      "deletionLineIndex": 348,
-      "deletionLines": 42,
-      "deletionStart": 349,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 22,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 9,
-          "deletions": 8,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 51,
-          "deletions": 4,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 1,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 1,
-          "deletions": 30,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -349,53 +425,94 @@
-"
-,
-      "splitLineCount": 123,
-      "splitLineStart": 301,
-      "unifiedLineCount": 136,
-      "unifiedLineStart": 315,
-    },
-    {
-      "additionCount": 27,
-      "additionLineIndex": 549,
-      "additionLines": 19,
-      "additionStart": 550,
-      "collapsedBefore": 31,
-      "deletionCount": 8,
-      "deletionLineIndex": 432,
-      "deletionLines": 0,
-      "deletionStart": 433,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 19,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -433,8 +550,27 @@
-"
-,
-      "splitLineCount": 27,
-      "splitLineStart": 424,
-      "unifiedLineCount": 27,
-      "unifiedLineStart": 451,
-    },
-    {
-      "additionCount": 36,
-      "additionLineIndex": 632,
-      "additionLines": 28,
-      "additionStart": 633,
-      "collapsedBefore": 56,
-      "deletionCount": 8,
-      "deletionLineIndex": 496,
-      "deletionLines": 0,
-      "deletionStart": 497,
-      "hunkContent": [
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-        {
-          "additions": 28,
-          "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
-          "type": "change",
-        },
-        {
-          "lines": 4,
-          "noEOFCR": false,
-          "type": "context",
-        },
-      ],
-      "hunkContext": undefined,
-      "hunkSpecs": 
-"@@ -497,8 +633,36 @@
-"
-,
-      "splitLineCount": 36,
-      "splitLineStart": 451,
-      "unifiedLineCount": 36,
-      "unifiedLineStart": 478,
-    },
-  ],
-  "isPartial": false,
-  "name": "fileNew.txt",
-  "newLines": [
+  "additionLines": [
     
 "import type {
 "
@@ -3675,7 +2848,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
   ],
-  "oldLines": [
+  "cacheKey": undefined,
+  "deletionLines": [
     
 "import type {
 "
@@ -5865,6 +5039,832 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
   ],
+  "hunks": [
+    {
+      "additionCount": 9,
+      "additionLineIndex": 3,
+      "additionLines": 1,
+      "additionStart": 4,
+      "collapsedBefore": 3,
+      "deletionCount": 8,
+      "deletionLineIndex": 3,
+      "deletionLines": 0,
+      "deletionStart": 4,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -4,8 +4,9 @@
+"
+,
+      "splitLineCount": 9,
+      "splitLineStart": 0,
+      "unifiedLineCount": 9,
+      "unifiedLineStart": 0,
+    },
+    {
+      "additionCount": 15,
+      "additionLineIndex": 18,
+      "additionLines": 7,
+      "additionStart": 19,
+      "collapsedBefore": 6,
+      "deletionCount": 8,
+      "deletionLineIndex": 17,
+      "deletionLines": 0,
+      "deletionStart": 18,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 7,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -18,8 +19,15 @@
+"
+,
+      "splitLineCount": 15,
+      "splitLineStart": 9,
+      "unifiedLineCount": 15,
+      "unifiedLineStart": 9,
+    },
+    {
+      "additionCount": 8,
+      "additionLineIndex": 47,
+      "additionLines": 0,
+      "additionStart": 48,
+      "collapsedBefore": 14,
+      "deletionCount": 10,
+      "deletionLineIndex": 39,
+      "deletionLines": 2,
+      "deletionStart": 40,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 2,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -40,10 +48,8 @@
+"
+,
+      "splitLineCount": 10,
+      "splitLineStart": 24,
+      "unifiedLineCount": 10,
+      "unifiedLineStart": 24,
+    },
+    {
+      "additionCount": 13,
+      "additionLineIndex": 105,
+      "additionLines": 3,
+      "additionStart": 106,
+      "collapsedBefore": 50,
+      "deletionCount": 19,
+      "deletionLineIndex": 99,
+      "deletionLines": 9,
+      "deletionStart": 100,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 3,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 5,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -100,19 +106,13 @@
+"
+,
+      "splitLineCount": 19,
+      "splitLineStart": 34,
+      "unifiedLineCount": 22,
+      "unifiedLineStart": 34,
+    },
+    {
+      "additionCount": 17,
+      "additionLineIndex": 119,
+      "additionLines": 3,
+      "additionStart": 120,
+      "collapsedBefore": 1,
+      "deletionCount": 18,
+      "deletionLineIndex": 119,
+      "deletionLines": 4,
+      "deletionStart": 120,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 5,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 2,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -120,18 +120,17 @@
+"
+,
+      "splitLineCount": 18,
+      "splitLineStart": 53,
+      "unifiedLineCount": 21,
+      "unifiedLineStart": 56,
+    },
+    {
+      "additionCount": 8,
+      "additionLineIndex": 147,
+      "additionLines": 0,
+      "additionStart": 148,
+      "collapsedBefore": 11,
+      "deletionCount": 9,
+      "deletionLineIndex": 148,
+      "deletionLines": 1,
+      "deletionStart": 149,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -149,9 +148,8 @@
+"
+,
+      "splitLineCount": 9,
+      "splitLineStart": 71,
+      "unifiedLineCount": 9,
+      "unifiedLineStart": 77,
+    },
+    {
+      "additionCount": 13,
+      "additionLineIndex": 156,
+      "additionLines": 0,
+      "additionStart": 157,
+      "collapsedBefore": 1,
+      "deletionCount": 28,
+      "deletionLineIndex": 158,
+      "deletionLines": 15,
+      "deletionStart": 159,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 11,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 5,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 4,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -159,28 +157,13 @@
+"
+,
+      "splitLineCount": 28,
+      "splitLineStart": 80,
+      "unifiedLineCount": 28,
+      "unifiedLineStart": 86,
+    },
+    {
+      "additionCount": 125,
+      "additionLineIndex": 213,
+      "additionLines": 95,
+      "additionStart": 214,
+      "collapsedBefore": 44,
+      "deletionCount": 35,
+      "deletionLineIndex": 230,
+      "deletionLines": 5,
+      "deletionStart": 231,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 2,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 5,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 55,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 2,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 2,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 5,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 0,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 2,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 37,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -231,35 +214,125 @@
+"
+,
+      "splitLineCount": 130,
+      "splitLineStart": 108,
+      "unifiedLineCount": 130,
+      "unifiedLineStart": 114,
+    },
+    {
+      "additionCount": 27,
+      "additionLineIndex": 348,
+      "additionLines": 5,
+      "additionStart": 349,
+      "collapsedBefore": 10,
+      "deletionCount": 26,
+      "deletionLineIndex": 275,
+      "deletionLines": 4,
+      "deletionStart": 276,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 5,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 3,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 6,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 2,
+          "deletions": 2,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -276,26 +349,27 @@
+"
+,
+      "splitLineCount": 27,
+      "splitLineStart": 238,
+      "unifiedLineCount": 31,
+      "unifiedLineStart": 244,
+    },
+    {
+      "additionCount": 18,
+      "additionLineIndex": 382,
+      "additionLines": 3,
+      "additionStart": 383,
+      "collapsedBefore": 7,
+      "deletionCount": 17,
+      "deletionLineIndex": 308,
+      "deletionLines": 2,
+      "deletionStart": 309,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 6,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -309,17 +383,18 @@
+"
+,
+      "splitLineCount": 18,
+      "splitLineStart": 265,
+      "unifiedLineCount": 20,
+      "unifiedLineStart": 275,
+    },
+    {
+      "additionCount": 18,
+      "additionLineIndex": 401,
+      "additionLines": 3,
+      "additionStart": 402,
+      "collapsedBefore": 1,
+      "deletionCount": 17,
+      "deletionLineIndex": 326,
+      "deletionLines": 2,
+      "deletionStart": 327,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 6,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 1,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -327,17 +402,18 @@
+"
+,
+      "splitLineCount": 18,
+      "splitLineStart": 283,
+      "unifiedLineCount": 20,
+      "unifiedLineStart": 295,
+    },
+    {
+      "additionCount": 94,
+      "additionLineIndex": 424,
+      "additionLines": 83,
+      "additionStart": 425,
+      "collapsedBefore": 5,
+      "deletionCount": 53,
+      "deletionLineIndex": 348,
+      "deletionLines": 42,
+      "deletionStart": 349,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 22,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 9,
+          "deletions": 8,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 51,
+          "deletions": 4,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 1,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 1,
+          "deletions": 30,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -349,53 +425,94 @@
+"
+,
+      "splitLineCount": 123,
+      "splitLineStart": 301,
+      "unifiedLineCount": 136,
+      "unifiedLineStart": 315,
+    },
+    {
+      "additionCount": 27,
+      "additionLineIndex": 549,
+      "additionLines": 19,
+      "additionStart": 550,
+      "collapsedBefore": 31,
+      "deletionCount": 8,
+      "deletionLineIndex": 432,
+      "deletionLines": 0,
+      "deletionStart": 433,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 19,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -433,8 +550,27 @@
+"
+,
+      "splitLineCount": 27,
+      "splitLineStart": 424,
+      "unifiedLineCount": 27,
+      "unifiedLineStart": 451,
+    },
+    {
+      "additionCount": 36,
+      "additionLineIndex": 632,
+      "additionLines": 28,
+      "additionStart": 633,
+      "collapsedBefore": 56,
+      "deletionCount": 8,
+      "deletionLineIndex": 496,
+      "deletionLines": 0,
+      "deletionStart": 497,
+      "hunkContent": [
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+        {
+          "additions": 28,
+          "deletions": 0,
+          "noEOFCRAdditions": false,
+          "noEOFCRDeletions": false,
+          "type": "change",
+        },
+        {
+          "lines": 4,
+          "noEOFCR": false,
+          "type": "context",
+        },
+      ],
+      "hunkContext": undefined,
+      "hunkSpecs": 
+"@@ -497,8 +633,36 @@
+"
+,
+      "splitLineCount": 36,
+      "splitLineStart": 451,
+      "unifiedLineCount": 36,
+      "unifiedLineStart": 478,
+    },
+  ],
+  "isPartial": false,
+  "name": "fileNew.txt",
   "prevName": "fileOld.txt",
   "splitLineCount": 487,
   "type": "rename-changed",
