@@ -54,8 +54,8 @@ export function renderDiffWithHighlighter(
       : options.lineDiffType;
 
   const code: RenderDiffFilesResult = {
-    oldLines: [],
-    newLines: [],
+    deletionLines: [],
+    additionLines: [],
   };
   let splitLineIndex = 0;
   let unifiedLineIndex = 0;
@@ -65,12 +65,12 @@ export function renderDiffWithHighlighter(
     unifiedLineIndex += hunk?.collapsedBefore ?? 0;
     const hunks = Array.isArray(hunkOrHunks) ? hunkOrHunks : [hunkOrHunks];
     const {
-      oldContent,
-      newContent,
-      oldInfo,
-      newInfo,
-      oldDecorations,
-      newDecorations,
+      deletionContent,
+      additionContent,
+      deletionInfo,
+      additionInfo,
+      deletionDecorations,
+      additionDecorations,
       splitLineIndex: newSplitLineIndex,
       unifiedLineIndex: newUnifiedLineIndex,
     } = processLines({
@@ -97,22 +97,22 @@ export function renderDiffWithHighlighter(
           : diff.additionLines,
       isPartial: hunk != null,
     });
-    const oldFile = {
+    const deletionFile = {
       name: diff.prevName ?? diff.name,
-      contents: oldContent,
+      contents: deletionContent,
     };
-    const newFile = {
+    const additionFile = {
       name: diff.name,
-      contents: newContent,
+      contents: additionContent,
     };
-    const { oldLines, newLines } = renderTwoFiles({
-      oldFile,
-      oldInfo,
-      oldDecorations,
+    const { deletionLines, additionLines } = renderTwoFiles({
+      deletionFile,
+      deletionInfo,
+      deletionDecorations,
 
-      newFile,
-      newInfo,
-      newDecorations,
+      additionFile,
+      additionInfo,
+      additionDecorations,
 
       highlighter,
       options,
@@ -120,13 +120,13 @@ export function renderDiffWithHighlighter(
     });
 
     if (hunk != null) {
-      code.oldLines.push(...oldLines);
-      code.newLines.push(...newLines);
+      code.deletionLines.push(...deletionLines);
+      code.additionLines.push(...additionLines);
       splitLineIndex = newSplitLineIndex;
       unifiedLineIndex = newUnifiedLineIndex;
     } else {
-      code.oldLines = oldLines;
-      code.newLines = newLines;
+      code.deletionLines = deletionLines;
+      code.additionLines = additionLines;
     }
   }
 
@@ -134,36 +134,36 @@ export function renderDiffWithHighlighter(
 }
 
 interface ProcessLineDiffProps {
-  oldLine: string | undefined;
-  newLine: string | undefined;
-  oldLineIndex: number;
-  newLineIndex: number;
-  oldDecorations: DecorationItem[];
-  newDecorations: DecorationItem[];
+  deletionLine: string | undefined;
+  additionLine: string | undefined;
+  deletionLineIndex: number;
+  additionLineIndex: number;
+  deletionDecorations: DecorationItem[];
+  additionDecorations: DecorationItem[];
   lineDiffType: LineDiffTypes;
 }
 
 function computeLineDiffDecorations({
-  oldLine,
-  newLine,
-  oldLineIndex,
-  newLineIndex,
-  oldDecorations,
-  newDecorations,
+  deletionLine,
+  additionLine,
+  deletionLineIndex,
+  additionLineIndex,
+  deletionDecorations,
+  additionDecorations,
   lineDiffType,
 }: ProcessLineDiffProps) {
-  if (oldLine == null || newLine == null || lineDiffType === 'none') {
+  if (deletionLine == null || additionLine == null || lineDiffType === 'none') {
     return;
   }
-  oldLine = cleanLastNewline(oldLine);
-  newLine = cleanLastNewline(newLine);
+  deletionLine = cleanLastNewline(deletionLine);
+  additionLine = cleanLastNewline(additionLine);
   // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
   // we also gotta make sure the diff parsing doesn't include the newline
   // character that could be there...
   const lineDiff =
     lineDiffType === 'char'
-      ? diffChars(oldLine, newLine)
-      : diffWordsWithSpace(oldLine, newLine);
+      ? diffChars(deletionLine, additionLine)
+      : diffWordsWithSpace(deletionLine, additionLine);
   const deletionSpans: [0 | 1, string][] = [];
   const additionSpans: [0 | 1, string][] = [];
   const enableJoin = lineDiffType === 'word-alt';
@@ -193,10 +193,10 @@ function computeLineDiffDecorations({
   let spanIndex = 0;
   for (const span of deletionSpans) {
     if (span[0] === 1) {
-      oldDecorations.push(
+      deletionDecorations.push(
         createDiffSpanDecoration({
           // Decoration indexes start at 0
-          line: oldLineIndex - 1,
+          line: deletionLineIndex - 1,
           spanStart: spanIndex,
           spanLength: span[1].length,
         })
@@ -207,10 +207,10 @@ function computeLineDiffDecorations({
   spanIndex = 0;
   for (const span of additionSpans) {
     if (span[0] === 1) {
-      newDecorations.push(
+      additionDecorations.push(
         createDiffSpanDecoration({
           // Decoration indexes start at 0
-          line: newLineIndex - 1,
+          line: additionLineIndex - 1,
           spanStart: spanIndex,
           spanLength: span[1].length,
         })
@@ -239,16 +239,16 @@ function processLines({
   lineDiffType,
   isPartial,
 }: ProcessLinesProps) {
-  const oldInfo: Record<number, LineInfo | undefined> = {};
-  const newInfo: Record<number, LineInfo | undefined> = {};
-  const oldDecorations: DecorationItem[] = [];
-  const newDecorations: DecorationItem[] = [];
+  const deletionInfo: Record<number, LineInfo | undefined> = {};
+  const additionInfo: Record<number, LineInfo | undefined> = {};
+  const deletionDecorations: DecorationItem[] = [];
+  const additionDecorations: DecorationItem[] = [];
   let deletionLineIndex = 1;
   let additionLineIndex = 1;
-  let newLineNumber = 1;
-  let oldLineNumber = 1;
-  let oldContent = '';
-  let newContent = '';
+  let additionLineNumber = 1;
+  let deletionLineNumber = 1;
+  let deletionContent = '';
+  let additionContent = '';
   for (const hunk of hunks) {
     // If there's content prior to the hunk in a non-partial diff,
     // lets fill it up
@@ -257,53 +257,53 @@ function processLines({
       additionLineIndex - 1 < hunk.additionLineIndex &&
       deletionLineIndex - 1 < hunk.deletionLineIndex
     ) {
-      oldInfo[deletionLineIndex] = {
+      deletionInfo[deletionLineIndex] = {
         type: 'context-expanded',
-        lineNumber: oldLineNumber,
-        altLineNumber: newLineNumber,
+        lineNumber: deletionLineNumber,
+        altLineNumber: additionLineNumber,
         lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
-      newInfo[additionLineIndex] = {
+      additionInfo[additionLineIndex] = {
         type: 'context-expanded',
-        lineNumber: newLineNumber,
-        altLineNumber: oldLineNumber,
+        lineNumber: additionLineNumber,
+        altLineNumber: deletionLineNumber,
         lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
-      oldContent += deletionLines[deletionLineIndex - 1];
-      newContent += additionLines[additionLineIndex - 1];
+      deletionContent += deletionLines[deletionLineIndex - 1];
+      additionContent += additionLines[additionLineIndex - 1];
       deletionLineIndex++;
       additionLineIndex++;
-      oldLineNumber++;
-      newLineNumber++;
+      deletionLineNumber++;
+      additionLineNumber++;
       splitLineIndex++;
       unifiedLineIndex++;
     }
-    oldLineNumber = hunk.deletionStart;
-    newLineNumber = hunk.additionStart;
+    deletionLineNumber = hunk.deletionStart;
+    additionLineNumber = hunk.additionStart;
 
     // Lets process the actual hunk content
     for (const hunkContent of hunk.hunkContent) {
       if (hunkContent.type === 'context') {
         let index = 0;
         while (index < hunkContent.lines) {
-          oldInfo[deletionLineIndex] = {
+          deletionInfo[deletionLineIndex] = {
             type: 'context',
-            lineNumber: oldLineNumber,
-            altLineNumber: newLineNumber,
+            lineNumber: deletionLineNumber,
+            altLineNumber: additionLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
-          newInfo[additionLineIndex] = {
+          additionInfo[additionLineIndex] = {
             type: 'context',
-            lineNumber: newLineNumber,
-            altLineNumber: oldLineNumber,
+            lineNumber: additionLineNumber,
+            altLineNumber: deletionLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
-          oldContent += deletionLines[deletionLineIndex - 1];
-          newContent += additionLines[additionLineIndex - 1];
+          deletionContent += deletionLines[deletionLineIndex - 1];
+          additionContent += additionLines[additionLineIndex - 1];
           deletionLineIndex++;
           additionLineIndex++;
-          newLineNumber++;
-          oldLineNumber++;
+          additionLineNumber++;
+          deletionLineNumber++;
           splitLineIndex++;
           unifiedLineIndex++;
           index++;
@@ -317,42 +317,42 @@ function processLines({
         // of additions/deletions to the main variable
         let _unifiedLineIndex = unifiedLineIndex;
         while (i < len) {
-          const oldLine =
+          const deletionLine =
             i < hunkContent.deletions
               ? deletionLines[deletionLineIndex - 1]
               : undefined;
-          const newLine =
+          const additionLine =
             i < hunkContent.additions
               ? additionLines[additionLineIndex - 1]
               : undefined;
           computeLineDiffDecorations({
-            newLine,
-            oldLine,
-            oldLineIndex: deletionLineIndex,
-            newLineIndex: additionLineIndex,
-            oldDecorations,
-            newDecorations,
+            additionLine,
+            deletionLine,
+            deletionLineIndex,
+            additionLineIndex,
+            deletionDecorations,
+            additionDecorations,
             lineDiffType,
           });
-          if (oldLine != null) {
-            oldInfo[deletionLineIndex] = {
+          if (deletionLine != null) {
+            deletionInfo[deletionLineIndex] = {
               type: 'change-deletion',
-              lineNumber: oldLineNumber,
+              lineNumber: deletionLineNumber,
               lineIndex: `${_unifiedLineIndex},${splitLineIndex}`,
             };
-            oldContent += oldLine;
+            deletionContent += deletionLine;
             deletionLineIndex++;
-            oldLineNumber++;
+            deletionLineNumber++;
           }
-          if (newLine != null) {
-            newInfo[additionLineIndex] = {
+          if (additionLine != null) {
+            additionInfo[additionLineIndex] = {
               type: 'change-addition',
-              lineNumber: newLineNumber,
+              lineNumber: additionLineNumber,
               lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${splitLineIndex}`,
             };
-            newContent += newLine;
+            additionContent += additionLine;
             additionLineIndex++;
-            newLineNumber++;
+            additionLineNumber++;
           }
           splitLineIndex++;
           _unifiedLineIndex++;
@@ -369,74 +369,76 @@ function processLines({
       deletionLineIndex <= deletionLines.length ||
       additionLineIndex <= additionLines.length
     ) {
-      const oldLine = deletionLines[deletionLineIndex - 1];
-      const newLine = additionLines[additionLineIndex - 1];
-      if (oldLine == null && newLine == null) {
+      const deletionLine = deletionLines[deletionLineIndex - 1];
+      const additionLine = additionLines[additionLineIndex - 1];
+      if (deletionLine == null && additionLine == null) {
         break;
       }
-      if (oldLine != null) {
-        oldInfo[deletionLineIndex] = {
+      if (deletionLine != null) {
+        deletionInfo[deletionLineIndex] = {
           type: 'context-expanded',
-          lineNumber: oldLineNumber,
-          altLineNumber: newLineNumber,
+          lineNumber: deletionLineNumber,
+          altLineNumber: additionLineNumber,
           lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
         };
-        oldContent += oldLine;
+        deletionContent += deletionLine;
         deletionLineIndex++;
-        oldLineNumber++;
+        deletionLineNumber++;
       }
-      if (newLine != null) {
-        newInfo[additionLineIndex] = {
+      if (additionLine != null) {
+        additionInfo[additionLineIndex] = {
           type: 'context-expanded',
-          lineNumber: newLineNumber,
-          altLineNumber: oldLineNumber,
+          lineNumber: additionLineNumber,
+          altLineNumber: deletionLineNumber,
           lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
         };
-        newContent += newLine;
+        additionContent += additionLine;
         additionLineIndex++;
-        newLineNumber++;
+        additionLineNumber++;
       }
       splitLineIndex++;
       unifiedLineIndex++;
     }
   }
   return {
-    oldContent,
-    newContent,
-    oldInfo,
-    newInfo,
-    oldDecorations,
-    newDecorations,
+    deletionContent: cleanLastNewline(deletionContent),
+    additionContent: cleanLastNewline(additionContent),
+    deletionInfo,
+    additionInfo,
+    deletionDecorations,
+    additionDecorations,
     splitLineIndex,
     unifiedLineIndex,
   };
 }
 
 interface RenderTwoFilesProps {
-  oldFile: FileContents;
-  newFile: FileContents;
-  oldInfo: Record<number, LineInfo | undefined>;
-  newInfo: Record<number, LineInfo | undefined>;
-  oldDecorations: DecorationItem[];
-  newDecorations: DecorationItem[];
+  deletionFile: FileContents;
+  additionFile: FileContents;
+  deletionInfo: Record<number, LineInfo | undefined>;
+  additionInfo: Record<number, LineInfo | undefined>;
+  deletionDecorations: DecorationItem[];
+  additionDecorations: DecorationItem[];
   options: RenderDiffOptions;
   highlighter: DiffsHighlighter;
   languageOverride: SupportedLanguages | undefined;
 }
 
 function renderTwoFiles({
-  oldFile,
-  newFile,
-  oldInfo,
-  newInfo,
+  deletionFile,
+  additionFile,
+  deletionInfo,
+  additionInfo,
   highlighter,
-  oldDecorations,
-  newDecorations,
+  deletionDecorations,
+  additionDecorations,
   languageOverride,
   options: { theme: themeOrThemes = DEFAULT_THEMES, ...options },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
-  const oldLang = languageOverride ?? getFiletypeFromFileName(oldFile.name);
-  const newLang = languageOverride ?? getFiletypeFromFileName(newFile.name);
+  const deletionLang =
+    languageOverride ?? getFiletypeFromFileName(deletionFile.name);
+  const additionLang =
+    languageOverride ?? getFiletypeFromFileName(additionFile.name);
   const { state, transformers } = createTransformerWithState();
   const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
     return typeof themeOrThemes === 'string'
@@ -462,28 +464,28 @@ function renderTwoFiles({
         };
   })();
 
-  const oldLines = (() => {
-    if (oldFile.contents === '') {
+  const deletionLines = (() => {
+    if (deletionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = oldLang;
-    state.lineInfo = oldInfo;
-    hastConfig.decorations = oldDecorations;
+    hastConfig.lang = deletionLang;
+    state.lineInfo = deletionInfo;
+    hastConfig.decorations = deletionDecorations;
     return getLineNodes(
-      highlighter.codeToHast(cleanLastNewline(oldFile.contents), hastConfig)
+      highlighter.codeToHast(deletionFile.contents, hastConfig)
     );
   })();
-  const newLines = (() => {
-    if (newFile.contents === '') {
+  const additionLines = (() => {
+    if (additionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = newLang;
-    hastConfig.decorations = newDecorations;
-    state.lineInfo = newInfo;
+    hastConfig.lang = additionLang;
+    hastConfig.decorations = additionDecorations;
+    state.lineInfo = additionInfo;
     return getLineNodes(
-      highlighter.codeToHast(cleanLastNewline(newFile.contents), hastConfig)
+      highlighter.codeToHast(additionFile.contents, hastConfig)
     );
   })();
 
-  return { oldLines, newLines };
+  return { deletionLines, additionLines };
 }
