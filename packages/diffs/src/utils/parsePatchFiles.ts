@@ -159,7 +159,7 @@ export function processFile(
             currentFile.mode = line.replace('new mode', '').trim();
           }
           if (line.startsWith('old mode ')) {
-            currentFile.oldMode = line.replace('old mode', '').trim();
+            currentFile.prevMode = line.replace('old mode', '').trim();
           }
           if (line.startsWith('new file mode')) {
             currentFile.type = 'new';
