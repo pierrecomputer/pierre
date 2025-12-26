@@ -28,20 +28,20 @@ export function diffAcceptRejectHunk(
     }
     if (type === 'reject') {
       newLines.splice(
-        hunk.newLinesIndex,
+        hunk.additionLineIndex,
         hunk.additionCount,
         ...oldLines.slice(
-          hunk.oldLinesIndex,
-          hunk.oldLinesIndex + hunk.deletionCount
+          hunk.deletionLineIndex,
+          hunk.deletionLineIndex + hunk.deletionCount
         )
       );
     } else {
       oldLines.splice(
-        hunk.oldLinesIndex,
+        hunk.deletionLineIndex,
         hunk.deletionCount,
         ...newLines.slice(
-          hunk.newLinesIndex,
-          hunk.newLinesIndex + hunk.additionCount
+          hunk.additionLineIndex,
+          hunk.additionLineIndex + hunk.additionCount
         )
       );
     }
@@ -106,9 +106,9 @@ export function diffAcceptRejectHunk(
       hunk.unifiedLineStart += unifiedOffset;
 
       hunk.additionStart += additionOffset;
-      hunk.newLinesIndex += additionOffset;
+      hunk.additionLineIndex += additionOffset;
 
-      hunk.oldLinesIndex += deletionOffset;
+      hunk.deletionLineIndex += deletionOffset;
       hunk.deletionStart += deletionOffset;
     }
   }

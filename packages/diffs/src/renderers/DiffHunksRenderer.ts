@@ -897,8 +897,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     state.lineIndex = startingLineIndex + hunk.collapsedBefore;
 
     const { oldLines, newLines } = ast;
-    let { oldLinesIndex: deletionLineIndex, newLinesIndex: additionLineIndex } =
-      hunk;
+    let { deletionLineIndex, additionLineIndex } = hunk;
 
     // Render hunk/diff content
     for (const hunkContent of hunk.hunkContent) {
