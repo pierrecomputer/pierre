@@ -308,26 +308,19 @@ export type AnnotationLineMap<LAnnotation> = Record<
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
-export interface RenderDiffFilesResult {
-  oldLines: ElementContent[];
-  newLines: ElementContent[];
-  hunks?: undefined;
-}
-
-export interface RenderDiffHunksResult {
-  hunks: RenderDiffFilesResult[];
-  oldLines?: undefined;
-  newLines?: undefined;
-}
-
 export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
+export interface RenderDiffFilesResult {
+  oldLines: ElementContent[];
+  newLines: ElementContent[];
+}
+
 export interface ThemedDiffResult {
-  code: RenderDiffFilesResult | RenderDiffHunksResult;
+  code: RenderDiffFilesResult;
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
