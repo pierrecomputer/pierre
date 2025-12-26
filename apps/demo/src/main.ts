@@ -281,16 +281,14 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
         {
           __id: 'hack',
           onHighlightSuccess(_diff, { code }) {
-            if (code.hunks == null) {
-              console.log(
-                'Worker Render: rendered file:',
-                fileDiff.name,
-                'lines:',
-                code.newLines.length + code.oldLines.length,
-                'time:',
-                Date.now() - start
-              );
-            }
+            console.log(
+              'Worker Render: rendered file:',
+              fileDiff.name,
+              'lines:',
+              code.newLines.length + code.oldLines.length,
+              'time:',
+              Date.now() - start
+            );
           },
           onHighlightError(error: unknown) {
             console.error(error);
@@ -564,6 +562,7 @@ function getThemeType() {
 }
 
 // For quick testing diffs
+// FAKE_DIFF_LINE_ANNOTATIONS.length = 0;
 // (() => {
 //   const oldFile = {
 //     name: 'file_old.ts',

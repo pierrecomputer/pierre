@@ -8,8 +8,8 @@ export function diffAcceptRejectHunk(
   diff = {
     ...diff,
     hunks: [...diff.hunks],
-    oldLines: diff.oldLines != null ? [...diff.oldLines] : undefined,
-    newLines: diff.newLines != null ? [...diff.newLines] : undefined,
+    oldLines: type === 'accept' ? [...diff.oldLines] : diff.oldLines,
+    newLines: type === 'reject' ? [...diff.newLines] : diff.newLines,
     // Automatically update cacheKey if it exists, since content is changing
     cacheKey:
       diff.cacheKey != null
@@ -28,20 +28,20 @@ export function diffAcceptRejectHunk(
     }
     if (type === 'reject') {
       newLines.splice(
-        hunk.additionStart - 1,
+        hunk.newLinesIndex,
         hunk.additionCount,
         ...oldLines.slice(
-          hunk.deletionStart - 1,
-          hunk.deletionStart - 1 + hunk.deletionCount
+          hunk.oldLinesIndex,
+          hunk.oldLinesIndex + hunk.deletionCount
         )
       );
     } else {
       oldLines.splice(
-        hunk.deletionStart - 1,
+        hunk.oldLinesIndex,
         hunk.deletionCount,
         ...newLines.slice(
-          hunk.additionStart - 1,
-          hunk.additionStart - 1 + hunk.additionCount
+          hunk.newLinesIndex,
+          hunk.newLinesIndex + hunk.additionCount
         )
       );
     }
@@ -58,27 +58,26 @@ export function diffAcceptRejectHunk(
         'diffResolveRejectHunk: iterating through hunks, hunk doesnt exist...'
       );
     }
-    hunk = { ...hunk };
-    diff.hunks[i] = hunk;
+    diff.hunks[i] = hunk = { ...hunk };
     if (i === hunkIndex) {
       const newContent: ContextContent = {
         type: 'context',
-        lines: [],
+        lines: 0,
         noEOFCR: false,
       };
       for (const content of hunk.hunkContent) {
         if (content.type === 'context') {
-          newContent.lines.push(...content.lines);
+          newContent.lines += content.lines;
           newContent.noEOFCR = content.noEOFCR;
         } else if (type === 'accept') {
-          newContent.lines.push(...content.additions);
+          newContent.lines += content.additions;
           newContent.noEOFCR = content.noEOFCRAdditions;
         } else if (type === 'reject') {
-          newContent.lines.push(...content.deletions);
+          newContent.lines += content.deletions;
           newContent.noEOFCR = content.noEOFCRDeletions;
         }
       }
-      const lineCount = newContent.lines.length;
+      const lineCount = newContent.lines;
       hunk.hunkContent = [newContent];
       splitOffset = lineCount - hunk.splitLineCount;
       hunk.splitLineCount = lineCount;
@@ -92,10 +91,24 @@ export function diffAcceptRejectHunk(
       hunk.additionLines = 0;
       diff.splitLineCount += splitOffset;
       diff.unifiedLineCount += unifiedOffset;
+      // If we don't need to make any value offset differences for the rest of
+      // the hunks, we done
+      if (
+        splitOffset === 0 &&
+        unifiedOffset === 0 &&
+        additionOffset === 0 &&
+        deletionOffset === 0
+      ) {
+        break;
+      }
     } else {
       hunk.splitLineStart += splitOffset;
       hunk.unifiedLineStart += unifiedOffset;
+
       hunk.additionStart += additionOffset;
+      hunk.newLinesIndex += additionOffset;
+
+      hunk.oldLinesIndex += deletionOffset;
       hunk.deletionStart += deletionOffset;
     }
   }
