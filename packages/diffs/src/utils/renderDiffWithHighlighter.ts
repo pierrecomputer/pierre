@@ -52,8 +52,18 @@ export function renderDiffWithHighlighter(
     (diff.unifiedLineCount > 1000 || diff.splitLineCount > 1000)
       ? 'none'
       : options.lineDiffType;
-  // If we've received a diff with both files
-  if (diff.newLines != null && diff.oldLines != null) {
+
+  const code: RenderDiffFilesResult = {
+    oldLines: [],
+    newLines: [],
+  };
+  let splitLineIndex = 0;
+  let unifiedLineIndex = 0;
+  for (const hunkOrHunks of diff.isPartial ? diff.hunks : [diff.hunks]) {
+    const hunk = !Array.isArray(hunkOrHunks) ? hunkOrHunks : undefined;
+    splitLineIndex += hunk?.collapsedBefore ?? 0;
+    unifiedLineIndex += hunk?.collapsedBefore ?? 0;
+    const hunks = Array.isArray(hunkOrHunks) ? hunkOrHunks : [hunkOrHunks];
     const {
       oldContent,
       newContent,
@@ -61,11 +71,31 @@ export function renderDiffWithHighlighter(
       newInfo,
       oldDecorations,
       newDecorations,
+      splitLineIndex: newSplitLineIndex,
+      unifiedLineIndex: newUnifiedLineIndex,
     } = processLines({
-      hunks: diff.hunks,
-      oldLines: diff.oldLines,
-      newLines: diff.newLines,
+      hunks,
+      splitLineIndex,
+      unifiedLineIndex,
       lineDiffType,
+      // If we are dealing with a partial diff, highlight each hunk
+      // individually, it's not safe to do them all as 1 long highlight due to
+      // impartial code snippets bumping into each other
+      oldLines:
+        hunk != null
+          ? diff.oldLines.slice(
+              hunk.oldLinesIndex,
+              hunk.oldLinesIndex + hunk.deletionCount
+            )
+          : diff.oldLines,
+      newLines:
+        hunk != null
+          ? diff.newLines.slice(
+              hunk.newLinesIndex,
+              hunk.newLinesIndex + hunk.additionCount
+            )
+          : diff.newLines,
+      isPartial: hunk != null,
     });
     const oldFile = {
       name: diff.prevName ?? diff.name,
@@ -75,7 +105,7 @@ export function renderDiffWithHighlighter(
       name: diff.name,
       contents: newContent,
     };
-    const code = renderTwoFiles({
+    const { oldLines, newLines } = renderTwoFiles({
       oldFile,
       oldInfo,
       oldDecorations,
@@ -88,65 +118,17 @@ export function renderDiffWithHighlighter(
       options,
       languageOverride: forcePlainText ? 'text' : diff.lang,
     });
-    return { code, themeStyles, baseThemeType };
-  }
-  const hunks: RenderDiffFilesResult[] = [];
-  let splitLineIndex = 0;
-  let unifiedLineIndex = 0;
-  for (const hunk of diff.hunks) {
-    splitLineIndex += hunk.collapsedBefore;
-    unifiedLineIndex += hunk.collapsedBefore;
-    const {
-      oldContent,
-      newContent,
-      oldInfo,
-      newInfo,
-      oldDecorations,
-      newDecorations,
-      splitLineIndex: newSplitLineIndex,
-      unifiedLineIndex: newUnifiedLineIndex,
-    } = processLines({
-      hunks: [hunk],
-      splitLineIndex,
-      unifiedLineIndex,
-      lineDiffType,
-    });
-    const oldFile = {
-      name: diff.prevName ?? diff.name,
-      contents: oldContent,
-    };
-    const newFile = {
-      name: diff.name,
-      contents: newContent,
-    };
-    hunks.push(
-      renderTwoFiles({
-        oldFile,
-        oldInfo,
-        oldDecorations,
 
-        newFile,
-        newInfo,
-        newDecorations,
-
-        highlighter,
-        options,
-        languageOverride: forcePlainText ? 'text' : diff.lang,
-      })
-    );
-    splitLineIndex = newSplitLineIndex;
-    unifiedLineIndex = newUnifiedLineIndex;
-  }
-
-  const code = (() => {
-    if (hunks.length <= 1) {
-      const hunk = hunks[0] ?? { oldLines: [], newLines: [] };
-      if (hunk.newLines.length === 0 || hunk.oldLines.length === 0) {
-        return hunk;
-      }
+    if (hunk != null) {
+      code.oldLines.push(...oldLines);
+      code.newLines.push(...newLines);
+      splitLineIndex = newSplitLineIndex;
+      unifiedLineIndex = newUnifiedLineIndex;
+    } else {
+      code.oldLines = oldLines;
+      code.newLines = newLines;
     }
-    return { hunks };
-  })();
+  }
 
   return { code, themeStyles, baseThemeType };
 }
@@ -240,13 +222,12 @@ function computeLineDiffDecorations({
 
 interface ProcessLinesProps {
   hunks: Hunk[];
-  oldLines?: string[];
-  newLines?: string[];
-  splitLineIndex?: number;
-  unifiedLineIndex?: number;
-  newLineIndex?: number;
-  oldLineIndex?: number;
+  oldLines: string[];
+  newLines: string[];
+  splitLineIndex: number;
+  unifiedLineIndex: number;
   lineDiffType: LineDiffTypes;
+  isPartial: boolean;
 }
 
 function processLines({
@@ -256,6 +237,7 @@ function processLines({
   splitLineIndex = 0,
   unifiedLineIndex = 0,
   lineDiffType,
+  isPartial,
 }: ProcessLinesProps) {
   const oldInfo: Record<number, LineInfo | undefined> = {};
   const newInfo: Record<number, LineInfo | undefined> = {};
@@ -268,12 +250,12 @@ function processLines({
   let oldContent = '';
   let newContent = '';
   for (const hunk of hunks) {
-    // If there's content prior to the hunk, lets fill it up
+    // If there's content prior to the hunk in a non-partial diff,
+    // lets fill it up
     while (
-      oldLines != null &&
-      newLines != null &&
-      newLineIndex < hunk.additionStart &&
-      oldLineIndex < hunk.deletionStart
+      !isPartial &&
+      newLineIndex - 1 < hunk.newLinesIndex &&
+      oldLineIndex - 1 < hunk.oldLinesIndex
     ) {
       oldInfo[oldLineIndex] = {
         type: 'context-expanded',
@@ -302,7 +284,8 @@ function processLines({
     // Lets process the actual hunk content
     for (const hunkContent of hunk.hunkContent) {
       if (hunkContent.type === 'context') {
-        for (const line of hunkContent.lines) {
+        let index = 0;
+        while (index < hunkContent.lines) {
           oldInfo[oldLineIndex] = {
             type: 'context',
             lineNumber: oldLineNumber,
@@ -315,20 +298,18 @@ function processLines({
             altLineNumber: oldLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
-          oldContent += line;
-          newContent += line;
+          oldContent += oldLines[oldLineIndex - 1];
+          newContent += newLines[newLineIndex - 1];
           oldLineIndex++;
           newLineIndex++;
           newLineNumber++;
           oldLineNumber++;
           splitLineIndex++;
           unifiedLineIndex++;
+          index++;
         }
       } else {
-        const len = Math.max(
-          hunkContent.additions.length,
-          hunkContent.deletions.length
-        );
+        const len = Math.max(hunkContent.additions, hunkContent.deletions);
         let i = 0;
         // NOTE(amadeus): Since we iterate through deletions and additions
         // simultaneously, we have to create a secondary iterator for
@@ -336,8 +317,10 @@ function processLines({
         // of additions/deletions to the main variable
         let _unifiedLineIndex = unifiedLineIndex;
         while (i < len) {
-          const oldLine = hunkContent.deletions[i];
-          const newLine = hunkContent.additions[i];
+          const oldLine =
+            i < hunkContent.deletions ? oldLines[oldLineIndex - 1] : undefined;
+          const newLine =
+            i < hunkContent.additions ? newLines[newLineIndex - 1] : undefined;
           computeLineDiffDecorations({
             newLine,
             oldLine,
@@ -361,7 +344,7 @@ function processLines({
             newInfo[newLineIndex] = {
               type: 'change-addition',
               lineNumber: newLineNumber,
-              lineIndex: `${_unifiedLineIndex + hunkContent.deletions.length},${splitLineIndex}`,
+              lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${splitLineIndex}`,
             };
             newContent += newLine;
             newLineIndex++;
@@ -371,20 +354,14 @@ function processLines({
           _unifiedLineIndex++;
           i++;
         }
-        unifiedLineIndex +=
-          hunkContent.additions.length + hunkContent.deletions.length;
+        unifiedLineIndex += hunkContent.additions + hunkContent.deletions;
       }
     }
 
-    if (
-      oldLines == null ||
-      newLines == null ||
-      hunk !== hunks[hunks.length - 1]
-    )
-      continue;
+    if (isPartial || hunk !== hunks[hunks.length - 1]) continue;
     // If we are on the last hunk, we should fully iterate through the rest
     // of the lines
-    while (oldLineIndex <= oldLines.length || newLineIndex <= oldLines.length) {
+    while (oldLineIndex <= oldLines.length || newLineIndex <= newLines.length) {
       const oldLine = oldLines[oldLineIndex - 1];
       const newLine = newLines[newLineIndex - 1];
       if (oldLine == null && newLine == null) {
@@ -450,7 +427,7 @@ function renderTwoFiles({
   newDecorations,
   languageOverride,
   options: { theme: themeOrThemes = DEFAULT_THEMES, ...options },
-}: RenderTwoFilesProps) {
+}: RenderTwoFilesProps): RenderDiffFilesResult {
   const oldLang = languageOverride ?? getFiletypeFromFileName(oldFile.name);
   const newLang = languageOverride ?? getFiletypeFromFileName(newFile.name);
   const { state, transformers } = createTransformerWithState();
