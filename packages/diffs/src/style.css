@@ -546,11 +546,14 @@
 
   [data-hover-slot] {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 0;
+    inset: 0;
     display: flex;
+    align-items: center;
     justify-content: flex-end;
+  }
+
+  [data-indicators='bars'] [data-hover-slot] {
+    inset-inline-start: 5px;
   }
 
   @media (pointer: fine) {
@@ -769,14 +772,13 @@
     }
 
     [data-hover-slot] {
-      right: unset;
-      left: 0;
+      inset-inline-start: 0;
+      inset-inline-end: unset;
       justify-content: flex-start;
     }
 
     &[data-indicators='bars'] [data-hover-slot] {
-      /* Using 5px here because theres a 1px separator after the bar */
-      left: 5px;
+      inset-inline-start: 5px;
     }
   }
 
