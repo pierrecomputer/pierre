@@ -285,7 +285,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
               'Worker Render: rendered file:',
               fileDiff.name,
               'lines:',
-              code.newLines.length + code.oldLines.length,
+              code.additionLines.length + code.deletionLines.length,
               'time:',
               Date.now() - start
             );

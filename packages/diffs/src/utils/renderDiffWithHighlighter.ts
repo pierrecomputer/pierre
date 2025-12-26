@@ -81,20 +81,20 @@ export function renderDiffWithHighlighter(
       // If we are dealing with a partial diff, highlight each hunk
       // individually, it's not safe to do them all as 1 long highlight due to
       // impartial code snippets bumping into each other
-      oldLines:
+      deletionLines:
         hunk != null
-          ? diff.oldLines.slice(
+          ? diff.deletionLines.slice(
               hunk.deletionLineIndex,
               hunk.deletionLineIndex + hunk.deletionCount
             )
-          : diff.oldLines,
-      newLines:
+          : diff.deletionLines,
+      additionLines:
         hunk != null
-          ? diff.newLines.slice(
+          ? diff.additionLines.slice(
               hunk.additionLineIndex,
               hunk.additionLineIndex + hunk.additionCount
             )
-          : diff.newLines,
+          : diff.additionLines,
       isPartial: hunk != null,
     });
     const oldFile = {
@@ -222,8 +222,8 @@ function computeLineDiffDecorations({
 
 interface ProcessLinesProps {
   hunks: Hunk[];
-  oldLines: string[];
-  newLines: string[];
+  deletionLines: string[];
+  additionLines: string[];
   splitLineIndex: number;
   unifiedLineIndex: number;
   lineDiffType: LineDiffTypes;
@@ -232,8 +232,8 @@ interface ProcessLinesProps {
 
 function processLines({
   hunks,
-  oldLines,
-  newLines,
+  deletionLines,
+  additionLines,
   splitLineIndex = 0,
   unifiedLineIndex = 0,
   lineDiffType,
@@ -243,8 +243,8 @@ function processLines({
   const newInfo: Record<number, LineInfo | undefined> = {};
   const oldDecorations: DecorationItem[] = [];
   const newDecorations: DecorationItem[] = [];
-  let newLineIndex = 1;
-  let oldLineIndex = 1;
+  let deletionLineIndex = 1;
+  let additionLineIndex = 1;
   let newLineNumber = 1;
   let oldLineNumber = 1;
   let oldContent = '';
@@ -254,25 +254,25 @@ function processLines({
     // lets fill it up
     while (
       !isPartial &&
-      newLineIndex - 1 < hunk.additionLineIndex &&
-      oldLineIndex - 1 < hunk.deletionLineIndex
+      additionLineIndex - 1 < hunk.additionLineIndex &&
+      deletionLineIndex - 1 < hunk.deletionLineIndex
     ) {
-      oldInfo[oldLineIndex] = {
+      oldInfo[deletionLineIndex] = {
         type: 'context-expanded',
         lineNumber: oldLineNumber,
         altLineNumber: newLineNumber,
         lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
-      newInfo[newLineIndex] = {
+      newInfo[additionLineIndex] = {
         type: 'context-expanded',
         lineNumber: newLineNumber,
         altLineNumber: oldLineNumber,
         lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
       };
-      oldContent += oldLines[oldLineIndex - 1];
-      newContent += newLines[newLineIndex - 1];
-      oldLineIndex++;
-      newLineIndex++;
+      oldContent += deletionLines[deletionLineIndex - 1];
+      newContent += additionLines[additionLineIndex - 1];
+      deletionLineIndex++;
+      additionLineIndex++;
       oldLineNumber++;
       newLineNumber++;
       splitLineIndex++;
@@ -286,22 +286,22 @@ function processLines({
       if (hunkContent.type === 'context') {
         let index = 0;
         while (index < hunkContent.lines) {
-          oldInfo[oldLineIndex] = {
+          oldInfo[deletionLineIndex] = {
             type: 'context',
             lineNumber: oldLineNumber,
             altLineNumber: newLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
-          newInfo[newLineIndex] = {
+          newInfo[additionLineIndex] = {
             type: 'context',
             lineNumber: newLineNumber,
             altLineNumber: oldLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           };
-          oldContent += oldLines[oldLineIndex - 1];
-          newContent += newLines[newLineIndex - 1];
-          oldLineIndex++;
-          newLineIndex++;
+          oldContent += deletionLines[deletionLineIndex - 1];
+          newContent += additionLines[additionLineIndex - 1];
+          deletionLineIndex++;
+          additionLineIndex++;
           newLineNumber++;
           oldLineNumber++;
           splitLineIndex++;
@@ -318,36 +318,40 @@ function processLines({
         let _unifiedLineIndex = unifiedLineIndex;
         while (i < len) {
           const oldLine =
-            i < hunkContent.deletions ? oldLines[oldLineIndex - 1] : undefined;
+            i < hunkContent.deletions
+              ? deletionLines[deletionLineIndex - 1]
+              : undefined;
           const newLine =
-            i < hunkContent.additions ? newLines[newLineIndex - 1] : undefined;
+            i < hunkContent.additions
+              ? additionLines[additionLineIndex - 1]
+              : undefined;
           computeLineDiffDecorations({
             newLine,
             oldLine,
-            oldLineIndex,
-            newLineIndex,
+            oldLineIndex: deletionLineIndex,
+            newLineIndex: additionLineIndex,
             oldDecorations,
             newDecorations,
             lineDiffType,
           });
           if (oldLine != null) {
-            oldInfo[oldLineIndex] = {
+            oldInfo[deletionLineIndex] = {
               type: 'change-deletion',
               lineNumber: oldLineNumber,
               lineIndex: `${_unifiedLineIndex},${splitLineIndex}`,
             };
             oldContent += oldLine;
-            oldLineIndex++;
+            deletionLineIndex++;
             oldLineNumber++;
           }
           if (newLine != null) {
-            newInfo[newLineIndex] = {
+            newInfo[additionLineIndex] = {
               type: 'change-addition',
               lineNumber: newLineNumber,
               lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${splitLineIndex}`,
             };
             newContent += newLine;
-            newLineIndex++;
+            additionLineIndex++;
             newLineNumber++;
           }
           splitLineIndex++;
@@ -361,32 +365,35 @@ function processLines({
     if (isPartial || hunk !== hunks[hunks.length - 1]) continue;
     // If we are on the last hunk, we should fully iterate through the rest
     // of the lines
-    while (oldLineIndex <= oldLines.length || newLineIndex <= newLines.length) {
-      const oldLine = oldLines[oldLineIndex - 1];
-      const newLine = newLines[newLineIndex - 1];
+    while (
+      deletionLineIndex <= deletionLines.length ||
+      additionLineIndex <= additionLines.length
+    ) {
+      const oldLine = deletionLines[deletionLineIndex - 1];
+      const newLine = additionLines[additionLineIndex - 1];
       if (oldLine == null && newLine == null) {
         break;
       }
       if (oldLine != null) {
-        oldInfo[oldLineIndex] = {
+        oldInfo[deletionLineIndex] = {
           type: 'context-expanded',
           lineNumber: oldLineNumber,
           altLineNumber: newLineNumber,
           lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
         };
         oldContent += oldLine;
-        oldLineIndex++;
+        deletionLineIndex++;
         oldLineNumber++;
       }
       if (newLine != null) {
-        newInfo[newLineIndex] = {
+        newInfo[additionLineIndex] = {
           type: 'context-expanded',
           lineNumber: newLineNumber,
           altLineNumber: oldLineNumber,
           lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
         };
         newContent += newLine;
-        newLineIndex++;
+        additionLineIndex++;
         newLineNumber++;
       }
       splitLineIndex++;

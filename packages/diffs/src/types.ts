@@ -105,8 +105,8 @@ export interface FileDiffMetadata {
   oldMode?: string;
   mode?: string;
   isPartial: boolean;
-  oldLines: string[];
-  newLines: string[];
+  deletionLines: string[];
+  additionLines: string[];
   cacheKey?: string;
 }
 

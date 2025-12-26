@@ -119,11 +119,11 @@ export function processFile(
         splitLineCount: 0,
         unifiedLineCount: 0,
         isPartial,
-        newLines:
+        additionLines:
           !isPartial && oldFile != null && newFile != null
             ? newFile.contents.split(SPLIT_WITH_NEWLINES)
             : [],
-        oldLines:
+        deletionLines:
           !isPartial && oldFile != null && newFile != null
             ? oldFile.contents.split(SPLIT_WITH_NEWLINES)
             : [],
@@ -269,7 +269,7 @@ export function processFile(
         }
         if (isPartial) {
           additionLineIndex++;
-          currentFile.newLines.push(line);
+          currentFile.additionLines.push(line);
         }
         currentContent.additions++;
         additionLines++;
@@ -281,7 +281,7 @@ export function processFile(
         }
         if (isPartial) {
           deletionLineIndex++;
-          currentFile.oldLines.push(line);
+          currentFile.deletionLines.push(line);
         }
         currentContent.deletions++;
         deletionLines++;
@@ -294,8 +294,8 @@ export function processFile(
         if (isPartial) {
           additionLineIndex++;
           deletionLineIndex++;
-          currentFile.oldLines.push(line);
-          currentFile.newLines.push(line);
+          currentFile.deletionLines.push(line);
+          currentFile.additionLines.push(line);
         }
         currentContent.lines++;
         lastLineType = 'context';
@@ -313,10 +313,10 @@ export function processFile(
           isPartial &&
           (lastLineType === 'addition' || lastLineType === 'context')
         ) {
-          const lastIndex = currentFile.newLines.length - 1;
+          const lastIndex = currentFile.additionLines.length - 1;
           if (lastIndex >= 0) {
-            currentFile.newLines[lastIndex] = cleanLastNewline(
-              currentFile.newLines[lastIndex]
+            currentFile.additionLines[lastIndex] = cleanLastNewline(
+              currentFile.additionLines[lastIndex]
             );
           }
         }
@@ -324,10 +324,10 @@ export function processFile(
           isPartial &&
           (lastLineType === 'deletion' || lastLineType === 'context')
         ) {
-          const lastIndex = currentFile.oldLines.length - 1;
+          const lastIndex = currentFile.deletionLines.length - 1;
           if (lastIndex >= 0) {
-            currentFile.oldLines[lastIndex] = cleanLastNewline(
-              currentFile.oldLines[lastIndex]
+            currentFile.deletionLines[lastIndex] = cleanLastNewline(
+              currentFile.deletionLines[lastIndex]
             );
           }
         }
