@@ -73,26 +73,25 @@ export interface ChangeContent {
 export interface Hunk {
   collapsedBefore: number;
 
+  additionStart: number;
+  additionCount: number;
+  additionLines: number;
+  additionLineIndex: number;
+
+  deletionStart: number;
+  deletionCount: number;
+  deletionLines: number;
+  deletionLineIndex: number;
+
+  hunkContent: (ContextContent | ChangeContent)[];
+  hunkContext: string | undefined;
+  hunkSpecs: string | undefined;
+
   splitLineStart: number;
   splitLineCount: number;
 
   unifiedLineStart: number;
   unifiedLineCount: number;
-
-  additionCount: number;
-  additionStart: number;
-  additionLines: number;
-
-  deletionCount: number;
-  deletionStart: number;
-  deletionLines: number;
-
-  oldLinesIndex: number;
-  newLinesIndex: number;
-
-  hunkContent: (ContextContent | ChangeContent)[];
-  hunkContext: string | undefined;
-  hunkSpecs: string | undefined;
 }
 
 export interface FileDiffMetadata {
