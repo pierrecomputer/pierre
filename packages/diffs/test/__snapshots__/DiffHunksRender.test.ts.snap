@@ -6,10 +6,12 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
   "hunks": [
     {
       "additionCount": 13,
+      "additionLineIndex": 0,
       "additionLines": 4,
       "additionStart": 1,
       "collapsedBefore": 0,
       "deletionCount": 12,
+      "deletionLineIndex": 0,
       "deletionLines": 3,
       "deletionStart": 1,
       "hunkContent": [
@@ -67,8 +69,6 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
 "@@ -1,12 +1,13 @@
 "
 ,
-      "newLinesIndex": 0,
-      "oldLinesIndex": 0,
       "splitLineCount": 14,
       "splitLineStart": 0,
       "unifiedLineCount": 16,
@@ -2603,10 +2603,12 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
   "hunks": [
     {
       "additionCount": 12,
+      "additionLineIndex": 0,
       "additionLines": 3,
       "additionStart": 1,
       "collapsedBefore": 0,
       "deletionCount": 13,
+      "deletionLineIndex": 0,
       "deletionLines": 4,
       "deletionStart": 1,
       "hunkContent": [
@@ -2664,8 +2666,6 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
 "@@ -1,13 +1,12 @@
 "
 ,
-      "newLinesIndex": 0,
-      "oldLinesIndex": 0,
       "splitLineCount": 14,
       "splitLineStart": 0,
       "unifiedLineCount": 16,
@@ -5200,10 +5200,12 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
   "hunks": [
     {
       "additionCount": 13,
+      "additionLineIndex": 0,
       "additionLines": 4,
       "additionStart": 1,
       "collapsedBefore": 0,
       "deletionCount": 12,
+      "deletionLineIndex": 0,
       "deletionLines": 3,
       "deletionStart": 1,
       "hunkContent": [
@@ -5261,8 +5263,6 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
 "@@ -1,12 +1,13 @@
 "
 ,
-      "newLinesIndex": 0,
-      "oldLinesIndex": 0,
       "splitLineCount": 14,
       "splitLineStart": 0,
       "unifiedLineCount": 16,
@@ -7063,10 +7063,12 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
   "hunks": [
     {
       "additionCount": 13,
+      "additionLineIndex": 0,
       "additionLines": 13,
       "additionStart": 1,
       "collapsedBefore": 0,
       "deletionCount": 0,
+      "deletionLineIndex": -1,
       "deletionLines": 0,
       "deletionStart": 0,
       "hunkContent": [
@@ -7083,8 +7085,6 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
 "@@ -0,0 +1,13 @@
 "
 ,
-      "newLinesIndex": 0,
-      "oldLinesIndex": -1,
       "splitLineCount": 13,
       "splitLineStart": 0,
       "unifiedLineCount": 13,
@@ -8389,10 +8389,12 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
   "hunks": [
     {
       "additionCount": 0,
+      "additionLineIndex": -1,
       "additionLines": 0,
       "additionStart": 0,
       "collapsedBefore": 0,
       "deletionCount": 12,
+      "deletionLineIndex": 0,
       "deletionLines": 12,
       "deletionStart": 1,
       "hunkContent": [
@@ -8409,8 +8411,6 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
 "@@ -1,12 +0,0 @@
 "
 ,
-      "newLinesIndex": -1,
-      "oldLinesIndex": 0,
       "splitLineCount": 12,
       "splitLineStart": 0,
       "unifiedLineCount": 12,

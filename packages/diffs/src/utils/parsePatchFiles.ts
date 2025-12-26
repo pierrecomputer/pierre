@@ -92,8 +92,8 @@ export function processFile(
   const hunks = fileDiffString.split(FILE_CONTEXT_BLOB);
   let currentFile: FileDiffMetadata | undefined;
   const isPartial = oldFile == null || newFile == null;
-  let oldLinesIndex = 0;
-  let newLinesIndex = 0;
+  let deletionLineIndex = 0;
+  let additionLineIndex = 0;
   for (const hunk of hunks) {
     const lines = hunk.split(SPLIT_WITH_NEWLINES);
     const firstLine = lines.shift();
@@ -230,8 +230,8 @@ export function processFile(
       deletionStart,
       deletionLines,
 
-      oldLinesIndex: isPartial ? oldLinesIndex : deletionStart - 1,
-      newLinesIndex: isPartial ? newLinesIndex : additionStart - 1,
+      deletionLineIndex: isPartial ? deletionLineIndex : deletionStart - 1,
+      additionLineIndex: isPartial ? additionLineIndex : additionStart - 1,
 
       hunkContent: [],
       hunkContext: fileHeaderMatch[5],
@@ -268,7 +268,7 @@ export function processFile(
           hunkData.hunkContent.push(currentContent);
         }
         if (isPartial) {
-          newLinesIndex++;
+          additionLineIndex++;
           currentFile.newLines.push(line);
         }
         currentContent.additions++;
@@ -280,7 +280,7 @@ export function processFile(
           hunkData.hunkContent.push(currentContent);
         }
         if (isPartial) {
-          oldLinesIndex++;
+          deletionLineIndex++;
           currentFile.oldLines.push(line);
         }
         currentContent.deletions++;
@@ -292,8 +292,8 @@ export function processFile(
           hunkData.hunkContent.push(currentContent);
         }
         if (isPartial) {
-          newLinesIndex++;
-          oldLinesIndex++;
+          additionLineIndex++;
+          deletionLineIndex++;
           currentFile.oldLines.push(line);
           currentFile.newLines.push(line);
         }

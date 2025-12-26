@@ -84,15 +84,15 @@ export function renderDiffWithHighlighter(
       oldLines:
         hunk != null
           ? diff.oldLines.slice(
-              hunk.oldLinesIndex,
-              hunk.oldLinesIndex + hunk.deletionCount
+              hunk.deletionLineIndex,
+              hunk.deletionLineIndex + hunk.deletionCount
             )
           : diff.oldLines,
       newLines:
         hunk != null
           ? diff.newLines.slice(
-              hunk.newLinesIndex,
-              hunk.newLinesIndex + hunk.additionCount
+              hunk.additionLineIndex,
+              hunk.additionLineIndex + hunk.additionCount
             )
           : diff.newLines,
       isPartial: hunk != null,
@@ -254,8 +254,8 @@ function processLines({
     // lets fill it up
     while (
       !isPartial &&
-      newLineIndex - 1 < hunk.newLinesIndex &&
-      oldLineIndex - 1 < hunk.oldLinesIndex
+      newLineIndex - 1 < hunk.additionLineIndex &&
+      oldLineIndex - 1 < hunk.deletionLineIndex
     ) {
       oldInfo[oldLineIndex] = {
         type: 'context-expanded',
