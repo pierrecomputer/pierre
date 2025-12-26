@@ -37,8 +37,8 @@ export function MultiFileDiff<LAnnotation = undefined>({
     prerenderedHTML,
   });
   const children = renderDiffChildren({
-    oldFile,
-    newFile,
+    deletionFile: oldFile,
+    additionFile: newFile,
     renderHeaderMetadata,
     renderAnnotation,
     lineAnnotations,
