@@ -1,4 +1,4 @@
-import { createTwoFilesPatch } from 'diff';
+import { type CreatePatchOptionsNonabortable, createTwoFilesPatch } from 'diff';
 
 import { SPLIT_WITH_NEWLINES } from '../constants';
 import type { FileContents, FileDiffMetadata } from '../types';
@@ -12,7 +12,8 @@ import { parsePatchFiles } from './parsePatchFiles';
  */
 export function parseDiffFromFile(
   oldFile: FileContents,
-  newFile: FileContents
+  newFile: FileContents,
+  options?: CreatePatchOptionsNonabortable
 ): FileDiffMetadata {
   const patch = createTwoFilesPatch(
     oldFile.name,
@@ -20,7 +21,8 @@ export function parseDiffFromFile(
     oldFile.contents,
     newFile.contents,
     oldFile.header,
-    newFile.header
+    newFile.header,
+    options
   );
   const fileData = parsePatchFiles(patch)[0]?.files[0];
   if (fileData == null) {
