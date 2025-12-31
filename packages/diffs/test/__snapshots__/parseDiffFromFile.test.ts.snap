@@ -5081,9 +5081,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 9,
-      "splitLineStart": 0,
+      "splitLineStart": 3,
       "unifiedLineCount": 9,
-      "unifiedLineStart": 0,
+      "unifiedLineStart": 3,
     },
     {
       "additionCount": 15,
@@ -5126,9 +5126,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 15,
-      "splitLineStart": 9,
+      "splitLineStart": 18,
       "unifiedLineCount": 15,
-      "unifiedLineStart": 9,
+      "unifiedLineStart": 18,
     },
     {
       "additionCount": 8,
@@ -5171,9 +5171,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 10,
-      "splitLineStart": 24,
+      "splitLineStart": 47,
       "unifiedLineCount": 10,
-      "unifiedLineStart": 24,
+      "unifiedLineStart": 47,
     },
     {
       "additionCount": 13,
@@ -5248,9 +5248,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 19,
-      "splitLineStart": 34,
+      "splitLineStart": 107,
       "unifiedLineCount": 22,
-      "unifiedLineStart": 34,
+      "unifiedLineStart": 107,
     },
     {
       "additionCount": 17,
@@ -5325,9 +5325,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 18,
-      "splitLineStart": 53,
+      "splitLineStart": 127,
       "unifiedLineCount": 21,
-      "unifiedLineStart": 56,
+      "unifiedLineStart": 130,
     },
     {
       "additionCount": 8,
@@ -5370,9 +5370,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 9,
-      "splitLineStart": 71,
+      "splitLineStart": 156,
       "unifiedLineCount": 9,
-      "unifiedLineStart": 77,
+      "unifiedLineStart": 162,
     },
     {
       "additionCount": 13,
@@ -5431,9 +5431,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 28,
-      "splitLineStart": 80,
+      "splitLineStart": 166,
       "unifiedLineCount": 28,
-      "unifiedLineStart": 86,
+      "unifiedLineStart": 172,
     },
     {
       "additionCount": 125,
@@ -5604,9 +5604,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 130,
-      "splitLineStart": 108,
+      "splitLineStart": 238,
       "unifiedLineCount": 130,
-      "unifiedLineStart": 114,
+      "unifiedLineStart": 244,
     },
     {
       "additionCount": 27,
@@ -5697,9 +5697,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 27,
-      "splitLineStart": 238,
+      "splitLineStart": 378,
       "unifiedLineCount": 31,
-      "unifiedLineStart": 244,
+      "unifiedLineStart": 384,
     },
     {
       "additionCount": 18,
@@ -5774,9 +5774,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 18,
-      "splitLineStart": 265,
+      "splitLineStart": 412,
       "unifiedLineCount": 20,
-      "unifiedLineStart": 275,
+      "unifiedLineStart": 422,
     },
     {
       "additionCount": 18,
@@ -5851,9 +5851,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 18,
-      "splitLineStart": 283,
+      "splitLineStart": 431,
       "unifiedLineCount": 20,
-      "unifiedLineStart": 295,
+      "unifiedLineStart": 443,
     },
     {
       "additionCount": 94,
@@ -5944,9 +5944,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 123,
-      "splitLineStart": 301,
+      "splitLineStart": 454,
       "unifiedLineCount": 136,
-      "unifiedLineStart": 315,
+      "unifiedLineStart": 468,
     },
     {
       "additionCount": 27,
@@ -5989,9 +5989,9 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 27,
-      "splitLineStart": 424,
+      "splitLineStart": 608,
       "unifiedLineCount": 27,
-      "unifiedLineStart": 451,
+      "unifiedLineStart": 635,
     },
     {
       "additionCount": 36,
@@ -6034,16 +6034,16 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "
 ,
       "splitLineCount": 36,
-      "splitLineStart": 451,
+      "splitLineStart": 691,
       "unifiedLineCount": 36,
-      "unifiedLineStart": 478,
+      "unifiedLineStart": 718,
     },
   ],
   "isPartial": false,
   "name": "fileNew.txt",
   "prevName": "fileOld.txt",
-  "splitLineCount": 487,
+  "splitLineCount": 727,
   "type": "rename-changed",
-  "unifiedLineCount": 514,
+  "unifiedLineCount": 754,
 }
 `;

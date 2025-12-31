@@ -62,7 +62,11 @@ describe('parsePatchFiles', () => {
           // combination of lines and empty buffer regions.  Line types will be a
           // mix of context, additions and deletions.  Lets make sure what we
           // math from parsePatchFiles is correctly rendered and vice versa.
-          expect(file.splitLineCount).toBe(countSplitRows(renderResult));
+          const expectedSplitRows = file.hunks.reduce(
+            (sum, hunk) => sum + hunk.splitLineCount,
+            0
+          );
+          expect(expectedSplitRows).toBe(countSplitRows(renderResult));
         }
       }
     },
@@ -81,7 +85,11 @@ describe('parsePatchFiles', () => {
           // In 'unified' style we stack all output as context, deletions,
           // additions. Lets ensure we are mathing correctly and rendering to
           // this math
-          expect(file.unifiedLineCount).toBe(countRenderedLines(unifiedAST));
+          const expectedUnifiedLines = file.hunks.reduce(
+            (sum, hunk) => sum + hunk.unifiedLineCount,
+            0
+          );
+          expect(expectedUnifiedLines).toBe(countRenderedLines(unifiedAST));
         }
       }
     },
