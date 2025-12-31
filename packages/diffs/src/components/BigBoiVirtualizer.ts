@@ -32,6 +32,8 @@ interface RenderedItems<LAnnotations> {
   element: HTMLElement;
 }
 
+let lastScrollPosition = 0;
+
 export class BigBoiVirtualizer<LAnnotations = undefined> {
   private files: VirtualizedFileDiff<LAnnotations>[] = [];
   private totalHeightUnified = 0;
@@ -72,8 +74,10 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
     window.TOGGLE = () => {
       if (window.STOP === true) {
         window.STOP = false;
+        window.scrollTo({ top: lastScrollPosition });
         queueRender(this._render);
       } else {
+        lastScrollPosition = window.scrollY;
         window.STOP = true;
       }
     };
