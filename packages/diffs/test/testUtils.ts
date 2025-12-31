@@ -78,8 +78,8 @@ export function verifyHunkLineValues(
 ): string[] {
   const errors: string[] = [];
 
-  let expectedSplitLineStart = 0;
-  let expectedUnifiedLineStart = 0;
+  let currentSplitLineTotal = 0;
+  let currentUnifiedLineTotal = 0;
   let lastHunkAdditionEnd = 0;
 
   for (const [hunkIndex, hunk] of file.hunks.entries()) {
@@ -155,21 +155,24 @@ export function verifyHunkLineValues(
       );
     }
 
+    const expectedSplitLineStart = currentSplitLineTotal + hunk.collapsedBefore;
     // Verify splitLineStart is cumulative
     if (hunk.splitLineStart !== expectedSplitLineStart) {
       errors.push(
         `${hunkPrefix}: splitLineStart (${hunk.splitLineStart}) !== expected cumulative (${expectedSplitLineStart})`
       );
     }
-    expectedSplitLineStart += hunk.splitLineCount;
+    currentSplitLineTotal += hunk.collapsedBefore + hunk.splitLineCount;
 
+    const expectedUnifiedLineStart =
+      currentUnifiedLineTotal + hunk.collapsedBefore;
     // Verify unifiedLineStart is cumulative
     if (hunk.unifiedLineStart !== expectedUnifiedLineStart) {
       errors.push(
         `${hunkPrefix}: unifiedLineStart (${hunk.unifiedLineStart}) !== expected cumulative (${expectedUnifiedLineStart})`
       );
     }
-    expectedUnifiedLineStart += hunk.unifiedLineCount;
+    currentUnifiedLineTotal += hunk.collapsedBefore + hunk.unifiedLineCount;
 
     // Verify collapsedBefore = additionStart - 1 - lastHunkAdditionEnd
     const expectedCollapsedBefore = Math.max(
@@ -186,7 +189,7 @@ export function verifyHunkLineValues(
 
   // Verify file-level totals
   const expectedTotalSplitLines = file.hunks.reduce(
-    (sum, h) => sum + h.splitLineCount,
+    (sum, h) => sum + h.collapsedBefore + h.splitLineCount,
     0
   );
   if (file.splitLineCount !== expectedTotalSplitLines) {
@@ -196,7 +199,7 @@ export function verifyHunkLineValues(
   }
 
   const expectedTotalUnifiedLines = file.hunks.reduce(
-    (sum, h) => sum + h.unifiedLineCount,
+    (sum, h) => sum + h.collapsedBefore + h.unifiedLineCount,
     0
   );
   if (file.unifiedLineCount !== expectedTotalUnifiedLines) {
