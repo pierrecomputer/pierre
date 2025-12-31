@@ -60,12 +60,16 @@ export interface ContextContent {
   type: 'context';
   lines: number;
   noEOFCR: boolean;
+  additionLineIndex: number;
+  deletionLineIndex: number;
 }
 
 export interface ChangeContent {
   type: 'change';
   deletions: number;
+  deletionLineIndex: number;
   additions: number;
+  additionLineIndex: number;
   noEOFCRDeletions: boolean;
   noEOFCRAdditions: boolean;
 }
@@ -290,14 +294,6 @@ export interface HunkData {
     up: boolean;
     down: boolean;
   };
-}
-
-export interface ChangeHunk {
-  diffGroupStartIndex: number;
-  deletionStartIndex: number;
-  additionStartIndex: number;
-  deletionLines: string[];
-  additionLines: string[];
 }
 
 export type AnnotationLineMap<LAnnotation> = Record<

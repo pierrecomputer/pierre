@@ -213,6 +213,9 @@ export function processFile(
 
     const additionStart = parseInt(fileHeaderMatch[3]);
     const deletionStart = parseInt(fileHeaderMatch[1]);
+    deletionLineIndex = isPartial ? deletionLineIndex : deletionStart - 1;
+    additionLineIndex = isPartial ? additionLineIndex : additionStart - 1;
+
     const hunkData: Hunk = {
       collapsedBefore: 0,
 
@@ -230,8 +233,8 @@ export function processFile(
       deletionStart,
       deletionLines,
 
-      deletionLineIndex: isPartial ? deletionLineIndex : deletionStart - 1,
-      additionLineIndex: isPartial ? additionLineIndex : additionStart - 1,
+      deletionLineIndex,
+      additionLineIndex,
 
       hunkContent: [],
       hunkContext: fileHeaderMatch[5],
@@ -264,7 +267,11 @@ export function processFile(
       const { type, line } = parsedLine;
       if (type === 'addition') {
         if (currentContent == null || currentContent.type !== 'change') {
-          currentContent = createContentGroup('change');
+          currentContent = createContentGroup(
+            'change',
+            deletionLineIndex,
+            additionLineIndex
+          );
           hunkData.hunkContent.push(currentContent);
         }
         if (isPartial) {
@@ -276,7 +283,11 @@ export function processFile(
         lastLineType = 'addition';
       } else if (type === 'deletion') {
         if (currentContent == null || currentContent.type !== 'change') {
-          currentContent = createContentGroup('change');
+          currentContent = createContentGroup(
+            'change',
+            deletionLineIndex,
+            additionLineIndex
+          );
           hunkData.hunkContent.push(currentContent);
         }
         if (isPartial) {
@@ -288,7 +299,11 @@ export function processFile(
         lastLineType = 'deletion';
       } else if (type === 'context') {
         if (currentContent == null || currentContent.type !== 'context') {
-          currentContent = createContentGroup('context');
+          currentContent = createContentGroup(
+            'context',
+            deletionLineIndex,
+            additionLineIndex
+          );
           hunkData.hunkContent.push(currentContent);
         }
         if (isPartial) {
@@ -416,19 +431,37 @@ export function parsePatchFiles(
   return patches;
 }
 
-function createContentGroup(type: 'change'): ChangeContent;
-function createContentGroup(type: 'context'): ContextContent;
 function createContentGroup(
-  type: 'change' | 'context'
+  type: 'change',
+  deletionLineIndex: number,
+  additionLineIndex: number
+): ChangeContent;
+function createContentGroup(
+  type: 'context',
+  deletionLineIndex: number,
+  additionLineIndex: number
+): ContextContent;
+function createContentGroup(
+  type: 'change' | 'context',
+  deletionLineIndex: number,
+  additionLineIndex: number
 ): ChangeContent | ContextContent {
   if (type === 'change') {
     return {
       type: 'change',
       additions: 0,
       deletions: 0,
+      additionLineIndex,
+      deletionLineIndex,
       noEOFCRAdditions: false,
       noEOFCRDeletions: false,
     };
   }
-  return { type: 'context', lines: 0, noEOFCR: false };
+  return {
+    type: 'context',
+    lines: 0,
+    additionLineIndex,
+    deletionLineIndex,
+    noEOFCR: false,
+  };
 }

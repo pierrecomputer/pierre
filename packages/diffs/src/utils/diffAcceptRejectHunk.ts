@@ -65,6 +65,8 @@ export function diffAcceptRejectHunk(
       const newContent: ContextContent = {
         type: 'context',
         lines: 0,
+        additionLineIndex: hunk.additionLineIndex,
+        deletionLineIndex: hunk.deletionLineIndex,
         noEOFCR: false,
       };
       for (const content of hunk.hunkContent) {
@@ -112,6 +114,19 @@ export function diffAcceptRejectHunk(
 
       hunk.deletionLineIndex += deletionOffset;
       hunk.deletionStart += deletionOffset;
+
+      if (additionOffset > 0 || additionOffset > 0) {
+        let i = 0;
+        while (i < hunk.hunkContent.length) {
+          const content = hunk.hunkContent[i];
+          hunk.hunkContent[i] = {
+            ...content,
+            additionLineIndex: content.additionLineIndex + additionOffset,
+            deletionLineIndex: content.deletionLineIndex + deletionOffset,
+          };
+          i++;
+        }
+      }
     }
   }
   return diff;
