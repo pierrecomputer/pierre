@@ -370,11 +370,15 @@ export function processFile(
         hunkData.unifiedLineCount += content.deletions + content.additions;
       }
     }
-    hunkData.splitLineStart = currentFile.splitLineCount;
-    hunkData.unifiedLineStart = currentFile.unifiedLineCount;
+    hunkData.splitLineStart =
+      currentFile.splitLineCount + hunkData.collapsedBefore;
+    hunkData.unifiedLineStart =
+      currentFile.unifiedLineCount + hunkData.collapsedBefore;
 
-    currentFile.splitLineCount += hunkData.splitLineCount;
-    currentFile.unifiedLineCount += hunkData.unifiedLineCount;
+    currentFile.splitLineCount +=
+      hunkData.collapsedBefore + hunkData.splitLineCount;
+    currentFile.unifiedLineCount +=
+      hunkData.collapsedBefore + hunkData.unifiedLineCount;
   }
   if (currentFile != null) {
     if (
