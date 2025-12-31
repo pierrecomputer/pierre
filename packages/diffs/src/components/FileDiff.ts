@@ -657,9 +657,6 @@ export class FileDiff<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
 
-    // Clear existing content
-    pre.innerHTML = '';
-
     let codeDeletions: HTMLElement | undefined;
     let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
