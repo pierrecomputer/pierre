@@ -274,8 +274,8 @@ export function processFile(
           );
           hunkData.hunkContent.push(currentContent);
         }
+        additionLineIndex++;
         if (isPartial) {
-          additionLineIndex++;
           currentFile.additionLines.push(line);
         }
         currentContent.additions++;
@@ -290,8 +290,8 @@ export function processFile(
           );
           hunkData.hunkContent.push(currentContent);
         }
+        deletionLineIndex++;
         if (isPartial) {
-          deletionLineIndex++;
           currentFile.deletionLines.push(line);
         }
         currentContent.deletions++;
@@ -306,9 +306,9 @@ export function processFile(
           );
           hunkData.hunkContent.push(currentContent);
         }
+        additionLineIndex++;
+        deletionLineIndex++;
         if (isPartial) {
-          additionLineIndex++;
-          deletionLineIndex++;
           currentFile.deletionLines.push(line);
           currentFile.additionLines.push(line);
         }
