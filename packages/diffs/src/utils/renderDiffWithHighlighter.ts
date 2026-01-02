@@ -328,6 +328,12 @@ interface HighlightSegment {
   count: number;
 }
 
+interface FakeArrayType {
+  push(value: string): void;
+  value: string;
+  length: number;
+}
+
 interface ProcessHunksProps {
   hunks: Hunk[];
   deletionLines: string[];
@@ -365,12 +371,54 @@ function processHunks({
   const additionInfo: (LineInfo | undefined)[] = [];
   const deletionDecorations: DecorationItem[] = [];
   const additionDecorations: DecorationItem[] = [];
-  const deletionContent: string[] = [];
-  const additionContent: string[] = [];
+  // NOTE(amadeus): Using these fake array data structures for content as an
+  // optmization to keep loop iterations to a minimum.  Basically if we use an
+  // array, then we have to run a `.join('')` on return which adds _yet
+  // another_ iteration which can be costly in large files. And since we
+  // already have to loop through all the lines onces, lets combine all this
+  // logic together
+  const deletionContent: FakeArrayType = {
+    push(value: string) {
+      this.value += value;
+      this.length++;
+    },
+    value: '',
+    length: 0,
+  };
+  const additionContent: FakeArrayType = {
+    push(value: string) {
+      this.value += value;
+      this.length++;
+    },
+    value: '',
+    length: 0,
+  };
   const deletionSegments: HighlightSegment[] = [];
   const additionSegments: HighlightSegment[] = [];
-  let currentDeletionSegment: HighlightSegment | undefined;
-  let currentAdditionSegment: HighlightSegment | undefined;
+  function appendContent(
+    lineContent: string,
+    lineIndex: number,
+    segments: HighlightSegment[],
+    contentWrapper: FakeArrayType
+  ) {
+    if (isWindowedHighlight) {
+      // Grab the last segment off the end and check if it's contiguous or not
+      let segment = segments.at(-1);
+      if (
+        segment == null ||
+        segment.targetIndex + segment.count !== lineIndex
+      ) {
+        segment = {
+          targetIndex: lineIndex,
+          originalOffset: contentWrapper.length,
+          count: 0,
+        };
+        segments.push(segment);
+      }
+      segment.count++;
+    }
+    contentWrapper.push(lineContent);
+  }
 
   hunkIterator: for (const hunk of hunks) {
     // Check if we've rendered enough lines in
@@ -417,11 +465,21 @@ function processHunks({
           altLineNumber: deletionLineNumber,
           lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
         });
-        deletionContent.push(
-          deletionLines[hunk.deletionLineIndex - hunk.collapsedBefore + index]
+        const deletionLineIndex =
+          hunk.deletionLineIndex - hunk.collapsedBefore + index;
+        appendContent(
+          deletionLines[deletionLineIndex],
+          deletionLineIndex,
+          deletionSegments,
+          deletionContent
         );
-        additionContent.push(
-          additionLines[hunk.additionLineIndex - hunk.collapsedBefore + index]
+        const additionLineIndex =
+          hunk.additionLineIndex - hunk.collapsedBefore + index;
+        appendContent(
+          additionLines[additionLineIndex],
+          additionLineIndex,
+          additionSegments,
+          additionContent
         );
         deletionLineNumber++;
         additionLineNumber++;
@@ -480,54 +538,20 @@ function processHunks({
             break hunkIterator;
           }
 
-          // FIXME(amadeus): Rework this absolute slop...
-          // Build segments for viewport rendering
           const deletionLineIndex = hunkContent.deletionLineIndex + index;
+          appendContent(
+            deletionLines[deletionLineIndex],
+            deletionLineIndex,
+            deletionSegments,
+            deletionContent
+          );
           const additionLineIndex = hunkContent.additionLineIndex + index;
-
-          // Check if contiguous with current segment
-          const isDeletionContiguous =
-            currentDeletionSegment != null &&
-            deletionLineIndex ===
-              currentDeletionSegment.targetIndex + currentDeletionSegment.count;
-          const isAdditionContiguous =
-            currentAdditionSegment != null &&
-            additionLineIndex ===
-              currentAdditionSegment.targetIndex + currentAdditionSegment.count;
-
-          // Start new deletion segment if not contiguous
-          if (isWindowedHighlight === true && isDeletionContiguous === false) {
-            if (currentDeletionSegment != null) {
-              deletionSegments.push(currentDeletionSegment);
-            }
-            currentDeletionSegment = {
-              targetIndex: deletionLineIndex,
-              originalOffset: deletionContent.length,
-              count: 0,
-            };
-          }
-
-          // FIXME(amadeus): Rework this absolute slop...
-          // Start new addition segment if not contiguous
-          if (isWindowedHighlight === true && isAdditionContiguous === false) {
-            if (currentAdditionSegment != null) {
-              additionSegments.push(currentAdditionSegment);
-            }
-            currentAdditionSegment = {
-              targetIndex: additionLineIndex,
-              originalOffset: additionContent.length,
-              count: 0,
-            };
-          }
-
-          // FIXME(amadeus): Rework this absolute slop...
-          // Expand segments
-          if (isWindowedHighlight === true) {
-            // lol no -- fix the use of !
-            currentDeletionSegment!.count++;
-            currentAdditionSegment!.count++;
-          }
-
+          appendContent(
+            additionLines[additionLineIndex],
+            additionLineIndex,
+            additionSegments,
+            additionContent
+          );
           deletionInfo.push({
             type: 'context',
             lineNumber: deletionLineNumber,
@@ -540,12 +564,6 @@ function processHunks({
             altLineNumber: deletionLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
           });
-          deletionContent.push(
-            deletionLines[hunkContent.deletionLineIndex + index]
-          );
-          additionContent.push(
-            additionLines[hunkContent.additionLineIndex + index]
-          );
           additionLineNumber++;
           deletionLineNumber++;
           splitLineIndex++;
@@ -749,72 +767,36 @@ function processHunks({
 
           // Process deletion if visible
           if (deletionLine != null) {
-            // FIXME(amadeus): Fix this absolutely horrendous slop
-            // Build segment for deletion
             const deletionLineIndex = hunkContent.deletionLineIndex + index;
-            const isDeletionContiguous =
-              currentDeletionSegment != null &&
-              deletionLineIndex ===
-                currentDeletionSegment.targetIndex +
-                  currentDeletionSegment.count;
-
-            if (
-              isWindowedHighlight === true &&
-              isDeletionContiguous === false
-            ) {
-              if (currentDeletionSegment != null) {
-                deletionSegments.push(currentDeletionSegment);
-              }
-              currentDeletionSegment = {
-                targetIndex: deletionLineIndex,
-                originalOffset: deletionContent.length,
-                count: 0,
-              };
-            }
-            if (isWindowedHighlight === true) currentDeletionSegment!.count++;
-
+            appendContent(
+              deletionLine,
+              deletionLineIndex,
+              deletionSegments,
+              deletionContent
+            );
             deletionInfo.push({
               type: 'change-deletion',
               lineNumber: deletionLineNumber,
               lineIndex: `${_unifiedLineIndex},${_splitLineIndex}`,
             });
             deletionLineNumber++;
-            deletionContent.push(deletionLine);
           }
 
           // Process addition if visible
           if (additionLine != null) {
-            // FIXME(amadeus): Fix this absolutely horrendous slop
-            // Build segment for addition
             const additionLineIndex = hunkContent.additionLineIndex + index;
-            const isAdditionContiguous =
-              currentAdditionSegment != null &&
-              additionLineIndex ===
-                currentAdditionSegment.targetIndex +
-                  currentAdditionSegment.count;
-
-            if (
-              isWindowedHighlight === true &&
-              isAdditionContiguous === false
-            ) {
-              if (currentAdditionSegment != null) {
-                additionSegments.push(currentAdditionSegment);
-              }
-              currentAdditionSegment = {
-                targetIndex: additionLineIndex,
-                originalOffset: additionContent.length,
-                count: 0,
-              };
-            }
-            if (isWindowedHighlight === true) currentAdditionSegment!.count++;
-
+            appendContent(
+              additionLine,
+              additionLineIndex,
+              additionSegments,
+              additionContent
+            );
             additionInfo.push({
               type: 'change-addition',
               lineNumber: additionLineNumber,
               lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${_splitLineIndex}`,
             });
             additionLineNumber++;
-            additionContent.push(additionLine);
           }
 
           _splitLineIndex++;
@@ -845,13 +827,15 @@ function processHunks({
           if (state.shouldBreak()) {
             break hunkIterator;
           }
+          const deletionLineIndex = hunkContent.deletionLineIndex + index;
+          const additionLineIndex = hunkContent.additionLineIndex + index;
           const deletionLine =
             index < hunkContent.deletions
-              ? deletionLines[hunkContent.deletionLineIndex + index]
+              ? deletionLines[deletionLineIndex]
               : undefined;
           const additionLine =
             index < hunkContent.additions
-              ? additionLines[hunkContent.additionLineIndex + index]
+              ? additionLines[additionLineIndex]
               : undefined;
           computeLineDiffDecorations({
             additionLine,
@@ -868,7 +852,12 @@ function processHunks({
               lineNumber: deletionLineNumber,
               lineIndex: `${_unifiedLineIndex},${_splitLineIndex}`,
             });
-            deletionContent.push(deletionLine);
+            appendContent(
+              deletionLine,
+              deletionLineIndex,
+              deletionSegments,
+              deletionContent
+            );
             deletionLineNumber++;
           }
           if (additionLine != null) {
@@ -877,7 +866,12 @@ function processHunks({
               lineNumber: additionLineNumber,
               lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${_splitLineIndex}`,
             });
-            additionContent.push(additionLine);
+            appendContent(
+              additionLine,
+              additionLineIndex,
+              additionSegments,
+              additionContent
+            );
             additionLineNumber++;
           }
 
@@ -910,7 +904,12 @@ function processHunks({
       if (state.shouldBreak()) {
         break;
       }
-      deletionContent.push(deletionLines[deletionLineIndex]);
+      appendContent(
+        deletionLines[deletionLineIndex],
+        deletionLineIndex,
+        deletionSegments,
+        deletionContent
+      );
       deletionLineIndex++;
       deletionInfo.push({
         type: 'context-expanded',
@@ -920,7 +919,12 @@ function processHunks({
       });
       deletionLineNumber++;
 
-      additionContent.push(additionLines[additionLineIndex]);
+      appendContent(
+        additionLines[additionLineIndex],
+        additionLineIndex,
+        additionSegments,
+        additionContent
+      );
       additionLineIndex++;
       additionInfo.push({
         type: 'context-expanded',
@@ -937,23 +941,9 @@ function processHunks({
     }
   }
 
-  // This is absolute AI slop... so we should negate the need for this
-  // Close any remaining segments
-  if (isWindowedHighlight === true && currentDeletionSegment != null) {
-    deletionSegments.push(currentDeletionSegment);
-    currentDeletionSegment = undefined;
-  }
-  if (isWindowedHighlight === true && currentAdditionSegment != null) {
-    additionSegments.push(currentAdditionSegment);
-    currentAdditionSegment = undefined;
-  }
-
   return {
-    // FIXME(amadeus): As a performance improvement, i should probably make
-    // functions that we use to append content that can also locally track line
-    // indexes instead of requiring a second iteration for join
-    deletionContent: deletionContent.join(''),
-    additionContent: additionContent.join(''),
+    deletionContent: deletionContent.value,
+    additionContent: additionContent.value,
     deletionInfo,
     additionInfo,
     deletionDecorations,
