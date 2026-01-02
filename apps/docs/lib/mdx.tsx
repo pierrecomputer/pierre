@@ -25,6 +25,7 @@ import {
   VanillaComponentTabs,
   VanillaPropTabs,
 } from '../app/docs/VanillaAPI/ComponentTabs';
+import type { MDXFilePath, MDXScopeRegistry } from './mdx-scopes';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 
@@ -62,18 +63,24 @@ const defaultComponents = {
   VanillaPropTabs,
 };
 
-interface RenderMDXOptions {
+interface RenderMDXOptions<P extends MDXFilePath> {
   /** Path to MDX file relative to app directory */
-  filePath: string;
+  filePath: P;
   /** Data passed to MDX scope - available as variables in MDX */
-  scope?: Record<string, unknown>;
+  scope: MDXScopeRegistry[P];
 }
 
 /**
  * Render an MDX file with components and scope data.
  * Works in React Server Components with Turbopack.
+ *
+ * The scope parameter is type-checked against the MDXScopeRegistry
+ * to ensure the correct variables are passed for each MDX file.
  */
-export async function renderMDX({ filePath, scope = {} }: RenderMDXOptions) {
+export async function renderMDX<P extends MDXFilePath>({
+  filePath,
+  scope,
+}: RenderMDXOptions<P>) {
   const fullPath = join(process.cwd(), 'app', filePath);
   const source = await readFile(fullPath, 'utf-8');
 
@@ -86,7 +93,9 @@ export async function renderMDX({ filePath, scope = {} }: RenderMDXOptions) {
         remarkPlugins: [remarkGfm, remarkTocIgnore],
         rehypePlugins: [[rehypeHierarchicalSlug, { levels: [2, 3, 4] }]],
       },
-      scope,
+      // Cast to Record<string, unknown> for compileMDX compatibility
+      // Type safety is enforced at the renderMDX call site via MDXScopeRegistry
+      scope: scope as unknown as Record<string, unknown>,
     },
   });
 
