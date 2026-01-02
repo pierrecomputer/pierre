@@ -312,6 +312,7 @@ export class File<LAnnotation = undefined> {
       this.renderHoverUtility();
     } catch (error: unknown) {
       if (error instanceof Error) {
+        console.error(error);
         this.applyErrorToDOM(error, fileContainer);
       }
     }
