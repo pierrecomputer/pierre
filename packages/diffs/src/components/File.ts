@@ -74,7 +74,8 @@ let instanceId = -1;
 export class File<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
-  readonly __id: number = ++instanceId;
+  readonly __id: string = `file:${++instanceId}`;
+
   private fileContainer: HTMLElement | undefined;
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
@@ -311,6 +312,7 @@ export class File<LAnnotation = undefined> {
       this.renderHoverUtility();
     } catch (error: unknown) {
       if (error instanceof Error) {
+        console.error(error);
         this.applyErrorToDOM(error, fileContainer);
       }
     }
@@ -381,11 +383,10 @@ export class File<LAnnotation = undefined> {
   private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
-    pre.innerHTML = '';
     // Create code elements and insert HTML content
     this.code = createCodeNode();
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
-    pre.appendChild(this.code);
+    pre.replaceChildren(this.code);
     this.injectUnsafeCSS();
     this.mouseEventManager.setup(pre);
     this.lineSelectionManager.setup(pre);

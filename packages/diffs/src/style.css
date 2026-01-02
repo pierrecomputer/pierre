@@ -872,6 +872,9 @@
       1lh + (var(--diffs-gap-block, var(--diffs-gap-fallback)) * 3)
     );
     padding-inline: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
 
   [data-header-content] {
@@ -1032,5 +1035,9 @@
     [data-error-stack] {
       color: var(--diffs-fg-number);
     }
+  }
+
+  [data-virtualized-buffer] {
+    grid-column: 1 / 3;
   }
 }

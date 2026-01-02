@@ -13,7 +13,7 @@ export function createWorkerAPI(
       workerFactory() {
         return new Worker(WorkerUrl, { type: 'module' });
       },
-      poolSize: 8,
+      poolSize: 4,
     },
     highlighterOptions,
   });
