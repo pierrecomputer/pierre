@@ -7202,7 +7202,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
   "name": "file.tsx",
   "prevName": undefined,
   "splitLineCount": 13,
-  "type": "change",
+  "type": "new",
   "unifiedLineCount": 13,
 }
 `;
@@ -8335,14 +8335,14 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
               {
                 "children": [],
                 "properties": {
-                  "href": "#diffs-icon-symbol-modified",
+                  "href": "#diffs-icon-symbol-added",
                 },
                 "tagName": "use",
                 "type": "element",
               },
             ],
             "properties": {
-              "data-change-icon": "change",
+              "data-change-icon": "new",
               "height": 16,
               "viewBox": "0 0 16 16",
               "width": 16,
@@ -8402,7 +8402,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
       },
     ],
     "properties": {
-      "data-change-type": "change",
+      "data-change-type": "new",
       "data-diffs-header": "",
       "data-theme-type": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
@@ -8526,7 +8526,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
   "name": "file.tsx",
   "prevName": undefined,
   "splitLineCount": 12,
-  "type": "change",
+  "type": "deleted",
   "unifiedLineCount": 12,
 }
 `;
@@ -9551,14 +9551,14 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
               {
                 "children": [],
                 "properties": {
-                  "href": "#diffs-icon-symbol-modified",
+                  "href": "#diffs-icon-symbol-deleted",
                 },
                 "tagName": "use",
                 "type": "element",
               },
             ],
             "properties": {
-              "data-change-icon": "change",
+              "data-change-icon": "deleted",
               "height": 16,
               "viewBox": "0 0 16 16",
               "width": 16,
@@ -9618,7 +9618,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
       },
     ],
     "properties": {
-      "data-change-type": "change",
+      "data-change-type": "deleted",
       "data-diffs-header": "",
       "data-theme-type": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",

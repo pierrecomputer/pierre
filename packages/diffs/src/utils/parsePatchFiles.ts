@@ -380,9 +380,14 @@ export function processFile(
     currentFile.unifiedLineCount +=
       hunkData.collapsedBefore + hunkData.unifiedLineCount;
   }
-  if (currentFile != null) {
+  if (currentFile == null) {
+    return undefined;
+  }
+
+  // If this isn't a git diff style patch, then we'll need to sus out some
+  // additional metadata manually
+  if (!isGitDiff) {
     if (
-      !isGitDiff &&
       currentFile.prevName != null &&
       currentFile.name !== currentFile.prevName
     ) {
@@ -392,15 +397,20 @@ export function processFile(
         currentFile.type = 'rename-pure';
       }
     }
-    if (
-      currentFile.type !== 'rename-pure' &&
-      currentFile.type !== 'rename-changed'
-    ) {
-      currentFile.prevName = undefined;
+    // Sort of a hack for detecting deleted/added files...
+    else if (newFile != null && newFile.contents === '') {
+      currentFile.type = 'deleted';
+    } else if (oldFile != null && oldFile.contents === '') {
+      currentFile.type = 'new';
     }
-    return currentFile;
   }
-  return undefined;
+  if (
+    currentFile.type !== 'rename-pure' &&
+    currentFile.type !== 'rename-changed'
+  ) {
+    currentFile.prevName = undefined;
+  }
+  return currentFile;
 }
 
 /**

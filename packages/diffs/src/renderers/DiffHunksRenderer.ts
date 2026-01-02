@@ -554,9 +554,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
 
     additionsAST =
-      !unified && code.additionLines.length > 0 ? additionsAST : undefined;
+      !unified && fileDiff.type !== 'deleted' ? additionsAST : undefined;
     deletionsAST =
-      !unified && code.deletionLines.length > 0 ? deletionsAST : undefined;
+      !unified && fileDiff.type !== 'new' ? deletionsAST : undefined;
     unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
 
     // FIXME(amadeus): this version of virtualization is probably more
