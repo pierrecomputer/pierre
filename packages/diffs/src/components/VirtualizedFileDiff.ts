@@ -76,9 +76,13 @@ export class VirtualizedFileDiff<
       this.splitHeight += FILE_GAP;
     }
 
-    // Add hunk lines height
-    this.unifiedHeight += fileDiff.unifiedLineCount * LINE_HEIGHT;
-    this.splitHeight += fileDiff.splitLineCount * LINE_HEIGHT;
+    // NOTE(amadeus): I wonder if it's worth shortcutting this? I it might help
+    // to measure these values though and see if it's at all an issue on the
+    // big bois
+    for (const hunk of fileDiff.hunks) {
+      this.unifiedHeight += hunk.unifiedLineCount * LINE_HEIGHT;
+      this.splitHeight += hunk.splitLineCount * LINE_HEIGHT;
+    }
 
     // Add hunk separators height
     const hunkCount = fileDiff.hunks.length;
