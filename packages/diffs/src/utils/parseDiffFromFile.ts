@@ -10,6 +10,8 @@ import { processFile } from './parsePatchFiles';
  * automatically get a combined cache key in the format `oldKey:newKey`.
  */
 export function parseDiffFromFile(
+  // FIXME(amadeus): oldFile/newFile should be optional to simulate new/deleted
+  // files
   oldFile: FileContents,
   newFile: FileContents,
   options?: CreatePatchOptionsNonabortable
