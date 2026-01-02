@@ -1,4 +1,4 @@
-import { DIFFS_TAG_NAME, FILE_GAP } from '../constants';
+import { DEFAULT_THEMES, DIFFS_TAG_NAME, FILE_GAP } from '../constants';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import type { ParsedPatch } from '../types';
 import type { WorkerPoolManager } from '../worker';
@@ -15,17 +15,8 @@ declare global {
   }
 }
 
-const OVERSCROLL_MULTIPLIER = 1.2;
-
-const DIFF_OPTIONS = {
-  theme: 'pierre-dark',
-  // FIXME(amadeus): 'unified' is pretty great, 'split' definitely runs a bit
-  // slower due to the heavier dome load.  May be worth dynamically changing
-  // overscroll based on the type?  Also should debug more closely to figure
-  // out the potential layout/css pain points with 'split'
-  diffStyle: 'unified',
-} as const;
 const ENABLE_RENDERING = true;
+const OVERSCROLL_MULTIPLIER = 1.2;
 
 interface RenderedItems<LAnnotations> {
   instance: VirtualizedFileDiff<LAnnotations>;
@@ -55,7 +46,12 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
 
   constructor(
     private container: HTMLElement,
-    private fileOptions: FileDiffOptions<LAnnotations> = DIFF_OPTIONS,
+    private fileOptions: FileDiffOptions<LAnnotations> = {
+      theme: DEFAULT_THEMES,
+      // FIXME(amadeus): Fix selected lines crashing when scroll out of the window
+      enableLineSelection: true,
+      diffStyle: 'split',
+    },
     private workerManager?: WorkerPoolManager | undefined
   ) {
     this.stickyOffset = document.createElement('div');
