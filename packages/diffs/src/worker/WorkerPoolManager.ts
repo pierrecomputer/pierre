@@ -497,14 +497,17 @@ export class WorkerPoolManager {
     this.submitTask(instance, { type: 'diff', diff });
   }
 
-  getPlainDiffAST(diff: FileDiffMetadata): ThemedDiffResult | undefined {
+  getPlainDiffAST(
+    diff: FileDiffMetadata,
+    startingLine: number,
+    totalLines: number
+  ): ThemedDiffResult | undefined {
     return this.highlighter != null
-      ? renderDiffWithHighlighter(
-          diff,
-          this.highlighter,
-          this.renderOptions,
-          true
-        )
+      ? renderDiffWithHighlighter(diff, this.highlighter, this.renderOptions, {
+          forcePlainText: true,
+          startingLine,
+          totalLines,
+        })
       : undefined;
   }
 

@@ -234,9 +234,7 @@ export interface LineInfo {
 }
 
 export interface SharedRenderState {
-  lineInfo:
-    | Record<number, LineInfo | undefined>
-    | ((shikiLineNumber: number) => LineInfo);
+  lineInfo: (LineInfo | undefined)[] | ((shikiLineNumber: number) => LineInfo);
 }
 
 export interface AnnotationSpan {
@@ -318,6 +316,12 @@ export interface ThemedDiffResult {
   code: RenderDiffFilesResult;
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
+}
+
+export interface ForcePlainTextOptions {
+  forcePlainText: boolean;
+  startingLine?: number;
+  totalLines?: number;
 }
 
 export interface RenderFileOptions {

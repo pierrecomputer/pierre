@@ -17,9 +17,7 @@ interface CreateTransformerWithStateReturn {
 export function createTransformerWithState(
   useCSSClasses = false
 ): CreateTransformerWithStateReturn {
-  const state: SharedRenderState = {
-    lineInfo: {},
-  };
+  const state: SharedRenderState = { lineInfo: [] };
   const transformers: ShikiTransformer[] = [
     {
       line(node) {
