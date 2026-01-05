@@ -1,0 +1,39 @@
+import { FILE_TREE_TAG_NAME } from '../constants';
+import styles from '../style.css';
+
+// If HTMLElement is undefined it usually means we are in a server environment
+// so best to just not do anything
+if (
+  typeof HTMLElement !== 'undefined' &&
+  customElements.get(FILE_TREE_TAG_NAME) == null
+) {
+  let sheet: CSSStyleSheet | undefined;
+
+  class FileTreeContainer extends HTMLElement {
+    constructor() {
+      super();
+      // If shadow root is already open, we can sorta assume the
+      // CSS is already in place
+      if (this.shadowRoot != null) {
+        return;
+      }
+      const shadowRoot = this.attachShadow({ mode: 'open' });
+      if (sheet == null) {
+        sheet = new CSSStyleSheet();
+        // Declare layer order first, then wrap base styles in @layer to match SSR behavior
+        sheet.replaceSync(
+          `@layer base, theme, unsafe;\n@layer base {\n${styles}\n}`
+        );
+      }
+      shadowRoot.adoptedStyleSheets = [sheet];
+    }
+    // Not sure if we need to do anything here yet...
+    // connectedCallback() {
+    //   this.dataset.diffsContainer = '';
+    // }
+  }
+
+  customElements.define(FILE_TREE_TAG_NAME, FileTreeContainer);
+}
+
+export const FileTreeContainerLoaded = true;

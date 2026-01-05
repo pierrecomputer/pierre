@@ -11,7 +11,7 @@
     "prepublishOnly": "bun run build"
   },
   "sideEffects": [
-    "src/custom-components/Container.ts"
+    "src/components/web-components.ts"
   ],
   "exports": {
     ".": {
