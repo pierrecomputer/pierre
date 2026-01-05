@@ -10,10 +10,21 @@
     "tsc": "tsc --noEmit --pretty",
     "prepublishOnly": "bun run build"
   },
+  "sideEffects": [
+    "src/components/web-components.ts"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react/index.js",
+      "types": "./dist/react/index.d.ts"
+    },
+    "./ssr": {
+      "import": "./dist/ssr/index.js",
+      "types": "./dist/ssr/index.d.ts"
     }
   },
   "files": [
@@ -24,10 +35,18 @@
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
     "@trivago/prettier-plugin-sort-imports": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "autoprefixer": "catalog:",
     "postcss": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "peerDependencies": {
+    "react": "^18.3.1 || ^19.0.0",
+    "react-dom": "^18.3.1 || ^19.0.0"
+  }
 }
