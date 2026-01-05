@@ -5,13 +5,15 @@
   "scripts": {
     "build": "bun run build:deps && bun run build:next",
     "build:next": "next build --turbopack",
-    "build:deps": "bun run build:deps:diffs && bun run build:deps:elements-next && bun run build:deps:registry",
+    "build:deps": "bun run build:deps:diffs && bun run build:deps:tree && bun run build:deps:elements-next && bun run build:deps:registry",
     "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
+    "build:deps:tree": "output=$(cd ../../packages/file-tree && bun run build 2>&1) && echo '[tree] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
     "build:deps:elements-next": "(cd ../../packages/storage-elements-next && bun run build)",
     "build:deps:registry": "shadcn build",
-    "dev": "bun run build:deps && concurrently \"bun run dev:deps:diffs\" \"bun run dev:next\" --names \"diffs,docs\" --prefix-colors \"blue,green\"",
+    "dev": "bun run build:deps && concurrently \"bun run dev:deps:diffs\" \"bun run dev:deps:tree\" \"bun run dev:next\" --names \"diffs,tree,docs\" --prefix-colors \"blue,green,yellow\"",
     "dev:next": "next dev --turbopack",
     "dev:deps:diffs": "(cd ../../packages/diffs && bun run dev)",
+    "dev:deps:tree": "(cd ../../packages/file-tree && bun run dev)",
     "prod": "bun run build && next start",
     "start": "next start",
     "tsc": "bun run build:deps && tsc --noEmit --pretty"
@@ -19,6 +21,7 @@
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
     "@pierre/diffs": "workspace:*",
+    "@pierre/file-tree": "workspace:*",
     "@pierre/storage-elements-next": "workspace:*",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-dialog": "catalog:",

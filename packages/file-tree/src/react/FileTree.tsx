@@ -13,7 +13,7 @@ export function FileTree({
 }: FileTreeProps): React.JSX.Element {
   return (
     <FILE_TREE_TAG_NAME className={className} style={style}>
-      fake
+      fake file tree
     </FILE_TREE_TAG_NAME>
   );
 }

@@ -12,6 +12,9 @@
       "path": "packages/diffs"
     },
     {
+      "path": "packages/file-tree"
+    },
+    {
       "path": "packages/storage-elements"
     },
     {
