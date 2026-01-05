@@ -129,10 +129,13 @@
   },
   "overrides": {
     "@shikijs/core": "catalog:",
-    "typescript": "catalog:",
+    "@shikijs/engine-javascript": "catalog:",
+    "@shikijs/transformers": "catalog:",
+    "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "next": "catalog:"
+    "shiki": "catalog:",
+    "typescript": "catalog:"
   },
   "devDependencies": {
     "@babel/core": "catalog:",
