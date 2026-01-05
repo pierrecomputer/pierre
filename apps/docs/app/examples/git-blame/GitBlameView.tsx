@@ -3,7 +3,6 @@
 import { IconArrowDownRight, IconCommit } from '@/components/icons';
 import { FileDiff } from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
-import Link from 'next/link';
 import { useState } from 'react';
 
 // =============================================================================
