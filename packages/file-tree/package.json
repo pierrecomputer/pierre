@@ -22,6 +22,10 @@
     "README.md"
   ],
   "devDependencies": {
+    "@arethetypeswrong/core": "catalog:",
+    "@trivago/prettier-plugin-sort-imports": "catalog:",
+    "autoprefixer": "catalog:",
+    "postcss": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
