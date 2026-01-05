@@ -48,6 +48,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  ),
   title: 'Diffs, from Pierre',
   description:
     'An open source diff and file rendering library by The Pierre Computer Company.',
@@ -58,6 +61,17 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-touch-icon.png',
     shortcut: '/favicon.ico',
+  },
+  openGraph: {
+    title: 'Diffs, from Pierre',
+    description:
+      'An open source diff and file rendering library by The Pierre Computer Company.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Diffs, from Pierre',
+    description:
+      'An open source diff and file rendering library by The Pierre Computer Company.',
   },
 };
 
