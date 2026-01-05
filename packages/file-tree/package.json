@@ -1,0 +1,29 @@
+{
+  "name": "@pierre/file-tree",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "apache-2.0",
+  "scripts": {
+    "build": "tsdown --clean",
+    "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
+    "test": "bun test",
+    "tsc": "tsc --noEmit --pretty",
+    "prepublishOnly": "bun run build"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "dependencies": {}
+}
