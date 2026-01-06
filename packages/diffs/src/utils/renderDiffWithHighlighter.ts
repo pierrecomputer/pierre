@@ -150,8 +150,6 @@ export function renderDiffWithHighlighter(
       state.incrementCounts(hunk.unifiedLineCount, hunk.splitLineCount);
       continue;
     }
-    // FIXME(amadeus): Lets maybe just make this 2 objects instead of creating
-    // so many confusing variables
     const {
       deletionContent,
       additionContent,
@@ -268,8 +266,9 @@ function computeLineDiffDecorations({
   const deletionSpans: [0 | 1, string][] = [];
   const additionSpans: [0 | 1, string][] = [];
   const enableJoin = lineDiffType === 'word-alt';
+  const lastItem = lineDiff.at(-1);
   for (const item of lineDiff) {
-    const isLastItem = item === lineDiff[lineDiff.length - 1];
+    const isLastItem = item === lastItem;
     if (!item.added && !item.removed) {
       pushOrJoinSpan({
         item,
@@ -570,7 +569,7 @@ function processHunks({
           unifiedLineIndex++;
           state.incrementCounts(1, 1);
         }
-      } else if (startingLine > 0 || totalLines < Infinity) {
+      } else {
         const splitCount = Math.max(
           hunkContent.additions,
           hunkContent.deletions
@@ -592,101 +591,59 @@ function processHunks({
         // Calculate visible deletion indices
         let deletionStartIdx: number | undefined;
         let deletionEndIdx: number | undefined;
-
-        // Check unified view deletions
-        const unifiedDeletionStart = state.unifiedCount;
-        const unifiedDeletionEnd = state.unifiedCount + hunkContent.deletions;
-        if (
-          unifiedDeletionEnd > viewportStart &&
-          unifiedDeletionStart < viewportEnd
-        ) {
-          const visibleStart = Math.max(
-            0,
-            viewportStart - unifiedDeletionStart
-          );
-
-          const visibleEnd = Math.min(
-            hunkContent.deletions,
-            viewportEnd - unifiedDeletionStart
-          );
-          deletionStartIdx = visibleStart;
-          deletionEndIdx = visibleEnd;
-        }
-
-        // Check split view deletions
-        const splitDeletionStart = state.splitCount;
-        const splitDeletionEnd = state.splitCount + hunkContent.deletions;
-        if (
-          splitDeletionEnd > viewportStart &&
-          splitDeletionStart < viewportEnd
-        ) {
-          const visibleStart = Math.max(0, viewportStart - splitDeletionStart);
-          const visibleEnd = Math.min(
-            hunkContent.deletions,
-            viewportEnd - splitDeletionStart
-          );
-
-          // Merge with unified range (union)
-          if (deletionStartIdx == null || deletionEndIdx == null) {
-            deletionStartIdx = visibleStart;
-            deletionEndIdx = visibleEnd;
-          } else {
-            deletionStartIdx = Math.min(deletionStartIdx, visibleStart);
-            deletionEndIdx = Math.max(deletionEndIdx, visibleEnd);
-          }
-        }
-
-        // Calculate visible addition indices
         let additionStartIdx: number | undefined;
         let additionEndIdx: number | undefined;
 
-        // Check unified view additions
-        const unifiedAdditionStart = state.unifiedCount + hunkContent.deletions;
-        const unifiedAdditionEnd =
-          state.unifiedCount + hunkContent.deletions + hunkContent.additions;
-        if (
-          unifiedAdditionEnd > viewportStart &&
-          unifiedAdditionStart < viewportEnd
-        ) {
-          const visibleStart = Math.max(
-            0,
-            viewportStart - unifiedAdditionStart
-          );
-          const visibleEnd = Math.min(
-            hunkContent.additions,
-            viewportEnd - unifiedAdditionStart
-          );
-          additionStartIdx = visibleStart;
-          additionEndIdx = visibleEnd;
-        }
-
-        // Check split view additions
-        const splitAdditionStart = state.splitCount;
-        const splitAdditionEnd = state.splitCount + hunkContent.additions;
-        if (
-          splitAdditionEnd > viewportStart &&
-          splitAdditionStart < viewportEnd
-        ) {
-          const visibleStart = Math.max(0, viewportStart - splitAdditionStart);
-          const visibleEnd = Math.min(
-            hunkContent.additions,
-            viewportEnd - splitAdditionStart
-          );
-
-          // Merge with unified range (union)
-          if (additionStartIdx == null) {
-            additionStartIdx = visibleStart;
-            additionEndIdx = visibleEnd;
-          } else {
-            additionStartIdx = Math.min(additionStartIdx, visibleStart);
-            additionEndIdx = Math.max(additionEndIdx!, visibleEnd);
+        const calculateRegionIndexes = (
+          start: number,
+          end: number,
+          type: 'deletions' | 'additions'
+        ) => {
+          if (end > viewportStart && start < viewportEnd) {
+            const visibleStart = Math.max(0, viewportStart - start);
+            const visibleEnd = Math.min(
+              type === 'deletions'
+                ? hunkContent.deletions
+                : hunkContent.additions,
+              viewportEnd - start
+            );
+            if (type === 'deletions') {
+              deletionStartIdx = Math.min(
+                deletionStartIdx ?? Infinity,
+                visibleStart
+              );
+              deletionEndIdx = Math.max(deletionEndIdx ?? 0, visibleEnd);
+            } else {
+              additionStartIdx = Math.min(
+                additionStartIdx ?? Infinity,
+                visibleStart
+              );
+              additionEndIdx = Math.max(additionEndIdx ?? 0, visibleEnd);
+            }
           }
-        }
+        };
 
-        // FIXME(amadeus): Theoretically this shouldn't be possible since we
-        // did region visibility checks higher up. Might be worth throwing an
-        // error in here to see if we ever hit it
-        // === PHASE 2: Early exit if nothing visible ===
+        calculateRegionIndexes(
+          state.unifiedCount,
+          state.unifiedCount + hunkContent.deletions,
+          'deletions'
+        );
+        calculateRegionIndexes(
+          state.splitCount,
+          state.splitCount + hunkContent.deletions,
+          'deletions'
+        );
+        calculateRegionIndexes(
+          state.unifiedCount + hunkContent.deletions,
+          state.unifiedCount + hunkContent.deletions + hunkContent.additions,
+          'additions'
+        );
+        calculateRegionIndexes(
+          state.splitCount,
+          state.splitCount + hunkContent.additions,
+          'additions'
+        );
+
         if (deletionStartIdx == null && additionStartIdx == null) {
           // Nothing visible, just advance counters
           splitLineIndex += splitCount;
@@ -697,8 +654,6 @@ function processHunks({
           continue;
         }
 
-        // FIXME(amadeus): Also unclear of we still need any of this...
-        // Set ranges to end if undefined (means not visible)
         deletionStartIdx ??= hunkContent.deletions;
         deletionEndIdx ??= hunkContent.deletions;
         additionStartIdx ??= hunkContent.additions;
@@ -717,21 +672,23 @@ function processHunks({
             : Infinity,
           additionStartIdx < hunkContent.additions ? additionStartIdx : Infinity
         );
-        // FIXME(amadeus): Also probably not needed due to windowing checks
-        // above...
+
         if (index === Infinity) {
+          // Nothing visible at all, skip this hunk.  I don't think it should
+          // ever be possible to to logically get in here, however just in case...
           deletionLineNumber += hunkContent.deletions;
           additionLineNumber += hunkContent.additions;
-          // Nothing visible at all, skip this hunk
           unifiedLineIndex += unifiedCount;
           splitLineIndex += splitCount;
           state.incrementCounts(unifiedCount, splitCount);
           continue;
         }
+
+        // If we can skip some lines of this current hunkContent, lets go ahead
+        // and increment counters as necessary
         if (index > 0) {
           const skippedDeletions = Math.min(index, hunkContent.deletions);
           const skippedAdditions = Math.min(index, hunkContent.additions);
-
           deletionLineNumber += skippedDeletions;
           additionLineNumber += skippedAdditions;
           _splitLineIndex += index;
@@ -751,8 +708,9 @@ function processHunks({
 
           // Only compute diff decorations if BOTH lines are visible
           if (deletionLine == null && additionLine == null) {
-            // FIXME(amadeus): Lets make this a proper error message
-            throw new Error('We should never be in here');
+            throw new Error(
+              'processHunks: a serious windowing error has occured and we do not have a proper addition or deletion line to work with'
+            );
           }
 
           computeLineDiffDecorations({
@@ -805,86 +763,6 @@ function processHunks({
 
         splitLineIndex += splitCount;
         unifiedLineIndex += unifiedCount;
-        state.incrementCounts(unifiedCount, splitCount);
-      }
-      // FIXME(amadeus): Ideally this actually goes away completely, and we can
-      // make sure to support window and non-windowed with the above else
-      // statement. I just need to spend time cleaning up the slop before doing
-      // so
-      else {
-        const len = Math.max(hunkContent.additions, hunkContent.deletions);
-        let index = 0;
-        // NOTE(amadeus): Since we iterate through deletions and additions
-        // simultaneously, we have to create a secondary iterator for
-        // unifiedLineIndex, and then when we're done, add the combined lengths
-        // of additions/deletions to the main variable
-        //
-        // NOTE(amadeus): Can i remove this variable completely and just depend
-        // on unifiedLineIndex and i and hunkContent.deletions?
-        let _unifiedLineIndex = unifiedLineIndex;
-        let _splitLineIndex = splitLineIndex;
-        for (; index < len; index++) {
-          if (state.shouldBreak()) {
-            break hunkIterator;
-          }
-          const deletionLineIndex = hunkContent.deletionLineIndex + index;
-          const additionLineIndex = hunkContent.additionLineIndex + index;
-          const deletionLine =
-            index < hunkContent.deletions
-              ? deletionLines[deletionLineIndex]
-              : undefined;
-          const additionLine =
-            index < hunkContent.additions
-              ? additionLines[additionLineIndex]
-              : undefined;
-          computeLineDiffDecorations({
-            additionLine,
-            deletionLine,
-            deletionLineIndex: deletionContent.length,
-            additionLineIndex: additionContent.length,
-            deletionDecorations,
-            additionDecorations,
-            lineDiffType,
-          });
-          if (deletionLine != null) {
-            deletionInfo.push({
-              type: 'change-deletion',
-              lineNumber: deletionLineNumber,
-              lineIndex: `${_unifiedLineIndex},${_splitLineIndex}`,
-            });
-            appendContent(
-              deletionLine,
-              deletionLineIndex,
-              deletionSegments,
-              deletionContent
-            );
-            deletionLineNumber++;
-          }
-          if (additionLine != null) {
-            additionInfo.push({
-              type: 'change-addition',
-              lineNumber: additionLineNumber,
-              lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${_splitLineIndex}`,
-            });
-            appendContent(
-              additionLine,
-              additionLineIndex,
-              additionSegments,
-              additionContent
-            );
-            additionLineNumber++;
-          }
-
-          _splitLineIndex++;
-          _unifiedLineIndex++;
-        }
-        const unifiedCount = hunkContent.additions + hunkContent.deletions;
-        const splitCount = Math.max(
-          hunkContent.deletions,
-          hunkContent.additions
-        );
-        unifiedLineIndex += unifiedCount;
-        splitLineIndex += splitCount;
         state.incrementCounts(unifiedCount, splitCount);
       }
     }
