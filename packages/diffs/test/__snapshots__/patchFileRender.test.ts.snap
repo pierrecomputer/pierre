@@ -5,155 +5,167 @@ exports[`file.patch fixture parses and renders the patch file: parsed patch 1`] 
   {
     "files": [
       {
+        "additionLines": [
+          
+"
+"
+,
+        ],
         "cacheKey": "file-patch-0-0",
+        "deletionLines": [
+          
+"
+"
+,
+          
+"
+"
+,
+          
+"# Codex 2025 holiday campaign
+"
+,
+          
+"- airflow:
+"
+,
+          
+"    environment: prod
+"
+,
+          
+"    dag:
+"
+,
+          
+"      start_date: "2025-12-25T00:00:00Z"
+"
+,
+          
+"      schedule: "@daily"
+"
+,
+          
+"      audience: INTERNAL_APPLIED
+"
+,
+          
+"      urgency: MEDIUM
+"
+,
+          
+"      notification:
+"
+,
+          
+"        email: shijie.rao@openai.com
+"
+,
+          
+"        pagerduty: pagerduty-chatgpt-growth-retention-oncall
+"
+,
+          
+"      airflow_dataset_sensors:
+"
+,
+          
+"        - fully_qualified_table_name: analytics.scratch.shijie_codex_2025_holiday_campaign_user_id
+"
+,
+          
+"  databricks_source:
+"
+,
+          
+"    spark_sql: |
+"
+,
+          
+"      SELECT DISTINCT
+"
+,
+          
+"        user_id
+"
+,
+          
+"      FROM
+"
+,
+          
+"        analytics.scratch.shijie_codex_2025_holiday_campaign_user_id
+"
+,
+          
+"  azure_blob_storage_stage:
+"
+,
+          
+"    storage_account: oailodestoneprod
+"
+,
+          
+"    container: notifications
+"
+,
+          
+"  rockset_sink:
+"
+,
+          
+"    workspace: campaigns
+"
+,
+          
+"    collection_alias: codex_2025_holiday
+"
+,
+          
+"    deployments:
+"
+,
+          
+"      - deployment_rrn: rrn:rsd:rs6:c74bab26-bcfd-4e9b-82f8-1417bea02b8d
+"
+,
+          
+"        assumed_role_rrn: rrn:role:rs6:68fb7059-b1d7-46f6-bd4e-0d11088735f9
+"
+,
+          
+"    shard_count_minimum: 4
+"
+,
+          
+"  owner: growth
+"
+,
+        ],
         "hunks": [
           {
             "additionCount": 1,
+            "additionLineIndex": 0,
             "additionLines": 0,
             "additionStart": 3720,
             "collapsedBefore": 3719,
             "deletionCount": 32,
+            "deletionLineIndex": 0,
             "deletionLines": 31,
             "deletionStart": 3720,
             "hunkContent": [
               {
-                "lines": [
-                  
-"
-"
-,
-                ],
+                "additionLineIndex": 0,
+                "deletionLineIndex": 0,
+                "lines": 1,
                 "noEOFCR": false,
                 "type": "context",
               },
               {
-                "additions": [],
-                "deletions": [
-                  
-"
-"
-,
-                  
-"# Codex 2025 holiday campaign
-"
-,
-                  
-"- airflow:
-"
-,
-                  
-"    environment: prod
-"
-,
-                  
-"    dag:
-"
-,
-                  
-"      start_date: "2025-12-25T00:00:00Z"
-"
-,
-                  
-"      schedule: "@daily"
-"
-,
-                  
-"      audience: INTERNAL_APPLIED
-"
-,
-                  
-"      urgency: MEDIUM
-"
-,
-                  
-"      notification:
-"
-,
-                  
-"        email: shijie.rao@openai.com
-"
-,
-                  
-"        pagerduty: pagerduty-chatgpt-growth-retention-oncall
-"
-,
-                  
-"      airflow_dataset_sensors:
-"
-,
-                  
-"        - fully_qualified_table_name: analytics.scratch.shijie_codex_2025_holiday_campaign_user_id
-"
-,
-                  
-"  databricks_source:
-"
-,
-                  
-"    spark_sql: |
-"
-,
-                  
-"      SELECT DISTINCT
-"
-,
-                  
-"        user_id
-"
-,
-                  
-"      FROM
-"
-,
-                  
-"        analytics.scratch.shijie_codex_2025_holiday_campaign_user_id
-"
-,
-                  
-"  azure_blob_storage_stage:
-"
-,
-                  
-"    storage_account: oailodestoneprod
-"
-,
-                  
-"    container: notifications
-"
-,
-                  
-"  rockset_sink:
-"
-,
-                  
-"    workspace: campaigns
-"
-,
-                  
-"    collection_alias: codex_2025_holiday
-"
-,
-                  
-"    deployments:
-"
-,
-                  
-"      - deployment_rrn: rrn:rsd:rs6:c74bab26-bcfd-4e9b-82f8-1417bea02b8d
-"
-,
-                  
-"        assumed_role_rrn: rrn:role:rs6:68fb7059-b1d7-46f6-bd4e-0d11088735f9
-"
-,
-                  
-"    shard_count_minimum: 4
-"
-,
-                  
-"  owner: growth
-"
-,
-                ],
+                "additionLineIndex": 1,
+                "additions": 0,
+                "deletionLineIndex": 1,
+                "deletions": 31,
                 "noEOFCRAdditions": false,
                 "noEOFCRDeletions": false,
                 "type": "change",
@@ -165,16 +177,17 @@ exports[`file.patch fixture parses and renders the patch file: parsed patch 1`] 
 "
 ,
             "splitLineCount": 32,
-            "splitLineStart": 0,
+            "splitLineStart": 3719,
             "unifiedLineCount": 32,
-            "unifiedLineStart": 0,
+            "unifiedLineStart": 3719,
           },
         ],
+        "isPartial": true,
         "name": "/Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml",
         "prevName": undefined,
-        "splitLineCount": 32,
+        "splitLineCount": 3751,
         "type": "change",
-        "unifiedLineCount": 32,
+        "unifiedLineCount": 3751,
       },
     ],
     "patchMetadata": undefined,
@@ -273,7 +286,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": 3720,
         "data-line": 3720,
-        "data-line-index": "0,0",
+        "data-line-index": "3719,3719",
         "data-line-type": "context",
       },
       "tagName": "div",
@@ -380,7 +393,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": 3720,
         "data-line": 3720,
-        "data-line-index": "0,0",
+        "data-line-index": "3719,3719",
         "data-line-type": "context",
       },
       "tagName": "div",
@@ -430,7 +443,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3721,
-        "data-line-index": "1,1",
+        "data-line-index": "3720,3720",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -486,7 +499,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3722,
-        "data-line-index": "2,2",
+        "data-line-index": "3721,3721",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -568,7 +581,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3723,
-        "data-line-index": "3,3",
+        "data-line-index": "3722,3722",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -650,7 +663,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3724,
-        "data-line-index": "4,4",
+        "data-line-index": "3723,3723",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -719,7 +732,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3725,
-        "data-line-index": "5,5",
+        "data-line-index": "3724,3724",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -801,7 +814,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3726,
-        "data-line-index": "6,6",
+        "data-line-index": "3725,3725",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -883,7 +896,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3727,
-        "data-line-index": "7,7",
+        "data-line-index": "3726,3726",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -965,7 +978,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3728,
-        "data-line-index": "8,8",
+        "data-line-index": "3727,3727",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1047,7 +1060,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3729,
-        "data-line-index": "9,9",
+        "data-line-index": "3728,3728",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1116,7 +1129,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3730,
-        "data-line-index": "10,10",
+        "data-line-index": "3729,3729",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1198,7 +1211,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3731,
-        "data-line-index": "11,11",
+        "data-line-index": "3730,3730",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1280,7 +1293,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3732,
-        "data-line-index": "12,12",
+        "data-line-index": "3731,3731",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1349,7 +1362,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3733,
-        "data-line-index": "13,13",
+        "data-line-index": "3732,3732",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1444,7 +1457,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3734,
-        "data-line-index": "14,14",
+        "data-line-index": "3733,3733",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1513,7 +1526,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3735,
-        "data-line-index": "15,15",
+        "data-line-index": "3734,3734",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1595,7 +1608,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3736,
-        "data-line-index": "16,16",
+        "data-line-index": "3735,3735",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1651,7 +1664,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3737,
-        "data-line-index": "17,17",
+        "data-line-index": "3736,3736",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1707,7 +1720,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3738,
-        "data-line-index": "18,18",
+        "data-line-index": "3737,3737",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1763,7 +1776,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3739,
-        "data-line-index": "19,19",
+        "data-line-index": "3738,3738",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1819,7 +1832,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3740,
-        "data-line-index": "20,20",
+        "data-line-index": "3739,3739",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1888,7 +1901,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3741,
-        "data-line-index": "21,21",
+        "data-line-index": "3740,3740",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -1970,7 +1983,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3742,
-        "data-line-index": "22,22",
+        "data-line-index": "3741,3741",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2052,7 +2065,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3743,
-        "data-line-index": "23,23",
+        "data-line-index": "3742,3742",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2121,7 +2134,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3744,
-        "data-line-index": "24,24",
+        "data-line-index": "3743,3743",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2203,7 +2216,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3745,
-        "data-line-index": "25,25",
+        "data-line-index": "3744,3744",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2285,7 +2298,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3746,
-        "data-line-index": "26,26",
+        "data-line-index": "3745,3745",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2354,7 +2367,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3747,
-        "data-line-index": "27,27",
+        "data-line-index": "3746,3746",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2449,7 +2462,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3748,
-        "data-line-index": "28,28",
+        "data-line-index": "3747,3747",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2531,7 +2544,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3749,
-        "data-line-index": "29,29",
+        "data-line-index": "3748,3748",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2613,7 +2626,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3750,
-        "data-line-index": "30,30",
+        "data-line-index": "3749,3749",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",
@@ -2695,7 +2708,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "properties": {
         "data-alt-line": undefined,
         "data-line": 3751,
-        "data-line-index": "31,31",
+        "data-line-index": "3750,3750",
         "data-line-type": "change-deletion",
       },
       "tagName": "div",

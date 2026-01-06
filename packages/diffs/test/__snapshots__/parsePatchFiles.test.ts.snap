@@ -96436,75 +96436,107 @@ exports[`parsePatchFiles patches with a final blank line should have a \\n added
   {
     "files": [
       {
+        "additionLines": [
+          
+"	const is_single_element = trimmed.length === 1 && trimmed[0].type === 'RegularElement';
+"
+,
+          
+"	const is_single_child_not_needing_template =
+"
+,
+          
+"		trimmed.length === 1 &&
+"
+,
+          
+"		(trimmed[0].type === 'SvelteFragment' || trimmed[0].type === 'TitleElement');
+"
+,
+          
+"
+"
+,
+          
+"	const template_name = context.state.scope.root.unique('root'); // TODO infer name from parent
+"
+,
+          
+"
+"
+,
+        ],
         "cacheKey": undefined,
+        "deletionLines": [
+          
+"	const is_single_element = trimmed.length === 1 && trimmed[0].type === 'RegularElement';
+"
+,
+          
+"	const is_single_child_not_needing_template =
+"
+,
+          
+"		trimmed.length === 1 &&
+"
+,
+          
+"		(trimmed[0].type === 'SvelteFragment' ||
+"
+,
+          
+"			trimmed[0].type === 'TitleElement' ||
+"
+,
+          
+"			(trimmed[0].type === 'IfBlock' && trimmed[0].elseif));
+"
+,
+          
+"
+"
+,
+          
+"	const template_name = context.state.scope.root.unique('root'); // TODO infer name from parent
+"
+,
+          
+"
+"
+,
+        ],
         "hunks": [
           {
             "additionCount": 7,
+            "additionLineIndex": 0,
             "additionLines": 1,
             "additionStart": 47,
             "collapsedBefore": 46,
             "deletionCount": 9,
+            "deletionLineIndex": 0,
             "deletionLines": 3,
             "deletionStart": 47,
             "hunkContent": [
               {
-                "lines": [
-                  
-"	const is_single_element = trimmed.length === 1 && trimmed[0].type === 'RegularElement';
-"
-,
-                  
-"	const is_single_child_not_needing_template =
-"
-,
-                  
-"		trimmed.length === 1 &&
-"
-,
-                ],
+                "additionLineIndex": 0,
+                "deletionLineIndex": 0,
+                "lines": 3,
                 "noEOFCR": false,
                 "type": "context",
               },
               {
-                "additions": [
-                  
-"		(trimmed[0].type === 'SvelteFragment' || trimmed[0].type === 'TitleElement');
-"
-,
-                ],
-                "deletions": [
-                  
-"		(trimmed[0].type === 'SvelteFragment' ||
-"
-,
-                  
-"			trimmed[0].type === 'TitleElement' ||
-"
-,
-                  
-"			(trimmed[0].type === 'IfBlock' && trimmed[0].elseif));
-"
-,
-                ],
+                "additionLineIndex": 3,
+                "additions": 1,
+                "deletionLineIndex": 3,
+                "deletions": 3,
                 "noEOFCRAdditions": false,
                 "noEOFCRDeletions": false,
                 "type": "change",
               },
               {
-                "lines": [
-                  
-"
-"
-,
-                  
-"	const template_name = context.state.scope.root.unique('root'); // TODO infer name from parent
-"
-,
-                  
-"
-"
-,
-                ],
+                "additionLineIndex": 4,
+                "deletionLineIndex": 6,
+                "lines": 3,
                 "noEOFCR": false,
                 "type": "context",
               },
@@ -96515,16 +96547,17 @@ exports[`parsePatchFiles patches with a final blank line should have a \\n added
 "
 ,
             "splitLineCount": 9,
-            "splitLineStart": 0,
+            "splitLineStart": 46,
             "unifiedLineCount": 10,
-            "unifiedLineStart": 0,
+            "unifiedLineStart": 46,
           },
         ],
+        "isPartial": true,
         "name": "packages/svelte/src/compiler/phases/3-transform/client/visitors/Fragment.js",
         "prevName": undefined,
-        "splitLineCount": 9,
+        "splitLineCount": 55,
         "type": "change",
-        "unifiedLineCount": 10,
+        "unifiedLineCount": 56,
       },
     ],
     "patchMetadata": undefined,
