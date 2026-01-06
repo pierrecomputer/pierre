@@ -1,0 +1,36 @@
+diff --git a//Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml b//Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml
+--- a//Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml
++++ b//Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml
+@@ -3720,32 +3720 @@
+ 
+-
+-# Codex 2025 holiday campaign
+-- airflow:
+-    environment: prod
+-    dag:
+-      start_date: "2025-12-25T00:00:00Z"
+-      schedule: "@daily"
+-      audience: INTERNAL_APPLIED
+-      urgency: MEDIUM
+-      notification:
+-        email: shijie.rao@openai.com
+-        pagerduty: pagerduty-chatgpt-growth-retention-oncall
+-      airflow_dataset_sensors:
+-        - fully_qualified_table_name: analytics.scratch.shijie_codex_2025_holiday_campaign_user_id
+-  databricks_source:
+-    spark_sql: |
+-      SELECT DISTINCT
+-        user_id
+-      FROM
+-        analytics.scratch.shijie_codex_2025_holiday_campaign_user_id
+-  azure_blob_storage_stage:
+-    storage_account: oailodestoneprod
+-    container: notifications
+-  rockset_sink:
+-    workspace: campaigns
+-    collection_alias: codex_2025_holiday
+-    deployments:
+-      - deployment_rrn: rrn:rsd:rs6:c74bab26-bcfd-4e9b-82f8-1417bea02b8d
+-        assumed_role_rrn: rrn:role:rs6:68fb7059-b1d7-46f6-bd4e-0d11088735f9
+-    shard_count_minimum: 4
+-  owner: growth
