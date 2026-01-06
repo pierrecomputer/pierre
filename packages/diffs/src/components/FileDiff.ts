@@ -266,17 +266,15 @@ export class FileDiff<LAnnotation = undefined> {
     fileContainer?: HTMLElement,
     containerWrapper?: HTMLElement
   ): void {
-    if (this.imageDiffInstance == null) {
-      this.imageDiffInstance = new ImageDiff(
-        {
-          theme: this.options.theme,
-          themeType: this.options.themeType,
-          disableFileHeader: this.options.disableFileHeader,
-          ...this.options.imageDiff,
-        },
-        this.isContainerManaged
-      );
-    }
+    this.imageDiffInstance ??= new ImageDiff(
+      {
+        theme: this.options.theme,
+        themeType: this.options.themeType,
+        disableFileHeader: this.options.disableFileHeader,
+        ...this.options.imageDiff,
+      },
+      this.isContainerManaged
+    );
 
     this.imageDiffInstance.render({
       fileDiff: this.fileDiff,
