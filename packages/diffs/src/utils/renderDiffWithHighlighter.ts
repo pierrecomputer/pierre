@@ -407,8 +407,8 @@ function processLines({
     }
   }
   return {
-    oldContent: cleanLastNewline(oldContent),
-    newContent: cleanLastNewline(newContent),
+    oldContent,
+    newContent,
     oldInfo,
     newInfo,
     oldDecorations,
@@ -475,7 +475,9 @@ function renderTwoFiles({
     hastConfig.lang = oldLang;
     state.lineInfo = oldInfo;
     hastConfig.decorations = oldDecorations;
-    return getLineNodes(highlighter.codeToHast(oldFile.contents, hastConfig));
+    return getLineNodes(
+      highlighter.codeToHast(cleanLastNewline(oldFile.contents), hastConfig)
+    );
   })();
   const newLines = (() => {
     if (newFile.contents === '') {
@@ -484,7 +486,9 @@ function renderTwoFiles({
     hastConfig.lang = newLang;
     hastConfig.decorations = newDecorations;
     state.lineInfo = newInfo;
-    return getLineNodes(highlighter.codeToHast(newFile.contents, hastConfig));
+    return getLineNodes(
+      highlighter.codeToHast(cleanLastNewline(newFile.contents), hastConfig)
+    );
   })();
 
   return { oldLines, newLines };
