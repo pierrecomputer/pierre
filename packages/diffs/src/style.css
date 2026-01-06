@@ -695,16 +695,19 @@
   }
 
   [data-indicators='bars'] {
-    [data-line-type='change-deletion'] [data-column-number]::before,
-    [data-line-type='change-addition'] [data-column-number]::before {
-      content: '';
-      display: block;
-      width: 4px;
-      height: 100%;
-      position: absolute;
-      top: 0;
-      left: 0;
-      user-select: none;
+    [data-line-type='change-deletion'],
+    [data-line-type='change-addition'] {
+      [data-column-number]::before {
+        content: '';
+        display: block;
+        width: 4px;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        user-select: none;
+        contain: strict;
+      }
     }
 
     [data-line-type='change-deletion'] [data-column-number]::before {
