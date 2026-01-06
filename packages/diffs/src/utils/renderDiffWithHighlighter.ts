@@ -192,17 +192,12 @@ export function renderDiffWithHighlighter(
     });
 
     if (forcePlainText || hunk != null) {
-      // FIXME(amadeus): Maybe there's an opportunity to clean up this AI slop?
       // Viewport highlighting, populate a sparse array of lines
       if (deletionSegments.length > 0) {
         for (const seg of deletionSegments) {
-          // Lol we probably don't need to do this?
-          const nodes = deletionLines.slice(
-            seg.originalOffset,
-            seg.originalOffset + seg.count
-          );
-          for (let i = 0; i < nodes.length; i++) {
-            code.deletionLines[seg.targetIndex + i] = nodes[i];
+          for (let i = 0; i < seg.count; i++) {
+            code.deletionLines[seg.targetIndex + i] =
+              deletionLines[seg.originalOffset + i];
           }
         }
       } else {
@@ -210,14 +205,10 @@ export function renderDiffWithHighlighter(
       }
       // Viewport highlighting, populate a sparse array of lines
       if (additionSegments.length > 0) {
-        for (const segment of additionSegments) {
-          // Lol we probably don't need to do this?
-          const nodes = additionLines.slice(
-            segment.originalOffset,
-            segment.originalOffset + segment.count
-          );
-          for (let i = 0; i < nodes.length; i++) {
-            code.additionLines[segment.targetIndex + i] = nodes[i];
+        for (const seg of additionSegments) {
+          for (let i = 0; i < seg.count; i++) {
+            code.additionLines[seg.targetIndex + i] =
+              additionLines[seg.originalOffset + i];
           }
         }
       } else {
