@@ -20,6 +20,10 @@ export const FILE_MODE_FROM_INDEX: RegExp =
 
 export const HEADER_METADATA_SLOT_ID = 'header-metadata';
 
+export const BINARY_FILES_DIFFER_REGEX: RegExp =
+  /^Binary files .* and .* differ$/;
+export const GIT_BINARY_PATCH_REGEX: RegExp = /^GIT binary patch$/;
+
 export const DEFAULT_THEMES: ThemesType = {
   dark: 'pierre-dark',
   light: 'pierre-light',

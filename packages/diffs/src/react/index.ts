@@ -4,6 +4,7 @@
 export * from '../types';
 export * from './File';
 export * from './FileDiff';
+export * from './ImageDiff';
 export * from './MultiFileDiff';
 export * from './PatchDiff';
 export * from './WorkerPoolContext';
@@ -14,4 +15,5 @@ export * from './utils/renderFileChildren';
 export * from './utils/templateRender';
 export * from './utils/useFileDiffInstance';
 export * from './utils/useFileInstance';
+export * from './utils/useImageDiffInstance';
 export * from './utils/useStableCallback';

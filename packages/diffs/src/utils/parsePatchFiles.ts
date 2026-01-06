@@ -1,10 +1,12 @@
 import {
   ALTERNATE_FILE_NAMES_GIT,
+  BINARY_FILES_DIFFER_REGEX,
   COMMIT_METADATA_SPLIT,
   FILENAME_HEADER_REGEX,
   FILENAME_HEADER_REGEX_GIT,
   FILE_CONTEXT_BLOB,
   FILE_MODE_FROM_INDEX,
+  GIT_BINARY_PATCH_REGEX,
   GIT_DIFF_FILE_BREAK_REGEX,
   HUNK_HEADER,
   SPLIT_WITH_NEWLINES,
@@ -18,6 +20,7 @@ import type {
   ParsedPatch,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
+import { detectContentType } from './imageDetection';
 import { parseLineType } from './parseLineType';
 
 function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
@@ -136,6 +139,13 @@ function processPatch(data: string, cacheKeyPrefix?: string): ParsedPatch {
             }
             if (line.startsWith('rename to ')) {
               currentFile.name = line.replace('rename to ', '').trim();
+            }
+            if (
+              BINARY_FILES_DIFFER_REGEX.test(line) ||
+              GIT_BINARY_PATCH_REGEX.test(line)
+            ) {
+              currentFile.isBinary = true;
+              currentFile.contentType = detectContentType(currentFile.name);
             }
           }
         }

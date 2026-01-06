@@ -48,6 +48,7 @@ import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
+import { ImageDiff } from './ImageDiff';
 import { DiffsContainerLoaded } from './web-components';
 
 export interface FileDiffRenderProps<LAnnotation> {
@@ -118,6 +119,7 @@ export class FileDiff<LAnnotation = undefined> {
   private oldFile: FileContents | undefined;
   private newFile: FileContents | undefined;
   private fileDiff: FileDiffMetadata | undefined;
+  private imageDiffInstance: ImageDiff | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -238,6 +240,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.lineSelectionManager.cleanUp();
+    this.cleanUpImageDiff();
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
 
@@ -259,8 +262,76 @@ export class FileDiff<LAnnotation = undefined> {
     this.errorWrapper = undefined;
   }
 
+  private renderAsImageDiff(
+    fileContainer?: HTMLElement,
+    containerWrapper?: HTMLElement
+  ): void {
+    if (this.imageDiffInstance == null) {
+      this.imageDiffInstance = new ImageDiff(
+        {
+          theme: this.options.theme,
+          themeType: this.options.themeType,
+          disableFileHeader: this.options.disableFileHeader,
+          ...this.options.imageDiff,
+        },
+        this.isContainerManaged
+      );
+    }
+
+    this.imageDiffInstance.render({
+      fileDiff: this.fileDiff,
+      oldFile: this.oldFile,
+      newFile: this.newFile,
+      fileContainer: fileContainer ?? this.fileContainer,
+      containerWrapper,
+    });
+
+    this.fileContainer = this.imageDiffInstance.getFileContainer();
+  }
+
+  private cleanUpImageDiff(): void {
+    if (this.imageDiffInstance != null) {
+      this.imageDiffInstance.cleanUp();
+      this.imageDiffInstance = undefined;
+    }
+  }
+
   hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
-    const { fileContainer, prerenderedHTML } = props;
+    const { fileContainer, prerenderedHTML, fileDiff, oldFile, newFile } =
+      props;
+
+    const resolvedFileDiff =
+      fileDiff ??
+      (oldFile != null && newFile != null
+        ? parseDiffFromFile(oldFile, newFile)
+        : undefined);
+
+    if (resolvedFileDiff != null && ImageDiff.isImageDiff(resolvedFileDiff)) {
+      this.fileDiff = resolvedFileDiff;
+      this.oldFile = oldFile;
+      this.newFile = newFile;
+      this.fileContainer = fileContainer;
+
+      this.imageDiffInstance = new ImageDiff(
+        {
+          theme: this.options.theme,
+          themeType: this.options.themeType,
+          disableFileHeader: this.options.disableFileHeader,
+          ...this.options.imageDiff,
+        },
+        this.isContainerManaged
+      );
+
+      this.imageDiffInstance.hydrate({
+        fileContainer,
+        prerenderedHTML,
+        fileDiff: resolvedFileDiff,
+        oldFile,
+        newFile,
+      });
+      return;
+    }
+
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
       fileContainer.shadowRoot?.children ?? []
@@ -294,18 +365,14 @@ export class FileDiff<LAnnotation = undefined> {
     }
     // Otherwise orchestrate our setup
     else {
-      const { lineAnnotations, oldFile, newFile, fileDiff } = props;
+      const { lineAnnotations } = props;
       this.fileContainer = fileContainer;
       delete this.pre.dataset.dehydrated;
 
       this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
       this.newFile = newFile;
       this.oldFile = oldFile;
-      this.fileDiff =
-        fileDiff ??
-        (oldFile != null && newFile != null
-          ? parseDiffFromFile(oldFile, newFile)
-          : undefined);
+      this.fileDiff = resolvedFileDiff;
 
       this.hunksRenderer.hydrate(this.fileDiff);
       // FIXME(amadeus): not sure how to handle this yet...
@@ -392,6 +459,14 @@ export class FileDiff<LAnnotation = undefined> {
     if (this.fileDiff == null) {
       return;
     }
+
+    if (ImageDiff.isImageDiff(this.fileDiff)) {
+      this.renderAsImageDiff(fileContainer, containerWrapper);
+      return;
+    }
+
+    this.cleanUpImageDiff();
+
     this.hunksRenderer.setOptions({
       ...this.options,
       hunkSeparators:

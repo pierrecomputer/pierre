@@ -11,6 +11,17 @@ import type {
   ThemedToken,
 } from 'shiki';
 
+export type ContentType = 'text' | 'image' | 'binary';
+
+export type ImageDiffMode = 'side-by-side' | 'swipe';
+
+export interface ImageMetadata {
+  width?: number;
+  height?: number;
+  fileSize?: number;
+  mimeType?: string;
+}
+
 export interface FileContents {
   cacheKey?: string;
   name: string;
@@ -19,6 +30,9 @@ export interface FileContents {
   // Technically our diff library can take a `header` property, but we don't
   // have any way of rendering it at the moment
   header?: string;
+  contentType?: ContentType;
+  imageUrl?: string;
+  imageMetadata?: ImageMetadata;
 }
 
 export type {
@@ -100,6 +114,12 @@ export interface FileDiffMetadata {
   oldLines?: string[];
   newLines?: string[];
   cacheKey?: string;
+  contentType?: ContentType;
+  isBinary?: boolean;
+  oldImageUrl?: string;
+  newImageUrl?: string;
+  oldImageMetadata?: ImageMetadata;
+  newImageMetadata?: ImageMetadata;
 }
 
 export type SupportedLanguages = BundledLanguage | 'text';
@@ -146,6 +166,17 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 
   // How many lines to expand per click
   expansionLineCount?: number; // 100 is default
+
+  imageDiff?: Pick<
+    ImageDiffOptions,
+    'imageDiffMode' | 'showImageMetadata' | 'maxImageWidth'
+  >;
+}
+
+export interface ImageDiffOptions extends BaseCodeOptions {
+  imageDiffMode?: ImageDiffMode;
+  showImageMetadata?: boolean;
+  maxImageWidth?: number;
 }
 
 // NOTE(amadeus): This is the shared config that all `pre` nodes will need to

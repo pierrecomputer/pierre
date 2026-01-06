@@ -13,17 +13,20 @@ export function createTextNodeElement(value: string): Text {
   return { type: 'text', value };
 }
 
+export type HastTagNames =
+  | 'span'
+  | 'div'
+  | 'code'
+  | 'pre'
+  | 'slot'
+  | 'svg'
+  | 'use'
+  | 'style'
+  | 'template'
+  | 'img';
+
 interface CreateHastElementProps {
-  tagName:
-    | 'span'
-    | 'div'
-    | 'code'
-    | 'pre'
-    | 'slot'
-    | 'svg'
-    | 'use'
-    | 'style'
-    | 'template';
+  tagName: HastTagNames;
   children?: ElementContent[];
   properties?: Properties;
 }
