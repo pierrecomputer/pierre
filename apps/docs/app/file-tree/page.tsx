@@ -16,7 +16,7 @@ const preloadedFileTreeHtml = `<style>
 }
 </style>
 <div id="file-tree-div-wrapper">
-  <div>File Tree Fake</div><slot name="fake-slot"></slot>
+  <div>File Tree Fake</div>
 </div>`;
 
 export default function Home() {

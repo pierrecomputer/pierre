@@ -41,8 +41,6 @@ export function FileDiff<LAnnotation = undefined>({
     renderHoverUtility,
     getHoveredLine,
   });
-  console.log('FileDiff prerenderedHTML', prerenderedHTML);
-  console.log('FileDiff children', children);
   return (
     <DIFFS_TAG_NAME ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}
