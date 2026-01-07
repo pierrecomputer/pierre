@@ -59,6 +59,8 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
     this.stickyContainer.style.contain = 'strict';
     this.stickyContainer.style.position = 'sticky';
     this.stickyContainer.style.width = '100%';
+    this.stickyContainer.style.contain = 'strict';
+    this.stickyContainer.style.isolation = 'isolate';
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
     this.handleScroll();

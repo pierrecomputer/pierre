@@ -438,8 +438,6 @@
   }
 
   [data-buffer] {
-    position: sticky;
-    left: 0;
     grid-column: 1 / 3;
     user-select: none;
     /* We multiply by 1.414 (√2) to better approximate the diagonal repeat distance */
@@ -451,7 +449,11 @@
       var(--diffs-bg-buffer) calc(4px * 1.414)
     );
     min-height: 1lh;
-    width: var(--diffs-column-width, auto);
+    /* lol not sure this is worth it... */
+    /* position: sticky; */
+    /* left: 0; */
+    /* width: var(--diffs-column-width, auto); */
+    /* background-attachment: fixed; */
   }
 
   [data-separator] {
