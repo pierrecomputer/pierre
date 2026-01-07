@@ -153,6 +153,9 @@
     "packages/file-tree": {
       "name": "@pierre/file-tree",
       "version": "0.0.1",
+      "dependencies": {
+        "@headless-tree/core": "catalog:",
+      },
       "devDependencies": {
         "@arethetypeswrong/core": "catalog:",
         "@trivago/prettier-plugin-sort-imports": "catalog:",
@@ -230,6 +233,7 @@
     "@babel/core": "7.28.4",
     "@eslint/eslintrc": "3.3.1",
     "@eslint/js": "9.36.0",
+    "@headless-tree/core": "1.6.1",
     "@icons-pack/react-simple-icons": "13.8.0",
     "@next/eslint-plugin-next": "16.0.9",
     "@octokit/app": "16.1.1",
@@ -488,6 +492,8 @@
     "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.6", "", { "dependencies": { "@floating-ui/dom": "^1.7.4" }, "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-4JX6rEatQEvlmgU80wZyq9RT96HZJa88q8hp0pBd+LrczeDI4o6uA2M+uvxngVHo4Ihr8uibXxH6+70zhAFrVw=="],
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ=="],
+
+    "@headless-tree/core": ["@headless-tree/core@1.6.1", "", {}, "sha512-67de8m/50/4l7qgDvJBFjG6wMMWGkEFWBtbk0kwKGVGZPW3kiPM+2uQmEFGaHugegVbNI/vNjLUJAqG6oegj5g=="],
 
     "@humanfs/core": ["@humanfs/core@0.19.1", "", {}, "sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA=="],
 
