@@ -44,6 +44,7 @@ export class FileTree {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.divWrapper == null) {
       this.divWrapper = document.createElement('div');
+      this.divWrapper.id = 'file-tree-div-wrapper';
       container.shadowRoot?.appendChild(this.divWrapper);
     }
     // If we have a new parent container for the pre element, lets go ahead and
@@ -65,6 +66,6 @@ export class FileTree {
   }
 
   generateFileTreeFake(): string {
-    return '<div>File Tree Fake</div>';
+    return '<div>File Tree Fake</div><slot name="fake-slot"></slot>';
   }
 }
