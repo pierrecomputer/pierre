@@ -559,6 +559,37 @@ if (renderFileButton != null) {
   });
 }
 
+const visibleRangesButton = document.getElementById('visible-ranges');
+if (visibleRangesButton != null) {
+  visibleRangesButton.addEventListener('click', () => {
+    const wrapper = document.getElementById('wrapper');
+    if (wrapper == null) return;
+    cleanupInstances(wrapper);
+
+    const fileContainer = document.createElement(DIFFS_TAG_NAME);
+    wrapper.appendChild(fileContainer);
+    const instance = new File<LineCommentMetadata>(
+      {
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: getThemeType(),
+        visibleRanges: [
+          [1, 25],
+          [90, 110],
+          [200, 220],
+        ],
+        expansionLineCount: 20,
+      },
+      poolManager
+    );
+
+    void instance.render({
+      file: fileExample,
+      fileContainer,
+    });
+    fileInstances.push(instance);
+  });
+}
+
 const workerRenderButton = document.getElementById('worker-load-diff');
 workerRenderButton?.addEventListener('click', () => {
   void (async () => {
