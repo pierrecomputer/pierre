@@ -68,9 +68,9 @@ export default function Home() {
           </h2>
           <p className="text-muted-foreground max-w-2xl">
             Our team has decades of cumulative experience in open source,
-            developer tools, and more. We’ve worked on projects like Coinbase,
-            GitHub, Bootstrap, Twitter, Medium, and more. This stuff is our
-            bread and butter, and we’re happy to share it with you.
+            developer tools, and more. We’ve worked on projects like Discord,
+            Coinbase, GitHub, Bootstrap, Twitter, Medium, and more. This stuff
+            is our bread and butter, and we’re happy to share it with you.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
