@@ -34,11 +34,13 @@ import type {
   FileDiffMetadata,
   HunkData,
   HunkSeparators,
+  PrePropertiesConfig,
   RenderHeaderMetadataCallback,
   RenderRange,
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createCodeNode } from '../utils/createCodeNode';
@@ -122,6 +124,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected additionFile: FileContents | undefined;
   protected fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
+  protected appliedPreAttributes: PrePropertiesConfig | undefined;
 
   protected enabled = true;
 
@@ -261,6 +264,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.pre.innerHTML = '';
       this.pre = undefined;
     }
+    this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
@@ -580,12 +584,14 @@ export class FileDiff<LAnnotation = undefined> {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
+      this.appliedPreAttributes = undefined;
       shadowRoot.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
     else if (this.pre.parentNode !== shadowRoot) {
       shadowRoot.appendChild(this.pre);
+      this.appliedPreAttributes = undefined;
     }
     return this.pre;
   }
@@ -721,21 +727,24 @@ export class FileDiff<LAnnotation = undefined> {
       themeType = 'system',
       diffStyle = 'split',
     } = this.options;
-    const split =
-      diffStyle === 'unified'
-        ? false
-        : additionsAST != null && deletionsAST != null;
-    setPreNodeProperties({
-      pre,
+    const preProperties: PrePropertiesConfig = {
       diffIndicators,
       disableBackground,
       disableLineNumbers,
       overflow,
-      split,
+      split:
+        diffStyle === 'unified'
+          ? false
+          : additionsAST != null && deletionsAST != null,
       themeStyles,
       themeType: baseThemeType ?? themeType,
       totalLines,
-    });
+    };
+    if (arePrePropertiesEqual(preProperties, this.appliedPreAttributes)) {
+      return;
+    }
+    setPreNodeProperties(pre, preProperties);
+    this.appliedPreAttributes = preProperties;
   }
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
@@ -744,6 +753,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre.innerHTML = '';
     pre.parentNode?.removeChild(pre);
     this.pre = undefined;
+    this.appliedPreAttributes = undefined;
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     this.errorWrapper ??= document.createElement('div');

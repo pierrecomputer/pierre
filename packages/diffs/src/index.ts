@@ -36,6 +36,7 @@ export * from './sprite';
 export * from './utils/areFilesEqual';
 export * from './utils/areObjectsEqual';
 export * from './utils/areOptionsEqual';
+export * from './utils/arePrePropertiesEqual';
 export * from './utils/areRenderRangesEqual';
 export * from './utils/areSelectionsEqual';
 export * from './utils/areThemesEqual';

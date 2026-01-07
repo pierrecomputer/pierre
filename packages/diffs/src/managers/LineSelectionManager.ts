@@ -64,17 +64,14 @@ export class LineSelectionManager {
     this.setDirty();
     if (this.pre !== pre) {
       this.cleanUp();
+      this.pre = pre;
+      const { enableLineSelection = false } = this.options;
+      if (enableLineSelection) {
+        this.attachEventListeners();
+      } else {
+        this.removeEventListeners();
+      }
     }
-    this.pre = pre;
-    const { enableLineSelection = false } = this.options;
-    if (enableLineSelection) {
-      this.pre.dataset.interactiveLineNumbers = '';
-      this.attachEventListeners();
-    } else {
-      this.removeEventListeners();
-      delete this.pre.dataset.interactiveLineNumbers;
-    }
-
     this.setSelection(this.selectedRange);
   }
 
@@ -107,6 +104,7 @@ export class LineSelectionManager {
     if (this.pre == null) return;
     // Lets run a cleanup, just in case
     this.removeEventListeners();
+    this.pre.dataset.interactiveLineNumbers = '';
     this.pre.addEventListener('pointerdown', this.handleMouseDown);
   }
 
@@ -115,6 +113,7 @@ export class LineSelectionManager {
     this.pre.removeEventListener('pointerdown', this.handleMouseDown);
     document.removeEventListener('pointermove', this.handleMouseMove);
     document.removeEventListener('pointerup', this.handleMouseUp);
+    delete this.pre.dataset.interactiveLineNumbers;
   }
 
   private handleMouseDown = (event: PointerEvent): void => {

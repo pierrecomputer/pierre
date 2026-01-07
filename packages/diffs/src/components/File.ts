@@ -26,10 +26,12 @@ import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
+  PrePropertiesConfig,
   RenderFileMetadata,
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createCodeNode } from '../utils/createCodeNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
@@ -83,6 +85,7 @@ export class File<LAnnotation = undefined> {
   private unsafeCSSStyle: HTMLStyleElement | undefined;
   private hoverContent: HTMLElement | undefined;
   private errorWrapper: HTMLElement | undefined;
+  private appliedPreAttributes: PrePropertiesConfig | undefined;
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
@@ -200,6 +203,7 @@ export class File<LAnnotation = undefined> {
     }
     this.fileContainer = undefined;
     this.pre = undefined;
+    this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
@@ -220,6 +224,7 @@ export class File<LAnnotation = undefined> {
       }
       if (element instanceof HTMLPreElement) {
         this.pre = element;
+        this.appliedPreAttributes = undefined;
         continue;
       }
       if (
@@ -465,11 +470,13 @@ export class File<LAnnotation = undefined> {
     if (this.pre == null) {
       this.pre = document.createElement('pre');
       container.shadowRoot?.appendChild(this.pre);
+      this.appliedPreAttributes = undefined;
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
     else if (this.pre.parentNode !== container) {
       container.shadowRoot?.appendChild(this.pre);
+      this.appliedPreAttributes = undefined;
     }
     return this.pre;
   }
@@ -483,8 +490,7 @@ export class File<LAnnotation = undefined> {
       themeType = 'system',
       disableLineNumbers = false,
     } = this.options;
-    setPreNodeProperties({
-      pre,
+    const preProperties: PrePropertiesConfig = {
       split: false,
       themeStyles,
       overflow,
@@ -493,7 +499,12 @@ export class File<LAnnotation = undefined> {
       diffIndicators: 'none',
       disableBackground: true,
       totalLines,
-    });
+    };
+    if (arePrePropertiesEqual(preProperties, this.appliedPreAttributes)) {
+      return;
+    }
+    setPreNodeProperties(pre, preProperties);
+    this.appliedPreAttributes = preProperties;
   }
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
@@ -502,6 +513,7 @@ export class File<LAnnotation = undefined> {
     pre.innerHTML = '';
     pre.parentNode?.removeChild(pre);
     this.pre = undefined;
+    this.appliedPreAttributes = undefined;
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     this.errorWrapper ??= document.createElement('div');
