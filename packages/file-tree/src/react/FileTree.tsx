@@ -5,11 +5,7 @@ import type { ReactNode } from 'react';
 import { FILE_TREE_TAG_NAME } from '../constants';
 
 function renderFileTreeChildren(): ReactNode {
-  return (
-    <>
-      <div slot="fake-slot">METADATA</div>
-    </>
-  );
+  return <>{/* <div slot="fake-slot">METADATA</div> */}</>;
 }
 
 export function templateRender(
