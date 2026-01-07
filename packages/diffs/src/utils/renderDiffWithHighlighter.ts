@@ -575,7 +575,7 @@ function processHunks({
           continue;
         }
 
-        // === PHASE 1: Calculate visible ranges ===
+        // Calculate visible ranges
         const viewportStart = startingLine;
         const viewportEnd = startingLine + totalLines;
 
@@ -650,23 +650,46 @@ function processHunks({
         additionStartIdx ??= hunkContent.additions;
         additionEndIdx ??= hunkContent.additions;
 
-        // === PHASE 3: Iterate through visible lines ===
-        const len = Math.max(deletionEndIdx, additionEndIdx);
-        let _unifiedLineIndex = unifiedLineIndex;
-        let _splitLineIndex = splitLineIndex;
+        // Build iteration ranges and iterate through visible lines. If
+        // deletion and addition ranges don't overlap, we create separate
+        // iteration ranges to avoid unnecessary iterations through the gap.
+        const iterationRanges: [number, number][] = [];
+        const hasDeletionRange = deletionStartIdx < deletionEndIdx;
+        const hasAdditionRange = additionStartIdx < additionEndIdx;
 
-        // Optimization: skip to first visible index
-        // Only use indices that have actual content (not sentinel values)
-        let index = Math.min(
-          deletionStartIdx < hunkContent.deletions
-            ? deletionStartIdx
-            : Infinity,
-          additionStartIdx < hunkContent.additions ? additionStartIdx : Infinity
-        );
+        if (hasDeletionRange && hasAdditionRange) {
+          // Check overlap: [a, b) and [c, d) overlap if a < d && c < b
+          const hasOverlap =
+            deletionStartIdx < additionEndIdx &&
+            additionStartIdx < deletionEndIdx;
 
-        if (index === Infinity) {
-          // Nothing visible at all, skip this hunk.  I don't think it should
-          // ever be possible to to logically get in here, however just in case...
+          if (hasOverlap) {
+            // Merge into single range
+            iterationRanges.push([
+              Math.min(deletionStartIdx, additionStartIdx),
+              Math.max(deletionEndIdx, additionEndIdx),
+            ]);
+          } else {
+            if (additionEndIdx < deletionStartIdx) {
+              iterationRanges.push(
+                [additionStartIdx, additionEndIdx],
+                [deletionStartIdx, deletionEndIdx]
+              );
+            } else {
+              iterationRanges.push(
+                [deletionStartIdx, deletionEndIdx],
+                [additionStartIdx, additionEndIdx]
+              );
+            }
+          }
+        } else if (hasDeletionRange) {
+          iterationRanges.push([deletionStartIdx, deletionEndIdx]);
+        } else if (hasAdditionRange) {
+          iterationRanges.push([additionStartIdx, additionEndIdx]);
+        }
+
+        if (iterationRanges.length === 0) {
+          // Nothing visible at all, skip this hunk content
           deletionLineNumber += hunkContent.deletions;
           additionLineNumber += hunkContent.additions;
           unifiedLineIndex += unifiedCount;
@@ -675,83 +698,84 @@ function processHunks({
           continue;
         }
 
-        // If we can skip some lines of this current hunkContent, lets go ahead
-        // and increment counters as necessary
-        if (index > 0) {
-          const skippedDeletions = Math.min(index, hunkContent.deletions);
-          const skippedAdditions = Math.min(index, hunkContent.additions);
-          deletionLineNumber += skippedDeletions;
-          additionLineNumber += skippedAdditions;
-          _splitLineIndex += index;
-          _unifiedLineIndex += index;
-        }
+        for (const [rangeStart, rangeEnd] of iterationRanges) {
+          // Compute values directly based on rangeStart
+          let _deletionLineNumber =
+            deletionLineNumber + Math.min(rangeStart, hunkContent.deletions);
+          let _additionLineNumber =
+            additionLineNumber + Math.min(rangeStart, hunkContent.additions);
+          let _splitLineIndex = splitLineIndex + rangeStart;
+          let _unifiedLineIndex = unifiedLineIndex + rangeStart;
 
-        for (; index < len; index++) {
-          // Get lines only if they exist and are visible
-          const deletionLine =
-            index < hunkContent.deletions
-              ? deletionLines[hunkContent.deletionLineIndex + index]
-              : undefined;
-          const additionLine =
-            index < hunkContent.additions
-              ? additionLines[hunkContent.additionLineIndex + index]
-              : undefined;
+          for (let index = rangeStart; index < rangeEnd; index++) {
+            // Get lines only if they exist and are visible
+            const deletionLine =
+              index < hunkContent.deletions
+                ? deletionLines[hunkContent.deletionLineIndex + index]
+                : undefined;
+            const additionLine =
+              index < hunkContent.additions
+                ? additionLines[hunkContent.additionLineIndex + index]
+                : undefined;
 
-          // Only compute diff decorations if BOTH lines are visible
-          if (deletionLine == null && additionLine == null) {
-            throw new Error(
-              'processHunks: a serious windowing error has occured and we do not have a proper addition or deletion line to work with'
-            );
-          }
+            // Only compute diff decorations if BOTH lines are visible
+            if (deletionLine == null && additionLine == null) {
+              throw new Error(
+                'processHunks: a serious windowing error has occured and we do not have a proper addition or deletion line to work with'
+              );
+            }
 
-          computeLineDiffDecorations({
-            additionLine,
-            deletionLine,
-            deletionLineIndex: deletionContent.length,
-            additionLineIndex: additionContent.length,
-            deletionDecorations,
-            additionDecorations,
-            lineDiffType,
-          });
-
-          // Process deletion if visible
-          if (deletionLine != null) {
-            const deletionLineIndex = hunkContent.deletionLineIndex + index;
-            appendContent(
-              deletionLine,
-              deletionLineIndex,
-              deletionSegments,
-              deletionContent
-            );
-            deletionInfo.push({
-              type: 'change-deletion',
-              lineNumber: deletionLineNumber,
-              lineIndex: `${_unifiedLineIndex},${_splitLineIndex}`,
-            });
-            deletionLineNumber++;
-          }
-
-          // Process addition if visible
-          if (additionLine != null) {
-            const additionLineIndex = hunkContent.additionLineIndex + index;
-            appendContent(
+            computeLineDiffDecorations({
               additionLine,
-              additionLineIndex,
-              additionSegments,
-              additionContent
-            );
-            additionInfo.push({
-              type: 'change-addition',
-              lineNumber: additionLineNumber,
-              lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${_splitLineIndex}`,
+              deletionLine,
+              deletionLineIndex: deletionContent.length,
+              additionLineIndex: additionContent.length,
+              deletionDecorations,
+              additionDecorations,
+              lineDiffType,
             });
-            additionLineNumber++;
-          }
 
-          _splitLineIndex++;
-          _unifiedLineIndex++;
+            // Process deletion if visible
+            if (deletionLine != null) {
+              const deletionLineIndex = hunkContent.deletionLineIndex + index;
+              appendContent(
+                deletionLine,
+                deletionLineIndex,
+                deletionSegments,
+                deletionContent
+              );
+              deletionInfo.push({
+                type: 'change-deletion',
+                lineNumber: _deletionLineNumber,
+                lineIndex: `${_unifiedLineIndex},${_splitLineIndex}`,
+              });
+              _deletionLineNumber++;
+            }
+
+            // Process addition if visible
+            if (additionLine != null) {
+              const additionLineIndex = hunkContent.additionLineIndex + index;
+              appendContent(
+                additionLine,
+                additionLineIndex,
+                additionSegments,
+                additionContent
+              );
+              additionInfo.push({
+                type: 'change-addition',
+                lineNumber: _additionLineNumber,
+                lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${_splitLineIndex}`,
+              });
+              _additionLineNumber++;
+            }
+
+            _splitLineIndex++;
+            _unifiedLineIndex++;
+          }
         }
 
+        deletionLineNumber += hunkContent.deletions;
+        additionLineNumber += hunkContent.additions;
         splitLineIndex += splitCount;
         unifiedLineIndex += unifiedCount;
         state.incrementCounts(unifiedCount, splitCount);
