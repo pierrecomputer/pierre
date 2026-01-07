@@ -1,1 +1,2 @@
-export const version = '0.0.1';
+export * from './components/FileTree';
+export * from './constants';

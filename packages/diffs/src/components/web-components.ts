@@ -20,10 +20,7 @@ if (
       const shadowRoot = this.attachShadow({ mode: 'open' });
       if (sheet == null) {
         sheet = new CSSStyleSheet();
-        // Declare layer order first, then wrap base styles in @layer to match SSR behavior
-        sheet.replaceSync(
-          `@layer base, theme, unsafe;\n@layer base {\n${styles}\n}`
-        );
+        sheet.replaceSync(styles);
       }
       shadowRoot.adoptedStyleSheets = [sheet];
     }

@@ -2,14 +2,10 @@
 
 @layer base {
   :host {
-    --diffs-bg: #fff;
-    --diffs-fg: #000;
-    --diffs-font-fallback:
-      'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
-      'Courier New', monospace;
-
     color-scheme: light dark;
     display: block;
-    font-family: var(--diffs-header-font-fallback);
+    font-family:
+      'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
+      'Courier New', monospace;
   }
 }

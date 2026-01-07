@@ -1,12 +1,14 @@
-import { version } from '@pierre/file-tree';
-import { FileTree } from '@pierre/file-tree/react';
+// import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
+import { ClientPage } from './ClientPage';
 
 export default function Home() {
   return (
-    <div>
-      <h1>File Tree</h1>
-      <p>version: {version}</p>
-      <FileTree />
+    <div className="flex gap-4 p-4">
+      {/* <FileTreeReact /> */}
+      <div className="w-1/3 border border-gray-300">
+        <div id="test-file-tree-elem" />
+      </div>
+      <ClientPage />
     </div>
   );
 }
