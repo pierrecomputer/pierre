@@ -67,10 +67,10 @@ export default function Home() {
             With love from The Pierre Computer Company
           </h2>
           <p className="text-muted-foreground max-w-2xl">
-            Our team has decades of cumulative experience in open source,
-            developer tools, and more. We’ve worked on projects like Discord,
-            Coinbase, GitHub, Bootstrap, Twitter, Medium, and more. This stuff
-            is our bread and butter, and we’re happy to share it with you.
+            Collectively, our team brings over 150 years of expertise designing,
+            building, and scaling the world's largest distributed systems at
+            Cloudflare, Coinbase, Discord, GitHub, Reddit, Stripe, X, and
+            others.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
