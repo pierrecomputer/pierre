@@ -51,6 +51,7 @@
       "@babel/core": "7.28.4",
       "@eslint/eslintrc": "3.3.1",
       "@eslint/js": "9.36.0",
+      "@headless-tree/core": "1.6.1",
       "@icons-pack/react-simple-icons": "13.8.0",
       "@next/eslint-plugin-next": "16.0.9",
       "@octokit/app": "16.1.1",

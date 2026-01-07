@@ -44,7 +44,9 @@
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@headless-tree/core": "catalog:"
+  },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",
     "react-dom": "^18.3.1 || ^19.0.0"
