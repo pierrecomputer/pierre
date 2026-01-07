@@ -35,11 +35,6 @@ export function DocsSidebar({
         continue;
       }
 
-      // Skip headings marked to be ignored in TOC
-      // if ('tocIgnore' in element.dataset) {
-      //   continue;
-      // }
-
       const text = element.textContent ?? '';
       const level = parseInt(element.tagName.charAt(1));
       const id = element.id;
@@ -102,16 +97,23 @@ export function DocsSidebar({
 
   // Scroll active nav link into view within the sidebar
   useEffect(() => {
-    if (activeHeading === '' || navRef.current == null) {
+    const nav = navRef.current;
+    if (activeHeading === '' || nav == null) {
       return;
     }
 
-    const activeLink = navRef.current.querySelector(
+    const activeLink = nav.querySelector(
       `a[href="#${CSS.escape(activeHeading)}"]`
     );
 
     if (activeLink instanceof HTMLElement) {
-      activeLink.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // Calculate position to center the link within the sidebar
+      const linkTop = activeLink.offsetTop;
+      const linkHeight = activeLink.offsetHeight;
+      const navHeight = nav.clientHeight;
+      const scrollTarget = linkTop - navHeight / 2 + linkHeight / 2;
+
+      nav.scrollTo({ top: scrollTarget, behavior: 'smooth' });
     }
   }, [activeHeading]);
 
