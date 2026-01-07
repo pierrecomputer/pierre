@@ -1,5 +1,3 @@
-import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
-
 import { ClientPage } from './ClientPage';
 
 const preloadedFileTreeHtml = `<style>
@@ -26,14 +24,8 @@ export default function Home() {
         <h2>Vanilla File Tree</h2>
         <div id="test-file-tree-elem" className="border border-gray-300" />
       </div>
-      <div className="w-2/3">
-        <h2>React SSR File Tree</h2>
-        <FileTreeReact
-          className="border border-gray-300"
-          prerenderedHTML={preloadedFileTreeHtml}
-        />
-      </div>
-      <ClientPage />
+
+      <ClientPage preloadedFileTreeHtml={preloadedFileTreeHtml} />
     </div>
   );
 }
