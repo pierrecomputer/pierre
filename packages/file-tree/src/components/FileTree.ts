@@ -39,11 +39,12 @@ export class FileTree<T> {
       ...options.config,
       features: [syncDataLoaderFeature],
     });
-    console.log('tree', this.tree);
+    console.log('tree', this.__id, this.tree.getItems());
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setOptions(options: FileTreeOptions<T>): void {
-    console.log('setOptions faked for now', options);
+    // todo
   }
 
   private getOrCreateFileTreeContainer(
@@ -93,14 +94,16 @@ export class FileTree<T> {
   }
 
   hydrate({
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     fileTreeContainer,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     prerenderedHTML,
   }: FileTreeHydrationProps): void {
-    console.log('hydrate faked for now', fileTreeContainer, prerenderedHTML);
+    // todo
   }
 
   cleanUp(): void {
-    console.log('cleanUp faked for now');
+    // todo
   }
 
   generateFileTreeFake(): string {
