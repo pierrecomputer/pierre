@@ -61,12 +61,10 @@ export class FileTree {
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
     const output = this.generateFileTreeFake();
-    divWrapper.appendChild(output);
+    divWrapper.innerHTML = output;
   }
 
-  generateFileTreeFake(): HTMLElement {
-    const div = document.createElement('div');
-    div.innerHTML = `File Tree Fake`;
-    return div;
+  generateFileTreeFake(): string {
+    return '<div>File Tree Fake</div>';
   }
 }
