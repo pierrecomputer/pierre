@@ -248,6 +248,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableBackground = false,
       disableFileHeader = false,
       disableLineNumbers = false,
+      disableVirtualizationBuffers = false,
       expandUnchanged = false,
       expansionLineCount = 100,
       hunkSeparators = 'line-info',
@@ -265,6 +266,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableBackground,
       disableFileHeader,
       disableLineNumbers,
+      disableVirtualizationBuffers,
       expandUnchanged,
       expansionLineCount,
       hunkSeparators,
@@ -515,7 +517,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     { code, themeStyles, baseThemeType }: ThemedDiffResult
   ): HunksRenderResult {
-    const { diffStyle, disableFileHeader } = this.getOptionsWithDefaults();
+    const { diffStyle, disableFileHeader, disableVirtualizationBuffers } =
+      this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
@@ -583,33 +586,32 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !unified && fileDiff.type !== 'new' ? deletionsAST : undefined;
     unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
 
-    // FIXME(amadeus): this version of virtualization is probably more
-    // applicable to normie scenarios, so keeping this around for that.  Will
-    // need to figure out how to create these different sorts of APIs
-    // if (renderRange.bufferBefore > 0) {
-    //   const element = createHastElement({
-    //     tagName: 'div',
-    //     properties: {
-    //       'data-virtualized-buffer': 'before',
-    //       style: `height: ${renderRange.bufferBefore}px`,
-    //     },
-    //   });
-    //   unifiedAST?.unshift(element);
-    //   deletionsAST?.unshift(element);
-    //   additionsAST?.unshift(element);
-    // }
-    // if (renderRange.bufferAfter > 0) {
-    //   const element = createHastElement({
-    //     tagName: 'div',
-    //     properties: {
-    //       'data-virtualized-buffer': 'after',
-    //       style: `height: ${renderRange.bufferAfter}px`,
-    //     },
-    //   });
-    //   unifiedAST?.push(element);
-    //   deletionsAST?.push(element);
-    //   additionsAST?.push(element);
-    // }
+    if (!disableVirtualizationBuffers) {
+      if (renderRange.bufferBefore > 0) {
+        const element = createHastElement({
+          tagName: 'div',
+          properties: {
+            'data-virtualized-buffer': 'before',
+            style: `height: ${renderRange.bufferBefore}px`,
+          },
+        });
+        unifiedAST?.unshift(element);
+        deletionsAST?.unshift(element);
+        additionsAST?.unshift(element);
+      }
+      if (renderRange.bufferAfter > 0) {
+        const element = createHastElement({
+          tagName: 'div',
+          properties: {
+            'data-virtualized-buffer': 'after',
+            style: `height: ${renderRange.bufferAfter}px`,
+          },
+        });
+        unifiedAST?.push(element);
+        deletionsAST?.push(element);
+        additionsAST?.push(element);
+      }
+    }
 
     const preNode = this.createPreElement(
       deletionsAST != null && additionsAST != null,

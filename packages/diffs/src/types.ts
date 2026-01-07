@@ -136,6 +136,7 @@ export interface BaseCodeOptions {
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
   disableFileHeader?: boolean;
+  disableVirtualizationBuffers?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
   useCSSClasses?: boolean;

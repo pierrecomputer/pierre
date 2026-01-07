@@ -50,6 +50,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
       theme: DEFAULT_THEMES,
       // FIXME(amadeus): Fix selected lines crashing when scroll out of the window
       enableLineSelection: true,
+      disableVirtualizationBuffers: true,
       diffStyle: 'split',
     },
     private workerManager?: WorkerPoolManager | undefined
