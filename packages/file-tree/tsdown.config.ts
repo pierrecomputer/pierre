@@ -4,7 +4,7 @@ import { type UserConfig, defineConfig } from 'tsdown';
 
 const config: UserConfig = defineConfig([
   {
-    entry: ['src/**/*.ts'],
+    entry: ['src/**/*.ts', 'src/**/*.tsx'],
     loader: {
       '.css': 'text',
     },
