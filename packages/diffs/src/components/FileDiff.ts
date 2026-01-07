@@ -125,6 +125,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
+  protected lastRenderedHeaderHTML: string | undefined;
 
   protected enabled = true;
 
@@ -266,6 +267,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
+    this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
 
@@ -454,6 +456,7 @@ export class FileDiff<LAnnotation = undefined> {
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
+        this.lastRenderedHeaderHTML = undefined;
       }
     }
     fileContainer = this.getOrCreateFileContainer(
@@ -555,10 +558,17 @@ export class FileDiff<LAnnotation = undefined> {
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
+    const previousContainer = this.fileContainer;
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement(DIFFS_TAG_NAME);
+    // NOTE(amadeus): If the container changes, we should reset the rendered
+    // HTML
+    if (previousContainer != null && previousContainer !== this.fileContainer) {
+      this.lastRenderedHeaderHTML = undefined;
+      this.headerElement = undefined;
+    }
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }
@@ -601,18 +611,22 @@ export class FileDiff<LAnnotation = undefined> {
     container: HTMLElement
   ): void {
     this.cleanupErrorWrapper();
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = toHtml(headerAST);
-    const newHeader = tempDiv.firstElementChild;
-    if (!(newHeader instanceof HTMLElement)) {
-      return;
+    const headerHTML = toHtml(headerAST);
+    if (headerHTML !== this.lastRenderedHeaderHTML) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = headerHTML;
+      const newHeader = tempDiv.firstElementChild;
+      if (!(newHeader instanceof HTMLElement)) {
+        return;
+      }
+      if (this.headerElement != null) {
+        container.shadowRoot?.replaceChild(newHeader, this.headerElement);
+      } else {
+        container.shadowRoot?.prepend(newHeader);
+      }
+      this.headerElement = newHeader;
+      this.lastRenderedHeaderHTML = headerHTML;
     }
-    if (this.headerElement != null) {
-      container.shadowRoot?.replaceChild(newHeader, this.headerElement);
-    } else {
-      container.shadowRoot?.prepend(newHeader);
-    }
-    this.headerElement = newHeader;
 
     if (this.isContainerManaged) return;
 

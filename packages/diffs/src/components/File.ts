@@ -85,6 +85,7 @@ export class File<LAnnotation = undefined> {
   private unsafeCSSStyle: HTMLStyleElement | undefined;
   private hoverContent: HTMLElement | undefined;
   private errorWrapper: HTMLElement | undefined;
+  private lastRenderedHeaderHTML: string | undefined;
   private appliedPreAttributes: PrePropertiesConfig | undefined;
 
   private headerElement: HTMLElement | undefined;
@@ -205,6 +206,7 @@ export class File<LAnnotation = undefined> {
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
+    this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
   }
@@ -236,6 +238,7 @@ export class File<LAnnotation = undefined> {
       }
       if ('diffsHeader' in element.dataset) {
         this.headerElement = element;
+        this.lastRenderedHeaderHTML = undefined;
         continue;
       }
     }
@@ -292,6 +295,7 @@ export class File<LAnnotation = undefined> {
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
+        this.lastRenderedHeaderHTML = undefined;
       }
     }
 
@@ -410,18 +414,22 @@ export class File<LAnnotation = undefined> {
     const { file } = this;
     if (file == null) return;
     this.cleanupErrorWrapper();
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = toHtml(headerAST);
-    const newHeader = tempDiv.firstElementChild;
-    if (!(newHeader instanceof HTMLElement)) {
-      return;
+    const headerHTML = toHtml(headerAST);
+    if (headerHTML !== this.lastRenderedHeaderHTML) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = headerHTML;
+      const newHeader = tempDiv.firstElementChild;
+      if (!(newHeader instanceof HTMLElement)) {
+        return;
+      }
+      if (this.headerElement != null) {
+        container.shadowRoot?.replaceChild(newHeader, this.headerElement);
+      } else {
+        container.shadowRoot?.prepend(newHeader);
+      }
+      this.headerElement = newHeader;
+      this.lastRenderedHeaderHTML = headerHTML;
     }
-    if (this.headerElement != null) {
-      container.shadowRoot?.replaceChild(newHeader, this.headerElement);
-    } else {
-      container.shadowRoot?.prepend(newHeader);
-    }
-    this.headerElement = newHeader;
 
     if (this.isContainerManaged) return;
 
@@ -446,10 +454,15 @@ export class File<LAnnotation = undefined> {
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
+    const previousContainer = this.fileContainer;
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement(DIFFS_TAG_NAME);
+    if (previousContainer != null && previousContainer !== this.fileContainer) {
+      this.lastRenderedHeaderHTML = undefined;
+      this.headerElement = undefined;
+    }
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }
