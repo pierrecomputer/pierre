@@ -1,3 +1,10 @@
+import {
+  type TreeConfig,
+  type TreeInstance,
+  createTree,
+  syncDataLoaderFeature,
+} from '@headless-tree/core';
+
 import { FILE_TREE_TAG_NAME } from '../constants';
 import { FileTreeContainerLoaded } from './web-components';
 
@@ -8,15 +15,35 @@ export interface FileTreeRenderProps {
   containerWrapper?: HTMLElement;
 }
 
-export class FileTree {
+export interface FileTreeHydrationProps {
+  fileTreeContainer: HTMLElement;
+  prerenderedHTML?: string;
+}
+
+export interface FileTreeOptions<T> {
+  // probably change the name here once i know a better one
+  config: Omit<TreeConfig<T>, 'features'>;
+}
+
+export class FileTree<T> {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
   readonly __id: number = ++instanceId;
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
+  private tree: TreeInstance<T> | undefined;
 
-  constructor() {
+  constructor(public options: FileTreeOptions<T>) {
     this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
+    this.tree = createTree({
+      ...options.config,
+      features: [syncDataLoaderFeature],
+    });
+    console.log('tree', this.tree);
+  }
+
+  setOptions(options: FileTreeOptions<T>): void {
+    console.log('setOptions faked for now', options);
   }
 
   private getOrCreateFileTreeContainer(
@@ -63,6 +90,17 @@ export class FileTree {
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
     const output = this.generateFileTreeFake();
     divWrapper.innerHTML = output;
+  }
+
+  hydrate({
+    fileTreeContainer,
+    prerenderedHTML,
+  }: FileTreeHydrationProps): void {
+    console.log('hydrate faked for now', fileTreeContainer, prerenderedHTML);
+  }
+
+  cleanUp(): void {
+    console.log('cleanUp faked for now');
   }
 
   generateFileTreeFake(): string {
