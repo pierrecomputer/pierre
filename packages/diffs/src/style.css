@@ -69,6 +69,7 @@
   pre,
   code,
   [data-error-wrapper] {
+    isolation: isolate;
     margin: 0;
     padding: 0;
     display: block;
