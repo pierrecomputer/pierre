@@ -103,7 +103,7 @@ export class VirtualizedFileDiff<
     }
   }
 
-  virtaulizedRender({ renderWindow, fileContainer }: RenderProps): void {
+  virtualizedRender({ renderWindow, fileContainer }: RenderProps): void {
     const { fileDiff } = this;
     const renderRange = this.computeRenderRangeFromWindow(renderWindow);
     if (

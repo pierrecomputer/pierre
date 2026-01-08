@@ -190,14 +190,14 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
           element: fileContainer,
           instance: instance,
         });
-        instance.virtaulizedRender({
+        instance.virtualizedRender({
           fileContainer,
           renderWindow: { top, bottom },
         });
         prevElement = fileContainer;
       } else {
         prevElement = rendered.element;
-        rendered.instance.virtaulizedRender({
+        rendered.instance.virtualizedRender({
           renderWindow: { top, bottom },
         });
       }
