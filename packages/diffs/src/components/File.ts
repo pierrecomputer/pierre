@@ -33,11 +33,11 @@ import type {
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
-import { createCodeNode } from '../utils/createCodeNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
@@ -393,7 +393,7 @@ export class File<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
     // Create code elements and insert HTML content
-    this.code = createCodeNode();
+    this.code = getOrCreateCodeNode({ code: this.code });
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
     pre.replaceChildren(this.code);
     this.injectUnsafeCSS();

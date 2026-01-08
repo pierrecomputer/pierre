@@ -43,11 +43,11 @@ import { areFilesEqual } from '../utils/areFilesEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
-import { createCodeNode } from '../utils/createCodeNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -103,6 +103,9 @@ export class FileDiff<LAnnotation = undefined> {
   protected fileContainer: HTMLElement | undefined;
   protected spriteSVG: SVGElement | undefined;
   protected pre: HTMLPreElement | undefined;
+  protected codeUnified: HTMLElement | undefined;
+  protected codeDeletions: HTMLElement | undefined;
+  protected codeAdditions: HTMLElement | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected hoverContent: HTMLElement | undefined;
 
@@ -265,6 +268,9 @@ export class FileDiff<LAnnotation = undefined> {
       this.pre.innerHTML = '';
       this.pre = undefined;
     }
+    this.codeUnified = undefined;
+    this.codeDeletions = undefined;
+    this.codeAdditions = undefined;
     this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
     this.lastRenderedHeaderHTML = undefined;
@@ -318,6 +324,9 @@ export class FileDiff<LAnnotation = undefined> {
         this.unsafeCSSStyle = element;
         continue;
       }
+    }
+    if (this.pre != null) {
+      this.syncCodeNodesFromPre(this.pre);
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
@@ -595,6 +604,9 @@ export class FileDiff<LAnnotation = undefined> {
     if (this.pre == null) {
       this.pre = document.createElement('pre');
       this.appliedPreAttributes = undefined;
+      this.codeUnified = undefined;
+      this.codeDeletions = undefined;
+      this.codeAdditions = undefined;
       shadowRoot.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
@@ -604,6 +616,24 @@ export class FileDiff<LAnnotation = undefined> {
       this.appliedPreAttributes = undefined;
     }
     return this.pre;
+  }
+
+  private syncCodeNodesFromPre(pre: HTMLPreElement): void {
+    this.codeUnified = undefined;
+    this.codeDeletions = undefined;
+    this.codeAdditions = undefined;
+    for (const child of Array.from(pre.children)) {
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      if ('unified' in child.dataset) {
+        this.codeUnified = child;
+      } else if ('deletions' in child.dataset) {
+        this.codeDeletions = child;
+      } else if ('additions' in child.dataset) {
+        this.codeAdditions = child;
+      }
+    }
   }
 
   private applyHeaderToDOM(
@@ -678,36 +708,50 @@ export class FileDiff<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
 
+    let shouldReplace = false;
     let codeDeletions: HTMLElement | undefined;
     let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
     const codeElements: HTMLElement[] = [];
     if (result.unifiedAST != null) {
-      const codeUnified = createCodeNode({ columnType: 'unified' });
-      codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
+      shouldReplace = this.codeUnified == null;
+      this.codeUnified = getOrCreateCodeNode({
+        code: this.codeUnified,
+        columnType: 'unified',
+      });
+      this.codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
         result.unifiedAST
       );
-      codeElements.push(codeUnified);
+      codeElements.push(this.codeUnified);
     } else {
       if (result.deletionsAST != null) {
-        codeDeletions = createCodeNode({ columnType: 'deletions' });
-        codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
+        shouldReplace = shouldReplace || this.codeDeletions == null;
+        this.codeDeletions = getOrCreateCodeNode({
+          code: this.codeDeletions,
+          columnType: 'deletions',
+        });
+        this.codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
           result.deletionsAST
         );
-        codeElements.push(codeDeletions);
+        codeElements.push(this.codeDeletions);
       }
       if (result.additionsAST != null) {
-        codeAdditions = createCodeNode({ columnType: 'additions' });
-        codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
+        shouldReplace = shouldReplace || this.codeAdditions == null;
+        this.codeAdditions = getOrCreateCodeNode({
+          code: this.codeAdditions,
+          columnType: 'additions',
+        });
+        this.codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
           result.additionsAST
         );
-        codeElements.push(codeAdditions);
+        codeElements.push(this.codeAdditions);
       }
     }
-    if (codeElements.length > 0) {
-      pre.replaceChildren(...codeElements);
-    } else {
+
+    if (codeElements.length === 0) {
       pre.textContent = '';
+    } else if (shouldReplace) {
+      pre.replaceChildren(...codeElements);
     }
 
     this.injectUnsafeCSS();
