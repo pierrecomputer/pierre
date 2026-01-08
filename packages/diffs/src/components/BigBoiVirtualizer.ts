@@ -56,6 +56,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
     private workerManager?: WorkerPoolManager | undefined
   ) {
     this.stickyOffset = document.createElement('div');
+    this.stickyOffset.style.contain = 'layout size';
     this.stickyContainer = document.createElement('div');
     this.stickyContainer.style.contain = 'strict';
     this.stickyContainer.style.position = 'sticky';
