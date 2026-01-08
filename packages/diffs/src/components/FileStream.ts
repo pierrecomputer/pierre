@@ -9,12 +9,12 @@ import type {
   ThemeTypes,
   ThemedToken,
 } from '../types';
-import { createCodeNode } from '../utils/createCodeNode';
 import { createRowNodes } from '../utils/createRowNodes';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
 import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
+import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
@@ -135,7 +135,7 @@ export class FileStream {
     pre.innerHTML = '';
 
     this.pre = pre;
-    this.code = createCodeNode({ pre });
+    this.code = getOrCreateCodeNode({ code: this.code, pre });
     this.abortController?.abort();
     this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;

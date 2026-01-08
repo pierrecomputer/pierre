@@ -1,13 +1,18 @@
 interface CreateCodeNodeProps {
   pre?: HTMLPreElement;
+  code?: HTMLElement;
   columnType?: 'additions' | 'deletions' | 'unified';
 }
 
-export function createCodeNode({
+export function getOrCreateCodeNode({
+  code,
   pre,
   columnType,
 }: CreateCodeNodeProps = {}): HTMLElement {
-  const code = document.createElement('code');
+  if (code != null) {
+    return code;
+  }
+  code = document.createElement('code');
   code.dataset.code = '';
   if (columnType != null) {
     code.dataset[columnType] = '';
