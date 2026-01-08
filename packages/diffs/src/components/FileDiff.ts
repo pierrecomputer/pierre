@@ -134,9 +134,8 @@ export class FileDiff<LAnnotation = undefined> {
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    private workerManager?: WorkerPoolManager | undefined,
-    // NOTE(amadeus): Temp hack while we use this component in a react context
-    private isContainerManaged = false
+    protected workerManager?: WorkerPoolManager | undefined,
+    protected isContainerManaged = false
   ) {
     this.hunksRenderer = new DiffHunksRenderer(
       {
