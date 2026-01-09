@@ -122,7 +122,7 @@ code {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -141,7 +141,7 @@ code {
   min-width: 0;
   min-height: 0;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  overflow: hidden;
+  overflow-anchor: none;
 }
 
 .wrapper[data-diff] {
@@ -151,7 +151,6 @@ code {
   width: auto;
   height: auto;
   display: block;
-  padding-top: 50px;
 }
 
 [data-commit-metadata] {
@@ -188,7 +187,6 @@ code {
 }
 
 diffs-container {
-  content-visibility: auto;
   margin-top: 2px;
 }
 

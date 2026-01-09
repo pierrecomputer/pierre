@@ -6,17 +6,12 @@ import {
   LINE_HEIGHT,
   LINE_HUNK_COUNT,
 } from '../constants';
-import type { FileDiffMetadata, RenderRange } from '../types';
+import type { FileDiffMetadata, RenderRange, RenderWindow } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import type { WorkerPoolManager } from '../worker';
 import { FileDiff, type FileDiffOptions } from './FileDiff';
 
 export type { FileDiffOptions };
-
-interface RenderWindow {
-  top: number;
-  bottom: number;
-}
 
 interface RenderProps {
   fileContainer?: HTMLElement;
