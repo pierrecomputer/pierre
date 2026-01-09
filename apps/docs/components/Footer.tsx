@@ -24,6 +24,12 @@ export default function Footer() {
           >
             Docs
           </Link>
+          <Link
+            href="/theme"
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+          >
+            Theme
+          </Link>
         </nav>
       </div>
     </footer>
