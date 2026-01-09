@@ -123,6 +123,8 @@ export class FileRenderer<LAnnotation = undefined> {
       // pre-rendered HTML, otherwise one should not be hydrating
       highlighted: true,
       result: cache?.result,
+      // FIXME(amadeus): Add support for renderRanges
+      renderRange: undefined,
     };
     if (
       this.workerManager?.isWorkingPool() === true &&
@@ -166,7 +168,12 @@ export class FileRenderer<LAnnotation = undefined> {
     }
     const cache = this.workerManager?.getFileResultCache(file);
     if (cache != null && this.renderCache == null) {
-      this.renderCache = { file, highlighted: true, ...cache };
+      this.renderCache = {
+        file,
+        highlighted: true,
+        renderRange: undefined,
+        ...cache,
+      };
     }
     const { options, forceRender } = this.getRenderOptions(file);
     this.renderCache ??= {
@@ -174,6 +181,7 @@ export class FileRenderer<LAnnotation = undefined> {
       highlighted: false,
       options,
       result: undefined,
+      renderRange: undefined,
     };
     if (this.workerManager?.isWorkingPool() === true) {
       this.renderCache.result ??= this.workerManager.getPlainFileAST(file);
@@ -211,6 +219,7 @@ export class FileRenderer<LAnnotation = undefined> {
           options,
           highlighted: hasLangs,
           result,
+          renderRange: undefined,
         };
       }
 
@@ -379,6 +388,7 @@ export class FileRenderer<LAnnotation = undefined> {
       options,
       highlighted: true,
       result,
+      renderRange: undefined,
     };
 
     if (triggerRenderUpdate) {

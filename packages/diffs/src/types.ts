@@ -351,6 +351,7 @@ export interface RenderedFileASTCache {
   highlighted: boolean;
   options: RenderFileOptions;
   result: ThemedFileResult | undefined;
+  renderRange: RenderRange | undefined;
 }
 
 export interface RenderedDiffASTCache {
@@ -358,6 +359,7 @@ export interface RenderedDiffASTCache {
   highlighted: boolean;
   options: RenderDiffOptions;
   result: ThemedDiffResult | undefined;
+  renderRange: RenderRange | undefined;
 }
 
 export interface RenderRange {
