@@ -5,8 +5,10 @@ import {
   type DiffsThemeNames,
   File,
   type FileContents,
-  FileDiff,
+  type FileDiff,
   FileStream,
+  LittleBoiVirtualizer,
+  LittleVirtualizedFileDiff,
   type ParsedPatch,
   isHighlighterNull,
   parseDiffFromFile,
@@ -79,6 +81,8 @@ const poolManager = (() => {
   return manager;
 })();
 
+const intersectionObserver = new LittleBoiVirtualizer(globalThis.document);
+
 function startStreaming() {
   const container = document.getElementById('wrapper');
   if (container == null) return;
@@ -126,7 +130,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
-      const instance = new FileDiff<LineCommentMetadata>(
+      const instance = new LittleVirtualizedFileDiff<LineCommentMetadata>(
+        fileDiff,
         {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           diffStyle: unified ? 'unified' : 'split',
@@ -242,14 +247,14 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           // },
           // __debugMouseEvents: 'click',
         },
+        intersectionObserver,
         manager
       );
 
       const fileContainer = document.createElement(DIFFS_TAG_NAME);
       wrapper.appendChild(fileContainer);
       const start = Date.now();
-      instance.render({
-        fileDiff,
+      instance.virtualizedRender({
         lineAnnotations: fileAnnotations,
         fileContainer,
       });
