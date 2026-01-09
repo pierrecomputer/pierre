@@ -744,8 +744,6 @@
     grid-column: 1 / 2;
     box-sizing: content-box;
     text-align: right;
-    position: sticky;
-    left: 0;
     user-select: none;
     background-color: var(--diffs-bg);
     color: var(--diffs-fg-number);
@@ -756,6 +754,11 @@
     );
     padding-left: 2ch;
     border-right: var(--diffs-gap-style, 1px solid var(--diffs-bg));
+  }
+
+  [data-overflow='scroll'] [data-column-number] {
+    position: sticky;
+    left: 0;
   }
 
   [data-disable-line-numbers] {
