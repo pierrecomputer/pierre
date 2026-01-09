@@ -236,11 +236,10 @@ export function ShikiThemes({
         <p className="text-muted-foreground text-sm">
           Love the Pierre themes?{' '}
           <Link
-            href="https://marketplace.visualstudio.com/items?itemName=pierre-computer-co.pierre-vscode-theme"
-            target="_blank"
+            href="/theme"
             className="text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-colors"
           >
-            Install our Pierre VS Code Theme pack
+            Install our Pierre Theme pack
           </Link>{' '}
           with light and dark flavors.
         </p>
