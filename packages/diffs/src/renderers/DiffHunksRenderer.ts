@@ -378,7 +378,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         );
         this.renderCache.renderRange = renderRange;
       }
-      if (!this.renderCache.highlighted || forceRender) {
+      if (
+        // We should only attempt to kick off the worker highlighter if there
+        // are lines to render
+        renderRange.totalLines > 0 &&
+        (!this.renderCache.highlighted || forceRender)
+      ) {
         this.workerManager.highlightDiffAST(this, diff);
       }
     } else {

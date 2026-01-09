@@ -1,6 +1,7 @@
 import { DEFAULT_THEMES, DIFFS_TAG_NAME, FILE_GAP } from '../constants';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import type { ParsedPatch } from '../types';
+import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import type { WorkerPoolManager } from '../worker';
 import type { FileDiffOptions } from './FileDiff';
 import { VirtualizedFileDiff } from './VirtualizedFileDiff';
@@ -145,6 +146,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
       scrollHeight,
       containerOffset,
       fitPerfectly,
+      overscrollMultiplier: OVERSCROLL_MULTIPLIER,
     });
     this.lastRenderedScrollY = scrollY;
     for (const [renderedInstance, item] of Array.from(this.rendered)) {
@@ -276,53 +278,6 @@ function cleanupRenderedItem<LAnnotations>(item: RenderedItems<LAnnotations>) {
   if (item.element.shadowRoot != null) {
     item.element.shadowRoot.innerHTML = '';
   }
-}
-
-interface WindowFromScrollPositionProps {
-  scrollY: number;
-  height: number;
-  scrollHeight: number;
-  containerOffset: number;
-  fitPerfectly: boolean;
-}
-
-interface VirtualWindowSpecs {
-  top: number;
-  bottom: number;
-}
-
-function createWindowFromScrollPosition({
-  scrollY,
-  scrollHeight,
-  height,
-  containerOffset,
-  fitPerfectly,
-}: WindowFromScrollPositionProps): VirtualWindowSpecs {
-  const windowHeight = height * OVERSCROLL_MULTIPLIER;
-  if (windowHeight > scrollHeight || fitPerfectly) {
-    return {
-      top: Math.max(scrollY - containerOffset, 0),
-      bottom:
-        scrollY + (fitPerfectly ? height : windowHeight) - containerOffset,
-    };
-  }
-  const scrollCenter = scrollY + height / 2;
-  let top = scrollCenter - windowHeight / 2;
-  let bottom = top + windowHeight;
-  if (top < 0) {
-    top = 0;
-    bottom = Math.min(windowHeight, scrollHeight);
-  } else if (bottom > scrollHeight) {
-    bottom = scrollHeight;
-    top = Math.max(bottom - windowHeight, 0);
-  }
-  top = Math.floor(Math.max(top - containerOffset, 0));
-  return {
-    top,
-    bottom: Math.ceil(
-      Math.max(Math.min(bottom, scrollHeight) - containerOffset, top)
-    ),
-  };
 }
 
 function getInstanceSpecs<LAnnotations>(

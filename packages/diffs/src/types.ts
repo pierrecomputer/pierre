@@ -368,3 +368,13 @@ export interface RenderRange {
   bufferBefore: number;
   bufferAfter: number;
 }
+
+export interface RenderWindow {
+  top: number;
+  bottom: number;
+}
+
+export interface VirtualWindowSpecs {
+  top: number;
+  bottom: number;
+}
