@@ -1,5 +1,6 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
+import { areRenderRangesEqual } from 'src/utils/areRenderRangesEqual';
 
 import { DEFAULT_THEMES } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
@@ -40,7 +41,6 @@ import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import { createHastElement } from '../utils/hast_utils';
-import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import type { WorkerPoolManager } from '../worker';
 
@@ -304,6 +304,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       highlighted: true,
       options,
       result: cache?.result,
+      renderRange: undefined,
     };
     if (
       this.workerManager?.isWorkingPool() === true &&
@@ -349,7 +350,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     const cache = this.workerManager?.getDiffResultCache(diff);
     if (cache != null && this.renderCache == null) {
-      this.renderCache = { diff, highlighted: true, ...cache };
+      this.renderCache = {
+        diff,
+        highlighted: true,
+        renderRange: undefined,
+        ...cache,
+      };
     }
     const { options, forceRender } = this.getRenderOptions(diff);
     this.renderCache ??= {
@@ -357,17 +363,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       highlighted: false,
       options,
       result: undefined,
+      renderRange: undefined,
     };
     if (this.workerManager?.isWorkingPool() === true) {
       if (
         this.renderCache.result == null ||
-        (!this.renderCache.highlighted && !isDefaultRenderRange(renderRange))
+        (!this.renderCache.highlighted &&
+          !areRenderRangesEqual(this.renderCache.renderRange, renderRange))
       ) {
         this.renderCache.result = this.workerManager.getPlainDiffAST(
           diff,
           renderRange.startingLine,
           renderRange.totalLines
         );
+        this.renderCache.renderRange = renderRange;
       }
       if (!this.renderCache.highlighted || forceRender) {
         this.workerManager.highlightDiffAST(this, diff);
@@ -400,6 +409,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           options,
           highlighted: hasLangs,
           result,
+          renderRange: undefined,
         };
       }
 
@@ -502,6 +512,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       options,
       highlighted: true,
       result,
+      renderRange: undefined,
     };
     if (triggerRenderUpdate) {
       this.onRenderUpdate?.();
