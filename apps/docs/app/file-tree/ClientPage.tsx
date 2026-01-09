@@ -1,25 +1,29 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 'use client';
 
-import { FileTree, type FileTreeOptions } from '@pierre/file-tree';
+import {
+  type DemoItem,
+  FileTree,
+  type FileTreeOptions,
+  syncDataLoader,
+} from '@pierre/file-tree';
 import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
 import { useEffect, useRef } from 'react';
 
-const sharedFileTreeOptions: FileTreeOptions<any> = {
+const sharedFileTreeOptions: FileTreeOptions<DemoItem> = {
   config: {
-    rootItemId: 'root-item',
-    getItemName: (item: any) => item.itemName,
-    isItemFolder: (_item) => true,
-    dataLoader: {
-      getItem: (itemId) => {
-        return {
-          id: itemId,
-          itemName: `item ${itemId}`,
-          isFolder: false,
-          childrenIds: [],
-        };
-      },
-      getChildren: (_itemId) => [],
+    initialState: {
+      expandedItems: ['packages', 'file-tree', 'file-tree-src'],
+      selectedItems: ['file-tree-ts', 'file-tree-react-tsx'],
     },
+    rootItemId: 'root',
+
+    getItemName: (item) => item.getItemData().name,
+    isItemFolder: (item) => {
+      const children = item.getItemData()?.children;
+      return children != null;
+    },
+    dataLoader: syncDataLoader,
   },
 };
 
