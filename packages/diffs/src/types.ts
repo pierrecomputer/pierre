@@ -58,33 +58,44 @@ export interface ParsedPatch {
 
 export interface ContextContent {
   type: 'context';
-  lines: string[];
+  lines: number;
   noEOFCR: boolean;
+  additionLineIndex: number;
+  deletionLineIndex: number;
 }
 
 export interface ChangeContent {
   type: 'change';
-  deletions: string[];
-  additions: string[];
+  deletions: number;
+  deletionLineIndex: number;
+  additions: number;
+  additionLineIndex: number;
   noEOFCRDeletions: boolean;
   noEOFCRAdditions: boolean;
 }
 
 export interface Hunk {
   collapsedBefore: number;
-  splitLineStart: number;
-  splitLineCount: number;
-  unifiedLineStart: number;
-  unifiedLineCount: number;
-  additionCount: number;
+
   additionStart: number;
+  additionCount: number;
   additionLines: number;
-  deletionCount: number;
+  additionLineIndex: number;
+
   deletionStart: number;
+  deletionCount: number;
   deletionLines: number;
+  deletionLineIndex: number;
+
   hunkContent: (ContextContent | ChangeContent)[];
   hunkContext: string | undefined;
   hunkSpecs: string | undefined;
+
+  splitLineStart: number;
+  splitLineCount: number;
+
+  unifiedLineStart: number;
+  unifiedLineCount: number;
 }
 
 export interface FileDiffMetadata {
@@ -95,10 +106,11 @@ export interface FileDiffMetadata {
   hunks: Hunk[];
   splitLineCount: number;
   unifiedLineCount: number;
-  oldMode?: string;
+  prevMode?: string;
   mode?: string;
-  oldLines?: string[];
-  newLines?: string[];
+  isPartial: boolean;
+  deletionLines: string[];
+  additionLines: string[];
   cacheKey?: string;
 }
 
@@ -124,6 +136,7 @@ export interface BaseCodeOptions {
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
   disableFileHeader?: boolean;
+  disableVirtualizationBuffers?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
   useCSSClasses?: boolean;
@@ -168,8 +181,8 @@ export interface PrePropertiesConfig
 }
 
 export interface RenderHeaderMetadataProps {
-  oldFile?: FileContents;
-  newFile?: FileContents;
+  deletionFile?: FileContents;
+  additionFile?: FileContents;
   fileDiff?: FileDiffMetadata;
 }
 
@@ -222,9 +235,7 @@ export interface LineInfo {
 }
 
 export interface SharedRenderState {
-  lineInfo:
-    | Record<number, LineInfo | undefined>
-    | ((shikiLineNumber: number) => LineInfo);
+  lineInfo: (LineInfo | undefined)[] | ((shikiLineNumber: number) => LineInfo);
 }
 
 export interface AnnotationSpan {
@@ -284,14 +295,6 @@ export interface HunkData {
   };
 }
 
-export interface ChangeHunk {
-  diffGroupStartIndex: number;
-  deletionStartIndex: number;
-  additionStartIndex: number;
-  deletionLines: string[];
-  additionLines: string[];
-}
-
 export type AnnotationLineMap<LAnnotation> = Record<
   number,
   DiffLineAnnotation<LAnnotation>[] | undefined
@@ -299,28 +302,27 @@ export type AnnotationLineMap<LAnnotation> = Record<
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
-export interface RenderDiffFilesResult {
-  oldLines: ElementContent[];
-  newLines: ElementContent[];
-  hunks?: undefined;
-}
-
-export interface RenderDiffHunksResult {
-  hunks: RenderDiffFilesResult[];
-  oldLines?: undefined;
-  newLines?: undefined;
-}
-
 export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
+export interface RenderDiffFilesResult {
+  deletionLines: ElementContent[];
+  additionLines: ElementContent[];
+}
+
 export interface ThemedDiffResult {
-  code: RenderDiffFilesResult | RenderDiffHunksResult;
+  code: RenderDiffFilesResult;
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
+}
+
+export interface ForcePlainTextOptions {
+  forcePlainText: boolean;
+  startingLine?: number;
+  totalLines?: number;
 }
 
 export interface RenderFileOptions {
@@ -349,6 +351,7 @@ export interface RenderedFileASTCache {
   highlighted: boolean;
   options: RenderFileOptions;
   result: ThemedFileResult | undefined;
+  renderRange: RenderRange | undefined;
 }
 
 export interface RenderedDiffASTCache {
@@ -356,4 +359,22 @@ export interface RenderedDiffASTCache {
   highlighted: boolean;
   options: RenderDiffOptions;
   result: ThemedDiffResult | undefined;
+  renderRange: RenderRange | undefined;
+}
+
+export interface RenderRange {
+  startingLine: number;
+  totalLines: number;
+  bufferBefore: number;
+  bufferAfter: number;
+}
+
+export interface RenderWindow {
+  top: number;
+  bottom: number;
+}
+
+export interface VirtualWindowSpecs {
+  top: number;
+  bottom: number;
 }

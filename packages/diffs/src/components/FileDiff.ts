@@ -34,16 +34,20 @@ import type {
   FileDiffMetadata,
   HunkData,
   HunkSeparators,
+  PrePropertiesConfig,
   RenderHeaderMetadataCallback,
+  RenderRange,
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
+import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
-import { createCodeNode } from '../utils/createCodeNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -58,6 +62,7 @@ export interface FileDiffRenderProps<LAnnotation> {
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  renderRange?: RenderRange;
 }
 
 export interface FileDiffHydrationProps<LAnnotation>
@@ -93,37 +98,44 @@ export class FileDiff<LAnnotation = undefined> {
   // properly loaded
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
-  readonly __id: number = ++instanceId;
+  readonly __id: string = `file-diff:${++instanceId}`;
 
-  private fileContainer: HTMLElement | undefined;
-  private spriteSVG: SVGElement | undefined;
-  private pre: HTMLPreElement | undefined;
-  private unsafeCSSStyle: HTMLStyleElement | undefined;
-  private hoverContent: HTMLElement | undefined;
+  protected fileContainer: HTMLElement | undefined;
+  protected spriteSVG: SVGElement | undefined;
+  protected pre: HTMLPreElement | undefined;
+  protected codeUnified: HTMLElement | undefined;
+  protected codeDeletions: HTMLElement | undefined;
+  protected codeAdditions: HTMLElement | undefined;
+  protected unsafeCSSStyle: HTMLStyleElement | undefined;
+  protected hoverContent: HTMLElement | undefined;
 
-  private headerElement: HTMLElement | undefined;
-  private headerMetadata: HTMLElement | undefined;
-  private customHunkElements: HTMLElement[] = [];
-  private errorWrapper: HTMLElement | undefined;
+  protected headerElement: HTMLElement | undefined;
+  protected headerMetadata: HTMLElement | undefined;
+  protected customHunkElements: HTMLElement[] = [];
+  protected errorWrapper: HTMLElement | undefined;
 
-  private hunksRenderer: DiffHunksRenderer<LAnnotation>;
-  private resizeManager: ResizeManager;
-  private scrollSyncManager: ScrollSyncManager;
-  private mouseEventManager: MouseEventManager<'diff'>;
-  private lineSelectionManager: LineSelectionManager;
+  protected hunksRenderer: DiffHunksRenderer<LAnnotation>;
+  protected resizeManager: ResizeManager;
+  protected scrollSyncManager: ScrollSyncManager;
+  protected mouseEventManager: MouseEventManager<'diff'>;
+  protected lineSelectionManager: LineSelectionManager;
 
-  private annotationElements: HTMLElement[] = [];
-  private lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
+  protected annotationElements: HTMLElement[] = [];
+  protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
 
-  private oldFile: FileContents | undefined;
-  private newFile: FileContents | undefined;
-  private fileDiff: FileDiffMetadata | undefined;
+  protected deletionFile: FileContents | undefined;
+  protected additionFile: FileContents | undefined;
+  protected fileDiff: FileDiffMetadata | undefined;
+  protected renderRange: RenderRange | undefined;
+  protected appliedPreAttributes: PrePropertiesConfig | undefined;
+  protected lastRenderedHeaderHTML: string | undefined;
+
+  protected enabled = true;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    private workerManager?: WorkerPoolManager | undefined,
-    // NOTE(amadeus): Temp hack while we use this component in a react context
-    private isContainerManaged = false
+    protected workerManager?: WorkerPoolManager | undefined,
+    protected isContainerManaged = false
   ) {
     this.hunksRenderer = new DiffHunksRenderer(
       {
@@ -152,6 +164,7 @@ export class FileDiff<LAnnotation = undefined> {
       pluckLineSelectionOptions(options)
     );
     this.workerManager?.subscribeToThemeChanges(this);
+    this.enabled = true;
   }
 
   private handleHighlightRender = (): void => {
@@ -232,31 +245,54 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineSelectionManager.setSelection(range);
   }
 
-  cleanUp(): void {
-    this.hunksRenderer.cleanUp();
+  cleanUp(recycle: boolean = false): void {
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.lineSelectionManager.cleanUp();
     this.workerManager?.unsubscribeToThemeChanges(this);
-    this.workerManager = undefined;
-
-    // Clean up the data
-    this.fileDiff = undefined;
-    this.oldFile = undefined;
-    this.newFile = undefined;
+    this.renderRange = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
       this.fileContainer?.parentNode?.removeChild(this.fileContainer);
     }
     if (this.fileContainer?.shadowRoot != null) {
+      // Manually help garbage collection
       this.fileContainer.shadowRoot.innerHTML = '';
     }
     this.fileContainer = undefined;
-    this.pre = undefined;
+    // Manually help garbage collection
+    if (this.pre != null) {
+      this.pre.innerHTML = '';
+      this.pre = undefined;
+    }
+    this.codeUnified = undefined;
+    this.codeDeletions = undefined;
+    this.codeAdditions = undefined;
+    this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
+    this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
+    this.spriteSVG = undefined;
+
+    if (recycle) {
+      this.hunksRenderer.recycle();
+    } else {
+      this.hunksRenderer.cleanUp();
+      this.workerManager = undefined;
+      // Clean up the data
+      this.fileDiff = undefined;
+      this.deletionFile = undefined;
+      this.additionFile = undefined;
+    }
+
+    this.enabled = false;
+  }
+
+  virtualizedSetup(): void {
+    this.enabled = true;
+    this.workerManager?.subscribeToThemeChanges(this);
   }
 
   hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
@@ -288,6 +324,9 @@ export class FileDiff<LAnnotation = undefined> {
         continue;
       }
     }
+    if (this.pre != null) {
+      this.syncCodeNodesFromPre(this.pre);
+    }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
       this.render(props);
@@ -299,8 +338,8 @@ export class FileDiff<LAnnotation = undefined> {
       delete this.pre.dataset.dehydrated;
 
       this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
-      this.newFile = newFile;
-      this.oldFile = oldFile;
+      this.additionFile = newFile;
+      this.deletionFile = oldFile;
       this.fileDiff =
         fileDiff ??
         (oldFile != null && newFile != null
@@ -323,14 +362,20 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   rerender(): void {
-    if (this.fileDiff == null && this.newFile == null && this.oldFile == null) {
+    if (
+      !this.enabled ||
+      (this.fileDiff == null &&
+        this.additionFile == null &&
+        this.deletionFile == null)
+    ) {
       return;
     }
     this.render({
-      oldFile: this.oldFile,
-      newFile: this.newFile,
+      oldFile: this.deletionFile,
+      newFile: this.additionFile,
       fileDiff: this.fileDiff,
       forceRender: true,
+      renderRange: this.renderRange,
     });
   }
 
@@ -354,18 +399,27 @@ export class FileDiff<LAnnotation = undefined> {
     lineAnnotations,
     fileContainer,
     containerWrapper,
+    renderRange,
   }: FileDiffRenderProps<LAnnotation>): void {
+    if (!this.enabled) {
+      // NOTE(amadeus): May need to be a silent failure? Making it loud for now
+      // to better understand it
+      throw new Error(
+        'FileDiff.render: attempting to call render after cleaned up'
+      );
+    }
     const filesDidChange =
       oldFile != null &&
       newFile != null &&
-      (!areFilesEqual(oldFile, this.oldFile) ||
-        !areFilesEqual(newFile, this.newFile));
+      (!areFilesEqual(oldFile, this.deletionFile) ||
+        !areFilesEqual(newFile, this.additionFile));
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
     if (
+      areRenderRangesEqual(renderRange, this.renderRange) &&
       !forceRender &&
       !annotationsChanged &&
       // If using the fileDiff API, lets check to see if they are equal to
@@ -378,8 +432,9 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
 
-    this.oldFile = oldFile;
-    this.newFile = newFile;
+    this.renderRange = renderRange;
+    this.deletionFile = oldFile;
+    this.additionFile = newFile;
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
     } else if (oldFile != null && newFile != null && filesDidChange) {
@@ -409,6 +464,7 @@ export class FileDiff<LAnnotation = undefined> {
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
+        this.lastRenderedHeaderHTML = undefined;
       }
     }
     fileContainer = this.getOrCreateFileContainer(
@@ -417,7 +473,10 @@ export class FileDiff<LAnnotation = undefined> {
     );
 
     try {
-      const hunksResult = this.hunksRenderer.renderDiff(this.fileDiff);
+      const hunksResult = this.hunksRenderer.renderDiff(
+        this.fileDiff,
+        renderRange
+      );
       if (hunksResult == null) {
         if (this.workerManager != null && !this.workerManager.isInitialized()) {
           void this.workerManager.initialize().then(() => this.rerender());
@@ -435,6 +494,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderHoverUtility();
     } catch (error: unknown) {
       if (error instanceof Error) {
+        console.error(error);
         this.applyErrorToDOM(error, fileContainer);
       }
     }
@@ -502,14 +562,21 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private getOrCreateFileContainer(
+  getOrCreateFileContainer(
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
+    const previousContainer = this.fileContainer;
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement(DIFFS_TAG_NAME);
+    // NOTE(amadeus): If the container changes, we should reset the rendered
+    // HTML
+    if (previousContainer != null && previousContainer !== this.fileContainer) {
+      this.lastRenderedHeaderHTML = undefined;
+      this.headerElement = undefined;
+    }
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }
@@ -530,17 +597,42 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private getOrCreatePreNode(container: HTMLElement): HTMLPreElement {
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
-      container.shadowRoot?.appendChild(this.pre);
+      this.appliedPreAttributes = undefined;
+      this.codeUnified = undefined;
+      this.codeDeletions = undefined;
+      this.codeAdditions = undefined;
+      shadowRoot.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
-    else if (this.pre.parentNode !== container) {
-      container.shadowRoot?.appendChild(this.pre);
+    else if (this.pre.parentNode !== shadowRoot) {
+      shadowRoot.appendChild(this.pre);
+      this.appliedPreAttributes = undefined;
     }
     return this.pre;
+  }
+
+  private syncCodeNodesFromPre(pre: HTMLPreElement): void {
+    this.codeUnified = undefined;
+    this.codeDeletions = undefined;
+    this.codeAdditions = undefined;
+    for (const child of Array.from(pre.children)) {
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      if ('unified' in child.dataset) {
+        this.codeUnified = child;
+      } else if ('deletions' in child.dataset) {
+        this.codeDeletions = child;
+      } else if ('additions' in child.dataset) {
+        this.codeAdditions = child;
+      }
+    }
   }
 
   private applyHeaderToDOM(
@@ -548,18 +640,22 @@ export class FileDiff<LAnnotation = undefined> {
     container: HTMLElement
   ): void {
     this.cleanupErrorWrapper();
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = toHtml(headerAST);
-    const newHeader = tempDiv.firstElementChild;
-    if (!(newHeader instanceof HTMLElement)) {
-      return;
+    const headerHTML = toHtml(headerAST);
+    if (headerHTML !== this.lastRenderedHeaderHTML) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = headerHTML;
+      const newHeader = tempDiv.firstElementChild;
+      if (!(newHeader instanceof HTMLElement)) {
+        return;
+      }
+      if (this.headerElement != null) {
+        container.shadowRoot?.replaceChild(newHeader, this.headerElement);
+      } else {
+        container.shadowRoot?.prepend(newHeader);
+      }
+      this.headerElement = newHeader;
+      this.lastRenderedHeaderHTML = headerHTML;
     }
-    if (this.headerElement != null) {
-      container.shadowRoot?.replaceChild(newHeader, this.headerElement);
-    } else {
-      container.shadowRoot?.prepend(newHeader);
-    }
-    this.headerElement = newHeader;
 
     if (this.isContainerManaged) return;
 
@@ -569,8 +665,8 @@ export class FileDiff<LAnnotation = undefined> {
     }
     const content =
       renderHeaderMetadata?.({
-        oldFile: this.oldFile,
-        newFile: this.newFile,
+        deletionFile: this.deletionFile,
+        additionFile: this.additionFile,
         fileDiff: this.fileDiff,
       }) ?? undefined;
     if (content != null) {
@@ -611,33 +707,50 @@ export class FileDiff<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
 
-    // Clear existing content
-    pre.innerHTML = '';
-
+    let shouldReplace = false;
     let codeDeletions: HTMLElement | undefined;
     let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
+    const codeElements: HTMLElement[] = [];
     if (result.unifiedAST != null) {
-      const codeUnified = createCodeNode({ columnType: 'unified' });
-      codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
+      shouldReplace = this.codeUnified == null;
+      this.codeUnified = getOrCreateCodeNode({
+        code: this.codeUnified,
+        columnType: 'unified',
+      });
+      this.codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
         result.unifiedAST
       );
-      pre.appendChild(codeUnified);
+      codeElements.push(this.codeUnified);
     } else {
       if (result.deletionsAST != null) {
-        codeDeletions = createCodeNode({ columnType: 'deletions' });
-        codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
+        shouldReplace = shouldReplace || this.codeDeletions == null;
+        this.codeDeletions = getOrCreateCodeNode({
+          code: this.codeDeletions,
+          columnType: 'deletions',
+        });
+        this.codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
           result.deletionsAST
         );
-        pre.appendChild(codeDeletions);
+        codeElements.push(this.codeDeletions);
       }
       if (result.additionsAST != null) {
-        codeAdditions = createCodeNode({ columnType: 'additions' });
-        codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
+        shouldReplace = shouldReplace || this.codeAdditions == null;
+        this.codeAdditions = getOrCreateCodeNode({
+          code: this.codeAdditions,
+          columnType: 'additions',
+        });
+        this.codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
           result.additionsAST
         );
-        pre.appendChild(codeAdditions);
+        codeElements.push(this.codeAdditions);
       }
+    }
+
+    if (codeElements.length === 0) {
+      pre.textContent = '';
+    } else if (shouldReplace) {
+      pre.replaceChildren(...codeElements);
     }
 
     this.injectUnsafeCSS();
@@ -671,21 +784,24 @@ export class FileDiff<LAnnotation = undefined> {
       themeType = 'system',
       diffStyle = 'split',
     } = this.options;
-    const split =
-      diffStyle === 'unified'
-        ? false
-        : additionsAST != null && deletionsAST != null;
-    setPreNodeProperties({
-      pre,
+    const preProperties: PrePropertiesConfig = {
       diffIndicators,
       disableBackground,
       disableLineNumbers,
       overflow,
-      split,
+      split:
+        diffStyle === 'unified'
+          ? false
+          : additionsAST != null && deletionsAST != null,
       themeStyles,
       themeType: baseThemeType ?? themeType,
       totalLines,
-    });
+    };
+    if (arePrePropertiesEqual(preProperties, this.appliedPreAttributes)) {
+      return;
+    }
+    setPreNodeProperties(pre, preProperties);
+    this.appliedPreAttributes = preProperties;
   }
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
@@ -694,6 +810,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre.innerHTML = '';
     pre.parentNode?.removeChild(pre);
     this.pre = undefined;
+    this.appliedPreAttributes = undefined;
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     this.errorWrapper ??= document.createElement('div');

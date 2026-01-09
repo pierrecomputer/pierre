@@ -1,0 +1,28 @@
+.wrapper {
+  overscroll-behavior-x: none;
+  position: relative;
+  margin-inline: 8px;
+  margin-top: 8px;
+  overflow-anchor: none;
+}
+
+.wrapper diffs-container {
+  contain: layout paint style;
+  overflow: clip;
+  border-radius: 8px;
+  /* box-shadow: 0 0 0 2px red; */
+  margin-bottom: 8px;
+  /* Need to percolate on this because
+   * it will cause cause things to register
+   * 0 height until the browser is scrolled close to them scrollability-wise. But
+   * it's also super effective as a way to optimized the browser, we we probably
+   * want it on at some point. */
+  /* content-visibility: auto; */
+}
+
+.stickyWrapper {
+  contain: strict;
+  position: sticky;
+  width: 100%;
+  /* background-color: yellow; */
+}

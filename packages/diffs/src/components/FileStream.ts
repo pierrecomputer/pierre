@@ -9,12 +9,12 @@ import type {
   ThemeTypes,
   ThemedToken,
 } from '../types';
-import { createCodeNode } from '../utils/createCodeNode';
 import { createRowNodes } from '../utils/createRowNodes';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
 import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
+import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
@@ -30,7 +30,11 @@ export interface FileStreamOptions extends BaseCodeOptions {
   onStreamAbort?(reason: unknown): unknown;
 }
 
+let instanceId = -1;
+
 export class FileStream {
+  readonly __id: string = `file-stream:${++instanceId}`;
+
   private highlighter: DiffsHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;
@@ -118,12 +122,11 @@ export class FileStream {
     const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
     const baseThemeType =
       typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
-    const pre = setPreNodeProperties({
+    const pre = setPreNodeProperties(this.pre, {
       diffIndicators: 'none',
       disableBackground: true,
       disableLineNumbers,
       overflow,
-      pre: this.pre,
       split: false,
       themeType: baseThemeType ?? themeType,
       themeStyles,
@@ -132,7 +135,7 @@ export class FileStream {
     pre.innerHTML = '';
 
     this.pre = pre;
-    this.code = createCodeNode({ pre });
+    this.code = getOrCreateCodeNode({ code: this.code, pre });
     this.abortController?.abort();
     this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;

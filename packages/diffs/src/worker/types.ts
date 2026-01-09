@@ -22,6 +22,7 @@ export interface WorkerRenderingOptions {
 }
 
 export interface FileRendererInstance {
+  readonly __id: string;
   onHighlightSuccess(
     file: FileContents,
     result: ThemedFileResult,
@@ -31,6 +32,7 @@ export interface FileRendererInstance {
 }
 
 export interface DiffRendererInstance {
+  readonly __id: string;
   onHighlightSuccess(
     diff: FileDiffMetadata,
     result: ThemedDiffResult,
@@ -194,8 +196,13 @@ export type AllWorkerTasks =
   | RenderDiffTask;
 
 export interface WorkerStats {
+  managerState: 'waiting' | 'initializing' | 'initialized';
+  workersFailed: boolean;
   totalWorkers: number;
   busyWorkers: number;
   queuedTasks: number;
   pendingTasks: number;
+  themeSubscribers: number;
+  fileCacheSize: number;
+  diffCacheSize: number;
 }

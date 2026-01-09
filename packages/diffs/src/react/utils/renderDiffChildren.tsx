@@ -9,8 +9,8 @@ import type { DiffBasePropsReact } from '../types';
 
 interface RenderDiffChildrenProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
-  oldFile?: FileContents;
-  newFile?: FileContents;
+  deletionFile?: FileContents;
+  additionFile?: FileContents;
   renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
   renderHoverUtility: DiffBasePropsReact<LAnnotation>['renderHoverUtility'];
@@ -20,15 +20,19 @@ interface RenderDiffChildrenProps<LAnnotation> {
 
 export function renderDiffChildren<LAnnotation>({
   fileDiff,
-  oldFile,
-  newFile,
+  deletionFile,
+  additionFile,
   renderHeaderMetadata,
   renderAnnotation,
   renderHoverUtility,
   lineAnnotations,
   getHoveredLine,
 }: RenderDiffChildrenProps<LAnnotation>): ReactNode {
-  const metadata = renderHeaderMetadata?.({ fileDiff, oldFile, newFile });
+  const metadata = renderHeaderMetadata?.({
+    fileDiff,
+    deletionFile,
+    additionFile,
+  });
   return (
     <>
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}

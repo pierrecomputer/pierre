@@ -69,6 +69,7 @@
   pre,
   code,
   [data-error-wrapper] {
+    isolation: isolate;
     margin: 0;
     padding: 0;
     display: block;
@@ -438,8 +439,6 @@
   }
 
   [data-buffer] {
-    position: sticky;
-    left: 0;
     grid-column: 1 / 3;
     user-select: none;
     /* We multiply by 1.414 (√2) to better approximate the diagonal repeat distance */
@@ -451,7 +450,11 @@
       var(--diffs-bg-buffer) calc(4px * 1.414)
     );
     min-height: 1lh;
-    width: var(--diffs-column-width, auto);
+    /* lol not sure this is worth it... */
+    /* position: sticky; */
+    /* left: 0; */
+    /* width: var(--diffs-column-width, auto); */
+    /* background-attachment: fixed; */
   }
 
   [data-separator] {
@@ -695,16 +698,19 @@
   }
 
   [data-indicators='bars'] {
-    [data-line-type='change-deletion'] [data-column-number]::before,
-    [data-line-type='change-addition'] [data-column-number]::before {
-      content: '';
-      display: block;
-      width: 4px;
-      height: 100%;
-      position: absolute;
-      top: 0;
-      left: 0;
-      user-select: none;
+    [data-line-type='change-deletion'],
+    [data-line-type='change-addition'] {
+      [data-column-number]::before {
+        content: '';
+        display: block;
+        width: 4px;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        user-select: none;
+        contain: strict;
+      }
     }
 
     [data-line-type='change-deletion'] [data-column-number]::before {
@@ -738,8 +744,6 @@
     grid-column: 1 / 2;
     box-sizing: content-box;
     text-align: right;
-    position: sticky;
-    left: 0;
     user-select: none;
     background-color: var(--diffs-bg);
     color: var(--diffs-fg-number);
@@ -750,6 +754,11 @@
     );
     padding-left: 2ch;
     border-right: var(--diffs-gap-style, 1px solid var(--diffs-bg));
+  }
+
+  [data-overflow='scroll'] [data-column-number] {
+    position: sticky;
+    left: 0;
   }
 
   [data-disable-line-numbers] {
@@ -872,6 +881,9 @@
       1lh + (var(--diffs-gap-block, var(--diffs-gap-fallback)) * 3)
     );
     padding-inline: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
   }
 
   [data-header-content] {
@@ -1032,5 +1044,9 @@
     [data-error-stack] {
       color: var(--diffs-fg-number);
     }
+  }
+
+  [data-virtualized-buffer] {
+    grid-column: 1 / 3;
   }
 }

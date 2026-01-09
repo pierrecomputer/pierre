@@ -26,16 +26,18 @@ import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
+  PrePropertiesConfig,
   RenderFileMetadata,
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
-import { createCodeNode } from '../utils/createCodeNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
@@ -74,7 +76,8 @@ let instanceId = -1;
 export class File<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
-  readonly __id: number = ++instanceId;
+  readonly __id: string = `file:${++instanceId}`;
+
   private fileContainer: HTMLElement | undefined;
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
@@ -82,6 +85,8 @@ export class File<LAnnotation = undefined> {
   private unsafeCSSStyle: HTMLStyleElement | undefined;
   private hoverContent: HTMLElement | undefined;
   private errorWrapper: HTMLElement | undefined;
+  private lastRenderedHeaderHTML: string | undefined;
+  private appliedPreAttributes: PrePropertiesConfig | undefined;
 
   private headerElement: HTMLElement | undefined;
   private headerMetadata: HTMLElement | undefined;
@@ -199,7 +204,9 @@ export class File<LAnnotation = undefined> {
     }
     this.fileContainer = undefined;
     this.pre = undefined;
+    this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
+    this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
   }
@@ -219,6 +226,7 @@ export class File<LAnnotation = undefined> {
       }
       if (element instanceof HTMLPreElement) {
         this.pre = element;
+        this.appliedPreAttributes = undefined;
         continue;
       }
       if (
@@ -230,6 +238,7 @@ export class File<LAnnotation = undefined> {
       }
       if ('diffsHeader' in element.dataset) {
         this.headerElement = element;
+        this.lastRenderedHeaderHTML = undefined;
         continue;
       }
     }
@@ -286,6 +295,7 @@ export class File<LAnnotation = undefined> {
       if (this.headerElement != null) {
         this.headerElement.parentNode?.removeChild(this.headerElement);
         this.headerElement = undefined;
+        this.lastRenderedHeaderHTML = undefined;
       }
     }
 
@@ -311,6 +321,7 @@ export class File<LAnnotation = undefined> {
       this.renderHoverUtility();
     } catch (error: unknown) {
       if (error instanceof Error) {
+        console.error(error);
         this.applyErrorToDOM(error, fileContainer);
       }
     }
@@ -381,11 +392,10 @@ export class File<LAnnotation = undefined> {
   private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
-    pre.innerHTML = '';
     // Create code elements and insert HTML content
-    this.code = createCodeNode();
+    this.code = getOrCreateCodeNode({ code: this.code });
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
-    pre.appendChild(this.code);
+    pre.replaceChildren(this.code);
     this.injectUnsafeCSS();
     this.mouseEventManager.setup(pre);
     this.lineSelectionManager.setup(pre);
@@ -404,18 +414,22 @@ export class File<LAnnotation = undefined> {
     const { file } = this;
     if (file == null) return;
     this.cleanupErrorWrapper();
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = toHtml(headerAST);
-    const newHeader = tempDiv.firstElementChild;
-    if (!(newHeader instanceof HTMLElement)) {
-      return;
+    const headerHTML = toHtml(headerAST);
+    if (headerHTML !== this.lastRenderedHeaderHTML) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = headerHTML;
+      const newHeader = tempDiv.firstElementChild;
+      if (!(newHeader instanceof HTMLElement)) {
+        return;
+      }
+      if (this.headerElement != null) {
+        container.shadowRoot?.replaceChild(newHeader, this.headerElement);
+      } else {
+        container.shadowRoot?.prepend(newHeader);
+      }
+      this.headerElement = newHeader;
+      this.lastRenderedHeaderHTML = headerHTML;
     }
-    if (this.headerElement != null) {
-      container.shadowRoot?.replaceChild(newHeader, this.headerElement);
-    } else {
-      container.shadowRoot?.prepend(newHeader);
-    }
-    this.headerElement = newHeader;
 
     if (this.isContainerManaged) return;
 
@@ -440,10 +454,15 @@ export class File<LAnnotation = undefined> {
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
+    const previousContainer = this.fileContainer;
     this.fileContainer =
       fileContainer ??
       this.fileContainer ??
       document.createElement(DIFFS_TAG_NAME);
+    if (previousContainer != null && previousContainer !== this.fileContainer) {
+      this.lastRenderedHeaderHTML = undefined;
+      this.headerElement = undefined;
+    }
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }
@@ -464,11 +483,13 @@ export class File<LAnnotation = undefined> {
     if (this.pre == null) {
       this.pre = document.createElement('pre');
       container.shadowRoot?.appendChild(this.pre);
+      this.appliedPreAttributes = undefined;
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
     else if (this.pre.parentNode !== container) {
       container.shadowRoot?.appendChild(this.pre);
+      this.appliedPreAttributes = undefined;
     }
     return this.pre;
   }
@@ -482,8 +503,7 @@ export class File<LAnnotation = undefined> {
       themeType = 'system',
       disableLineNumbers = false,
     } = this.options;
-    setPreNodeProperties({
-      pre,
+    const preProperties: PrePropertiesConfig = {
       split: false,
       themeStyles,
       overflow,
@@ -492,7 +512,12 @@ export class File<LAnnotation = undefined> {
       diffIndicators: 'none',
       disableBackground: true,
       totalLines,
-    });
+    };
+    if (arePrePropertiesEqual(preProperties, this.appliedPreAttributes)) {
+      return;
+    }
+    setPreNodeProperties(pre, preProperties);
+    this.appliedPreAttributes = preProperties;
   }
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
@@ -501,6 +526,7 @@ export class File<LAnnotation = undefined> {
     pre.innerHTML = '';
     pre.parentNode?.removeChild(pre);
     this.pre = undefined;
+    this.appliedPreAttributes = undefined;
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     this.errorWrapper ??= document.createElement('div');

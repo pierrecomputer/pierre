@@ -8,6 +8,7 @@ import type {
   DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
+  ForcePlainTextOptions,
   Hunk,
   LineDiffTypes,
   LineInfo,
@@ -27,12 +28,42 @@ import {
   pushOrJoinSpan,
 } from './parseDiffDecorations';
 
+interface HighlightState {
+  finalHunk: Hunk;
+  splitCount: number;
+  unifiedCount: number;
+  shouldBreak(): boolean;
+  shouldSkip(unifiedHeight: number, splitHeight: number): boolean;
+  incrementCounts(unifiedCount: number, splitCount: number): void;
+  isInWindow(unifiedHeight: number, splitHeight: number): boolean;
+}
+
+const DEFAULT_PLAIN_TEXT_OPTIONS: ForcePlainTextOptions = {
+  forcePlainText: false,
+};
+
 export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
   highlighter: DiffsHighlighter,
   options: RenderDiffOptions,
-  forcePlainText = false
+  {
+    forcePlainText,
+    startingLine,
+    totalLines,
+  }: ForcePlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedDiffResult {
+  if (forcePlainText) {
+    startingLine ??= 0;
+    totalLines ??= Infinity;
+  } else {
+    // If we aren't forcing plain text, then we intentionally do not support
+    // ranges for highlighting as that could break the syntax highlighting, we
+    // we override any values that may have been passed in.  Maybe one day we
+    // warn about this?
+    startingLine = 0;
+    totalLines = Infinity;
+  }
+  const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
   const baseThemeType = (() => {
     const theme = options.theme ?? DEFAULT_THEMES;
     if (typeof theme === 'string') {
@@ -44,139 +75,191 @@ export function renderDiffWithHighlighter(
     theme: options.theme,
     highlighter,
   });
-  // If we've received a diff with both files
-  if (diff.newLines != null && diff.oldLines != null) {
-    const {
-      oldContent,
-      newContent,
-      oldInfo,
-      newInfo,
-      oldDecorations,
-      newDecorations,
-    } = processLines({
-      hunks: diff.hunks,
-      oldLines: diff.oldLines,
-      newLines: diff.newLines,
-      lineDiffType: options.lineDiffType,
-    });
-    const oldFile = {
-      name: diff.prevName ?? diff.name,
-      contents: oldContent,
-    };
-    const newFile = {
-      name: diff.name,
-      contents: newContent,
-    };
-    const code = renderTwoFiles({
-      oldFile,
-      oldInfo,
-      oldDecorations,
 
-      newFile,
-      newInfo,
-      newDecorations,
+  // If we have a large file and we are rendering the WHOLE plain diff ast,
+  // then we should remove the lineDiffType to make sure things render quickly.
+  // For highlighted ASTs or windowed highlights, we should just inherit the
+  // setting
+  const lineDiffType =
+    forcePlainText &&
+    !isWindowedHighlight &&
+    (diff.unifiedLineCount > 1000 || diff.splitLineCount > 1000)
+      ? 'none'
+      : options.lineDiffType;
+
+  const code: RenderDiffFilesResult = {
+    deletionLines: [],
+    additionLines: [],
+  };
+
+  // If we are doing plainText or partial rendering, then we want to render
+  // individual hunks separately, and not as a singular file
+  // The reason we do it for plain text is because we also want to only
+  // HAST-ify the actual lines we need to render and don't over do it (for
+  // things like virtualization) since with plain text, grammar doesnt matter
+  const hunks = diff.isPartial || forcePlainText ? diff.hunks : [diff.hunks];
+  const state: HighlightState = {
+    finalHunk: diff.hunks[diff.hunks.length - 1],
+    splitCount: 0,
+    unifiedCount: 0,
+    shouldBreak() {
+      return (
+        isWindowedHighlight &&
+        state.unifiedCount >= startingLine + totalLines &&
+        state.splitCount >= startingLine + totalLines
+      );
+    },
+    shouldSkip(unifiedHeight: number, splitHeight: number) {
+      return (
+        isWindowedHighlight &&
+        state.unifiedCount + unifiedHeight < startingLine &&
+        state.splitCount + splitHeight < startingLine
+      );
+    },
+    incrementCounts(unifiedValue: number, splitValue: number) {
+      state.unifiedCount += unifiedValue;
+      state.splitCount += splitValue;
+    },
+    isInWindow(unifiedHeight: number, splitHeight: number) {
+      if (!isWindowedHighlight) {
+        return true;
+      }
+      const unifiedInWindow =
+        state.unifiedCount >= startingLine - unifiedHeight &&
+        state.unifiedCount < startingLine + totalLines;
+      const splitInWindow =
+        state.splitCount >= startingLine - splitHeight &&
+        state.splitCount < startingLine + totalLines;
+      return unifiedInWindow || splitInWindow;
+    },
+  };
+
+  for (const hunkOrHunks of hunks) {
+    // If we are rendering thins at an individual hunk level, lets grab a
+    // reference to that hunk
+    const hunk = !Array.isArray(hunkOrHunks) ? hunkOrHunks : undefined;
+    const hunks = Array.isArray(hunkOrHunks) ? hunkOrHunks : [hunkOrHunks];
+    // If we are partial highlighting and out of view, lets stop
+    if (hunk != null && state.shouldBreak()) {
+      break;
+    }
+    if (
+      hunk != null &&
+      state.shouldSkip(hunk.unifiedLineCount, hunk.splitLineCount)
+    ) {
+      state.incrementCounts(hunk.unifiedLineCount, hunk.splitLineCount);
+      continue;
+    }
+    const {
+      deletionContent,
+      additionContent,
+      deletionInfo,
+      additionInfo,
+      deletionDecorations,
+      additionDecorations,
+      deletionSegments,
+      additionSegments,
+    } = processHunks({
+      hunks,
+      lineDiffType,
+      deletionLines: diff.deletionLines,
+      additionLines: diff.additionLines,
+      isPartial: diff.isPartial,
+      startingLine,
+      totalLines,
+      state,
+    });
+    const deletionFile = {
+      name: diff.prevName ?? diff.name,
+      contents: deletionContent,
+    };
+    const additionFile = {
+      name: diff.name,
+      contents: additionContent,
+    };
+    const { deletionLines, additionLines } = renderTwoFiles({
+      deletionFile,
+      deletionInfo,
+      deletionDecorations,
+
+      additionFile,
+      additionInfo,
+      additionDecorations,
 
       highlighter,
       options,
       languageOverride: forcePlainText ? 'text' : diff.lang,
     });
-    return { code, themeStyles, baseThemeType };
-  }
-  const hunks: RenderDiffFilesResult[] = [];
-  let splitLineIndex = 0;
-  let unifiedLineIndex = 0;
-  for (const hunk of diff.hunks) {
-    const {
-      oldContent,
-      newContent,
-      oldInfo,
-      newInfo,
-      oldDecorations,
-      newDecorations,
-      splitLineIndex: newSplitLineIndex,
-      unifiedLineIndex: newUnifiedLineIndex,
-    } = processLines({
-      hunks: [hunk],
-      splitLineIndex,
-      unifiedLineIndex,
-      lineDiffType: options.lineDiffType,
-    });
-    const oldFile = {
-      name: diff.prevName ?? diff.name,
-      contents: oldContent,
-    };
-    const newFile = {
-      name: diff.name,
-      contents: newContent,
-    };
-    hunks.push(
-      renderTwoFiles({
-        oldFile,
-        oldInfo,
-        oldDecorations,
 
-        newFile,
-        newInfo,
-        newDecorations,
-
-        highlighter,
-        options,
-        languageOverride: forcePlainText ? 'text' : diff.lang,
-      })
-    );
-    splitLineIndex = newSplitLineIndex;
-    unifiedLineIndex = newUnifiedLineIndex;
-  }
-
-  const code = (() => {
-    if (hunks.length <= 1) {
-      const hunk = hunks[0] ?? { oldLines: [], newLines: [] };
-      if (hunk.newLines.length === 0 || hunk.oldLines.length === 0) {
-        return hunk;
+    if (forcePlainText || hunk != null) {
+      // Viewport highlighting, populate a sparse array of lines
+      if (deletionSegments.length > 0) {
+        for (const seg of deletionSegments) {
+          for (let i = 0; i < seg.count; i++) {
+            code.deletionLines[seg.targetIndex + i] =
+              deletionLines[seg.originalOffset + i];
+          }
+        }
+      } else {
+        code.deletionLines.push(...deletionLines);
       }
+      // Viewport highlighting, populate a sparse array of lines
+      if (additionSegments.length > 0) {
+        for (const seg of additionSegments) {
+          for (let i = 0; i < seg.count; i++) {
+            code.additionLines[seg.targetIndex + i] =
+              additionLines[seg.originalOffset + i];
+          }
+        }
+      } else {
+        code.additionLines.push(...additionLines);
+      }
+    } else {
+      code.deletionLines = deletionLines;
+      code.additionLines = additionLines;
     }
-    return { hunks };
-  })();
+  }
 
   return { code, themeStyles, baseThemeType };
 }
 
 interface ProcessLineDiffProps {
-  oldLine: string | undefined;
-  newLine: string | undefined;
-  oldLineIndex: number;
-  newLineIndex: number;
-  oldDecorations: DecorationItem[];
-  newDecorations: DecorationItem[];
+  deletionLine: string | undefined;
+  additionLine: string | undefined;
+  deletionLineIndex: number;
+  additionLineIndex: number;
+  deletionDecorations: DecorationItem[];
+  additionDecorations: DecorationItem[];
   lineDiffType: LineDiffTypes;
 }
 
 function computeLineDiffDecorations({
-  oldLine,
-  newLine,
-  oldLineIndex,
-  newLineIndex,
-  oldDecorations,
-  newDecorations,
+  deletionLine,
+  additionLine,
+  deletionLineIndex,
+  additionLineIndex,
+  deletionDecorations,
+  additionDecorations,
   lineDiffType,
 }: ProcessLineDiffProps) {
-  if (oldLine == null || newLine == null || lineDiffType === 'none') {
+  if (deletionLine == null || additionLine == null || lineDiffType === 'none') {
     return;
   }
-  oldLine = cleanLastNewline(oldLine);
-  newLine = cleanLastNewline(newLine);
+  deletionLine = cleanLastNewline(deletionLine);
+  additionLine = cleanLastNewline(additionLine);
   // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
   // we also gotta make sure the diff parsing doesn't include the newline
   // character that could be there...
   const lineDiff =
     lineDiffType === 'char'
-      ? diffChars(oldLine, newLine)
-      : diffWordsWithSpace(oldLine, newLine);
+      ? diffChars(deletionLine, additionLine)
+      : diffWordsWithSpace(deletionLine, additionLine);
   const deletionSpans: [0 | 1, string][] = [];
   const additionSpans: [0 | 1, string][] = [];
   const enableJoin = lineDiffType === 'word-alt';
+  const lastItem = lineDiff.at(-1);
   for (const item of lineDiff) {
-    const isLastItem = item === lineDiff[lineDiff.length - 1];
+    const isLastItem = item === lastItem;
     if (!item.added && !item.removed) {
       pushOrJoinSpan({
         item,
@@ -201,10 +284,9 @@ function computeLineDiffDecorations({
   let spanIndex = 0;
   for (const span of deletionSpans) {
     if (span[0] === 1) {
-      oldDecorations.push(
+      deletionDecorations.push(
         createDiffSpanDecoration({
-          // Decoration indexes start at 0
-          line: oldLineIndex - 1,
+          line: deletionLineIndex,
           spanStart: spanIndex,
           spanLength: span[1].length,
         })
@@ -215,10 +297,9 @@ function computeLineDiffDecorations({
   spanIndex = 0;
   for (const span of additionSpans) {
     if (span[0] === 1) {
-      newDecorations.push(
+      additionDecorations.push(
         createDiffSpanDecoration({
-          // Decoration indexes start at 0
-          line: newLineIndex - 1,
+          line: additionLineIndex,
           spanStart: spanIndex,
           spanLength: span[1].length,
         })
@@ -228,221 +309,570 @@ function computeLineDiffDecorations({
   }
 }
 
-interface ProcessLinesProps {
-  hunks: Hunk[];
-  oldLines?: string[];
-  newLines?: string[];
-  splitLineIndex?: number;
-  unifiedLineIndex?: number;
-  newLineIndex?: number;
-  oldLineIndex?: number;
-  lineDiffType: LineDiffTypes;
+interface HighlightSegment {
+  // The where the highlighted region starts
+  originalOffset: number;
+  // Where to place the highlighted line in RenderDiffFilesResult
+  targetIndex: number;
+  // Number of highlighted lines
+  count: number;
 }
 
-function processLines({
+interface FakeArrayType {
+  push(value: string): void;
+  value: string;
+  length: number;
+}
+
+interface ProcessHunksProps {
+  hunks: Hunk[];
+  deletionLines: string[];
+  additionLines: string[];
+  lineDiffType: LineDiffTypes;
+  isPartial: boolean;
+  startingLine: number;
+  totalLines: number;
+  state: HighlightState;
+}
+
+interface ProcessHunksReturn {
+  deletionContent: string;
+  additionContent: string;
+  deletionInfo: (LineInfo | undefined)[];
+  additionInfo: (LineInfo | undefined)[];
+  deletionDecorations: DecorationItem[];
+  additionDecorations: DecorationItem[];
+  deletionSegments: HighlightSegment[];
+  additionSegments: HighlightSegment[];
+}
+
+function processHunks({
   hunks,
-  oldLines,
-  newLines,
-  splitLineIndex = 0,
-  unifiedLineIndex = 0,
+  deletionLines,
+  additionLines,
   lineDiffType,
-}: ProcessLinesProps) {
-  const oldInfo: Record<number, LineInfo | undefined> = {};
-  const newInfo: Record<number, LineInfo | undefined> = {};
-  const oldDecorations: DecorationItem[] = [];
-  const newDecorations: DecorationItem[] = [];
-  let newLineIndex = 1;
-  let oldLineIndex = 1;
-  let newLineNumber = 1;
-  let oldLineNumber = 1;
-  let oldContent = '';
-  let newContent = '';
-  for (const hunk of hunks) {
-    // If there's content prior to the hunk, lets fill it up
-    while (
-      oldLines != null &&
-      newLines != null &&
-      newLineIndex < hunk.additionStart &&
-      oldLineIndex < hunk.deletionStart
-    ) {
-      oldInfo[oldLineIndex] = {
-        type: 'context-expanded',
-        lineNumber: oldLineNumber,
-        altLineNumber: newLineNumber,
-        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-      };
-      newInfo[newLineIndex] = {
-        type: 'context-expanded',
-        lineNumber: newLineNumber,
-        altLineNumber: oldLineNumber,
-        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-      };
-      oldContent += oldLines[oldLineIndex - 1];
-      newContent += newLines[newLineIndex - 1];
-      oldLineIndex++;
-      newLineIndex++;
-      oldLineNumber++;
-      newLineNumber++;
-      splitLineIndex++;
-      unifiedLineIndex++;
+  isPartial,
+  startingLine,
+  totalLines,
+  state,
+}: ProcessHunksProps): ProcessHunksReturn {
+  const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
+  const deletionInfo: (LineInfo | undefined)[] = [];
+  const additionInfo: (LineInfo | undefined)[] = [];
+  const deletionDecorations: DecorationItem[] = [];
+  const additionDecorations: DecorationItem[] = [];
+  // NOTE(amadeus): Using these fake array data structures for content as an
+  // optmization to keep loop iterations to a minimum.  Basically if we use an
+  // array, then we have to run a `.join('')` on return which adds _yet
+  // another_ iteration which can be costly in large files. And since we
+  // already have to loop through all the lines onces, lets combine all this
+  // logic together
+  const deletionContent: FakeArrayType = {
+    push(value: string) {
+      this.value += value;
+      this.length++;
+    },
+    value: '',
+    length: 0,
+  };
+  const additionContent: FakeArrayType = {
+    push(value: string) {
+      this.value += value;
+      this.length++;
+    },
+    value: '',
+    length: 0,
+  };
+  const deletionSegments: HighlightSegment[] = [];
+  const additionSegments: HighlightSegment[] = [];
+  function appendContent(
+    lineContent: string,
+    lineIndex: number,
+    segments: HighlightSegment[],
+    contentWrapper: FakeArrayType
+  ) {
+    if (isWindowedHighlight) {
+      // Grab the last segment off the end and check if it's contiguous or not
+      let segment = segments.at(-1);
+      if (
+        segment == null ||
+        segment.targetIndex + segment.count !== lineIndex
+      ) {
+        segment = {
+          targetIndex: lineIndex,
+          originalOffset: contentWrapper.length,
+          count: 0,
+        };
+        segments.push(segment);
+      }
+      segment.count++;
     }
-    oldLineNumber = hunk.deletionStart;
-    newLineNumber = hunk.additionStart;
+    contentWrapper.push(lineContent);
+  }
+
+  hunkIterator: for (const hunk of hunks) {
+    // Check if we've rendered enough lines in
+    // Yeet out of we are passed the required render range for partials
+    if (state.shouldBreak()) {
+      break hunkIterator;
+    }
+
+    // Skip hunks that are entirely before the viewport
+    // NOTE(amadeus): Right now we do not support expanded regions in
+    // partial rendering, something that I will need to think about how to pass
+    // that data down to the highlighter
+    if (
+      state.shouldSkip(hunk.unifiedLineCount, hunk.splitLineCount) ||
+      !state.isInWindow(hunk.unifiedLineCount, hunk.splitLineCount)
+    ) {
+      state.incrementCounts(hunk.unifiedLineCount, hunk.splitLineCount);
+      continue;
+    }
+
+    // If there's content prior to the hunk in a non-partial diff,
+    // lets fill it up
+    if (!isPartial && !isWindowedHighlight) {
+      let unifiedLineIndex = hunk.unifiedLineStart - hunk.collapsedBefore;
+      let splitLineIndex = hunk.splitLineStart - hunk.collapsedBefore;
+      let deletionLineNumber = hunk.deletionStart - hunk.collapsedBefore;
+      let additionLineNumber = hunk.additionStart - hunk.collapsedBefore;
+      let index = 0;
+      // FIXME(amadeus): When supporting expansion, we'll also need to figure
+      // out how to skip lines if appropriate
+      for (; index < hunk.collapsedBefore; index++) {
+        if (state.shouldBreak()) {
+          break hunkIterator;
+        }
+        deletionInfo.push({
+          type: 'context-expanded',
+          lineNumber: deletionLineNumber,
+          altLineNumber: additionLineNumber,
+          lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
+        });
+        additionInfo.push({
+          type: 'context-expanded',
+          lineNumber: additionLineNumber,
+          altLineNumber: deletionLineNumber,
+          lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
+        });
+        const deletionLineIndex =
+          hunk.deletionLineIndex - hunk.collapsedBefore + index;
+        appendContent(
+          deletionLines[deletionLineIndex],
+          deletionLineIndex,
+          deletionSegments,
+          deletionContent
+        );
+        const additionLineIndex =
+          hunk.additionLineIndex - hunk.collapsedBefore + index;
+        appendContent(
+          additionLines[additionLineIndex],
+          additionLineIndex,
+          additionSegments,
+          additionContent
+        );
+        deletionLineNumber++;
+        additionLineNumber++;
+        splitLineIndex++;
+        unifiedLineIndex++;
+        // NOTE(amadeus): Expansion isn't supported with windowed rendering at
+        // the moment... so we don't increment state
+        // state.incrementCounts(1, 1);
+      }
+    }
+
+    let {
+      unifiedLineStart: unifiedLineIndex,
+      splitLineStart: splitLineIndex,
+      deletionStart: deletionLineNumber,
+      additionStart: additionLineNumber,
+    } = hunk;
 
     // Lets process the actual hunk content
     for (const hunkContent of hunk.hunkContent) {
+      if (state.shouldBreak()) {
+        break hunkIterator;
+      }
       if (hunkContent.type === 'context') {
-        for (const line of hunkContent.lines) {
-          oldInfo[oldLineIndex] = {
+        let index = 0;
+        // If we are not in a valid render window, lets go ahead and skip
+        if (!state.isInWindow(hunkContent.lines, hunkContent.lines)) {
+          additionLineNumber += hunkContent.lines;
+          deletionLineNumber += hunkContent.lines;
+          splitLineIndex += hunkContent.lines;
+          unifiedLineIndex += hunkContent.lines;
+          state.incrementCounts(hunkContent.lines, hunkContent.lines);
+          continue;
+        }
+        // If we don't need to process the first line, lets start off at the
+        // first required line to highlight. This can help prevent large
+        // iteration costs over large hunkContent regions
+        else {
+          const linesToSkip = Math.min(
+            hunkContent.lines,
+            startingLine - unifiedLineIndex,
+            startingLine - splitLineIndex
+          );
+          if (linesToSkip > 0) {
+            additionLineNumber += linesToSkip;
+            deletionLineNumber += linesToSkip;
+            splitLineIndex += linesToSkip;
+            unifiedLineIndex += linesToSkip;
+            state.incrementCounts(linesToSkip, linesToSkip);
+            index += linesToSkip;
+          }
+        }
+
+        for (; index < hunkContent.lines; index++) {
+          if (state.shouldBreak()) {
+            break hunkIterator;
+          }
+
+          const deletionLineIndex = hunkContent.deletionLineIndex + index;
+          appendContent(
+            deletionLines[deletionLineIndex],
+            deletionLineIndex,
+            deletionSegments,
+            deletionContent
+          );
+          const additionLineIndex = hunkContent.additionLineIndex + index;
+          appendContent(
+            additionLines[additionLineIndex],
+            additionLineIndex,
+            additionSegments,
+            additionContent
+          );
+          deletionInfo.push({
             type: 'context',
-            lineNumber: oldLineNumber,
-            altLineNumber: newLineNumber,
+            lineNumber: deletionLineNumber,
+            altLineNumber: additionLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-          };
-          newInfo[newLineIndex] = {
+          });
+          additionInfo.push({
             type: 'context',
-            lineNumber: newLineNumber,
-            altLineNumber: oldLineNumber,
+            lineNumber: additionLineNumber,
+            altLineNumber: deletionLineNumber,
             lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-          };
-          oldContent += line;
-          newContent += line;
-          oldLineIndex++;
-          newLineIndex++;
-          newLineNumber++;
-          oldLineNumber++;
+          });
+          additionLineNumber++;
+          deletionLineNumber++;
           splitLineIndex++;
           unifiedLineIndex++;
+          state.incrementCounts(1, 1);
         }
       } else {
-        const len = Math.max(
-          hunkContent.additions.length,
-          hunkContent.deletions.length
+        const splitCount = Math.max(
+          hunkContent.additions,
+          hunkContent.deletions
         );
-        let i = 0;
-        // NOTE(amadeus): Since we iterate through deletions and additions
-        // simultaneously, we have to create a secondary iterator for
-        // unifiedLineIndex, and then when we're done, add the combined lengths
-        // of additions/deletions to the main variable
-        let _unifiedLineIndex = unifiedLineIndex;
-        while (i < len) {
-          const oldLine = hunkContent.deletions[i];
-          const newLine = hunkContent.additions[i];
-          computeLineDiffDecorations({
-            newLine,
-            oldLine,
-            oldLineIndex,
-            newLineIndex,
-            oldDecorations,
-            newDecorations,
-            lineDiffType,
-          });
-          if (oldLine != null) {
-            oldInfo[oldLineIndex] = {
-              type: 'change-deletion',
-              lineNumber: oldLineNumber,
-              lineIndex: `${_unifiedLineIndex},${splitLineIndex}`,
-            };
-            oldContent += oldLine;
-            oldLineIndex++;
-            oldLineNumber++;
-          }
-          if (newLine != null) {
-            newInfo[newLineIndex] = {
-              type: 'change-addition',
-              lineNumber: newLineNumber,
-              lineIndex: `${_unifiedLineIndex + hunkContent.deletions.length},${splitLineIndex}`,
-            };
-            newContent += newLine;
-            newLineIndex++;
-            newLineNumber++;
-          }
-          splitLineIndex++;
-          _unifiedLineIndex++;
-          i++;
+        const unifiedCount = hunkContent.deletions + hunkContent.additions;
+        if (!state.isInWindow(unifiedCount, splitCount)) {
+          deletionLineNumber += hunkContent.deletions;
+          additionLineNumber += hunkContent.additions;
+          splitLineIndex += splitCount;
+          unifiedLineIndex += unifiedCount;
+          state.incrementCounts(unifiedCount, splitCount);
+          continue;
         }
-        unifiedLineIndex +=
-          hunkContent.additions.length + hunkContent.deletions.length;
+
+        // Calculate visible ranges
+        const viewportStart = startingLine;
+        const viewportEnd = startingLine + totalLines;
+
+        // Calculate visible deletion indices
+        let deletionStartIdx: number | undefined;
+        let deletionEndIdx: number | undefined;
+        let additionStartIdx: number | undefined;
+        let additionEndIdx: number | undefined;
+
+        const calculateRegionIndexes = (
+          start: number,
+          end: number,
+          type: 'deletions' | 'additions'
+        ) => {
+          if (end > viewportStart && start < viewportEnd) {
+            const visibleStart = Math.max(0, viewportStart - start);
+            const visibleEnd = Math.min(
+              type === 'deletions'
+                ? hunkContent.deletions
+                : hunkContent.additions,
+              viewportEnd - start
+            );
+            if (type === 'deletions') {
+              deletionStartIdx = Math.min(
+                deletionStartIdx ?? Infinity,
+                visibleStart
+              );
+              deletionEndIdx = Math.max(deletionEndIdx ?? 0, visibleEnd);
+            } else {
+              additionStartIdx = Math.min(
+                additionStartIdx ?? Infinity,
+                visibleStart
+              );
+              additionEndIdx = Math.max(additionEndIdx ?? 0, visibleEnd);
+            }
+          }
+        };
+
+        calculateRegionIndexes(
+          state.unifiedCount,
+          state.unifiedCount + hunkContent.deletions,
+          'deletions'
+        );
+        calculateRegionIndexes(
+          state.splitCount,
+          state.splitCount + hunkContent.deletions,
+          'deletions'
+        );
+        calculateRegionIndexes(
+          state.unifiedCount + hunkContent.deletions,
+          state.unifiedCount + hunkContent.deletions + hunkContent.additions,
+          'additions'
+        );
+        calculateRegionIndexes(
+          state.splitCount,
+          state.splitCount + hunkContent.additions,
+          'additions'
+        );
+
+        if (deletionStartIdx == null && additionStartIdx == null) {
+          // Nothing visible, just advance counters
+          splitLineIndex += splitCount;
+          unifiedLineIndex += unifiedCount;
+          state.incrementCounts(unifiedCount, splitCount);
+          deletionLineNumber += hunkContent.deletions;
+          additionLineNumber += hunkContent.additions;
+          continue;
+        }
+
+        deletionStartIdx ??= hunkContent.deletions;
+        deletionEndIdx ??= hunkContent.deletions;
+        additionStartIdx ??= hunkContent.additions;
+        additionEndIdx ??= hunkContent.additions;
+
+        // Build iteration ranges and iterate through visible lines. If
+        // deletion and addition ranges don't overlap, we create separate
+        // iteration ranges to avoid unnecessary iterations through the gap.
+        const iterationRanges: [number, number][] = [];
+        const hasDeletionRange = deletionStartIdx < deletionEndIdx;
+        const hasAdditionRange = additionStartIdx < additionEndIdx;
+
+        if (hasDeletionRange && hasAdditionRange) {
+          // Check overlap: [a, b) and [c, d) overlap if a < d && c < b
+          const hasOverlap =
+            deletionStartIdx < additionEndIdx &&
+            additionStartIdx < deletionEndIdx;
+
+          if (hasOverlap) {
+            // Merge into single range
+            iterationRanges.push([
+              Math.min(deletionStartIdx, additionStartIdx),
+              Math.max(deletionEndIdx, additionEndIdx),
+            ]);
+          } else {
+            if (additionEndIdx < deletionStartIdx) {
+              iterationRanges.push(
+                [additionStartIdx, additionEndIdx],
+                [deletionStartIdx, deletionEndIdx]
+              );
+            } else {
+              iterationRanges.push(
+                [deletionStartIdx, deletionEndIdx],
+                [additionStartIdx, additionEndIdx]
+              );
+            }
+          }
+        } else if (hasDeletionRange) {
+          iterationRanges.push([deletionStartIdx, deletionEndIdx]);
+        } else if (hasAdditionRange) {
+          iterationRanges.push([additionStartIdx, additionEndIdx]);
+        }
+
+        if (iterationRanges.length === 0) {
+          // Nothing visible at all, skip this hunk content
+          deletionLineNumber += hunkContent.deletions;
+          additionLineNumber += hunkContent.additions;
+          unifiedLineIndex += unifiedCount;
+          splitLineIndex += splitCount;
+          state.incrementCounts(unifiedCount, splitCount);
+          continue;
+        }
+
+        for (const [rangeStart, rangeEnd] of iterationRanges) {
+          // Compute values directly based on rangeStart
+          let _deletionLineNumber =
+            deletionLineNumber + Math.min(rangeStart, hunkContent.deletions);
+          let _additionLineNumber =
+            additionLineNumber + Math.min(rangeStart, hunkContent.additions);
+          let _splitLineIndex = splitLineIndex + rangeStart;
+          let _unifiedLineIndex = unifiedLineIndex + rangeStart;
+
+          for (let index = rangeStart; index < rangeEnd; index++) {
+            // Get lines only if they exist and are visible
+            const deletionLine =
+              index < hunkContent.deletions
+                ? deletionLines[hunkContent.deletionLineIndex + index]
+                : undefined;
+            const additionLine =
+              index < hunkContent.additions
+                ? additionLines[hunkContent.additionLineIndex + index]
+                : undefined;
+
+            // Only compute diff decorations if BOTH lines are visible
+            if (deletionLine == null && additionLine == null) {
+              throw new Error(
+                'processHunks: a serious windowing error has occured and we do not have a proper addition or deletion line to work with'
+              );
+            }
+
+            computeLineDiffDecorations({
+              additionLine,
+              deletionLine,
+              deletionLineIndex: deletionContent.length,
+              additionLineIndex: additionContent.length,
+              deletionDecorations,
+              additionDecorations,
+              lineDiffType,
+            });
+
+            // Process deletion if visible
+            if (deletionLine != null) {
+              const deletionLineIndex = hunkContent.deletionLineIndex + index;
+              appendContent(
+                deletionLine,
+                deletionLineIndex,
+                deletionSegments,
+                deletionContent
+              );
+              deletionInfo.push({
+                type: 'change-deletion',
+                lineNumber: _deletionLineNumber,
+                lineIndex: `${_unifiedLineIndex},${_splitLineIndex}`,
+              });
+              _deletionLineNumber++;
+            }
+
+            // Process addition if visible
+            if (additionLine != null) {
+              const additionLineIndex = hunkContent.additionLineIndex + index;
+              appendContent(
+                additionLine,
+                additionLineIndex,
+                additionSegments,
+                additionContent
+              );
+              additionInfo.push({
+                type: 'change-addition',
+                lineNumber: _additionLineNumber,
+                lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${_splitLineIndex}`,
+              });
+              _additionLineNumber++;
+            }
+
+            _splitLineIndex++;
+            _unifiedLineIndex++;
+          }
+        }
+
+        deletionLineNumber += hunkContent.deletions;
+        additionLineNumber += hunkContent.additions;
+        splitLineIndex += splitCount;
+        unifiedLineIndex += unifiedCount;
+        state.incrementCounts(unifiedCount, splitCount);
       }
     }
 
-    if (
-      oldLines == null ||
-      newLines == null ||
-      hunk !== hunks[hunks.length - 1]
-    )
-      continue;
+    // FIXME(amadeus): Right now we do not support expanded regions in
+    // windowed highlighting, something that I will need to think about more
+    if (isPartial || isWindowedHighlight || hunk !== state.finalHunk) continue;
+
     // If we are on the last hunk, we should fully iterate through the rest
     // of the lines
-    while (oldLineIndex <= oldLines.length || newLineIndex <= oldLines.length) {
-      const oldLine = oldLines[oldLineIndex - 1];
-      const newLine = newLines[newLineIndex - 1];
-      if (oldLine == null && newLine == null) {
+    let additionLineIndex = hunk.additionLineIndex + hunk.additionCount;
+    let deletionLineIndex = hunk.deletionLineIndex + hunk.deletionCount;
+    while (
+      additionLineIndex < additionLines.length &&
+      deletionLineIndex < deletionLines.length
+    ) {
+      if (state.shouldBreak()) {
         break;
       }
-      if (oldLine != null) {
-        oldInfo[oldLineIndex] = {
-          type: 'context-expanded',
-          lineNumber: oldLineNumber,
-          altLineNumber: newLineNumber,
-          lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-        };
-        oldContent += oldLine;
-        oldLineIndex++;
-        oldLineNumber++;
-      }
-      if (newLine != null) {
-        newInfo[newLineIndex] = {
-          type: 'context-expanded',
-          lineNumber: newLineNumber,
-          altLineNumber: oldLineNumber,
-          lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-        };
-        newContent += newLine;
-        newLineIndex++;
-        newLineNumber++;
-      }
+      appendContent(
+        deletionLines[deletionLineIndex],
+        deletionLineIndex,
+        deletionSegments,
+        deletionContent
+      );
+      deletionLineIndex++;
+      deletionInfo.push({
+        type: 'context-expanded',
+        lineNumber: deletionLineNumber,
+        altLineNumber: additionLineNumber,
+        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
+      });
+      deletionLineNumber++;
+
+      appendContent(
+        additionLines[additionLineIndex],
+        additionLineIndex,
+        additionSegments,
+        additionContent
+      );
+      additionLineIndex++;
+      additionInfo.push({
+        type: 'context-expanded',
+        lineNumber: additionLineNumber,
+        altLineNumber: deletionLineNumber,
+        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
+      });
+      additionLineNumber++;
+
+      // FIXME(amadeus): Expansion isn't supported with windowed rendering at the moment
+      state.incrementCounts(1, 1);
       splitLineIndex++;
       unifiedLineIndex++;
     }
   }
+
   return {
-    oldContent,
-    newContent,
-    oldInfo,
-    newInfo,
-    oldDecorations,
-    newDecorations,
-    splitLineIndex,
-    unifiedLineIndex,
+    deletionContent: deletionContent.value,
+    additionContent: additionContent.value,
+    deletionInfo,
+    additionInfo,
+    deletionDecorations,
+    additionDecorations,
+    deletionSegments,
+    additionSegments,
   };
 }
 
 interface RenderTwoFilesProps {
-  oldFile: FileContents;
-  newFile: FileContents;
-  oldInfo: Record<number, LineInfo | undefined>;
-  newInfo: Record<number, LineInfo | undefined>;
-  oldDecorations: DecorationItem[];
-  newDecorations: DecorationItem[];
+  deletionFile: FileContents;
+  additionFile: FileContents;
+  deletionInfo: (LineInfo | undefined)[];
+  additionInfo: (LineInfo | undefined)[];
+  deletionDecorations: DecorationItem[];
+  additionDecorations: DecorationItem[];
   options: RenderDiffOptions;
   highlighter: DiffsHighlighter;
   languageOverride: SupportedLanguages | undefined;
 }
 
 function renderTwoFiles({
-  oldFile,
-  newFile,
-  oldInfo,
-  newInfo,
+  deletionFile,
+  additionFile,
+  deletionInfo,
+  additionInfo,
   highlighter,
-  oldDecorations,
-  newDecorations,
+  deletionDecorations,
+  additionDecorations,
   languageOverride,
   options: { theme: themeOrThemes = DEFAULT_THEMES, ...options },
-}: RenderTwoFilesProps) {
-  const oldLang = languageOverride ?? getFiletypeFromFileName(oldFile.name);
-  const newLang = languageOverride ?? getFiletypeFromFileName(newFile.name);
+}: RenderTwoFilesProps): RenderDiffFilesResult {
+  const deletionLang =
+    languageOverride ?? getFiletypeFromFileName(deletionFile.name);
+  const additionLang =
+    languageOverride ?? getFiletypeFromFileName(additionFile.name);
   const { state, transformers } = createTransformerWithState();
   const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
     return typeof themeOrThemes === 'string'
@@ -468,28 +898,34 @@ function renderTwoFiles({
         };
   })();
 
-  const oldLines = (() => {
-    if (oldFile.contents === '') {
+  const deletionLines = (() => {
+    if (deletionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = oldLang;
-    state.lineInfo = oldInfo;
-    hastConfig.decorations = oldDecorations;
+    hastConfig.lang = deletionLang;
+    state.lineInfo = deletionInfo;
+    hastConfig.decorations = deletionDecorations;
     return getLineNodes(
-      highlighter.codeToHast(cleanLastNewline(oldFile.contents), hastConfig)
+      highlighter.codeToHast(
+        cleanLastNewline(deletionFile.contents),
+        hastConfig
+      )
     );
   })();
-  const newLines = (() => {
-    if (newFile.contents === '') {
+  const additionLines = (() => {
+    if (additionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = newLang;
-    hastConfig.decorations = newDecorations;
-    state.lineInfo = newInfo;
+    hastConfig.lang = additionLang;
+    hastConfig.decorations = additionDecorations;
+    state.lineInfo = additionInfo;
     return getLineNodes(
-      highlighter.codeToHast(cleanLastNewline(newFile.contents), hastConfig)
+      highlighter.codeToHast(
+        cleanLastNewline(additionFile.contents),
+        hastConfig
+      )
     );
   })();
 
-  return { oldLines, newLines };
+  return { deletionLines, additionLines };
 }

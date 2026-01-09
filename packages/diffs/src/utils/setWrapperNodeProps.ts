@@ -1,20 +1,18 @@
 import type { PrePropertiesConfig } from '../types';
 
-export interface SetPreNodePropertiesProps extends PrePropertiesConfig {
-  pre: HTMLPreElement;
-}
-
-export function setPreNodeProperties({
-  diffIndicators,
-  disableBackground,
-  disableLineNumbers,
-  overflow,
-  pre,
-  split,
-  themeStyles,
-  themeType,
-  totalLines,
-}: SetPreNodePropertiesProps): HTMLPreElement {
+export function setPreNodeProperties(
+  pre: HTMLPreElement,
+  {
+    diffIndicators,
+    disableBackground,
+    disableLineNumbers,
+    overflow,
+    split,
+    themeStyles,
+    themeType,
+    totalLines,
+  }: PrePropertiesConfig
+): HTMLPreElement {
   if (themeType === 'system') {
     delete pre.dataset.themeType;
   } else {
