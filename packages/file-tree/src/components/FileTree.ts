@@ -133,7 +133,7 @@ const sampleTree: Record<string, DemoItem> = {
   'storage-next-repo-route': { name: 'route.ts' },
   apps: {
     name: 'apps',
-    children: ['docs', 'demo', 'solid-diff-demo'],
+    children: ['docs', 'demo'],
   },
   docs: {
     name: 'docs',
@@ -222,30 +222,6 @@ const sampleTree: Record<string, DemoItem> = {
   'demo-utils-stream': { name: 'createFakeContentStream.ts' },
   'demo-utils-worker': { name: 'createWorkerAPI.ts' },
   'demo-config': { name: 'vite.config.ts' },
-  'solid-diff-demo': {
-    name: 'solid-diff-demo',
-    children: ['solid-src', 'solid-config'],
-  },
-  'solid-src': {
-    name: 'src',
-    children: ['solid-components', 'solid-routes', 'solid-lib'],
-  },
-  'solid-components': {
-    name: 'components',
-    children: ['solid-diff-ssr'],
-  },
-  'solid-diff-ssr': { name: 'FileDiffSSR.tsx' },
-  'solid-routes': {
-    name: 'routes',
-    children: ['solid-index'],
-  },
-  'solid-index': { name: 'index.tsx' },
-  'solid-lib': {
-    name: 'lib',
-    children: ['solid-preload'],
-  },
-  'solid-preload': { name: 'preload-diff.ts' },
-  'solid-config': { name: 'app.config.ts' },
   scripts: {
     name: 'scripts',
     children: ['scripts-build-icons', 'scripts-build-sprite'],
@@ -299,7 +275,9 @@ export class FileTree<T> {
   private tree: TreeInstance<T> | undefined;
 
   constructor(public options: FileTreeOptions<T>) {
-    this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
+    if (typeof document !== 'undefined') {
+      this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
+    }
     const createTreeOptions = {
       ...options.config,
       features: [syncDataLoaderFeature],
@@ -337,7 +315,7 @@ export class FileTree<T> {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.divWrapper == null) {
       this.divWrapper = document.createElement('div');
-      this.divWrapper.id = 'file-tree-div-wrapper';
+      this.divWrapper.id = `file-tree-div-wrapper-${this.__id}`;
       container.shadowRoot?.appendChild(this.divWrapper);
     }
     // If we have a new parent container for the pre element, lets go ahead and
@@ -352,22 +330,18 @@ export class FileTree<T> {
     if (this.tree == null) {
       throw new Error('FileTree: Tree is not initialized');
     }
-    // idk if these should be here, but works for now.
-    // maybe they should be in 'hydrate'? but not totally sure.
-    // maybe it should get called here but only once unless unmounted?
-    this.tree.setMounted(true);
-    this.tree.rebuildTree();
-    console.log(
-      'tree render',
-      this.__id,
-      this.tree.getItems().map((item) => item.getItemData())
-    );
+
     fileTreeContainer = this.getOrCreateFileTreeContainer(
       fileTreeContainer,
       containerWrapper
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
     const output = this.generateFileTreeFake();
+    console.log(
+      'tree render',
+      this.__id,
+      this.tree.getItems().map((item) => item.getItemData())
+    );
     divWrapper.innerHTML = output;
   }
 
@@ -384,7 +358,23 @@ export class FileTree<T> {
     // todo
   }
 
-  generateFileTreeFake(): string {
-    return '<div>File Tree Fake</div><slot name="fake-slot"></slot>';
+  generateFileTreeFake(subtreeId?: string): string {
+    if (this.tree == null) {
+      throw new Error('FileTree: Tree is not initialized');
+    }
+    // idk if these should be here, but works for now.
+    // maybe they should be in 'hydrate'? but not totally sure.
+    // maybe it should get called here but only once unless unmounted?
+    this.tree.setMounted(true);
+    this.tree.rebuildTree();
+    const subtree =
+      subtreeId != null
+        ? this.tree.getItemInstance(subtreeId).getChildren()
+        : this.tree.getItems();
+    const items = subtree.map((item) => item.getItemData());
+    const listHtml = items
+      ?.map((item: any) => `<li>${item.name}</li>`)
+      .join('');
+    return `<ul>${listHtml}</ul>`;
   }
 }
