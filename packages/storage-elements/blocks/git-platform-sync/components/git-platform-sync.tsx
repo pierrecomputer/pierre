@@ -169,8 +169,7 @@ export function ComboBox({
         className="w-[220px] p-0"
       >
         <Command {...props}>
-          {/* TODO: search is silly when there are only 1-5 options */}
-          <CommandInput placeholder="Search…" />
+          {options.length > 5 && <CommandInput placeholder="Search…" />}
           <CommandList>
             <CommandEmpty>No results</CommandEmpty>
             <CommandGroup>
