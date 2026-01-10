@@ -24,8 +24,11 @@ import { type FileRenderResult, FileRenderer } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseCodeOptions,
+  ExpansionDirections,
   FileContents,
+  HunkSeparators,
   LineAnnotation,
+  LineRange,
   RenderFileMetadata,
   ThemeTypes,
 } from '../types';
@@ -67,6 +70,9 @@ export interface FileOptions<LAnnotation>
   renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null;
+  visibleRanges?: LineRange[];
+  hunkSeparators?: HunkSeparators;
+  expansionLineCount?: number;
 }
 
 let instanceId = -1;
@@ -109,7 +115,12 @@ export class File<LAnnotation = undefined> {
     this.resizeManager = new ResizeManager();
     this.mouseEventManager = new MouseEventManager(
       'file',
-      pluckMouseEventOptions(options)
+      pluckMouseEventOptions(
+        options,
+        options.visibleRanges != null && options.visibleRanges.length > 0
+          ? this.handleExpandRange
+          : undefined
+      )
     );
     this.lineSelectionManager = new LineSelectionManager(
       pluckLineSelectionOptions(options)
@@ -121,6 +132,18 @@ export class File<LAnnotation = undefined> {
     this.rerender();
   };
 
+  handleExpandRange = (
+    rangeIndex: number,
+    direction: ExpansionDirections
+  ): void => {
+    this.expandRange(rangeIndex, direction);
+  };
+
+  expandRange(rangeIndex: number, direction: ExpansionDirections): void {
+    this.fileRenderer.expandRange(rangeIndex, direction);
+    this.rerender();
+  }
+
   rerender(): void {
     if (this.file == null) return;
     this.render({ file: this.file, forceRender: true });
@@ -129,7 +152,15 @@ export class File<LAnnotation = undefined> {
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
-    this.mouseEventManager.setOptions(pluckMouseEventOptions(options));
+    this.fileRenderer.setOptions(options);
+    this.mouseEventManager.setOptions(
+      pluckMouseEventOptions(
+        options,
+        options.visibleRanges != null && options.visibleRanges.length > 0
+          ? this.handleExpandRange
+          : undefined
+      )
+    );
     this.lineSelectionManager.setOptions(pluckLineSelectionOptions(options));
   }
 

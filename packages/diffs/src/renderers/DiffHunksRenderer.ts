@@ -15,6 +15,7 @@ import type {
   DiffLineAnnotation,
   DiffsHighlighter,
   ExpansionDirections,
+  ExpansionRegion,
   FileDiffMetadata,
   Hunk,
   HunkData,
@@ -111,11 +112,6 @@ interface GetRenderOptionsReturn {
 type OptionsWithDefaults = Required<
   Omit<BaseDiffOptions, 'lang' | 'unsafeCSS'>
 >;
-
-interface ExpansionRegion {
-  fromStart: number;
-  fromEnd: number;
-}
 
 export interface HunksRenderResult {
   additionsAST: ElementContent[] | undefined;

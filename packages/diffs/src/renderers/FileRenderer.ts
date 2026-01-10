@@ -12,8 +12,12 @@ import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import type {
   BaseCodeOptions,
   DiffsHighlighter,
+  ExpansionDirections,
+  ExpansionRegion,
   FileContents,
+  HunkSeparators,
   LineAnnotation,
+  LineRange,
   RenderFileOptions,
   RenderFileResult,
   RenderedFileASTCache,
@@ -25,6 +29,7 @@ import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationElement } from '../utils/createAnnotationElement';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createPreElement } from '../utils/createPreElement';
+import { createSeparator } from '../utils/createSeparator';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
@@ -53,14 +58,33 @@ export interface FileRenderResult {
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface FileRendererOptions extends BaseCodeOptions {}
+export interface FileRendererOptions extends BaseCodeOptions {
+  visibleRanges?: LineRange[];
+  hunkSeparators?: HunkSeparators;
+  expansionLineCount?: number;
+}
+
+const EXPANDED_REGION: ExpansionRegion = {
+  fromStart: 0,
+  fromEnd: 0,
+};
+
+interface PushSeparatorProps {
+  codeAST: ElementContent[];
+  hunkSeparators: HunkSeparators;
+  collapsedLines: number;
+  expandIndex: number;
+  chunked: boolean;
+  isFirstHunk: boolean;
+  isLastHunk: boolean;
+}
 
 export class FileRenderer<LAnnotation = undefined> {
   private highlighter: DiffsHighlighter | undefined;
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private expandedRegions = new Map<number, ExpansionRegion>();
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
@@ -88,6 +112,21 @@ export class FileRenderer<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
+  }
+
+  expandRange(index: number, direction: ExpansionDirections): void {
+    const { expansionLineCount = 100 } = this.options;
+    const region = this.expandedRegions.get(index) ?? {
+      fromStart: 0,
+      fromEnd: 0,
+    };
+    if (direction === 'up' || direction === 'both') {
+      region.fromStart += expansionLineCount;
+    }
+    if (direction === 'down' || direction === 'both') {
+      region.fromEnd += expansionLineCount;
+    }
+    this.expandedRegions.set(index, region);
   }
 
   setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
@@ -264,43 +303,254 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     result: ThemedFileResult
   ): FileRenderResult {
-    const { disableFileHeader = false } = this.options;
+    const {
+      disableFileHeader = false,
+      visibleRanges,
+      hunkSeparators = 'line-info',
+      expansionLineCount = 100,
+    } = this.options;
+
+    const totalLines = result.code.length;
     const codeAST: ElementContent[] = [];
-    let lineIndex = 1;
-    for (const line of result.code) {
-      codeAST.push(line);
-      const annotations = this.lineAnnotations[lineIndex];
-      if (annotations != null) {
-        codeAST.push(
-          createAnnotationElement({
-            type: 'annotation',
-            hunkIndex: 0,
-            lineIndex,
-            annotations: annotations.map((annotation) =>
-              getLineAnnotationName(annotation)
-            ),
-          })
-        );
+
+    if (visibleRanges == null || visibleRanges.length === 0) {
+      let lineIndex = 1;
+      for (const line of result.code) {
+        codeAST.push(line);
+        const annotations = this.lineAnnotations[lineIndex];
+        if (annotations != null) {
+          codeAST.push(
+            createAnnotationElement({
+              type: 'annotation',
+              hunkIndex: 0,
+              lineIndex,
+              annotations: annotations.map((annotation) =>
+                getLineAnnotationName(annotation)
+              ),
+            })
+          );
+        }
+        lineIndex++;
       }
-      lineIndex++;
+    } else {
+      const sortedRanges = normalizeRanges(visibleRanges, totalLines);
+      let lastRangeEnd = 0;
+
+      for (let rangeIndex = 0; rangeIndex < sortedRanges.length; rangeIndex++) {
+        const [rangeStart, rangeEnd] = sortedRanges[rangeIndex];
+        const expandedRegion =
+          this.expandedRegions.get(rangeIndex) ?? EXPANDED_REGION;
+        const originalCollapsedSize = rangeStart - lastRangeEnd - 1;
+
+        if (originalCollapsedSize > 0) {
+          const isFirstSeparator = lastRangeEnd === 0;
+          const chunked = originalCollapsedSize > expansionLineCount;
+          const collapsedLines = Math.max(
+            originalCollapsedSize -
+              expandedRegion.fromStart -
+              expandedRegion.fromEnd,
+            0
+          );
+
+          const expandFromTop =
+            collapsedLines === 0
+              ? originalCollapsedSize
+              : Math.min(expandedRegion.fromStart, originalCollapsedSize);
+
+          if (expandFromTop > 0) {
+            this.renderLineRange(
+              result.code,
+              codeAST,
+              lastRangeEnd + 1,
+              lastRangeEnd + expandFromTop,
+              rangeIndex
+            );
+          }
+
+          if (collapsedLines > 0) {
+            this.pushSeparator({
+              codeAST,
+              hunkSeparators,
+              collapsedLines,
+              expandIndex: rangeIndex,
+              chunked,
+              isFirstHunk: isFirstSeparator,
+              isLastHunk: false,
+            });
+          }
+
+          if (expandedRegion.fromEnd > 0 && collapsedLines > 0) {
+            const expandFromBottom = Math.min(
+              expandedRegion.fromEnd,
+              originalCollapsedSize - expandedRegion.fromStart
+            );
+            const startLine = rangeStart - expandFromBottom;
+            if (startLine <= rangeStart - 1) {
+              this.renderLineRange(
+                result.code,
+                codeAST,
+                startLine,
+                rangeStart - 1,
+                rangeIndex
+              );
+            }
+          }
+        }
+
+        this.renderLineRange(
+          result.code,
+          codeAST,
+          rangeStart,
+          rangeEnd,
+          rangeIndex
+        );
+
+        lastRangeEnd = rangeEnd;
+      }
+
+      const lastExpandedRegion =
+        this.expandedRegions.get(sortedRanges.length) ?? EXPANDED_REGION;
+      const collapsedAfterOriginal = totalLines - lastRangeEnd;
+
+      if (collapsedAfterOriginal > 0) {
+        const chunked = collapsedAfterOriginal > expansionLineCount;
+        const collapsedAfter = Math.max(
+          collapsedAfterOriginal -
+            lastExpandedRegion.fromStart -
+            lastExpandedRegion.fromEnd,
+          0
+        );
+
+        const expandFromTop =
+          collapsedAfter === 0
+            ? collapsedAfterOriginal
+            : Math.min(lastExpandedRegion.fromStart, collapsedAfterOriginal);
+
+        if (expandFromTop > 0) {
+          this.renderLineRange(
+            result.code,
+            codeAST,
+            lastRangeEnd + 1,
+            lastRangeEnd + expandFromTop,
+            sortedRanges.length
+          );
+        }
+
+        if (collapsedAfter > 0) {
+          this.pushSeparator({
+            codeAST,
+            hunkSeparators,
+            collapsedLines: collapsedAfter,
+            expandIndex: sortedRanges.length,
+            chunked,
+            isFirstHunk: false,
+            isLastHunk: true,
+          });
+        }
+
+        if (lastExpandedRegion.fromEnd > 0 && collapsedAfter > 0) {
+          const expandFromBottom = Math.min(
+            lastExpandedRegion.fromEnd,
+            collapsedAfterOriginal - lastExpandedRegion.fromStart
+          );
+          const startLine = totalLines - expandFromBottom + 1;
+          if (startLine <= totalLines) {
+            this.renderLineRange(
+              result.code,
+              codeAST,
+              startLine,
+              totalLines,
+              sortedRanges.length
+            );
+          }
+        }
+      }
     }
 
     return {
       codeAST,
       preAST: this.createPreElement(
-        result.code.length,
+        totalLines,
         result.themeStyles,
         result.baseThemeType
       ),
       headerAST: !disableFileHeader
         ? this.renderHeader(file, result.themeStyles, result.baseThemeType)
         : undefined,
-      totalLines: result.code.length,
+      totalLines,
       themeStyles: result.themeStyles,
       baseThemeType: result.baseThemeType,
       // FIXME(amadeus): Fix this
       css: '',
     };
+  }
+
+  private renderLineRange(
+    code: ElementContent[],
+    codeAST: ElementContent[],
+    startLine: number,
+    endLine: number,
+    rangeIndex: number = 0
+  ): void {
+    for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
+      const line = code[lineNum - 1];
+      if (line != null) {
+        codeAST.push(line);
+        const annotations = this.lineAnnotations[lineNum];
+        if (annotations != null) {
+          codeAST.push(
+            createAnnotationElement({
+              type: 'annotation',
+              hunkIndex: rangeIndex,
+              lineIndex: lineNum,
+              annotations: annotations.map((annotation) =>
+                getLineAnnotationName(annotation)
+              ),
+            })
+          );
+        }
+      }
+    }
+  }
+
+  private pushSeparator({
+    codeAST,
+    hunkSeparators,
+    collapsedLines,
+    expandIndex,
+    chunked,
+    isFirstHunk,
+    isLastHunk,
+  }: PushSeparatorProps): void {
+    if (hunkSeparators === 'line-info' || hunkSeparators === 'custom') {
+      codeAST.push(
+        createSeparator({
+          type: hunkSeparators,
+          content: getHiddenLinesString(collapsedLines),
+          expandIndex,
+          chunked,
+          isFirstHunk,
+          isLastHunk,
+        })
+      );
+    } else if (hunkSeparators === 'metadata') {
+      codeAST.push(
+        createSeparator({
+          type: 'metadata',
+          content: getHiddenLinesString(collapsedLines),
+          isFirstHunk,
+          isLastHunk,
+        })
+      );
+    } else if (hunkSeparators === 'simple' && !isFirstHunk) {
+      codeAST.push(
+        createSeparator({
+          type: 'simple',
+          isFirstHunk,
+          isLastHunk: false,
+        })
+      );
+    }
   }
 
   private renderHeader(
@@ -417,4 +667,29 @@ function areRenderOptionsEqual(
     areThemesEqual(optionsA.theme, optionsB.theme) &&
     optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength
   );
+}
+
+function getHiddenLinesString(lines: number): string {
+  return `${lines} hidden line${lines > 1 ? 's' : ''}`;
+}
+
+function normalizeRanges(ranges: LineRange[], totalLines: number): LineRange[] {
+  if (ranges.length === 0) return [];
+
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  const result: [number, number][] = [];
+
+  for (const [start, end] of sorted) {
+    const clampedStart = Math.max(1, Math.min(start, totalLines));
+    const clampedEnd = Math.max(1, Math.min(end, totalLines));
+    if (clampedStart > clampedEnd) continue;
+
+    const last = result[result.length - 1];
+    if (last != null && clampedStart <= last[1] + 1) {
+      last[1] = Math.max(last[1], clampedEnd);
+    } else {
+      result.push([clampedStart, clampedEnd]);
+    }
+  }
+  return result;
 }

@@ -51,6 +51,14 @@ export type ChangeTypes =
   | 'new'
   | 'deleted';
 
+export type LineRange = readonly [start: number, end: number];
+
+/** Represents the expanded portion of a collapsed region */
+export interface ExpansionRegion {
+  fromStart: number;
+  fromEnd: number;
+}
+
 export interface ParsedPatch {
   patchMetadata?: string;
   files: FileDiffMetadata[];
