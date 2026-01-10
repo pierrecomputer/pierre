@@ -1,3 +1,4 @@
+import '@/app/prose.css';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
@@ -8,10 +9,21 @@ import {
   IconBrandZed,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { renderMDX } from '@/lib/mdx';
+import { preloadFile } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { ThemeScreenshots } from './ThemeScreenshots';
+import { ProseWrapper } from '../docs/ProseWrapper';
+import {
+  THEMING_PACKAGE_JSON_EXAMPLE,
+  THEMING_PALETTE_EXAMPLE,
+  THEMING_PROJECT_STRUCTURE,
+  THEMING_REGISTER_THEME,
+  THEMING_TOKEN_COLORS_EXAMPLE,
+  THEMING_USE_IN_COMPONENT,
+} from '../docs/Theming/constants';
+import { ThemeDemo } from './ThemeDemo';
 
 export const metadata: Metadata = {
   title: 'Pierre Themes — Themes for Visual Studio Code, Cursor, and Shiki.',
@@ -30,7 +42,35 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ThemePage() {
+export default async function ThemePage() {
+  const [
+    projectStructure,
+    paletteExample,
+    tokenColorsExample,
+    packageJsonExample,
+    registerTheme,
+    useInComponent,
+  ] = await Promise.all([
+    preloadFile(THEMING_PROJECT_STRUCTURE),
+    preloadFile(THEMING_PALETTE_EXAMPLE),
+    preloadFile(THEMING_TOKEN_COLORS_EXAMPLE),
+    preloadFile(THEMING_PACKAGE_JSON_EXAMPLE),
+    preloadFile(THEMING_REGISTER_THEME),
+    preloadFile(THEMING_USE_IN_COMPONENT),
+  ]);
+
+  const content = await renderMDX({
+    filePath: 'docs/Theming/content.mdx',
+    scope: {
+      projectStructure,
+      paletteExample,
+      tokenColorsExample,
+      packageJsonExample,
+      registerTheme,
+      useInComponent,
+    },
+  });
+
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <Header className="-mb-[1px]" />
@@ -100,47 +140,15 @@ export default function ThemePage() {
         </div>
       </section>
 
-      <section className="py-6">
+      {/* <section className="py-6">
         <ThemeScreenshots />
+      </section> */}
+
+      <section className="pb-6">
+        <ThemeDemo />
       </section>
 
-      <section className="space-y-4 py-6">
-        <h2 className="text-2xl font-medium">Usage</h2>
-
-        <ol className="list-inside list-decimal space-y-2">
-          <li>
-            Install the Pierre theme pack from your editor’s extension
-            marketplace.
-            <ul className="mt-2 list-['—'] space-y-2 pl-8">
-              <li className="pl-[1.25ch]">
-                <Link
-                  href="https://marketplace.visualstudio.com/items?itemName=pierrecomputer.pierre-theme"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
-                >
-                  Visual Studio Code
-                </Link>
-              </li>
-              <li className="pl-[1.25ch]">
-                <Link
-                  href="https://open-vsx.org/extension/pierrecomputer/pierre-theme"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
-                >
-                  Cursor
-                </Link>
-              </li>
-              <li className="pl-[1.25ch] opacity-50">Zed (coming soon)</li>
-            </ul>
-          </li>
-          <li>
-            Open your editor and select the Pierre themes in settings or the
-            command palette.
-          </li>
-        </ol>
-      </section>
+      <ProseWrapper>{content}</ProseWrapper>
 
       <PierreCompanySection />
 
