@@ -27,16 +27,30 @@ const sharedFileTreeOptions: FileTreeOptions<DemoItem> = {
   },
 };
 
-export function ClientPage({
-  preloadedFileTreeHtml,
-}: {
-  preloadedFileTreeHtml: string;
-}) {
+const fileTree = new FileTree(sharedFileTreeOptions);
+
+const preloadedFileTreeHtml = `<style>
+@layer base, theme, unsafe;
+
+@layer base {
+  :host {
+    color-scheme: light dark;
+    display: block;
+    font-family:
+      'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
+      'Courier New', monospace;
+  }
+}
+</style>
+<div id="file-tree-div-wrapper-${fileTree.__id}">
+  ${fileTree.generateFileTreeFake()}
+</div>`;
+
+export function ClientPage() {
   const isRendered = useRef(false);
   useEffect(() => {
     if (isRendered.current) return;
     isRendered.current = true;
-    const fileTree = new FileTree(sharedFileTreeOptions);
     fileTree.render({
       containerWrapper:
         document.getElementById('test-file-tree-elem') ?? undefined,
