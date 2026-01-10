@@ -20,6 +20,7 @@ JavaScript and React components.
 - Flexible annotation framework for injecting comments, annotations, and more
 - Add your own accept/reject changes UI
 - Select and highlight lines
+- Image diffs with side-by-side and swipe comparison modes
 
 ## Install
 

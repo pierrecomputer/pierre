@@ -1,0 +1,467 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`ImageDiffRenderer should render new image in side-by-side mode: new image container AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Added",
+                },
+              ],
+              "properties": {
+                "data-image-label": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "loading": "lazy",
+                "src": "https://example.com/new.png",
+              },
+              "tagName": "img",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-image-panel": "added",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-image-diff-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-image-diff": "",
+    "data-image-diff-mode": "side-by-side",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;
+
+exports[`ImageDiffRenderer should render deleted image in side-by-side mode: deleted image container AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Deleted",
+                },
+              ],
+              "properties": {
+                "data-image-label": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "loading": "lazy",
+                "src": "https://example.com/old.png",
+              },
+              "tagName": "img",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-image-panel": "deleted",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-image-diff-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-image-diff": "",
+    "data-image-diff-mode": "side-by-side",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;
+
+exports[`ImageDiffRenderer should render changed image in side-by-side mode: changed image side-by-side AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Before",
+                },
+              ],
+              "properties": {
+                "data-image-label": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "loading": "lazy",
+                "src": "https://example.com/old.png",
+              },
+              "tagName": "img",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-image-panel": "old",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "After",
+                },
+              ],
+              "properties": {
+                "data-image-label": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "loading": "lazy",
+                "src": "https://example.com/new.png",
+              },
+              "tagName": "img",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-image-panel": "new",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-image-diff-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-image-diff": "",
+    "data-image-diff-mode": "side-by-side",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;
+
+exports[`ImageDiffRenderer should render changed image in swipe mode: changed image swipe AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "properties": {
+                    "loading": "lazy",
+                    "src": "https://example.com/old.png",
+                  },
+                  "tagName": "img",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "data-swipe-layer": "old",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "children": [],
+                  "properties": {
+                    "loading": "lazy",
+                    "src": "https://example.com/new.png",
+                  },
+                  "tagName": "img",
+                  "type": "element",
+                },
+              ],
+              "properties": {
+                "data-swipe-layer": "new",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "data-swipe-handle": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-swipe-container": "",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-image-diff-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-image-diff": "",
+    "data-image-diff-mode": "swipe",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;
+
+exports[`ImageDiffRenderer should render binary placeholder when no image URL provided: binary placeholder AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "📁",
+        },
+      ],
+      "properties": {
+        "data-binary-icon": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Binary file added - provide imageUrl to preview",
+        },
+      ],
+      "properties": {
+        "data-binary-text": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-binary-placeholder": "",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;
+
+exports[`ImageDiffRenderer should render with metadata when showImageMetadata is true: image with metadata AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Before",
+                },
+              ],
+              "properties": {
+                "data-image-label": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "loading": "lazy",
+                "src": "https://example.com/old.png",
+              },
+              "tagName": "img",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "800 × 600 100.0 KB",
+                },
+              ],
+              "properties": {
+                "data-image-metadata": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-image-panel": "old",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "After",
+                },
+              ],
+              "properties": {
+                "data-image-label": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "loading": "lazy",
+                "src": "https://example.com/new.png",
+              },
+              "tagName": "img",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "1024 × 768 150.0 KB",
+                },
+              ],
+              "properties": {
+                "data-image-metadata": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-image-panel": "new",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-image-diff-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-image-diff": "",
+    "data-image-diff-mode": "side-by-side",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;
+
+exports[`ImageDiffRenderer should render renamed image: renamed image AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Renamed",
+                },
+              ],
+              "properties": {
+                "data-image-label": "",
+              },
+              "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [],
+              "properties": {
+                "loading": "lazy",
+                "src": "https://example.com/image.png",
+              },
+              "tagName": "img",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-image-panel": "new",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-image-diff-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-image-diff": "",
+    "data-image-diff-mode": "side-by-side",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;

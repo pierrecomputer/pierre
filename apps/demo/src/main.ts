@@ -7,6 +7,7 @@ import {
   type FileContents,
   FileDiff,
   FileStream,
+  ImageDiff,
   type ParsedPatch,
   type SupportedLanguages,
   getFiletypeFromFileName,
@@ -574,6 +575,115 @@ function getThemeType() {
     : parentThemeSetting === 'light'
       ? 'light'
       : 'system';
+}
+
+const imageDiffInstances: ImageDiff[] = [];
+const imageDiffButton = document.getElementById('image-diff');
+if (imageDiffButton != null) {
+  imageDiffButton.addEventListener('click', () => {
+    const wrapper = document.getElementById('wrapper');
+    if (wrapper == null) return;
+    cleanupInstances(wrapper);
+
+    for (const instance of imageDiffInstances) {
+      instance.cleanUp();
+    }
+    imageDiffInstances.length = 0;
+
+    const themeType = getThemeType();
+
+    const sideBySideContainer = document.createElement(DIFFS_TAG_NAME);
+    wrapper.appendChild(sideBySideContainer);
+    const sideBySideInstance = new ImageDiff({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType,
+      imageDiffMode: 'side-by-side',
+      showImageMetadata: true,
+    });
+    sideBySideInstance.render({
+      fileDiff: {
+        name: 'example-changed.png',
+        prevName: 'example-changed.png',
+        type: 'change',
+        contentType: 'image',
+        hunks: [],
+        splitLineCount: 0,
+        unifiedLineCount: 0,
+        oldImageUrl: 'https://picsum.photos/seed/old/400/300',
+        newImageUrl: 'https://picsum.photos/seed/new/400/300',
+      },
+      fileContainer: sideBySideContainer,
+    });
+    imageDiffInstances.push(sideBySideInstance);
+
+    const swipeContainer = document.createElement(DIFFS_TAG_NAME);
+    wrapper.appendChild(swipeContainer);
+    const swipeInstance = new ImageDiff({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType,
+      imageDiffMode: 'swipe',
+      showImageMetadata: true,
+    });
+    swipeInstance.render({
+      fileDiff: {
+        name: 'example-swipe.jpg',
+        prevName: 'example-swipe.jpg',
+        type: 'change',
+        contentType: 'image',
+        hunks: [],
+        splitLineCount: 0,
+        unifiedLineCount: 0,
+        oldImageUrl: 'https://picsum.photos/seed/before/600/400',
+        newImageUrl: 'https://picsum.photos/seed/after/600/400',
+      },
+      fileContainer: swipeContainer,
+    });
+    imageDiffInstances.push(swipeInstance);
+
+    const newImageContainer = document.createElement(DIFFS_TAG_NAME);
+    wrapper.appendChild(newImageContainer);
+    const newImageInstance = new ImageDiff({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType,
+      imageDiffMode: 'side-by-side',
+    });
+    newImageInstance.render({
+      fileDiff: {
+        name: 'new-image.png',
+        prevName: undefined,
+        type: 'new',
+        contentType: 'image',
+        hunks: [],
+        splitLineCount: 0,
+        unifiedLineCount: 0,
+        newImageUrl: 'https://picsum.photos/seed/added/300/200',
+      },
+      fileContainer: newImageContainer,
+    });
+    imageDiffInstances.push(newImageInstance);
+
+    const deletedImageContainer = document.createElement(DIFFS_TAG_NAME);
+    wrapper.appendChild(deletedImageContainer);
+    const deletedImageInstance = new ImageDiff({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType,
+      imageDiffMode: 'side-by-side',
+    });
+    deletedImageInstance.render({
+      fileDiff: {
+        name: 'deleted-image.gif',
+        prevName: 'deleted-image.gif',
+        type: 'deleted',
+        contentType: 'image',
+        hunks: [],
+        splitLineCount: 0,
+        unifiedLineCount: 0,
+        oldImageUrl: 'https://picsum.photos/seed/deleted/350/250',
+      },
+      fileContainer: deletedImageContainer,
+    });
+    imageDiffInstances.push(deletedImageInstance);
+  });
 }
 
 // For quick testing diffs

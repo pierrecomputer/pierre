@@ -20,6 +20,7 @@ import { DiffStyles } from './diff-examples/DiffStyles/DiffStyles';
 import { DIFF_STYLES } from './diff-examples/DiffStyles/constants';
 import { FontStyles } from './diff-examples/FontStyles/FontStyles';
 import { FONT_STYLES } from './diff-examples/FontStyles/constants';
+import { ImageDiffs } from './diff-examples/ImageDiffs/ImageDiffs';
 import { LineSelection } from './diff-examples/LineSelection/LineSelection';
 import { LINE_SELECTION_EXAMPLE } from './diff-examples/LineSelection/constants';
 import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
@@ -43,6 +44,7 @@ export default function Home() {
         <AcceptRejectSection />
         <LineSelectionSection />
         <ArbitraryFilesSection />
+        <ImageDiffs />
       </section>
 
       {/* TODO: add this back once we add the migration APIs
