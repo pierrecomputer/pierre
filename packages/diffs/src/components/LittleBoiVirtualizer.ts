@@ -19,20 +19,22 @@ declare global {
 }
 
 export class LittleBoiVirtualizer {
-  private intersectionObserver: IntersectionObserver;
-  private scrollY: number = 0;
+  private intersectionObserver: IntersectionObserver | undefined;
+  private scrollTop: number = 0;
   private height: number = 0;
   private scrollHeight: number = 0;
-  public windowSpecs: VirtualWindowSpecs;
+  public windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
+  private root: HTMLElement | Document | undefined;
 
-  constructor(private root: Element | Document) {
+  setup(root: HTMLElement | Document): void {
+    this.root = root;
     if (root === globalThis.document) {
       this.setupWindow();
     } else {
       this.setupElement();
     }
     this.windowSpecs = createWindowFromScrollPosition({
-      scrollY: this.scrollY,
+      scrollY: this.scrollTop,
       height: this.height,
       scrollHeight: this.scrollHeight,
       containerOffset: 0,
@@ -64,27 +66,36 @@ export class LittleBoiVirtualizer {
   }
 
   private setupWindow() {
-    this.scrollY = window.scrollY;
+    this.scrollTop = window.scrollY;
     this.height = window.innerHeight;
     this.scrollHeight = globalThis.document.documentElement.scrollHeight;
-    window.addEventListener('scroll', this.handleWindowScroll);
-    window.addEventListener('resize', this.handleWindowResize);
+    window.addEventListener('scroll', this.handleWindowScroll, {
+      passive: true,
+    });
+    window.addEventListener('resize', this.handleWindowResize, {
+      passive: true,
+    });
   }
 
   private setupElement() {
-    if (this.root === globalThis.document) {
+    if (this.root == null || this.root instanceof Document) {
       throw new Error(
         'LittleBoiVirtualizer.setupElement: Invalid setup method'
       );
     }
-    // FIXME(amadeus): Implement the scrolling/resize
-    // observers for the container
-    // this.root.addEventListener('scroll', this.handleScroll);
-    // TODO(amadeus): Add resize observer probably?
+    this.scrollTop = this.root.scrollTop;
+    this.height = this.root.clientHeight;
+    this.scrollHeight = this.root.scrollHeight;
+    this.root.addEventListener('scroll', this.handleElementScroll, {
+      passive: true,
+    });
+    // FIXME(amadeus): Implement the resize observer stuff probably?
   }
 
   cleanUp(): void {
-    this.intersectionObserver.disconnect();
+    this.intersectionObserver?.disconnect();
+    this.intersectionObserver = undefined;
+    this.root = undefined;
   }
 
   getOffsetFromRoot(element: Element | null): number {
@@ -108,17 +119,36 @@ export class LittleBoiVirtualizer {
 
   private handleWindowScroll = () => {
     if (window.STOP === true) return;
-    const { scrollY } = window;
-    if (scrollY === this.scrollY) {
+    const { scrollY: scrollTop } = window;
+    if (scrollTop === this.scrollTop) {
       return;
     }
-    this.scrollY = scrollY;
+    this.scrollTop = scrollTop;
+    queueRender(this.computeRenderRangeAndEmit);
+  };
+
+  private handleElementScroll = () => {
+    if (
+      window.STOP === true ||
+      this.root == null ||
+      this.root instanceof Document
+    ) {
+      return;
+    }
+    // FIXME(amadeus): We should not be grabbing scroll height here... lol this
+    // might cause thrash too
+    const { scrollTop, scrollHeight } = this.root;
+    if (scrollTop === this.scrollTop && scrollHeight === this.scrollHeight) {
+      return;
+    }
+    this.scrollTop = scrollTop;
+    this.scrollHeight = scrollHeight;
     queueRender(this.computeRenderRangeAndEmit);
   };
 
   private computeRenderRangeAndEmit = () => {
     const windowSpecs = createWindowFromScrollPosition({
-      scrollY: this.scrollY,
+      scrollY: this.scrollTop,
       height: this.height,
       scrollHeight: this.scrollHeight,
       containerOffset: 0,
@@ -147,7 +177,7 @@ export class LittleBoiVirtualizer {
   };
 
   unobserver(target: HTMLElement): void {
-    this.intersectionObserver.unobserve(target);
+    this.intersectionObserver?.unobserve(target);
   }
 
   observers: Map<SubscribedInstance, HTMLElement> = new Map();
@@ -158,7 +188,7 @@ export class LittleBoiVirtualizer {
         'LittleBoiVirtualizer.connect: instance is already connected...'
       );
     }
-    this.intersectionObserver.observe(container);
+    this.intersectionObserver?.observe(container);
     this.observers.set(instance, container);
     return () => this.disconnect(instance);
   }
@@ -170,7 +200,7 @@ export class LittleBoiVirtualizer {
         'LittleBoiVirtualizer.disconnect: instance already disconnected...'
       );
     }
-    this.intersectionObserver.unobserve(element);
+    this.intersectionObserver?.unobserve(element);
     this.observers.delete(instance);
   }
 }

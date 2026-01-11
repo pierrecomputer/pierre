@@ -12,6 +12,7 @@ import type {
   VirtualWindowSpecs,
 } from 'src/types';
 import { areRenderRangesEqual } from 'src/utils/areRenderRangesEqual';
+import { parseDiffFromFile } from 'src/utils/parseDiffFromFile';
 import type { WorkerPoolManager } from 'src/worker';
 
 import {
@@ -28,27 +29,24 @@ export class LittleVirtualizedFileDiff<
 > extends FileDiff<LAnnotation> {
   override readonly __id: string = `little-virtualized-file-diff:${++instanceId}`;
 
-  override fileDiff: FileDiffMetadata;
   public top: number | undefined;
   public unifiedHeight: number = 0;
   public splitHeight: number = 0;
+  public override fileDiff: FileDiffMetadata | undefined = undefined;
 
   constructor(
-    fileDiff: FileDiffMetadata,
-    override options: FileDiffOptions<LAnnotation>,
+    options: FileDiffOptions<LAnnotation> | undefined,
     private intersectionObserver: LittleBoiVirtualizer,
     workerManager?: WorkerPoolManager
   ) {
     super(options, workerManager, true);
-    this.fileDiff = fileDiff;
-    this.computeApproximateSize();
   }
 
   onScrollUpdate = (_windowSpecs: VirtualWindowSpecs): void => {
     if (this.fileContainer == null) {
       return;
     }
-    this.virtualizedRender();
+    this.render();
   };
 
   onResize = (_windowSpecs: VirtualWindowSpecs): void => {
@@ -56,7 +54,7 @@ export class LittleVirtualizedFileDiff<
       return;
     }
     this.top = this.intersectionObserver.getOffsetFromRoot(this.fileContainer);
-    this.virtualizedRender();
+    this.render();
   };
 
   override cleanUp(): void {
@@ -68,11 +66,8 @@ export class LittleVirtualizedFileDiff<
 
   // NOTE(amadeus): If we can get scroll fixing working properly, we shoiuld
   // probably improve this to be much simpler...
-  private computeApproximateSize() {
-    const {
-      options: { disableFileHeader = false },
-      fileDiff,
-    } = this;
+  private computeApproximateSize(fileDiff: FileDiffMetadata) {
+    const { disableFileHeader = false } = this.options;
 
     // Add header gap
     if (disableFileHeader) {
@@ -107,13 +102,32 @@ export class LittleVirtualizedFileDiff<
     }
   }
 
-  virtualizedRender({
+  override render({
     fileContainer,
+    oldFile,
+    newFile,
+    fileDiff,
     ...props
-  }: Omit<FileDiffRenderProps<LAnnotation>, 'fileDiff'> = {}): void {
+  }: FileDiffRenderProps<LAnnotation> = {}): void {
     const isFirstRender = this.fileContainer == null;
+
+    this.fileDiff ??=
+      fileDiff ??
+      (oldFile != null && newFile != null
+        ? parseDiffFromFile(oldFile, newFile)
+        : undefined);
+
     fileContainer = this.getOrCreateFileContainer(fileContainer);
+
+    if (this.fileDiff == null) {
+      console.error(
+        'attempting to virtually render when we dont have the correct data'
+      );
+      return;
+    }
+
     if (isFirstRender) {
+      this.computeApproximateSize(this.fileDiff);
       // Figure out how to properly manage this...
       this.intersectionObserver.connect(this, fileContainer);
     }
@@ -121,6 +135,7 @@ export class LittleVirtualizedFileDiff<
     const { windowSpecs } = this.intersectionObserver;
     this.top ??= this.intersectionObserver.getOffsetFromRoot(fileContainer);
     const renderRange = this.computeRenderRangeFromWindow(
+      this.fileDiff,
       this.top,
       windowSpecs
     );
@@ -128,19 +143,27 @@ export class LittleVirtualizedFileDiff<
     if (areRenderRangesEqual(this.renderRange, renderRange)) {
       return;
     }
-    this.render({
+    super.render({
       fileDiff: this.fileDiff,
       fileContainer,
       renderRange,
+      oldFile,
+      newFile,
       ...props,
     });
   }
 
   private computeRenderRangeFromWindow(
+    fileDiff: FileDiffMetadata,
     fileTop: number,
     { top, bottom }: RenderWindow
   ): RenderRange {
     const { diffStyle = 'split', disableFileHeader = false } = this.options;
+    if (fileDiff == null) {
+      throw new Error(
+        'LittleVirtualizedFileDiff.computeRenderRangeFromWindow: fileDiff does not exist to compute from'
+      );
+    }
     const { lineCount, fileHeight } = getSpecs(this, diffStyle);
 
     // We should never hit this theoretically, but if so, gtfo and yell loudly,
@@ -170,11 +193,11 @@ export class LittleVirtualizedFileDiff<
     const hunkOffsets: number[] = [];
     let startingLine: number | undefined;
     let endingLine = 0;
-    for (const hunk of this.fileDiff.hunks) {
+    for (const hunk of fileDiff.hunks ?? []) {
       let hunkGap = 0;
       if (hunk.additionStart > 1 || hunk.deletionStart > 1) {
         hunkGap = HUNK_SEPARATOR_HEIGHT + FILE_GAP;
-        if (hunk !== this.fileDiff.hunks[0]) {
+        if (hunk !== fileDiff.hunks[0]) {
           hunkGap += FILE_GAP;
         }
         absoluteLineTop += hunkGap;
@@ -235,12 +258,12 @@ function getSpecs<LAnnotation>(
 ) {
   if (type === 'split') {
     return {
-      lineCount: instance.fileDiff.splitLineCount,
+      lineCount: instance.fileDiff?.splitLineCount ?? 0,
       fileHeight: instance.splitHeight,
     };
   }
   return {
-    lineCount: instance.fileDiff.unifiedLineCount,
+    lineCount: instance.fileDiff?.unifiedLineCount ?? 0,
     fileHeight: instance.unifiedHeight,
   };
 }

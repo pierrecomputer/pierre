@@ -81,7 +81,7 @@ const poolManager = (() => {
   return manager;
 })();
 
-const intersectionObserver = new LittleBoiVirtualizer(globalThis.document);
+const intersectionObserver = new LittleBoiVirtualizer();
 
 function startStreaming() {
   const container = document.getElementById('wrapper');
@@ -122,6 +122,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
   let patchIndex = 0;
   const themeType = getThemeType();
 
+  intersectionObserver.setup(globalThis.document);
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
       wrapper.appendChild(createFileMetadata(parsedPatch.patchMetadata));
@@ -131,7 +132,6 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
       const instance = new LittleVirtualizedFileDiff<LineCommentMetadata>(
-        fileDiff,
         {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           diffStyle: unified ? 'unified' : 'split',
@@ -254,7 +254,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
       const fileContainer = document.createElement(DIFFS_TAG_NAME);
       wrapper.appendChild(fileContainer);
       const start = Date.now();
-      instance.virtualizedRender({
+      instance.render({
+        fileDiff,
         lineAnnotations: fileAnnotations,
         fileContainer,
       });
