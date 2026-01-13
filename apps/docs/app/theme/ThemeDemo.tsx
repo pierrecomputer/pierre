@@ -378,7 +378,7 @@ function FileIcon({ lang, isDiff }: { lang: string; isDiff?: boolean }) {
     <IconFileCode
       className={cn(
         'size-4',
-        colors[isDiff ? 'diff' : lang] ?? 'text-neutral-400'
+        colors[isDiff === true ? 'diff' : lang] ?? 'text-neutral-400'
       )}
     />
   );
