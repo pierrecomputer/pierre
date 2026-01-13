@@ -8,4 +8,12 @@
       'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
       'Courier New', monospace;
   }
+
+  li {
+    cursor: pointer;
+    user-select: none;
+  }
+  li:hover {
+    background-color: #6661;
+  }
 }

@@ -96,11 +96,18 @@ export class FileTree<T> {
     if (this.divWrapper == null) {
       throw new Error('FileTree attachEventListeners: divWrapper is null');
     }
-    this.divWrapper.onclick = () => {
-      console.log(
-        this.__id,
-        this.tree?.getItems().map((item) => item.getItemData())
-      );
+    this.divWrapper.onclick = (e) => {
+      const itemId = (e.target as HTMLElement)?.dataset?.itemId;
+      if (itemId == null) {
+        console.warn('FileTree attachEventListeners: itemId is null');
+        return;
+      }
+      const item = this.tree?.getItemInstance(itemId);
+      if (item == null) {
+        console.warn('FileTree attachEventListeners: item not found');
+        return;
+      }
+      console.log(this.__id, itemId, item.getItemData());
     };
   }
 
@@ -172,9 +179,11 @@ export class FileTree<T> {
       subtreeId != null
         ? this.tree.getItemInstance(subtreeId).getChildren()
         : this.tree.getItems();
-    const items = subtree.map((item) => item.getItemData());
-    const listHtml = items
-      ?.map((item: any) => `<li>${item.name}</li>`)
+    const listHtml = subtree
+      ?.map((item: ItemInstance<any>) => {
+        const itemData = item.getItemData();
+        return `<li data-item-id="${item.getId()}">${itemData.name}</li>`;
+      })
       .join('');
     return `<ul>${listHtml}</ul>`;
   }
