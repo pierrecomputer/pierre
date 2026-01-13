@@ -12,6 +12,8 @@
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
+      - You must have first discussed with the dev team and they should be aware
+        that this PR is being opened
 - [ ] Refactoring (non-breaking change)
 - [ ] Breaking change (fix or feature that would change existing functionality)
 - [ ] Documentation update
@@ -25,6 +27,11 @@
 - [ ] I have updated the documentation accordingly (if applicable)
 - [ ] I have added tests to cover my changes (if applicable)
 - [ ] All new and existing tests pass (`bun run diffs:test`)
+
+### How was AI used in generating this PR
+
+<!-- You must disclosed any and all use of AI in PRs to help us asses how to
+review it -->
 
 ### Related issues
 
