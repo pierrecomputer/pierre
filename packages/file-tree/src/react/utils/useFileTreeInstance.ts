@@ -29,10 +29,20 @@ export function useFileTreeInstance<T>({
           'useFileDiffInstance: An instance should not already exist when a node is created'
         );
       }
+      const children = Array.from(fileTreeContainer.shadowRoot?.children ?? []);
+      const fileTreeElement = children.find(
+        (child: Element): child is HTMLElement =>
+          child instanceof HTMLElement &&
+          child.dataset?.fileTreeId != null &&
+          child.dataset.fileTreeId.length > 0
+      );
+      if (fileTreeElement == null) {
+        throw new Error(
+          'useFileTreeInstance: No file tree element found in the container'
+        );
+      }
       // TODO: switch to a more robust way of quickly grabbing this specific element
-      const existingFileTreeId = (
-        fileTreeContainer.shadowRoot?.children[1] as HTMLElement | undefined
-      )?.dataset?.fileTreeId;
+      const existingFileTreeId = fileTreeElement?.dataset?.fileTreeId;
       if (!existingFileTreeId) {
         throw new Error(
           'useFileTreeInstance: No file tree id found in the container'

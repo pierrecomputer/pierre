@@ -7,7 +7,9 @@ import {
 } from '@headless-tree/core';
 
 import { FILE_TREE_TAG_NAME } from '../constants';
+import { SVGSpriteSheet } from '../sprite';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
+import { propsToHtml } from '../utils/propsToHtml';
 import { FileTreeContainerLoaded } from './web-components';
 
 let instanceId = -1;
@@ -37,6 +39,7 @@ export class FileTree<T> {
   readonly __id: string;
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
+  private spriteSVG: SVGElement | undefined;
   private tree: TreeInstance<T> | undefined;
 
   constructor(public options: FileTreeOptions<T>) {
@@ -70,6 +73,15 @@ export class FileTree<T> {
     ) {
       parentNode.appendChild(this.fileTreeContainer);
     }
+    if (this.spriteSVG == null) {
+      const fragment = document.createElement('div');
+      fragment.innerHTML = SVGSpriteSheet;
+      const firstChild = fragment.firstChild;
+      if (firstChild instanceof SVGElement) {
+        this.spriteSVG = firstChild;
+        this.fileTreeContainer.shadowRoot?.appendChild(this.spriteSVG);
+      }
+    }
     return this.fileTreeContainer;
   }
 
@@ -97,7 +109,9 @@ export class FileTree<T> {
       throw new Error('FileTree attachEventListeners: divWrapper is null');
     }
     this.divWrapper.onclick = (e) => {
-      const itemId = (e.target as HTMLElement)?.dataset?.itemId;
+      const itemId = (
+        (e.target as HTMLElement)?.closest('[data-type="item"]') as HTMLElement
+      )?.dataset?.itemId;
       if (itemId == null) {
         console.warn('FileTree attachEventListeners: itemId is null');
         return;
@@ -107,7 +121,7 @@ export class FileTree<T> {
         console.warn('FileTree attachEventListeners: item not found');
         return;
       }
-      console.log(this.__id, itemId, item.getItemData());
+      console.log(this.__id, itemId, item.getItemData(), item.getItemMeta());
     };
   }
 
@@ -122,7 +136,6 @@ export class FileTree<T> {
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
     const output = this.generateFileTreeFake();
-    console.log('render', this.__id);
     divWrapper.innerHTML = output;
     this.attachEventListeners();
   }
@@ -133,6 +146,10 @@ export class FileTree<T> {
     for (const element of Array.from(
       fileTreeContainer.shadowRoot?.children ?? []
     )) {
+      if (element instanceof SVGElement) {
+        this.spriteSVG = element;
+        continue;
+      }
       if (!(element instanceof HTMLElement)) {
         continue;
       }
@@ -182,9 +199,14 @@ export class FileTree<T> {
     const listHtml = subtree
       ?.map((item: ItemInstance<any>) => {
         const itemData = item.getItemData();
-        return `<li data-item-id="${item.getId()}">${itemData.name}</li>`;
+        const itemProps = item.getProps();
+        return `<div data-type="item" data-item-id="${item.getId()}" ${propsToHtml(itemProps)}>
+          <div data-item-section="content">${itemData.name}</div>
+        </div>`;
       })
       .join('');
-    return `<ul>${listHtml}</ul>`;
+    const containerProps = this.tree.getContainerProps();
+    console.log('containerProps', propsToHtml(containerProps));
+    return `<div ${propsToHtml(containerProps)}>${listHtml}</div>`;
   }
 }

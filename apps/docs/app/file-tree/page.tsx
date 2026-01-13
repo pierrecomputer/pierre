@@ -1,15 +1,9 @@
-import { FileTree, fileTreeStyles } from '@pierre/file-tree';
+import { FileTree } from '@pierre/file-tree';
+import { preloadFileTree } from '@pierre/file-tree/ssr';
 
 import { ClientPage } from './ClientPage';
 import type { DemoItem } from './demo-data';
 import { sharedDemoFileTreeOptions } from './demo-data';
-
-function getPreloadedFileTreeHtml(fileTree: FileTree<DemoItem>): string {
-  return `<style>${fileTreeStyles}</style>
-<div data-file-tree-id="${fileTree.__id}" data-dehydrated>
-  ${fileTree.generateFileTreeFake()}
-</div>`;
-}
 
 export default function Home() {
   const fileTree = new FileTree(sharedDemoFileTreeOptions);
@@ -20,7 +14,7 @@ export default function Home() {
         <div id="test-file-tree-elem" className="border border-gray-300" />
       </div>
 
-      <ClientPage preloadedFileTreeHtml={getPreloadedFileTreeHtml(fileTree)} />
+      <ClientPage preloadedFileTreeHtml={preloadFileTree<DemoItem>(fileTree)} />
     </div>
   );
 }

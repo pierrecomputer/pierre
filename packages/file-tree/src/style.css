@@ -7,13 +7,37 @@
     font-family:
       'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
       'Courier New', monospace;
+
+    --level-gap: 16px;
   }
 
-  li {
+  /* LIST ITEM */
+
+  [data-type='item'] {
+    padding: 0 4px;
     cursor: pointer;
     user-select: none;
   }
-  li:hover {
+  [data-type='item']:hover,
+  [data-type='item']:focus {
     background-color: #6661;
   }
+
+  /* LIST IDENTATION */
+  [aria-level] > [data-item-section='content'] {
+    padding-left: calc(var(--level-gap) * calc(var(--aria-level) - 1));
+  }
+  [aria-level='1'] {
+    --aria-level: 1;
+  }
+  [aria-level='2'] {
+    --aria-level: 2;
+  }
+  [aria-level='3'] {
+    --aria-level: 3;
+  }
+  [aria-level='4'] {
+    --aria-level: 4;
+  }
+  /* TODO: how many levels do we support out of the box? */
 }
