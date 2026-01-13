@@ -8,6 +8,7 @@ const useIsometricEffect =
 
 interface UseFileTreeInstanceProps<T> {
   options: FileTreeOptions<T>;
+  forceClientRender?: boolean;
   prerenderedHTML: string | undefined;
 }
 
@@ -17,6 +18,7 @@ interface UseFileTreeInstanceReturn {
 
 export function useFileTreeInstance<T>({
   options,
+  forceClientRender,
   prerenderedHTML,
 }: UseFileTreeInstanceProps<T>): UseFileTreeInstanceReturn {
   const instanceRef = useRef<FileTree<T> | null>(null);
@@ -27,9 +29,19 @@ export function useFileTreeInstance<T>({
           'useFileDiffInstance: An instance should not already exist when a node is created'
         );
       }
-      // FIXME: Ideally we don't use FileDiffUI here, and instead amalgamate
-      // the renderers manually
-      instanceRef.current = new FileTree(options);
+      // TODO: switch to a more robust way of quickly grabbing this specific element
+      const existingFileTreeId = (
+        fileTreeContainer.shadowRoot?.children[1] as HTMLElement | undefined
+      )?.dataset?.fileTreeId;
+      if (!existingFileTreeId) {
+        throw new Error(
+          'useFileTreeInstance: No file tree id found in the container'
+        );
+      }
+      instanceRef.current = new FileTree({
+        ...options,
+        id: existingFileTreeId ?? undefined,
+      });
       void instanceRef.current.hydrate({
         fileTreeContainer,
         prerenderedHTML,
@@ -49,7 +61,9 @@ export function useFileTreeInstance<T>({
     if (instanceRef.current == null) return;
     const instance = instanceRef.current;
     instance.setOptions(options);
-    void instance.render({});
+    if (forceClientRender === true) {
+      void instance.render({});
+    }
   });
 
   return { ref };
