@@ -1,6 +1,5 @@
 import '@/app/prose.css';
 import Footer from '@/components/Footer';
-import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 import {
   IconArrowUpRight,
@@ -14,16 +13,20 @@ import { preloadFile } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { HeadingAnchors } from '../docs/HeadingAnchors';
 import { ProseWrapper } from '../docs/ProseWrapper';
 import {
   THEMING_PACKAGE_JSON_EXAMPLE,
-  THEMING_PALETTE_EXAMPLE,
+  THEMING_PALETTE_COLORS,
+  THEMING_PALETTE_LIGHT,
+  THEMING_PALETTE_ROLES,
   THEMING_PROJECT_STRUCTURE,
   THEMING_REGISTER_THEME,
   THEMING_TOKEN_COLORS_EXAMPLE,
   THEMING_USE_IN_COMPONENT,
 } from '../docs/Theming/constants';
 import { ThemeDemo } from './ThemeDemo';
+import { ThemeLayout } from './ThemeLayout';
 
 export const metadata: Metadata = {
   title: 'Pierre Themes — Themes for Visual Studio Code, Cursor, and Shiki.',
@@ -44,26 +47,54 @@ export const metadata: Metadata = {
 
 export default async function ThemePage() {
   const [
-    projectStructure,
-    paletteExample,
-    tokenColorsExample,
-    packageJsonExample,
-    registerTheme,
-    useInComponent,
+    projectStructurePreload,
+    paletteColorsPreload,
+    paletteRolesPreload,
+    paletteLightPreload,
+    tokenColorsExamplePreload,
+    packageJsonExamplePreload,
+    registerThemePreload,
+    useInComponentPreload,
   ] = await Promise.all([
     preloadFile(THEMING_PROJECT_STRUCTURE),
-    preloadFile(THEMING_PALETTE_EXAMPLE),
+    preloadFile(THEMING_PALETTE_COLORS),
+    preloadFile(THEMING_PALETTE_ROLES),
+    preloadFile(THEMING_PALETTE_LIGHT),
     preloadFile(THEMING_TOKEN_COLORS_EXAMPLE),
     preloadFile(THEMING_PACKAGE_JSON_EXAMPLE),
     preloadFile(THEMING_REGISTER_THEME),
     preloadFile(THEMING_USE_IN_COMPONENT),
   ]);
 
+  // Merge href from constants into preloaded results
+  const projectStructure = { ...projectStructurePreload };
+  const paletteColors = {
+    ...paletteColorsPreload,
+    href: THEMING_PALETTE_COLORS.href,
+  };
+  const paletteRoles = {
+    ...paletteRolesPreload,
+    href: THEMING_PALETTE_ROLES.href,
+  };
+  const paletteLight = {
+    ...paletteLightPreload,
+    href: THEMING_PALETTE_LIGHT.href,
+  };
+  const tokenColorsExample = {
+    ...tokenColorsExamplePreload,
+    href: THEMING_TOKEN_COLORS_EXAMPLE.href,
+  };
+  const packageJsonExample = { ...packageJsonExamplePreload };
+  const registerTheme = { ...registerThemePreload };
+  const useInComponent = { ...useInComponentPreload };
+
   const content = await renderMDX({
     filePath: 'docs/Theming/content.mdx',
     scope: {
       projectStructure,
-      paletteExample,
+      paletteColors,
+      paletteRoles,
+      paletteLight,
       tokenColorsExample,
       packageJsonExample,
       registerTheme,
@@ -71,10 +102,8 @@ export default async function ThemePage() {
     },
   });
 
-  return (
-    <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
-      <Header className="-mb-[1px]" />
-
+  const headerContent = (
+    <>
       <section className="flex max-w-3xl flex-col gap-3 py-20 lg:max-w-4xl">
         <div className="mb-2 flex gap-2">
           <div className="size-4 rounded-full bg-[#fc2b73] dark:bg-[#ff678d]" />
@@ -140,17 +169,23 @@ export default async function ThemePage() {
         </div>
       </section>
 
-      {/* <section className="py-6">
-        <ThemeScreenshots />
-      </section> */}
-
       <section className="pb-6">
         <ThemeDemo />
       </section>
+    </>
+  );
 
-      <ProseWrapper>{content}</ProseWrapper>
+  return (
+    <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
+      <ThemeLayout header={headerContent}>
+        <div className="min-w-0 space-y-8">
+          <HeadingAnchors />
 
-      <PierreCompanySection />
+          <ProseWrapper>{content}</ProseWrapper>
+
+          <PierreCompanySection />
+        </div>
+      </ThemeLayout>
 
       <Footer />
     </div>

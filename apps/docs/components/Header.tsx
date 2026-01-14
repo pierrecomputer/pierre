@@ -112,7 +112,7 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
         </div>
       </Link>
 
-      {pathname === '/docs' && (
+      {(pathname === '/docs' || pathname === '/theme') && (
         <div className="mr-auto flex items-center gap-1 md:hidden">
           <IconChevronFlat size={16} className="text-border" />
           <Button variant="ghost" size="icon" onClick={onMobileMenuToggle}>
