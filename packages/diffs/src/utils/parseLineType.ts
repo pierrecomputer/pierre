@@ -18,8 +18,14 @@ export function parseLineType(line: string): ParsedLine | undefined {
     );
     return undefined;
   }
+  const processedLine = line.substring(1);
   return {
-    line: line.substring(1),
+    // NOTE(amadeus): If the line is empty, we should make it a
+    // newline to force shiki to highlight the row. This should
+    // only really ever apply as the last line of a hunk that was most likely
+    // processed via a string and not a file since patch files will include a
+    // newline here by default
+    line: processedLine === '' ? '\n' : processedLine,
     type:
       firstChar === ' '
         ? 'context'
