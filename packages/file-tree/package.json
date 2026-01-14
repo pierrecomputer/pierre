@@ -46,7 +46,8 @@
   },
   "dependencies": {
     "@headless-tree/core": "catalog:",
-    "preact": "catalog:"
+    "preact": "catalog:",
+    "preact-render-to-string": "catalog:"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",

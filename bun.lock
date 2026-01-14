@@ -156,6 +156,7 @@
       "dependencies": {
         "@headless-tree/core": "catalog:",
         "preact": "catalog:",
+        "preact-render-to-string": "catalog:",
       },
       "devDependencies": {
         "@arethetypeswrong/core": "catalog:",
@@ -296,6 +297,7 @@
     "postcss-html": "1.7.0",
     "postcss-import": "16.1.1",
     "preact": "11.0.0-beta.0",
+    "preact-render-to-string": "6.6.5",
     "prettier": "3.6.2",
     "prettier-plugin-tailwindcss": "0.7.1",
     "react": "19.2.3",
@@ -2090,6 +2092,8 @@
     "postcss-value-parser": ["postcss-value-parser@4.2.0", "", {}, "sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ=="],
 
     "preact": ["preact@11.0.0-beta.0", "", {}, "sha512-IcODoASASYwJ9kxz7+MJeiJhvLriwSb4y4mHIyxdgaRZp6kPUud7xytrk/6GZw8U3y6EFJaRb5wi9SrEK+8+lg=="],
+
+    "preact-render-to-string": ["preact-render-to-string@6.6.5", "", { "peerDependencies": { "preact": ">=10 || >= 11.0.0-0" } }, "sha512-O6MHzYNIKYaiSX3bOw0gGZfEbOmlIDtDfWwN1JJdc/T3ihzRT6tGGSEWE088dWrEDGa1u7101q+6fzQnO9XCPA=="],
 
     "prelude-ls": ["prelude-ls@1.2.1", "", {}, "sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g=="],
 
