@@ -1,4 +1,4 @@
-import type { ThemeRegistrationResolved } from 'shiki';
+import type { ThemeRegistration, ThemeRegistrationResolved } from 'shiki';
 
 import type { DiffsThemeNames } from '../../types';
 
@@ -12,7 +12,7 @@ export const ResolvingThemes: Map<
 
 export const RegisteredCustomThemes: Map<
   string,
-  () => Promise<ThemeRegistrationResolved>
+  () => Promise<ThemeRegistrationResolved | ThemeRegistration>
 > = new Map();
 
 export const AttachedThemes: Set<string> = new Set();

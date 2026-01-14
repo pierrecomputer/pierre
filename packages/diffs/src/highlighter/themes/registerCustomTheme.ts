@@ -1,10 +1,10 @@
-import type { ThemeRegistrationResolved } from 'shiki';
+import type { ThemeRegistration, ThemeRegistrationResolved } from 'shiki';
 
 import { RegisteredCustomThemes } from './constants';
 
 export function registerCustomTheme(
   themeName: string,
-  loader: () => Promise<ThemeRegistrationResolved>
+  loader: () => Promise<ThemeRegistrationResolved | ThemeRegistration>
 ): void {
   if (RegisteredCustomThemes.has(themeName)) {
     console.error(
