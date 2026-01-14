@@ -45,7 +45,8 @@
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@headless-tree/core": "catalog:"
+    "@headless-tree/core": "catalog:",
+    "preact": "catalog:"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",
