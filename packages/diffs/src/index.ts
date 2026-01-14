@@ -19,7 +19,7 @@ export * from './highlighter/themes/constants';
 export * from './highlighter/themes/getResolvedOrResolveTheme';
 export * from './highlighter/themes/getResolvedThemes';
 export * from './highlighter/themes/hasResolvedThemes';
-export * from './highlighter/themes/registerCustomCSSTheme';
+export * from './highlighter/themes/registerCustomCSSVariableTheme';
 export * from './highlighter/themes/registerCustomTheme';
 export * from './highlighter/themes/resolveTheme';
 export * from './highlighter/themes/resolveThemes';

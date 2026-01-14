@@ -3,16 +3,16 @@ import { formatCSSVariablePrefix } from 'src/utils/formatCSSVariablePrefix';
 
 import { registerCustomTheme } from './registerCustomTheme';
 
-export function registerCustomCSSTheme(
+export function registerCustomCSSVariableTheme(
   name: string,
-  variableDefaults: Record<string, string>
+  variableDefaults: Record<string, string>,
+  fontStyle: boolean = false
 ): void {
   const theme = createCssVariablesTheme({
     name,
     variablePrefix: formatCSSVariablePrefix(),
     variableDefaults,
-    // NOTE(amadeus): Not sure the impact of this
-    fontStyle: true,
+    fontStyle,
   });
 
   registerCustomTheme(name, () => Promise.resolve(theme));
