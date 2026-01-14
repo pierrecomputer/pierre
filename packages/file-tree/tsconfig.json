@@ -1,10 +1,5 @@
 {
   "extends": "../../tsconfig.options.json",
-  "references": [
-    {
-      "path": "./tsconfig.react.json"
-    }
-  ],
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
@@ -12,7 +7,7 @@
     "test/**/*.ts",
     "tsdown.config.ts"
   ],
-  "exclude": ["src/react/FileTree.react.tsx", "node_modules", "dist"],
+  "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "isolatedDeclarations": true,
     "allowJs": false,
