@@ -1,18 +1,7 @@
 {
   "extends": "../../tsconfig.options.json",
-  "references": [
-    {
-      "path": "./tsconfig.react.json"
-    }
-  ],
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "src/**/*.json",
-    "test/**/*.ts",
-    "tsdown.config.ts"
-  ],
-  "exclude": ["src/react/FileTree.react.tsx", "node_modules", "dist"],
+  "include": ["src/react/FileTree.react.tsx"],
+  "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "isolatedDeclarations": true,
     "allowJs": false,
@@ -22,8 +11,8 @@
     "baseUrl": ".",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "jsxImportSource": "preact",
     "target": "esnext",
+    "jsxImportSource": "react",
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,

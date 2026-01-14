@@ -4,7 +4,7 @@ import { type UserConfig, defineConfig } from 'tsdown';
 
 const config: UserConfig = defineConfig([
   {
-    entry: ['src/**/*.ts', 'src/**/*.tsx'],
+    entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/react/FileTree.react.tsx'],
     loader: {
       '.css': 'text',
     },
@@ -16,6 +16,16 @@ const config: UserConfig = defineConfig([
     },
     unbundle: true,
     platform: 'neutral',
+    // inputOptions: {
+    //   transform: {
+    //     jsx: {
+    //       runtime: 'classic',
+    //       importSource: 'preact',
+    //       pragma: 'h',
+    //       pragmaFrag: 'Fragment',
+    //     },
+    //   },
+    // },
     plugins: [
       {
         name: 'postcss-autoprefixer',
