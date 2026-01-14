@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-import { FileTree, type FileTreeOptions } from '../../components/FileTree';
+import { FileTree, type FileTreeOptions } from '../../FileTree';
 import { useStableCallback } from './useStableCallback';
 
 const useIsometricEffect =

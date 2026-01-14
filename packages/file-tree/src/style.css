@@ -37,7 +37,8 @@
     width: 8px;
     height: 8px;
   }
-  [aria-expanded='false'] > [data-item-section='icon'] {
+  [aria-expanded='false'][data-item-type='folder']
+    > [data-item-section='icon'] {
     transform: rotate(-90deg);
   }
 
