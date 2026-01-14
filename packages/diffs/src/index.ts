@@ -1,3 +1,8 @@
+import {
+  codeToHtml,
+  createCssVariablesTheme as createCSSVariablesTheme,
+} from 'shiki';
+
 export * from './components/File';
 export * from './components/FileDiff';
 export * from './components/FileStream';
@@ -80,4 +85,4 @@ export * from './utils/setLanguageOverride';
 export * from './utils/setWrapperNodeProps';
 export type * from './types';
 
-export { codeToHtml, createCssVariablesTheme } from 'shiki';
+export { codeToHtml, createCSSVariablesTheme };

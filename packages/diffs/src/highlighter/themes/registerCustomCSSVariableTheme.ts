@@ -1,6 +1,6 @@
-import { createCssVariablesTheme } from 'shiki';
-import { formatCSSVariablePrefix } from 'src/utils/formatCSSVariablePrefix';
+import { createCssVariablesTheme as createCSSVariablesTheme } from 'shiki';
 
+import { formatCSSVariablePrefix } from '../../utils/formatCSSVariablePrefix';
 import { registerCustomTheme } from './registerCustomTheme';
 
 export function registerCustomCSSVariableTheme(
@@ -8,12 +8,11 @@ export function registerCustomCSSVariableTheme(
   variableDefaults: Record<string, string>,
   fontStyle: boolean = false
 ): void {
-  const theme = createCssVariablesTheme({
+  const theme = createCSSVariablesTheme({
     name,
     variablePrefix: formatCSSVariablePrefix(),
     variableDefaults,
     fontStyle,
   });
-
   registerCustomTheme(name, () => Promise.resolve(theme));
 }
