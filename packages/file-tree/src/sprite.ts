@@ -1,12 +1,12 @@
 export type SVGSpriteNames =
-  | 'diffs-icon-chevron'
-  | 'diffs-icon-symbol-modified';
+  | 'file-tree-icon-chevron'
+  | 'file-tree-icon-symbol-modified';
 
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
-  <symbol id="diffs-icon-chevron" viewBox="0 0 16 16">
+  <symbol id="file-tree-icon-chevron" viewBox="0 0 16 16">
     <path d="M1.47 4.47a.75.75 0 0 1 1.06 0L8 9.94l5.47-5.47a.75.75 0 1 1 1.06 1.06l-6 6a.75.75 0 0 1-1.06 0l-6-6a.75.75 0 0 1 0-1.06"/>
   </symbol>
-  <symbol id="diffs-icon-symbol-modified" viewBox="0 0 16 16">
+  <symbol id="file-tree-icon-symbol-modified" viewBox="0 0 16 16">
     <path d="M1.5 8c0 1.613.088 2.806.288 3.704.196.88.478 1.381.802 1.706s.826.607 1.706.802c.898.2 2.091.288 3.704.288s2.806-.088 3.704-.288c.88-.195 1.381-.478 1.706-.802s.607-.826.802-1.706c.2-.898.288-2.091.288-3.704s-.088-2.806-.288-3.704c-.195-.88-.478-1.381-.802-1.706s-.826-.606-1.706-.802C10.806 1.588 9.613 1.5 8 1.5s-2.806.088-3.704.288c-.88.196-1.381.478-1.706.802s-.606.826-.802 1.706C1.588 5.194 1.5 6.387 1.5 8M0 8c0-6.588 1.412-8 8-8s8 1.412 8 8-1.412 8-8 8-8-1.412-8-8m8 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
   </symbol>
 </svg>`;

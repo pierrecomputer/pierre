@@ -3,41 +3,101 @@
 @layer base {
   :host {
     color-scheme: light dark;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
     font-family:
       'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
       'Courier New', monospace;
 
-    --level-gap: 16px;
+    --ft-level-gap: 16px;
+    --ft-max-level: 4;
   }
 
   /* LIST ITEM */
-
   [data-type='item'] {
     padding: 0 4px;
     cursor: pointer;
     user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   [data-type='item']:hover,
   [data-type='item']:focus {
     background-color: #6661;
   }
 
+  [data-item-section='icon'] {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    fill: currentColor;
+    width: 8px;
+    height: 8px;
+  }
+  [aria-expanded='false'] > [data-item-section='icon'] {
+    transform: rotate(-90deg);
+  }
+
   /* LIST IDENTATION */
   [aria-level] > [data-item-section='content'] {
-    padding-left: calc(var(--level-gap) * calc(var(--aria-level) - 1));
+    /* Gap is level - 1 because aria starts at 1 but we want to start at 0 */
+    /* If for some reason someone is using a level higher than the max, we'll use the
+    max level + 1 by default, so it still indents past all known levels. */
+    padding-left: calc(
+      var(--ft-level-gap) *
+        calc(var(--ft-aria-level, calc(var(--ft-max-level) + 1)) - 1)
+    );
   }
   [aria-level='1'] {
-    --aria-level: 1;
+    --ft-aria-level: 1;
   }
   [aria-level='2'] {
-    --aria-level: 2;
+    --ft-aria-level: 2;
   }
   [aria-level='3'] {
-    --aria-level: 3;
+    --ft-aria-level: 3;
   }
   [aria-level='4'] {
-    --aria-level: 4;
+    --ft-aria-level: 4;
+  }
+  [aria-level='5'] {
+    --ft-aria-level: 5;
+  }
+  [aria-level='6'] {
+    --ft-aria-level: 6;
+  }
+  [aria-level='7'] {
+    --ft-aria-level: 7;
+  }
+  [aria-level='8'] {
+    --ft-aria-level: 8;
+  }
+  [aria-level='9'] {
+    --ft-aria-level: 9;
+  }
+  [aria-level='10'] {
+    --ft-aria-level: 10;
+  }
+  [aria-level='11'] {
+    --ft-aria-level: 11;
+  }
+  [aria-level='12'] {
+    --ft-aria-level: 12;
+  }
+  [aria-level='13'] {
+    --ft-aria-level: 13;
+  }
+  [aria-level='14'] {
+    --ft-aria-level: 14;
+  }
+  [aria-level='15'] {
+    --ft-aria-level: 15;
+  }
+  [aria-level='16'] {
+    --ft-aria-level: 16;
   }
   /* TODO: how many levels do we support out of the box? */
 }

@@ -8,6 +8,7 @@ import {
 
 import { FILE_TREE_TAG_NAME } from '../constants';
 import { SVGSpriteSheet } from '../sprite';
+import { iconHtml } from '../utils/icon';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { propsToHtml } from '../utils/propsToHtml';
 import { FileTreeContainerLoaded } from './web-components';
@@ -109,9 +110,10 @@ export class FileTree<T> {
       throw new Error('FileTree attachEventListeners: divWrapper is null');
     }
     this.divWrapper.onclick = (e) => {
-      const itemId = (
-        (e.target as HTMLElement)?.closest('[data-type="item"]') as HTMLElement
-      )?.dataset?.itemId;
+      const itemElement = (e.target as HTMLElement)?.closest(
+        '[data-type="item"]'
+      ) as HTMLElement;
+      const itemId = itemElement?.dataset?.itemId;
       if (itemId == null) {
         console.warn('FileTree attachEventListeners: itemId is null');
         return;
@@ -121,7 +123,25 @@ export class FileTree<T> {
         console.warn('FileTree attachEventListeners: item not found');
         return;
       }
-      console.log(this.__id, itemId, item.getItemData(), item.getItemMeta());
+      // console.log(this.__id, itemId, item.getItemData(), item.getItemMeta());
+      if (item.isExpanded()) {
+        item.collapse();
+        itemElement.setAttribute('aria-expanded', 'false');
+        const numChildren = (item.getItemData() as any).children?.length ?? 0;
+        // remove the next numChildren elements after the itemElement
+        for (let i = 0; i < numChildren; i++) {
+          itemElement.nextElementSibling?.remove();
+        }
+      } else {
+        item.expand();
+        itemElement.setAttribute('aria-expanded', 'true');
+        const newhtml = this.generateFileTreeFake(itemId);
+        const newElement = document.createElement('div');
+        newElement.innerHTML = newhtml;
+        while (newElement.lastElementChild != null) {
+          itemElement.after(newElement.lastElementChild);
+        }
+      }
     };
   }
 
@@ -202,11 +222,18 @@ export class FileTree<T> {
         const itemProps = item.getProps();
         return `<div data-type="item" data-item-id="${item.getId()}" ${propsToHtml(itemProps)}>
           <div data-item-section="content">${itemData.name}</div>
+          ${
+            itemData.children != null && itemData.children.length > 0
+              ? `<div data-item-section="icon">${iconHtml('file-tree-icon-chevron')}</div>`
+              : ''
+          }
         </div>`;
       })
       .join('');
     const containerProps = this.tree.getContainerProps();
-    console.log('containerProps', propsToHtml(containerProps));
+    if (subtreeId != null) {
+      return listHtml;
+    }
     return `<div ${propsToHtml(containerProps)}>${listHtml}</div>`;
   }
 }
