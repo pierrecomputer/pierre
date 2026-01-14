@@ -5,12 +5,14 @@ import {
   createTree,
   syncDataLoaderFeature,
 } from '@headless-tree/core';
+import { hydrate } from 'preact';
 
 import { FILE_TREE_TAG_NAME } from '../constants';
 import { SVGSpriteSheet } from '../sprite';
 import { iconHtml } from '../utils/icon';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { propsToHtml } from '../utils/propsToHtml';
+import { TestFileTree } from './TestFileTree';
 import { FileTreeContainerLoaded } from './web-components';
 
 let instanceId = -1;
@@ -195,6 +197,11 @@ export class FileTree<T> {
       this.tree.setMounted(true);
       this.tree.rebuildTree();
       this.attachEventListeners();
+      const preactDiv = this.divWrapper.nextElementSibling;
+      if (preactDiv == null) {
+        throw new Error('FileTree: preactDiv is null');
+      }
+      hydrate(<TestFileTree />, preactDiv);
     }
   }
 
