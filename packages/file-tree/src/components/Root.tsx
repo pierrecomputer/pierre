@@ -13,7 +13,7 @@ export interface FileTreeRootProps<T> {
 export function Root<T>({ treeConfig }: FileTreeRootProps<T>): JSX.Element {
   'use no memo';
 
-  const tree = useTree({
+  const tree = useTree<T>({
     ...treeConfig,
     features: [syncDataLoaderFeature],
   });
@@ -22,17 +22,12 @@ export function Root<T>({ treeConfig }: FileTreeRootProps<T>): JSX.Element {
     <div {...tree.getContainerProps()}>
       {tree.getItems().map((item) => {
         const hasChildren = (item.getItemData() as any)?.children != null;
-        const props = item.getProps();
         return (
           <div
             data-type="item"
             data-item-type={hasChildren ? 'folder' : 'file'}
             data-item-id={item.getId()}
-            {...props}
-            onClick={() => {
-              props.onClick?.bind(item);
-              console.log('clicked', item.getId());
-            }}
+            {...item.getProps()}
             key={item.getId()}
           >
             <div data-item-section="content">{item.getItemName()}</div>
