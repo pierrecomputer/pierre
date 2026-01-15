@@ -6,6 +6,7 @@ import {
   IconBrandCursor,
   IconBrandVsCode,
   IconBrandZed,
+  IconThemes,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { renderMDX } from '@/lib/mdx';
@@ -105,14 +106,7 @@ export default async function ThemePage() {
   const headerContent = (
     <>
       <section className="flex max-w-3xl flex-col gap-3 py-20 lg:max-w-4xl">
-        <div className="mb-2 flex gap-2">
-          <div className="size-4 rounded-full bg-[#fc2b73] dark:bg-[#ff678d]" />
-          <div className="size-4 w-8 rounded-full bg-[#0dbe4e] dark:bg-[#5ecc71]" />
-          <div className="size-4 w-12 rounded-full bg-[#00cab1] dark:bg-[#61d5c0]" />
-          <div className="size-4 w-20 rounded-full bg-[#7b43f8] dark:bg-[#9d6afb]" />
-          <div className="size-4 w-8 rounded-full bg-[#fe8c2c] dark:bg-[#ffa359]" />
-          <div className="size-4 w-6 rounded-full bg-[#009fff] dark:bg-[#69b1ff]" />
-        </div>
+        <IconThemes className="mb-2 size-8" />
 
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
           Pierre themes
