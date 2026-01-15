@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  IconCheckCheck,
   IconColorDark,
   IconColorLight,
   IconFileCode,
@@ -402,7 +403,35 @@ export function ThemeDemo() {
 
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
-  const themeName = colorMode === 'dark' ? 'pierre-dark' : 'pierre-light';
+  const isDark = colorMode === 'dark';
+  const themeName = isDark ? 'pierre-dark' : 'pierre-light';
+
+  // Consolidated color-mode-specific styles
+  const styles = useMemo(
+    () => ({
+      container: isDark
+        ? 'border-neutral-700/50 bg-[#1b1d23]'
+        : 'border-neutral-300/70 bg-[#f9f9fb]',
+      tabBar: isDark
+        ? 'border-neutral-700/50 bg-neutral-900'
+        : 'border-neutral-200 bg-neutral-50',
+      tabActive: isDark
+        ? 'border-neutral-700/50 bg-neutral-950 text-neutral-100'
+        : 'border-neutral-200 bg-[#fff] text-neutral-900',
+      tabInactive: isDark
+        ? 'text-neutral-400 hover:text-neutral-300'
+        : 'text-neutral-500 hover:text-neutral-700',
+      tabIndicator: isDark ? 'bg-blue-400' : 'bg-blue-500',
+      headerText: isDark ? 'text-neutral-300' : 'text-neutral-700',
+      buttonSecondary: isDark
+        ? 'bg-neutral-700 text-neutral-300 hover:bg-neutral-700'
+        : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300',
+      buttonPrimary: isDark
+        ? 'bg-blue-600 text-white hover:bg-blue-500'
+        : 'bg-blue-500 text-white hover:bg-blue-400',
+    }),
+    [isDark]
+  );
 
   const file = useMemo(
     () => ({
@@ -520,19 +549,10 @@ export function ThemeDemo() {
       <div
         className={cn(
           'overflow-hidden rounded-sm border transition-colors',
-          colorMode === 'dark'
-            ? 'border-neutral-700/50 bg-[#1b1d23]'
-            : 'border-neutral-300/70 bg-[#f9f9fb]'
+          styles.container
         )}
       >
-        <div
-          className={cn(
-            '-ml-[1px] flex items-end border-b',
-            colorMode === 'dark'
-              ? 'border-neutral-700/50 bg-[#15171c]'
-              : 'border-neutral-200 bg-neutral-50'
-          )}
-        >
+        <div className={cn('-ml-[1px] flex items-end border-b', styles.tabBar)}>
           {TABS.map((tab) => {
             const isActive = tab.id === activeTab;
             return (
@@ -541,13 +561,7 @@ export function ThemeDemo() {
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   'relative flex items-center gap-2 border-r border-l border-transparent px-4 py-2 text-sm font-medium',
-                  isActive
-                    ? colorMode === 'dark'
-                      ? 'border-neutral-700/50 bg-[#1b1d23] text-neutral-100'
-                      : 'border-neutral-200 bg-[#fff] text-neutral-900'
-                    : colorMode === 'dark'
-                      ? 'text-neutral-400 hover:text-neutral-300'
-                      : 'text-neutral-500 hover:text-neutral-700'
+                  isActive ? styles.tabActive : styles.tabInactive
                 )}
               >
                 <FileIcon lang={tab.lang} isDiff={tab.isDiff} />
@@ -556,7 +570,7 @@ export function ThemeDemo() {
                   <span
                     className={cn(
                       'absolute top-0 right-0 left-0 h-[1px]',
-                      colorMode === 'dark' ? 'bg-blue-400' : 'bg-blue-500'
+                      styles.tabIndicator
                     )}
                   />
                 )}
@@ -570,17 +584,10 @@ export function ThemeDemo() {
             <div
               className={cn(
                 'sticky top-0 z-10 flex items-center justify-between border-b py-2 pr-3 pl-4.5',
-                colorMode === 'dark'
-                  ? 'border-neutral-700/50 bg-[#15171c]'
-                  : 'border-neutral-200 bg-neutral-50'
+                styles.tabBar
               )}
             >
-              <span
-                className={cn(
-                  'text-[13px]',
-                  colorMode === 'dark' ? 'text-neutral-300' : 'text-neutral-700'
-                )}
-              >
+              <span className={cn('text-[13px]', styles.headerText)}>
                 {totalChanges > 0 ? (
                   <>
                     {totalChanges} {totalChanges === 1 ? 'change' : 'changes'}{' '}
@@ -588,7 +595,10 @@ export function ThemeDemo() {
                     {filesWithChanges === 1 ? 'file' : 'files'}
                   </>
                 ) : (
-                  <>All changes reviewed</>
+                  <div className="flex items-center gap-1.5">
+                    <IconCheckCheck className="text-green-500 dark:text-green-400" />
+                    All changes reviewed
+                  </div>
                 )}
               </span>
               {totalChanges > 0 && (
@@ -596,10 +606,8 @@ export function ThemeDemo() {
                   <button
                     onClick={() => handleGlobalAction('reject')}
                     className={cn(
-                      'rounded-md px-2.5 py-1 text-[13px] transition-colors',
-                      colorMode === 'dark'
-                        ? 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
-                        : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+                      'rounded-md px-2.5 py-1 text-[13px]',
+                      styles.buttonSecondary
                     )}
                   >
                     Undo All
@@ -607,10 +615,8 @@ export function ThemeDemo() {
                   <button
                     onClick={() => handleGlobalAction('accept')}
                     className={cn(
-                      'rounded-md px-2.5 py-1 text-[13px] transition-colors',
-                      colorMode === 'dark'
-                        ? 'bg-blue-700 text-white hover:bg-blue-600'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                      'rounded-md px-2.5 py-1 text-[13px]',
+                      styles.buttonPrimary
                     )}
                   >
                     Accept All
@@ -618,7 +624,7 @@ export function ThemeDemo() {
                 </div>
               )}
             </div>
-            <div className="divide-y divide-neutral-200">
+            <div className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {fileDiffs.map((fileData) => {
                 // Check if this file has any remaining changes
                 const hasChanges = fileData.diff.hunks.some((hunk) =>
@@ -711,6 +717,18 @@ function FileDiffWithChangeActions({
   colorMode,
   onChangeAction,
 }: FileDiffWithChangeActionsProps) {
+  const isDark = colorMode === 'dark';
+
+  const buttonStyles = useMemo(
+    () => ({
+      undo: isDark
+        ? 'border-[rgb(255_255_255_/0.1)] bg-neutral-900 text-neutral-300 hover:bg-neutral-700'
+        : 'border-[rgb(0_0_0_/0.15)] bg-white text-neutral-700 hover:bg-neutral-100',
+      keep: isDark ? 'text-black' : 'text-white',
+    }),
+    [isDark]
+  );
+
   // Create line annotations for each change block within hunks
   const lineAnnotations = useMemo(() => {
     const annotations: DiffLineAnnotation<ChangeBlockAnnotation>[] = [];
@@ -788,9 +806,7 @@ function FileDiffWithChangeActions({
               }
               className={cn(
                 'rounded-sm border px-2.5 py-0.5 text-[12px] transition-colors',
-                colorMode === 'dark'
-                  ? 'border-[rgb(255_255_255_/0.1)] bg-neutral-900 text-neutral-300 hover:bg-neutral-700'
-                  : 'border-[rgb(0_0_0_/0.15)] bg-white text-neutral-700 hover:bg-neutral-100'
+                buttonStyles.undo
               )}
               style={{ fontFamily: 'var(--font-geist)' }}
             >
@@ -807,7 +823,7 @@ function FileDiffWithChangeActions({
               }
               className={cn(
                 'rounded-sm border border-cyan-500 bg-cyan-500 px-2.5 py-0.5 text-[12px] transition-colors hover:border-cyan-600 hover:bg-cyan-600',
-                colorMode === 'dark' ? 'text-black' : 'text-white'
+                buttonStyles.keep
               )}
               style={{ fontFamily: 'var(--font-geist)' }}
             >
@@ -817,7 +833,7 @@ function FileDiffWithChangeActions({
         </div>
       );
     },
-    [colorMode, onChangeAction]
+    [buttonStyles, onChangeAction]
   );
 
   return (
