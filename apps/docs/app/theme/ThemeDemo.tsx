@@ -378,6 +378,8 @@ export function ThemeDemo() {
       workingFiles.map((wf) => ({
         id: wf.id,
         name: wf.name,
+        // Keep the raw newContents for displaying resolved files
+        newContents: wf.newContents,
         diff: parseDiffFromFile(
           { name: wf.name, contents: wf.oldContents },
           { name: wf.name, contents: wf.newContents }
@@ -467,7 +469,7 @@ export function ThemeDemo() {
   // Count total change blocks across all files
   const totalChanges = useMemo(() => {
     let count = 0;
-    activeDiffs.forEach((fd) => {
+    fileDiffs.forEach((fd) => {
       fd.diff.hunks.forEach((hunk) => {
         hunk.hunkContent.forEach((content) => {
           if (content.type === 'change') {
@@ -477,25 +479,28 @@ export function ThemeDemo() {
       });
     });
     return count;
-  }, [activeDiffs]);
+  }, [fileDiffs]);
+
+  // Count files with remaining changes
+  const filesWithChanges = useMemo(
+    () => activeDiffs.length,
+    [activeDiffs]
+  );
 
   // Accept/reject all changes globally
-  const handleGlobalAction = useCallback(
-    (action: 'accept' | 'reject') => {
-      setWorkingFiles((prev) =>
-        prev.map((wf) => {
-          if (action === 'accept') {
-            // Accept all: make old match new
-            return { ...wf, oldContents: wf.newContents };
-          } else {
-            // Reject all: make new match old
-            return { ...wf, newContents: wf.oldContents };
-          }
-        })
-      );
-    },
-    []
-  );
+  const handleGlobalAction = useCallback((action: 'accept' | 'reject') => {
+    setWorkingFiles((prev) =>
+      prev.map((wf) => {
+        if (action === 'accept') {
+          // Accept all: make old match new
+          return { ...wf, oldContents: wf.newContents };
+        } else {
+          // Reject all: make new match old
+          return { ...wf, newContents: wf.oldContents };
+        }
+      })
+    );
+  }, []);
 
   if (!mounted) {
     return (
@@ -585,45 +590,78 @@ export function ThemeDemo() {
                   colorMode === 'dark' ? 'text-neutral-300' : 'text-neutral-700'
                 )}
               >
-                {totalChanges} {totalChanges === 1 ? 'change' : 'changes'} in{' '}
-                {activeDiffs.length} {activeDiffs.length === 1 ? 'file' : 'files'}
+                {totalChanges > 0 ? (
+                  <>
+                    {totalChanges} {totalChanges === 1 ? 'change' : 'changes'}{' '}
+                    in {filesWithChanges}{' '}
+                    {filesWithChanges === 1 ? 'file' : 'files'}
+                  </>
+                ) : (
+                  <>All changes reviewed</>
+                )}
               </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleGlobalAction('reject')}
-                  className={cn(
-                    'rounded-md px-2.5 py-1 text-[13px] transition-colors',
-                    colorMode === 'dark'
-                      ? 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
-                      : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
-                  )}
-                >
-                  Undo All
-                </button>
-                <button
-                  onClick={() => handleGlobalAction('accept')}
-                  className={cn(
-                    'rounded-md px-2.5 py-1 text-[13px] transition-colors',
-                    colorMode === 'dark'
-                      ? 'bg-blue-700 text-white hover:bg-blue-600'
-                      : 'bg-blue-500 text-white hover:bg-blue-400'
-                  )}
-                >
-                  Accept All
-                </button>
-              </div>
+              {totalChanges > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleGlobalAction('reject')}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-[13px] transition-colors',
+                      colorMode === 'dark'
+                        ? 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                        : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+                    )}
+                  >
+                    Undo All
+                  </button>
+                  <button
+                    onClick={() => handleGlobalAction('accept')}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-[13px] transition-colors',
+                      colorMode === 'dark'
+                        ? 'bg-blue-700 text-white hover:bg-blue-600'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    )}
+                  >
+                    Accept All
+                  </button>
+                </div>
+              )}
             </div>
             <div className="divide-y divide-neutral-200">
-              {activeDiffs.map((fileData) => (
-                <FileDiffWithChangeActions
-                  key={fileData.id}
-                  fileId={fileData.id}
-                  fileDiff={fileData.diff}
-                  themeName={themeName}
-                  colorMode={colorMode}
-                  onChangeAction={handleChangeAction}
-                />
-              ))}
+              {fileDiffs.map((fileData) => {
+                // Check if this file has any remaining changes
+                const hasChanges = fileData.diff.hunks.some((hunk) =>
+                  hunk.hunkContent.some((content) => content.type === 'change')
+                );
+
+                if (hasChanges) {
+                  return (
+                    <FileDiffWithChangeActions
+                      key={fileData.id}
+                      fileId={fileData.id}
+                      fileDiff={fileData.diff}
+                      themeName={themeName}
+                      colorMode={colorMode}
+                      onChangeAction={handleChangeAction}
+                    />
+                  );
+                }
+
+                // File is fully resolved - show as regular code
+                return (
+                  <File
+                    key={fileData.id}
+                    file={{
+                      name: fileData.name,
+                      contents: fileData.newContents,
+                    }}
+                    options={{
+                      theme: themeName,
+                      themeType: colorMode,
+                    }}
+                  />
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -799,6 +837,7 @@ function FileDiffWithChangeActions({
         theme: themeName,
         themeType: colorMode,
         diffStyle: 'unified',
+        expandUnchanged: true,
       }}
       lineAnnotations={lineAnnotations}
       renderAnnotation={renderAnnotation}
