@@ -268,7 +268,6 @@ interface ChangeBlockAnnotation {
 }
 
 // Apply a single change block to the file contents
-// Uses the same approach as diffAcceptRejectHunk: slice directly from file lines
 function applyChangeBlock(
   oldContents: string,
   newContents: string,
@@ -294,13 +293,10 @@ function applyChangeBlock(
         const additionCount = content.additions.length;
 
         if (action === 'accept') {
-          // Accept: copy lines from new file into old file at the correct position
-          // This matches how diffAcceptRejectHunk works
           const linesToInsert = newLines.slice(newPos, newPos + additionCount);
           oldLines.splice(oldPos, deletionCount, ...linesToInsert);
           return { oldContents: oldLines.join('\n'), newContents };
         } else {
-          // Reject: copy lines from old file into new file at the correct position
           const linesToInsert = oldLines.slice(oldPos, oldPos + deletionCount);
           newLines.splice(newPos, additionCount, ...linesToInsert);
           return { oldContents, newContents: newLines.join('\n') };
@@ -450,7 +446,6 @@ export function ThemeDemo() {
           const hunk = currentDiff.hunks[hunkIndex];
           if (hunk == null) return wf;
 
-          // Apply the change to file contents
           const { oldContents, newContents } = applyChangeBlock(
             wf.oldContents,
             wf.newContents,
@@ -481,8 +476,7 @@ export function ThemeDemo() {
     return count;
   }, [fileDiffs]);
 
-  // Count files with remaining changes
-  const filesWithChanges = useMemo(() => activeDiffs.length, [activeDiffs]);
+  const filesWithChanges = activeDiffs.length;
 
   // Accept/reject all changes globally
   const handleGlobalAction = useCallback((action: 'accept' | 'reject') => {
@@ -737,7 +731,6 @@ function FileDiffWithChangeActions({
           const deletionCount = content.deletions.length;
 
           if (additionCount > 0) {
-            // Annotation on the last addition line
             const lastAdditionLine = currentAdditionLine + additionCount - 1;
             annotations.push({
               side: 'additions',
@@ -749,8 +742,6 @@ function FileDiffWithChangeActions({
               },
             });
           } else if (deletionCount > 0) {
-            // If only deletions, place annotation on deletions side
-            // Use the deletion line position
             annotations.push({
               side: 'deletions',
               lineNumber: hunk.deletionStart + deletionCount - 1,
