@@ -19,31 +19,29 @@ export function Root<T>({ treeConfig }: FileTreeRootProps<T>): JSX.Element {
   });
 
   return (
-    <div {...tree().getContainerProps()}>
-      {tree()
-        .getItems()
-        .map((item) => {
-          const hasChildren = (item.getItemData() as any)?.children != null;
-          const props = item.getProps();
-          return (
-            <div
-              data-type="item"
-              data-item-type={hasChildren ? 'folder' : 'file'}
-              data-item-id={item.getId()}
-              {...props}
-              onClick={() => {
-                props.onClick?.bind(item);
-                console.log('clicked', item.getId());
-              }}
-              key={item.getId()}
-            >
-              <div data-item-section="content">{item.getItemName()}</div>
-              <div data-item-section="icon">
-                {hasChildren ? <Icon name="file-tree-icon-chevron" /> : null}
-              </div>
+    <div {...tree.getContainerProps()}>
+      {tree.getItems().map((item) => {
+        const hasChildren = (item.getItemData() as any)?.children != null;
+        const props = item.getProps();
+        return (
+          <div
+            data-type="item"
+            data-item-type={hasChildren ? 'folder' : 'file'}
+            data-item-id={item.getId()}
+            {...props}
+            onClick={() => {
+              props.onClick?.bind(item);
+              console.log('clicked', item.getId());
+            }}
+            key={item.getId()}
+          >
+            <div data-item-section="content">{item.getItemName()}</div>
+            <div data-item-section="icon">
+              {hasChildren ? <Icon name="file-tree-icon-chevron" /> : null}
             </div>
-          );
-        })}
+          </div>
+        );
+      })}
     </div>
   );
 }

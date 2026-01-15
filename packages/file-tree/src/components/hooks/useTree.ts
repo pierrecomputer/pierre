@@ -6,7 +6,7 @@ import {
 } from '@headless-tree/core';
 import { useEffect, useState } from 'preact/hooks';
 
-export const useTree = <T>(config: TreeConfig<T>): (() => TreeInstance<T>) => {
+export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
   'use no memo';
   const [tree] = useState(() => ({ current: createTree(config) }));
   // since we're server rendering we need to do this immediately
@@ -40,5 +40,5 @@ export const useTree = <T>(config: TreeConfig<T>): (() => TreeInstance<T>) => {
     },
   }));
 
-  return () => tree.current;
+  return tree.current;
 };
