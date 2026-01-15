@@ -289,7 +289,6 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
-// Track working file contents in state
 interface WorkingFile {
   id: string;
   name: string;
@@ -313,19 +312,24 @@ export function ThemeDemo() {
     }))
   );
 
-  // Parse diffs from current working file contents
   const fileDiffs = useMemo(
     () =>
-      workingFiles.map((wf) => ({
-        id: wf.id,
-        name: wf.name,
-        // Keep the raw newContents for displaying resolved files
-        newContents: wf.newContents,
-        diff: parseDiffFromFile(
+      workingFiles.map((wf) => {
+        const diff = parseDiffFromFile(
           { name: wf.name, contents: wf.oldContents },
           { name: wf.name, contents: wf.newContents }
-        ),
-      })),
+        );
+        const hasChanges = diff.hunks.some((hunk) =>
+          hunk.hunkContent.some((content) => content.type === 'change')
+        );
+        return {
+          id: wf.id,
+          name: wf.name,
+          newContents: wf.newContents,
+          diff,
+          hasChanges,
+        };
+      }),
     [workingFiles]
   );
 
@@ -368,7 +372,7 @@ export function ThemeDemo() {
       tabIndicator: isDark ? 'bg-blue-400' : 'bg-blue-500',
       headerText: isDark ? 'text-neutral-300' : 'text-neutral-700',
       buttonSecondary: isDark
-        ? 'bg-neutral-700 text-neutral-300 hover:bg-neutral-700'
+        ? 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
         : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300',
       buttonPrimary: isDark
         ? 'bg-blue-600 text-white hover:bg-blue-500'
@@ -386,15 +390,8 @@ export function ThemeDemo() {
     [currentTab]
   );
 
-  // Filter to only files that still have changes
   const activeDiffs = useMemo(
-    () =>
-      fileDiffs.filter((fd) => {
-        // Check if any hunks have actual changes (not just context)
-        return fd.diff.hunks.some((hunk) =>
-          hunk.hunkContent.some((content) => content.type === 'change')
-        );
-      }),
+    () => fileDiffs.filter((fd) => fd.hasChanges),
     [fileDiffs]
   );
 
@@ -531,12 +528,7 @@ export function ThemeDemo() {
             </div>
             <div className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {fileDiffs.map((fileData) => {
-                // Check if this file has any remaining changes
-                const hasChanges = fileData.diff.hunks.some((hunk) =>
-                  hunk.hunkContent.some((content) => content.type === 'change')
-                );
-
-                if (hasChanges) {
+                if (fileData.hasChanges) {
                   return (
                     <FileDiff
                       key={fileData.id}
