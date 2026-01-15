@@ -7,10 +7,15 @@ import {
 } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
-import { parseDiffFromFile, preloadHighlighter } from '@pierre/diffs';
+import {
+  type DiffLineAnnotation,
+  type FileDiffMetadata,
+  parseDiffFromFile,
+  preloadHighlighter,
+} from '@pierre/diffs';
 import { File, FileDiff } from '@pierre/diffs/react';
 import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Sample code files for demo
 const TYPESCRIPT_CODE = `import { useEffect, useState } from 'react';
@@ -190,6 +195,126 @@ export function useConfig(): Config {
   return config;
 }`;
 
+// Second diff example - API utils
+const DIFF2_OLD = `export async function fetchAPI(endpoint: string) {
+  const response = await fetch(endpoint);
+  return response.json();
+}
+
+export function formatDate(date: Date) {
+  return date.toLocaleDateString();
+}`;
+
+const DIFF2_NEW = `export async function fetchAPI<T>(endpoint: string): Promise<T> {
+  const response = await fetch(endpoint, {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(\`API error: \${response.status}\`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export function formatDate(date: Date, locale = 'en-US') {
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
+export function debounce<T extends (...args: unknown[]) => unknown>(
+  fn: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+}`;
+
+interface ReviewFile {
+  id: string;
+  name: string;
+  oldContents: string;
+  newContents: string;
+}
+
+const REVIEW_FILES: ReviewFile[] = [
+  {
+    id: 'useConfig',
+    name: 'useConfig.ts',
+    oldContents: DIFF_OLD,
+    newContents: DIFF_NEW,
+  },
+  {
+    id: 'apiUtils',
+    name: 'utils/api.ts',
+    oldContents: DIFF2_OLD,
+    newContents: DIFF2_NEW,
+  },
+];
+
+// Annotation metadata for change blocks
+interface ChangeBlockAnnotation {
+  fileId: string;
+  hunkIndex: number;
+  changeIndexInHunk: number;
+}
+
+// Apply a single change block to the file contents
+// Uses the same approach as diffAcceptRejectHunk: slice directly from file lines
+function applyChangeBlock(
+  oldContents: string,
+  newContents: string,
+  hunk: FileDiffMetadata['hunks'][0],
+  targetChangeIndex: number,
+  action: 'accept' | 'reject'
+): { oldContents: string; newContents: string } {
+  const oldLines = oldContents.split('\n');
+  const newLines = newContents.split('\n');
+
+  // Track position within the hunk
+  let oldPos = hunk.deletionStart - 1; // 0-based
+  let newPos = hunk.additionStart - 1; // 0-based
+  let changeIndex = 0;
+
+  for (const content of hunk.hunkContent) {
+    if (content.type === 'context') {
+      oldPos += content.lines.length;
+      newPos += content.lines.length;
+    } else if (content.type === 'change') {
+      if (changeIndex === targetChangeIndex) {
+        const deletionCount = content.deletions.length;
+        const additionCount = content.additions.length;
+
+        if (action === 'accept') {
+          // Accept: copy lines from new file into old file at the correct position
+          // This matches how diffAcceptRejectHunk works
+          const linesToInsert = newLines.slice(newPos, newPos + additionCount);
+          oldLines.splice(oldPos, deletionCount, ...linesToInsert);
+          return { oldContents: oldLines.join('\n'), newContents };
+        } else {
+          // Reject: copy lines from old file into new file at the correct position
+          const linesToInsert = oldLines.slice(oldPos, oldPos + deletionCount);
+          newLines.splice(newPos, additionCount, ...linesToInsert);
+          return { oldContents, newContents: newLines.join('\n') };
+        }
+      }
+      oldPos += content.deletions.length;
+      newPos += content.additions.length;
+      changeIndex++;
+    }
+  }
+
+  return { oldContents, newContents };
+}
+
 const TABS = [
   {
     id: 'typescript',
@@ -223,11 +348,43 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
+// Track working file contents in state
+interface WorkingFile {
+  id: string;
+  name: string;
+  oldContents: string;
+  newContents: string;
+}
+
 export function ThemeDemo() {
   const { resolvedTheme } = useTheme();
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
   const [activeTab, setActiveTab] = useState<TabId>('typescript');
   const [mounted, setMounted] = useState(false);
+
+  // Store raw file contents - these get modified as changes are accepted/rejected
+  const [workingFiles, setWorkingFiles] = useState<WorkingFile[]>(() =>
+    REVIEW_FILES.map((rf) => ({
+      id: rf.id,
+      name: rf.name,
+      oldContents: rf.oldContents,
+      newContents: rf.newContents,
+    }))
+  );
+
+  // Parse diffs from current working file contents
+  const fileDiffs = useMemo(
+    () =>
+      workingFiles.map((wf) => ({
+        id: wf.id,
+        name: wf.name,
+        diff: parseDiffFromFile(
+          { name: wf.name, contents: wf.oldContents },
+          { name: wf.name, contents: wf.newContents }
+        ),
+      })),
+    [workingFiles]
+  );
 
   // Sync with system theme on mount
   useEffect(() => {
@@ -258,12 +415,85 @@ export function ThemeDemo() {
     [currentTab]
   );
 
-  const fileDiff = useMemo(
+  // Filter to only files that still have changes
+  const activeDiffs = useMemo(
     () =>
-      parseDiffFromFile(
-        { name: 'useConfig.ts', contents: DIFF_OLD },
-        { name: 'useConfig.ts', contents: DIFF_NEW }
-      ),
+      fileDiffs.filter((fd) => {
+        // Check if any hunks have actual changes (not just context)
+        return fd.diff.hunks.some((hunk) =>
+          hunk.hunkContent.some((content) => content.type === 'change')
+        );
+      }),
+    [fileDiffs]
+  );
+
+  // Handle individual change block action by modifying file contents
+  const handleChangeAction = useCallback(
+    (
+      fileId: string,
+      hunkIndex: number,
+      changeIndexInHunk: number,
+      action: 'accept' | 'reject'
+    ) => {
+      setWorkingFiles((prev) =>
+        prev.map((wf) => {
+          if (wf.id !== fileId) return wf;
+
+          // Parse current diff to get the hunk structure
+          const currentDiff = parseDiffFromFile(
+            { name: wf.name, contents: wf.oldContents },
+            { name: wf.name, contents: wf.newContents }
+          );
+
+          const hunk = currentDiff.hunks[hunkIndex];
+          if (hunk == null) return wf;
+
+          // Apply the change to file contents
+          const { oldContents, newContents } = applyChangeBlock(
+            wf.oldContents,
+            wf.newContents,
+            hunk,
+            changeIndexInHunk,
+            action
+          );
+
+          return { ...wf, oldContents, newContents };
+        })
+      );
+    },
+    []
+  );
+
+  // Count total change blocks across all files
+  const totalChanges = useMemo(() => {
+    let count = 0;
+    activeDiffs.forEach((fd) => {
+      fd.diff.hunks.forEach((hunk) => {
+        hunk.hunkContent.forEach((content) => {
+          if (content.type === 'change') {
+            count++;
+          }
+        });
+      });
+    });
+    return count;
+  }, [activeDiffs]);
+
+  // Accept/reject all changes globally
+  const handleGlobalAction = useCallback(
+    (action: 'accept' | 'reject') => {
+      setWorkingFiles((prev) =>
+        prev.map((wf) => {
+          if (action === 'accept') {
+            // Accept all: make old match new
+            return { ...wf, oldContents: wf.newContents };
+          } else {
+            // Reject all: make new match old
+            return { ...wf, newContents: wf.oldContents };
+          }
+        })
+      );
+    },
     []
   );
 
@@ -340,15 +570,62 @@ export function ThemeDemo() {
         </div>
 
         {currentTab.isDiff ? (
-          <FileDiff
-            fileDiff={fileDiff}
-            options={{
-              theme: themeName,
-              themeType: colorMode,
-              diffStyle: 'unified',
-            }}
-            className="max-h-[720px] overflow-auto"
-          />
+          <div className="max-h-[720px] overflow-auto">
+            <div
+              className={cn(
+                'sticky top-0 z-10 flex items-center justify-between border-b py-2 pr-3 pl-4.5',
+                colorMode === 'dark'
+                  ? 'border-neutral-700/50 bg-[#15171c]'
+                  : 'border-neutral-200 bg-neutral-50'
+              )}
+            >
+              <span
+                className={cn(
+                  'text-[13px]',
+                  colorMode === 'dark' ? 'text-neutral-300' : 'text-neutral-700'
+                )}
+              >
+                {totalChanges} {totalChanges === 1 ? 'change' : 'changes'} in{' '}
+                {activeDiffs.length} {activeDiffs.length === 1 ? 'file' : 'files'}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleGlobalAction('reject')}
+                  className={cn(
+                    'rounded-md px-2.5 py-1 text-[13px] transition-colors',
+                    colorMode === 'dark'
+                      ? 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                      : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+                  )}
+                >
+                  Undo All
+                </button>
+                <button
+                  onClick={() => handleGlobalAction('accept')}
+                  className={cn(
+                    'rounded-md px-2.5 py-1 text-[13px] transition-colors',
+                    colorMode === 'dark'
+                      ? 'bg-blue-700 text-white hover:bg-blue-600'
+                      : 'bg-blue-500 text-white hover:bg-blue-400'
+                  )}
+                >
+                  Accept All
+                </button>
+              </div>
+            </div>
+            <div className="divide-y divide-neutral-200">
+              {activeDiffs.map((fileData) => (
+                <FileDiffWithChangeActions
+                  key={fileData.id}
+                  fileId={fileData.id}
+                  fileDiff={fileData.diff}
+                  themeName={themeName}
+                  colorMode={colorMode}
+                  onChangeAction={handleChangeAction}
+                />
+              ))}
+            </div>
+          </div>
         ) : (
           <File
             file={file}
@@ -380,6 +657,151 @@ function FileIcon({ lang, isDiff }: { lang: string; isDiff?: boolean }) {
         'size-4',
         colors[isDiff === true ? 'diff' : lang] ?? 'text-neutral-400'
       )}
+    />
+  );
+}
+
+// Component to render a file diff with per-change-block action buttons
+interface FileDiffWithChangeActionsProps {
+  fileId: string;
+  fileDiff: FileDiffMetadata;
+  themeName: string;
+  colorMode: 'light' | 'dark';
+  onChangeAction: (
+    fileId: string,
+    hunkIndex: number,
+    changeIndexInHunk: number,
+    action: 'accept' | 'reject'
+  ) => void;
+}
+
+function FileDiffWithChangeActions({
+  fileId,
+  fileDiff,
+  themeName,
+  colorMode,
+  onChangeAction,
+}: FileDiffWithChangeActionsProps) {
+  // Create line annotations for each change block within hunks
+  const lineAnnotations = useMemo(() => {
+    const annotations: DiffLineAnnotation<ChangeBlockAnnotation>[] = [];
+    const hunks = fileDiff.hunks ?? [];
+
+    hunks.forEach((hunk, hunkIndex) => {
+      // Track current line position in the new file
+      let currentAdditionLine = hunk.additionStart;
+      let changeIndexInHunk = 0;
+
+      // Iterate through hunk content to find each change block
+      for (const content of hunk.hunkContent) {
+        if (content.type === 'context') {
+          currentAdditionLine += content.lines.length;
+        } else if (content.type === 'change') {
+          // This is a change block - place annotation at last addition line
+          const additionCount = content.additions.length;
+          const deletionCount = content.deletions.length;
+
+          if (additionCount > 0) {
+            // Annotation on the last addition line
+            const lastAdditionLine = currentAdditionLine + additionCount - 1;
+            annotations.push({
+              side: 'additions',
+              lineNumber: lastAdditionLine,
+              metadata: {
+                fileId,
+                hunkIndex,
+                changeIndexInHunk,
+              },
+            });
+          } else if (deletionCount > 0) {
+            // If only deletions, place annotation on deletions side
+            // Use the deletion line position
+            annotations.push({
+              side: 'deletions',
+              lineNumber: hunk.deletionStart + deletionCount - 1,
+              metadata: {
+                fileId,
+                hunkIndex,
+                changeIndexInHunk,
+              },
+            });
+          }
+
+          currentAdditionLine += additionCount;
+          changeIndexInHunk++;
+        }
+      }
+    });
+
+    return annotations;
+  }, [fileDiff, fileId]);
+
+  const renderAnnotation = useCallback(
+    (annotation: DiffLineAnnotation<ChangeBlockAnnotation>) => {
+      if (annotation.metadata == null) return null;
+      const {
+        fileId: annotationFileId,
+        hunkIndex,
+        changeIndexInHunk,
+      } = annotation.metadata;
+
+      return (
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-end pr-3"
+          style={{ zIndex: 10 }}
+        >
+          <div className="pointer-events-auto flex items-center gap-1.5">
+            <button
+              onClick={() =>
+                onChangeAction(
+                  annotationFileId,
+                  hunkIndex,
+                  changeIndexInHunk,
+                  'reject'
+                )
+              }
+              className={cn(
+                'rounded-sm border px-2.5 py-0.5 text-[12px] transition-colors',
+                colorMode === 'dark'
+                  ? 'border-[rgb(255_255_255_/0.1)] bg-neutral-900 text-neutral-300 hover:bg-neutral-700'
+                  : 'border-[rgb(0_0_0_/0.15)] bg-white text-neutral-700 hover:bg-neutral-100'
+              )}
+            >
+              Undo
+            </button>
+            <button
+              onClick={() =>
+                onChangeAction(
+                  annotationFileId,
+                  hunkIndex,
+                  changeIndexInHunk,
+                  'accept'
+                )
+              }
+              className={cn(
+                'rounded-sm border border-cyan-500 bg-cyan-500 px-2.5 py-0.5 text-[12px] transition-colors hover:border-cyan-600 hover:bg-cyan-600',
+                colorMode === 'dark' ? 'text-black' : 'text-white'
+              )}
+            >
+              Keep
+            </button>
+          </div>
+        </div>
+      );
+    },
+    [colorMode, onChangeAction]
+  );
+
+  return (
+    <FileDiff
+      fileDiff={fileDiff}
+      options={{
+        theme: themeName,
+        themeType: colorMode,
+        diffStyle: 'unified',
+      }}
+      lineAnnotations={lineAnnotations}
+      renderAnnotation={renderAnnotation}
     />
   );
 }
