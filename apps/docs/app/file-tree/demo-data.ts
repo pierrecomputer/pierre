@@ -14,7 +14,6 @@ export const sharedDemoFileTreeOptions: FileTreeOptions<DemoItem> = {
   config: {
     initialState: {
       expandedItems: ['packages', 'file-tree', 'file-tree-src'],
-      selectedItems: ['file-tree-ts', 'file-tree-react-tsx'],
     },
     rootItemId: 'root',
 

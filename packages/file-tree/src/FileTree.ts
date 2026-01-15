@@ -1,10 +1,4 @@
-import {
-  type ItemInstance,
-  type TreeConfig,
-  type TreeInstance,
-  createTree,
-  syncDataLoaderFeature,
-} from '@headless-tree/core';
+import { type ItemInstance, type TreeConfig } from '@headless-tree/core';
 
 import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME } from './constants';
@@ -39,21 +33,16 @@ export class FileTree<T> {
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
   private spriteSVG: SVGElement | undefined;
-  public tree: TreeInstance<T> | undefined;
+  private initialTreeConfig: TreeConfig<T>;
 
   constructor(public options: FileTreeOptions<T>) {
     if (typeof document !== 'undefined') {
       this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
     }
     this.__id = options.id ?? `ft_${isBrowser ? 'brw' : 'srv'}_${++instanceId}`;
-    const createTreeOptions = {
+    this.initialTreeConfig = {
       ...options.config,
-      features: [syncDataLoaderFeature],
     };
-    this.tree = createTree(createTreeOptions);
-    // TODO: consider moving this once it's more obvious where
-    this.tree.setMounted(true);
-    this.tree.rebuildTree();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -92,6 +81,7 @@ export class FileTree<T> {
   }
 
   private getOrCreateDivWrapperNode(container: HTMLElement): HTMLElement {
+    console.log('getOrCreateDivWrapperNode container', container);
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.divWrapper == null) {
       this.divWrapper = document.createElement('div');
@@ -107,7 +97,7 @@ export class FileTree<T> {
   }
 
   render({ fileTreeContainer, containerWrapper }: FileTreeRenderProps): void {
-    if (this.tree == null) {
+    if (this.initialTreeConfig == null) {
       throw new Error('FileTree: Tree is not initialized');
     }
 
@@ -116,7 +106,9 @@ export class FileTree<T> {
       containerWrapper
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
-    preactRenderRoot(divWrapper, { fileTree: this });
+    preactRenderRoot(divWrapper, {
+      treeConfig: this.initialTreeConfig,
+    });
   }
 
   hydrate(props: FileTreeHydrationProps): void {
@@ -144,14 +136,9 @@ export class FileTree<T> {
       this.render(props);
     } else {
       this.fileTreeContainer = fileTreeContainer;
-      delete this.divWrapper.dataset.dehydrated;
-      if (this.tree == null) {
-        throw new Error(
-          'FileTree: this.tree is null, but ssr html was provided'
-        );
-      }
-
-      preactHydrateRoot(this.divWrapper, { fileTree: this });
+      preactHydrateRoot(this.divWrapper, {
+        treeConfig: this.initialTreeConfig,
+      });
     }
   }
 

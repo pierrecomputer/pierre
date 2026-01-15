@@ -2,8 +2,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { FileTreeOptions } from 'src/components/FileTree';
 
+import type { FileTreeOptions } from '../FileTree';
 import { FILE_TREE_TAG_NAME } from '../constants';
 import { useFileTreeInstance } from './utils/useFileTreeInstance';
 
