@@ -81,7 +81,6 @@ export class FileTree<T> {
   }
 
   private getOrCreateDivWrapperNode(container: HTMLElement): HTMLElement {
-    console.log('getOrCreateDivWrapperNode container', container);
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.divWrapper == null) {
       this.divWrapper = document.createElement('div');
