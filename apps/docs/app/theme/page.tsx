@@ -107,7 +107,6 @@ export default async function ThemePage() {
     <>
       <section className="flex max-w-3xl flex-col gap-3 py-20 lg:max-w-4xl">
         <IconThemes className="mb-2 size-8" />
-
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
           Pierre themes
         </h1>

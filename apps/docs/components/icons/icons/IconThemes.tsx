@@ -9,12 +9,13 @@ export function IconThemes({
   ...props
 }: IconProps) {
   const height = size;
-  const width = size === '1em' ? '1em' : Math.round(Number(size) * 1);
+  const width =
+    size === '1em' ? '1em' : Math.round(Number(size) * 0.9411764705882353);
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       fill={Colors[color] ?? color}
-      viewBox="0 0 16 16"
+      viewBox="0 0 16 17"
       width={width}
       height={height}
       style={style}
@@ -22,18 +23,29 @@ export function IconThemes({
       {...props}
     >
       <path
-        d="M15.244 8.253a1 1 0 0 1-.366 1.366l-7.41 4.278 6.31-7.518q.12-.145.208-.304z"
-        opacity={0.2}
+        d="M15.977 15.01a1 1 0 0 1-1 1H6.184l9.433-3.907q.194-.081.36-.195z"
+        fill="var(--l5, currentColor)"
+        opacity="var(--l-opacity, 0.15)"
       />
       <path
-        d="M12.88 4.342a1 1 0 0 1 .124 1.41l-5.491 6.542 3.35-9.203q.065-.18.093-.364z"
-        opacity={0.4}
+        d="M15.758 9.895a1 1 0 0 1-.54 1.306l-8.13 3.367 7.226-7.225q.147-.148.257-.315z"
+        fill="var(--l4, currentColor)"
+        opacity="var(--l-opacity, 0.3)"
       />
       <path
-        d="M9.323 1.477a1 1 0 0 1 .598 1.282L7 10.783V1Q6.999.803 6.962.616z"
-        opacity={0.6}
+        d="M13.598 5.238a1 1 0 0 1 0 1.415l-6.213 6.211 3.902-9.42q.08-.195.118-.397z"
+        fill="var(--l3, currentColor)"
+        opacity="var(--l-opacity, 0.45)"
       />
-      <path d="M5 0a1 1 0 0 1 1 1v12a3 3 0 1 1-6 0V1a1 1 0 0 1 1-1zM3 12a1 1 0 1 0 0 2 1 1 0 0 0 0-2" />
+      <path
+        d="M9.82 1.765a1 1 0 0 1 .541 1.306L7 11.186V1Q6.999.781 6.953.576z"
+        fill="var(--l2, currentColor)"
+        opacity="var(--l-opacity, 0.6)"
+      />
+      <path
+        d="M5 0a1 1 0 0 1 1 1v12a3 3 0 1 1-6 0V1a1 1 0 0 1 1-1zM3 12a1 1 0 1 0 0 2 1 1 0 0 0 0-2"
+        fill="var(--l1, currentColor)"
+      />
     </svg>
   );
 }
