@@ -482,10 +482,7 @@ export function ThemeDemo() {
   }, [fileDiffs]);
 
   // Count files with remaining changes
-  const filesWithChanges = useMemo(
-    () => activeDiffs.length,
-    [activeDiffs]
-  );
+  const filesWithChanges = useMemo(() => activeDiffs.length, [activeDiffs]);
 
   // Accept/reject all changes globally
   const handleGlobalAction = useCallback((action: 'accept' | 'reject') => {
@@ -804,6 +801,7 @@ function FileDiffWithChangeActions({
                   ? 'border-[rgb(255_255_255_/0.1)] bg-neutral-900 text-neutral-300 hover:bg-neutral-700'
                   : 'border-[rgb(0_0_0_/0.15)] bg-white text-neutral-700 hover:bg-neutral-100'
               )}
+              style={{ fontFamily: 'var(--font-geist)' }}
             >
               Undo
             </button>
@@ -820,6 +818,7 @@ function FileDiffWithChangeActions({
                 'rounded-sm border border-cyan-500 bg-cyan-500 px-2.5 py-0.5 text-[12px] transition-colors hover:border-cyan-600 hover:bg-cyan-600',
                 colorMode === 'dark' ? 'text-black' : 'text-white'
               )}
+              style={{ fontFamily: 'var(--font-geist)' }}
             >
               Keep
             </button>
