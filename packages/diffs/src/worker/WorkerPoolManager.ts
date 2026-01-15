@@ -1,4 +1,4 @@
-import { LRUMap } from 'lru_map';
+import LRUMapPkg from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
@@ -50,8 +50,8 @@ import type {
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 
 interface GetCachesResult {
-  fileCache: LRUMap<string, RenderFileResult>;
-  diffCache: LRUMap<string, RenderDiffResult>;
+  fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
+  diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
 }
 
 interface ManagedWorker {
@@ -79,8 +79,8 @@ export class WorkerPoolManager {
     FileRendererInstance | DiffRendererInstance,
     string
   >();
-  private fileCache: LRUMap<string, RenderFileResult>;
-  private diffCache: LRUMap<string, RenderDiffResult>;
+  private fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
+  private diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
 
   constructor(
     private options: WorkerPoolOptions,
@@ -92,8 +92,8 @@ export class WorkerPoolManager {
     }: WorkerInitializationRenderOptions
   ) {
     this.renderOptions = { theme, lineDiffType, tokenizeMaxLineLength };
-    this.fileCache = new LRUMap(options.totalASTLRUCacheSize ?? 100);
-    this.diffCache = new LRUMap(options.totalASTLRUCacheSize ?? 100);
+    this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
+    this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     void this.initialize(langs);
   }
 
