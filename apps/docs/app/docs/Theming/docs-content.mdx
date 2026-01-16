@@ -1,0 +1,30 @@
+## Themes
+
+Pierre Diffs ships with our custom open source themes,
+[Pierre Light and Pierre Dark](/theme). We generate our themes with a custom
+build process that takes a shared color palette, assigns colors to specific
+roles for syntax highlighting, and builds JSON files and editor extensions. This
+makes our themes compatible with Shiki, Visual Studio Code, and Cursor.
+
+| Editor / Platform  | Source                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| Visual Studio Code | [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pierrecomputer.pierre-theme) |
+| Cursor             | [Open VSX](https://open-vsx.org/extension/pierrecomputer/pierre-theme)                                 |
+| Shiki              | [Theme repository](https://github.com/pierrecomputer/theme/tree/main/themes)                           |
+
+While you can use any Shiki theme with Pierre Diffs by passing the theme name to
+the `theme` option, you can also create and register custom themes compatible
+with Shiki and Visual Studio Code. We recommend using our themes as a starting
+point for your own custom themes—head to our [themes documentation](/theme) to
+get started.
+
+<Button asChild>
+  <Link
+    href="/theme"
+    className="h-10 max-w-fit px-4"
+    style={{ fontSize: 'inherit' }}
+  >
+    Themes documentation
+    <IconArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+  </Link>
+</Button>

@@ -102,6 +102,7 @@ export default function DocsPage() {
           <VanillaAPISection />
           <UtilitiesSection />
           <StylingSection />
+          <ThemingSection />
           <WorkerPoolSection />
           <SSRSection />
         </div>
@@ -302,6 +303,13 @@ async function StylingSection() {
       stylingInline,
       stylingUnsafe,
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function ThemingSection() {
+  const content = await renderMDX({
+    filePath: 'docs/Theming/docs-content.mdx',
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

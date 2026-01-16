@@ -1,8 +1,10 @@
 import {
+  IconArrowRight,
   IconBulbFill,
   IconCiWarningFill,
   IconInfoFill,
 } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import { compileMDX } from 'next-mdx-remote/rsc';
@@ -45,7 +47,10 @@ function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
 /** Default components available in all MDX content */
 const defaultComponents = {
   a: MdxLink,
+  Link,
+  Button,
   Notice,
+  IconArrowRight,
   IconCiWarningFill,
   IconInfoFill,
   IconBulbFill,
