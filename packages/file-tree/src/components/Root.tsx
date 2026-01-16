@@ -15,11 +15,11 @@ export interface FileTreeRootProps {
 
 export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   'use no memo';
-  const { config, files } = fileTreeOptions;
+  const { config, files, collapseFolders } = fileTreeOptions;
   const { rootItemId, ...restTreeConfig } = config ?? {};
   const dataLoader = useMemo(
-    () => generateSyncDataLoader(fileListToTree(files)),
-    [files]
+    () => generateSyncDataLoader(fileListToTree(files), { collapseFolders }),
+    [files, collapseFolders]
   );
 
   const tree = useTree<FileTreeNode>({

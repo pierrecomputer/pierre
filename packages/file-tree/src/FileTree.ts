@@ -26,10 +26,11 @@ export type HeadlessTreeConfig = Omit<
 };
 
 export interface FileTreeOptions {
-  // probably change the name here once i know a better one
-  config?: HeadlessTreeConfig;
   files: string[];
   id?: string;
+  collapseFolders?: boolean;
+  // probably change the name here once i know a better one
+  config?: HeadlessTreeConfig;
 }
 
 const isBrowser = typeof document !== 'undefined';
@@ -113,6 +114,7 @@ export class FileTree {
       fileTreeOptions: {
         config: this.initialTreeConfig,
         files: this.files,
+        collapseFolders: this.options.collapseFolders,
       },
     });
   }
@@ -146,6 +148,7 @@ export class FileTree {
         fileTreeOptions: {
           config: this.initialTreeConfig,
           files: this.files,
+          collapseFolders: this.options.collapseFolders,
         },
       });
     }

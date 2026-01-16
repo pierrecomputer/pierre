@@ -24,5 +24,6 @@ export const sharedDemoFileTreeOptions: FileTreeOptions = {
       expandedItems: ['src'],
     },
   },
+  collapseFolders: true,
   files: sampleFileList,
 };
