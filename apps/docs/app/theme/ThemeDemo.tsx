@@ -424,6 +424,19 @@ export function ThemeDemo() {
     );
   };
 
+  const handleFileAction = (fileId: string, action: 'accept' | 'reject') => {
+    setWorkingFiles((prev) =>
+      prev.map((wf) => {
+        if (wf.id !== fileId) return wf;
+        if (action === 'accept') {
+          return { ...wf, oldContents: wf.newContents };
+        } else {
+          return { ...wf, newContents: wf.oldContents };
+        }
+      })
+    );
+  };
+
   if (!mounted) {
     return (
       <div className="aspect-[16/10] w-full animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />
@@ -539,6 +552,28 @@ export function ThemeDemo() {
                         diffStyle: 'unified',
                         expandUnchanged: true,
                       }}
+                      renderHeaderMetadata={() => (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleFileAction(fileData.id, 'reject')}
+                            className={cn(
+                              'rounded-md px-2.5 py-1 text-[13px]',
+                              styles.buttonSecondary
+                            )}
+                          >
+                            Undo
+                          </button>
+                          <button
+                            onClick={() => handleFileAction(fileData.id, 'accept')}
+                            className={cn(
+                              'rounded-md px-2.5 py-1 text-[13px]',
+                              styles.buttonPrimary
+                            )}
+                          >
+                            Accept
+                          </button>
+                        </div>
+                      )}
                     />
                   );
                 }
