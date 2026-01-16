@@ -317,7 +317,9 @@ export class FileDiff<LAnnotation = undefined> {
       this.lineSelectionManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
-        this.scrollSyncManager.setup(this.pre);
+        if ((this.options.diffStyle ?? 'split') === 'split') {
+          this.scrollSyncManager.setup(this.pre);
+        }
       }
     }
   }
@@ -646,7 +648,11 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineSelectionManager.setup(pre);
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);
-      this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
+      if ((this.options.diffStyle ?? 'split') === 'split') {
+        this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
+      } else {
+        this.scrollSyncManager.cleanUp();
+      }
     } else {
       this.resizeManager.cleanUp();
       this.scrollSyncManager.cleanUp();
