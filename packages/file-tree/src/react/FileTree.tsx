@@ -30,19 +30,19 @@ export function templateRender(
   return <>{children}</>;
 }
 
-export interface FileTreeProps<T> {
-  options: FileTreeOptions<T>;
+export interface FileTreeProps {
+  options: FileTreeOptions;
   className?: string;
   style?: React.CSSProperties;
   prerenderedHTML?: string;
 }
 
-export function FileTree<T>({
+export function FileTree({
   options,
   className,
   style,
   prerenderedHTML,
-}: FileTreeProps<T>): React.JSX.Element {
+}: FileTreeProps): React.JSX.Element {
   const children = renderFileTreeChildren();
   const { ref } = useFileTreeInstance({ options, prerenderedHTML });
   return (

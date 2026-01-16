@@ -7,9 +7,7 @@ import fileTreeStyles from '../style.css';
 
 // TODO: this is crude for now
 // needs options and unsafe css etc
-export function preloadFileTree<T>(
-  fileTreeOptions: FileTreeOptions<T>
-): string {
+export function preloadFileTree(fileTreeOptions: FileTreeOptions): string {
   return `${SVGSpriteSheet}<style>${fileTreeStyles}</style>
 <div data-file-tree-id="ft_srv_4">
   ${renderToString(<Root treeConfig={fileTreeOptions.config} />)}

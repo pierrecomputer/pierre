@@ -6,8 +6,8 @@ import { useStableCallback } from './useStableCallback';
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface UseFileTreeInstanceProps<T> {
-  options: FileTreeOptions<T>;
+interface UseFileTreeInstanceProps {
+  options: FileTreeOptions;
   forceClientRender?: boolean;
   prerenderedHTML: string | undefined;
 }
@@ -16,12 +16,12 @@ interface UseFileTreeInstanceReturn {
   ref(node: HTMLElement | null): void;
 }
 
-export function useFileTreeInstance<T>({
+export function useFileTreeInstance({
   options,
   forceClientRender,
   prerenderedHTML,
-}: UseFileTreeInstanceProps<T>): UseFileTreeInstanceReturn {
-  const instanceRef = useRef<FileTree<T> | null>(null);
+}: UseFileTreeInstanceProps): UseFileTreeInstanceReturn {
+  const instanceRef = useRef<FileTree | null>(null);
   const ref = useStableCallback((fileTreeContainer: HTMLElement | null) => {
     if (fileTreeContainer != null) {
       if (instanceRef.current != null) {

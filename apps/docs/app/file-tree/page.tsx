@@ -1,10 +1,13 @@
 import { preloadFileTree } from '@pierre/file-tree/ssr';
+import { notFound } from 'next/navigation';
 
 import { ClientPage } from './ClientPage';
-import type { DemoItem } from './demo-data';
 import { sharedDemoFileTreeOptions } from './demo-data';
 
-export default function Home() {
+export default function FileTreePage() {
+  if (process.env.NODE_ENV !== 'development') {
+    return notFound();
+  }
   return (
     <div className="grid grid-cols-2 gap-4 p-4">
       <div className="w-2/3">
@@ -13,9 +16,7 @@ export default function Home() {
       </div>
 
       <ClientPage
-        preloadedFileTreeHtml={preloadFileTree<DemoItem>(
-          sharedDemoFileTreeOptions
-        )}
+        preloadedFileTreeHtml={preloadFileTree(sharedDemoFileTreeOptions)}
       />
     </div>
   );

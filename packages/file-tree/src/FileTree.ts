@@ -1,41 +1,41 @@
-import { type ItemInstance, type TreeConfig } from '@headless-tree/core';
+import { type TreeConfig } from '@headless-tree/core';
 
 import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME } from './constants';
 import { SVGSpriteSheet } from './sprite';
+import { type FileTreeNode } from './types';
 import { preactHydrateRoot, preactRenderRoot } from './utils/preactRenderer';
 
 let instanceId = -1;
 
-export type FileTreeItem<T> = ItemInstance<T>;
-export interface FileTreeRenderProps {
+interface FileTreeRenderProps {
   fileTreeContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
 }
 
-export interface FileTreeHydrationProps {
+interface FileTreeHydrationProps {
   fileTreeContainer: HTMLElement;
   prerenderedHTML?: string;
 }
 
-export interface FileTreeOptions<T> {
+export interface FileTreeOptions {
   // probably change the name here once i know a better one
-  config: Omit<TreeConfig<T>, 'features'>;
+  config: Omit<TreeConfig<FileTreeNode>, 'features'>;
   id?: string;
 }
 
 const isBrowser = typeof document !== 'undefined';
 
-export class FileTree<T> {
+export class FileTree {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
   readonly __id: string;
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
   private spriteSVG: SVGElement | undefined;
-  private initialTreeConfig: TreeConfig<T>;
+  private initialTreeConfig: TreeConfig<FileTreeNode>;
 
-  constructor(public options: FileTreeOptions<T>) {
+  constructor(public options: FileTreeOptions) {
     if (typeof document !== 'undefined') {
       this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
     }
@@ -46,7 +46,7 @@ export class FileTree<T> {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  setOptions(options: FileTreeOptions<T>): void {
+  setOptions(options: FileTreeOptions): void {
     // todo
   }
 
