@@ -76,8 +76,10 @@ describe('fileListToTree', () => {
   test('should support custom root id and name', () => {
     const files = ['file.ts'];
     const tree = fileListToTree(files, {
-      rootId: 'my-root',
-      rootName: 'Project',
+      root: {
+        id: 'my-root',
+        name: 'Project',
+      },
     });
 
     expect(tree['my-root']).toEqual({

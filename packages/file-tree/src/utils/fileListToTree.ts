@@ -4,8 +4,10 @@ export interface FileTreeNode {
 }
 
 export interface FileListToTreeOptions {
-  rootId?: string;
-  rootName?: string;
+  root?: {
+    id: string;
+    name: string;
+  };
 }
 
 /**
@@ -28,12 +30,10 @@ export interface FileListToTreeOptions {
  */
 export function fileListToTree(
   filePaths: string[],
-  options: FileListToTreeOptions = {
-    rootId: 'root',
-    rootName: 'root',
-  }
+  options: FileListToTreeOptions = {}
 ): Record<string, FileTreeNode> {
-  const { rootId = 'root', rootName = 'root' } = options;
+  const { root: rootOptions } = options;
+  const { id: rootId = 'root', name: rootName = 'root' } = rootOptions ?? {};
 
   const tree: Record<string, FileTreeNode> = {};
   const folderChildren: Map<string, Set<string>> = new Map();
