@@ -128,15 +128,3 @@ registerCustomTheme('pierre-light', () => {
     '../themes/pierre-light.json'
   ) as unknown as Promise<ThemeRegistrationResolved>;
 });
-
-registerCustomTheme('pierre-dark-vibrant', () => {
-  return import(
-    '../themes/pierre-dark-vibrant.json'
-  ) as unknown as Promise<ThemeRegistrationResolved>;
-});
-
-registerCustomTheme('pierre-light-vibrant', () => {
-  return import(
-    '../themes/pierre-light-vibrant.json'
-  ) as unknown as Promise<ThemeRegistrationResolved>;
-});

@@ -555,7 +555,9 @@ export function ThemeDemo() {
                       renderHeaderMetadata={() => (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => handleFileAction(fileData.id, 'reject')}
+                            onClick={() =>
+                              handleFileAction(fileData.id, 'reject')
+                            }
                             className={cn(
                               'rounded-md px-2.5 py-1 text-[13px]',
                               styles.buttonSecondary
@@ -564,7 +566,9 @@ export function ThemeDemo() {
                             Undo
                           </button>
                           <button
-                            onClick={() => handleFileAction(fileData.id, 'accept')}
+                            onClick={() =>
+                              handleFileAction(fileData.id, 'accept')
+                            }
                             className={cn(
                               'rounded-md px-2.5 py-1 text-[13px]',
                               styles.buttonPrimary
