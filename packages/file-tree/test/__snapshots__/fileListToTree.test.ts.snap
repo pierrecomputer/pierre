@@ -6,10 +6,12 @@ exports[`fileListToTree should match snapshot for sample file list: sample file 
     "name": "README.md",
   },
   "build": {
-    "children": [
-      "build/index.mjs",
-      "build/scripts.js",
-    ],
+    "children": {
+      "direct": [
+        "build/index.mjs",
+        "build/scripts.js",
+      ],
+    },
     "name": "build",
   },
   "build/index.mjs": {
@@ -19,9 +21,11 @@ exports[`fileListToTree should match snapshot for sample file list: sample file 
     "name": "scripts.js",
   },
   "config": {
-    "children": [
-      "config/app.config.json",
-    ],
+    "children": {
+      "direct": [
+        "config/app.config.json",
+      ],
+    },
     "name": "config",
   },
   "config/app.config.json": {
@@ -31,31 +35,37 @@ exports[`fileListToTree should match snapshot for sample file list: sample file 
     "name": "package.json",
   },
   "root": {
-    "children": [
-      "src",
-      "build",
-      "config",
-      "README.md",
-      "package.json",
-    ],
+    "children": {
+      "direct": [
+        "src",
+        "build",
+        "config",
+        "README.md",
+        "package.json",
+      ],
+    },
     "name": "root",
   },
   "src": {
-    "children": [
-      "src/index.ts",
-      "src/components",
-      "src/lib",
-      "src/utils",
-    ],
+    "children": {
+      "direct": [
+        "src/index.ts",
+        "src/components",
+        "src/lib",
+        "src/utils",
+      ],
+    },
     "name": "src",
   },
   "src/components": {
-    "children": [
-      "src/components/Button.tsx",
-      "src/components/Card.tsx",
-      "src/components/Header.tsx",
-      "src/components/Sidebar.tsx",
-    ],
+    "children": {
+      "direct": [
+        "src/components/Button.tsx",
+        "src/components/Card.tsx",
+        "src/components/Header.tsx",
+        "src/components/Sidebar.tsx",
+      ],
+    },
     "name": "components",
   },
   "src/components/Button.tsx": {
@@ -74,10 +84,12 @@ exports[`fileListToTree should match snapshot for sample file list: sample file 
     "name": "index.ts",
   },
   "src/lib": {
-    "children": [
-      "src/lib/mdx.tsx",
-      "src/lib/utils.ts",
-    ],
+    "children": {
+      "direct": [
+        "src/lib/mdx.tsx",
+        "src/lib/utils.ts",
+      ],
+    },
     "name": "lib",
   },
   "src/lib/mdx.tsx": {
@@ -87,10 +99,12 @@ exports[`fileListToTree should match snapshot for sample file list: sample file 
     "name": "utils.ts",
   },
   "src/utils": {
-    "children": [
-      "src/utils/stream.ts",
-      "src/utils/worker.ts",
-    ],
+    "children": {
+      "direct": [
+        "src/utils/stream.ts",
+        "src/utils/worker.ts",
+      ],
+    },
     "name": "utils",
   },
   "src/utils/stream.ts": {

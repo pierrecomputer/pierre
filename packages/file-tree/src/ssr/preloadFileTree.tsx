@@ -10,7 +10,7 @@ import fileTreeStyles from '../style.css';
 export function preloadFileTree(fileTreeOptions: FileTreeOptions): string {
   return `${SVGSpriteSheet}<style>${fileTreeStyles}</style>
 <div data-file-tree-id="ft_srv_4">
-  ${renderToString(<Root treeConfig={fileTreeOptions.config} />)}
+  ${renderToString(<Root fileTreeOptions={fileTreeOptions} />)}
 </div>
 `;
 }

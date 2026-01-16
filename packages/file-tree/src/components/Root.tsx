@@ -1,21 +1,36 @@
-import type { TreeConfig } from '@headless-tree/core';
 import { syncDataLoaderFeature } from '@headless-tree/core';
 import type { JSX } from 'preact';
+import { useMemo } from 'preact/hooks';
+import { fileListToTree } from 'src/utils/fileListToTree';
 
+import type { FileTreeOptions } from '../FileTree';
+import { generateSyncDataLoader } from '../loader/sync';
 import type { FileTreeNode } from '../types';
 import { Icon } from './Icon';
 import { useTree } from './hooks/useTree';
 
 export interface FileTreeRootProps {
-  treeConfig: TreeConfig<FileTreeNode>;
-  server?: boolean;
+  fileTreeOptions: FileTreeOptions;
 }
 
-export function Root({ treeConfig }: FileTreeRootProps): JSX.Element {
+export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   'use no memo';
+  const { config, files } = fileTreeOptions;
+  const { rootItemId, ...restTreeConfig } = config ?? {};
+  const dataLoader = useMemo(
+    () => generateSyncDataLoader(fileListToTree(files)),
+    [files]
+  );
 
   const tree = useTree<FileTreeNode>({
-    ...treeConfig,
+    rootItemId: rootItemId ?? 'root',
+    ...restTreeConfig,
+    dataLoader,
+    getItemName: (item) => item.getItemData().name,
+    isItemFolder: (item) => {
+      const children = item.getItemData()?.children?.direct;
+      return children != null;
+    },
     features: [syncDataLoaderFeature],
   });
 
@@ -23,7 +38,7 @@ export function Root({ treeConfig }: FileTreeRootProps): JSX.Element {
     <div {...tree.getContainerProps()}>
       {tree.getItems().map((item) => {
         // TODO: is it possible to have empty array as children? is this valid in that case?
-        const hasChildren = item.getItemData()?.children != null;
+        const hasChildren = item.getItemData()?.children?.direct != null;
         return (
           <div
             data-type="item"

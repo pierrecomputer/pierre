@@ -70770,6 +70770,107 @@ Mostly cause it'll make it easier to grep for this in the future
 ]
 `;
 
+exports[`parsePatchFiles patches with a final blank line should have a \\n added: final blank line patch 1`] = `
+[
+  {
+    "files": [
+      {
+        "cacheKey": undefined,
+        "hunks": [
+          {
+            "additionCount": 7,
+            "additionLines": 1,
+            "additionStart": 47,
+            "collapsedBefore": 46,
+            "deletionCount": 9,
+            "deletionLines": 3,
+            "deletionStart": 47,
+            "hunkContent": [
+              {
+                "lines": [
+                  
+"	const is_single_element = trimmed.length === 1 && trimmed[0].type === 'RegularElement';
+"
+,
+                  
+"	const is_single_child_not_needing_template =
+"
+,
+                  
+"		trimmed.length === 1 &&
+"
+,
+                ],
+                "noEOFCR": false,
+                "type": "context",
+              },
+              {
+                "additions": [
+                  
+"		(trimmed[0].type === 'SvelteFragment' || trimmed[0].type === 'TitleElement');
+"
+,
+                ],
+                "deletions": [
+                  
+"		(trimmed[0].type === 'SvelteFragment' ||
+"
+,
+                  
+"			trimmed[0].type === 'TitleElement' ||
+"
+,
+                  
+"			(trimmed[0].type === 'IfBlock' && trimmed[0].elseif));
+"
+,
+                ],
+                "noEOFCRAdditions": false,
+                "noEOFCRDeletions": false,
+                "type": "change",
+              },
+              {
+                "lines": [
+                  
+"
+"
+,
+                  
+"	const template_name = context.state.scope.root.unique('root'); // TODO infer name from parent
+"
+,
+                  
+"
+"
+,
+                ],
+                "noEOFCR": false,
+                "type": "context",
+              },
+            ],
+            "hunkContext": "export function Fragment(node, context) {",
+            "hunkSpecs": 
+"@@ -47,9 +47,7 @@ export function Fragment(node, context) {
+"
+,
+            "splitLineCount": 9,
+            "splitLineStart": 0,
+            "unifiedLineCount": 10,
+            "unifiedLineStart": 0,
+          },
+        ],
+        "name": "packages/svelte/src/compiler/phases/3-transform/client/visitors/Fragment.js",
+        "prevName": undefined,
+        "splitLineCount": 9,
+        "type": "change",
+        "unifiedLineCount": 10,
+      },
+    ],
+    "patchMetadata": undefined,
+  },
+]
+`;
+
 exports[`parsePatchFiles should warn on malformed patch with bare newline in hunk: malformed patch 1`] = `
 [
   {
@@ -71153,107 +71254,6 @@ exports[`parsePatchFiles should warn on malformed patch with bare newline in hun
         "splitLineCount": 86,
         "type": "deleted",
         "unifiedLineCount": 86,
-      },
-    ],
-    "patchMetadata": undefined,
-  },
-]
-`;
-
-exports[`parsePatchFiles patches with a final blank line should have a \\n added: final blank line patch 1`] = `
-[
-  {
-    "files": [
-      {
-        "cacheKey": undefined,
-        "hunks": [
-          {
-            "additionCount": 7,
-            "additionLines": 1,
-            "additionStart": 47,
-            "collapsedBefore": 46,
-            "deletionCount": 9,
-            "deletionLines": 3,
-            "deletionStart": 47,
-            "hunkContent": [
-              {
-                "lines": [
-                  
-"	const is_single_element = trimmed.length === 1 && trimmed[0].type === 'RegularElement';
-"
-,
-                  
-"	const is_single_child_not_needing_template =
-"
-,
-                  
-"		trimmed.length === 1 &&
-"
-,
-                ],
-                "noEOFCR": false,
-                "type": "context",
-              },
-              {
-                "additions": [
-                  
-"		(trimmed[0].type === 'SvelteFragment' || trimmed[0].type === 'TitleElement');
-"
-,
-                ],
-                "deletions": [
-                  
-"		(trimmed[0].type === 'SvelteFragment' ||
-"
-,
-                  
-"			trimmed[0].type === 'TitleElement' ||
-"
-,
-                  
-"			(trimmed[0].type === 'IfBlock' && trimmed[0].elseif));
-"
-,
-                ],
-                "noEOFCRAdditions": false,
-                "noEOFCRDeletions": false,
-                "type": "change",
-              },
-              {
-                "lines": [
-                  
-"
-"
-,
-                  
-"	const template_name = context.state.scope.root.unique('root'); // TODO infer name from parent
-"
-,
-                  
-"
-"
-,
-                ],
-                "noEOFCR": false,
-                "type": "context",
-              },
-            ],
-            "hunkContext": "export function Fragment(node, context) {",
-            "hunkSpecs": 
-"@@ -47,9 +47,7 @@ export function Fragment(node, context) {
-"
-,
-            "splitLineCount": 9,
-            "splitLineStart": 0,
-            "unifiedLineCount": 10,
-            "unifiedLineStart": 0,
-          },
-        ],
-        "name": "packages/svelte/src/compiler/phases/3-transform/client/visitors/Fragment.js",
-        "prevName": undefined,
-        "splitLineCount": 9,
-        "type": "change",
-        "unifiedLineCount": 10,
       },
     ],
     "patchMetadata": undefined,

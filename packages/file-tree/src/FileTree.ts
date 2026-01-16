@@ -18,9 +18,17 @@ interface FileTreeHydrationProps {
   prerenderedHTML?: string;
 }
 
+export type HeadlessTreeConfig = Omit<
+  TreeConfig<FileTreeNode>,
+  'features' | 'dataLoader' | 'rootItemId' | 'getItemName' | 'isItemFolder'
+> & {
+  rootItemId?: string;
+};
+
 export interface FileTreeOptions {
   // probably change the name here once i know a better one
-  config: Omit<TreeConfig<FileTreeNode>, 'features'>;
+  config?: HeadlessTreeConfig;
+  files: string[];
   id?: string;
 }
 
@@ -30,19 +38,19 @@ export class FileTree {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
   readonly __id: string;
+  private files: string[];
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
   private spriteSVG: SVGElement | undefined;
-  private initialTreeConfig: TreeConfig<FileTreeNode>;
+  private initialTreeConfig: HeadlessTreeConfig | undefined;
 
   constructor(public options: FileTreeOptions) {
     if (typeof document !== 'undefined') {
       this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
     }
     this.__id = options.id ?? `ft_${isBrowser ? 'brw' : 'srv'}_${++instanceId}`;
-    this.initialTreeConfig = {
-      ...options.config,
-    };
+    this.initialTreeConfig = options.config;
+    this.files = options.files;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -96,17 +104,16 @@ export class FileTree {
   }
 
   render({ fileTreeContainer, containerWrapper }: FileTreeRenderProps): void {
-    if (this.initialTreeConfig == null) {
-      throw new Error('FileTree: Tree is not initialized');
-    }
-
     fileTreeContainer = this.getOrCreateFileTreeContainer(
       fileTreeContainer,
       containerWrapper
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
     preactRenderRoot(divWrapper, {
-      treeConfig: this.initialTreeConfig,
+      fileTreeOptions: {
+        config: this.initialTreeConfig,
+        files: this.files,
+      },
     });
   }
 
@@ -136,7 +143,10 @@ export class FileTree {
     } else {
       this.fileTreeContainer = fileTreeContainer;
       preactHydrateRoot(this.divWrapper, {
-        treeConfig: this.initialTreeConfig,
+        fileTreeOptions: {
+          config: this.initialTreeConfig,
+          files: this.files,
+        },
       });
     }
   }
