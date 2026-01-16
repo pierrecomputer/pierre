@@ -13,6 +13,12 @@ import { File, FileDiff } from '@pierre/diffs/react';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useState } from 'react';
 
+// Preload themes at module level for earliest possible start
+void preloadHighlighter({
+  themes: ['pierre-dark', 'pierre-light'],
+  langs: ['tsx', 'html', 'css'],
+});
+
 // Sample code files for demo
 const TYPESCRIPT_CODE = `import { useEffect, useState } from 'react';
 
@@ -341,14 +347,6 @@ export function ThemeDemo() {
     }
   }, [resolvedTheme]);
 
-  // Preload themes on mount
-  useEffect(() => {
-    void preloadHighlighter({
-      themes: ['pierre-dark', 'pierre-light'],
-      langs: ['tsx', 'html', 'css'],
-    });
-  }, []);
-
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
   const isDark = colorMode === 'dark';
@@ -498,7 +496,7 @@ export function ThemeDemo() {
           <div className="max-h-[720px] overflow-auto">
             <div
               className={cn(
-                'sticky top-0 z-10 flex min-h-[44px] items-center justify-between border-b py-1 pr-3 pl-4.5',
+                'sticky top-0 z-10 flex min-h-[44px] items-center justify-between border-b py-1 pr-4 pl-4.5',
                 styles.tabBar
               )}
             >
