@@ -2,6 +2,7 @@
 
 import {
   IconCheckCheck,
+  IconChevronsNarrow,
   IconColorDark,
   IconColorLight,
   IconFileCode,
@@ -11,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { parseDiffFromFile, preloadHighlighter } from '@pierre/diffs';
 import { File, FileDiff } from '@pierre/diffs/react';
 import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 // Preload themes at module level for earliest possible start
 void preloadHighlighter({
@@ -307,6 +308,8 @@ export function ThemeDemo() {
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
   const [activeTab, setActiveTab] = useState<TabId>('typescript');
   const [mounted, setMounted] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Store raw file contents - these get modified as changes are accepted/rejected
   const [workingFiles, setWorkingFiles] = useState<WorkingFile[]>(() =>
@@ -346,6 +349,22 @@ export function ThemeDemo() {
       setColorMode(resolvedTheme);
     }
   }, [resolvedTheme]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current !== null &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
 
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
@@ -465,7 +484,69 @@ export function ThemeDemo() {
           styles.container
         )}
       >
-        <div className={cn('-ml-[1px] flex items-end border-b', styles.tabBar)}>
+        {/* Mobile dropdown */}
+        <div
+          ref={dropdownRef}
+          className={cn('relative border-b sm:hidden', styles.tabBar)}
+        >
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className={cn(
+              'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-sm',
+              styles.tabActive
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <FileIcon lang={currentTab.lang} isDiff={currentTab.isDiff} />
+              {currentTab.label}
+            </span>
+            <IconChevronsNarrow className="size-4" />
+          </button>
+          {dropdownOpen && (
+            <div
+              className={cn(
+                'absolute right-1 left-1 z-20 mt-1 flex flex-col gap-[2px] rounded-lg border [background-clip:padding-box] p-[3px] shadow-lg',
+                isDark
+                  ? 'border-[rgb(255_255_255_/_0.15)] bg-neutral-900'
+                  : 'border-[rgb(0_0_0_/_0.125)] bg-white'
+              )}
+            >
+              {TABS.map((tab) => {
+                const isActive = tab.id === activeTab;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      setDropdownOpen(false);
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                      isActive
+                        ? isDark
+                          ? 'bg-neutral-800 text-neutral-100'
+                          : 'bg-neutral-100 text-neutral-900'
+                        : isDark
+                          ? 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-300'
+                          : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700'
+                    )}
+                  >
+                    <FileIcon lang={tab.lang} isDiff={tab.isDiff} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop tabs */}
+        <div
+          className={cn(
+            '-ml-[1px] hidden items-end border-b sm:flex',
+            styles.tabBar
+          )}
+        >
           {TABS.map((tab) => {
             const isActive = tab.id === activeTab;
             return (

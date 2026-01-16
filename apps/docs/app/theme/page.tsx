@@ -131,7 +131,7 @@ export default async function ThemePage() {
           .
         </p>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Button asChild>
             <Link
               href="https://marketplace.visualstudio.com/items?itemName=pierrecomputer.pierre-theme"
@@ -157,7 +157,7 @@ export default async function ThemePage() {
           <Button variant="outline" disabled className="opacity-50">
             <IconBrandZed />
             Zed
-            <span className="text-muted-foreground text-xs">(Soon)</span>
+            <span className="text-muted-foreground">(Soon)</span>
           </Button>
         </div>
       </section>
