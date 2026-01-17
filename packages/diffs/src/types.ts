@@ -323,6 +323,7 @@ export interface ForcePlainTextOptions {
   forcePlainText: boolean;
   startingLine?: number;
   totalLines?: number;
+  expandedHunks?: Map<number, { fromStart: number; fromEnd: number }> | true;
 }
 
 export interface RenderFileOptions {
