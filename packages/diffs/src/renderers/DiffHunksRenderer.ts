@@ -1,6 +1,5 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
-import { areRenderRangesEqual } from 'src/utils/areRenderRangesEqual';
 
 import { DEFAULT_THEMES } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
@@ -28,6 +27,7 @@ import type {
   ThemeTypes,
   ThemedDiffResult,
 } from '../types';
+import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationElement } from '../utils/createAnnotationElement';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
@@ -600,7 +600,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !unified && fileDiff.type !== 'deleted' ? additionsAST : undefined;
     deletionsAST =
       !unified && fileDiff.type !== 'new' ? deletionsAST : undefined;
-    unifiedAST = unifiedAST.length > 0 ? unifiedAST : undefined;
+    unifiedAST = unified ? unifiedAST : undefined;
 
     if (!disableVirtualizationBuffers) {
       if (renderRange.bufferBefore > 0) {
@@ -627,6 +627,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         deletionsAST?.push(element);
         additionsAST?.push(element);
       }
+    }
+
+    // If any of our arrays are empty, lets null them out to optimize rendering
+    if (unifiedAST?.length === 0) {
+      unifiedAST = undefined;
+    }
+    if (deletionsAST?.length === 0) {
+      deletionsAST = undefined;
+    }
+    if (additionsAST?.length === 0) {
+      additionsAST = undefined;
     }
 
     const preNode = this.createPreElement(
@@ -1083,6 +1094,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             brokeEarly = true;
             break;
           }
+
+          // In unified mode, inject deletion's no-newline at the transition point
+          if (unified && index === dLen && hunkContent.noEOFCRDeletions) {
+            unifiedAST.push(createNoNewlineElement('change-deletion'));
+          }
+
           const { deletionLine, additionLine } = (() => {
             let deletionLine: ElementContent | undefined =
               deletionLines[deletionLineIndex];
@@ -1184,11 +1201,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               deletionsAST.push(createEmptyRowBuffer(1));
             }
           }
+        } else if (unified && !brokeEarly && hunkContent.noEOFCRAdditions) {
+          unifiedAST.push(createNoNewlineElement('change-addition'));
         }
       }
     }
 
-    if (isLastHunk && !isPartial) {
+    if (isLastHunk && !isPartial && state.renderRange.bufferAfter === 0) {
       state.hunkIndex++;
       this.renderCollapsedHunks({
         hunk,

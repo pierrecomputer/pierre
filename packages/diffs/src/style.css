@@ -279,7 +279,9 @@
   }
 
   [data-diffs] {
-    --diffs-code-grid: minmax(min-content, max-content) 1fr;
+    /* This feels a bit crazy to me... so I need to think about it a bit more... */
+    --diffs-grid-number-column-width: minmax(min-content, max-content);
+    --diffs-code-grid: var(--diffs-grid-number-column-width) 1fr;
 
     [data-column-content] span {
       color: light-dark(
@@ -307,7 +309,7 @@
   }
 
   [data-diffs][data-dehydrated] {
-    --diffs-code-grid: minmax(min-content, max-content) minmax(0, 1fr);
+    --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -455,7 +457,9 @@
   }
 
   [data-buffer] {
+    display: grid;
     grid-column: 1 / 3;
+    grid-template-columns: subgrid;
     user-select: none;
     /* We multiply by 1.414 (√2) to better approximate the diagonal repeat distance */
     background-image: repeating-linear-gradient(
@@ -471,6 +475,24 @@
     /* left: 0; */
     /* width: var(--diffs-column-width, auto); */
     /* background-attachment: fixed; */
+
+    &::before,
+    &::after {
+      content: '';
+      display: block;
+    }
+
+    &::before {
+      box-sizing: content-box;
+      padding-left: 2ch;
+      padding-right: 1ch;
+      border-left: 4px solid transparent;
+      border-right: 1px solid transparent;
+      min-width: var(
+        --diffs-min-number-column-width,
+        var(--diffs-min-number-column-width-default, 3ch)
+      );
+    }
   }
 
   [data-separator] {
@@ -512,13 +534,19 @@
   }
 
   [data-separator='line-info'] [data-separator-wrapper] {
-    position: sticky;
+    position: relative;
     display: flex;
     align-items: center;
     gap: 2px;
     width: auto;
     width: calc(var(--diffs-column-width) - var(--diffs-gap-fallback));
     border-radius: 6px;
+  }
+
+  [data-overflow='scroll']
+    [data-separator='line-info']
+    [data-separator-wrapper] {
+    position: sticky;
   }
 
   @media (pointer: fine) {
@@ -577,9 +605,12 @@
       opacity: 1;
     }
 
-    [data-line]:hover {
-      z-index: 2;
-    }
+    /* FIXME(amadeus): We need to figure out how/when to apply hover effects in
+     * a more performant way this because it'll trigger layout/paint re-calcs
+     * probably when we dont want tham... */
+    /* [data-line]:hover { */
+    /*   z-index: 2; */
+    /* } */
   }
 
   [data-expand-up] [data-icon] {
@@ -615,7 +646,6 @@
     [data-code]
     [data-separator='line-info']
     [data-separator-wrapper] {
-    left: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     margin-left: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     margin-right: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     width: calc(
@@ -628,21 +658,33 @@
     [data-deletions]
     [data-separator='line-info']
     [data-separator-wrapper] {
-    left: var(--diffs-gap-fallback);
-    margin-left: var(--diffs-gap-fallback);
+    margin-left: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
+  }
+
+  [data-type='file'][data-overflow='scroll'],
+  [data-type='split'][data-overflow='scroll'] {
+    [data-deletions] [data-separator='line-info'] [data-separator-wrapper] {
+      left: var(--diffs-gap-inline, var(--diffs-gap-fallback));
+    }
   }
 
   [data-type='split']
     [data-additions]
     [data-separator='line-info']
     [data-separator-wrapper] {
-    left: 0;
     margin-right: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
     flex-direction: row-reverse;
+  }
+
+  [data-type='split'][data-overflow='scroll']
+    [data-additions]
+    [data-separator='line-info']
+    [data-separator-wrapper] {
+    left: 0;
   }
 
   [data-line] {
@@ -654,7 +696,10 @@
     [data-line-annotation],
     [data-buffer],
     [data-line],
-    [data-separator] {
+    [data-separator],
+    [data-virtualized-buffer],
+    [data-no-newline] {
+      margin-right: 1px;
       grid-column: 1 / 3;
     }
   }
@@ -669,8 +714,10 @@
     [data-line-annotation],
     [data-buffer],
     [data-line],
-    [data-separator] {
-      margin-left: 2px;
+    [data-separator],
+    [data-virtualized-buffer],
+    [data-no-newline] {
+      margin-left: 1px;
       grid-column: 3 / 5;
     }
   }
@@ -783,8 +830,8 @@
       border-right: var(--diffs-gap-style, 1px solid var(--diffs-bg));
     }
 
-    [data-column-number] {
-      border-right: none;
+    [data-column-number],
+    [data-buffer]::before {
       min-width: 0;
       padding: 0;
     }
@@ -865,7 +912,7 @@
   }
 
   /* By wrapping hovers in a pointer: fine, we ensure that mobile devices don't
-*  require a double click */
+   *  require a double click */
   @media (pointer: fine) {
     [data-line]:hover:not([data-selected-line]) {
       [data-column-number],
@@ -888,6 +935,7 @@
   }
 
   [data-diffs-header] {
+    position: relative;
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -897,7 +945,6 @@
       1lh + (var(--diffs-gap-block, var(--diffs-gap-fallback)) * 3)
     );
     padding-inline: 16px;
-    position: sticky;
     top: 0;
     z-index: 2;
   }
@@ -956,13 +1003,19 @@
   }
 
   [data-annotation-content] {
-    position: sticky;
-    left: var(--diffs-column-number-width, 0);
+    position: relative;
     grid-column: 2 / -1;
     width: var(--diffs-column-content-width, auto);
     align-self: flex-start;
     z-index: 2;
     height: 100%;
+  }
+
+  /* Sticky positioning has a composite costs, so we should _only_ pay it if we
+   * need to */
+  [data-overflow='scroll'] [data-annotation-content] {
+    position: sticky;
+    left: var(--diffs-column-number-width, 0);
   }
 
   /* Undo some of the stuff that the 'pre' tag does */
@@ -1063,6 +1116,8 @@
   }
 
   [data-virtualized-buffer] {
+    /* for blanking debugging purposes */
+    /* background-color: red; */
     grid-column: 1 / 3;
   }
 }

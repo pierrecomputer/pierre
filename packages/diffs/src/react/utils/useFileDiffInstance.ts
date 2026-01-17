@@ -65,7 +65,8 @@ export function useFileDiffInstance<LAnnotation>({
         instanceRef.current = new LittleVirtualizedFileDiff(
           options,
           intersectionObserver,
-          poolManager
+          poolManager,
+          true
         );
       } else {
         instanceRef.current = new FileDiff(options, poolManager, true);

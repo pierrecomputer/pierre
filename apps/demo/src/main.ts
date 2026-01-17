@@ -82,6 +82,7 @@ const poolManager = (() => {
 })();
 
 const intersectionObserver = new LittleBoiVirtualizer();
+// const intersectionObserver = undefined;
 
 function startStreaming() {
   const container = document.getElementById('wrapper');
@@ -253,13 +254,11 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
 
       const fileContainer = document.createElement(DIFFS_TAG_NAME);
       wrapper.appendChild(fileContainer);
-      const start = Date.now();
       instance.render({
         fileDiff,
         lineAnnotations: fileAnnotations,
         fileContainer,
       });
-      console.log('Time To Render', fileDiff.name.trim(), Date.now() - start);
       diffInstances.push(instance);
       hunkIndex++;
     }
@@ -339,8 +338,11 @@ if (loadDiff != null) {
         'parsed-patch'
       );
       renderDiff(parsedPatches, poolManager);
+      // window.scrollTo({ top: 99999999999 });
     })();
   }
+
+  // void poolManager.initialize().then(() => handleClick());
   loadDiff.addEventListener('click', handleClick);
   loadDiff.addEventListener('pointerenter', () => void handlePreloadDiff());
 }
@@ -357,14 +359,14 @@ if (wrapCheckbox != null) {
         ...instance.options,
         overflow: checked ? 'wrap' : 'scroll',
       });
-      void instance.rerender();
+      // void instance.rerender();
     }
     for (const instance of fileInstances) {
       instance.setOptions({
         ...instance.options,
         overflow: checked ? 'wrap' : 'scroll',
       });
-      void instance.rerender();
+      // void instance.rerender();
     }
   });
 }
@@ -378,7 +380,7 @@ if (unifiedCheckbox instanceof HTMLInputElement) {
         ...instance.options,
         diffStyle: checked ? 'unified' : 'split',
       });
-      void instance.rerender();
+      // void instance.rerender();
     }
   });
 }

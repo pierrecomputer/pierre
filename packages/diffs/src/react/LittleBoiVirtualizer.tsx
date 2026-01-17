@@ -20,12 +20,16 @@ interface LittleBoiVirtualizerProps {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
+  contentClassName?: string;
+  contentStyle?: CSSProperties;
 }
 
 export function LittleBoiVirtualizerWrapper({
   children,
   className,
   style,
+  contentClassName,
+  contentStyle,
 }: LittleBoiVirtualizerProps): React.JSX.Element {
   const [instance] = useState(() => {
     return typeof window !== 'undefined'
@@ -45,7 +49,9 @@ export function LittleBoiVirtualizerWrapper({
   return (
     <LittleBoiVirtualizerContext.Provider value={instance}>
       <div className={className} style={style} ref={ref}>
-        {children}
+        <div className={contentClassName} style={contentStyle}>
+          {children}
+        </div>
       </div>
     </LittleBoiVirtualizerContext.Provider>
   );

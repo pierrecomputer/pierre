@@ -298,9 +298,7 @@ export class FileDiff<LAnnotation = undefined> {
   hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
     const { fileContainer, prerenderedHTML } = props;
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
-    for (const element of Array.from(
-      fileContainer.shadowRoot?.children ?? []
-    )) {
+    for (const element of fileContainer.shadowRoot?.children ?? []) {
       if (element instanceof SVGElement) {
         this.spriteSVG = element;
         continue;
@@ -310,6 +308,23 @@ export class FileDiff<LAnnotation = undefined> {
       }
       if (element instanceof HTMLPreElement) {
         this.pre = element;
+        for (const code of element.children) {
+          if (
+            !(code instanceof HTMLElement) ||
+            code.tagName.toLowerCase() !== 'code'
+          ) {
+            continue;
+          }
+          if ('deletions' in code.dataset) {
+            this.codeDeletions = code;
+          }
+          if ('additions' in code.dataset) {
+            this.codeAdditions = code;
+          }
+          if ('unified' in code.dataset) {
+            this.codeUnified = code;
+          }
+        }
         continue;
       }
       if ('diffsHeader' in element.dataset) {
@@ -357,7 +372,11 @@ export class FileDiff<LAnnotation = undefined> {
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
         this.resizeManager.setup(this.pre);
         if ((this.options.diffStyle ?? 'split') === 'split') {
-          this.scrollSyncManager.setup(this.pre);
+          this.scrollSyncManager.setup(
+            this.pre,
+            this.codeDeletions,
+            this.codeAdditions
+          );
         }
       }
     }
@@ -489,8 +508,17 @@ export class FileDiff<LAnnotation = undefined> {
       if (hunksResult.headerElement != null) {
         this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
       }
-      const pre = this.getOrCreatePreNode(fileContainer);
-      this.applyHunksToDOM(pre, hunksResult);
+      if (
+        hunksResult.additionsAST != null ||
+        hunksResult.deletionsAST != null ||
+        hunksResult.unifiedAST != null
+      ) {
+        const pre = this.getOrCreatePreNode(fileContainer);
+        this.applyHunksToDOM(pre, hunksResult);
+      } else if (this.pre != null) {
+        this.pre.parentNode?.removeChild(this.pre);
+        this.pre = undefined;
+      }
       this.renderSeparators(hunksResult.hunkData);
       this.renderAnnotations();
       this.renderHoverUtility();
@@ -715,37 +743,62 @@ export class FileDiff<LAnnotation = undefined> {
     // Create code elements and insert HTML content
     const codeElements: HTMLElement[] = [];
     if (result.unifiedAST != null) {
-      shouldReplace = this.codeUnified == null;
-      this.codeUnified = getOrCreateCodeNode({
-        code: this.codeUnified,
-        columnType: 'unified',
-      });
-      this.codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
-        result.unifiedAST
-      );
-      codeElements.push(this.codeUnified);
+      shouldReplace =
+        this.codeUnified == null ||
+        this.codeAdditions != null ||
+        this.codeDeletions != null;
+      this.codeDeletions = undefined;
+      this.codeAdditions = undefined;
+      if (result.unifiedAST.length > 0) {
+        this.codeUnified = getOrCreateCodeNode({
+          code: this.codeUnified,
+          columnType: 'unified',
+        });
+        this.codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
+          result.unifiedAST
+        );
+        codeElements.push(this.codeUnified);
+      } else {
+        this.codeUnified = undefined;
+      }
     } else {
       if (result.deletionsAST != null) {
-        shouldReplace = shouldReplace || this.codeDeletions == null;
-        this.codeDeletions = getOrCreateCodeNode({
-          code: this.codeDeletions,
-          columnType: 'deletions',
-        });
-        this.codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
-          result.deletionsAST
-        );
-        codeElements.push(this.codeDeletions);
+        shouldReplace =
+          shouldReplace ||
+          this.codeDeletions == null ||
+          this.codeUnified != null;
+        this.codeUnified = undefined;
+        if (result.deletionsAST.length > 0) {
+          this.codeDeletions = getOrCreateCodeNode({
+            code: this.codeDeletions,
+            columnType: 'deletions',
+          });
+          this.codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
+            result.deletionsAST
+          );
+          codeElements.push(this.codeDeletions);
+        } else {
+          this.codeDeletions = undefined;
+        }
       }
       if (result.additionsAST != null) {
-        shouldReplace = shouldReplace || this.codeAdditions == null;
-        this.codeAdditions = getOrCreateCodeNode({
-          code: this.codeAdditions,
-          columnType: 'additions',
-        });
-        this.codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
-          result.additionsAST
-        );
-        codeElements.push(this.codeAdditions);
+        shouldReplace =
+          shouldReplace ||
+          this.codeAdditions == null ||
+          this.codeUnified != null;
+        this.codeUnified = undefined;
+        if (result.additionsAST.length > 0) {
+          this.codeAdditions = getOrCreateCodeNode({
+            code: this.codeAdditions,
+            columnType: 'additions',
+          });
+          this.codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
+            result.additionsAST
+          );
+          codeElements.push(this.codeAdditions);
+        } else {
+          this.codeAdditions = undefined;
+        }
       }
     }
 

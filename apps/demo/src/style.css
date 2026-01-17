@@ -44,6 +44,7 @@ html[data-theme-type='dark'] {
 
 html,
 body {
+  overflow-anchor: none;
   background-color: light-dark(white, black);
 }
 
@@ -55,7 +56,6 @@ body,
   padding: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  overscroll-behavior: none;
   touch-action: manipulation;
   zoom: 1;
   -webkit-text-size-adjust: 100%;
@@ -164,6 +164,8 @@ code {
 [data-commit-metadata] {
   margin-top: 10px;
   padding: 10px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .files-input {

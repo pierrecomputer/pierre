@@ -1,31 +1,31 @@
 import type { VirtualWindowSpecs } from '../types';
 
 interface WindowFromScrollPositionProps {
-  scrollY: number;
+  scrollTop: number;
   height: number;
   scrollHeight: number;
-  containerOffset: number;
+  containerOffset?: number;
   fitPerfectly: boolean;
-  overscrollMultiplier: number;
+  overscrollSize: number;
 }
 
 export function createWindowFromScrollPosition({
-  scrollY,
+  scrollTop,
   scrollHeight,
   height,
-  containerOffset,
+  containerOffset = 0,
   fitPerfectly,
-  overscrollMultiplier,
+  overscrollSize,
 }: WindowFromScrollPositionProps): VirtualWindowSpecs {
-  const windowHeight = height * overscrollMultiplier;
+  const windowHeight = height + overscrollSize * 2;
   if (windowHeight > scrollHeight || fitPerfectly) {
     return {
-      top: Math.max(scrollY - containerOffset, 0),
+      top: Math.max(scrollTop - containerOffset, 0),
       bottom:
-        scrollY + (fitPerfectly ? height : windowHeight) - containerOffset,
+        scrollTop + (fitPerfectly ? height : windowHeight) - containerOffset,
     };
   }
-  const scrollCenter = scrollY + height / 2;
+  const scrollCenter = scrollTop + height / 2;
   let top = scrollCenter - windowHeight / 2;
   let bottom = top + windowHeight;
   if (top < 0) {

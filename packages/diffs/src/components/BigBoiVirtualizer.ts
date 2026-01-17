@@ -17,7 +17,7 @@ declare global {
 }
 
 const ENABLE_RENDERING = true;
-const OVERSCROLL_MULTIPLIER = 1.2;
+const OVERSCROLL_SIZE = 500;
 
 interface RenderedItems<LAnnotations> {
   instance: VirtualizedFileDiff<LAnnotations>;
@@ -36,7 +36,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
   > = new Map();
 
   private containerOffset = 0;
-  private scrollY: number = 0;
+  private scrollTop: number = 0;
   private lastRenderedScrollY = -1;
   private height: number = 0;
   private scrollHeight: number = 0;
@@ -69,7 +69,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
     this.handleScroll();
     this.handleResize();
     this.containerOffset =
-      this.container.getBoundingClientRect().top + this.scrollY;
+      this.container.getBoundingClientRect().top + this.scrollTop;
     window.__LOL = this;
 
     window.TOGGLE = () => {
@@ -135,20 +135,20 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
       return;
     }
     const { diffStyle = 'split' } = this.fileOptions;
-    const { scrollY, height, scrollHeight, containerOffset } = this;
+    const { scrollTop, height, scrollHeight, containerOffset } = this;
     const fitPerfectly =
       this.lastRenderedScrollY === -1 ||
-      Math.abs(scrollY - this.lastRenderedScrollY) >
-        height * OVERSCROLL_MULTIPLIER;
+      Math.abs(scrollTop - this.lastRenderedScrollY) >
+        height + OVERSCROLL_SIZE * 2;
     const { top, bottom } = createWindowFromScrollPosition({
-      scrollY,
+      scrollTop,
       height,
       scrollHeight,
       containerOffset,
       fitPerfectly,
-      overscrollMultiplier: OVERSCROLL_MULTIPLIER,
+      overscrollSize: OVERSCROLL_SIZE,
     });
-    this.lastRenderedScrollY = scrollY;
+    this.lastRenderedScrollY = scrollTop;
     for (const [renderedInstance, item] of Array.from(this.rendered)) {
       // If not visible, we should unmount it
       if (
@@ -249,10 +249,10 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
   }
 
   handleScroll = (): void => {
-    let { scrollY } = window;
-    scrollY = Math.max(scrollY, 0);
-    if (this.scrollY === scrollY) return;
-    this.scrollY = scrollY;
+    let { scrollY: scrollTop } = window;
+    scrollTop = Math.max(scrollTop, 0);
+    if (this.scrollTop === scrollTop) return;
+    this.scrollTop = scrollTop;
     if (this.files.length === 0) return;
     queueRender(this._render);
   };
