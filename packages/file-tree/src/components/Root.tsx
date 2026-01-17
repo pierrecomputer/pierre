@@ -1,4 +1,4 @@
-import { syncDataLoaderFeature } from '@headless-tree/core';
+import { hotkeysCoreFeature, syncDataLoaderFeature } from '@headless-tree/core';
 import type { JSX } from 'preact';
 import { useMemo } from 'preact/hooks';
 import { fileListToTree } from 'src/utils/fileListToTree';
@@ -31,7 +31,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
       const children = item.getItemData()?.children?.direct;
       return children != null;
     },
-    features: [syncDataLoaderFeature],
+    features: [syncDataLoaderFeature, hotkeysCoreFeature],
   });
 
   return (
@@ -39,18 +39,29 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
       {tree.getItems().map((item) => {
         // TODO: is it possible to have empty array as children? is this valid in that case?
         const hasChildren = item.getItemData()?.children?.direct != null;
+        const isExpanded = item.isExpanded();
         return (
           <div
             data-type="item"
             data-item-type={hasChildren ? 'folder' : 'file'}
             data-item-id={item.getId()}
             {...item.getProps()}
+            onKeyPress={(event) => {
+              if (event.key === 'Enter') {
+                if (isExpanded) {
+                  item.collapse();
+                } else {
+                  item.expand();
+                }
+              }
+            }}
             key={item.getId()}
           >
-            <div data-item-section="content">{item.getItemName()}</div>
+            <div data-item-section="spacing"></div>
             <div data-item-section="icon">
               {hasChildren ? <Icon name="file-tree-icon-chevron" /> : null}
             </div>
+            <div data-item-section="content">{item.getItemName()}</div>
           </div>
         );
       })}

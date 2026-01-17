@@ -37,16 +37,17 @@ export function ClientPage({
   }, [collapseFolders]);
 
   return (
-    <>
-      <div className="w-2/3">
-        <h2>React SSR File Tree</h2>
-        <FileTreeReact
-          options={fileTreeOptions}
-          className="border border-gray-300"
-          prerenderedHTML={preloadedFileTreeHtml}
-        />
-        <div className="mt-4">
-          <label htmlFor="collapse-folders">
+    <div className="m-4">
+      <div
+        className="rounded-sm border p-4"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        <h4 className="text-lg font-bold">Controls</h4>
+        <div className="flex flex-row gap-2">
+          <label
+            htmlFor="collapse-folders"
+            className="flex cursor-pointer items-center gap-2 select-none"
+          >
             <input
               type="checkbox"
               id="collapse-folders"
@@ -57,6 +58,25 @@ export function ClientPage({
           </label>
         </div>
       </div>
-    </>
+      <div className="grid grid-cols-2 gap-4 p-4">
+        <div className="w-2/3">
+          <h2 className="text-sm font-bold">Vanilla</h2>
+          <div
+            id="test-file-tree-elem"
+            className="mt-2 rounded-md border"
+            style={{ borderColor: 'var(--color-border)' }}
+          />
+        </div>
+        <div className="w-2/3">
+          <h2 className="text-sm font-bold">React SSR</h2>
+          <FileTreeReact
+            options={fileTreeOptions}
+            className="mt-2 rounded-md border"
+            style={{ borderColor: 'var(--color-border)' }}
+            prerenderedHTML={preloadedFileTreeHtml}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

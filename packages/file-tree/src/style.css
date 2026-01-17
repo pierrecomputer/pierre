@@ -5,10 +5,11 @@
     color-scheme: light dark;
     display: flex;
     flex-direction: column;
-    font-size: 12px;
-    font-family:
-      'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
-      'Courier New', monospace;
+    font-size: 13px;
+    line-height: 30px;
+    color: var(--color-foreground);
+    background-color: var(--color-background);
+    font-family: var(--font-geist), var(--default-font-family);
 
     --ft-level-gap: 16px;
     --ft-max-level: 4;
@@ -43,7 +44,7 @@
   }
 
   /* LIST IDENTATION */
-  [aria-level] > [data-item-section='content'] {
+  [aria-level] > [data-item-section='spacing'] {
     /* Gap is level - 1 because aria starts at 1 but we want to start at 0 */
     /* If for some reason someone is using a level higher than the max, we'll use the
     max level + 1 by default, so it still indents past all known levels. */
