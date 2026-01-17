@@ -16,3 +16,7 @@ export function preactHydrateRoot(
 ): void {
   hydrate(<Root {...props} />, element);
 }
+
+export function preactUnmountRoot(element: HTMLElement): void {
+  render(null, element);
+}

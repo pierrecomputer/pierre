@@ -208,9 +208,7 @@ describe('fileListToTree', () => {
     expect(tree.src.children?.direct).toContain('src/index.ts');
     expect(tree.src.children?.direct).toContain('src/utils');
     expect(tree.src.children?.collapsed).toContain('src/index.ts');
-    expect(tree.src.children?.collapsed).toContain(
-      'c::src/utils/deep/nested'
-    );
+    expect(tree.src.children?.collapsed).toContain('c::src/utils/deep/nested');
 
     // The collapsed node - no collapsed since children would be identical to direct
     expect(tree['c::src/utils/deep/nested']).toEqual({
@@ -250,9 +248,7 @@ describe('fileListToTree', () => {
     const tree = fileListToTree(files);
 
     // Root should have collapsed pointing to the fully collapsed path
-    expect(tree.root.children?.collapsed).toEqual([
-      'c::outer/middle/inner',
-    ]);
+    expect(tree.root.children?.collapsed).toEqual(['c::outer/middle/inner']);
 
     // The collapsed node - no collapsed since children would be identical to direct
     expect(tree['c::outer/middle/inner']).toEqual({
@@ -355,7 +351,10 @@ describe('fileListToTree', () => {
     const tree = fileListToTree(files);
 
     // src has two collapsible children
-    expect(tree.src.children?.direct).toEqual(['src/feature-a', 'src/feature-b']);
+    expect(tree.src.children?.direct).toEqual([
+      'src/feature-a',
+      'src/feature-b',
+    ]);
     expect(tree.src.children?.collapsed).toEqual([
       'c::src/feature-a/components/deep',
       'c::src/feature-b/utils/helpers',
@@ -402,9 +401,7 @@ describe('fileListToTree', () => {
     expect(tree.root.children?.direct).toContain('.vscode');
 
     // .github/workflows is collapsible (single folder child)
-    expect(tree.root.children?.collapsed).toContain(
-      'c::.github/workflows'
-    );
+    expect(tree.root.children?.collapsed).toContain('c::.github/workflows');
 
     expect(tree['.gitignore']).toEqual({ name: '.gitignore' });
 
@@ -419,7 +416,11 @@ describe('fileListToTree', () => {
 
   test('should handle file and folder with similar names', () => {
     // utils.ts (file) and utils/ (folder) at the same level
-    const files = ['src/utils.ts', 'src/utils/helper.ts', 'src/utils/format.ts'];
+    const files = [
+      'src/utils.ts',
+      'src/utils/helper.ts',
+      'src/utils/format.ts',
+    ];
     const tree = fileListToTree(files);
 
     // src has both utils.ts and utils folder
@@ -500,10 +501,7 @@ describe('fileListToTree', () => {
 
     // a has both a file and a folder, so b/c is collapsible from a's perspective
     expect(tree.a.children?.direct).toEqual(['a/file.ts', 'a/b']);
-    expect(tree.a.children?.collapsed).toEqual([
-      'a/file.ts',
-      'c::a/b/c',
-    ]);
+    expect(tree.a.children?.collapsed).toEqual(['a/file.ts', 'c::a/b/c']);
 
     // Root should NOT collapse a since a has multiple children
     expect(tree.root.children?.collapsed).toBeUndefined();

@@ -4,7 +4,11 @@ import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME } from './constants';
 import { SVGSpriteSheet } from './sprite';
 import { type FileTreeNode } from './types';
-import { preactHydrateRoot, preactRenderRoot } from './utils/preactRenderer';
+import {
+  preactHydrateRoot,
+  preactRenderRoot,
+  preactUnmountRoot,
+} from './utils/preactRenderer';
 
 let instanceId = -1;
 
@@ -73,6 +77,18 @@ export class FileTree {
     ) {
       parentNode.appendChild(this.fileTreeContainer);
     }
+    // First try to find the sprite SVG
+    if (this.spriteSVG == null) {
+      for (const element of Array.from(
+        this.fileTreeContainer.shadowRoot?.children ?? []
+      )) {
+        if (element instanceof SVGElement) {
+          this.spriteSVG = element;
+          break;
+        }
+      }
+    }
+    // If we didn't find the sprite SVG, create a new one
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -92,9 +108,20 @@ export class FileTree {
   private getOrCreateDivWrapperNode(container: HTMLElement): HTMLElement {
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.divWrapper == null) {
-      this.divWrapper = document.createElement('div');
-      this.divWrapper.dataset.fileTreeId = this.__id.toString();
-      container.shadowRoot?.appendChild(this.divWrapper);
+      for (const element of Array.from(container.shadowRoot?.children ?? [])) {
+        if (
+          element instanceof HTMLDivElement &&
+          element.dataset.fileTreeId === this.__id
+        ) {
+          this.divWrapper = element;
+          break;
+        }
+      }
+      if (this.divWrapper == null) {
+        this.divWrapper = document.createElement('div');
+        this.divWrapper.dataset.fileTreeId = this.__id.toString();
+        container.shadowRoot?.appendChild(this.divWrapper);
+      }
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
@@ -155,6 +182,11 @@ export class FileTree {
   }
 
   cleanUp(): void {
-    // todo
+    if (this.divWrapper != null) {
+      preactUnmountRoot(this.divWrapper);
+    }
+    this.fileTreeContainer = undefined;
+    this.divWrapper = undefined;
+    this.spriteSVG = undefined;
   }
 }
