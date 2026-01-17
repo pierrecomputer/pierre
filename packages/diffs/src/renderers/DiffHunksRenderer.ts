@@ -1,7 +1,7 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { DEFAULT_THEMES } from '../constants';
+import { DEFAULT_EXPANDED_REGION, DEFAULT_THEMES } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -18,6 +18,7 @@ import type {
   FileDiffMetadata,
   Hunk,
   HunkData,
+  HunkExpansionRegion,
   RenderDiffFilesResult,
   RenderDiffOptions,
   RenderDiffResult,
@@ -43,11 +44,6 @@ import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks'
 import { createHastElement } from '../utils/hast_utils';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import type { WorkerPoolManager } from '../worker';
-
-const EXPANDED_REGION: ExpansionRegion = {
-  fromStart: 0,
-  fromEnd: 0,
-};
 
 interface PushHunkSeparatorProps {
   type: 'additions' | 'deletions' | 'unified';
@@ -131,11 +127,6 @@ type OptionsWithDefaults = Required<
   Omit<BaseDiffOptions, 'lang' | 'unsafeCSS'>
 >;
 
-interface ExpansionRegion {
-  fromStart: number;
-  fromEnd: number;
-}
-
 export interface HunksRenderResult {
   additionsAST: ElementContent[] | undefined;
   deletionsAST: ElementContent[] | undefined;
@@ -157,7 +148,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private highlighter: DiffsHighlighter | undefined;
   private diff: FileDiffMetadata | undefined;
 
-  private expandedHunks = new Map<number, ExpansionRegion>();
+  private expandedHunks = new Map<number, HunkExpansionRegion>();
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
@@ -221,6 +212,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       region.fromEnd += expansionLineCount;
     }
     this.expandedHunks.set(index, region);
+  }
+
+  getExpandedHunk(hunkIndex: number): HunkExpansionRegion {
+    return this.expandedHunks.get(hunkIndex) ?? DEFAULT_EXPANDED_REGION;
   }
 
   setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
@@ -374,7 +369,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.renderCache.result = this.workerManager.getPlainDiffAST(
           diff,
           renderRange.startingLine,
-          renderRange.totalLines
+          renderRange.totalLines,
+          this.expandedHunks
         );
         this.renderCache.renderRange = renderRange;
       }
@@ -494,6 +490,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { options } = this.getRenderOptions(diff);
     const result = renderDiffWithHighlighter(diff, highlighter, options, {
       forcePlainText,
+      expandedHunks: forcePlainText ? this.expandedHunks : undefined,
     });
     return { result, options };
   }
@@ -533,8 +530,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     { code, themeStyles, baseThemeType }: ThemedDiffResult
   ): HunksRenderResult {
-    const { diffStyle, disableFileHeader, disableVirtualizationBuffers } =
-      this.getOptionsWithDefaults();
+    const {
+      diffStyle,
+      disableFileHeader,
+      disableVirtualizationBuffers,
+      expandUnchanged,
+    } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
@@ -562,15 +563,32 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         );
       },
     };
+    const getExpandedBeforeCount = (hunkIndex: number, hunk: Hunk): number => {
+      const rangeSize = Math.max(hunk.collapsedBefore, 0);
+      if (fileDiff.isPartial || rangeSize === 0) {
+        return 0;
+      }
+      if (expandUnchanged) {
+        return rangeSize;
+      }
+      const expandedRegion = this.getExpandedHunk(hunkIndex);
+      return Math.min(
+        rangeSize,
+        expandedRegion.fromStart + expandedRegion.fromEnd
+      );
+    };
+
     for (const hunk of fileDiff.hunks) {
       if (state.shouldBreak()) {
         break;
       }
       const hunkCount =
         diffStyle === 'unified' ? hunk.unifiedLineCount : hunk.splitLineCount;
+      const expandedBeforeCount = getExpandedBeforeCount(state.hunkIndex, hunk);
+      const totalHunkCount = expandedBeforeCount + hunkCount;
       // Skip hunks we don't need to process
-      if (state.shouldSkip(hunkCount)) {
-        state.incrementCount(hunkCount);
+      if (state.shouldSkip(totalHunkCount)) {
+        state.incrementCount(totalHunkCount);
         state.hunkIndex++;
         state.prevHunk = hunk;
         continue;
@@ -753,8 +771,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     const { hunkSeparators, expandUnchanged, diffStyle, expansionLineCount } =
       this.getOptionsWithDefaults();
-    const expandedRegion =
-      this.expandedHunks.get(state.hunkIndex) ?? EXPANDED_REGION;
+    const expandedRegion = this.getExpandedHunk(state.hunkIndex);
     const chunked = rangeSize > expansionLineCount;
     const collapsedLines = Math.max(
       !expandUnchanged

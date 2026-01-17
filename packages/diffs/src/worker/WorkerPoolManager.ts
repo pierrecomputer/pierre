@@ -13,6 +13,7 @@ import type {
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
+  HunkExpansionRegion,
   RenderDiffOptions,
   RenderDiffResult,
   RenderFileOptions,
@@ -500,13 +501,15 @@ export class WorkerPoolManager {
   getPlainDiffAST(
     diff: FileDiffMetadata,
     startingLine: number,
-    totalLines: number
+    totalLines: number,
+    expandedHunks?: Map<number, HunkExpansionRegion> | true
   ): ThemedDiffResult | undefined {
     return this.highlighter != null
       ? renderDiffWithHighlighter(diff, this.highlighter, this.renderOptions, {
           forcePlainText: true,
           startingLine,
           totalLines,
+          expandedHunks,
         })
       : undefined;
   }

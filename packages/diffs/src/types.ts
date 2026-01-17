@@ -319,11 +319,16 @@ export interface ThemedDiffResult {
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
+export interface HunkExpansionRegion {
+  fromStart: number;
+  fromEnd: number;
+}
+
 export interface ForcePlainTextOptions {
   forcePlainText: boolean;
   startingLine?: number;
   totalLines?: number;
-  expandedHunks?: Map<number, { fromStart: number; fromEnd: number }> | true;
+  expandedHunks?: Map<number, HunkExpansionRegion> | true;
 }
 
 export interface RenderFileOptions {

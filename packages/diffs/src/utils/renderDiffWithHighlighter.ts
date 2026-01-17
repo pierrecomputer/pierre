@@ -10,6 +10,7 @@ import type {
   FileDiffMetadata,
   ForcePlainTextOptions,
   Hunk,
+  HunkExpansionRegion,
   LineDiffTypes,
   LineInfo,
   RenderDiffFilesResult,
@@ -337,10 +338,7 @@ interface ProcessHunksProps {
   startingLine: number;
   totalLines: number;
   state: HighlightState;
-  expandedHunks:
-    | Map<number, { fromStart: number; fromEnd: number }>
-    | true
-    | undefined;
+  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
 }
 
 interface ProcessHunksReturn {
@@ -371,7 +369,7 @@ function processHunks({
   const getExpandedRegion = (
     hunkIndex: number,
     rangeSize: number
-  ): { fromStart: number; fromEnd: number } => {
+  ): HunkExpansionRegion => {
     if (expandedHunks === true) {
       return { fromStart: rangeSize, fromEnd: rangeSize };
     }
