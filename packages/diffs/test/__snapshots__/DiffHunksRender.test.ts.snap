@@ -8521,9 +8521,9 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
   "isPartial": false,
   "name": "file.tsx",
   "prevName": undefined,
-  "splitLineCount": 13,
+  "splitLineCount": 12,
   "type": "deleted",
-  "unifiedLineCount": 13,
+  "unifiedLineCount": 12,
 }
 `;
 

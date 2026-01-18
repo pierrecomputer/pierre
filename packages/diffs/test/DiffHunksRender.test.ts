@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { DiffHunksRenderer, parseDiffFromFile } from 'src';
 
 import { mockDiffs } from './mocks';
-import { assertDefined } from './testUtils';
+import { assertDefined, countSplitRows } from './testUtils';
 
 describe('DiffHunksRenderer', () => {
   test('proper buffers should be prepended to additions colum in split style', async () => {
@@ -61,6 +61,7 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-type']).toBe('file');
     assertDefined(result.additionsAST, 'result.additionsAST should be defined');
+    expect(countSplitRows(result)).toBe(diff.splitLineCount);
     expect(result.deletionsAST).toBeUndefined();
     expect(result.unifiedAST).toBeUndefined();
     expect(result).toMatchSnapshot('rendered result');
@@ -77,6 +78,7 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-type']).toBe('file');
     assertDefined(result.deletionsAST, 'result.deletionsAST should be defined');
+    expect(countSplitRows(result)).toBe(diff.splitLineCount);
     expect(result.additionsAST).toBeUndefined();
     expect(result.unifiedAST).toBeUndefined();
     expect(result).toMatchSnapshot('rendered result');
