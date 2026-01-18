@@ -1224,7 +1224,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
 
-    if (isLastHunk && !isPartial && state.renderRange.bufferAfter === 0) {
+    if (isLastHunk && !isPartial && !state.shouldBreak()) {
       state.hunkIndex++;
       this.renderCollapsedHunks({
         hunk,

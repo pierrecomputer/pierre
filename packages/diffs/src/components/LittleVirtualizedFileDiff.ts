@@ -312,7 +312,8 @@ export class LittleVirtualizedFileDiff<
       if (trailingRangeSize > 0) {
         const { fromStart, collapsedLines, renderAll } = this.getExpandedRegion(
           this.fileDiff.isPartial,
-          this.fileDiff.hunks.length - 1,
+          // Final hunk separator is basically not a hunk
+          this.fileDiff.hunks.length,
           trailingRangeSize
         );
         const renderFromStart = renderAll ? trailingRangeSize : fromStart;
@@ -488,7 +489,7 @@ export class LittleVirtualizedFileDiff<
     if (lastHunk != null && trailingRangeSize > 0) {
       const { fromStart, renderAll } = this.getExpandedRegion(
         fileDiff.isPartial,
-        fileDiff.hunks.length - 1,
+        fileDiff.hunks.length,
         trailingRangeSize
       );
       count += renderAll ? trailingRangeSize : fromStart;
@@ -701,7 +702,7 @@ export class LittleVirtualizedFileDiff<
           const { fromStart, collapsedLines, renderAll } =
             this.getExpandedRegion(
               fileDiff.isPartial,
-              hunkIndex,
+              fileDiff.hunks.length,
               trailingRangeSize
             );
           const renderFromStart = renderAll ? trailingRangeSize : fromStart;

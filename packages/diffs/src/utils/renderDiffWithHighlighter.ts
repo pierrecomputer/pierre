@@ -879,7 +879,7 @@ function processHunks({
       if (!hasExpansion) {
         return trailingCount;
       }
-      const region = getExpandedRegion(hunkIndex, trailingCount);
+      const region = getExpandedRegion(hunkIndex + 1, trailingCount);
       return Math.min(region.fromStart, trailingCount);
     })();
     let trailingIndex = 0;
