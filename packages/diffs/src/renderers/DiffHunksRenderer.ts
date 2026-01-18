@@ -940,8 +940,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (collapsedLines > 0 && expandedRegion.fromEnd > 0 && !isLastHunk) {
       const rangeLen = Math.min(expandedRegion.fromEnd, rangeSize);
       renderContextLines({
-        additionLineNumber: hunk.additionStart + hunk.additionCount - rangeLen,
-        deletionLineNumber: hunk.deletionStart + hunk.deletionCount - rangeLen,
+        additionLineNumber: hunk.additionStart - 1 - hunk.collapsedBefore,
+        deletionLineNumber: hunk.deletionStart - 1 - hunk.collapsedBefore,
         rangeLen,
         fromStart: false,
       });
