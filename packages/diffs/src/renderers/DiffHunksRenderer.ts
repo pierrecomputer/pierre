@@ -344,6 +344,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff == null) {
       return undefined;
     }
+    const { expandUnchanged = false } = this.options;
     const cache = this.workerManager?.getDiffResultCache(diff);
     if (cache != null && this.renderCache == null) {
       this.renderCache = {
@@ -371,7 +372,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           diff,
           renderRange.startingLine,
           renderRange.totalLines,
-          isDefaultRenderRange(renderRange) ? true : this.expandedHunks
+          // If we aren't using a windowed render, then we need to render
+          // everything
+          isDefaultRenderRange(renderRange)
+            ? true
+            : expandUnchanged
+              ? true
+              : this.expandedHunks
         );
         this.renderCache.renderRange = renderRange;
       }
