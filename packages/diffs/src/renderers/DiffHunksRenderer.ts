@@ -986,12 +986,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     let { deletionLineIndex, additionLineIndex } = hunk;
 
     let lineIndex = startingHunkIndex;
+    let didBreak = false;
     // Render hunk/diff content
     for (const hunkContent of hunk.hunkContent) {
-      if (state.shouldBreak()) {
+      if (didBreak || state.shouldBreak()) {
+        didBreak = true;
         break;
       }
-      let brokeEarly = false;
       if (hunkContent.type === 'context') {
         // If we can skip over rendering any of the context lines, lets do so
         let index = 0;
@@ -1013,7 +1014,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }
         for (; index < hunkContent.lines; index++) {
           if (state.shouldBreak()) {
-            brokeEarly = true;
+            didBreak = true;
             break;
           }
           const deletionLine = deletionLines[deletionLineIndex];
@@ -1065,7 +1066,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           lineIndex++;
           state.incrementCount(1);
         }
-        if (!brokeEarly && hunkContent.noEOFCR) {
+        if (!didBreak && hunkContent.noEOFCR) {
           const node = createNoNewlineElement('context');
           if (unified) {
             unifiedAST.push(node);
@@ -1108,7 +1109,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
         for (; index < len; index++) {
           if (state.shouldBreak()) {
-            brokeEarly = true;
+            didBreak = true;
             break;
           }
 
@@ -1206,25 +1207,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             }
             spanSize = 0;
           }
-          if (!brokeEarly && hunkContent.noEOFCRDeletions) {
+          if (!didBreak && hunkContent.noEOFCRDeletions) {
             deletionsAST.push(createNoNewlineElement('change-deletion'));
             if (!hunkContent.noEOFCRAdditions) {
               additionsAST.push(createEmptyRowBuffer(1));
             }
           }
-          if (!brokeEarly && hunkContent.noEOFCRAdditions) {
+          if (!didBreak && hunkContent.noEOFCRAdditions) {
             additionsAST.push(createNoNewlineElement('change-addition'));
             if (!hunkContent.noEOFCRDeletions) {
               deletionsAST.push(createEmptyRowBuffer(1));
             }
           }
-        } else if (unified && !brokeEarly && hunkContent.noEOFCRAdditions) {
+        } else if (unified && !didBreak && hunkContent.noEOFCRAdditions) {
           unifiedAST.push(createNoNewlineElement('change-addition'));
         }
       }
     }
 
-    if (isLastHunk && !isPartial && !state.shouldBreak()) {
+    if (isLastHunk && !isPartial && !didBreak) {
       state.hunkIndex++;
       this.renderCollapsedHunks({
         hunk,
@@ -1240,7 +1241,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         isFirstHunk: false,
         isLastHunk: true,
         rangeSize: Math.max(
-          ast.additionLines.length -
+          (this.diff?.additionLines.length ?? 0) -
             Math.max(hunk.additionStart + hunk.additionCount - 1, 0),
           0
         ),
