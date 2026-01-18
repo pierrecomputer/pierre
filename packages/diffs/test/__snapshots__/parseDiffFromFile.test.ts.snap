@@ -6042,8 +6042,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
   "isPartial": false,
   "name": "fileNew.txt",
   "prevName": "fileOld.txt",
-  "splitLineCount": 727,
+  "splitLineCount": 770,
   "type": "rename-changed",
-  "unifiedLineCount": 754,
+  "unifiedLineCount": 797,
 }
 `;

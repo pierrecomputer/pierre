@@ -392,6 +392,22 @@ export function processFile(
     return undefined;
   }
 
+  // Account for collapsed lines after the final hunk and increment the
+  // split/unified counts properly
+  if (
+    currentFile.hunks.length > 0 &&
+    !isPartial &&
+    currentFile.additionLines.length > 0 &&
+    currentFile.deletionLines.length > 0
+  ) {
+    const lastHunk = currentFile.hunks[currentFile.hunks.length - 1];
+    const lastHunkEnd = lastHunk.additionStart + lastHunk.additionCount - 1;
+    const totalFileLines = currentFile.additionLines.length;
+    const collapsedAfter = Math.max(totalFileLines - lastHunkEnd, 0);
+    currentFile.splitLineCount += collapsedAfter;
+    currentFile.unifiedLineCount += collapsedAfter;
+  }
+
   // If this isn't a git diff style patch, then we'll need to sus out some
   // additional metadata manually
   if (!isGitDiff) {
