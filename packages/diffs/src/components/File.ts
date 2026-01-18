@@ -31,6 +31,7 @@ import type {
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
@@ -71,6 +72,11 @@ export interface FileOptions<LAnnotation>
   ): HTMLElement | null;
 }
 
+interface AnnotationElementCache<LAnnotation> {
+  element: HTMLElement;
+  annotation: LineAnnotation<LAnnotation>;
+}
+
 let instanceId = -1;
 
 export class File<LAnnotation = undefined> {
@@ -96,7 +102,8 @@ export class File<LAnnotation = undefined> {
   private mouseEventManager: MouseEventManager<'file'>;
   private lineSelectionManager: LineSelectionManager;
 
-  private annotationElements: HTMLElement[] = [];
+  private annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
+    new Map();
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
 
   private file: FileContents | undefined;
@@ -329,26 +336,45 @@ export class File<LAnnotation = undefined> {
 
   private renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
+      for (const { element } of this.annotationCache.values()) {
+        element.parentNode?.removeChild(element);
+      }
+      this.annotationCache.clear();
       return;
     }
-    // Handle annotation elements
-    for (const element of this.annotationElements) {
-      element.parentNode?.removeChild(element);
-    }
-    this.annotationElements.length = 0;
-
+    const staleAnnotations = new Map(this.annotationCache);
     const { renderAnnotation } = this.options;
     if (renderAnnotation != null && this.lineAnnotations.length > 0) {
-      for (const annotation of this.lineAnnotations) {
-        const content = renderAnnotation(annotation);
-        if (content == null) continue;
-        const el = createAnnotationWrapperNode(
-          getLineAnnotationName(annotation)
-        );
-        el.appendChild(content);
-        this.annotationElements.push(el);
-        this.fileContainer.appendChild(el);
+      for (const [index, annotation] of this.lineAnnotations.entries()) {
+        const id = `${index}-${getLineAnnotationName(annotation)}`;
+        let cache = this.annotationCache.get(id);
+        if (
+          cache == null ||
+          !areLineAnnotationsEqual(annotation, cache.annotation)
+        ) {
+          cache?.element.parentElement?.removeChild(cache.element);
+          const content = renderAnnotation(annotation);
+          // If we can't render anything, then we should not render anything
+          // and clear the annotation cache if necessary.
+          if (content == null) {
+            continue;
+          }
+          cache = {
+            element: createAnnotationWrapperNode(
+              getLineAnnotationName(annotation)
+            ),
+            annotation,
+          };
+          cache.element.appendChild(content);
+          this.fileContainer.appendChild(cache.element);
+          this.annotationCache.set(id, cache);
+        }
+        staleAnnotations.delete(id);
       }
+    }
+    for (const [id, { element }] of staleAnnotations.entries()) {
+      this.annotationCache.delete(id);
+      element.parentNode?.removeChild(element);
     }
   }
 
