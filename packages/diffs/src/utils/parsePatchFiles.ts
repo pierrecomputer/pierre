@@ -129,6 +129,14 @@ export function processFile(
             : [],
         cacheKey,
       };
+      // If either file is technically empty, then we should empty the
+      // arrays respectively
+      if (currentFile.additionLines.length === 1 && newFile?.contents === '') {
+        currentFile.additionLines.length = 0;
+      }
+      if (currentFile.deletionLines.length === 1 && oldFile?.contents === '') {
+        currentFile.deletionLines.length = 0;
+      }
 
       // Push that first line back into the group of lines so we can properly
       // parse it out

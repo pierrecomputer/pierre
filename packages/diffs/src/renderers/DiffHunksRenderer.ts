@@ -42,6 +42,7 @@ import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import { createHastElement } from '../utils/hast_utils';
+import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import type { WorkerPoolManager } from '../worker';
 
@@ -370,7 +371,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           diff,
           renderRange.startingLine,
           renderRange.totalLines,
-          this.expandedHunks
+          isDefaultRenderRange(renderRange) ? true : this.expandedHunks
         );
         this.renderCache.renderRange = renderRange;
       }
@@ -490,7 +491,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { options } = this.getRenderOptions(diff);
     const result = renderDiffWithHighlighter(diff, highlighter, options, {
       forcePlainText,
-      expandedHunks: forcePlainText ? this.expandedHunks : undefined,
+      expandedHunks: forcePlainText ? true : undefined,
     });
     return { result, options };
   }

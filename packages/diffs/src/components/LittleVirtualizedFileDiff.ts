@@ -530,7 +530,7 @@ export class LittleVirtualizedFileDiff<
     if (lineCount <= LINE_HUNK_COUNT || fileDiff.hunks.length === 0) {
       return {
         startingLine: 0,
-        totalLines: Infinity,
+        totalLines: LINE_HUNK_COUNT,
         bufferBefore: 0,
         bufferAfter: 0,
       };

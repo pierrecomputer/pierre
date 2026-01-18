@@ -7162,9 +7162,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
 ,
   ],
   "cacheKey": undefined,
-  "deletionLines": [
-    "",
-  ],
+  "deletionLines": [],
   "hunks": [
     {
       "additionCount": 13,
@@ -8435,9 +8433,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
 
 exports[`DiffHunksRenderer a diff with only deletions should have an empty additions column: parsed diff 1`] = `
 {
-  "additionLines": [
-    "",
-  ],
+  "additionLines": [],
   "cacheKey": undefined,
   "deletionLines": [
     
