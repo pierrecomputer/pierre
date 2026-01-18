@@ -380,16 +380,20 @@ export class File<LAnnotation = undefined> {
 
   private renderHoverUtility() {
     const { renderHoverUtility } = this.options;
-    if (this.fileContainer == null || renderHoverUtility == null) return;
-    if (this.hoverContent == null) {
-      this.hoverContent = createHoverContentNode();
-      this.fileContainer.appendChild(this.hoverContent);
+    if (this.fileContainer == null || renderHoverUtility == null) {
+      return;
     }
     const element = renderHoverUtility(this.mouseEventManager.getHoveredLine);
-    this.hoverContent.innerHTML = '';
-    if (element != null) {
-      this.hoverContent.appendChild(element);
+    if (element != null && this.hoverContent != null) {
+      return;
+    } else if (element == null) {
+      this.hoverContent?.parentNode?.removeChild(this.hoverContent);
+      this.hoverContent = undefined;
+      return;
     }
+    this.hoverContent = createHoverContentNode();
+    this.hoverContent.appendChild(element);
+    this.fileContainer.appendChild(this.hoverContent);
   }
 
   private injectUnsafeCSS(): void {
