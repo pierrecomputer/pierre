@@ -142,15 +142,32 @@ export function renderDiffWithHighlighter(
     const hunk = !Array.isArray(hunkOrHunks) ? hunkOrHunks : undefined;
     const hunks = Array.isArray(hunkOrHunks) ? hunkOrHunks : [hunkOrHunks];
     // If we are partial highlighting and out of view, lets stop
-    if (hunk != null && state.shouldBreak()) {
-      break;
-    }
-    if (
-      hunk != null &&
-      state.shouldSkip(hunk.unifiedLineCount, hunk.splitLineCount)
-    ) {
-      state.incrementCounts(hunk.unifiedLineCount, hunk.splitLineCount);
-      continue;
+    if (hunk != null) {
+      if (state.shouldBreak()) {
+        break;
+      }
+      const expandedBeforeCount = (() => {
+        if (diff.isPartial || !forcePlainText) {
+          return 0;
+        }
+        if (expandedHunks === true) {
+          return Math.max(hunk.collapsedBefore, 0);
+        }
+        const region = expandedHunks?.get(hunkIndex);
+        if (region == null) {
+          return 0;
+        }
+        return Math.min(
+          Math.max(hunk.collapsedBefore, 0),
+          Math.max(region.fromStart, 0) + Math.max(region.fromEnd, 0)
+        );
+      })();
+      const totalUnifiedCount = hunk.unifiedLineCount + expandedBeforeCount;
+      const totalSplitCount = hunk.splitLineCount + expandedBeforeCount;
+      if (state.shouldSkip(totalUnifiedCount, totalSplitCount)) {
+        state.incrementCounts(totalUnifiedCount, totalSplitCount);
+        continue;
+      }
     }
     const {
       deletionContent,
