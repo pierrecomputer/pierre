@@ -295,7 +295,7 @@ export class LittleVirtualizedFileDiff<
     }
 
     const lastHunk = this.fileDiff.hunks.at(-1);
-    if (!this.fileDiff.isPartial && lastHunk != null) {
+    if (lastHunk != null && hasFinalHunk(this.fileDiff)) {
       const additionRemaining =
         this.fileDiff.additionLines.length -
         (lastHunk.additionLineIndex + lastHunk.additionCount);
@@ -470,29 +470,27 @@ export class LittleVirtualizedFileDiff<
     }
 
     const lastHunk = fileDiff.hunks.at(-1);
-    const additionRemaining =
-      lastHunk == null
-        ? 0
-        : fileDiff.additionLines.length -
-          (lastHunk.additionLineIndex + lastHunk.additionCount);
-    const deletionRemaining =
-      lastHunk == null
-        ? 0
-        : fileDiff.deletionLines.length -
-          (lastHunk.deletionLineIndex + lastHunk.deletionCount);
-    if (lastHunk != null && additionRemaining !== deletionRemaining) {
-      throw new Error(
-        `LittleVirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
-      );
-    }
-    const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
-    if (lastHunk != null && trailingRangeSize > 0) {
-      const { fromStart, renderAll } = this.getExpandedRegion(
-        fileDiff.isPartial,
-        fileDiff.hunks.length,
-        trailingRangeSize
-      );
-      count += renderAll ? trailingRangeSize : fromStart;
+    if (lastHunk != null && hasFinalHunk(fileDiff)) {
+      const additionRemaining =
+        fileDiff.additionLines.length -
+        (lastHunk.additionLineIndex + lastHunk.additionCount);
+      const deletionRemaining =
+        fileDiff.deletionLines.length -
+        (lastHunk.deletionLineIndex + lastHunk.deletionCount);
+      if (lastHunk != null && additionRemaining !== deletionRemaining) {
+        throw new Error(
+          `LittleVirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
+        );
+      }
+      const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
+      if (lastHunk != null && trailingRangeSize > 0) {
+        const { fromStart, renderAll } = this.getExpandedRegion(
+          fileDiff.isPartial,
+          fileDiff.hunks.length,
+          trailingRangeSize
+        );
+        count += renderAll ? trailingRangeSize : fromStart;
+      }
     }
 
     return count;
@@ -798,7 +796,12 @@ function appendNoNewlineHeight(
 
 function hasFinalHunk(fileDiff: FileDiffMetadata): boolean {
   const lastHunk = fileDiff.hunks.at(-1);
-  if (lastHunk == null || fileDiff.isPartial) {
+  if (
+    lastHunk == null ||
+    fileDiff.isPartial ||
+    fileDiff.additionLines.length === 0 ||
+    fileDiff.deletionLines.length === 0
+  ) {
     return false;
   }
 
