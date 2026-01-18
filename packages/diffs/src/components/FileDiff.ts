@@ -41,6 +41,7 @@ import type {
 } from '../types';
 import { areDiffLineAnnotationsEqual } from '../utils/areDiffLineAnnotationsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
@@ -97,6 +98,11 @@ interface AnnotationElementCache<LAnnotation> {
   annotation: DiffLineAnnotation<LAnnotation>;
 }
 
+interface CustomHunkElementCache {
+  element: HTMLElement;
+  hunkData: HunkData;
+}
+
 let instanceId = -1;
 
 export class FileDiff<LAnnotation = undefined> {
@@ -117,7 +123,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected headerElement: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
-  protected customHunkElements: HTMLElement[] = [];
+  protected separatorCache: Map<string, CustomHunkElementCache> = new Map();
   protected errorWrapper: HTMLElement | undefined;
 
   protected hunksRenderer: DiffHunksRenderer<LAnnotation>;
@@ -544,19 +550,31 @@ export class FileDiff<LAnnotation = undefined> {
       this.fileContainer == null ||
       typeof hunkSeparators !== 'function'
     ) {
+      for (const { element } of this.separatorCache.values()) {
+        element.parentNode?.removeChild(element);
+      }
+      this.separatorCache.clear();
       return;
     }
-    for (const element of this.customHunkElements) {
-      element.parentNode?.removeChild(element);
-    }
-    this.customHunkElements.length = 0;
+    const staleSeparators = new Map(this.separatorCache);
     for (const hunk of hunkData) {
-      const element = document.createElement('div');
-      element.style.display = 'contents';
-      element.slot = hunk.slotName;
-      element.appendChild(hunkSeparators(hunk, this));
-      this.fileContainer.appendChild(element);
-      this.customHunkElements.push(element);
+      const id = hunk.slotName;
+      let cache = this.separatorCache.get(id);
+      if (cache == null || !areHunkDataEqual(hunk, cache.hunkData)) {
+        cache?.element.parentNode?.removeChild(cache.element);
+        const element = document.createElement('div');
+        element.style.display = 'contents';
+        element.slot = hunk.slotName;
+        element.appendChild(hunkSeparators(hunk, this));
+        this.fileContainer.appendChild(element);
+        cache = { element, hunkData: hunk };
+        this.separatorCache.set(id, cache);
+      }
+      staleSeparators.delete(id);
+    }
+    for (const [id, { element }] of staleSeparators.entries()) {
+      this.separatorCache.delete(id);
+      element.parentNode?.removeChild(element);
     }
   }
 

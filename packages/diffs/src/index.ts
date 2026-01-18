@@ -43,6 +43,7 @@ export * from './shiki-stream';
 export * from './sprite';
 export * from './utils/areDiffLineAnnotationsEqual';
 export * from './utils/areFilesEqual';
+export * from './utils/areHunkDataEqual';
 export * from './utils/areLineAnnotationsEqual';
 export * from './utils/areObjectsEqual';
 export * from './utils/areOptionsEqual';
