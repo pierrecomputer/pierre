@@ -188,20 +188,32 @@ export function verifyHunkLineValues(
   }
 
   // Verify file-level totals
-  const expectedTotalSplitLines = file.hunks.reduce(
+  let expectedTotalSplitLines = file.hunks.reduce(
     (sum, h) => sum + h.collapsedBefore + h.splitLineCount,
     0
   );
+  let expectedTotalUnifiedLines = file.hunks.reduce(
+    (sum, h) => sum + h.collapsedBefore + h.unifiedLineCount,
+    0
+  );
+
+  // Account for collapsed lines after the final hunk (only for non-partial diffs)
+  if (file.hunks.length > 0 && !file.isPartial) {
+    const lastHunk = file.hunks[file.hunks.length - 1];
+    const lastHunkEnd = lastHunk.additionStart + lastHunk.additionCount - 1;
+    const totalFileLines = file.additionLines.length;
+    const collapsedAfter = Math.max(totalFileLines - lastHunkEnd, 0);
+
+    expectedTotalSplitLines += collapsedAfter;
+    expectedTotalUnifiedLines += collapsedAfter;
+  }
+
   if (file.splitLineCount !== expectedTotalSplitLines) {
     errors.push(
       `${prefix}: splitLineCount (${file.splitLineCount}) !== sum of hunk splitLineCounts (${expectedTotalSplitLines})`
     );
   }
 
-  const expectedTotalUnifiedLines = file.hunks.reduce(
-    (sum, h) => sum + h.collapsedBefore + h.unifiedLineCount,
-    0
-  );
   if (file.unifiedLineCount !== expectedTotalUnifiedLines) {
     errors.push(
       `${prefix}: unifiedLineCount (${file.unifiedLineCount}) !== sum of hunk unifiedLineCounts (${expectedTotalUnifiedLines})`
@@ -257,4 +269,59 @@ export function countSplitRows(result: HunksRenderResult): number {
     }
   }
   return lineIndices.size;
+}
+
+// Virtualization buffer helpers
+
+export interface BufferElement {
+  position: 'before' | 'after';
+  height: number;
+}
+
+export function findBufferElements(ast: ElementContent[]): BufferElement[] {
+  const buffers: BufferElement[] = [];
+
+  for (const node of ast) {
+    if (isHastElement(node)) {
+      const position = node.properties?.['data-virtualized-buffer'];
+      if (position === 'before' || position === 'after') {
+        const style = node.properties?.['style'];
+        const heightMatch =
+          typeof style === 'string' ? style.match(/height:\s*(\d+)px/) : null;
+        const height =
+          heightMatch != null ? Number.parseInt(heightMatch[1], 10) : 0;
+        buffers.push({ position, height });
+      }
+    }
+  }
+
+  return buffers;
+}
+
+export function extractLineNumbers(ast: ElementContent[]): {
+  unifiedIndices: number[];
+  splitIndices: number[];
+} {
+  const unifiedIndices: number[] = [];
+  const splitIndices: number[] = [];
+
+  for (const node of ast) {
+    if (isHastElement(node) && node.properties?.['data-line'] != null) {
+      const lineIndex = node.properties?.['data-line-index'];
+      if (typeof lineIndex === 'string') {
+        // data-line-index format is "unifiedIndex,splitIndex"
+        const [unifiedStr, splitStr] = lineIndex.split(',');
+        const unified = Number.parseInt(unifiedStr, 10);
+        const split = Number.parseInt(splitStr, 10);
+        if (!isNaN(unified)) {
+          unifiedIndices.push(unified);
+        }
+        if (!isNaN(split)) {
+          splitIndices.push(split);
+        }
+      }
+    }
+  }
+
+  return { unifiedIndices, splitIndices };
 }
