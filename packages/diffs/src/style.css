@@ -606,11 +606,11 @@
     }
 
     /* FIXME(amadeus): We need to figure out how/when to apply hover effects in
-     * a more performant way this because it'll trigger layout/paint re-calcs
-     * probably when we dont want tham... */
-    /* [data-line]:hover { */
-    /*   z-index: 2; */
-    /* } */
+     * a more performant way because it'll trigger layout/paint re-calcs
+     * probably when we dont want them... */
+    [data-line]:hover {
+      z-index: 2;
+    }
   }
 
   [data-expand-up] [data-icon] {
