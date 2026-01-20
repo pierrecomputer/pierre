@@ -26,7 +26,7 @@ interface PositionProps {
 
 let instanceId = -1;
 
-export class VirtualizedFileDiff<
+export class AdvancedVirtualizedFileDiff<
   LAnnotation = undefined,
 > extends FileDiff<LAnnotation> {
   override readonly __id: string = `virtualized-file-diff:${++instanceId}`;
@@ -210,7 +210,7 @@ export class VirtualizedFileDiff<
 }
 
 function getSpecs<LAnnotation>(
-  instance: VirtualizedFileDiff<LAnnotation>,
+  instance: AdvancedVirtualizedFileDiff<LAnnotation>,
   type: 'split' | 'unified' = 'split'
 ) {
   if (type === 'split') {

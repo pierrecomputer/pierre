@@ -10,13 +10,13 @@ import {
   useState,
 } from 'react';
 
-import { LittleBoiVirtualizer } from '../components/LittleBoiVirtualizer';
+import { SimpleVirtualizer as SimpleVirtualizerClass } from '../components/SimpleVirtualizer';
 
-export const LittleBoiVirtualizerContext: Context<
-  LittleBoiVirtualizer | undefined
-> = createContext<LittleBoiVirtualizer | undefined>(undefined);
+export const SimpleVirtualizerContext: Context<
+  SimpleVirtualizerClass | undefined
+> = createContext<SimpleVirtualizerClass | undefined>(undefined);
 
-interface LittleBoiVirtualizerProps {
+interface SimpleVirtualizerProps {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -24,16 +24,16 @@ interface LittleBoiVirtualizerProps {
   contentStyle?: CSSProperties;
 }
 
-export function LittleBoiVirtualizerWrapper({
+export function SimpleVirtualizer({
   children,
   className,
   style,
   contentClassName,
   contentStyle,
-}: LittleBoiVirtualizerProps): React.JSX.Element {
+}: SimpleVirtualizerProps): React.JSX.Element {
   const [instance] = useState(() => {
     return typeof window !== 'undefined'
-      ? new LittleBoiVirtualizer()
+      ? new SimpleVirtualizerClass()
       : undefined;
   });
   const ref = useCallback(
@@ -47,16 +47,16 @@ export function LittleBoiVirtualizerWrapper({
     [instance]
   );
   return (
-    <LittleBoiVirtualizerContext.Provider value={instance}>
+    <SimpleVirtualizerContext.Provider value={instance}>
       <div className={className} style={style} ref={ref}>
         <div className={contentClassName} style={contentStyle}>
           {children}
         </div>
       </div>
-    </LittleBoiVirtualizerContext.Provider>
+    </SimpleVirtualizerContext.Provider>
   );
 }
 
-export function useVirtualizerInstance(): LittleBoiVirtualizer | undefined {
-  return useContext(LittleBoiVirtualizerContext);
+export function useSimpleVirtualizer(): SimpleVirtualizerClass | undefined {
+  return useContext(SimpleVirtualizerContext);
 }

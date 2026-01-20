@@ -7,7 +7,7 @@ import {
 } from 'react';
 
 import { FileDiff, type FileDiffOptions } from '../../components/FileDiff';
-import { LittleVirtualizedFileDiff } from '../../components/LittleVirtualizedFileDiff';
+import { SimpleVirtualizedFileDiff } from '../../components/SimpleVirtualizedFileDiff';
 import type { SelectedLineRange } from '../../managers/LineSelectionManager';
 import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type {
@@ -16,7 +16,7 @@ import type {
   FileDiffMetadata,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
-import { useVirtualizerInstance } from '../LittleBoiVirtualizer';
+import { useSimpleVirtualizer } from '../SimpleVirtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
@@ -47,10 +47,10 @@ export function useFileDiffInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
-  const intersectionObserver = useVirtualizerInstance();
+  const simpleVirtualizer = useSimpleVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<
-    FileDiff<LAnnotation> | LittleVirtualizedFileDiff<LAnnotation> | null
+    FileDiff<LAnnotation> | SimpleVirtualizedFileDiff<LAnnotation> | null
   >(null);
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
@@ -59,12 +59,10 @@ export function useFileDiffInstance<LAnnotation>({
           'useFileDiffInstance: An instance should not already exist when a node is created'
         );
       }
-      // FIXME: Ideally we don't use FileDiffUI here, and instead amalgamate
-      // the renderers manually
-      if (intersectionObserver != null) {
-        instanceRef.current = new LittleVirtualizedFileDiff(
+      if (simpleVirtualizer != null) {
+        instanceRef.current = new SimpleVirtualizedFileDiff(
           options,
-          intersectionObserver,
+          simpleVirtualizer,
           poolManager,
           true
         );

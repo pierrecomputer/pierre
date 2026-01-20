@@ -32,7 +32,7 @@ const RESIZE_DEBUGGING = false;
 const RESIZE_OBSERVER_MARGIN = OVERSCROLL_SIZE * 4;
 let lastSize = 0;
 
-export class LittleBoiVirtualizer {
+export class SimpleVirtualizer {
   private intersectionObserver: IntersectionObserver | undefined;
   private scrollTop: number = 0;
   private height: number = 0;
@@ -110,7 +110,7 @@ export class LittleBoiVirtualizer {
 
   private setupWindow() {
     if (this.root == null || !(this.root instanceof Document)) {
-      throw new Error('LittleBoiVirtualizer.setupWindow: Invalid setup method');
+      throw new Error('SimpleVirtualizer.setupWindow: Invalid setup method');
     }
     window.addEventListener('scroll', this.handleWindowScroll, {
       passive: true,
@@ -123,9 +123,7 @@ export class LittleBoiVirtualizer {
 
   private setupElement(contentContainer: Element | undefined) {
     if (this.root == null || this.root instanceof Document) {
-      throw new Error(
-        'LittleBoiVirtualizer.setupElement: Invalid setup method'
-      );
+      throw new Error('SimpleVirtualizer.setupElement: Invalid setup method');
     }
     this.root.addEventListener('scroll', this.handleElementScroll, {
       passive: true,
@@ -152,7 +150,7 @@ export class LittleBoiVirtualizer {
   connect(container: HTMLElement, instance: SubscribedInstance): () => void {
     if (this.observers.has(container)) {
       throw new Error(
-        'LittleBoiVirtualizer.connect: instance is already connected...'
+        'SimpleVirtualizer.connect: instance is already connected...'
       );
     }
     // If we are racing against the intersectionObserver, then we should just
@@ -451,13 +449,13 @@ export class LittleBoiVirtualizer {
     for (const { target, isIntersecting } of entries) {
       if (!(target instanceof HTMLElement)) {
         throw new Error(
-          'LittleBoiVirtualizer.handleIntersectionChange: target not an HTMLElement'
+          'SimpleVirtualizer.handleIntersectionChange: target not an HTMLElement'
         );
       }
       const instance = this.observers.get(target);
       if (instance == null) {
         throw new Error(
-          'LittleBoiVirtualizer.handleIntersectionChange: no instance for target'
+          'SimpleVirtualizer.handleIntersectionChange: no instance for target'
         );
       }
       if (isIntersecting && !this.visibleInstances.has(target)) {

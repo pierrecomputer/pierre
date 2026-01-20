@@ -3,16 +3,16 @@
 import { Header } from '@/components/Header';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 
-import { BigBoiDiff } from './BigBoiDiff';
+import { AdvancedDiff } from './AdvancedDiff';
 
-export default function BigBoiPage() {
+export default function AdvancedDiffPage() {
   return (
     <WorkerPoolContext>
       <div className="relative mx-auto w-5xl max-w-full px-5">
         <Header />
       </div>
       <div>
-        <BigBoiDiff />
+        <AdvancedDiff />
       </div>
     </WorkerPoolContext>
   );

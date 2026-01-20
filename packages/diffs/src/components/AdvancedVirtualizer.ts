@@ -3,14 +3,14 @@ import { queueRender } from '../managers/UniversalRenderingManager';
 import type { ParsedPatch } from '../types';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import type { WorkerPoolManager } from '../worker';
+import { AdvancedVirtualizedFileDiff } from './AdvancedVirtualizedFileDiff';
 import type { FileDiffOptions } from './FileDiff';
-import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 
 // FIXME(amadeus): REMOVE ME
 declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    __LOL?: BigBoiVirtualizer<any>;
+    __LOL?: AdvancedVirtualizer<any>;
     TOGGLE?: () => void;
     STOP?: boolean;
   }
@@ -20,18 +20,18 @@ const ENABLE_RENDERING = true;
 const OVERSCROLL_SIZE = 500;
 
 interface RenderedItems<LAnnotations> {
-  instance: VirtualizedFileDiff<LAnnotations>;
+  instance: AdvancedVirtualizedFileDiff<LAnnotations>;
   element: HTMLElement;
 }
 
 let lastScrollPosition = 0;
 
-export class BigBoiVirtualizer<LAnnotations = undefined> {
-  private files: VirtualizedFileDiff<LAnnotations>[] = [];
+export class AdvancedVirtualizer<LAnnotations = undefined> {
+  private files: AdvancedVirtualizedFileDiff<LAnnotations>[] = [];
   private totalHeightUnified = 0;
   private totalHeightSplit = 0;
   private rendered: Map<
-    VirtualizedFileDiff<LAnnotations>,
+    AdvancedVirtualizedFileDiff<LAnnotations>,
     RenderedItems<LAnnotations>
   > = new Map();
 
@@ -104,7 +104,7 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
   addFiles(parsedPatches: ParsedPatch[]): void {
     for (const patch of parsedPatches) {
       for (const fileDiff of patch.files) {
-        const vFileDiff = new VirtualizedFileDiff<LAnnotations>(
+        const vFileDiff = new AdvancedVirtualizedFileDiff<LAnnotations>(
           {
             unifiedTop: this.totalHeightUnified,
             splitTop: this.totalHeightSplit,
@@ -163,8 +163,8 @@ export class BigBoiVirtualizer<LAnnotations = undefined> {
       }
     }
     let prevElement: HTMLElement | undefined;
-    let firstInstance: VirtualizedFileDiff<LAnnotations> | undefined;
-    let lastInstance: VirtualizedFileDiff<LAnnotations> | undefined;
+    let firstInstance: AdvancedVirtualizedFileDiff<LAnnotations> | undefined;
+    let lastInstance: AdvancedVirtualizedFileDiff<LAnnotations> | undefined;
     for (const instance of this.files) {
       // We can stop iterating when we get to elements after the window
       if (getInstanceSpecs(instance, diffStyle).top > bottom) {
@@ -281,7 +281,7 @@ function cleanupRenderedItem<LAnnotations>(item: RenderedItems<LAnnotations>) {
 }
 
 function getInstanceSpecs<LAnnotations>(
-  instance: VirtualizedFileDiff<LAnnotations>,
+  instance: AdvancedVirtualizedFileDiff<LAnnotations>,
   diffStyle: 'split' | 'unified' = 'split'
 ) {
   if (diffStyle === 'split') {

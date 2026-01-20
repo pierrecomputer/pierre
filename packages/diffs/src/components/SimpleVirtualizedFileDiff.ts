@@ -20,11 +20,11 @@ import {
   type FileDiffOptions,
   type FileDiffRenderProps,
 } from './FileDiff';
-import type { LittleBoiVirtualizer } from './LittleBoiVirtualizer';
+import type { SimpleVirtualizer } from './SimpleVirtualizer';
 
 let instanceId = -1;
 
-export class LittleVirtualizedFileDiff<
+export class SimpleVirtualizedFileDiff<
   LAnnotation = undefined,
 > extends FileDiff<LAnnotation> {
   override readonly __id: string = `little-virtualized-file-diff:${++instanceId}`;
@@ -38,7 +38,7 @@ export class LittleVirtualizedFileDiff<
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
-    private virtualizer: LittleBoiVirtualizer,
+    private virtualizer: SimpleVirtualizer,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
   ) {

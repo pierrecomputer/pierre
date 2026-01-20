@@ -1,12 +1,12 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { BigBoiVirtualizer, parsePatchFiles } from '@pierre/diffs';
+import { AdvancedVirtualizer, parsePatchFiles } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
 
 import { WorkerPoolStatus } from './WorkerPoolStatus';
-import styles from './big-boi.module.css';
+import styles from './advanced-diff.module.css';
 
 interface SubmitButtonProps {
   disabled?: boolean;
@@ -30,12 +30,12 @@ function SubmitButton({ children, disabled = false }: SubmitButtonProps) {
   );
 }
 
-export function BigBoiDiff() {
+export function AdvancedDiff() {
   const workerPool = useWorkerPool();
   const [fetching, setFetching] = useState(false);
   // The BIG BOI
   const [url, setURL] = useState('https://github.com/nodejs/node/pull/59805');
-  const bigBoiRef = useRef<BigBoiVirtualizer>(null);
+  const bigBoiRef = useRef<AdvancedVirtualizer>(null);
   const ref = useRef<HTMLDivElement>(null);
   const handleSubmit = useStableCallback(
     async (event: SyntheticEvent<HTMLFormElement>) => {
@@ -62,7 +62,7 @@ export function BigBoiDiff() {
           console.error('No valid container to run the virtualizer with');
           return;
         }
-        bigBoiRef.current ??= new BigBoiVirtualizer(
+        bigBoiRef.current ??= new AdvancedVirtualizer(
           ref.current,
           undefined,
           workerPool

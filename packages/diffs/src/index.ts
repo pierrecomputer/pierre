@@ -3,13 +3,13 @@ import {
   createCssVariablesTheme as createCSSVariablesTheme,
 } from 'shiki';
 
-export * from './components/BigBoiVirtualizer';
+export * from './components/AdvancedVirtualizedFileDiff';
+export * from './components/AdvancedVirtualizer';
 export * from './components/File';
 export * from './components/FileDiff';
 export * from './components/FileStream';
-export * from './components/LittleBoiVirtualizer';
-export * from './components/LittleVirtualizedFileDiff';
-export * from './components/VirtualizedFileDiff';
+export * from './components/SimpleVirtualizedFileDiff';
+export * from './components/SimpleVirtualizer';
 export * from './constants';
 export * from './highlighter/languages/areLanguagesAttached';
 export * from './highlighter/languages/attachResolvedLanguages';

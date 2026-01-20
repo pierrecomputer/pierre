@@ -7,9 +7,9 @@ import {
   type FileContents,
   type FileDiff,
   FileStream,
-  LittleBoiVirtualizer,
-  LittleVirtualizedFileDiff,
   type ParsedPatch,
+  SimpleVirtualizedFileDiff,
+  SimpleVirtualizer,
   isHighlighterNull,
   parseDiffFromFile,
   parsePatchFiles,
@@ -81,7 +81,7 @@ const poolManager = (() => {
   return manager;
 })();
 
-const intersectionObserver = new LittleBoiVirtualizer();
+const intersectionObserver = new SimpleVirtualizer();
 // const intersectionObserver = undefined;
 
 function startStreaming() {
@@ -132,7 +132,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
-      const instance = new LittleVirtualizedFileDiff<LineCommentMetadata>(
+      const instance = new SimpleVirtualizedFileDiff<LineCommentMetadata>(
         {
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           diffStyle: unified ? 'unified' : 'split',
