@@ -100,14 +100,16 @@ export interface Hunk {
 
 export interface FileDiffMetadata {
   name: string;
-  prevName: string | undefined;
+  prevName?: string;
   languageOverride?: SupportedLanguages;
+  mode?: string;
+  prevMode?: string;
   type: ChangeTypes;
+
   hunks: Hunk[];
   splitLineCount: number;
   unifiedLineCount: number;
-  prevMode?: string;
-  mode?: string;
+
   isPartial: boolean;
   deletionLines: string[];
   additionLines: string[];

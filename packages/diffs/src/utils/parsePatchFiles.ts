@@ -113,7 +113,6 @@ export function processFile(
       }
       currentFile = {
         name: '',
-        prevName: undefined,
         type: 'change',
         hunks: [],
         splitLineCount: 0,
