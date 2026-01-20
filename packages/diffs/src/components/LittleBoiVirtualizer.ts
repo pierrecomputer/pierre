@@ -217,6 +217,9 @@ export class LittleBoiVirtualizer {
   };
 
   private computeRenderRangeAndEmit = () => {
+    if (window.STOP === true) {
+      return;
+    }
     if (
       !this.scrollDirty &&
       !this.scrollHeightDirty &&
