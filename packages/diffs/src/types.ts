@@ -101,7 +101,7 @@ export interface Hunk {
 export interface FileDiffMetadata {
   name: string;
   prevName: string | undefined;
-  lang?: SupportedLanguages;
+  languageOverride?: SupportedLanguages;
   type: ChangeTypes;
   hunks: Hunk[];
   splitLineCount: number;

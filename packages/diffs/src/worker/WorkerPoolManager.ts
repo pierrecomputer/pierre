@@ -479,8 +479,8 @@ export class WorkerPoolManager {
     instance: DiffRendererInstance,
     diff: FileDiffMetadata
   ): void {
-    // NOTE(amadeus): Is this the best way to do this? Probably not...
-    const computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+    const computedLang =
+      diff.languageOverride ?? getFiletypeFromFileName(diff.name);
     if (computedLang === 'text') return;
     // If we already have a task in progress for this same diff content, we
     // should ignore executing it again
@@ -803,11 +803,11 @@ function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
     }
     case 'diff': {
       langs.add(
-        task.request.diff.lang ??
+        task.request.diff.languageOverride ??
           getFiletypeFromFileName(task.request.diff.name)
       );
       langs.add(
-        task.request.diff.lang ??
+        task.request.diff.languageOverride ??
           getFiletypeFromFileName(task.request.diff.prevName ?? '-')
       );
       break;

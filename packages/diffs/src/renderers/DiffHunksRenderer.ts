@@ -363,7 +363,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.workerManager.highlightDiffAST(this, diff);
       }
     } else {
-      this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+      this.computedLang =
+        diff.languageOverride ?? getFiletypeFromFileName(diff.name);
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =
@@ -448,7 +449,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private async asyncHighlight(
     diff: FileDiffMetadata
   ): Promise<RenderDiffResult> {
-    this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+    this.computedLang =
+      diff.languageOverride ?? getFiletypeFromFileName(diff.name);
     const hasThemes =
       this.highlighter != null &&
       areThemesAttached(this.options.theme ?? DEFAULT_THEMES);

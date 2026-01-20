@@ -64,8 +64,9 @@ interface FileDiffMetadata {
   // Previous filename (for renames)
   prevName: string | undefined;
 
-  // Optional: Override language for syntax highlighting
-  lang?: SupportedLanguages;
+  // Optional: Override language for syntax highlighting. Normally
+  // language is detected automatically base on file extension
+  languageOverride?: SupportedLanguages;
 
   // Type of change: 'change' | 'rename-pure' | 'rename-changed' | 'new' | 'deleted'
   type: ChangeTypes;
