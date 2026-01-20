@@ -14,7 +14,7 @@ type ThemingConstant = PreloadFileOptions<undefined> & { href?: string };
 export const THEMING_PROJECT_STRUCTURE: ThemingConstant = {
   file: {
     name: 'project-structure.txt',
-    lang: 'text',
+    languageOverride: 'text',
     contents: `theme/
 ├── src/
 │   ├── build.ts        # Build script entry point

@@ -33,6 +33,7 @@ interface FileContents {
 
 // Example usage
 const file: FileContents = {
+  // We'll attempt to detect the language based on file extension
   name: 'example.tsx',
   contents: 'export function Hello() { return <div>Hello</div>; }',
   cacheKey: 'example-file-v1', // Must change if contents change
@@ -40,9 +41,10 @@ const file: FileContents = {
 
 // With explicit language override
 const jsonFile: FileContents = {
-  name: 'config', // No extension, so we specify lang
+  // No extension, so we specify languageOverride
+  name: 'config',
   contents: '{ "key": "value" }',
-  lang: 'json',
+  languageOverride: 'json',
   cacheKey: 'config-file',
 };`,
   },
@@ -103,7 +105,7 @@ interface Hunk {
   // Optional context shown in hunk headers (e.g., function name)
   hunkContext: string | undefined;
 
-  // Line position information, mostly used internally for 
+  // Line position information, mostly used internally for
   // rendering optimizations
   splitLineStart: number;
   splitLineCount: number;

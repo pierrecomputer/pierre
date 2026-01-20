@@ -15,7 +15,7 @@ export interface FileContents {
   cacheKey?: string;
   name: string;
   contents: string;
-  lang?: SupportedLanguages;
+  languageOverride?: SupportedLanguages;
   // Technically our diff library can take a `header` property, but we don't
   // have any way of rendering it at the moment
   header?: string;

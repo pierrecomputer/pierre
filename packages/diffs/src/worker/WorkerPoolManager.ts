@@ -442,7 +442,8 @@ export class WorkerPoolManager {
   };
 
   highlightFileAST(instance: FileRendererInstance, file: FileContents): void {
-    const computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+    const computedLang =
+      file.languageOverride ?? getFiletypeFromFileName(file.name);
     if (computedLang === 'text') return;
     // If we already have a task in progress for this same file content, we
     // should drop it
@@ -795,7 +796,7 @@ function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
   switch (task.type) {
     case 'file': {
       langs.add(
-        task.request.file.lang ??
+        task.request.file.languageOverride ??
           getFiletypeFromFileName(task.request.file.name)
       );
       break;
