@@ -5055,7 +5055,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 3,
           "deletionLineIndex": 3,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5063,15 +5062,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 7,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 8,
           "deletionLineIndex": 7,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5080,6 +5076,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -4,8 +4,9 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 9,
       "splitLineStart": 3,
       "unifiedLineCount": 9,
@@ -5100,7 +5098,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 18,
           "deletionLineIndex": 17,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5108,15 +5105,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 7,
           "deletionLineIndex": 21,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 29,
           "deletionLineIndex": 21,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5125,6 +5119,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -18,8 +19,15 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 15,
       "splitLineStart": 18,
       "unifiedLineCount": 15,
@@ -5145,7 +5141,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 47,
           "deletionLineIndex": 39,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5153,15 +5148,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 43,
           "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 51,
           "deletionLineIndex": 45,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5170,6 +5162,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -40,10 +48,8 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 10,
       "splitLineStart": 47,
       "unifiedLineCount": 10,
@@ -5190,7 +5184,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 105,
           "deletionLineIndex": 99,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5198,15 +5191,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 103,
           "deletions": 3,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 110,
           "deletionLineIndex": 106,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5214,15 +5204,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 107,
           "deletions": 5,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 112,
           "deletionLineIndex": 112,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5230,15 +5217,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 113,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 114,
           "deletionLineIndex": 114,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5247,6 +5231,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -100,19 +106,13 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 19,
       "splitLineStart": 107,
       "unifiedLineCount": 22,
@@ -5267,7 +5253,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 119,
           "deletionLineIndex": 119,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5275,15 +5260,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 123,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 124,
           "deletionLineIndex": 124,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5291,15 +5273,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 125,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 126,
           "deletionLineIndex": 126,
           "lines": 5,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5307,15 +5286,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 131,
           "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 132,
           "deletionLineIndex": 133,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5324,6 +5300,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -120,18 +120,17 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 18,
       "splitLineStart": 127,
       "unifiedLineCount": 21,
@@ -5344,7 +5322,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 147,
           "deletionLineIndex": 148,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5352,15 +5329,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 152,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 151,
           "deletionLineIndex": 153,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5369,6 +5343,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -149,9 +148,8 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 9,
       "splitLineStart": 156,
       "unifiedLineCount": 9,
@@ -5389,7 +5365,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 156,
           "deletionLineIndex": 158,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5397,15 +5372,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 162,
           "deletions": 11,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 160,
           "deletionLineIndex": 173,
           "lines": 5,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5413,15 +5385,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 178,
           "deletions": 4,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 165,
           "deletionLineIndex": 182,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5430,6 +5399,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -159,28 +157,13 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 28,
       "splitLineStart": 166,
       "unifiedLineCount": 28,
@@ -5450,7 +5421,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 213,
           "deletionLineIndex": 230,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5458,15 +5428,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 234,
           "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 217,
           "deletionLineIndex": 236,
           "lines": 5,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5474,15 +5441,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 55,
           "deletionLineIndex": 241,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 277,
           "deletionLineIndex": 241,
           "lines": 2,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5490,15 +5454,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 243,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 280,
           "deletionLineIndex": 243,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5506,15 +5467,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 247,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 284,
           "deletionLineIndex": 248,
           "lines": 2,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5522,15 +5480,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 250,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 287,
           "deletionLineIndex": 250,
           "lines": 5,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5538,15 +5493,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 255,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 292,
           "deletionLineIndex": 256,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5554,15 +5506,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 257,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 294,
           "deletionLineIndex": 257,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5570,15 +5519,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 0,
           "deletionLineIndex": 258,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 295,
           "deletionLineIndex": 259,
           "lines": 2,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5586,15 +5532,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 37,
           "deletionLineIndex": 261,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 334,
           "deletionLineIndex": 261,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5603,6 +5546,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -231,35 +214,125 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 130,
       "splitLineStart": 238,
       "unifiedLineCount": 130,
@@ -5623,7 +5568,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 348,
           "deletionLineIndex": 275,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5631,15 +5575,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 279,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 353,
           "deletionLineIndex": 280,
           "lines": 5,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5647,15 +5588,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 285,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 359,
           "deletionLineIndex": 285,
           "lines": 3,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5663,15 +5601,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 288,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 363,
           "deletionLineIndex": 289,
           "lines": 6,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5679,15 +5614,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 2,
           "deletionLineIndex": 295,
           "deletions": 2,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 371,
           "deletionLineIndex": 297,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5696,6 +5628,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -276,26 +349,27 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 27,
       "splitLineStart": 378,
       "unifiedLineCount": 31,
@@ -5716,7 +5650,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 382,
           "deletionLineIndex": 308,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5724,15 +5657,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 312,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 387,
           "deletionLineIndex": 312,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5740,15 +5670,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 313,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 389,
           "deletionLineIndex": 314,
           "lines": 6,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5756,15 +5683,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 320,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 396,
           "deletionLineIndex": 321,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5773,6 +5697,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -309,17 +383,18 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 18,
       "splitLineStart": 412,
       "unifiedLineCount": 20,
@@ -5793,7 +5719,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 401,
           "deletionLineIndex": 326,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5801,15 +5726,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 330,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 406,
           "deletionLineIndex": 330,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5817,15 +5739,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 331,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 408,
           "deletionLineIndex": 332,
           "lines": 6,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5833,15 +5752,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 338,
           "deletions": 1,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 415,
           "deletionLineIndex": 339,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5850,6 +5766,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -327,17 +402,18 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 18,
       "splitLineStart": 431,
       "unifiedLineCount": 20,
@@ -5870,7 +5788,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 424,
           "deletionLineIndex": 348,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5878,15 +5795,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 22,
           "deletionLineIndex": 352,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 450,
           "deletionLineIndex": 352,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5894,15 +5808,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 9,
           "deletionLineIndex": 353,
           "deletions": 8,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 460,
           "deletionLineIndex": 361,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5910,15 +5821,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 51,
           "deletionLineIndex": 362,
           "deletions": 4,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 512,
           "deletionLineIndex": 366,
           "lines": 1,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5926,15 +5834,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 1,
           "deletionLineIndex": 367,
           "deletions": 30,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 514,
           "deletionLineIndex": 397,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5943,6 +5848,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -349,53 +425,94 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 123,
       "splitLineStart": 454,
       "unifiedLineCount": 136,
@@ -5963,7 +5870,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 549,
           "deletionLineIndex": 432,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -5971,15 +5877,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 19,
           "deletionLineIndex": 436,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 572,
           "deletionLineIndex": 436,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -5988,6 +5891,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -433,8 +550,27 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 27,
       "splitLineStart": 608,
       "unifiedLineCount": 27,
@@ -6008,7 +5913,6 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additionLineIndex": 632,
           "deletionLineIndex": 496,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
         {
@@ -6016,15 +5920,12 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
           "additions": 28,
           "deletionLineIndex": 500,
           "deletions": 0,
-          "noEOFCRAdditions": false,
-          "noEOFCRDeletions": false,
           "type": "change",
         },
         {
           "additionLineIndex": 664,
           "deletionLineIndex": 500,
           "lines": 4,
-          "noEOFCR": false,
           "type": "context",
         },
       ],
@@ -6033,6 +5934,8 @@ exports[`parseDiffFromFile should parse diff from fileOld and fileNew and match 
 "@@ -497,8 +633,36 @@
 "
 ,
+      "noEOFCRAdditions": false,
+      "noEOFCRDeletions": false,
       "splitLineCount": 36,
       "splitLineStart": 691,
       "unifiedLineCount": 36,

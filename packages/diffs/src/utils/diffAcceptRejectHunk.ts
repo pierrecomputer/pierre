@@ -60,25 +60,32 @@ export function diffAcceptRejectHunk(
         'diffResolveRejectHunk: iterating through hunks, hunk doesnt exist...'
       );
     }
+    const { noEOFCRAdditions, noEOFCRDeletions } = hunk;
     diff.hunks[i] = hunk = { ...hunk };
+
     if (i === hunkIndex) {
+      hunk.noEOFCRDeletions = false;
+      hunk.noEOFCRAdditions = false;
+      if (
+        (type === 'accept' && noEOFCRAdditions) ||
+        (type === 'reject' && noEOFCRDeletions)
+      ) {
+        hunk.noEOFCRAdditions = true;
+        hunk.noEOFCRDeletions = true;
+      }
       const newContent: ContextContent = {
         type: 'context',
         lines: 0,
         additionLineIndex: hunk.additionLineIndex,
         deletionLineIndex: hunk.deletionLineIndex,
-        noEOFCR: false,
       };
       for (const content of hunk.hunkContent) {
         if (content.type === 'context') {
           newContent.lines += content.lines;
-          newContent.noEOFCR = content.noEOFCR;
         } else if (type === 'accept') {
           newContent.lines += content.additions;
-          newContent.noEOFCR = content.noEOFCRAdditions;
         } else if (type === 'reject') {
           newContent.lines += content.deletions;
-          newContent.noEOFCR = content.noEOFCRDeletions;
         }
       }
       const lineCount = newContent.lines;

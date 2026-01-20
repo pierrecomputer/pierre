@@ -362,8 +362,8 @@ export function iterateOverDiff({
                   deletionLineNumber: deletionLineNumber + index,
                   additionLineNumber: additionLineNumber + index,
                   type: 'context',
-                  noEOFCRAddition: isLastLine && content.noEOFCR,
-                  noEOFCRDeletion: isLastLine && content.noEOFCR,
+                  noEOFCRAddition: isLastLine && hunk.noEOFCRAdditions,
+                  noEOFCRDeletion: isLastLine && hunk.noEOFCRDeletions,
                 })
               ) {
                 break hunkIterator;
@@ -725,9 +725,9 @@ function getChangeLineData({
       noEOFCRDeletion:
         isLastContent &&
         index === content.deletions - 1 &&
-        content.noEOFCRDeletions,
+        hunk.noEOFCRDeletions,
       noEOFCRAddition:
-        isLastContent && index === unifiedCount - 1 && content.noEOFCRAdditions,
+        isLastContent && index === unifiedCount - 1 && hunk.noEOFCRAdditions,
     };
   }
   return {
@@ -752,8 +752,8 @@ function getChangeLineData({
     deletionLineNumber:
       index < content.deletions ? deletionLineNumber + index : undefined,
     noEOFCRDeletion:
-      isLastContent && index === splitCount - 1 && content.noEOFCRDeletions,
+      isLastContent && index === splitCount - 1 && hunk.noEOFCRDeletions,
     noEOFCRAddition:
-      isLastContent && index === splitCount - 1 && content.noEOFCRAdditions,
+      isLastContent && index === splitCount - 1 && hunk.noEOFCRAdditions,
   };
 }

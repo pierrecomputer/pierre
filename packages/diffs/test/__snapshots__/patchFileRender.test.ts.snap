@@ -158,7 +158,6 @@ exports[`file.patch fixture parses and renders the patch file: parsed patch 1`] 
                 "additionLineIndex": 0,
                 "deletionLineIndex": 0,
                 "lines": 1,
-                "noEOFCR": false,
                 "type": "context",
               },
               {
@@ -166,8 +165,6 @@ exports[`file.patch fixture parses and renders the patch file: parsed patch 1`] 
                 "additions": 0,
                 "deletionLineIndex": 1,
                 "deletions": 31,
-                "noEOFCRAdditions": false,
-                "noEOFCRDeletions": false,
                 "type": "change",
               },
             ],
@@ -176,6 +173,8 @@ exports[`file.patch fixture parses and renders the patch file: parsed patch 1`] 
 "@@ -3720,32 +3720 @@
 "
 ,
+            "noEOFCRAdditions": false,
+            "noEOFCRDeletions": false,
             "splitLineCount": 32,
             "splitLineStart": 3719,
             "unifiedLineCount": 32,

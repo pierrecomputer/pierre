@@ -59,7 +59,6 @@ export interface ParsedPatch {
 export interface ContextContent {
   type: 'context';
   lines: number;
-  noEOFCR: boolean;
   additionLineIndex: number;
   deletionLineIndex: number;
 }
@@ -70,8 +69,6 @@ export interface ChangeContent {
   deletionLineIndex: number;
   additions: number;
   additionLineIndex: number;
-  noEOFCRDeletions: boolean;
-  noEOFCRAdditions: boolean;
 }
 
 export interface Hunk {
@@ -96,6 +93,9 @@ export interface Hunk {
 
   unifiedLineStart: number;
   unifiedLineCount: number;
+
+  noEOFCRDeletions: boolean;
+  noEOFCRAdditions: boolean;
 }
 
 export interface FileDiffMetadata {

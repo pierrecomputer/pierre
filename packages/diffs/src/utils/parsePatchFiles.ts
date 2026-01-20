@@ -247,6 +247,9 @@ export function processFile(
       hunkContent: [],
       hunkContext: fileHeaderMatch[5],
       hunkSpecs: firstLine,
+
+      noEOFCRAdditions: false,
+      noEOFCRDeletions: false,
     };
 
     // Lets validate out hunkData to ensure there's no broken data from the
@@ -324,11 +327,12 @@ export function processFile(
         lastLineType = 'context';
       } else if (type === 'metadata' && currentContent != null) {
         if (currentContent.type === 'context') {
-          currentContent.noEOFCR = true;
+          hunkData.noEOFCRAdditions = true;
+          hunkData.noEOFCRDeletions = true;
         } else if (lastLineType === 'deletion') {
-          currentContent.noEOFCRDeletions = true;
+          hunkData.noEOFCRDeletions = true;
         } else if (lastLineType === 'addition') {
-          currentContent.noEOFCRAdditions = true;
+          hunkData.noEOFCRAdditions = true;
         }
         // If we're dealing with partial content from a diff, we need to strip
         // newlines manually from the content
@@ -491,8 +495,6 @@ function createContentGroup(
       deletions: 0,
       additionLineIndex,
       deletionLineIndex,
-      noEOFCRAdditions: false,
-      noEOFCRDeletions: false,
     };
   }
   return {
@@ -500,6 +502,5 @@ function createContentGroup(
     lines: 0,
     additionLineIndex,
     deletionLineIndex,
-    noEOFCR: false,
   };
 }
