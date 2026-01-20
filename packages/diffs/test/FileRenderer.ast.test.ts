@@ -91,7 +91,7 @@ describe('FileRenderer AST Structure', () => {
     const tokensWithCSSVars = styledTokens.filter(
       (node) =>
         node.style?.match(
-          /--diffs-dark:#[A-F0-9]{6};--diffs-light:#[A-F0-9]{6}/
+          /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/
         ) !== null
     );
     expect(tokensWithCSSVars.length).toBeGreaterThan(0);
@@ -101,7 +101,7 @@ describe('FileRenderer AST Structure', () => {
     assertDefined(functionToken, 'functionToken should be defined');
     assertDefined(functionToken.style, 'functionToken.style should be defined');
     expect(functionToken.style).toMatch(
-      /--diffs-dark:#[A-F0-9]{6};--diffs-light:#[A-F0-9]{6}/
+      /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/
     );
   });
 

@@ -36,7 +36,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -49,7 +49,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -62,7 +62,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -75,7 +75,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -88,7 +88,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -101,7 +101,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -114,7 +114,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -127,7 +127,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -140,7 +140,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+              "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
             },
             "tagName": "span",
             "type": "element",
@@ -153,7 +153,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -259,7 +259,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -272,7 +272,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -285,7 +285,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#9D6AFB;--diffs-light:#7B43F8",
+              "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
             },
             "tagName": "span",
             "type": "element",
@@ -298,7 +298,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -354,7 +354,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#ADADB1;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#ADADB1;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -367,7 +367,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -380,7 +380,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -393,7 +393,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -406,7 +406,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -419,7 +419,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -432,7 +432,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -445,7 +445,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -501,7 +501,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#ADADB1;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#ADADB1;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -514,7 +514,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -527,7 +527,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -540,7 +540,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -553,7 +553,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -566,7 +566,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -579,7 +579,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -635,7 +635,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -648,7 +648,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#D568EA;--diffs-light:#C635E4",
+              "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
             },
             "tagName": "span",
             "type": "element",
@@ -661,7 +661,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -717,7 +717,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -730,7 +730,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -786,7 +786,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -799,7 +799,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -812,7 +812,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#68CDF2;--diffs-light:#1CA1C7",
+              "style": "--diffs-token-dark:#68CDF2;--diffs-token-light:#1CA1C7",
             },
             "tagName": "span",
             "type": "element",
@@ -825,7 +825,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -881,7 +881,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -894,7 +894,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -907,7 +907,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#68CDF2;--diffs-light:#1CA1C7",
+              "style": "--diffs-token-dark:#68CDF2;--diffs-token-light:#1CA1C7",
             },
             "tagName": "span",
             "type": "element",
@@ -920,7 +920,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -976,7 +976,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -989,7 +989,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1002,7 +1002,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -1015,7 +1015,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+              "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
             },
             "tagName": "span",
             "type": "element",
@@ -1028,7 +1028,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -1084,7 +1084,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -1097,7 +1097,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1110,7 +1110,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -1123,7 +1123,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+              "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
             },
             "tagName": "span",
             "type": "element",
@@ -1179,7 +1179,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1192,7 +1192,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1248,7 +1248,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -1261,7 +1261,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1274,7 +1274,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -1287,7 +1287,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1300,7 +1300,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1356,7 +1356,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1412,7 +1412,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+              "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
             },
             "tagName": "span",
             "type": "element",
@@ -1425,7 +1425,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1438,7 +1438,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1451,7 +1451,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1464,7 +1464,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -1477,7 +1477,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1490,7 +1490,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1503,7 +1503,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1516,7 +1516,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -1529,7 +1529,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1542,7 +1542,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1555,7 +1555,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1568,7 +1568,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#08C0EF;--diffs-light:#08C0EF",
+              "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
             },
             "tagName": "span",
             "type": "element",
@@ -1581,7 +1581,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1594,7 +1594,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1607,7 +1607,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#FFA359;--diffs-light:#D47628",
+              "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
             },
             "tagName": "span",
             "type": "element",
@@ -1620,7 +1620,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",
@@ -1676,7 +1676,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
               },
             ],
             "properties": {
-              "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+              "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
             },
             "tagName": "span",
             "type": "element",

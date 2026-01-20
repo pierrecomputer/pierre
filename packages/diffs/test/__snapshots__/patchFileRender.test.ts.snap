@@ -470,7 +470,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#84848A;--diffs-light:#84848A",
+                "style": "--diffs-token-dark:#84848A;--diffs-token-light:#84848A",
               },
               "tagName": "span",
               "type": "element",
@@ -526,7 +526,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -539,7 +539,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -552,7 +552,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -608,7 +608,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -621,7 +621,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -634,7 +634,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -690,7 +690,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -703,7 +703,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -759,7 +759,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -772,7 +772,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -785,7 +785,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -841,7 +841,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -854,7 +854,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -867,7 +867,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -923,7 +923,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -936,7 +936,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -949,7 +949,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1005,7 +1005,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1018,7 +1018,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1031,7 +1031,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1087,7 +1087,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1100,7 +1100,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1156,7 +1156,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1169,7 +1169,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1182,7 +1182,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1238,7 +1238,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1251,7 +1251,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1264,7 +1264,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1320,7 +1320,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1333,7 +1333,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1389,7 +1389,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1402,7 +1402,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1415,7 +1415,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1428,7 +1428,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1484,7 +1484,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1497,7 +1497,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1553,7 +1553,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1566,7 +1566,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1579,7 +1579,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF678D;--diffs-light:#FC2B73",
+                "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
               },
               "tagName": "span",
               "type": "element",
@@ -1635,7 +1635,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1691,7 +1691,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1747,7 +1747,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1803,7 +1803,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -1859,7 +1859,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1872,7 +1872,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1928,7 +1928,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -1941,7 +1941,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -1954,7 +1954,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -2010,7 +2010,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2023,7 +2023,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2036,7 +2036,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -2092,7 +2092,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2105,7 +2105,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2161,7 +2161,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2174,7 +2174,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2187,7 +2187,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -2243,7 +2243,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2256,7 +2256,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2269,7 +2269,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -2325,7 +2325,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2338,7 +2338,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2394,7 +2394,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2407,7 +2407,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2420,7 +2420,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2433,7 +2433,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -2489,7 +2489,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2502,7 +2502,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2515,7 +2515,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
@@ -2571,7 +2571,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2584,7 +2584,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2597,7 +2597,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#68CDF2;--diffs-light:#1CA1C7",
+                "style": "--diffs-token-dark:#68CDF2;--diffs-token-light:#1CA1C7",
               },
               "tagName": "span",
               "type": "element",
@@ -2653,7 +2653,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#FF6762;--diffs-light:#D52C36",
+                "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
               },
               "tagName": "span",
               "type": "element",
@@ -2666,7 +2666,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#79797F;--diffs-light:#79797F",
+                "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
               },
               "tagName": "span",
               "type": "element",
@@ -2679,7 +2679,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
                 },
               ],
               "properties": {
-                "style": "--diffs-dark:#5ECC71;--diffs-light:#199F43",
+                "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
               },
               "tagName": "span",
               "type": "element",
