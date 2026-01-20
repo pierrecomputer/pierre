@@ -10,7 +10,7 @@ export function registerCustomCSSVariableTheme(
 ): void {
   const theme = createCSSVariablesTheme({
     name,
-    variablePrefix: formatCSSVariablePrefix(),
+    variablePrefix: formatCSSVariablePrefix('global'),
     variableDefaults,
     fontStyle,
   });

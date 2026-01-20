@@ -281,10 +281,23 @@
     --diffs-code-grid: minmax(min-content, max-content) 1fr;
 
     [data-column-content] span {
-      color: light-dark(var(--diffs-light), var(--diffs-dark));
-      font-weight: var(--diffs-light-font-weight);
-      font-style: var(--diffs-light-font-style);
+      color: light-dark(
+        var(--diffs-token-light, var(--diffs-light)),
+        var(--diffs-token-dark, var(--diffs-dark))
+      );
+      font-weight: var(--diffs-token-light-font-weight, inherit);
+      font-style: var(--diffs-token-light-font-style, inherit);
+      text-decoration: var(--diffs-token-light-text-decoration, inherit);
     }
+  }
+
+  /* Since span is a pretty innocuous selector, we need to make sure we don't
+   * apply tokenized BG colors to diff-spans */
+  [data-column-content] span:not([data-diff-span]) {
+    background-color: light-dark(
+      var(--diffs-token-light-bg, inherit),
+      var(--diffs-token-dark-bg, inherit)
+    );
   }
 
   [data-column-content] {
@@ -303,8 +316,9 @@
     }
 
     [data-diffs] [data-column-content] span {
-      font-weight: var(--diffs-dark-font-weight);
-      font-style: var(--diffs-dark-font-style);
+      font-weight: var(--diffs-token-dark-font-weight, inherit);
+      font-style: var(--diffs-token-dark-font-style, inherit);
+      text-decoration: var(--diffs-token-dark-text-decoration, inherit);
     }
   }
 
@@ -314,8 +328,9 @@
   }
 
   [data-diffs][data-theme-type='light'] [data-column-content] span {
-    font-weight: var(--diffs-light-font-weight);
-    font-style: var(--diffs-light-font-style);
+    font-weight: var(--diffs-token-light-font-weight, inherit);
+    font-style: var(--diffs-token-light-font-style, inherit);
+    text-decoration: var(--diffs-token-light-text-decoration, inherit);
   }
 
   [data-diffs-header][data-theme-type='dark'],
@@ -324,8 +339,9 @@
   }
 
   [data-diffs][data-theme-type='dark'] [data-column-content] span {
-    font-weight: var(--diffs-dark-font-weight);
-    font-style: var(--diffs-dark-font-style);
+    font-weight: var(--diffs-token-dark-font-weight, inherit);
+    font-style: var(--diffs-token-dark-font-style, inherit);
+    text-decoration: var(--diffs-token-dark-text-decoration, inherit);
   }
 
   [data-type='split'][data-overflow='wrap'] {

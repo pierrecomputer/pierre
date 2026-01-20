@@ -46,7 +46,7 @@ export function renderFileWithHighlighter(
         theme,
         transformers,
         defaultColor: false,
-        cssVariablePrefix: formatCSSVariablePrefix(),
+        cssVariablePrefix: formatCSSVariablePrefix('token'),
         tokenizeMaxLineLength,
       };
     }
@@ -55,7 +55,7 @@ export function renderFileWithHighlighter(
       themes: theme,
       transformers,
       defaultColor: false,
-      cssVariablePrefix: formatCSSVariablePrefix(),
+      cssVariablePrefix: formatCSSVariablePrefix('token'),
       tokenizeMaxLineLength,
     };
   })();

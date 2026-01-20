@@ -44,7 +44,7 @@ export async function getSharedHighlighter({
 
   const languageLoaders: Promise<ResolvedLanguage>[] = [];
   for (const language of langs) {
-    if (language === 'text') continue;
+    if (language === 'text' || language === 'ansi') continue;
     const maybeResolvedLanguage = getResolvedOrResolveLanguage(language);
     if ('then' in maybeResolvedLanguage) {
       languageLoaders.push(maybeResolvedLanguage);

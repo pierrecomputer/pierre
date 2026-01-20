@@ -26,26 +26,25 @@ export function getHighlighterThemeStyles({
     const themeData = highlighter.getTheme(theme);
     styles += `color:${themeData.fg};`;
     styles += `background-color:${themeData.bg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}fg:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}bg:${themeData.bg};`;
+    styles += `${formatCSSVariablePrefix('global')}fg:${themeData.fg};`;
+    styles += `${formatCSSVariablePrefix('global')}bg:${themeData.bg};`;
     styles += getThemeVariables(themeData, prefix);
   } else {
     let themeData = highlighter.getTheme(theme.dark);
-    styles += `${formatCSSVariablePrefix(prefix)}dark:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}dark-bg:${themeData.bg};`;
-    styles += getThemeVariables(themeData, prefix, 'dark');
+    styles += `${formatCSSVariablePrefix('global')}dark:${themeData.fg};`;
+    styles += `${formatCSSVariablePrefix('global')}dark-bg:${themeData.bg};`;
+    styles += getThemeVariables(themeData, 'dark');
 
     themeData = highlighter.getTheme(theme.light);
-    styles += `${formatCSSVariablePrefix(prefix)}light:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix(prefix)}light-bg:${themeData.bg};`;
-    styles += getThemeVariables(themeData, prefix, 'light');
+    styles += `${formatCSSVariablePrefix('global')}light:${themeData.fg};`;
+    styles += `${formatCSSVariablePrefix('global')}light-bg:${themeData.bg};`;
+    styles += getThemeVariables(themeData, 'light');
   }
   return styles;
 }
 
 function getThemeVariables(
   themeData: ThemeRegistrationResolved,
-  prefix?: string,
   modePrefix?: string
 ) {
   modePrefix = modePrefix != null ? `${modePrefix}-` : '';
@@ -54,19 +53,19 @@ function getThemeVariables(
     themeData.colors?.['gitDecoration.addedResourceForeground'] ??
     themeData.colors?.['terminal.ansiGreen'];
   if (additionGreen != null) {
-    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}addition-color:${additionGreen};`;
+    styles += `${formatCSSVariablePrefix('global')}${modePrefix}addition-color:${additionGreen};`;
   }
   const deletionRed =
     themeData.colors?.['gitDecoration.deletedResourceForeground'] ??
     themeData.colors?.['terminal.ansiRed'];
   if (deletionRed != null) {
-    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}deletion-color:${deletionRed};`;
+    styles += `${formatCSSVariablePrefix('global')}${modePrefix}deletion-color:${deletionRed};`;
   }
   const modifiedBlue =
     themeData.colors?.['gitDecoration.modifiedResourceForeground'] ??
     themeData.colors?.['terminal.ansiBlue'];
   if (modifiedBlue != null) {
-    styles += `${formatCSSVariablePrefix(prefix)}${modePrefix}modified-color:${modifiedBlue};`;
+    styles += `${formatCSSVariablePrefix('global')}${modePrefix}modified-color:${modifiedBlue};`;
   }
   return styles;
 }

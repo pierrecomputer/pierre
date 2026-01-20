@@ -9,7 +9,7 @@ export async function resolveLanguages(
   const resolvedLanguages: ResolvedLanguage[] = [];
   const languagesToResolve: Promise<ResolvedLanguage | undefined>[] = [];
   for (const language of languages) {
-    if (language === 'text') continue;
+    if (language === 'text' || language === 'ansi') continue;
     const maybeResolvedLanguage =
       getResolvedOrResolveLanguage(language) ?? resolveLanguage(language);
     if ('then' in maybeResolvedLanguage) {

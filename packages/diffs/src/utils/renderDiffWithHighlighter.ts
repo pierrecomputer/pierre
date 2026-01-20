@@ -454,7 +454,7 @@ function renderTwoFiles({
           transformers,
           decorations: undefined,
           defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix(),
+          cssVariablePrefix: formatCSSVariablePrefix('token'),
         }
       : {
           ...options,
@@ -464,7 +464,7 @@ function renderTwoFiles({
           transformers,
           decorations: undefined,
           defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix(),
+          cssVariablePrefix: formatCSSVariablePrefix('token'),
         };
   })();
 

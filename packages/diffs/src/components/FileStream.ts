@@ -146,7 +146,7 @@ export class FileStream {
               highlighter,
               allowRecalls: true,
               defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix(),
+              cssVariablePrefix: formatCSSVariablePrefix('token'),
             })
           : new CodeToTokenTransformStream({
               ...this.options,
@@ -154,7 +154,7 @@ export class FileStream {
               highlighter,
               allowRecalls: true,
               defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix(),
+              cssVariablePrefix: formatCSSVariablePrefix('token'),
             })
       )
       .pipeTo(

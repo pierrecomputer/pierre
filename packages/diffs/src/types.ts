@@ -102,7 +102,7 @@ export interface FileDiffMetadata {
   cacheKey?: string;
 }
 
-export type SupportedLanguages = BundledLanguage | 'text';
+export type SupportedLanguages = BundledLanguage | 'text' | 'ansi';
 
 // Line types that we can parse from a patch file
 export type HunkLineType =

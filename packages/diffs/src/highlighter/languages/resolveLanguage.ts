@@ -6,7 +6,7 @@ import type { ResolvedLanguage } from '../../worker';
 import { ResolvedLanguages, ResolvingLanguages } from './constants';
 
 export async function resolveLanguage(
-  lang: Exclude<SupportedLanguages, 'text'>
+  lang: Exclude<SupportedLanguages, 'text' | 'ansi'>
 ): Promise<ResolvedLanguage> {
   // Prevent dynamic imports in worker contexts
   if (isWorkerContext()) {
