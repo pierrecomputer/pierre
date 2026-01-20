@@ -7,7 +7,7 @@ describe('fileListToTree', () => {
     const files = ['src/index.ts', 'src/utils/helper.ts'];
     const tree = fileListToTree(files);
 
-    // No collapsed since direct and collapsed would be identical
+    // No flattened since direct and flattened would be identical
     expect(tree).toEqual({
       root: {
         name: 'root',
@@ -36,7 +36,7 @@ describe('fileListToTree', () => {
     const files = ['README.md', 'package.json'];
     const tree = fileListToTree(files);
 
-    // No collapsed since direct and collapsed would be identical
+    // No flattened since direct and flattened would be identical
     expect(tree).toEqual({
       root: {
         name: 'root',
@@ -53,16 +53,16 @@ describe('fileListToTree', () => {
     const files = ['a/b/c/d/file.ts'];
     const tree = fileListToTree(files);
 
-    // Root has collapsed since it differs from direct (collapsed path vs direct folder)
+    // Root has flattened since it differs from direct (flattened path vs direct folder)
     expect(tree.root).toEqual({
       name: 'root',
       children: {
         direct: ['a'],
-        collapsed: ['c::a/b/c/d'],
+        flattened: ['f::a/b/c/d'],
       },
     });
 
-    // Intermediate folders don't have collapsed (they're part of the chain)
+    // Intermediate folders don't have flattened (they're part of the chain)
     expect(tree.a).toEqual({
       name: 'a',
       children: {
@@ -82,7 +82,7 @@ describe('fileListToTree', () => {
       },
     });
 
-    // The endpoint folder - no collapsed since it would be identical to direct
+    // The endpoint folder - no flattened since it would be identical to direct
     expect(tree['a/b/c/d']).toEqual({
       name: 'd',
       children: {
@@ -91,10 +91,10 @@ describe('fileListToTree', () => {
     });
     expect(tree['a/b/c/d/file.ts']).toEqual({ name: 'file.ts' });
 
-    // Collapsed node - no collapsed since children would be identical to direct
-    expect(tree['c::a/b/c/d']).toEqual({
+    // Flattened node - no flattened since children would be identical to direct
+    expect(tree['f::a/b/c/d']).toEqual({
       name: 'a/b/c/d',
-      collapses: ['a', 'a/b', 'a/b/c', 'a/b/c/d'],
+      flattens: ['a', 'a/b', 'a/b/c', 'a/b/c/d'],
       children: {
         direct: ['a/b/c/d/file.ts'],
       },
@@ -109,12 +109,12 @@ describe('fileListToTree', () => {
     ];
     const tree = fileListToTree(files);
 
-    // Root has collapsed since it differs from direct
+    // Root has flattened since it differs from direct
     expect(tree.root).toEqual({
       name: 'root',
       children: {
         direct: ['src'],
-        collapsed: ['c::src/components'],
+        flattened: ['f::src/components'],
       },
     });
 
@@ -126,14 +126,14 @@ describe('fileListToTree', () => {
       },
     });
 
-    // src/components is the endpoint, has multiple children - no collapsed since identical
+    // src/components is the endpoint, has multiple children - no flattened since identical
     expect(tree['src/components'].children?.direct).toHaveLength(3);
-    expect(tree['src/components'].children?.collapsed).toBeUndefined();
+    expect(tree['src/components'].children?.flattened).toBeUndefined();
 
-    // Collapsed node - no collapsed since children would be identical to direct
-    expect(tree['c::src/components']).toEqual({
+    // Flattened node - no flattened since children would be identical to direct
+    expect(tree['f::src/components']).toEqual({
       name: 'src/components',
-      collapses: ['src', 'src/components'],
+      flattens: ['src', 'src/components'],
       children: {
         direct: expect.arrayContaining([
           'src/components/Button.tsx',
@@ -163,7 +163,7 @@ describe('fileListToTree', () => {
       },
     });
 
-    // No collapsed since identical to direct
+    // No flattened since identical to direct
     expect(tree['my-root']).toEqual({
       name: 'Project',
       children: {
@@ -197,23 +197,23 @@ describe('fileListToTree', () => {
 
     expect(tree.root.children?.direct).toContain('README.md');
     expect(tree.root.children?.direct).toContain('src');
-    // Root has no collapsed since it has multiple direct children that aren't all collapsible
-    expect(tree.root.children?.collapsed).toBeUndefined();
+    // Root has no flattened since it has multiple direct children that aren't all flattenable
+    expect(tree.root.children?.flattened).toBeUndefined();
 
     expect(tree['README.md']).toEqual({ name: 'README.md' });
     expect(tree['src/utils/deep/nested/file.ts']).toEqual({ name: 'file.ts' });
 
-    // src has multiple children (index.ts and utils), so it's not collapsible itself
-    // but utils -> deep -> nested is collapsible, so collapsed differs from direct
+    // src has multiple children (index.ts and utils), so it's not flattenable itself
+    // but utils -> deep -> nested is flattenable, so flattened differs from direct
     expect(tree.src.children?.direct).toContain('src/index.ts');
     expect(tree.src.children?.direct).toContain('src/utils');
-    expect(tree.src.children?.collapsed).toContain('src/index.ts');
-    expect(tree.src.children?.collapsed).toContain('c::src/utils/deep/nested');
+    expect(tree.src.children?.flattened).toContain('src/index.ts');
+    expect(tree.src.children?.flattened).toContain('f::src/utils/deep/nested');
 
-    // The collapsed node - no collapsed since children would be identical to direct
-    expect(tree['c::src/utils/deep/nested']).toEqual({
+    // The flattened node - no flattened since children would be identical to direct
+    expect(tree['f::src/utils/deep/nested']).toEqual({
       name: 'utils/deep/nested',
-      collapses: ['src/utils', 'src/utils/deep', 'src/utils/deep/nested'],
+      flattens: ['src/utils', 'src/utils/deep', 'src/utils/deep/nested'],
       children: {
         direct: ['src/utils/deep/nested/file.ts'],
       },
@@ -242,128 +242,128 @@ describe('fileListToTree', () => {
     expect(tree).toMatchSnapshot('sample file list tree');
   });
 
-  test('should correctly collapse single-child folder chains', () => {
+  test('should correctly flatten single-child folder chains', () => {
     // Test case: outer/middle/inner/file.ts where outer->middle->inner is a chain
     const files = ['outer/middle/inner/file.ts'];
     const tree = fileListToTree(files);
 
-    // Root should have collapsed pointing to the fully collapsed path
-    expect(tree.root.children?.collapsed).toEqual(['c::outer/middle/inner']);
+    // Root should have flattened pointing to the fully flattened path
+    expect(tree.root.children?.flattened).toEqual(['f::outer/middle/inner']);
 
-    // The collapsed node - no collapsed since children would be identical to direct
-    expect(tree['c::outer/middle/inner']).toEqual({
+    // The flattened node - no flattened since children would be identical to direct
+    expect(tree['f::outer/middle/inner']).toEqual({
       name: 'outer/middle/inner',
-      collapses: ['outer', 'outer/middle', 'outer/middle/inner'],
+      flattens: ['outer', 'outer/middle', 'outer/middle/inner'],
       children: {
         direct: ['outer/middle/inner/file.ts'],
       },
     });
   });
 
-  test('should not collapse folders with multiple children', () => {
+  test('should not flatten folders with multiple children', () => {
     const files = ['folder/file1.ts', 'folder/file2.ts'];
     const tree = fileListToTree(files);
 
-    // folder has 2 children (files), so it shouldn't be collapsed
-    // No collapsed since direct and collapsed would be identical
-    expect(tree.root.children?.collapsed).toBeUndefined();
-    expect(tree['c::folder']).toBeUndefined();
+    // folder has 2 children (files), so it shouldn't be flattened
+    // No flattened since direct and flattened would be identical
+    expect(tree.root.children?.flattened).toBeUndefined();
+    expect(tree['f::folder']).toBeUndefined();
   });
 
-  test('should not collapse folders when child is a file', () => {
+  test('should not flatten folders when child is a file', () => {
     const files = ['single/file.ts'];
     const tree = fileListToTree(files);
 
-    // single has one child that is a file, not a folder, so not collapsible
-    // No collapsed since direct and collapsed would be identical
-    expect(tree.root.children?.collapsed).toBeUndefined();
-    expect(tree['c::single']).toBeUndefined();
+    // single has one child that is a file, not a folder, so not flattenable
+    // No flattened since direct and flattened would be identical
+    expect(tree.root.children?.flattened).toBeUndefined();
+    expect(tree['f::single']).toBeUndefined();
   });
 
-  test('should only include collapsed when it differs from direct', () => {
-    // This test verifies that collapsed is only present when it contains
-    // different entries than direct (i.e., has c:: prefixed paths)
+  test('should only include flattened when it differs from direct', () => {
+    // This test verifies that flattened is only present when it contains
+    // different entries than direct (i.e., has f:: prefixed paths)
     const files = [
-      'src/simple/file.ts', // src/simple is not collapsible (file child)
-      'src/deep/nested/inner/file.ts', // src/deep/nested/inner is collapsible
+      'src/simple/file.ts', // src/simple is not flattenable (file child)
+      'src/deep/nested/inner/file.ts', // src/deep/nested/inner is flattenable
     ];
     const tree = fileListToTree(files);
 
-    // src has two children: simple (not collapsible) and deep (collapsible)
-    // So collapsed differs from direct
+    // src has two children: simple (not flattenable) and deep (flattenable)
+    // So flattened differs from direct
     expect(tree.src.children?.direct).toEqual(['src/simple', 'src/deep']);
-    expect(tree.src.children?.collapsed).toEqual([
+    expect(tree.src.children?.flattened).toEqual([
       'src/simple',
-      'c::src/deep/nested/inner',
+      'f::src/deep/nested/inner',
     ]);
 
-    // src/simple has no collapsed (would be identical to direct)
+    // src/simple has no flattened (would be identical to direct)
     expect(tree['src/simple'].children?.direct).toEqual(['src/simple/file.ts']);
-    expect(tree['src/simple'].children?.collapsed).toBeUndefined();
+    expect(tree['src/simple'].children?.flattened).toBeUndefined();
 
-    // Verify the collapsed node exists and has no collapsed (identical to direct)
-    expect(tree['c::src/deep/nested/inner']).toEqual({
+    // Verify the flattened node exists and has no flattened (identical to direct)
+    expect(tree['f::src/deep/nested/inner']).toEqual({
       name: 'deep/nested/inner',
-      collapses: ['src/deep', 'src/deep/nested', 'src/deep/nested/inner'],
+      flattens: ['src/deep', 'src/deep/nested', 'src/deep/nested/inner'],
       children: {
         direct: ['src/deep/nested/inner/file.ts'],
       },
     });
   });
 
-  test('collapsed node should have collapsed when its children differ', () => {
-    // A collapsed node that itself contains collapsible children
+  test('flattened node should have flattened when its children differ', () => {
+    // A flattened node that itself contains flattenable children
     const files = [
       'a/b/file.ts', // a/b is the endpoint of a->b chain
-      'a/b/c/d/file2.ts', // c/d is collapsible within a/b
+      'a/b/c/d/file2.ts', // c/d is flattenable within a/b
     ];
     const tree = fileListToTree(files);
 
-    // Root collapses a/b
-    expect(tree.root.children?.collapsed).toEqual(['c::a/b']);
+    // Root flattens a/b
+    expect(tree.root.children?.flattened).toEqual(['f::a/b']);
 
-    // The collapsed node a/b has children that differ (c is collapsible)
-    expect(tree['c::a/b']).toEqual({
+    // The flattened node a/b has children that differ (c is flattenable)
+    expect(tree['f::a/b']).toEqual({
       name: 'a/b',
-      collapses: ['a', 'a/b'],
+      flattens: ['a', 'a/b'],
       children: {
         direct: ['a/b/file.ts', 'a/b/c'],
-        collapsed: ['a/b/file.ts', 'c::a/b/c/d'],
+        flattened: ['a/b/file.ts', 'f::a/b/c/d'],
       },
     });
 
-    // Nested collapsed node
-    expect(tree['c::a/b/c/d']).toEqual({
+    // Nested flattened node
+    expect(tree['f::a/b/c/d']).toEqual({
       name: 'c/d',
-      collapses: ['a/b/c', 'a/b/c/d'],
+      flattens: ['a/b/c', 'a/b/c/d'],
       children: {
         direct: ['a/b/c/d/file2.ts'],
       },
     });
   });
 
-  test('should handle multiple parallel collapsible chains', () => {
-    // Two sibling folders that are both independently collapsible
+  test('should handle multiple parallel flattenable chains', () => {
+    // Two sibling folders that are both independently flattenable
     const files = [
       'src/feature-a/components/deep/Button.tsx',
       'src/feature-b/utils/helpers/format.ts',
     ];
     const tree = fileListToTree(files);
 
-    // src has two collapsible children
+    // src has two flattenable children
     expect(tree.src.children?.direct).toEqual([
       'src/feature-a',
       'src/feature-b',
     ]);
-    expect(tree.src.children?.collapsed).toEqual([
-      'c::src/feature-a/components/deep',
-      'c::src/feature-b/utils/helpers',
+    expect(tree.src.children?.flattened).toEqual([
+      'f::src/feature-a/components/deep',
+      'f::src/feature-b/utils/helpers',
     ]);
 
-    // Both collapsed nodes should exist
-    expect(tree['c::src/feature-a/components/deep']).toEqual({
+    // Both flattened nodes should exist
+    expect(tree['f::src/feature-a/components/deep']).toEqual({
       name: 'feature-a/components/deep',
-      collapses: [
+      flattens: [
         'src/feature-a',
         'src/feature-a/components',
         'src/feature-a/components/deep',
@@ -373,9 +373,9 @@ describe('fileListToTree', () => {
       },
     });
 
-    expect(tree['c::src/feature-b/utils/helpers']).toEqual({
+    expect(tree['f::src/feature-b/utils/helpers']).toEqual({
       name: 'feature-b/utils/helpers',
-      collapses: [
+      flattens: [
         'src/feature-b',
         'src/feature-b/utils',
         'src/feature-b/utils/helpers',
@@ -400,14 +400,14 @@ describe('fileListToTree', () => {
     expect(tree.root.children?.direct).toContain('.github');
     expect(tree.root.children?.direct).toContain('.vscode');
 
-    // .github/workflows is collapsible (single folder child)
-    expect(tree.root.children?.collapsed).toContain('c::.github/workflows');
+    // .github/workflows is flattenable (single folder child)
+    expect(tree.root.children?.flattened).toContain('f::.github/workflows');
 
     expect(tree['.gitignore']).toEqual({ name: '.gitignore' });
 
-    expect(tree['c::.github/workflows']).toEqual({
+    expect(tree['f::.github/workflows']).toEqual({
       name: '.github/workflows',
-      collapses: ['.github', '.github/workflows'],
+      flattens: ['.github', '.github/workflows'],
       children: {
         direct: ['.github/workflows/ci.yml', '.github/workflows/deploy.yml'],
       },
@@ -427,8 +427,8 @@ describe('fileListToTree', () => {
     expect(tree.src.children?.direct).toContain('src/utils.ts');
     expect(tree.src.children?.direct).toContain('src/utils');
 
-    // No collapsed since utils folder has multiple children (not collapsible)
-    expect(tree.src.children?.collapsed).toBeUndefined();
+    // No flattened since utils folder has multiple children (not flattenable)
+    expect(tree.src.children?.flattened).toBeUndefined();
 
     // Both should exist as separate entries
     expect(tree['src/utils.ts']).toEqual({ name: 'utils.ts' });
@@ -458,34 +458,34 @@ describe('fileListToTree', () => {
     // Both trees should have the same structure (keys)
     expect(Object.keys(tree1).sort()).toEqual(Object.keys(tree2).sort());
 
-    // Both should have the same collapsed nodes
-    expect(tree1['c::src/a/b/c']).toBeDefined();
-    expect(tree2['c::src/a/b/c']).toBeDefined();
-    expect(tree1['c::src/x/y/z']).toBeDefined();
-    expect(tree2['c::src/x/y/z']).toBeDefined();
+    // Both should have the same flattened nodes
+    expect(tree1['f::src/a/b/c']).toBeDefined();
+    expect(tree2['f::src/a/b/c']).toBeDefined();
+    expect(tree1['f::src/x/y/z']).toBeDefined();
+    expect(tree2['f::src/x/y/z']).toBeDefined();
 
-    // The collapsed nodes should have the same collapses arrays
-    expect(tree1['c::src/a/b/c'].collapses).toEqual(
-      tree2['c::src/a/b/c'].collapses
+    // The flattened nodes should have the same flattens arrays
+    expect(tree1['f::src/a/b/c'].flattens).toEqual(
+      tree2['f::src/a/b/c'].flattens
     );
   });
 
-  test('should handle minimal two-folder collapse', () => {
-    // Simplest collapsible case: just two folders
+  test('should handle minimal two-folder flatten', () => {
+    // Simplest flattenable case: just two folders
     const files = ['a/b/file.ts'];
     const tree = fileListToTree(files);
 
-    expect(tree.root.children?.collapsed).toEqual(['c::a/b']);
+    expect(tree.root.children?.flattened).toEqual(['f::a/b']);
 
-    expect(tree['c::a/b']).toEqual({
+    expect(tree['f::a/b']).toEqual({
       name: 'a/b',
-      collapses: ['a', 'a/b'],
+      flattens: ['a', 'a/b'],
       children: {
         direct: ['a/b/file.ts'],
       },
     });
 
-    // Intermediate folder exists but has no collapsed
+    // Intermediate folder exists but has no flattened
     expect(tree.a).toEqual({
       name: 'a',
       children: {
@@ -494,17 +494,17 @@ describe('fileListToTree', () => {
     });
   });
 
-  test('should handle folder becoming non-collapsible due to sibling file', () => {
-    // a/b would be collapsible alone, but a also has a file
+  test('should handle folder becoming non-flattenable due to sibling file', () => {
+    // a/b would be flattenable alone, but a also has a file
     const files = ['a/file.ts', 'a/b/c/deep.ts'];
     const tree = fileListToTree(files);
 
-    // a has both a file and a folder, so b/c is collapsible from a's perspective
+    // a has both a file and a folder, so b/c is flattenable from a's perspective
     expect(tree.a.children?.direct).toEqual(['a/file.ts', 'a/b']);
-    expect(tree.a.children?.collapsed).toEqual(['a/file.ts', 'c::a/b/c']);
+    expect(tree.a.children?.flattened).toEqual(['a/file.ts', 'f::a/b/c']);
 
-    // Root should NOT collapse a since a has multiple children
-    expect(tree.root.children?.collapsed).toBeUndefined();
+    // Root should NOT flatten a since a has multiple children
+    expect(tree.root.children?.flattened).toBeUndefined();
   });
 
   test('should handle paths with extensions that look like folders', () => {

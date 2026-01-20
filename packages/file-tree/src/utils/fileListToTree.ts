@@ -1,14 +1,4 @@
-export interface FileTreeNodeChildren {
-  collapsed?: string[];
-  direct: string[];
-}
-
-export interface FileTreeNode {
-  name: string;
-  children?: FileTreeNodeChildren;
-  /** For collapsed nodes, lists the folder IDs that were collapsed into this node */
-  collapses?: string[];
-}
+import type { FileTreeNode } from '../types';
 
 export interface FileListToTreeOptions {
   root?: {
@@ -17,11 +7,11 @@ export interface FileListToTreeOptions {
   };
 }
 
-const COLLAPSED_PREFIX = 'c::';
+const FLATTENED_PREFIX = 'f::';
 
 /**
  * Converts a list of file paths into a tree structure suitable for use with FileTree.
- * Generates both direct children and collapsed children (single-child folder chains).
+ * Generates both direct children and flattened children (single-child folder chains).
  *
  * @param filePaths - Array of file path strings (e.g., ['src/index.ts', 'src/utils/helper.ts'])
  * @param options - Optional configuration for root node
@@ -76,13 +66,13 @@ export function fileListToTree(
   const getFirstChild = (children: Set<string>): string | undefined =>
     children.values().next().value ?? undefined;
 
-  // Memoized collapsed endpoints to avoid recomputation
-  const collapsedEndpointCache = new Map<string, string | null>();
+  // Memoized flattened endpoints to avoid recomputation
+  const flattenedEndpointCache = new Map<string, string | null>();
 
-  // Helper to get the collapsed endpoint from a folder (iterative, memoized)
-  // Returns the deepest folder in a single-child chain, or null if not collapsible
-  function getCollapsedEndpoint(startPath: string): string | null {
-    const cached = collapsedEndpointCache.get(startPath);
+  // Helper to get the flattened endpoint from a folder (iterative, memoized)
+  // Returns the deepest folder in a single-child chain, or null if not flattenable
+  function getFlattenedEndpoint(startPath: string): string | null {
+    const cached = flattenedEndpointCache.get(startPath);
     if (cached !== undefined) return cached;
 
     let current = startPath;
@@ -93,18 +83,18 @@ export function fileListToTree(
       if (children == null || children.size !== 1) break;
 
       const onlyChild = getFirstChild(children);
-      if (onlyChild == null || !isFolder(onlyChild)) break; // Single child is a file, not collapsible
+      if (onlyChild == null || !isFolder(onlyChild)) break; // Single child is a file, not flattenable
 
       endpoint = onlyChild;
       current = onlyChild;
     }
 
-    collapsedEndpointCache.set(startPath, endpoint);
+    flattenedEndpointCache.set(startPath, endpoint);
     return endpoint;
   }
 
-  // Helper to build a collapsed name from start to end path
-  function buildCollapsedName(startPath: string, endPath: string): string {
+  // Helper to build a flattened name from start to end path
+  function buildFlattenedName(startPath: string, endPath: string): string {
     const lastSlashIndex = startPath.lastIndexOf('/');
     const startName =
       lastSlashIndex >= 0 ? startPath.slice(lastSlashIndex + 1) : startPath;
@@ -112,34 +102,34 @@ export function fileListToTree(
     return relativeSuffix !== '' ? `${startName}/${relativeSuffix}` : startName;
   }
 
-  // Helper to build collapsed children array, only if it differs from direct
-  // Returns undefined if collapsed would be identical to direct
-  function buildCollapsedChildren(
+  // Helper to build flattened children array, only if it differs from direct
+  // Returns undefined if flattened would be identical to direct
+  function buildFlattenedChildren(
     directChildren: string[]
   ): string[] | undefined {
-    let collapsed: string[] | undefined;
+    let flattened: string[] | undefined;
 
     for (let i = 0; i < directChildren.length; i++) {
       const child = directChildren[i];
       if (isFolder(child)) {
-        const collapsedEndpoint = getCollapsedEndpoint(child);
-        if (collapsedEndpoint != null) {
-          // Found a collapsible folder - initialize collapsed array if needed
-          collapsed ??= directChildren.slice(0, i);
-          collapsed.push(`${COLLAPSED_PREFIX}${collapsedEndpoint}`);
-        } else if (collapsed != null) {
-          collapsed.push(child);
+        const flattenedEndpoint = getFlattenedEndpoint(child);
+        if (flattenedEndpoint != null) {
+          // Found a flattenable folder - initialize flattened array if needed
+          flattened ??= directChildren.slice(0, i);
+          flattened.push(`${FLATTENED_PREFIX}${flattenedEndpoint}`);
+        } else if (flattened != null) {
+          flattened.push(child);
         }
-      } else if (collapsed != null) {
-        collapsed.push(child);
+      } else if (flattened != null) {
+        flattened.push(child);
       }
     }
 
-    return collapsed;
+    return flattened;
   }
 
-  // Helper to collect all folder IDs in a collapsible chain
-  function collectCollapsedFolders(
+  // Helper to collect all folder IDs in a flattenable chain
+  function collectFlattenedFolders(
     startPath: string,
     endPath: string
   ): string[] {
@@ -156,45 +146,45 @@ export function fileListToTree(
     return folders;
   }
 
-  // Track intermediate folders (those that are part of a collapsed chain)
+  // Track intermediate folders (those that are part of a flattened chain)
   const intermediateFolders = new Set<string>();
 
-  // First pass: identify all intermediate folders and create collapsed nodes
+  // First pass: identify all intermediate folders and create flattened nodes
   for (const children of folderChildren.values()) {
     for (const child of children) {
       if (!isFolder(child)) continue;
 
-      const collapsedEndpoint = getCollapsedEndpoint(child);
-      if (collapsedEndpoint == null) continue;
+      const flattenedEndpoint = getFlattenedEndpoint(child);
+      if (flattenedEndpoint == null) continue;
 
       // Mark all folders in the chain as intermediate (except the endpoint)
-      const collapsedFolders = collectCollapsedFolders(
+      const flattenedFolders = collectFlattenedFolders(
         child,
-        collapsedEndpoint
+        flattenedEndpoint
       );
-      for (let i = 0; i < collapsedFolders.length - 1; i++) {
-        intermediateFolders.add(collapsedFolders[i]);
+      for (let i = 0; i < flattenedFolders.length - 1; i++) {
+        intermediateFolders.add(flattenedFolders[i]);
       }
 
-      // Create the collapsed node if it doesn't exist
-      const collapsedKey = `${COLLAPSED_PREFIX}${collapsedEndpoint}`;
-      if (tree[collapsedKey] != null) continue;
+      // Create the flattened node if it doesn't exist
+      const flattenedKey = `${FLATTENED_PREFIX}${flattenedEndpoint}`;
+      if (tree[flattenedKey] != null) continue;
 
-      const collapsedName = buildCollapsedName(child, collapsedEndpoint);
-      const endpointChildren = folderChildren.get(collapsedEndpoint);
+      const flattenedName = buildFlattenedName(child, flattenedEndpoint);
+      const endpointChildren = folderChildren.get(flattenedEndpoint);
       const endpointDirectChildren =
         endpointChildren != null ? [...endpointChildren] : [];
-      const endpointCollapsedChildren = buildCollapsedChildren(
+      const endpointFlattenedChildren = buildFlattenedChildren(
         endpointDirectChildren
       );
 
-      tree[collapsedKey] = {
-        name: collapsedName,
-        collapses: collapsedFolders,
+      tree[flattenedKey] = {
+        name: flattenedName,
+        flattens: flattenedFolders,
         children: {
           direct: endpointDirectChildren,
-          ...(endpointCollapsedChildren != null && {
-            collapsed: endpointCollapsedChildren,
+          ...(endpointFlattenedChildren != null && {
+            flattened: endpointFlattenedChildren,
           }),
         },
       };
@@ -206,17 +196,17 @@ export function fileListToTree(
     const directChildren = [...children];
     const isIntermediate = intermediateFolders.has(path);
 
-    // Only compute collapsed children for non-intermediate folders
-    const collapsedChildren = isIntermediate
+    // Only compute flattened children for non-intermediate folders
+    const flattenedChildren = isIntermediate
       ? undefined
-      : buildCollapsedChildren(directChildren);
+      : buildFlattenedChildren(directChildren);
 
     if (path === rootId) {
       tree[rootId] = {
         name: rootName,
         children: {
           direct: directChildren,
-          ...(collapsedChildren != null && { collapsed: collapsedChildren }),
+          ...(flattenedChildren != null && { flattened: flattenedChildren }),
         },
       };
     } else if (tree[path] == null) {
@@ -226,7 +216,7 @@ export function fileListToTree(
         name,
         children: {
           direct: directChildren,
-          ...(collapsedChildren != null && { collapsed: collapsedChildren }),
+          ...(flattenedChildren != null && { flattened: flattenedChildren }),
         },
       };
     }

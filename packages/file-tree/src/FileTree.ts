@@ -32,7 +32,7 @@ export type HeadlessTreeConfig = Omit<
 export interface FileTreeOptions {
   files: string[];
   id?: string;
-  collapseFolders?: boolean;
+  flattenEmptyDirectories?: boolean;
   // probably change the name here once i know a better one
   config?: HeadlessTreeConfig;
 }
@@ -88,7 +88,6 @@ export class FileTree {
         }
       }
     }
-    // If we didn't find the sprite SVG, create a new one
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
@@ -141,7 +140,7 @@ export class FileTree {
       fileTreeOptions: {
         config: this.initialTreeConfig,
         files: this.files,
-        collapseFolders: this.options.collapseFolders,
+        flattenEmptyDirectories: this.options.flattenEmptyDirectories,
       },
     });
   }
@@ -175,7 +174,7 @@ export class FileTree {
         fileTreeOptions: {
           config: this.initialTreeConfig,
           files: this.files,
-          collapseFolders: this.options.collapseFolders,
+          flattenEmptyDirectories: this.options.flattenEmptyDirectories,
         },
       });
     }

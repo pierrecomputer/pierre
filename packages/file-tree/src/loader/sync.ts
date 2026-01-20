@@ -3,7 +3,7 @@ import type { TreeDataLoader } from '@headless-tree/core';
 import type { FileTreeData, FileTreeNode } from '../types';
 
 export interface SyncDataLoaderOptions {
-  collapseFolders?: boolean;
+  flattenEmptyDirectories?: boolean;
 }
 
 export function generateSyncDataLoader(
@@ -17,9 +17,9 @@ export function generateSyncDataLoader(
       if (children == null) {
         return [];
       }
-      if (options.collapseFolders === true) {
-        if (children.collapsed != null) {
-          return children.collapsed;
+      if (options.flattenEmptyDirectories === true) {
+        if (children.flattened != null) {
+          return children.flattened;
         }
       }
       return children.direct;

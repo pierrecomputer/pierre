@@ -6,6 +6,7 @@ import {
   Geist,
   Geist_Mono,
   IBM_Plex_Mono,
+  Inter,
   JetBrains_Mono,
 } from 'next/font/google';
 import localFont from 'next/font/local';
@@ -13,6 +14,11 @@ import localFont from 'next/font/local';
 import './globals.css';
 
 import { Toaster } from '@/components/ui/sonner';
+
+const inter = Inter({
+  variable: '--font-inter',
+  subsets: ['latin'],
+});
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -81,7 +87,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable}`}
+      className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable} ${inter.variable}`}
     >
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

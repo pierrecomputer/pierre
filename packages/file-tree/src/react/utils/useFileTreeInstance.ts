@@ -71,12 +71,14 @@ export function useFileTreeInstance({
     return instance;
   };
 
+  // TODO: pull this out and make it harder to forget to update
   const areOptionsEqual = (
     left: FileTreeOptions,
     right: FileTreeOptions
   ): boolean => {
     if (left === right) return true;
-    if (left.collapseFolders !== right.collapseFolders) return false;
+    if (left.flattenEmptyDirectories !== right.flattenEmptyDirectories)
+      return false;
     if (left.id !== right.id) return false;
     if (left.config !== right.config) return false;
     if (left.files === right.files) return true;
