@@ -82,3 +82,16 @@ export function findCodeElement(
   }
   return undefined;
 }
+
+export function createBufferElement(
+  type: 'before' | 'after',
+  height: number
+): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    properties: {
+      'data-virtualized-buffer': type,
+      style: `height: ${height}px`,
+    },
+  });
+}

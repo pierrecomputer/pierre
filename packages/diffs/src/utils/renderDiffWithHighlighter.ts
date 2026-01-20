@@ -9,8 +9,6 @@ import type {
   FileContents,
   FileDiffMetadata,
   ForcePlainTextOptions,
-  Hunk,
-  HunkExpansionRegion,
   LineDiffTypes,
   LineInfo,
   RenderDiffFilesResult,
@@ -24,20 +22,11 @@ import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
+import { iterateOverDiff } from './iterateOverDiff';
 import {
   createDiffSpanDecoration,
   pushOrJoinSpan,
 } from './parseDiffDecorations';
-
-interface HighlightState {
-  finalHunk: Hunk;
-  splitCount: number;
-  unifiedCount: number;
-  shouldBreak(): boolean;
-  shouldSkip(unifiedHeight: number, splitHeight: number): boolean;
-  incrementCounts(unifiedCount: number, splitCount: number): void;
-  isInWindow(unifiedHeight: number, splitHeight: number): boolean;
-}
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForcePlainTextOptions = {
   forcePlainText: false,
@@ -94,150 +83,173 @@ export function renderDiffWithHighlighter(
     additionLines: [],
   };
 
-  // If we are doing plainText or partial rendering, then we want to render
-  // individual hunks separately, and not as a singular file
-  // The reason we do it for plain text is because we also want to only
-  // HAST-ify the actual lines we need to render and don't over do it (for
-  // things like virtualization) since with plain text, grammar doesnt matter
-  const hunks = diff.isPartial || forcePlainText ? diff.hunks : [diff.hunks];
-  const state: HighlightState = {
-    finalHunk: diff.hunks[diff.hunks.length - 1],
-    splitCount: 0,
-    unifiedCount: 0,
-    shouldBreak() {
-      return (
-        isWindowedHighlight &&
-        state.unifiedCount >= startingLine + totalLines &&
-        state.splitCount >= startingLine + totalLines
-      );
-    },
-    shouldSkip(unifiedHeight: number, splitHeight: number) {
-      return (
-        isWindowedHighlight &&
-        state.unifiedCount + unifiedHeight < startingLine &&
-        state.splitCount + splitHeight < startingLine
-      );
-    },
-    incrementCounts(unifiedValue: number, splitValue: number) {
-      state.unifiedCount += unifiedValue;
-      state.splitCount += splitValue;
-    },
-    isInWindow(unifiedHeight: number, splitHeight: number) {
-      if (!isWindowedHighlight) {
-        return true;
-      }
-      const unifiedInWindow =
-        state.unifiedCount >= startingLine - unifiedHeight &&
-        state.unifiedCount < startingLine + totalLines;
-      const splitInWindow =
-        state.splitCount >= startingLine - splitHeight &&
-        state.splitCount < startingLine + totalLines;
-      return unifiedInWindow || splitInWindow;
-    },
-  };
+  const shouldGroupAll = !forcePlainText && !diff.isPartial;
+  const expandedHunksForIteration = forcePlainText ? expandedHunks : undefined;
+  const buckets = new Map<number, RenderBucket>();
+  function getBucketForHunk(hunkIndex: number) {
+    const index = shouldGroupAll ? 0 : hunkIndex;
+    const bucket = buckets.get(index) ?? createBucket();
+    buckets.set(index, bucket);
+    return bucket;
+  }
 
-  for (const [hunkIndex, hunkOrHunks] of hunks.entries()) {
-    // If we are rendering thins at an individual hunk level, lets grab a
-    // reference to that hunk
-    const hunk = !Array.isArray(hunkOrHunks) ? hunkOrHunks : undefined;
-    const hunks = Array.isArray(hunkOrHunks) ? hunkOrHunks : [hunkOrHunks];
-    // If we are partial highlighting and out of view, lets stop
-    if (hunk != null) {
-      if (state.shouldBreak()) {
-        break;
+  function appendContent(
+    lineContent: string,
+    lineIndex: number,
+    segments: HighlightSegment[],
+    contentWrapper: FakeArrayType
+  ) {
+    if (isWindowedHighlight) {
+      let segment = segments.at(-1);
+      if (
+        segment == null ||
+        segment.targetIndex + segment.count !== lineIndex
+      ) {
+        segment = {
+          targetIndex: lineIndex,
+          originalOffset: contentWrapper.length,
+          count: 0,
+        };
+        segments.push(segment);
       }
-      const expandedBeforeCount = (() => {
-        if (diff.isPartial || !forcePlainText) {
-          return 0;
-        }
-        if (expandedHunks === true) {
-          return Math.max(hunk.collapsedBefore, 0);
-        }
-        const region = expandedHunks?.get(hunkIndex);
-        if (region == null) {
-          return 0;
-        }
-        return Math.min(
-          Math.max(hunk.collapsedBefore, 0),
-          Math.max(region.fromStart, 0) + Math.max(region.fromEnd, 0)
-        );
-      })();
-      const totalUnifiedCount = hunk.unifiedLineCount + expandedBeforeCount;
-      const totalSplitCount = hunk.splitLineCount + expandedBeforeCount;
-      if (state.shouldSkip(totalUnifiedCount, totalSplitCount)) {
-        state.incrementCounts(totalUnifiedCount, totalSplitCount);
-        continue;
-      }
+      segment.count++;
     }
-    const {
-      deletionContent,
-      additionContent,
-      deletionInfo,
-      additionInfo,
-      deletionDecorations,
-      additionDecorations,
-      deletionSegments,
-      additionSegments,
-    } = processHunks({
-      hunks,
-      hunkIndexOffset: hunk != null ? hunkIndex : 0,
-      lineDiffType,
-      deletionLines: diff.deletionLines,
-      additionLines: diff.additionLines,
-      isPartial: diff.isPartial,
-      startingLine,
-      totalLines,
-      state,
-      expandedHunks: forcePlainText ? expandedHunks : undefined,
-    });
+    contentWrapper.push(lineContent);
+  }
+
+  iterateOverDiff({
+    diff,
+    diffStyle: 'both',
+    startingLine,
+    totalLines,
+    expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
+    callback: ({
+      hunkIndex,
+      additionLineIndex,
+      deletionLineIndex,
+      additionLineNumber,
+      deletionLineNumber,
+      unifiedAdditionLineIndex,
+      unifiedDeletionLineIndex,
+      splitLineIndex,
+      type,
+    }) => {
+      const bucket = getBucketForHunk(hunkIndex);
+
+      if (
+        type === 'change' &&
+        lineDiffType !== 'none' &&
+        additionLineIndex != null &&
+        deletionLineIndex != null
+      ) {
+        computeLineDiffDecorations({
+          additionLine: diff.additionLines[additionLineIndex],
+          deletionLine: diff.deletionLines[deletionLineIndex],
+          deletionLineIndex: bucket.deletionContent.length,
+          additionLineIndex: bucket.additionContent.length,
+          deletionDecorations: bucket.deletionDecorations,
+          additionDecorations: bucket.additionDecorations,
+          lineDiffType,
+        });
+      }
+
+      if (
+        deletionLineIndex != null &&
+        deletionLineNumber != null &&
+        unifiedDeletionLineIndex != null
+      ) {
+        appendContent(
+          diff.deletionLines[deletionLineIndex],
+          deletionLineIndex,
+          bucket.deletionSegments,
+          bucket.deletionContent
+        );
+        bucket.deletionInfo.push({
+          type: type === 'change' ? 'change-deletion' : type,
+          lineNumber: deletionLineNumber,
+          altLineNumber:
+            type === 'change' ? undefined : (additionLineNumber ?? undefined),
+          lineIndex: `${unifiedDeletionLineIndex},${splitLineIndex}`,
+        });
+      }
+
+      if (
+        additionLineIndex != null &&
+        additionLineNumber != null &&
+        unifiedAdditionLineIndex != null
+      ) {
+        appendContent(
+          diff.additionLines[additionLineIndex],
+          additionLineIndex,
+          bucket.additionSegments,
+          bucket.additionContent
+        );
+        bucket.additionInfo.push({
+          type: type === 'change' ? 'change-addition' : type,
+          lineNumber: additionLineNumber,
+          altLineNumber:
+            type === 'change' ? undefined : (deletionLineNumber ?? undefined),
+          lineIndex: `${unifiedAdditionLineIndex},${splitLineIndex}`,
+        });
+      }
+    },
+  });
+
+  for (const bucket of buckets.values()) {
+    if (
+      bucket.deletionContent.length === 0 &&
+      bucket.additionContent.length === 0
+    ) {
+      continue;
+    }
+
     const deletionFile = {
       name: diff.prevName ?? diff.name,
-      contents: deletionContent,
+      contents: bucket.deletionContent.value,
     };
     const additionFile = {
       name: diff.name,
-      contents: additionContent,
+      contents: bucket.additionContent.value,
     };
     const { deletionLines, additionLines } = renderTwoFiles({
       deletionFile,
-      deletionInfo,
-      deletionDecorations,
+      deletionInfo: bucket.deletionInfo,
+      deletionDecorations: bucket.deletionDecorations,
 
       additionFile,
-      additionInfo,
-      additionDecorations,
+      additionInfo: bucket.additionInfo,
+      additionDecorations: bucket.additionDecorations,
 
       highlighter,
       options,
       languageOverride: forcePlainText ? 'text' : diff.lang,
     });
 
-    if (forcePlainText || hunk != null) {
-      // Viewport highlighting, populate a sparse array of lines
-      if (deletionSegments.length > 0) {
-        for (const seg of deletionSegments) {
-          for (let i = 0; i < seg.count; i++) {
-            code.deletionLines[seg.targetIndex + i] =
-              deletionLines[seg.originalOffset + i];
-          }
-        }
-      } else {
-        code.deletionLines.push(...deletionLines);
-      }
-      // Viewport highlighting, populate a sparse array of lines
-      if (additionSegments.length > 0) {
-        for (const seg of additionSegments) {
-          for (let i = 0; i < seg.count; i++) {
-            code.additionLines[seg.targetIndex + i] =
-              additionLines[seg.originalOffset + i];
-          }
-        }
-      } else {
-        code.additionLines.push(...additionLines);
-      }
-    } else {
+    if (shouldGroupAll) {
       code.deletionLines = deletionLines;
       code.additionLines = additionLines;
+      continue;
+    }
+
+    if (bucket.deletionSegments.length > 0) {
+      for (const seg of bucket.deletionSegments) {
+        for (let i = 0; i < seg.count; i++) {
+          code.deletionLines[seg.targetIndex + i] =
+            deletionLines[seg.originalOffset + i];
+        }
+      }
+    } else {
+      code.deletionLines.push(...deletionLines);
+    }
+    if (bucket.additionSegments.length > 0) {
+      for (const seg of bucket.additionSegments) {
+        for (let i = 0; i < seg.count; i++) {
+          code.additionLines[seg.targetIndex + i] =
+            additionLines[seg.originalOffset + i];
+        }
+      }
+    } else {
+      code.additionLines.push(...additionLines);
     }
   }
 
@@ -345,22 +357,9 @@ interface FakeArrayType {
   length: number;
 }
 
-interface ProcessHunksProps {
-  hunks: Hunk[];
-  hunkIndexOffset: number;
-  deletionLines: string[];
-  additionLines: string[];
-  lineDiffType: LineDiffTypes;
-  isPartial: boolean;
-  startingLine: number;
-  totalLines: number;
-  state: HighlightState;
-  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
-}
-
-interface ProcessHunksReturn {
-  deletionContent: string;
-  additionContent: string;
+interface RenderBucket {
+  deletionContent: FakeArrayType;
+  additionContent: FakeArrayType;
   deletionInfo: (LineInfo | undefined)[];
   additionInfo: (LineInfo | undefined)[];
   deletionDecorations: DecorationItem[];
@@ -369,609 +368,30 @@ interface ProcessHunksReturn {
   additionSegments: HighlightSegment[];
 }
 
-function processHunks({
-  hunks,
-  hunkIndexOffset,
-  deletionLines,
-  additionLines,
-  lineDiffType,
-  isPartial,
-  startingLine,
-  totalLines,
-  state,
-  expandedHunks,
-}: ProcessHunksProps): ProcessHunksReturn {
-  const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
-  const hasExpansion = expandedHunks != null;
-  const getExpandedRegion = (
-    hunkIndex: number,
-    rangeSize: number
-  ): HunkExpansionRegion => {
-    if (expandedHunks === true) {
-      return { fromStart: rangeSize, fromEnd: rangeSize };
-    }
-    return expandedHunks?.get(hunkIndex) ?? { fromStart: 0, fromEnd: 0 };
-  };
-  const deletionInfo: (LineInfo | undefined)[] = [];
-  const additionInfo: (LineInfo | undefined)[] = [];
-  const deletionDecorations: DecorationItem[] = [];
-  const additionDecorations: DecorationItem[] = [];
-  // NOTE(amadeus): Using these fake array data structures for content as an
-  // optmization to keep loop iterations to a minimum.  Basically if we use an
-  // array, then we have to run a `.join('')` on return which adds _yet
-  // another_ iteration which can be costly in large files. And since we
-  // already have to loop through all the lines onces, lets combine all this
-  // logic together
-  const deletionContent: FakeArrayType = {
-    push(value: string) {
-      this.value += value;
-      this.length++;
-    },
-    value: '',
-    length: 0,
-  };
-  const additionContent: FakeArrayType = {
-    push(value: string) {
-      this.value += value;
-      this.length++;
-    },
-    value: '',
-    length: 0,
-  };
-  const deletionSegments: HighlightSegment[] = [];
-  const additionSegments: HighlightSegment[] = [];
-  function appendContent(
-    lineContent: string,
-    lineIndex: number,
-    segments: HighlightSegment[],
-    contentWrapper: FakeArrayType
-  ) {
-    if (isWindowedHighlight) {
-      // Grab the last segment off the end and check if it's contiguous or not
-      let segment = segments.at(-1);
-      if (
-        segment == null ||
-        segment.targetIndex + segment.count !== lineIndex
-      ) {
-        segment = {
-          targetIndex: lineIndex,
-          originalOffset: contentWrapper.length,
-          count: 0,
-        };
-        segments.push(segment);
-      }
-      segment.count++;
-    }
-    contentWrapper.push(lineContent);
-  }
-
-  hunkIterator: for (const [hunkOffset, hunk] of hunks.entries()) {
-    const hunkIndex = hunkIndexOffset + hunkOffset;
-    // Check if we've rendered enough lines in
-    // Yeet out of we are passed the required render range for partials
-    if (state.shouldBreak()) {
-      break hunkIterator;
-    }
-
-    const collapsedBefore = Math.max(hunk.collapsedBefore, 0);
-    const { expandedFromStart, expandedFromEnd } = (() => {
-      if (isPartial) {
-        return { expandedFromStart: 0, expandedFromEnd: 0 };
-      }
-      if (!hasExpansion) {
-        return {
-          expandedFromStart: isWindowedHighlight ? 0 : collapsedBefore,
-          expandedFromEnd: 0,
-        };
-      }
-      const region = getExpandedRegion(hunkIndex, collapsedBefore);
-      return {
-        expandedFromStart: Math.min(region.fromStart, collapsedBefore),
-        expandedFromEnd: Math.min(region.fromEnd, collapsedBefore),
-      };
-    })();
-
-    // If there's content prior to the hunk in a non-partial diff,
-    // lets fill it up
-    if (!isPartial && (expandedFromStart > 0 || expandedFromEnd > 0)) {
-      const baseUnifiedLineIndex = hunk.unifiedLineStart - collapsedBefore;
-      const baseSplitLineIndex = hunk.splitLineStart - collapsedBefore;
-      const baseDeletionLineNumber = hunk.deletionStart - collapsedBefore;
-      const baseAdditionLineNumber = hunk.additionStart - collapsedBefore;
-
-      const renderRange = (rangeStart: number, rangeLen: number): boolean => {
-        if (rangeLen <= 0) {
-          return false;
-        }
-        let unifiedLineIndex = baseUnifiedLineIndex + rangeStart;
-        let splitLineIndex = baseSplitLineIndex + rangeStart;
-        let deletionLineNumber = baseDeletionLineNumber + rangeStart;
-        let additionLineNumber = baseAdditionLineNumber + rangeStart;
-        let index = 0;
-
-        if (isWindowedHighlight) {
-          const linesToSkip = Math.max(
-            0,
-            Math.min(
-              rangeLen,
-              startingLine - unifiedLineIndex,
-              startingLine - splitLineIndex
-            )
-          );
-          if (linesToSkip > 0) {
-            deletionLineNumber += linesToSkip;
-            additionLineNumber += linesToSkip;
-            splitLineIndex += linesToSkip;
-            unifiedLineIndex += linesToSkip;
-            state.incrementCounts(linesToSkip, linesToSkip);
-            index += linesToSkip;
-          }
-        }
-
-        for (; index < rangeLen; index++) {
-          if (state.shouldBreak()) {
-            return true;
-          }
-          deletionInfo.push({
-            type: 'context-expanded',
-            lineNumber: deletionLineNumber,
-            altLineNumber: additionLineNumber,
-            lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-          });
-          additionInfo.push({
-            type: 'context-expanded',
-            lineNumber: additionLineNumber,
-            altLineNumber: deletionLineNumber,
-            lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-          });
-          const deletionLineIndex =
-            hunk.deletionLineIndex - collapsedBefore + rangeStart + index;
-          appendContent(
-            deletionLines[deletionLineIndex],
-            deletionLineIndex,
-            deletionSegments,
-            deletionContent
-          );
-          const additionLineIndex =
-            hunk.additionLineIndex - collapsedBefore + rangeStart + index;
-          appendContent(
-            additionLines[additionLineIndex],
-            additionLineIndex,
-            additionSegments,
-            additionContent
-          );
-          deletionLineNumber++;
-          additionLineNumber++;
-          splitLineIndex++;
-          unifiedLineIndex++;
-          state.incrementCounts(1, 1);
-        }
-        return false;
-      };
-
-      if (expandedFromStart + expandedFromEnd >= collapsedBefore) {
-        if (renderRange(0, collapsedBefore)) {
-          break hunkIterator;
-        }
-      } else {
-        if (renderRange(0, expandedFromStart)) {
-          break hunkIterator;
-        }
-        if (renderRange(collapsedBefore - expandedFromEnd, expandedFromEnd)) {
-          break hunkIterator;
-        }
-      }
-    }
-
-    // Skip hunks that are entirely before the viewport
-    // NOTE(amadeus): Right now we do not support expanded regions in
-    // partial rendering, something that I will need to think about how to pass
-    // that data down to the highlighter
-    if (
-      state.shouldSkip(hunk.unifiedLineCount, hunk.splitLineCount) ||
-      !state.isInWindow(hunk.unifiedLineCount, hunk.splitLineCount)
-    ) {
-      state.incrementCounts(hunk.unifiedLineCount, hunk.splitLineCount);
-      continue;
-    }
-
-    let {
-      unifiedLineStart: unifiedLineIndex,
-      splitLineStart: splitLineIndex,
-      deletionStart: deletionLineNumber,
-      additionStart: additionLineNumber,
-    } = hunk;
-
-    // Lets process the actual hunk content
-    for (const hunkContent of hunk.hunkContent) {
-      if (state.shouldBreak()) {
-        break hunkIterator;
-      }
-      if (hunkContent.type === 'context') {
-        let index = 0;
-        // If we are not in a valid render window, lets go ahead and skip
-        if (!state.isInWindow(hunkContent.lines, hunkContent.lines)) {
-          additionLineNumber += hunkContent.lines;
-          deletionLineNumber += hunkContent.lines;
-          splitLineIndex += hunkContent.lines;
-          unifiedLineIndex += hunkContent.lines;
-          state.incrementCounts(hunkContent.lines, hunkContent.lines);
-          continue;
-        }
-        // If we don't need to process the first line, lets start off at the
-        // first required line to highlight. This can help prevent large
-        // iteration costs over large hunkContent regions
-        else {
-          const linesToSkip = Math.min(
-            hunkContent.lines,
-            startingLine - unifiedLineIndex,
-            startingLine - splitLineIndex
-          );
-          if (linesToSkip > 0) {
-            additionLineNumber += linesToSkip;
-            deletionLineNumber += linesToSkip;
-            splitLineIndex += linesToSkip;
-            unifiedLineIndex += linesToSkip;
-            state.incrementCounts(linesToSkip, linesToSkip);
-            index += linesToSkip;
-          }
-        }
-
-        for (; index < hunkContent.lines; index++) {
-          if (state.shouldBreak()) {
-            break hunkIterator;
-          }
-
-          const deletionLineIndex = hunkContent.deletionLineIndex + index;
-          appendContent(
-            deletionLines[deletionLineIndex],
-            deletionLineIndex,
-            deletionSegments,
-            deletionContent
-          );
-          const additionLineIndex = hunkContent.additionLineIndex + index;
-          appendContent(
-            additionLines[additionLineIndex],
-            additionLineIndex,
-            additionSegments,
-            additionContent
-          );
-          deletionInfo.push({
-            type: 'context',
-            lineNumber: deletionLineNumber,
-            altLineNumber: additionLineNumber,
-            lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-          });
-          additionInfo.push({
-            type: 'context',
-            lineNumber: additionLineNumber,
-            altLineNumber: deletionLineNumber,
-            lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-          });
-          additionLineNumber++;
-          deletionLineNumber++;
-          splitLineIndex++;
-          unifiedLineIndex++;
-          state.incrementCounts(1, 1);
-        }
-      } else {
-        const splitCount = Math.max(
-          hunkContent.additions,
-          hunkContent.deletions
-        );
-        const unifiedCount = hunkContent.deletions + hunkContent.additions;
-        if (!state.isInWindow(unifiedCount, splitCount)) {
-          deletionLineNumber += hunkContent.deletions;
-          additionLineNumber += hunkContent.additions;
-          splitLineIndex += splitCount;
-          unifiedLineIndex += unifiedCount;
-          state.incrementCounts(unifiedCount, splitCount);
-          continue;
-        }
-
-        // Calculate visible ranges
-        const viewportStart = startingLine;
-        const viewportEnd = startingLine + totalLines;
-
-        // Calculate visible deletion indices
-        let deletionStartIdx: number | undefined;
-        let deletionEndIdx: number | undefined;
-        let additionStartIdx: number | undefined;
-        let additionEndIdx: number | undefined;
-
-        const calculateRegionIndexes = (
-          start: number,
-          end: number,
-          type: 'deletions' | 'additions'
-        ) => {
-          if (end > viewportStart && start < viewportEnd) {
-            const visibleStart = Math.max(0, viewportStart - start);
-            const visibleEnd = Math.min(
-              type === 'deletions'
-                ? hunkContent.deletions
-                : hunkContent.additions,
-              viewportEnd - start
-            );
-            if (type === 'deletions') {
-              deletionStartIdx = Math.min(
-                deletionStartIdx ?? Infinity,
-                visibleStart
-              );
-              deletionEndIdx = Math.max(deletionEndIdx ?? 0, visibleEnd);
-            } else {
-              additionStartIdx = Math.min(
-                additionStartIdx ?? Infinity,
-                visibleStart
-              );
-              additionEndIdx = Math.max(additionEndIdx ?? 0, visibleEnd);
-            }
-          }
-        };
-
-        calculateRegionIndexes(
-          state.unifiedCount,
-          state.unifiedCount + hunkContent.deletions,
-          'deletions'
-        );
-        calculateRegionIndexes(
-          state.splitCount,
-          state.splitCount + hunkContent.deletions,
-          'deletions'
-        );
-        calculateRegionIndexes(
-          state.unifiedCount + hunkContent.deletions,
-          state.unifiedCount + hunkContent.deletions + hunkContent.additions,
-          'additions'
-        );
-        calculateRegionIndexes(
-          state.splitCount,
-          state.splitCount + hunkContent.additions,
-          'additions'
-        );
-
-        if (deletionStartIdx == null && additionStartIdx == null) {
-          // Nothing visible, just advance counters
-          splitLineIndex += splitCount;
-          unifiedLineIndex += unifiedCount;
-          state.incrementCounts(unifiedCount, splitCount);
-          deletionLineNumber += hunkContent.deletions;
-          additionLineNumber += hunkContent.additions;
-          continue;
-        }
-
-        deletionStartIdx ??= hunkContent.deletions;
-        deletionEndIdx ??= hunkContent.deletions;
-        additionStartIdx ??= hunkContent.additions;
-        additionEndIdx ??= hunkContent.additions;
-
-        // Build iteration ranges and iterate through visible lines. If
-        // deletion and addition ranges don't overlap, we create separate
-        // iteration ranges to avoid unnecessary iterations through the gap.
-        const iterationRanges: [number, number][] = [];
-        const hasDeletionRange = deletionStartIdx < deletionEndIdx;
-        const hasAdditionRange = additionStartIdx < additionEndIdx;
-
-        if (hasDeletionRange && hasAdditionRange) {
-          // Check overlap: [a, b) and [c, d) overlap if a < d && c < b
-          const hasOverlap =
-            deletionStartIdx < additionEndIdx &&
-            additionStartIdx < deletionEndIdx;
-
-          if (hasOverlap) {
-            // Merge into single range
-            iterationRanges.push([
-              Math.min(deletionStartIdx, additionStartIdx),
-              Math.max(deletionEndIdx, additionEndIdx),
-            ]);
-          } else {
-            if (additionEndIdx < deletionStartIdx) {
-              iterationRanges.push(
-                [additionStartIdx, additionEndIdx],
-                [deletionStartIdx, deletionEndIdx]
-              );
-            } else {
-              iterationRanges.push(
-                [deletionStartIdx, deletionEndIdx],
-                [additionStartIdx, additionEndIdx]
-              );
-            }
-          }
-        } else if (hasDeletionRange) {
-          iterationRanges.push([deletionStartIdx, deletionEndIdx]);
-        } else if (hasAdditionRange) {
-          iterationRanges.push([additionStartIdx, additionEndIdx]);
-        }
-
-        if (iterationRanges.length === 0) {
-          // Nothing visible at all, skip this hunk content
-          deletionLineNumber += hunkContent.deletions;
-          additionLineNumber += hunkContent.additions;
-          unifiedLineIndex += unifiedCount;
-          splitLineIndex += splitCount;
-          state.incrementCounts(unifiedCount, splitCount);
-          continue;
-        }
-
-        for (const [rangeStart, rangeEnd] of iterationRanges) {
-          // Compute values directly based on rangeStart
-          let _deletionLineNumber =
-            deletionLineNumber + Math.min(rangeStart, hunkContent.deletions);
-          let _additionLineNumber =
-            additionLineNumber + Math.min(rangeStart, hunkContent.additions);
-          let _splitLineIndex = splitLineIndex + rangeStart;
-          let _unifiedLineIndex = unifiedLineIndex + rangeStart;
-
-          for (let index = rangeStart; index < rangeEnd; index++) {
-            // Get lines only if they exist and are visible
-            const deletionLine =
-              index < hunkContent.deletions
-                ? deletionLines[hunkContent.deletionLineIndex + index]
-                : undefined;
-            const additionLine =
-              index < hunkContent.additions
-                ? additionLines[hunkContent.additionLineIndex + index]
-                : undefined;
-
-            // Only compute diff decorations if BOTH lines are visible
-            if (deletionLine == null && additionLine == null) {
-              throw new Error(
-                'processHunks: a serious windowing error has occured and we do not have a proper addition or deletion line to work with'
-              );
-            }
-
-            computeLineDiffDecorations({
-              additionLine,
-              deletionLine,
-              deletionLineIndex: deletionContent.length,
-              additionLineIndex: additionContent.length,
-              deletionDecorations,
-              additionDecorations,
-              lineDiffType,
-            });
-
-            // Process deletion if visible
-            if (deletionLine != null) {
-              const deletionLineIndex = hunkContent.deletionLineIndex + index;
-              appendContent(
-                deletionLine,
-                deletionLineIndex,
-                deletionSegments,
-                deletionContent
-              );
-              deletionInfo.push({
-                type: 'change-deletion',
-                lineNumber: _deletionLineNumber,
-                lineIndex: `${_unifiedLineIndex},${_splitLineIndex}`,
-              });
-              _deletionLineNumber++;
-            }
-
-            // Process addition if visible
-            if (additionLine != null) {
-              const additionLineIndex = hunkContent.additionLineIndex + index;
-              appendContent(
-                additionLine,
-                additionLineIndex,
-                additionSegments,
-                additionContent
-              );
-              additionInfo.push({
-                type: 'change-addition',
-                lineNumber: _additionLineNumber,
-                lineIndex: `${_unifiedLineIndex + hunkContent.deletions},${_splitLineIndex}`,
-              });
-              _additionLineNumber++;
-            }
-
-            _splitLineIndex++;
-            _unifiedLineIndex++;
-          }
-        }
-
-        deletionLineNumber += hunkContent.deletions;
-        additionLineNumber += hunkContent.additions;
-        splitLineIndex += splitCount;
-        unifiedLineIndex += unifiedCount;
-        state.incrementCounts(unifiedCount, splitCount);
-      }
-    }
-
-    if (
-      isPartial ||
-      hunk !== state.finalHunk ||
-      (isWindowedHighlight && !hasExpansion)
-    ) {
-      continue;
-    }
-
-    // If we are on the last hunk, we should fully iterate through the rest
-    // of the lines
-    let additionLineIndex = hunk.additionLineIndex + hunk.additionCount;
-    let deletionLineIndex = hunk.deletionLineIndex + hunk.deletionCount;
-    const trailingCount = Math.min(
-      additionLines.length - additionLineIndex,
-      deletionLines.length - deletionLineIndex
-    );
-    const expandedAfter = (() => {
-      if (!hasExpansion) {
-        return trailingCount;
-      }
-      const region = getExpandedRegion(hunkIndex + 1, trailingCount);
-      return Math.min(region.fromStart, trailingCount);
-    })();
-    let trailingIndex = 0;
-
-    if (isWindowedHighlight) {
-      const linesToSkip = Math.max(
-        0,
-        Math.min(
-          expandedAfter,
-          startingLine - unifiedLineIndex,
-          startingLine - splitLineIndex
-        )
-      );
-      if (linesToSkip > 0) {
-        additionLineIndex += linesToSkip;
-        deletionLineIndex += linesToSkip;
-        splitLineIndex += linesToSkip;
-        unifiedLineIndex += linesToSkip;
-        additionLineNumber += linesToSkip;
-        deletionLineNumber += linesToSkip;
-        state.incrementCounts(linesToSkip, linesToSkip);
-        trailingIndex += linesToSkip;
-      }
-    }
-
-    while (trailingIndex < expandedAfter) {
-      if (state.shouldBreak()) {
-        break;
-      }
-      appendContent(
-        deletionLines[deletionLineIndex],
-        deletionLineIndex,
-        deletionSegments,
-        deletionContent
-      );
-      deletionLineIndex++;
-      deletionInfo.push({
-        type: 'context-expanded',
-        lineNumber: deletionLineNumber,
-        altLineNumber: additionLineNumber,
-        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-      });
-      deletionLineNumber++;
-
-      appendContent(
-        additionLines[additionLineIndex],
-        additionLineIndex,
-        additionSegments,
-        additionContent
-      );
-      additionLineIndex++;
-      additionInfo.push({
-        type: 'context-expanded',
-        lineNumber: additionLineNumber,
-        altLineNumber: deletionLineNumber,
-        lineIndex: `${unifiedLineIndex},${splitLineIndex}`,
-      });
-      additionLineNumber++;
-
-      state.incrementCounts(1, 1);
-      splitLineIndex++;
-      unifiedLineIndex++;
-      trailingIndex++;
-    }
-  }
-
+function createBucket(): RenderBucket {
   return {
-    deletionContent: deletionContent.value,
-    additionContent: additionContent.value,
-    deletionInfo,
-    additionInfo,
-    deletionDecorations,
-    additionDecorations,
-    deletionSegments,
-    additionSegments,
+    deletionContent: {
+      push(value: string) {
+        this.value += value;
+        this.length++;
+      },
+      value: '',
+      length: 0,
+    },
+    additionContent: {
+      push(value: string) {
+        this.value += value;
+        this.length++;
+      },
+      value: '',
+      length: 0,
+    },
+    deletionInfo: [],
+    additionInfo: [],
+    deletionDecorations: [],
+    additionDecorations: [],
+    deletionSegments: [],
+    additionSegments: [],
   };
 }
 

@@ -6,14 +6,13 @@ import {
   LINE_HUNK_COUNT,
 } from '../constants';
 import type {
-  ChangeContent,
-  ContextContent,
   ExpansionDirections,
   FileDiffMetadata,
   RenderRange,
   RenderWindow,
   VirtualWindowSpecs,
 } from '../types';
+import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import type { WorkerPoolManager } from '../worker';
 import {
@@ -106,8 +105,7 @@ export class LittleVirtualizedFileDiff<
 
         const lineIndex = parseLineIndex(lineIndexAttr, diffStyle);
         let measuredHeight = line.getBoundingClientRect().height;
-        const expectedHeight = this.getLineHeight(lineIndex);
-        let defaultMultiplier = 1;
+        let hasMetadata = false;
         // Annotations or noNewline metadata increase the size of the their
         // attached line
         if (
@@ -116,11 +114,12 @@ export class LittleVirtualizedFileDiff<
             'noNewline' in line.nextElementSibling.dataset)
         ) {
           if ('noNewline' in line.nextElementSibling.dataset) {
-            defaultMultiplier = 2;
+            hasMetadata = true;
           }
           measuredHeight +=
             line.nextElementSibling.getBoundingClientRect().height;
         }
+        const expectedHeight = this.getLineHeight(lineIndex, hasMetadata);
 
         if (measuredHeight === expectedHeight) {
           continue;
@@ -129,7 +128,7 @@ export class LittleVirtualizedFileDiff<
         hasLineHeightChange = true;
         // Line is back to standard height (e.g., after window resize)
         // Remove from cache
-        if (measuredHeight === LINE_HEIGHT * defaultMultiplier) {
+        if (measuredHeight === LINE_HEIGHT * (hasMetadata ? 2 : 1)) {
           this.heightCache.delete(lineIndex);
         }
         // Non-standard height, cache it
@@ -182,166 +181,63 @@ export class LittleVirtualizedFileDiff<
   // dynamically change for a number of reasons so we can never be fully sure
   // if the height is 100% accurate
   private computeApproximateSize(): void {
-    if (this.fileDiff == null) return;
+    this.height = 0;
+    if (this.fileDiff == null) {
+      return;
+    }
 
-    const { disableFileHeader = false } = this.options;
+    const { disableFileHeader = false, expandUnchanged = false } = this.options;
     const diffStyle = this.getDiffStyle();
-    let height = 0;
 
     // Header or initial padding
     if (!disableFileHeader) {
-      height += DIFF_HEADER_HEIGHT;
+      this.height += DIFF_HEADER_HEIGHT;
     } else {
-      height += FILE_GAP;
+      this.height += FILE_GAP;
     }
 
-    // Hunks and lines
-    for (const [hunkIndex, hunk] of this.fileDiff.hunks.entries()) {
-      const collapsedBefore = Math.max(hunk.collapsedBefore, 0);
-      const { fromStart, fromEnd, collapsedLines, renderAll } =
-        this.getExpandedRegion(
-          this.fileDiff.isPartial,
-          hunkIndex,
-          collapsedBefore
-        );
-      const renderFromStart = renderAll ? collapsedBefore : fromStart;
-      const renderFromEnd = renderAll ? 0 : fromEnd;
+    iterateOverDiff({
+      diff: this.fileDiff,
+      diffStyle,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      callback: ({
+        hunkIndex,
+        collapsedBefore,
+        collapsedAfter,
+        unifiedDeletionLineIndex,
+        unifiedAdditionLineIndex,
+        splitLineIndex,
+        noEOFCRAddition,
+        noEOFCRDeletion,
+      }) => {
+        if (collapsedBefore > 0) {
+          if (hunkIndex > 0) {
+            this.height += FILE_GAP;
+          }
+          this.height += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
+        }
 
-      // Expanded context before the hunk
-      if (collapsedBefore > 0 && renderFromStart > 0) {
-        let lineIndex =
+        const lineIndex =
           diffStyle === 'split'
-            ? hunk.splitLineStart - collapsedBefore
-            : hunk.unifiedLineStart - collapsedBefore;
-        for (let i = 0; i < renderFromStart; i++) {
-          height += this.getLineHeight(lineIndex);
-          lineIndex++;
+            ? splitLineIndex
+            : (unifiedDeletionLineIndex ??
+              unifiedAdditionLineIndex ??
+              splitLineIndex);
+        const hasMetadata = noEOFCRAddition || noEOFCRDeletion;
+        this.height += this.getLineHeight(lineIndex, hasMetadata);
+
+        if (collapsedAfter > 0) {
+          this.height += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
         }
-      }
-
-      // Hunk separator size
-      if ((hunk.additionStart > 1 || hunk.deletionStart > 1) && !renderAll) {
-        // The first hunk has no padding above it by default, so only add
-        // FILE_GAP it it's not the first hunk separator
-        if (collapsedLines > 0 && hunk !== this.fileDiff.hunks[0]) {
-          height += FILE_GAP;
-        }
-        if (collapsedLines > 0) {
-          height += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
-        }
-      }
-
-      if (!renderAll && collapsedBefore > 0 && renderFromEnd > 0) {
-        let lineIndex =
-          diffStyle === 'split'
-            ? hunk.splitLineStart - collapsedBefore + collapsedBefore - fromEnd
-            : hunk.unifiedLineStart -
-              collapsedBefore +
-              collapsedBefore -
-              fromEnd;
-        for (let i = 0; i < renderFromEnd; i++) {
-          height += this.getLineHeight(lineIndex);
-          lineIndex++;
-        }
-      }
-
-      const lastContent = hunk.hunkContent.at(-1);
-      let lineIndex =
-        diffStyle === 'split' ? hunk.splitLineStart : hunk.unifiedLineStart;
-
-      // Iterate through all of the hunk's content groups to determine
-      // approximately how tall it is
-      for (const content of hunk.hunkContent) {
-        const isLastContent = content === lastContent;
-        if (content.type === 'context') {
-          for (let i = 0; i < content.lines; i++) {
-            const isLastLine = isLastContent && i === content.lines - 1;
-            const hasMetadata = isLastLine && content.noEOFCR;
-            height += this.getLineHeight(lineIndex, hasMetadata);
-            lineIndex++;
-          }
-        } else {
-          if (diffStyle === 'split') {
-            // 'split' - both sets of lines are shown side by side
-            const count = Math.max(content.deletions, content.additions);
-            for (let i = 0; i < count; i++) {
-              const isLastLine = isLastContent && i === count - 1;
-              // We can basicaly assume that both lines will be the same height
-              // in split if either has the noNewline metadata, since they
-              // either both do or there will be a gap character on the side
-              // that doesn't have it
-              const hasMetadata =
-                isLastLine &&
-                (content.noEOFCRDeletions || content.noEOFCRAdditions);
-              height += this.getLineHeight(lineIndex, hasMetadata);
-              lineIndex++;
-            }
-          } else {
-            // 'unified' - deletions first, then additions
-            const count = content.deletions + content.additions;
-            for (let i = 0; i < count; i++) {
-              const isLastDeletion =
-                isLastContent && i === content.deletions - 1;
-              const isLastAddition = isLastContent && i === count - 1;
-              const hasMetadata =
-                (isLastDeletion && content.noEOFCRDeletions) ||
-                (isLastAddition && content.noEOFCRAdditions);
-              height += this.getLineHeight(lineIndex, hasMetadata);
-              lineIndex++;
-            }
-          }
-        }
-      }
-    }
-
-    const lastHunk = this.fileDiff.hunks.at(-1);
-    if (lastHunk != null && hasFinalHunk(this.fileDiff)) {
-      const additionRemaining =
-        this.fileDiff.additionLines.length -
-        (lastHunk.additionLineIndex + lastHunk.additionCount);
-      const deletionRemaining =
-        this.fileDiff.deletionLines.length -
-        (lastHunk.deletionLineIndex + lastHunk.deletionCount);
-      if (additionRemaining !== deletionRemaining) {
-        throw new Error(
-          `LittleVirtualizedFileDiff.computeApproximateSize: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${this.fileDiff.name}`
-        );
-      }
-      const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
-
-      if (trailingRangeSize > 0) {
-        const { fromStart, collapsedLines, renderAll } = this.getExpandedRegion(
-          this.fileDiff.isPartial,
-          // Final hunk separator is basically not a hunk
-          this.fileDiff.hunks.length,
-          trailingRangeSize
-        );
-        const renderFromStart = renderAll ? trailingRangeSize : fromStart;
-
-        if (renderFromStart > 0) {
-          let lineIndex =
-            diffStyle === 'split'
-              ? lastHunk.splitLineStart + lastHunk.splitLineCount
-              : lastHunk.unifiedLineStart + lastHunk.unifiedLineCount;
-          for (let i = 0; i < renderFromStart; i++) {
-            height += this.getLineHeight(lineIndex);
-            lineIndex++;
-          }
-        }
-
-        // if we have a hunk separator at the end....
-        if (collapsedLines > 0) {
-          height += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
-        }
-      }
-    }
+      },
+    });
 
     // Bottom padding
     if (this.fileDiff.hunks.length > 0) {
-      height += FILE_GAP;
+      this.height += FILE_GAP;
     }
-
-    this.height = height;
   }
 
   override render({
@@ -501,7 +397,7 @@ export class LittleVirtualizedFileDiff<
     fileTop: number,
     { top, bottom }: RenderWindow
   ): RenderRange {
-    const { disableFileHeader = false } = this.options;
+    const { disableFileHeader = false, expandUnchanged = false } = this.options;
     const diffStyle = this.getDiffStyle();
     const fileHeight = this.height;
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
@@ -538,118 +434,51 @@ export class LittleVirtualizedFileDiff<
     const hunkOffsets: number[] = [];
     let startingLine: number | undefined;
     let endingLine = 0;
-    let didBreak = false;
-    const lastHunk = fileDiff.hunks.at(-1);
+    let pendingGapAdjustment = 0;
 
-    for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
-      const collapsedBefore = Math.max(hunk.collapsedBefore, 0);
-      const { fromStart, fromEnd, collapsedLines, renderAll } =
-        this.getExpandedRegion(fileDiff.isPartial, hunkIndex, collapsedBefore);
-      const renderFromStart = renderAll ? collapsedBefore : fromStart;
-      const renderFromEnd = renderAll ? 0 : fromEnd;
-      const hunkGap =
-        collapsedLines > 0 && (hunk.additionStart > 1 || hunk.deletionStart > 1)
-          ? HUNK_SEPARATOR_HEIGHT +
-            FILE_GAP +
-            (hunk !== fileDiff.hunks[0] ? FILE_GAP : 0)
-          : 0;
-
-      const lineStart =
-        diffStyle === 'split' ? hunk.splitLineStart : hunk.unifiedLineStart;
-      const hunkLineCount =
-        diffStyle === 'split' ? hunk.splitLineCount : hunk.unifiedLineCount;
-
-      // NOTE(amadeus): This is probably extremely expensive on large diffs,
-      // i.e. a huge addition or deletion.  For that reason we probably should
-      // figure out to create some sort of line/region markers that we can skip
-      // large parts of the calculations when determining totalHeight or
-      // whatever
-      const renderRange = (
-        rangeStart: number,
-        rangeLen: number,
-        offsetAdjustment = 0
-      ) => {
-        for (let i = 0; i < rangeLen; i++) {
-          if (currentLine % LINE_HUNK_COUNT === 0) {
-            hunkOffsets.push(
-              absoluteLineTop -
-                (fileTop + headerRegion + (i === 0 ? offsetAdjustment : 0))
-            );
-          }
-
-          const lineHeight = this.getLineHeight(rangeStart + i);
-
-          // Find visible range
-          if (
-            startingLine == null &&
-            absoluteLineTop > top - lineHeight &&
-            absoluteLineTop < bottom
-          ) {
-            startingLine = currentLine;
-            endingLine = currentLine + 1;
-          } else if (startingLine != null && absoluteLineTop < bottom) {
-            endingLine = currentLine + 1;
-          }
-          currentLine++;
-          absoluteLineTop += lineHeight;
-
-          // Stop as soon as we're past viewport and at a line hunk boundary
-          if (
-            startingLine != null &&
-            absoluteLineTop > bottom &&
-            currentLine % LINE_HUNK_COUNT === 0
-          ) {
-            didBreak = true;
-            break;
-          }
+    iterateOverDiff({
+      diff: fileDiff,
+      diffStyle,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      callback: ({
+        hunkIndex,
+        collapsedBefore,
+        collapsedAfter,
+        unifiedDeletionLineIndex,
+        unifiedAdditionLineIndex,
+        splitLineIndex,
+        noEOFCRAddition,
+        noEOFCRDeletion,
+      }) => {
+        if (collapsedBefore > 0) {
+          pendingGapAdjustment =
+            HUNK_SEPARATOR_HEIGHT + FILE_GAP + (hunkIndex > 0 ? FILE_GAP : 0);
+          absoluteLineTop += pendingGapAdjustment;
         }
-      };
 
-      if (collapsedBefore > 0 && renderFromStart > 0) {
-        const rangeStart =
-          diffStyle === 'split'
-            ? hunk.splitLineStart - collapsedBefore
-            : hunk.unifiedLineStart - collapsedBefore;
-        renderRange(rangeStart, renderFromStart);
-        if (didBreak) {
-          break;
-        }
-      }
-
-      let pendingGapAdjustment = 0;
-      if (!renderAll && hunkGap > 0) {
-        absoluteLineTop += hunkGap;
-        pendingGapAdjustment = hunkGap;
-      }
-
-      if (!renderAll && collapsedBefore > 0 && renderFromEnd > 0) {
-        const rangeStart =
-          diffStyle === 'split'
-            ? hunk.splitLineStart - collapsedBefore + collapsedBefore - fromEnd
-            : hunk.unifiedLineStart -
-              collapsedBefore +
-              collapsedBefore -
-              fromEnd;
-        renderRange(rangeStart, renderFromEnd, pendingGapAdjustment);
-        pendingGapAdjustment = 0;
-        if (didBreak) {
-          break;
-        }
-      }
-
-      for (let i = 0; i < hunkLineCount; i++) {
-        // Record offset at LINE_HUNK_COUNT boundaries for future buffer
-        // calculations
         if (currentLine % LINE_HUNK_COUNT === 0) {
           hunkOffsets.push(
-            absoluteLineTop -
-              (fileTop + headerRegion + (i === 0 ? pendingGapAdjustment : 0))
+            absoluteLineTop - (fileTop + headerRegion + pendingGapAdjustment)
           );
         }
 
-        const lineHeight = this.getLineHeight(lineStart + i);
+        const lineIndex =
+          diffStyle === 'split'
+            ? splitLineIndex
+            : (unifiedDeletionLineIndex ?? unifiedAdditionLineIndex);
+        if (lineIndex == null) {
+          throw new Error(
+            'LittleVirtualizedFileDiff.computeRenderRangeFromWindow: Invalid line index'
+          );
+        }
 
-        // Find visible range
+        const lineHeight = this.getLineHeight(
+          lineIndex,
+          noEOFCRAddition || noEOFCRDeletion
+        );
+
         if (
           startingLine == null &&
           absoluteLineTop > top - lineHeight &&
@@ -660,70 +489,27 @@ export class LittleVirtualizedFileDiff<
         } else if (startingLine != null && absoluteLineTop < bottom) {
           endingLine = currentLine + 1;
         }
+
         currentLine++;
         absoluteLineTop += lineHeight;
         if (pendingGapAdjustment > 0) {
           pendingGapAdjustment = 0;
         }
 
-        // Stop as soon as we're past viewport and at a line hunk boundary
+        if (collapsedAfter > 0) {
+          absoluteLineTop += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
+        }
+
         if (
           startingLine != null &&
           absoluteLineTop > bottom &&
           currentLine % LINE_HUNK_COUNT === 0
         ) {
-          didBreak = true;
-          break;
+          return true;
         }
-      }
-
-      if (!didBreak) {
-        const lastContent = hunk.hunkContent.at(-1);
-        absoluteLineTop += appendNoNewlineHeight(lastContent, diffStyle);
-
-        if (hunk === lastHunk && hasFinalHunk(fileDiff)) {
-          const additionRemaining =
-            fileDiff.additionLines.length -
-            (hunk.additionLineIndex + hunk.additionCount);
-          const deletionRemaining =
-            fileDiff.deletionLines.length -
-            (hunk.deletionLineIndex + hunk.deletionCount);
-          if (additionRemaining !== deletionRemaining) {
-            throw new Error(
-              `LittleVirtualizedFileDiff.computeRenderRangeFromWindow: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
-            );
-          }
-          const trailingRangeSize = Math.min(
-            additionRemaining,
-            deletionRemaining
-          );
-          const { fromStart, collapsedLines, renderAll } =
-            this.getExpandedRegion(
-              fileDiff.isPartial,
-              fileDiff.hunks.length,
-              trailingRangeSize
-            );
-          const renderFromStart = renderAll ? trailingRangeSize : fromStart;
-
-          if (renderFromStart > 0) {
-            renderRange(lineStart + hunkLineCount, renderFromStart);
-          }
-          if (collapsedLines > 0) {
-            absoluteLineTop += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
-          }
-        }
-      }
-
-      // Break out of hunk loop too
-      if (
-        didBreak ||
-        (startingLine != null &&
-          absoluteLineTop > bottom &&
-          currentLine % LINE_HUNK_COUNT === 0)
-      ) {
-        break;
-      }
-    }
+        return false;
+      },
+    });
 
     if (startingLine == null) {
       return {
@@ -764,34 +550,6 @@ export class LittleVirtualizedFileDiff<
 
     return { startingLine, totalLines, bufferBefore, bufferAfter };
   }
-}
-
-function appendNoNewlineHeight(
-  lastContent: ContextContent | ChangeContent | undefined,
-  diffStyle: 'split' | 'unified'
-) {
-  let height = 0;
-  if (lastContent == null) {
-    return height;
-  }
-  if (lastContent.type === 'context' && lastContent.noEOFCR) {
-    height += LINE_HEIGHT;
-  } else if (
-    lastContent.type === 'change' &&
-    (lastContent.noEOFCRDeletions || lastContent.noEOFCRAdditions)
-  ) {
-    if (diffStyle === 'split') {
-      height += LINE_HEIGHT;
-    } else {
-      if (lastContent.noEOFCRDeletions) {
-        height += LINE_HEIGHT;
-      }
-      if (lastContent.noEOFCRAdditions) {
-        height += LINE_HEIGHT;
-      }
-    }
-  }
-  return height;
 }
 
 function hasFinalHunk(fileDiff: FileDiffMetadata): boolean {

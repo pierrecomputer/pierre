@@ -261,7 +261,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
     {
       "expandable": {
         "chunked": true,
-        "down": true,
+        "down": false,
         "up": true,
       },
       "hunkIndex": 14,
@@ -32265,7 +32265,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
     {
       "expandable": {
         "chunked": true,
-        "down": true,
+        "down": false,
         "up": true,
       },
       "hunkIndex": 14,
@@ -63999,7 +63999,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
     {
       "expandable": {
         "chunked": true,
-        "down": true,
+        "down": false,
         "up": true,
       },
       "hunkIndex": 14,
