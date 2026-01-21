@@ -265,7 +265,7 @@ export class SimpleVirtualizedFileDiff<
 
     if (this.fileDiff == null) {
       console.error(
-        'LittleVirtualizedFileDiff.render: attempting to virtually render when we dont have the correct data'
+        'SimpleVirtualizedFileDiff.render: attempting to virtually render when we dont have the correct data'
       );
       return;
     }
@@ -375,7 +375,7 @@ export class SimpleVirtualizedFileDiff<
         (lastHunk.deletionLineIndex + lastHunk.deletionCount);
       if (lastHunk != null && additionRemaining !== deletionRemaining) {
         throw new Error(
-          `LittleVirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
+          `SimpleVirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
         );
       }
       const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
@@ -470,7 +470,7 @@ export class SimpleVirtualizedFileDiff<
             : (unifiedDeletionLineIndex ?? unifiedAdditionLineIndex);
         if (lineIndex == null) {
           throw new Error(
-            'LittleVirtualizedFileDiff.computeRenderRangeFromWindow: Invalid line index'
+            'SimpleVirtualizedFileDiff.computeRenderRangeFromWindow: Invalid line index'
           );
         }
 
