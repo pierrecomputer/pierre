@@ -6,7 +6,7 @@ import type {
 
 export function setLanguageOverride<T extends FileContents | FileDiffMetadata>(
   fileOrDiff: T,
-  languageOverride: SupportedLanguages
+  lang: SupportedLanguages
 ): T {
-  return { ...fileOrDiff, languageOverride };
+  return { ...fileOrDiff, lang };
 }

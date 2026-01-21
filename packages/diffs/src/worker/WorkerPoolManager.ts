@@ -442,8 +442,7 @@ export class WorkerPoolManager {
   };
 
   highlightFileAST(instance: FileRendererInstance, file: FileContents): void {
-    const computedLang =
-      file.languageOverride ?? getFiletypeFromFileName(file.name);
+    const computedLang = file.lang ?? getFiletypeFromFileName(file.name);
     if (computedLang === 'text') return;
     // If we already have a task in progress for this same file content, we
     // should drop it
@@ -479,8 +478,7 @@ export class WorkerPoolManager {
     instance: DiffRendererInstance,
     diff: FileDiffMetadata
   ): void {
-    const computedLang =
-      diff.languageOverride ?? getFiletypeFromFileName(diff.name);
+    const computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
     if (computedLang === 'text') return;
     // If we already have a task in progress for this same diff content, we
     // should ignore executing it again
@@ -796,18 +794,18 @@ function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
   switch (task.type) {
     case 'file': {
       langs.add(
-        task.request.file.languageOverride ??
+        task.request.file.lang ??
           getFiletypeFromFileName(task.request.file.name)
       );
       break;
     }
     case 'diff': {
       langs.add(
-        task.request.diff.languageOverride ??
+        task.request.diff.lang ??
           getFiletypeFromFileName(task.request.diff.name)
       );
       langs.add(
-        task.request.diff.languageOverride ??
+        task.request.diff.lang ??
           getFiletypeFromFileName(task.request.diff.prevName ?? '-')
       );
       break;

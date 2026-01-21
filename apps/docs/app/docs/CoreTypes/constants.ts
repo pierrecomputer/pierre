@@ -41,10 +41,10 @@ const file: FileContents = {
 
 // With explicit language override
 const jsonFile: FileContents = {
-  // No extension, so we specify languageOverride
+  // No extension, so we specify lang
   name: 'config',
   contents: '{ "key": "value" }',
-  languageOverride: 'json',
+  lang: 'json',
   cacheKey: 'config-file',
 };`,
   },
@@ -65,8 +65,10 @@ interface FileDiffMetadata {
   prevName: string | undefined;
 
   // Optional: Override language for syntax highlighting. Normally
-  // language is detected automatically base on file extension
-  languageOverride?: SupportedLanguages;
+  // language is detected automatically base on file extension and you do not
+  // need to set this.  If you need to set a custom lang on a FileDiffMetadata
+  // instance, use the \`setLanguageOverride(diff, 'ruby')\` method.
+  lang?: SupportedLanguages;
 
   // Type of change: 'change' | 'rename-pure' | 'rename-changed' | 'new' | 'deleted'
   type: ChangeTypes;

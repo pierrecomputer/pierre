@@ -8,6 +8,6 @@ export function areFilesEqual(
     fileA?.cacheKey === fileB?.cacheKey &&
     fileA?.contents === fileB?.contents &&
     fileA?.name === fileB?.name &&
-    fileA?.languageOverride === fileB?.languageOverride
+    fileA?.lang === fileB?.lang
   );
 }

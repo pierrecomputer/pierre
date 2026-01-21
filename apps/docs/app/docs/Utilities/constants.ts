@@ -148,7 +148,7 @@ disposeHighlighter();`,
 export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<undefined> = {
   file: {
     name: 'getSharedHighlighter.ts',
-    contents: `import { getSharedHighlighter } from '@pierre/diffs';
+    contents: `import { getSharedHighlighter, DiffsHighlighter } from '@pierre/diffs';
 
 // Get the shared Shiki highlighter instance.
 // This is the same instance used internally by all FileDiff
@@ -157,13 +157,11 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<undefined> = {
 //
 // The highlighter is initialized lazily - themes and languages
 // are loaded on demand as you render different files.
-const highlighter = await getSharedHighlighter();
+const highlighter: DiffsHighlighter = await getSharedHighlighter();
 
-// You can use it directly for custom highlighting
-const tokens = highlighter.codeToTokens('const x = 1;', {
-  lang: 'typescript',
-  theme: 'pierre-dark',
-});`,
+// You can use it directly for custom highlighting, see the Shiki 
+// docs at https://shiki.style/ for details
+const tokens = highlighter.codeToTokens('const x = 1;'); `,
   },
   options,
 };

@@ -222,7 +222,7 @@ export function renderDiffWithHighlighter(
 
       highlighter,
       options,
-      languageOverride: forcePlainText ? 'text' : diff.languageOverride,
+      languageOverride: forcePlainText ? 'text' : diff.lang,
     });
 
     if (shouldGroupAll) {

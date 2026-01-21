@@ -192,8 +192,7 @@ export class FileRenderer<LAnnotation = undefined> {
         this.workerManager.highlightFileAST(this, file);
       }
     } else {
-      this.computedLang =
-        file.languageOverride ?? getFiletypeFromFileName(file.name);
+      this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =
@@ -245,8 +244,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
-    this.computedLang =
-      file.languageOverride ?? getFiletypeFromFileName(file.name);
+    this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
     const hasThemes =
       this.highlighter != null &&
       hasResolvedThemes(getThemes(this.options.theme));

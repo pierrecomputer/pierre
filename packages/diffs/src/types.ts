@@ -12,13 +12,11 @@ import type {
 } from 'shiki';
 
 export interface FileContents {
-  cacheKey?: string;
   name: string;
   contents: string;
-  languageOverride?: SupportedLanguages;
-  // Technically our diff library can take a `header` property, but we don't
-  // have any way of rendering it at the moment
+  lang?: SupportedLanguages;
   header?: string;
+  cacheKey?: string;
 }
 
 export type {
@@ -101,7 +99,7 @@ export interface Hunk {
 export interface FileDiffMetadata {
   name: string;
   prevName?: string;
-  languageOverride?: SupportedLanguages;
+  lang?: SupportedLanguages;
   mode?: string;
   prevMode?: string;
   type: ChangeTypes;

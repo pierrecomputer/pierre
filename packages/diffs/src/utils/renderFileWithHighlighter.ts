@@ -23,7 +23,7 @@ export function renderFileWithHighlighter(
   const { state, transformers } = createTransformerWithState();
   const lang = forcePlainText
     ? 'text'
-    : (file.languageOverride ?? getFiletypeFromFileName(file.name));
+    : (file.lang ?? getFiletypeFromFileName(file.name));
   const baseThemeType = (() => {
     if (typeof theme === 'string') {
       return highlighter.getTheme(theme).type;
