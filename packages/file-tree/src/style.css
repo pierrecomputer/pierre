@@ -12,25 +12,28 @@
     font-weight: 400;
 
     --ft-level-gap: 16px;
-    --ft-item-row-gap: 4px;
+    --ft-item-padding-x: 8px;
+    --ft-item-margin-x: 2px;
+    --ft-item-row-gap: 6px;
     --ft-icon-width: 12px;
-    --ft-max-level: 4;
     --ft-row-height: 30px;
   }
 
   /* LIST ITEM */
   [data-type='item'] {
-    padding: 0 var(--ft-root-padding);
+    padding: 0 var(--ft-item-padding-x);
+    margin: 0 var(--ft-item-margin-x);
     cursor: pointer;
     user-select: none;
     display: flex;
     align-items: center;
     line-height: var(--ft-row-height);
     gap: var(--ft-item-row-gap);
-  }
-  [data-type='item']:hover,
-  [data-type='item']:focus {
-    background-color: #6661;
+    border-radius: var(--radius-sm);
+    &:hover,
+    &:focus {
+      background-color: #6661;
+    }
   }
   [data-item-flattened-subitems] {
     display: inline-flex;
@@ -51,22 +54,27 @@
     width: 12px;
   }
 
-  [data-icon-name='file-tree-icon-chevron'][data-align-capitals='false'] {
-    transform: translate(0, 1px);
-  }
-  [data-icon-name='file-tree-icon-chevron'][data-align-capitals='true'] {
-    transform: translate(0, 0);
+  /* Chevron rotation and visual alignment */
+  /* Chevron pointing down */
+  [data-icon-name='file-tree-icon-chevron'] {
+    &[data-align-capitals='false'] {
+      transform: translate(0, 1px);
+    }
+    &[data-align-capitals='true'] {
+      transform: translate(0, 0);
+    }
   }
 
+  /* Chevron pointing right */
   [aria-expanded='false'][data-item-type='folder']
     > [data-item-section='icon']
-    > [data-icon-name='file-tree-icon-chevron'][data-align-capitals='true'] {
-    transform: rotate(-90deg) translate(0.5px, 0.5px);
-  }
-  [aria-expanded='false'][data-item-type='folder']
-    > [data-item-section='icon']
-    > [data-icon-name='file-tree-icon-chevron'][data-align-capitals='false'] {
-    transform: rotate(-90deg) translate(-0.5px, 0.5px);
+    > [data-icon-name='file-tree-icon-chevron'] {
+    &[data-align-capitals='true'] {
+      transform: rotate(-90deg) translate(0.5px, 0.5px);
+    }
+    &[data-align-capitals='false'] {
+      transform: rotate(-90deg) translate(-0.5px, 0.5px);
+    }
   }
 
   /* LIST IDENTATION */
@@ -76,81 +84,24 @@
     align-items: center;
     justify-content: center;
     height: var(--ft-row-height);
-    padding-left: calc(
-      var(--ft-level-gap) - calc(var(--ft-icon-width) / 2) - 0.5px
-    );
+    padding-left: calc(calc(var(--ft-icon-width) / 2) - 0.5px);
+
+    &:empty {
+      padding-left: 0;
+    }
   }
-  [data-item-section='spacing']:empty {
-    padding-left: 0;
-  }
+
   [data-item-section='spacing-item'] {
     transform: translateX(-0.25px);
     display: inline-block;
     border-left: 1px solid var(--color-border);
     height: 100%;
     margin-right: calc(var(--ft-level-gap) - 1px);
+
+    & + & {
+      margin-left: calc(
+        var(--ft-item-row-gap) + calc(var(--ft-icon-width) / 2) - 0.5px
+      );
+    }
   }
-  [data-item-section='spacing-item'] + [data-item-section='spacing-item'] {
-    margin-left: calc(
-      var(--ft-item-row-gap) + calc(var(--ft-icon-width) / 2) - 0.5px
-    );
-  }
-  /* [aria-level] > [data-item-section='spacing'] {
-    /* Gap is level - 1 because aria starts at 1 but we want to start at 0 * /
-    /* If for some reason someone is using a level higher than the max, we'll use the
-    max level + 1 by default, so it still indents past all known levels. * /
-    padding-left: calc(
-      var(--ft-level-gap) *
-        calc(var(--ft-aria-level, calc(var(--ft-max-level) + 1)) - 1)
-    );
-  }
-  [aria-level='1'] {
-    --ft-aria-level: 1;
-  }
-  [aria-level='2'] {
-    --ft-aria-level: 2;
-  }
-  [aria-level='3'] {
-    --ft-aria-level: 3;
-  }
-  [aria-level='4'] {
-    --ft-aria-level: 4;
-  }
-  [aria-level='5'] {
-    --ft-aria-level: 5;
-  }
-  [aria-level='6'] {
-    --ft-aria-level: 6;
-  }
-  [aria-level='7'] {
-    --ft-aria-level: 7;
-  }
-  [aria-level='8'] {
-    --ft-aria-level: 8;
-  }
-  [aria-level='9'] {
-    --ft-aria-level: 9;
-  }
-  [aria-level='10'] {
-    --ft-aria-level: 10;
-  }
-  [aria-level='11'] {
-    --ft-aria-level: 11;
-  }
-  [aria-level='12'] {
-    --ft-aria-level: 12;
-  }
-  [aria-level='13'] {
-    --ft-aria-level: 13;
-  }
-  [aria-level='14'] {
-    --ft-aria-level: 14;
-  }
-  [aria-level='15'] {
-    --ft-aria-level: 15;
-  }
-  [aria-level='16'] {
-    --ft-aria-level: 16;
-  } */
-  /* TODO: how many levels do we support out of the box? */
 }

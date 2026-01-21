@@ -103,11 +103,13 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
             }}
             key={item.getId()}
           >
-            <div data-item-section="spacing">
-              {Array.from({ length: level }).map((_, index) => (
-                <div key={index} data-item-section="spacing-item" />
-              ))}
-            </div>
+            {level > 0 ? (
+              <div data-item-section="spacing">
+                {Array.from({ length: level }).map((_, index) => (
+                  <div key={index} data-item-section="spacing-item" />
+                ))}
+              </div>
+            ) : null}
             <div data-item-section="icon">
               {hasChildren ? (
                 <Icon

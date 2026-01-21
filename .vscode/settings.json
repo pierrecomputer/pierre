@@ -27,7 +27,8 @@
     "**/.vercel/**": true
   },
   "files.associations": {
-    "*.css": "tailwindcss"
+    "**/apps/**/*.css": "tailwindcss",
+    "*.css": "postcss"
   },
   "stylelint.validate": ["css", "postcss"],
   "css.validate": false,
