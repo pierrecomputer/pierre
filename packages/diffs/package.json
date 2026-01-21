@@ -39,6 +39,22 @@
       "types": "./dist/worker/worker-portable.d.ts"
     }
   },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ],
+      "react": [
+        "dist/react/index.d.ts"
+      ],
+      "ssr": [
+        "dist/ssr/index.d.ts"
+      ],
+      "worker": [
+        "dist/worker/index.d.ts"
+      ]
+    }
+  },
   "files": [
     "dist",
     "LICENSE.md",
