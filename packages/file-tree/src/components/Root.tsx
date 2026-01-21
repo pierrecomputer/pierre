@@ -1,6 +1,8 @@
 import {
   type TreeInstance,
+  expandAllFeature,
   hotkeysCoreFeature,
+  selectionFeature,
   syncDataLoaderFeature,
 } from '@headless-tree/core';
 import type { JSX } from 'preact';
@@ -68,7 +70,27 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
       const children = item.getItemData()?.children?.direct;
       return children != null;
     },
-    features: [syncDataLoaderFeature, hotkeysCoreFeature],
+    hotkeys: {
+      // Begin the hotkey name with "custom" to satisfy the type checker
+      customExpandAll: {
+        hotkey: 'KeyQ',
+        handler: (_e, tree) => {
+          void tree.expandAll();
+        },
+      },
+      customCollapseAll: {
+        hotkey: 'KeyW',
+        handler: (_e, tree) => {
+          void tree.collapseAll();
+        },
+      },
+    },
+    features: [
+      syncDataLoaderFeature,
+      hotkeysCoreFeature,
+      selectionFeature,
+      expandAllFeature,
+    ],
   });
 
   return (
@@ -78,29 +100,22 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
         const itemMeta = item.getItemMeta();
         // TODO: is it possible to have empty array as children? is this valid in that case?
         const hasChildren = itemData?.children?.direct != null;
-        const isExpanded = item.isExpanded();
         const itemName = item.getItemName();
         const level = itemMeta.level;
         const startWithCapital =
           itemName.charAt(0).toUpperCase() === itemName.charAt(0);
         const alignCapitals = startWithCapital;
+        const isSelected = item.isSelected();
+        const selectionProps = isSelected ? { 'data-item-selected': true } : {};
 
         const isFlattenedDirectory = itemData?.flattens != null;
         return (
-          <div
+          <button
             data-type="item"
             data-item-type={hasChildren ? 'folder' : 'file'}
+            {...selectionProps}
             data-item-id={item.getId()}
             {...item.getProps()}
-            onKeyPress={(event) => {
-              if (event.key === 'Enter') {
-                if (isExpanded) {
-                  item.collapse();
-                } else {
-                  item.expand();
-                }
-              }
-            }}
             key={item.getId()}
           >
             {level > 0 ? (
@@ -130,7 +145,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
                 itemName
               )}
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
