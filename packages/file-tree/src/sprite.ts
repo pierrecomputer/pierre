@@ -1,6 +1,4 @@
-export type SVGSpriteNames =
-  | 'file-tree-icon-chevron'
-  | 'file-tree-icon-file';
+export type SVGSpriteNames = 'file-tree-icon-chevron' | 'file-tree-icon-file';
 
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="file-tree-icon-chevron" viewBox="0 0 10 6">
