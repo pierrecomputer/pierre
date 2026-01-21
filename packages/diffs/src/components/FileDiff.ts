@@ -811,10 +811,7 @@ export class FileDiff<LAnnotation = undefined> {
       }
     } else {
       if (result.deletionsAST != null) {
-        shouldReplace =
-          shouldReplace ||
-          this.codeDeletions == null ||
-          this.codeUnified != null;
+        shouldReplace = this.codeDeletions == null || this.codeUnified != null;
         this.codeUnified = undefined;
         if (result.deletionsAST.length > 0) {
           this.codeDeletions = getOrCreateCodeNode({
