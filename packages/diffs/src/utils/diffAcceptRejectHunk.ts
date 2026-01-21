@@ -122,7 +122,7 @@ export function diffAcceptRejectHunk(
       hunk.deletionLineIndex += deletionOffset;
       hunk.deletionStart += deletionOffset;
 
-      if (deletionOffset > 0 || additionOffset > 0) {
+      if (deletionOffset !== 0 || additionOffset !== 0) {
         let i = 0;
         while (i < hunk.hunkContent.length) {
           const content = hunk.hunkContent[i];
