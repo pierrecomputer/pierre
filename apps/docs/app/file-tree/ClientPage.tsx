@@ -69,7 +69,7 @@ export function ClientPage({
             id="test-file-tree-elem"
             className="mt-2 overflow-hidden rounded-md p-5"
             style={{
-              boxShadow: '0 0 0 1px #1f1f210f, 0 1px 3px #0000000d',
+              boxShadow: '0 0 0 1px var(--color-border), 0 1px 3px #0000000d',
             }}
           />
         </div>
@@ -91,7 +91,7 @@ export function ClientPage({
             options={fileTreeOptions}
             className="mt-2 rounded-md p-5"
             style={{
-              boxShadow: '0 0 0 1px #1f1f210f, 0 1px 3px #0000000d',
+              boxShadow: '0 0 0 1px var(--color-border), 0 1px 3px #0000000d',
             }}
             prerenderedHTML={preloadedFileTreeHtml}
           />
