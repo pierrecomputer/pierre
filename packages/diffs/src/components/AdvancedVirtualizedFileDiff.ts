@@ -71,7 +71,7 @@ export class AdvancedVirtualizedFileDiff<
       this.splitHeight += FILE_GAP;
     }
 
-    // NOTE(amadeus): I wonder if it's worth shortcutting this? I it might help
+    // NOTE(amadeus): I wonder if it's worth shortcutting this? It might help
     // to measure these values though and see if it's at all an issue on the
     // big bois
     for (const hunk of fileDiff.hunks) {

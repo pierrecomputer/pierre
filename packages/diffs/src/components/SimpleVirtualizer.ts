@@ -19,13 +19,6 @@ interface ScrollAnchor {
 
 let lastScrollPosition = 0;
 
-declare global {
-  interface Window {
-    STOP?: boolean;
-    TOGGLE?: () => void;
-  }
-}
-
 // FIXME(amadeus): Make this configurable probably?
 const OVERSCROLL_SIZE = 500;
 const RESIZE_DEBUGGING = false;
@@ -71,14 +64,16 @@ export class SimpleVirtualizer {
       this.setupElement(contentContainer);
     }
 
-    window.TOGGLE = () => {
-      if (window.STOP === true) {
-        window.STOP = false;
+    // FIXME(amadeus): Remove me before release
+    window.__INSTANCE = this;
+    window.__TOGGLE = () => {
+      if (window.__STOP === true) {
+        window.__STOP = false;
         window.scrollTo({ top: lastScrollPosition });
         queueRender(this.computeRenderRangeAndEmit);
       } else {
         lastScrollPosition = window.scrollY;
-        window.STOP = true;
+        window.__STOP = true;
       }
     };
     for (const [container, instance] of this.connectQueue.entries()) {
@@ -179,13 +174,13 @@ export class SimpleVirtualizer {
   }
 
   private handleWindowResize = () => {
-    if (window.STOP === true) return;
+    if (window.__STOP === true) return;
     this.markDOMDirty();
     queueRender(this.computeRenderRangeAndEmit);
   };
 
   private handleWindowScroll = () => {
-    if (window.STOP === true) return;
+    if (window.__STOP === true) return;
     this.scrollDirty = true;
 
     // FIXME(amadeus): Laziness assumption here... bad for business probably
@@ -198,7 +193,7 @@ export class SimpleVirtualizer {
 
   private handleElementScroll = () => {
     if (
-      window.STOP === true ||
+      window.__STOP === true ||
       this.root == null ||
       this.root instanceof Document
     ) {
@@ -215,7 +210,7 @@ export class SimpleVirtualizer {
   };
 
   private computeRenderRangeAndEmit = () => {
-    if (window.STOP === true) {
+    if (window.__STOP === true) {
       return;
     }
     if (

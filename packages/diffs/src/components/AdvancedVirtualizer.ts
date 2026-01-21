@@ -6,16 +6,6 @@ import type { WorkerPoolManager } from '../worker';
 import { AdvancedVirtualizedFileDiff } from './AdvancedVirtualizedFileDiff';
 import type { FileDiffOptions } from './FileDiff';
 
-// FIXME(amadeus): REMOVE ME
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    __LOL?: AdvancedVirtualizer<any>;
-    TOGGLE?: () => void;
-    STOP?: boolean;
-  }
-}
-
 const ENABLE_RENDERING = true;
 const OVERSCROLL_SIZE = 500;
 
@@ -70,16 +60,17 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
     this.handleResize();
     this.containerOffset =
       this.container.getBoundingClientRect().top + this.scrollTop;
-    window.__LOL = this;
 
-    window.TOGGLE = () => {
-      if (window.STOP === true) {
-        window.STOP = false;
+    // FIXME(amadeus): Remove me before release
+    window.__INSTANCE = this;
+    window.__TOGGLE = () => {
+      if (window.__STOP === true) {
+        window.__STOP = false;
         window.scrollTo({ top: lastScrollPosition });
         queueRender(this._render);
       } else {
         lastScrollPosition = window.scrollY;
-        window.STOP = true;
+        window.__STOP = true;
       }
     };
   }
@@ -131,7 +122,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
   }
 
   _render = (): void => {
-    if (this.files.length === 0 || window.STOP === true) {
+    if (this.files.length === 0 || window.__STOP === true) {
       return;
     }
     const { diffStyle = 'split' } = this.fileOptions;
