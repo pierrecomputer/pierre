@@ -470,7 +470,7 @@
       var(--diffs-bg-buffer) calc(4px * 1.414)
     );
     min-height: 1lh;
-    /* lol not sure this is worth it... */
+    /* lol not sure this is worth it… */
     /* position: sticky; */
     /* left: 0; */
     /* width: var(--diffs-column-width, auto); */
