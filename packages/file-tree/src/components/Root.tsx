@@ -2,6 +2,7 @@ import {
   type TreeInstance,
   expandAllFeature,
   hotkeysCoreFeature,
+  searchFeature,
   selectionFeature,
   syncDataLoaderFeature,
 } from '@headless-tree/core';
@@ -87,14 +88,24 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
     },
     features: [
       syncDataLoaderFeature,
-      hotkeysCoreFeature,
       selectionFeature,
+      hotkeysCoreFeature,
+      searchFeature,
       expandAllFeature,
     ],
   });
 
+  const { onChange, ...origSearchInputProps } =
+    tree.getSearchInputElementProps();
+  const searchInputProps = {
+    ...origSearchInputProps,
+    onInput: onChange,
+  };
   return (
     <div {...tree.getContainerProps()}>
+      <div data-file-tree-search-container>
+        <input data-file-tree-search-input {...searchInputProps} />
+      </div>
       {tree.getItems().map((item) => {
         const itemData = item.getItemData();
         const itemMeta = item.getItemMeta();
@@ -106,14 +117,22 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
           itemName.charAt(0).toUpperCase() === itemName.charAt(0);
         const alignCapitals = startWithCapital;
         const isSelected = item.isSelected();
+        if (isSelected) {
+          console.log('selected', item.getId());
+        }
         const selectionProps = isSelected ? { 'data-item-selected': true } : {};
 
         const isFlattenedDirectory = itemData?.flattens != null;
+        const isSearchMatch = item.isMatchingSearch();
+        const searchMatchProps = isSearchMatch
+          ? { 'data-item-search-match': true }
+          : {};
         return (
           <button
             data-type="item"
             data-item-type={hasChildren ? 'folder' : 'file'}
             {...selectionProps}
+            {...searchMatchProps}
             data-item-id={item.getId()}
             {...item.getProps()}
             key={item.getId()}

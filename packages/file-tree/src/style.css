@@ -19,6 +19,26 @@
     --ft-row-height: 30px;
   }
 
+  [data-file-tree-search-container] {
+    display: flex;
+    padding: 0;
+    margin: 0 var(--ft-item-margin-x) var(--ft-item-row-gap);
+  }
+
+  [data-file-tree-search-input] {
+    flex: 1;
+    height: var(--ft-row-height);
+    padding-inline: var(--ft-item-padding-x);
+    line-height: var(--ft-row-height);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--color-foreground);
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+
   /* LIST ITEM */
   [data-type='item'] {
     outline: none;
@@ -56,6 +76,10 @@
       background-color: #008cff1a;
       box-shadow: inset 0 0 0 1px #008cff26;
       z-index: 3;
+    }
+
+    &[data-item-search-match='true'] {
+      font-weight: 600;
     }
   }
 
