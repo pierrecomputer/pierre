@@ -15,8 +15,8 @@ export const FILENAME_HEADER_REGEX_GIT: RegExp =
   /^(---|\+\+\+)\s+[ab]\/([^\t\r\n]+)/;
 export const ALTERNATE_FILE_NAMES_GIT: RegExp =
   /^diff --git (?:"a\/(.+?)"|a\/(.+?)) (?:"b\/(.+?)"|b\/(.+?))$/;
-export const FILE_MODE_FROM_INDEX: RegExp =
-  /^index (?:[0-9a-f]+)\.\.(?:[0-9a-f]+)(?: (\d+))?/;
+export const INDEX_LINE_METADATA: RegExp =
+  /^index ([0-9a-f]+)\.\.([0-9a-f]+)(?: (\d+))?$/i;
 
 export const HEADER_METADATA_SLOT_ID = 'header-metadata';
 

@@ -4,9 +4,9 @@ import {
   FILENAME_HEADER_REGEX,
   FILENAME_HEADER_REGEX_GIT,
   FILE_CONTEXT_BLOB,
-  FILE_MODE_FROM_INDEX,
   GIT_DIFF_FILE_BREAK_REGEX,
   HUNK_HEADER,
+  INDEX_LINE_METADATA,
   SPLIT_WITH_NEWLINES,
   UNIFIED_DIFF_FILE_BREAK_REGEX,
 } from '../constants';
@@ -184,7 +184,14 @@ export function processFile(
             }
           }
           if (line.startsWith('index ')) {
-            const [, mode] = line.trim().match(FILE_MODE_FROM_INDEX) ?? [];
+            const [, prevObjectId, newObjectId, mode] =
+              line.trim().match(INDEX_LINE_METADATA) ?? [];
+            if (prevObjectId != null) {
+              currentFile.prevObjectId = prevObjectId;
+            }
+            if (newObjectId != null) {
+              currentFile.newObjectId = newObjectId;
+            }
             if (mode != null) {
               currentFile.mode = mode;
             }

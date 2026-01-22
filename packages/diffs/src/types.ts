@@ -246,11 +246,26 @@ export interface FileDiffMetadata {
    * specify a language override, you can do so via the method `setLanguageOverride`
    */
   lang?: SupportedLanguages;
-  /** Git file mode parsed from the diff (e.g., `100644` for regular files) if
-   * it exists */
+
+  /**
+   * Object ID for the new file content parsed from the `index` line in a
+   * patch file.
+   */
+  newObjectId?: string;
+  /**
+   * Object ID for the previous file content parsed from the `index` line in a
+   * patch file.
+   */
+  prevObjectId?: string;
+
+  /**
+   * Git file mode parsed from the diff (e.g., `100644` for regular files) when
+   * present in the patch metadata.
+   */
   mode?: string;
   /** Previous git file mode, present if the mode changed. */
   prevMode?: string;
+
   /** The type of change for this file. */
   type: ChangeTypes;
 
