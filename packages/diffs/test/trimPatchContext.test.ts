@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { trimPatchContent } from '../src/utils/trimPatchContext';
+import { trimPatchContext } from '../src/utils/trimPatchContext';
 
 const buildContext = (count: number, label: string): string[] =>
   Array.from({ length: count }, (_, index) => ` ${label}-${index + 1}`);
 
-describe('trimPatchContent', () => {
+describe('trimPatchContext', () => {
   test('trims and splits hunks with large context', () => {
     const hunk1Before = buildContext(40, 'h1-before');
     const hunk1After = buildContext(40, 'h1-after');
@@ -37,7 +37,7 @@ describe('trimPatchContent', () => {
       ...hunk2After,
     ].join('\n');
 
-    const trimmed = trimPatchContent(patch, 10);
+    const trimmed = trimPatchContext(patch, 10);
 
     const expected = [
       'diff --git a/file.txt b/file.txt',
@@ -75,7 +75,7 @@ describe('trimPatchContent', () => {
       '+hello',
     ].join('\n');
 
-    const trimmed = trimPatchContent(patch, 0);
+    const trimmed = trimPatchContext(patch, 0);
 
     const expected = [
       'diff --git a/a.txt b/a.txt',
@@ -100,7 +100,7 @@ describe('trimPatchContent', () => {
       ' four',
     ].join('\n');
 
-    const trimmed = trimPatchContent(patch, 10);
+    const trimmed = trimPatchContext(patch, 10);
 
     const expected = [
       'diff --git a/empty.txt b/empty.txt',
@@ -113,7 +113,7 @@ describe('trimPatchContent', () => {
 
   test('trims trim.patch fixture and matches snapshot', () => {
     const patch = readFileSync(resolve(__dirname, './trim.patch'), 'utf-8');
-    const trimmed = trimPatchContent(patch, 10);
+    const trimmed = trimPatchContext(patch, 10);
     expect(trimmed).toMatchSnapshot('trim.patch trimmed');
   });
 });

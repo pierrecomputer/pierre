@@ -92,10 +92,10 @@ for (const patch of patches) {
   options,
 };
 
-export const HELPER_TRIM_PATCH_CONTENT: PreloadFileOptions<undefined> = {
+export const HELPER_TRIM_PATCH_CONTEXT: PreloadFileOptions<undefined> = {
   file: {
-    name: 'trimPatchContent.ts',
-    contents: `import { trimPatchContent } from '@pierre/diffs';
+    name: 'trimPatchContext.ts',
+    contents: `import { trimPatchContext } from '@pierre/diffs';
 
 // Trim a patch's context lines down to a fixed window size.
 // Useful for reducing large diffs while preserving change hunks.
@@ -119,7 +119,7 @@ index abc123..def456 100644
 \`;
 
 // Keep 2 lines of context around changes.
-const trimmedPatch = trimPatchContent(patchContent, 3);
+const trimmedPatch = trimPatchContext(patchContent, 3);
 
 /*
 trimmedPatch:

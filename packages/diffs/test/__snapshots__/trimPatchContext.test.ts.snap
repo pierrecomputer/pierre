@@ -1,6 +1,6 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`trimPatchContent trims trim.patch fixture and matches snapshot: trim.patch trimmed 1`] = `
+exports[`trimPatchContext trims trim.patch fixture and matches snapshot: trim.patch trimmed 1`] = `
 "diff --git a/api/oai-synthetics/oai_synthetics/utils/api_config.py b/api/oai-synthetics/oai_synthetics/utils/api_config.py
 index 237cb4b1ba250c1bc63337b50d1d2ae5c02b6658..71f4e2dcdeafcdf9d3cb16f84c2d85c283edd54c 100644
 --- a/api/oai-synthetics/oai_synthetics/utils/api_config.py

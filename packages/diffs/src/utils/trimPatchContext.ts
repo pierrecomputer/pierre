@@ -16,12 +16,14 @@ interface CurrentHunk {
  * well as be able to create new hunks where necessary if there's excessive
  * context between changes
  */
-export function trimPatchContent(patch: string, contextSize = 10): string {
+export function trimPatchContext(patch: string, contextSize = 10): string {
   const lines: string[] = [];
 
   let currentHunk: CurrentHunk | undefined;
   for (const line of patch.split('\n')) {
     const parsedHunkHeader = line.match(HUNK_HEADER);
+    // If we've come across a new hunk boundary, then we should close out the
+    // current hunk and setup a new one
     if (parsedHunkHeader != null) {
       if (currentHunk != null) {
         if (currentHunk.hunkLines.length > 0) {
@@ -85,7 +87,9 @@ export function trimPatchContent(patch: string, contextSize = 10): string {
 
         removedItems.shift();
         currentHunk = {
-          ...currentHunk,
+          // NOTE(amadeus): Not sure there's an easy way to manage this context
+          // string stuff, so lets just remove it from auto generated hunks
+          hunkContextString: '',
           additionStart: currentHunk.additionStart + emittedAdditionCount + 1,
           deletionStart: currentHunk.deletionStart + emittedDeletionCount + 1,
           deletionCount: 0,
