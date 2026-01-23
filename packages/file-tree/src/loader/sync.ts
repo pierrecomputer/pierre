@@ -1,15 +1,34 @@
 import type { TreeDataLoader } from '@headless-tree/core';
+import type { FileTreeNode } from '../types';
 
-import type { FileTreeData, FileTreeNode } from '../types';
+import { fileListToTree } from '../utils/fileListToTree';
 
 export interface SyncDataLoaderOptions {
   flattenEmptyDirectories?: boolean;
+  rootId?: string;
+  rootName?: string;
 }
 
+/**
+ * Creates a sync data loader that pre-builds all nodes upfront.
+ *
+ * @param filePaths - Array of file path strings
+ * @param options - Configuration options
+ */
 export function generateSyncDataLoader(
-  data: FileTreeData,
+  filePaths: string[],
   options: SyncDataLoaderOptions = {}
 ): TreeDataLoader<FileTreeNode> {
+  const {
+    flattenEmptyDirectories = false,
+    rootId = 'root',
+    rootName = 'root',
+  } = options;
+
+  const data = fileListToTree(filePaths, {
+    root: { id: rootId, name: rootName },
+  });
+
   return {
     getItem: (id: string) => data[id],
     getChildren: (id: string) => {
@@ -17,7 +36,7 @@ export function generateSyncDataLoader(
       if (children == null) {
         return [];
       }
-      if (options.flattenEmptyDirectories === true) {
+      if (flattenEmptyDirectories === true) {
         if (children.flattened != null) {
           return children.flattened;
         }

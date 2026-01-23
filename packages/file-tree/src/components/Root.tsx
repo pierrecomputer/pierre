@@ -172,10 +172,10 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
   const dataLoader = useMemo(
     () =>
-      generateSyncDataLoader(treeData, {
+      generateSyncDataLoader(files, {
         flattenEmptyDirectories,
       }),
-    [treeData, flattenEmptyDirectories]
+    [files, flattenEmptyDirectories]
   );
 
   const tree = useTree<FileTreeNode>({
