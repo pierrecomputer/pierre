@@ -2,7 +2,6 @@ import {
   type TreeInstance,
   expandAllFeature,
   hotkeysCoreFeature,
-  searchFeature,
   selectionFeature,
   syncDataLoaderFeature,
 } from '@headless-tree/core';
@@ -12,6 +11,7 @@ import { useMemo } from 'preact/hooks';
 import { fileListToTree } from 'src/utils/fileListToTree';
 
 import type { FileTreeOptions } from '../FileTree';
+import { fileTreeSearchFeature } from '../features/fileTreeSearchFeature';
 import { generateSyncDataLoader } from '../loader/sync';
 import type { FileTreeNode } from '../types';
 import { Icon } from './Icon';
@@ -90,7 +90,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
       syncDataLoaderFeature,
       selectionFeature,
       hotkeysCoreFeature,
-      searchFeature,
+      fileTreeSearchFeature,
       expandAllFeature,
     ],
   });
