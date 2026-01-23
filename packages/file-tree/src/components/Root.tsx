@@ -101,6 +101,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
     ...origSearchInputProps,
     onInput: onChange,
   };
+  const hasFocusedItem = tree.getState().focusedItem != null;
   return (
     <div {...tree.getContainerProps()}>
       <div data-file-tree-search-container>
@@ -117,14 +118,11 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
           itemName.charAt(0).toUpperCase() === itemName.charAt(0);
         const alignCapitals = startWithCapital;
         const isSelected = item.isSelected();
-        if (isSelected) {
-          console.log('selected', item.getId());
-        }
         const selectionProps = isSelected ? { 'data-item-selected': true } : {};
 
         const isFlattenedDirectory = itemData?.flattens != null;
         const isSearchMatch = item.isMatchingSearch();
-        const isFocused = item.isFocused();
+        const isFocused = hasFocusedItem && item.isFocused();
         const focusedProps = isFocused ? { 'data-item-focused': true } : {};
         const searchMatchProps = isSearchMatch
           ? { 'data-item-search-match': true }
