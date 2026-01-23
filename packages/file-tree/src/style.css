@@ -44,12 +44,18 @@
     }
   }
 
+  /* The wrapper for the tree items */
+  [role='tree'] {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
   /* LIST ITEM */
   [data-type='item'] {
     outline: none;
     background: transparent;
     border: none;
-    width: 100%;
     position: relative;
 
     padding: 0 var(--ft-item-padding-x);
