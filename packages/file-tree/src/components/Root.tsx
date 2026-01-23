@@ -8,7 +8,6 @@ import {
 import type { JSX } from 'preact';
 import { Fragment } from 'preact';
 import { useMemo } from 'preact/hooks';
-import { fileListToTree } from 'src/utils/fileListToTree';
 
 import type { FileTreeOptions } from '../FileTree';
 import { generateSyncDataLoader } from '../loader/sync';
@@ -55,7 +54,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   const { rootItemId, ...restTreeConfig } = config ?? {};
   const dataLoader = useMemo(
     () =>
-      generateSyncDataLoader(fileListToTree(files), {
+      generateSyncDataLoader(files, {
         flattenEmptyDirectories,
       }),
     [files, flattenEmptyDirectories]
