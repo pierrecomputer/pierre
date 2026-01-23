@@ -1,14 +1,9 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { FileTree, type FileTreeOptions } from '../../FileTree';
-import { useStableCallback } from './useStableCallback';
-
-const useIsometricEffect =
-  typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface UseFileTreeInstanceProps {
   options: FileTreeOptions;
-  forceClientRender?: boolean;
   prerenderedHTML: string | undefined;
 }
 
@@ -18,136 +13,101 @@ interface UseFileTreeInstanceReturn {
 
 export function useFileTreeInstance({
   options,
-  forceClientRender,
   prerenderedHTML,
 }: UseFileTreeInstanceProps): UseFileTreeInstanceReturn {
   const containerRef = useRef<HTMLElement | null>(null);
   const instanceRef = useRef<FileTree | null>(null);
-  const previousOptionsRef = useRef<FileTreeOptions | null>(null);
-  const hasRenderedRef = useRef(false);
 
-  const getExistingFileTreeId = (fileTreeContainer: HTMLElement): string => {
-    const children = Array.from(fileTreeContainer.shadowRoot?.children ?? []);
-    const fileTreeElement = children.find(
-      (child: Element): child is HTMLElement =>
-        child instanceof HTMLElement &&
-        child.dataset?.fileTreeId != null &&
-        child.dataset.fileTreeId.length > 0
-    );
-    if (fileTreeElement == null) {
-      throw new Error(
-        'useFileTreeInstance: No file tree element found in the container'
-      );
-    }
-    // TODO: switch to a more robust way of quickly grabbing this specific element
-    const existingFileTreeId = fileTreeElement?.dataset?.fileTreeId;
-    if (!existingFileTreeId) {
-      throw new Error(
-        'useFileTreeInstance: No file tree id found in the container'
-      );
-    }
-    return existingFileTreeId;
-  };
-
-  const clearExistingFileTree = (fileTreeContainer: HTMLElement): void => {
-    const children = Array.from(fileTreeContainer.shadowRoot?.children ?? []);
-    const fileTreeElement = children.find(
-      (child: Element): child is HTMLElement =>
-        child instanceof HTMLElement &&
-        child.dataset?.fileTreeId != null &&
-        child.dataset.fileTreeId.length > 0
-    );
-    if (fileTreeElement != null) {
-      fileTreeElement.replaceChildren();
-    }
-  };
-
-  const createInstance = (fileTreeContainer: HTMLElement): FileTree => {
-    const existingFileTreeId = getExistingFileTreeId(fileTreeContainer);
-    const instance = new FileTree({
-      ...options,
-      id: existingFileTreeId ?? undefined,
-    });
-    return instance;
-  };
-
-  // TODO: pull this out and make it harder to forget to update
-  const areOptionsEqual = (
-    left: FileTreeOptions,
-    right: FileTreeOptions
-  ): boolean => {
-    if (left === right) return true;
-    if (left.flattenEmptyDirectories !== right.flattenEmptyDirectories)
-      return false;
-    if (left.id !== right.id) return false;
-    if (left.onSelection !== right.onSelection) return false;
-    if (left.config !== right.config) return false;
-    if (left.files === right.files) return true;
-    if (left.files.length !== right.files.length) return false;
-    return left.files.every((file, index) => file === right.files[index]);
-  };
-
-  const ref = useStableCallback((fileTreeContainer: HTMLElement | null) => {
-    if (fileTreeContainer != null) {
-      containerRef.current = fileTreeContainer;
-      if (instanceRef.current != null) {
-        throw new Error(
-          'useFileDiffInstance: An instance should not already exist when a node is created'
-        );
+  // Ref callback that handles mount/unmount and re-runs when options change.
+  // By including options in the dependency array, the callback identity changes
+  // when options change, causing React to call cleanup then re-invoke with the
+  // same DOM node - allowing us to detect and handle options changes.
+  //
+  // React 19: Return cleanup function, called when ref changes or element unmounts.
+  const ref = useCallback(
+    (fileTreeContainer: HTMLElement | null) => {
+      if (fileTreeContainer == null) {
+        return;
       }
-      instanceRef.current = createInstance(fileTreeContainer);
-      void instanceRef.current.hydrate({
-        fileTreeContainer,
-        prerenderedHTML,
-      });
-      hasRenderedRef.current = true;
-    } else {
-      containerRef.current = null;
-      if (instanceRef.current == null) {
-        throw new Error(
-          'useFileTreeInstance: A FileTree instance should exist when unmounting'
+
+      const getExistingFileTreeId = (): string | undefined => {
+        const children = Array.from(
+          fileTreeContainer.shadowRoot?.children ?? []
         );
-      }
-      instanceRef.current.cleanUp();
-      instanceRef.current = null;
-      hasRenderedRef.current = false;
-    }
-  });
+        const fileTreeElement = children.find(
+          (child: Element): child is HTMLElement =>
+            child instanceof HTMLElement &&
+            child.dataset?.fileTreeId != null &&
+            child.dataset.fileTreeId.length > 0
+        );
+        return fileTreeElement?.dataset?.fileTreeId;
+      };
 
-  useIsometricEffect(() => {
-    if (instanceRef.current == null) return;
-    const previousOptions = previousOptionsRef.current;
-    previousOptionsRef.current = options;
+      const clearExistingFileTree = (): void => {
+        const children = Array.from(
+          fileTreeContainer.shadowRoot?.children ?? []
+        );
+        const fileTreeElement = children.find(
+          (child: Element): child is HTMLElement =>
+            child instanceof HTMLElement &&
+            child.dataset?.fileTreeId != null &&
+            child.dataset.fileTreeId.length > 0
+        );
+        if (fileTreeElement != null) {
+          fileTreeElement.replaceChildren();
+        }
+      };
 
-    if (previousOptions == null) {
-      if (forceClientRender === true) {
-        void instanceRef.current.render({
-          fileTreeContainer: containerRef.current ?? undefined,
+      const createInstance = (existingId?: string): FileTree => {
+        return new FileTree({
+          ...options,
+          id: existingId,
         });
-        hasRenderedRef.current = true;
-      }
-      return;
-    }
+      };
 
-    if (!areOptionsEqual(previousOptions, options)) {
-      const fileTreeContainer = containerRef.current;
-      if (fileTreeContainer != null) {
-        instanceRef.current.cleanUp();
-        clearExistingFileTree(fileTreeContainer);
-        instanceRef.current = createInstance(fileTreeContainer);
+      const existingFileTreeId = getExistingFileTreeId();
+
+      // Check if this is a re-run due to options change (same container, but new callback identity)
+      const isOptionsChange =
+        containerRef.current === fileTreeContainer &&
+        instanceRef.current != null;
+
+      if (isOptionsChange) {
+        // Options changed - clean up and re-create instance
+        instanceRef.current?.cleanUp();
+        clearExistingFileTree();
+        instanceRef.current = createInstance(existingFileTreeId);
         void instanceRef.current.render({ fileTreeContainer });
-        hasRenderedRef.current = true;
-      }
-      return;
-    }
+      } else {
+        // Initial mount
+        containerRef.current = fileTreeContainer;
 
-    if (forceClientRender === true && !hasRenderedRef.current) {
-      void instanceRef.current.render({
-        fileTreeContainer: containerRef.current ?? undefined,
-      });
-      hasRenderedRef.current = true;
-    }
-  }, [forceClientRender, options]);
+        // Check if we have prerendered HTML to hydrate
+        const hasPrerenderedContent =
+          prerenderedHTML != null && existingFileTreeId != null;
+
+        instanceRef.current = createInstance(existingFileTreeId);
+
+        if (hasPrerenderedContent) {
+          // SSR: hydrate the prerendered HTML
+          void instanceRef.current.hydrate({
+            fileTreeContainer,
+            prerenderedHTML,
+          });
+        } else {
+          // CSR: render from scratch
+          void instanceRef.current.render({ fileTreeContainer });
+        }
+      }
+
+      return () => {
+        instanceRef.current?.cleanUp();
+        instanceRef.current = null;
+        containerRef.current = null;
+      };
+    },
+    [options, prerenderedHTML]
+  );
 
   return { ref };
 }
