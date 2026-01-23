@@ -124,6 +124,8 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
 
         const isFlattenedDirectory = itemData?.flattens != null;
         const isSearchMatch = item.isMatchingSearch();
+        const isFocused = item.isFocused();
+        const focusedProps = isFocused ? { 'data-item-focused': true } : {};
         const searchMatchProps = isSearchMatch
           ? { 'data-item-search-match': true }
           : {};
@@ -133,6 +135,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
             data-item-type={hasChildren ? 'folder' : 'file'}
             {...selectionProps}
             {...searchMatchProps}
+            {...focusedProps}
             data-item-id={item.getId()}
             {...item.getProps()}
             key={item.getId()}
