@@ -110,7 +110,6 @@ export function trimPatchContext(patch: string, contextSize = 10): string {
   }
 
   if (currentHunk != null && currentHunk.hunkLines.length > 0) {
-    console.log(currentHunk);
     flushContextLines(currentHunk, contextSize);
     flushHunk(currentHunk, lines);
   }

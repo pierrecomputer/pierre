@@ -118,7 +118,7 @@ index abc123..def456 100644
  export { greet };
 \`;
 
-// Keep 2 lines of context around changes.
+// Keep 3 lines of context around changes.
 const trimmedPatch = trimPatchContext(patchContent, 3);
 
 /*
