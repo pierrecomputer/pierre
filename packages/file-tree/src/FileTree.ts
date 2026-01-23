@@ -28,7 +28,6 @@ export type HeadlessTreeConfig = Omit<
   TreeConfig<FileTreeNode>,
   'features' | 'dataLoader' | 'rootItemId' | 'getItemName' | 'isItemFolder'
 > & {
-  rootItemId?: string;
   fileTreeSearchMode?: FileTreeSearchMode;
 };
 

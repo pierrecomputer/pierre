@@ -53,7 +53,9 @@ function FlattenedDirectoryName({
 export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   'use no memo';
   const { config, files, flattenEmptyDirectories } = fileTreeOptions;
-  const { rootItemId, ...restTreeConfig } = config ?? {};
+  const restTreeConfig = config ?? {};
+  const treeDomId = 'ft';
+  const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
   const dataLoader = useMemo(
     () =>
       generateSyncDataLoader(fileListToTree(files), {
@@ -63,8 +65,8 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   );
 
   const tree = useTree<FileTreeNode>({
-    rootItemId: rootItemId ?? 'root',
     ...restTreeConfig,
+    rootItemId: 'root',
     dataLoader,
     getItemName: (item) => item.getItemData().name,
     isItemFolder: (item) => {
@@ -97,15 +99,29 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
 
   const { onChange, ...origSearchInputProps } =
     tree.getSearchInputElementProps();
+  const hasFocusedItem = tree.getState().focusedItem != null;
+  const focusedItemId = hasFocusedItem ? tree.getState().focusedItem : null;
+  const isSearchOpen = tree.isSearchOpen?.() ?? false;
+  const activeDescendantId =
+    isSearchOpen && focusedItemId != null
+      ? getItemDomId(focusedItemId)
+      : undefined;
   const searchInputProps = {
     ...origSearchInputProps,
+    ...(activeDescendantId != null && {
+      'aria-activedescendant': activeDescendantId,
+      'aria-controls': treeDomId,
+    }),
     onInput: onChange,
   };
-  const hasFocusedItem = tree.getState().focusedItem != null;
   return (
-    <div {...tree.getContainerProps()}>
+    <div {...tree.getContainerProps()} id={treeDomId}>
       <div data-file-tree-search-container>
-        <input data-file-tree-search-input {...searchInputProps} />
+        <input
+          placeholder="Search…"
+          data-file-tree-search-input
+          {...searchInputProps}
+        />
       </div>
       {tree.getItems().map((item) => {
         const itemData = item.getItemData();
@@ -135,6 +151,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
             {...searchMatchProps}
             {...focusedProps}
             data-item-id={item.getId()}
+            id={getItemDomId(item.getId())}
             {...item.getProps()}
             key={item.getId()}
           >

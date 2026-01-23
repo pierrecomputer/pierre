@@ -2,12 +2,53 @@ import type { FileTreeNode } from '../types';
 
 export interface FileListToTreeOptions {
   root?: {
-    id: string;
-    name: string;
+    name?: string;
   };
 }
 
+const ROOT_ID = 'root';
 const FLATTENED_PREFIX = 'f::';
+
+const hashId = (input: string): string => {
+  let h1 = 0xdeadbeef ^ input.length;
+  let h2 = 0x41c6ce57 ^ input.length;
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ char, 2654435761);
+    h2 = Math.imul(h2 ^ char, 1597334677);
+  }
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+};
+
+const createIdFactory = () => {
+  const idByKey = new Map<string, string>();
+  const usedIds = new Set<string>([ROOT_ID]);
+
+  return (key: string): string => {
+    const existing = idByKey.get(key);
+    if (existing != null) {
+      return existing;
+    }
+
+    const base = hashId(key);
+    let id = `n${base}`;
+    let suffix = 0;
+    while (usedIds.has(id)) {
+      suffix += 1;
+      id = `n${base}${suffix.toString(36)}`;
+    }
+
+    usedIds.add(id);
+    idByKey.set(key, id);
+    return id;
+  };
+};
 
 /**
  * Converts a list of file paths into a tree structure suitable for use with FileTree.
@@ -15,14 +56,16 @@ const FLATTENED_PREFIX = 'f::';
  *
  * @param filePaths - Array of file path strings (e.g., ['src/index.ts', 'src/utils/helper.ts'])
  * @param options - Optional configuration for root node
- * @returns A record mapping node IDs (full paths) to FileTreeNode objects
+ * @returns A record mapping node IDs (hashed) to FileTreeNode objects
+ *   with the original path stored on each node's `path` field
  */
 export function fileListToTree(
   filePaths: string[],
   options: FileListToTreeOptions = {}
 ): Record<string, FileTreeNode> {
   const { root: rootOptions } = options;
-  const { id: rootId = 'root', name: rootName = 'root' } = rootOptions ?? {};
+  const rootId = ROOT_ID;
+  const rootName = rootOptions?.name ?? ROOT_ID;
 
   const tree: Record<string, FileTreeNode> = {};
   const folderChildren: Map<string, Set<string>> = new Map();
@@ -51,7 +94,7 @@ export function fileListToTree(
 
       if (isFile) {
         // Create file node (no children)
-        tree[currentPath] ??= { name: part };
+        tree[currentPath] ??= { name: part, path: currentPath };
       } else if (!folderChildren.has(currentPath)) {
         // Ensure folder has a children set for tracking
         folderChildren.set(currentPath, new Set());
@@ -180,6 +223,7 @@ export function fileListToTree(
 
       tree[flattenedKey] = {
         name: flattenedName,
+        path: flattenedKey,
         flattens: flattenedFolders,
         children: {
           direct: endpointDirectChildren,
@@ -204,6 +248,7 @@ export function fileListToTree(
     if (path === rootId) {
       tree[rootId] = {
         name: rootName,
+        path: rootId,
         children: {
           direct: directChildren,
           ...(flattenedChildren != null && { flattened: flattenedChildren }),
@@ -214,6 +259,7 @@ export function fileListToTree(
       const name = lastSlashIndex >= 0 ? path.slice(lastSlashIndex + 1) : path;
       tree[path] = {
         name,
+        path,
         children: {
           direct: directChildren,
           ...(flattenedChildren != null && { flattened: flattenedChildren }),
@@ -222,5 +268,28 @@ export function fileListToTree(
     }
   }
 
-  return tree;
+  const idForKey = createIdFactory();
+  const mapKey = (key: string) => (key === rootId ? rootId : idForKey(key));
+  const hashedTree: Record<string, FileTreeNode> = {};
+
+  for (const [key, node] of Object.entries(tree)) {
+    const mappedKey = mapKey(key);
+    const nextNode: FileTreeNode = {
+      ...node,
+      ...(node.children != null && {
+        children: {
+          direct: node.children.direct.map(mapKey),
+          ...(node.children.flattened != null && {
+            flattened: node.children.flattened.map(mapKey),
+          }),
+        },
+      }),
+      ...(node.flattens != null && { flattens: node.flattens.map(mapKey) }),
+    };
+
+    hashedTree[mappedKey] = nextNode;
+  }
+  console.log(hashedTree);
+
+  return hashedTree;
 }
