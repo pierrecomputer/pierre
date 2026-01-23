@@ -1,13 +1,14 @@
 import type {
   FeatureImplementation,
   ItemInstance,
+  SearchFeatureDataRef,
   TreeConfig,
   TreeInstance,
 } from '@headless-tree/core';
 import { makeStateUpdater } from '@headless-tree/core';
-import type { SearchFeatureDataRef } from '@headless-tree/core';
 
 import type { FileTreeSearchMode } from '../FileTree';
+import type { FileTreeNode } from '../types';
 
 type SearchIndex = {
   orderedIds: string[];
@@ -79,7 +80,7 @@ const getSearchCache = <T>(tree: TreeInstance<T>): SearchCache<T> => {
   const cached = dataRef.current.searchCache;
 
   if (
-    cached &&
+    cached != null &&
     cached.search === search &&
     cached.matcher === matcher &&
     cached.rootItemId === rootItemId &&
@@ -195,7 +196,7 @@ export const fileTreeSearchFeature: FeatureImplementation = {
   treeInstance: {
     setSearch: ({ tree }, search) => {
       const previousSearch = tree.getState().search;
-      const dataRef = tree.getDataRef<FileTreeSearchDataRef<any>>();
+      const dataRef = tree.getDataRef<FileTreeSearchDataRef<FileTreeNode>>();
       tree.applySubStateUpdate('search', search);
 
       if (previousSearch == null && search != null) {
@@ -245,7 +246,9 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       tree.setSearch(initialValue);
       tree.getConfig().onOpenSearch?.();
       setTimeout(() => {
-        tree.getDataRef<FileTreeSearchDataRef>().current.searchInput?.focus();
+        tree
+          .getDataRef<FileTreeSearchDataRef<FileTreeNode>>()
+          .current.searchInput?.focus();
       });
     },
     closeSearch: ({ tree }) => {
@@ -253,16 +256,17 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       tree.getConfig().onCloseSearch?.();
     },
     isSearchOpen: ({ tree }) => tree.getState().search !== null,
-    getSearchValue: ({ tree }) => tree.getState().search || '',
+    getSearchValue: ({ tree }) => tree.getState().search ?? '',
     registerSearchInputElement: ({ tree }, element) => {
-      const dataRef = tree.getDataRef<FileTreeSearchDataRef>();
+      const dataRef = tree.getDataRef<FileTreeSearchDataRef<FileTreeNode>>();
       dataRef.current.searchInput = element;
-      if (element && dataRef.current.keydownHandler) {
+      if (element != null && dataRef.current.keydownHandler != null) {
         element.addEventListener('keydown', dataRef.current.keydownHandler);
       }
     },
     getSearchInputElement: ({ tree }) =>
-      tree.getDataRef<FileTreeSearchDataRef>().current.searchInput ?? null,
+      tree.getDataRef<FileTreeSearchDataRef<FileTreeNode>>().current
+        .searchInput ?? null,
 
     getSearchInputElementProps: ({ tree }) => ({
       value: tree.getSearchValue(),
