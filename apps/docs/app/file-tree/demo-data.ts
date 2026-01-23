@@ -23,7 +23,21 @@ const sampleFileList: string[] = [
 export const sharedDemoFileTreeOptions: FileTreeOptions = {
   config: {
     initialState: {
-      expandedItems: ['src', 'src/utils'],
+      // TODO: We should be able to specify file paths directly
+      // (e.g., 'Build/assets/images/social') and have the library
+      // automatically compute the required expandedItems. Currently users must:
+      // 1. Know about the internal 'f::' prefix for flattened folder IDs
+      // 2. Specify all intermediate folder paths when not flattened
+      // This leaks internal implementation details.
+      expandedItems: [
+        'Build',
+        // Flattened ID (uses 'f::' prefix)
+        'f::Build/assets/images/social',
+        // Non-flattened IDs (all intermediate folders)
+        'Build/assets',
+        'Build/assets/images',
+        'Build/assets/images/social',
+      ],
     },
     fileTreeSearchMode: 'collapse-non-matches',
   },
