@@ -289,7 +289,6 @@ export function fileListToTree(
 
     hashedTree[mappedKey] = nextNode;
   }
-  console.log(hashedTree);
 
   return hashedTree;
 }

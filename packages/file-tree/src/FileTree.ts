@@ -24,6 +24,11 @@ interface FileTreeHydrationProps {
 
 export type FileTreeSearchMode = 'expand-matches' | 'collapse-non-matches';
 
+export type FileTreeSelectionItem = {
+  path: string;
+  isFolder: boolean;
+};
+
 export type HeadlessTreeConfig = Omit<
   TreeConfig<FileTreeNode>,
   'features' | 'dataLoader' | 'rootItemId' | 'getItemName' | 'isItemFolder'
@@ -35,6 +40,7 @@ export interface FileTreeOptions {
   files: string[];
   id?: string;
   flattenEmptyDirectories?: boolean;
+  onSelection?: (items: FileTreeSelectionItem[]) => void;
   // probably change the name here once i know a better one
   config?: HeadlessTreeConfig;
 }
@@ -143,6 +149,7 @@ export class FileTree {
         config: this.initialTreeConfig,
         files: this.files,
         flattenEmptyDirectories: this.options.flattenEmptyDirectories,
+        onSelection: this.options.onSelection,
       },
     });
   }
@@ -177,6 +184,7 @@ export class FileTree {
           config: this.initialTreeConfig,
           files: this.files,
           flattenEmptyDirectories: this.options.flattenEmptyDirectories,
+          onSelection: this.options.onSelection,
         },
       });
     }

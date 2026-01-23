@@ -80,6 +80,7 @@ export function useFileTreeInstance({
     if (left.flattenEmptyDirectories !== right.flattenEmptyDirectories)
       return false;
     if (left.id !== right.id) return false;
+    if (left.onSelection !== right.onSelection) return false;
     if (left.config !== right.config) return false;
     if (left.files === right.files) return true;
     if (left.files.length !== right.files.length) return false;

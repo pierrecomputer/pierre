@@ -7,10 +7,10 @@ import {
 } from '@headless-tree/core';
 import type { JSX } from 'preact';
 import { Fragment } from 'preact';
-import { useMemo } from 'preact/hooks';
+import { useEffect, useMemo, useRef } from 'preact/hooks';
 import { fileListToTree } from 'src/utils/fileListToTree';
 
-import type { FileTreeOptions } from '../FileTree';
+import type { FileTreeOptions, FileTreeSelectionItem } from '../FileTree';
 import { fileTreeSearchFeature } from '../features/fileTreeSearchFeature';
 import { generateSyncDataLoader } from '../loader/sync';
 import type { FileTreeNode } from '../types';
@@ -20,6 +20,13 @@ import { useTree } from './hooks/useTree';
 export interface FileTreeRootProps {
   fileTreeOptions: FileTreeOptions;
 }
+
+const FLATTENED_PREFIX = 'f::';
+
+const getSelectionPath = (path: string): string =>
+  path.startsWith(FLATTENED_PREFIX)
+    ? path.slice(FLATTENED_PREFIX.length)
+    : path;
 
 function FlattenedDirectoryName({
   tree,
@@ -96,6 +103,35 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
       expandAllFeature,
     ],
   });
+
+  const selectionSnapshotRef = useRef<string | null>(null);
+  const selectionSnapshot = tree.getState().selectedItems?.join('|') ?? '';
+
+  const onSelection = fileTreeOptions.onSelection;
+  useEffect(() => {
+    if (onSelection == null) {
+      return;
+    }
+    if (selectionSnapshotRef.current == null) {
+      selectionSnapshotRef.current = selectionSnapshot;
+      return;
+    }
+    if (selectionSnapshotRef.current === selectionSnapshot) {
+      return;
+    }
+
+    selectionSnapshotRef.current = selectionSnapshot;
+    const selection: FileTreeSelectionItem[] = tree
+      .getSelectedItems()
+      .map((item) => {
+        const data = item.getItemData();
+        return {
+          path: getSelectionPath(data.path),
+          isFolder: data.children?.direct != null,
+        };
+      });
+    onSelection(selection);
+  }, [selectionSnapshot, onSelection, tree]);
 
   const { onChange, ...origSearchInputProps } =
     tree.getSearchInputElementProps();

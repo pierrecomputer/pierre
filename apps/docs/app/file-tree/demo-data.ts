@@ -39,6 +39,9 @@ export const sharedDemoFileTreeOptions: FileTreeOptions = {
     },
     fileTreeSearchMode: 'collapse-non-matches',
   },
+  onSelection: (selection) => {
+    console.log('selection', selection);
+  },
   flattenEmptyDirectories: true,
   files: sampleFileList,
 };
