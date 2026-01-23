@@ -1,6 +1,8 @@
 import type { FileTreeOptions } from '@pierre/file-tree';
 
 const sampleFileList: string[] = [
+  'README.md',
+  'package.json',
   'Build/index.mjs',
   'Build/scripts.js',
   'Build/assets/images/social/logo.png',
@@ -16,8 +18,6 @@ const sampleFileList: string[] = [
   'src/utils/worker/index.ts',
   'src/utils/worker/deprecrated/old-worker.ts',
   'src/index.ts',
-  'README.md',
-  'package.json',
 ];
 
 export const sharedDemoFileTreeOptions: FileTreeOptions = {
