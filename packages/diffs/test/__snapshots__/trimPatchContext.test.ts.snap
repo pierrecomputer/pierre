@@ -1,0 +1,79 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`trimPatchContent trims trim.patch fixture and matches snapshot: trim.patch trimmed 1`] = `
+"diff --git a/api/oai-synthetics/oai_synthetics/utils/api_config.py b/api/oai-synthetics/oai_synthetics/utils/api_config.py
+index 237cb4b1ba250c1bc63337b50d1d2ae5c02b6658..71f4e2dcdeafcdf9d3cb16f84c2d85c283edd54c 100644
+--- a/api/oai-synthetics/oai_synthetics/utils/api_config.py
++++ b/api/oai-synthetics/oai_synthetics/utils/api_config.py
+@@ -28,21 +28,21 @@ looks like:
+ - "EU" (run data residency tests in the EU)
+ - "Expanded" (run data residency tests in a randomly-chosen region from [AU, CA, IN, JP, KR, SG])
+ 
+ """
+ 
+ from __future__ import annotations
+ 
+ import importlib
+ from datetime import timedelta
+ from pathlib import Path
+-from typing import Any, Mapping, MutableMapping, Sequence
++from typing import Any, Callable, Mapping, MutableMapping, Sequence
+ 
+ from ruamel.yaml import YAML
+ 
+ from oai_logging import logging as oai_logging
+ from oai_synthetics.common import TestConfig, TypedTestCase
+ from oai_synthetics.utils.additional_sku_configs import (
+     _choose_one_scale_tier_vm,
+     maybe_build_data_residency_test_cases,
+     maybe_build_scale_tier_test_cases,
+ )
+@@ -143,34 +143,44 @@ def _build_test_configs_for_model(
+                 blob_storage_container_names=blob_storage_container_names,
+             )
+             configs.append(preprod_tc)
+ 
+     return configs
+ 
+ 
+ def load_model_configs_from_yaml(
+     api_name: str,
+     test_case_config_path: str | Path,
+-    model_config_path: str | Path,
++    model_config_path: str | Path | None = None,
+     additional_model_config_path: str | Path | None = None,
++    *,
++    model_config_loader: Callable[[], Mapping[str, Any]] | None = None,
+ ) -> list[TestConfig[Any]]:
+     """Load a YAML manifest and return test configs for all models and aliases, using test_case.yaml for test case config."""
+     yaml = YAML(typ="safe")
+ 
+     with open(test_case_config_path, "r", encoding="utf-8") as fp:
+         base_test_cases = yaml.load(fp)
+ 
+     base_test_cases = {
+         k: v for k, v in base_test_cases.items() if not v.get("not_model_specific", False)
+     }
+-    with open(model_config_path, "r", encoding="utf-8") as fp:
+-        model_configs = yaml.load(fp)["models"]
++    if model_config_loader is not None:
++        loaded_config: Mapping[str, Any] | None = model_config_loader()
++    else:
++        if model_config_path is None:
++            raise ValueError("model_config_path must be provided when no loader is supplied")
++        with open(model_config_path, "r", encoding="utf-8") as fp:
++            loaded_config = yaml.load(fp)
++
++    loaded_config = loaded_config or {}
++    model_configs = list(loaded_config.get("models", []))
+ 
+     if additional_model_config_path is not None:
+         with open(additional_model_config_path, "r", encoding="utf-8") as fp:
+             additional_model_configs = yaml.load(fp)["models"]
+             model_configs.extend(additional_model_configs)
+ 
+     test_configs: list[TestConfig[Any]] = []
+ 
+     for model_entry in model_configs:
+         model_name: str = model_entry["name"]"
+`;

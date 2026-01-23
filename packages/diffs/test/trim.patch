@@ -1,0 +1,136 @@
+diff --git a/api/oai-synthetics/oai_synthetics/utils/api_config.py b/api/oai-synthetics/oai_synthetics/utils/api_config.py
+index 237cb4b1ba250c1bc63337b50d1d2ae5c02b6658..71f4e2dcdeafcdf9d3cb16f84c2d85c283edd54c 100644
+--- a/api/oai-synthetics/oai_synthetics/utils/api_config.py
++++ b/api/oai-synthetics/oai_synthetics/utils/api_config.py
+@@ -13,51 +13,51 @@ looks like:
+ ```
+ 
+ Each test case key corresponds to one of an API test cases. For
+ each listed test case we produce a `TestConfig` instance. Additional test
+ configs are produced for any `alternate_vm_names` unless excluded under
+ `synthetics_config.excluded_aliases`. Overrides for aliases can be provided
+ under `synthetics_config.alias_overrides`.
+ 
+ Data residency test cases can be automatically added to the test config based on the model's
+ `data_residency_config` field. For CompletionsAPI, the test copies configs from `BasicChatCompletion` or `Embeddings`.
+ For ResponsesAPI, the test copies configs from `FollowUp`.
+ 
+ The `data_residency_config` field is a list of strings, each corresponding to a geography. The full list of valid values is:
+ 
+ - "US" (run data residency tests in the US)
+ - "EU" (run data residency tests in the EU)
+ - "Expanded" (run data residency tests in a randomly-chosen region from [AU, CA, IN, JP, KR, SG])
+ 
+ """
+ 
+ from __future__ import annotations
+ 
+ import importlib
+ from datetime import timedelta
+ from pathlib import Path
+-from typing import Any, Mapping, MutableMapping, Sequence
++from typing import Any, Callable, Mapping, MutableMapping, Sequence
+ 
+ from ruamel.yaml import YAML
+ 
+ from oai_logging import logging as oai_logging
+ from oai_synthetics.common import TestConfig, TypedTestCase
+ from oai_synthetics.utils.additional_sku_configs import (
+     _choose_one_scale_tier_vm,
+     maybe_build_data_residency_test_cases,
+     maybe_build_scale_tier_test_cases,
+ )
+ 
+ logger = oai_logging.getLogger(__name__)
+ 
+ _PREPROD_EPS_MULTIPLIER = 0.2
+ 
+ 
+ def _get_prefix(api_name: str) -> str:
+     return "api" if api_name == "completionsapi" else api_name
+ 
+ 
+ def _import_fqn(fqn: str) -> tuple[type[TypedTestCase], type[TypedTestCase] | None]:
+     """Import a fully-qualified class name and return the class object."""
+     module_name, class_name = fqn.rsplit(".", 1)
+     module = importlib.import_module(module_name)
+     test_class = getattr(module, class_name)
+@@ -128,65 +128,75 @@ def _build_test_configs_for_model(
+             timeout=timedelta(seconds=timeout_seconds),
+             global_executions_per_second=eps,
+             config=cfg_dict,
+             blob_storage_container_names=blob_storage_container_names,
+         )
+         configs.append(tc)
+ 
+         # If preprod flag is set, also create a TestConfig for responsesapi-preprod
+         if preprod_test_class:
+             preprod_tc = TestConfig(
+                 name=f"{_get_prefix(api_name)}_preprod_{case_name}_{model}{experimental_suffix}",
+                 test_class=preprod_test_class,
+                 timeout=timedelta(seconds=timeout_seconds),
+                 global_executions_per_second=eps * _PREPROD_EPS_MULTIPLIER,
+                 config=cfg_dict,
+                 blob_storage_container_names=blob_storage_container_names,
+             )
+             configs.append(preprod_tc)
+ 
+     return configs
+ 
+ 
+ def load_model_configs_from_yaml(
+     api_name: str,
+     test_case_config_path: str | Path,
+-    model_config_path: str | Path,
++    model_config_path: str | Path | None = None,
+     additional_model_config_path: str | Path | None = None,
++    *,
++    model_config_loader: Callable[[], Mapping[str, Any]] | None = None,
+ ) -> list[TestConfig[Any]]:
+     """Load a YAML manifest and return test configs for all models and aliases, using test_case.yaml for test case config."""
+     yaml = YAML(typ="safe")
+ 
+     with open(test_case_config_path, "r", encoding="utf-8") as fp:
+         base_test_cases = yaml.load(fp)
+ 
+     base_test_cases = {
+         k: v for k, v in base_test_cases.items() if not v.get("not_model_specific", False)
+     }
+
+-    with open(model_config_path, "r", encoding="utf-8") as fp:
+-        model_configs = yaml.load(fp)["models"]
++    if model_config_loader is not None:
++        loaded_config: Mapping[str, Any] | None = model_config_loader()
++    else:
++        if model_config_path is None:
++            raise ValueError("model_config_path must be provided when no loader is supplied")
++        with open(model_config_path, "r", encoding="utf-8") as fp:
++            loaded_config = yaml.load(fp)
++
++    loaded_config = loaded_config or {}
++    model_configs = list(loaded_config.get("models", []))
+ 
+     if additional_model_config_path is not None:
+         with open(additional_model_config_path, "r", encoding="utf-8") as fp:
+             additional_model_configs = yaml.load(fp)["models"]
+             model_configs.extend(additional_model_configs)
+ 
+     test_configs: list[TestConfig[Any]] = []
+ 
+     for model_entry in model_configs:
+         model_name: str = model_entry["name"]
+         alt_names: Sequence[str] = model_entry.get("alternate_vm_names", [])
+         scale_tier_vms: list[str] = model_entry.get("scale_tier_vms", [])
+         model_specific_cfg: MutableMapping[str, Any] = model_entry.get("synthetics_config", {})
+         model_test_cases: MutableMapping[str, Mapping[str, Any]] = model_specific_cfg.get(
+             api_name, {}
+         )
+         api_has_model_test_cases = api_name in model_specific_cfg
+         excluded_aliases: Sequence[str] = model_specific_cfg.get("excluded_aliases", [])
+         alias_overrides: Mapping[str, Mapping[str, Any]] = model_specific_cfg.get(
+             "alias_overrides", {}
+         )
+ 
+         # Base model configs
+         extra_model_cfg = {
+             "inference_client_experimental": model_entry.get("inference_client_experimental", True)

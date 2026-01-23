@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { trimPatchContent } from '../src/utils/trimPatchContext';
 
@@ -107,5 +109,11 @@ describe('trimPatchContent', () => {
     ].join('\n');
 
     expect(trimmed).toBe(expected);
+  });
+
+  test('trims trim.patch fixture and matches snapshot', () => {
+    const patch = readFileSync(resolve(__dirname, './trim.patch'), 'utf-8');
+    const trimmed = trimPatchContent(patch, 10);
+    expect(trimmed).toMatchSnapshot('trim.patch trimmed');
   });
 });
