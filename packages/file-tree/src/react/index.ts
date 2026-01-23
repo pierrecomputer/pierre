@@ -1,4 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/triple-slash-reference
-/// <reference path="./jsx.d.ts" />
+// Type augmentation for the custom element
+import './jsx';
 
 export * from './FileTree';
