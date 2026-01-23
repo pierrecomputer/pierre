@@ -18,6 +18,7 @@ const sampleFileList: string[] = [
   'src/utils/worker/index.ts',
   'src/utils/worker/deprecrated/old-worker.ts',
   'src/index.ts',
+  '.gitignore',
 ];
 
 export const sharedDemoFileTreeOptions: FileTreeOptions = {

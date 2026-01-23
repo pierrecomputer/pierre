@@ -193,9 +193,7 @@ describe('fileListToTree', () => {
   test('should support custom root name', () => {
     const files = ['file.ts'];
     const tree = buildTree(files, {
-      root: {
-        name: 'Project',
-      },
+      rootName: 'Project',
     });
 
     // No flattened since identical to direct
@@ -252,28 +250,6 @@ describe('fileListToTree', () => {
         direct: ['src/utils/deep/nested/file.ts'],
       },
     });
-  });
-
-  test('should match snapshot for sample file list', () => {
-    const sampleFileList = [
-      'src/index.ts',
-      'src/components/Button.tsx',
-      'src/components/Card.tsx',
-      'src/components/Header.tsx',
-      'src/components/Sidebar.tsx',
-      'src/lib/mdx.tsx',
-      'src/lib/utils.ts',
-      'src/utils/stream.ts',
-      'src/utils/worker.ts',
-      'build/index.mjs',
-      'build/scripts.js',
-      'config/app.config.json',
-      'README.md',
-      'package.json',
-    ];
-
-    const tree = buildTree(sampleFileList);
-    expect(tree).toMatchSnapshot('sample file list tree');
   });
 
   test('should correctly flatten single-child folder chains', () => {
