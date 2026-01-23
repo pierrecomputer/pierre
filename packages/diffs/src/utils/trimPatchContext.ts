@@ -1,4 +1,4 @@
-import { HUNK_HEADER } from 'src/constants';
+import { HUNK_HEADER } from '../constants';
 
 interface CurrentHunk {
   hunkContextString: string;
@@ -10,6 +10,12 @@ interface CurrentHunk {
   contextLines: string[];
 }
 
+/**
+ * A utility function to trim out excess context lines from a patch file.  It
+ * will maintain line numbers, and properly update the hunk context markers, as
+ * well as be able to create new hunks where necessary if there's excessive
+ * context between changes
+ */
 export function trimPatchContent(patch: string, contextSize = 10): string {
   const lines: string[] = [];
 
@@ -117,7 +123,9 @@ function flushContextLines(hunk: CurrentHunk, contextSize: number) {
       hunk.contextLines.splice(0, difference);
       hunk.additionStart += difference;
       hunk.deletionStart += difference;
-    } else {
+    }
+    // Otherwise truncate from the end
+    else {
       hunk.contextLines.length = contextSize;
     }
   }
@@ -131,7 +139,6 @@ function flushContextLines(hunk: CurrentHunk, contextSize: number) {
 }
 
 function flushHunk(hunk: CurrentHunk, lines: string[]) {
-  // NOTE(amadeus): Ensure we are handling cases where the count isn't being passed...
   lines.push(
     `@@ -${formatHunkRange(hunk.deletionStart, hunk.deletionCount)} +${formatHunkRange(hunk.additionStart, hunk.additionCount)} @@${hunk.hunkContextString !== '' ? ` ${hunk.hunkContextString}` : ''}`
   );
