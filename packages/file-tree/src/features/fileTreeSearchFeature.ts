@@ -7,6 +7,8 @@ import type {
 import { makeStateUpdater } from '@headless-tree/core';
 import type { SearchFeatureDataRef } from '@headless-tree/core';
 
+import type { FileTreeSearchMode } from '../FileTree';
+
 type SearchIndex = {
   orderedIds: string[];
   indexById: Map<string, number>;
@@ -29,12 +31,20 @@ type FileTreeSearchDataRef<T> = SearchFeatureDataRef<T> & {
   searchCache?: SearchCache<T>;
 };
 
+type FileTreeSearchConfig = {
+  fileTreeSearchMode?: FileTreeSearchMode;
+};
+
 const defaultSearchMatcher = <T>(
   search: string,
   item: ItemInstance<T>
 ): boolean =>
   search.length > 0 &&
   item.getItemName().toLowerCase().includes(search.toLowerCase());
+
+const getSearchMode = <T>(tree: TreeInstance<T>): FileTreeSearchMode =>
+  (tree.getConfig() as FileTreeSearchConfig).fileTreeSearchMode ??
+  'expand-matches';
 
 const buildSearchIndex = <T>(
   tree: TreeInstance<T>,
@@ -119,14 +129,17 @@ const addAncestorFolders = (
 const expandForMatches = <T>(
   tree: TreeInstance<T>,
   cache: SearchCache<T>,
-  baselineExpandedItems: string[]
+  baselineExpandedItems: string[],
+  expandMatchingFolders: boolean
 ) => {
   const expandedItems = new Set(baselineExpandedItems);
   const { parentById } = cache.index;
   for (const matchId of cache.matchIds) {
-    const children = tree.retrieveChildrenIds(matchId) ?? [];
-    if (children.length > 0) {
-      expandedItems.add(matchId);
+    if (expandMatchingFolders) {
+      const children = tree.retrieveChildrenIds(matchId) ?? [];
+      if (children.length > 0) {
+        expandedItems.add(matchId);
+      }
     }
     addAncestorFolders(parentById, cache.rootItemId, matchId, expandedItems);
   }
@@ -210,9 +223,18 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       }
 
       const cache = getSearchCache(tree);
+      const searchMode = getSearchMode(tree);
       const baselineExpandedItems =
-        dataRef.current.previousExpandedItems ?? tree.getState().expandedItems;
-      expandForMatches(tree, cache, baselineExpandedItems);
+        searchMode === 'collapse-non-matches'
+          ? []
+          : (dataRef.current.previousExpandedItems ??
+            tree.getState().expandedItems);
+      expandForMatches(
+        tree,
+        cache,
+        baselineExpandedItems,
+        searchMode === 'expand-matches'
+      );
       cache.matchItems[0]?.setFocused();
       void cache.matchItems[0]?.scrollTo({
         block: 'nearest',
@@ -292,8 +314,8 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       allowWhenInputFocused: true,
       isEnabled: (tree) => tree.isSearchOpen(),
       handler: (_event, tree) => {
-        tree.closeSearch();
         tree.setSelectedItems([tree.getFocusedItem().getId()]);
+        tree.closeSearch();
       },
     },
     nextSearchItem: {

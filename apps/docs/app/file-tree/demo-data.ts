@@ -25,6 +25,7 @@ export const sharedDemoFileTreeOptions: FileTreeOptions = {
     initialState: {
       expandedItems: ['src', 'src/utils'],
     },
+    fileTreeSearchMode: 'collapse-non-matches',
   },
   flattenEmptyDirectories: true,
   files: sampleFileList,

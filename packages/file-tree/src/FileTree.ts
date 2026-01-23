@@ -22,11 +22,14 @@ interface FileTreeHydrationProps {
   prerenderedHTML?: string;
 }
 
+export type FileTreeSearchMode = 'expand-matches' | 'collapse-non-matches';
+
 export type HeadlessTreeConfig = Omit<
   TreeConfig<FileTreeNode>,
   'features' | 'dataLoader' | 'rootItemId' | 'getItemName' | 'isItemFolder'
 > & {
   rootItemId?: string;
+  fileTreeSearchMode?: FileTreeSearchMode;
 };
 
 export interface FileTreeOptions {
