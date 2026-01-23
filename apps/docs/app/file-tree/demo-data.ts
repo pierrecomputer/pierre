@@ -1,4 +1,4 @@
-import { type FileTreeOptions, fileListToTree } from '@pierre/file-tree';
+import type { FileTreeOptions } from '@pierre/file-tree';
 
 const sampleFileList: string[] = [
   'Build/index.mjs',
@@ -20,22 +20,10 @@ const sampleFileList: string[] = [
   'package.json',
 ];
 
-const expandedPaths = ['src', 'src/utils'];
-const expandedItems = (() => {
-  const tree = fileListToTree(sampleFileList);
-  const idByPath = new Map(
-    Object.entries(tree).map(([id, node]) => [node.path, id])
-  );
-  return expandedPaths.flatMap((path) => {
-    const id = idByPath.get(path);
-    return id != null ? [id] : [];
-  });
-})();
-
 export const sharedDemoFileTreeOptions: FileTreeOptions = {
   config: {
     initialState: {
-      expandedItems,
+      expandedItems: ['src', 'src/utils'],
     },
     fileTreeSearchMode: 'collapse-non-matches',
   },

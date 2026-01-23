@@ -60,15 +60,122 @@ function FlattenedDirectoryName({
 export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   'use no memo';
   const { config, files, flattenEmptyDirectories } = fileTreeOptions;
-  const restTreeConfig = config ?? {};
+  const treeData = useMemo(() => fileListToTree(files), [files]);
+  const restTreeConfig = useMemo(() => {
+    if (config == null) {
+      return {};
+    }
+
+    type TreeStateConfig = {
+      expandedItems?: string[];
+      selectedItems?: string[];
+      focusedItem?: string | null;
+      renamingItem?: string | null;
+      checkedItems?: string[];
+      loadingCheckPropagationItems?: string[];
+      [key: string]: unknown;
+    };
+
+    const pathToId = new Map<string, string>();
+    for (const [id, node] of Object.entries(treeData)) {
+      pathToId.set(node.path, id);
+    }
+
+    const mapId = (item: string): string => {
+      if (treeData[item] != null) {
+        return item;
+      }
+      return pathToId.get(item) ?? item;
+    };
+
+    const mapIds = (items: string[] | undefined): string[] | undefined => {
+      if (items == null) {
+        return undefined;
+      }
+      let changed = false;
+      const mapped = items.map((item) => {
+        const mappedItem = mapId(item);
+        if (mappedItem !== item) {
+          changed = true;
+        }
+        return mappedItem;
+      });
+      return changed ? mapped : items;
+    };
+
+    const mapState = (state: TreeStateConfig | undefined) => {
+      if (state == null) {
+        return { state, changed: false };
+      }
+      let changed = false;
+      const nextState: TreeStateConfig = { ...state };
+
+      const mappedExpanded = mapIds(state.expandedItems);
+      if (mappedExpanded !== state.expandedItems) {
+        nextState.expandedItems = mappedExpanded;
+        changed = true;
+      }
+
+      const mappedSelected = mapIds(state.selectedItems);
+      if (mappedSelected !== state.selectedItems) {
+        nextState.selectedItems = mappedSelected;
+        changed = true;
+      }
+
+      const mappedFocused =
+        state.focusedItem != null
+          ? mapId(state.focusedItem)
+          : state.focusedItem;
+      if (mappedFocused !== state.focusedItem) {
+        nextState.focusedItem = mappedFocused;
+        changed = true;
+      }
+
+      const mappedRenaming =
+        state.renamingItem != null
+          ? mapId(state.renamingItem)
+          : state.renamingItem;
+      if (mappedRenaming !== state.renamingItem) {
+        nextState.renamingItem = mappedRenaming;
+        changed = true;
+      }
+
+      const mappedChecked = mapIds(state.checkedItems);
+      if (mappedChecked !== state.checkedItems) {
+        nextState.checkedItems = mappedChecked;
+        changed = true;
+      }
+
+      const mappedLoadingChecked = mapIds(state.loadingCheckPropagationItems);
+      if (mappedLoadingChecked !== state.loadingCheckPropagationItems) {
+        nextState.loadingCheckPropagationItems = mappedLoadingChecked;
+        changed = true;
+      }
+
+      return { state: changed ? nextState : state, changed };
+    };
+
+    const initialState = mapState(config.initialState as TreeStateConfig);
+    const state = mapState(config.state as TreeStateConfig);
+
+    if (!initialState.changed && !state.changed) {
+      return config;
+    }
+
+    return {
+      ...config,
+      ...(initialState.state != null && { initialState: initialState.state }),
+      ...(state.state != null && { state: state.state }),
+    };
+  }, [config, treeData]);
   const treeDomId = 'ft';
   const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
   const dataLoader = useMemo(
     () =>
-      generateSyncDataLoader(fileListToTree(files), {
+      generateSyncDataLoader(treeData, {
         flattenEmptyDirectories,
       }),
-    [files, flattenEmptyDirectories]
+    [treeData, flattenEmptyDirectories]
   );
 
   const tree = useTree<FileTreeNode>({
