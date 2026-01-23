@@ -92,6 +92,57 @@ for (const patch of patches) {
   options,
 };
 
+export const HELPER_TRIM_PATCH_CONTENT: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'trimPatchContent.ts',
+    contents: `import { trimPatchContent } from '@pierre/diffs';
+
+// Trim a patch's context lines down to a fixed window size.
+// Useful for reducing large diffs while preserving change hunks.
+const patchContent = \`diff --git a/example.ts b/example.ts
+index abc123..def456 100644
+--- a/example.ts
++++ b/example.ts
+@@ -1,12 +1,13 @@
+ import { format } from "./format";
+ import { log } from "./log";
+ import { readConfig } from "./config";
+ import { parseEnv } from "./env";
+ import { setup } from "./setup";
+ 
+ function greet(name: string) {
+-  log("Hello, " + name);
++  log(format("Hello, " + name));
+ }
+ 
+ export { greet };
+\`;
+
+// Keep 2 lines of context around changes.
+const trimmedPatch = trimPatchContent(patchContent, 3);
+
+/*
+trimmedPatch:
+
+diff --git a/example.ts b/example.ts
+index abc123..def456 100644
+--- a/example.ts
++++ b/example.ts
+@@ -5,7 +5,7 @@
+ import { setup } from "./setup";
+ 
+ function greet(name: string) {
+-  log("Hello, " + name);
++  log(format("Hello, " + name));
+ }
+ 
+ export { greet };
+ 
+*/`,
+  },
+  options,
+};
+
 export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<undefined> = {
   file: {
     name: 'registerCustomTheme.ts',

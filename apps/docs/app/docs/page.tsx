@@ -57,6 +57,7 @@ import {
   HELPER_PRELOAD_HIGHLIGHTER,
   HELPER_REGISTER_CUSTOM_THEME,
   HELPER_SET_LANGUAGE_OVERRIDE,
+  HELPER_TRIM_PATCH_CONTENT,
 } from './Utilities/constants';
 import {
   VANILLA_API_CUSTOM_HUNK_FILE,
@@ -262,6 +263,7 @@ async function UtilitiesSection() {
     preloadHighlighter,
     registerCustomTheme,
     setLanguageOverride,
+    trimPatchContent,
   ] = await Promise.all([
     preloadFile(HELPER_DIFF_ACCEPT_REJECT),
     preloadFile(HELPER_DIFF_ACCEPT_REJECT_REACT),
@@ -272,6 +274,7 @@ async function UtilitiesSection() {
     preloadFile(HELPER_PRELOAD_HIGHLIGHTER),
     preloadFile(HELPER_REGISTER_CUSTOM_THEME),
     preloadFile(HELPER_SET_LANGUAGE_OVERRIDE),
+    preloadFile(HELPER_TRIM_PATCH_CONTENT),
   ]);
   const content = await renderMDX({
     filePath: 'docs/Utilities/content.mdx',
@@ -285,6 +288,7 @@ async function UtilitiesSection() {
       preloadHighlighter,
       registerCustomTheme,
       setLanguageOverride,
+      trimPatchContent,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
