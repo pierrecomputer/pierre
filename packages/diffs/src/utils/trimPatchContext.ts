@@ -36,8 +36,7 @@ export function trimPatchContent(patch: string, contextSize = 10): string {
         isNaN(additionStart) ||
         isNaN(deletionStart) ||
         isNaN(additionCount) ||
-        isNaN(deletionCount) ||
-        (deletionCount < contextSize && additionCount < contextSize)
+        isNaN(deletionCount)
       ) {
         lines.push(line);
       } else {

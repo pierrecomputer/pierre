@@ -54,7 +54,7 @@ describe('trimPatchContent', () => {
       ...hunk2Before.slice(30),
       '+only-add',
       ...hunk2Middle.slice(0, 10),
-      '@@ -251,22 +252,20 @@',
+      '@@ -266,22 +267,20 @@',
       ...hunk2Middle.slice(26),
       '-old-3',
       '-old-4',
