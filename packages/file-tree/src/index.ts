@@ -1,4 +1,5 @@
 export * from './constants';
 export * from './FileTree';
-export * from './utils/fileListToTree';
+export * from './loader';
+export * from './utils/sortChildren';
 export { default as fileTreeStyles } from './style.css';
