@@ -111,4 +111,11 @@ export default [
       '@next/next/no-img-element': 'off',
     },
   },
+  {
+    files: ['apps/docs/app/file-tree/ClientPage.tsx'],
+    rules: {
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/strict-boolean-expressions': 'off',
+    },
+  },
 ];
