@@ -16,6 +16,7 @@
         "@types/bun": "catalog:",
         "eslint": "catalog:",
         "eslint-plugin-react-hooks": "catalog:",
+        "husky": "catalog:",
         "postcss-html": "catalog:",
         "prettier": "catalog:",
         "prettier-plugin-tailwindcss": "catalog:",
@@ -122,7 +123,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.0.5",
+      "version": "1.0.7",
       "dependencies": {
         "@shikijs/core": "^3.0.0",
         "@shikijs/engine-javascript": "^3.0.0",
@@ -152,7 +153,7 @@
     },
     "packages/file-tree": {
       "name": "@pierre/file-tree",
-      "version": "0.0.1",
+      "version": "0.0.1-beta.2",
       "dependencies": {
         "@headless-tree/core": "catalog:",
         "preact": "catalog:",
@@ -287,6 +288,7 @@
     "hast-util-heading-rank": "3.0.0",
     "hast-util-to-html": "9.0.5",
     "hast-util-to-string": "3.0.1",
+    "husky": "^9.1.7",
     "lru_map": "0.4.1",
     "lucide-react": "0.545.0",
     "next": "16.1.1",
@@ -1615,6 +1617,8 @@
     "httpxy": ["httpxy@0.1.7", "", {}, "sha512-pXNx8gnANKAndgga5ahefxc++tJvNL87CXoRwxn1cJE2ZkWEojF3tNfQIEhZX/vfpt+wzeAzpUI4qkediX1MLQ=="],
 
     "human-signals": ["human-signals@8.0.1", "", {}, "sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ=="],
+
+    "husky": ["husky@9.1.7", "", { "bin": { "husky": "bin.js" } }, "sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA=="],
 
     "iconv-lite": ["iconv-lite@0.7.0", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-cf6L2Ds3h57VVmkZe+Pn+5APsT7FpqJtEhhieDCvrE2MK5Qk9MyffgQyuxQTm6BChfeZNtcOLHp9IcWRVcIcBQ=="],
 

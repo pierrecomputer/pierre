@@ -39,7 +39,8 @@
     "lint:css": "stylelint \"**/*.css\"",
     "lint:css:fix": "stylelint \"**/*.css\" --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepare": "husky"
   },
   "workspaces": {
     "packages": [
@@ -102,6 +103,7 @@
       "hast-util-heading-rank": "3.0.0",
       "hast-util-to-html": "9.0.5",
       "hast-util-to-string": "3.0.1",
+      "husky": "^9.1.7",
       "lru_map": "0.4.1",
       "lucide-react": "0.545.0",
       "next": "16.1.1",
@@ -158,6 +160,7 @@
     "@types/bun": "catalog:",
     "eslint": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
+    "husky": "catalog:",
     "postcss-html": "catalog:",
     "prettier": "catalog:",
     "prettier-plugin-tailwindcss": "catalog:",
@@ -167,5 +170,12 @@
     "svgo": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx}": [
+      "prettier --write",
+      "git update-index --again",
+      "eslint"
+    ]
   }
 }
