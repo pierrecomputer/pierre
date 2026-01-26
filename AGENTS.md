@@ -74,6 +74,51 @@ We use project references between each of our packages and apps.
   block of the consuming package. This ensures fast and accurate type checking
   without extra work across all packages.
 
+## Performance
+
+**CRITICAL: Avoid nested loops and O(n²) operations.**
+
+- When iterating over collections, calculate expensive values ONCE before the
+  loop, not inside it
+- Never nest loops unless absolutely necessary - it's expensive and usually
+  there's a better way
+- If you need to check conditions on remaining elements, scan backwards once
+  upfront instead of checking inside the main loop
+
+Example of BAD code:
+
+```typescript
+for (let i = 0; i < items.length; i++) {
+  // DON'T DO THIS - nested loop on every iteration
+  let hasMoreItems = false;
+  for (let j = i + 1; j < items.length; j++) {
+    if (items[j].someCondition) {
+      hasMoreItems = true;
+      break;
+    }
+  }
+}
+```
+
+Example of GOOD code:
+
+```typescript
+// Calculate once upfront
+let lastMeaningfulIndex = items.length - 1;
+for (let i = items.length - 1; i >= 0; i--) {
+  if (items[i].someCondition) {
+    lastMeaningfulIndex = i;
+    break;
+  }
+}
+
+// Now iterate efficiently
+for (let i = 0; i <= lastMeaningfulIndex; i++) {
+  const isLast = i === lastMeaningfulIndex;
+  // ...
+}
+```
+
 ## Testing
 
 We use Bun's built-in testing framework for unit tests. Tests are located in a
