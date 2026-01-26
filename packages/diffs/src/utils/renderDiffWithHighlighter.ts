@@ -11,7 +11,7 @@ import type {
   DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
-  ForcePlainTextOptions,
+  ForceDiffPlainTextOptions,
   LineDiffTypes,
   LineInfo,
   RenderDiffFilesResult,
@@ -31,7 +31,7 @@ import {
   pushOrJoinSpan,
 } from './parseDiffDecorations';
 
-const DEFAULT_PLAIN_TEXT_OPTIONS: ForcePlainTextOptions = {
+const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
   forcePlainText: false,
 };
 
@@ -45,7 +45,7 @@ export function renderDiffWithHighlighter(
     totalLines,
     expandedHunks,
     collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-  }: ForcePlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
+  }: ForceDiffPlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedDiffResult {
   if (forcePlainText) {
     startingLine ??= 0;

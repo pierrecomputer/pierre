@@ -1,4 +1,4 @@
-import type { HunkExpansionRegion, ThemesType } from './types';
+import type { HunkExpansionRegion, RenderRange, ThemesType } from './types';
 
 export const DIFFS_TAG_NAME = 'diffs-container' as const;
 
@@ -40,3 +40,10 @@ export const DEFAULT_EXPANDED_REGION: HunkExpansionRegion = Object.freeze({
   fromStart: 0,
   fromEnd: 0,
 });
+
+export const DEFAULT_RENDER_RANGE: RenderRange = {
+  startingLine: 0,
+  totalLines: Infinity,
+  bufferBefore: 0,
+  bufferAfter: 0,
+};

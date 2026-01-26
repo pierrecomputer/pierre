@@ -4,6 +4,7 @@ import { toHtml } from 'hast-util-to-html';
 import {
   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DEFAULT_EXPANDED_REGION,
+  DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
 } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
@@ -71,13 +72,6 @@ interface PushLineWithAnnotation {
 
   context: ProcessContext;
 }
-
-const DEFAULT_RENDER_RANGE: RenderRange = {
-  startingLine: 0,
-  totalLines: Infinity,
-  bufferBefore: 0,
-  bufferAfter: 0,
-};
 
 interface GetRenderOptionsReturn {
   options: RenderDiffOptions;

@@ -83,22 +83,26 @@ export function renderFileWithHighlighter(
       tokenizeMaxLineLength,
     };
   })();
-  return {
-    code: getLineNodes(
-      highlighter.codeToHast(
-        isWindowedHighlight
-          ? extractWindowedFileContent(
-              lines ?? splitFileContents(file.contents),
-              startingLine,
-              totalLines
-            )
-          : cleanLastNewline(file.contents),
-        hastConfig
-      )
-    ),
-    themeStyles,
-    baseThemeType: baseThemeType,
-  };
+  const highlightedLines = getLineNodes(
+    highlighter.codeToHast(
+      isWindowedHighlight
+        ? extractWindowedFileContent(
+            lines ?? splitFileContents(file.contents),
+            startingLine,
+            totalLines
+          )
+        : cleanLastNewline(file.contents),
+      hastConfig
+    )
+  );
+
+  // Create sparse array for windowed rendering
+  const code = isWindowedHighlight ? new Array(startingLine) : highlightedLines;
+  if (isWindowedHighlight) {
+    code.push(...highlightedLines);
+  }
+
+  return { code, themeStyles, baseThemeType };
 }
 
 function extractWindowedFileContent(
