@@ -139,7 +139,6 @@ export function generateLazyDataLoader(
   };
 
   // === Main TreeDataLoader Implementation ===
-
   const getItem = (id: string): FileTreeNode => {
     const cached = nodeCache.get(id);
     if (cached != null) return cached;
