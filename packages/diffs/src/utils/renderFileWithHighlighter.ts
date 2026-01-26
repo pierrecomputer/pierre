@@ -4,6 +4,7 @@ import type {
   DiffsHighlighter,
   DiffsThemeNames,
   FileContents,
+  ForceFilePlainTextOptions,
   RenderFileOptions,
   ThemedFileResult,
 } from '../types';
@@ -13,13 +14,36 @@ import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
+import { iterateOverFile } from './iterateOverFile';
+import { splitFileContents } from './splitFileContents';
+
+const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
+  forcePlainText: false,
+};
 
 export function renderFileWithHighlighter(
   file: FileContents,
   highlighter: DiffsHighlighter,
   { theme = DEFAULT_THEMES, tokenizeMaxLineLength }: RenderFileOptions,
-  forcePlainText = false
+  {
+    forcePlainText,
+    startingLine,
+    totalLines,
+    lines,
+  }: ForceFilePlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedFileResult {
+  if (forcePlainText) {
+    startingLine ??= 0;
+    totalLines ??= Infinity;
+  } else {
+    // If we aren't forcing plain text, then we intentionally do not support
+    // ranges for highlighting as that could break the syntax highlighting, we
+    // we override any values that may have been passed in.  Maybe one day we
+    // warn about this?
+    startingLine = 0;
+    totalLines = Infinity;
+  }
+  const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
   const { state, transformers } = createTransformerWithState();
   const lang = forcePlainText
     ? 'text'
@@ -36,8 +60,8 @@ export function renderFileWithHighlighter(
   });
   state.lineInfo = (shikiLineNumber: number) => ({
     type: 'context',
-    lineIndex: shikiLineNumber - 1,
-    lineNumber: shikiLineNumber,
+    lineIndex: shikiLineNumber - 1 + startingLine,
+    lineNumber: shikiLineNumber + startingLine,
   });
   const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
     if (typeof theme === 'string') {
@@ -61,9 +85,35 @@ export function renderFileWithHighlighter(
   })();
   return {
     code: getLineNodes(
-      highlighter.codeToHast(cleanLastNewline(file.contents), hastConfig)
+      highlighter.codeToHast(
+        isWindowedHighlight
+          ? extractWindowedFileContent(
+              lines ?? splitFileContents(file.contents),
+              startingLine,
+              totalLines
+            )
+          : cleanLastNewline(file.contents),
+        hastConfig
+      )
     ),
     themeStyles,
     baseThemeType: baseThemeType,
   };
+}
+
+function extractWindowedFileContent(
+  lines: string[],
+  startingLine: number,
+  totalLines: number
+): string {
+  let windowContent: string = '';
+  iterateOverFile({
+    lines,
+    startingLine,
+    totalLines,
+    callback({ content }) {
+      windowContent += content;
+    },
+  });
+  return windowContent;
 }

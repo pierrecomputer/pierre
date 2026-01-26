@@ -532,12 +532,20 @@ export interface HunkExpansionRegion {
   fromEnd: number;
 }
 
-export interface ForcePlainTextOptions {
+export interface ForceDiffPlainTextOptions {
   forcePlainText: boolean;
   startingLine?: number;
   totalLines?: number;
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
   collapsedContextThreshold?: number;
+}
+
+export interface ForceFilePlainTextOptions {
+  forcePlainText: boolean;
+  startingLine?: number;
+  totalLines?: number;
+  // Pre-split lines for caching in windowing scenarios
+  lines?: string[];
 }
 
 export interface RenderFileOptions {

@@ -261,15 +261,12 @@ export class FileRenderer<LAnnotation = undefined> {
   private renderFileWithHighlighter(
     file: FileContents,
     highlighter: DiffsHighlighter,
-    plainText = false
+    forcePlainText = false
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
-    const result = renderFileWithHighlighter(
-      file,
-      highlighter,
-      options,
-      plainText
-    );
+    const result = renderFileWithHighlighter(file, highlighter, options, {
+      forcePlainText,
+    });
     return { result, options };
   }
 

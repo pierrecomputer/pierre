@@ -462,7 +462,12 @@ export class WorkerPoolManager {
     this.submitTask(instance, { type: 'file', file });
   }
 
-  getPlainFileAST(file: FileContents): ThemedFileResult | undefined {
+  getPlainFileAST(
+    file: FileContents,
+    startingLine: number,
+    totalLines: number,
+    lines?: string[]
+  ): ThemedFileResult | undefined {
     if (this.highlighter == null) {
       void this.initialize();
       return undefined;
@@ -471,7 +476,7 @@ export class WorkerPoolManager {
       file,
       this.highlighter,
       this.renderOptions,
-      true
+      { forcePlainText: true, startingLine, totalLines, lines }
     );
   }
 
