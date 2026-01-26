@@ -12,6 +12,7 @@ import { fileListToTree } from 'src/utils/fileListToTree';
 
 import type { FileTreeOptions, FileTreeSelectionItem } from '../FileTree';
 import { fileTreeSearchFeature } from '../features/fileTreeSearchFeature';
+import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoader } from '../loader/sync';
 import type { FileTreeNode } from '../types';
 import { Icon } from './Icon';
@@ -59,7 +60,8 @@ function FlattenedDirectoryName({
 
 export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   'use no memo';
-  const { config, files, flattenEmptyDirectories } = fileTreeOptions;
+  const { config, files, flattenEmptyDirectories, useLazyDataLoader } =
+    fileTreeOptions;
   const treeData = useMemo(() => fileListToTree(files), [files]);
   const restTreeConfig = useMemo(() => {
     if (config == null) {
@@ -172,10 +174,14 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
   const dataLoader = useMemo(
     () =>
-      generateSyncDataLoader(files, {
-        flattenEmptyDirectories,
-      }),
-    [files, flattenEmptyDirectories]
+      useLazyDataLoader
+        ? generateLazyDataLoader(files, {
+            flattenEmptyDirectories,
+          })
+        : generateSyncDataLoader(files, {
+            flattenEmptyDirectories,
+          }),
+    [files, flattenEmptyDirectories, useLazyDataLoader]
   );
 
   const tree = useTree<FileTreeNode>({

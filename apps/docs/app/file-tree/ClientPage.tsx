@@ -15,18 +15,27 @@ export function ClientPage({ preloadedFileTreeHtml }: ClientPageProps) {
   const [flattenEmptyDirectories, setFlattenEmptyDirectories] = useState(
     sharedDemoFileTreeOptions.flattenEmptyDirectories ?? false
   );
+  const [useLazyDataLoader, setUseLazyDataLoader] = useState(
+    sharedDemoFileTreeOptions.useLazyDataLoader ?? false
+  );
 
   const fileTreeOptions = useMemo<FileTreeOptions>(
     () => ({
       ...sharedDemoFileTreeOptions,
       flattenEmptyDirectories,
+      useLazyDataLoader,
     }),
-    [flattenEmptyDirectories]
+    [flattenEmptyDirectories, useLazyDataLoader]
   );
 
   const handleToggleFlatten = () => {
     startTransition(() => {
       setFlattenEmptyDirectories((prev: boolean) => !prev);
+    });
+  };
+  const handleToggleLazyLoader = () => {
+    startTransition(() => {
+      setUseLazyDataLoader((prev: boolean) => !prev);
     });
   };
 
@@ -53,6 +62,19 @@ export function ClientPage({ preloadedFileTreeHtml }: ClientPageProps) {
               onChange={handleToggleFlatten}
             />
             Flatten Empty Directories
+          </label>
+          <label
+            htmlFor="lazy-data-loader"
+            className="flex cursor-pointer items-center gap-2 select-none"
+          >
+            <input
+              type="checkbox"
+              id="lazy-data-loader"
+              checked={useLazyDataLoader}
+              className="cursor-pointer"
+              onChange={handleToggleLazyLoader}
+            />
+            Lazy Loader
           </label>
         </div>
       </div>

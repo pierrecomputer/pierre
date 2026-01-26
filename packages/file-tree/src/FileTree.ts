@@ -40,6 +40,7 @@ export interface FileTreeOptions {
   files: string[];
   id?: string;
   flattenEmptyDirectories?: boolean;
+  useLazyDataLoader?: boolean;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
   // probably change the name here once i know a better one
   config?: HeadlessTreeConfig;
@@ -149,6 +150,7 @@ export class FileTree {
         config: this.initialTreeConfig,
         files: this.files,
         flattenEmptyDirectories: this.options.flattenEmptyDirectories,
+        useLazyDataLoader: this.options.useLazyDataLoader,
         onSelection: this.options.onSelection,
       },
     });
@@ -184,6 +186,7 @@ export class FileTree {
           config: this.initialTreeConfig,
           files: this.files,
           flattenEmptyDirectories: this.options.flattenEmptyDirectories,
+          useLazyDataLoader: this.options.useLazyDataLoader,
           onSelection: this.options.onSelection,
         },
       });
