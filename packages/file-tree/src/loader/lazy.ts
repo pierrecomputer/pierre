@@ -60,7 +60,8 @@ const createIdMaps = (rootId: string) => {
 
 /**
  * Creates a lazy data loader that computes nodes on-demand.
- * Suitable for large file trees where most folders stay collapsed.
+ * Best for large trees where most folders remain collapsed.
+ * Tradeoff: deeper navigation may trigger incremental work and caching.
  *
  * @param filePaths - Array of file path strings
  * @param options - Configuration options

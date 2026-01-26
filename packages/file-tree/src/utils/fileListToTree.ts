@@ -1,5 +1,6 @@
 import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
+import { createIdMaps } from './createIdMaps';
 import { createLoaderUtils } from './createLoaderUtils';
 import type { ChildrenComparator } from './sortChildren';
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
@@ -11,47 +12,6 @@ export interface FileListToTreeOptions {
 }
 
 const ROOT_ID = 'root';
-
-const hashId = (input: string): string => {
-  let h1 = 0xdeadbeef ^ input.length;
-  let h2 = 0x41c6ce57 ^ input.length;
-  for (let i = 0; i < input.length; i += 1) {
-    const char = input.charCodeAt(i);
-    h1 = Math.imul(h1 ^ char, 2654435761);
-    h2 = Math.imul(h2 ^ char, 1597334677);
-  }
-  h1 =
-    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
-    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 =
-    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
-    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
-};
-
-const createIdFactory = (rootId: string) => {
-  const idByKey = new Map<string, string>();
-  const usedIds = new Set<string>([rootId]);
-
-  return (key: string): string => {
-    const existing = idByKey.get(key);
-    if (existing != null) {
-      return existing;
-    }
-
-    const base = hashId(key);
-    let id = `n${base}`;
-    let suffix = 0;
-    while (usedIds.has(id)) {
-      suffix += 1;
-      id = `n${base}${suffix.toString(36)}`;
-    }
-
-    usedIds.add(id);
-    idByKey.set(key, id);
-    return id;
-  };
-};
 
 /**
  * Converts a list of file paths into a tree structure suitable for use with FileTree.
@@ -207,8 +167,8 @@ export function fileListToTree(
     }
   }
 
-  const idForKey = createIdFactory(rootId);
-  const mapKey = (key: string) => (key === rootId ? rootId : idForKey(key));
+  const { getIdForKey } = createIdMaps(rootId);
+  const mapKey = (key: string) => getIdForKey(key);
   const hashedTree: Record<string, FileTreeNode> = {};
 
   for (const [key, node] of Object.entries(tree)) {

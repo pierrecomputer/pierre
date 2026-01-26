@@ -6,7 +6,8 @@ import type { DataLoaderOptions } from './index';
 
 /**
  * Creates a sync data loader that pre-builds all nodes upfront.
- * Suitable for small-to-medium file trees or when all nodes will be accessed.
+ * Best for small-to-medium trees or workflows that touch most nodes.
+ * Tradeoff: higher upfront cost, but faster random access afterward.
  *
  * @param filePaths - Array of file path strings
  * @param options - Configuration options
