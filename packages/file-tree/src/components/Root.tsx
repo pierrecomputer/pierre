@@ -174,7 +174,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
   const dataLoader = useMemo(
     () =>
-      useLazyDataLoader
+      useLazyDataLoader === true
         ? generateLazyDataLoader(files, {
             flattenEmptyDirectories,
           })

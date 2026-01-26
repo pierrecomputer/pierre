@@ -47,10 +47,10 @@ const buildNormalizedTree = async (
 
     const item = await getItem(id);
     const path = item.path ?? id;
-    const flattens = item.flattens ? await mapIds(item.flattens) : undefined;
-    const directChildren = item.children
-      ? await mapIds(item.children.direct)
-      : undefined;
+    const flattens =
+      item.flattens != null ? await mapIds(item.flattens) : undefined;
+    const directChildren =
+      item.children != null ? await mapIds(item.children.direct) : undefined;
     const flattenedChildren =
       item.children?.flattened != null
         ? await mapIds(item.children.flattened)

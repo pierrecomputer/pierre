@@ -42,10 +42,10 @@ const buildNormalizedTree = async (
 
     const item = await getItem(id);
     const path = item.path ?? id;
-    const flattens = item.flattens ? await mapIds(item.flattens) : undefined;
-    const directChildren = item.children
-      ? await mapIds(item.children.direct)
-      : undefined;
+    const flattens =
+      item.flattens != null ? await mapIds(item.flattens) : undefined;
+    const directChildren =
+      item.children != null ? await mapIds(item.children.direct) : undefined;
     const flattenedChildren =
       item.children?.flattened != null
         ? await mapIds(item.children.flattened)
@@ -147,12 +147,10 @@ describe('loader equivalence', () => {
         flattenEmptyDirectories: true,
       });
 
-      await expect(getChildrenPaths(directLoader, rootId)).resolves.toEqual([
-        'a',
-      ]);
-      await expect(getChildrenPaths(flattenedLoader, rootId)).resolves.toEqual([
-        'f::a/b/c',
-      ]);
+      const directChildren = await getChildrenPaths(directLoader, rootId);
+      expect(directChildren).toEqual(['a']);
+      const flattenedChildren = await getChildrenPaths(flattenedLoader, rootId);
+      expect(flattenedChildren).toEqual(['f::a/b/c']);
     }
   });
 
