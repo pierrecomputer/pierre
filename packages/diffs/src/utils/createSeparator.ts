@@ -109,7 +109,7 @@ export function createSeparator({
     tagName: 'div',
     children,
     properties: {
-      'data-separator': children.length === 0 ? '' : type,
+      'data-separator': children.length === 0 ? 'simple' : type,
       'data-expand-index': expandIndex,
       'data-separator-first': isFirstHunk ? '' : undefined,
       'data-separator-last': isLastHunk ? '' : undefined,

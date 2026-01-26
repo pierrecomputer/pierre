@@ -6,23 +6,43 @@ import type {
   HunkExpansionRegion,
 } from '../types';
 
-export interface DiffLineCallbackProps {
+export interface DiffLineMetadata {
+  unifiedLineIndex: number;
+  splitLineIndex: number;
+  lineIndex: number;
+  lineNumber: number;
+  noEOFCR: boolean;
+}
+
+export interface DiffLineCallbackBase {
   hunkIndex: number;
   hunk: Hunk | undefined; // undefined for trailing expansion region
   collapsedBefore: number; // > 0 means separator before this line, value = hidden lines
   collapsedAfter: number; // > 0 only on final line if trailing collapsed content
-  unifiedDeletionLineIndex: number | undefined;
-  unifiedAdditionLineIndex: number | undefined;
-  splitLineIndex: number;
-  additionLineIndex: number | undefined;
-  deletionLineIndex: number | undefined;
-  additionLineNumber: number | undefined; // 1-based file line number
-  deletionLineNumber: number | undefined;
-  type: 'context' | 'context-expanded' | 'change';
-  // noEOFCR metadata - true if this is the last line and has no trailing newline
-  noEOFCRAddition: boolean;
-  noEOFCRDeletion: boolean;
 }
+
+interface DiffLineCallbackContextChange extends DiffLineCallbackBase {
+  type: 'change' | 'context' | 'context-expanded';
+  deletionLine: DiffLineMetadata;
+  additionLine: DiffLineMetadata;
+}
+
+interface DiffLineCallbackChangeDeletion extends DiffLineCallbackBase {
+  type: 'change';
+  deletionLine: DiffLineMetadata;
+  additionLine?: undefined;
+}
+
+interface DiffLineCallbackChangeAddition extends DiffLineCallbackBase {
+  type: 'change';
+  deletionLine?: undefined;
+  additionLine: DiffLineMetadata;
+}
+
+export type DiffLineCallbackProps =
+  | DiffLineCallbackContextChange
+  | DiffLineCallbackChangeDeletion
+  | DiffLineCallbackChangeAddition;
 
 interface IterationState {
   finalHunk: Hunk | undefined;
@@ -255,16 +275,21 @@ export function iterateOverDiff({
               //   unifiedRowIndex,
               //   splitRowIndex
               // ),
-              unifiedDeletionLineIndex: unifiedLineIndex + index,
-              unifiedAdditionLineIndex: unifiedLineIndex + index,
-              splitLineIndex: splitLineIndex + index,
-              deletionLineIndex: deletionLineIndex + index,
-              additionLineIndex: additionLineIndex + index,
-              deletionLineNumber: deletionLineNumber + index,
-              additionLineNumber: additionLineNumber + index,
               type: 'context-expanded',
-              noEOFCRAddition: false,
-              noEOFCRDeletion: false,
+              deletionLine: {
+                lineNumber: deletionLineNumber + index,
+                lineIndex: deletionLineIndex + index,
+                noEOFCR: false,
+                unifiedLineIndex: unifiedLineIndex + index,
+                splitLineIndex: splitLineIndex + index,
+              },
+              additionLine: {
+                unifiedLineIndex: unifiedLineIndex + index,
+                splitLineIndex: splitLineIndex + index,
+                lineIndex: additionLineIndex + index,
+                lineNumber: additionLineNumber + index,
+                noEOFCR: false,
+              },
             })
           ) {
             break hunkIterator;
@@ -300,16 +325,21 @@ export function iterateOverDiff({
               //   unifiedRowIndex,
               //   splitRowIndex
               // ),
-              unifiedDeletionLineIndex: unifiedLineIndex + index,
-              unifiedAdditionLineIndex: unifiedLineIndex + index,
-              splitLineIndex: splitLineIndex + index,
-              deletionLineIndex: deletionLineIndex + index,
-              additionLineIndex: additionLineIndex + index,
-              deletionLineNumber: deletionLineNumber + index,
-              additionLineNumber: additionLineNumber + index,
               type: 'context-expanded',
-              noEOFCRAddition: false,
-              noEOFCRDeletion: false,
+              deletionLine: {
+                lineNumber: deletionLineNumber + index,
+                lineIndex: deletionLineIndex + index,
+                noEOFCR: false,
+                unifiedLineIndex: unifiedLineIndex + index,
+                splitLineIndex: splitLineIndex + index,
+              },
+              additionLine: {
+                unifiedLineIndex: unifiedLineIndex + index,
+                splitLineIndex: splitLineIndex + index,
+                lineIndex: additionLineIndex + index,
+                lineNumber: additionLineNumber + index,
+                noEOFCR: false,
+              },
             })
           ) {
             break hunkIterator;
@@ -359,16 +389,21 @@ export function iterateOverDiff({
                     unifiedRowIndex,
                     splitRowIndex
                   ),
-                  unifiedDeletionLineIndex: unifiedRowIndex,
-                  unifiedAdditionLineIndex: unifiedRowIndex,
-                  splitLineIndex: splitRowIndex,
-                  deletionLineIndex: deletionLineIndex + index,
-                  additionLineIndex: additionLineIndex + index,
-                  deletionLineNumber: deletionLineNumber + index,
-                  additionLineNumber: additionLineNumber + index,
                   type: 'context',
-                  noEOFCRAddition: isLastLine && hunk.noEOFCRAdditions,
-                  noEOFCRDeletion: isLastLine && hunk.noEOFCRDeletions,
+                  deletionLine: {
+                    lineNumber: deletionLineNumber + index,
+                    lineIndex: deletionLineIndex + index,
+                    noEOFCR: isLastLine && hunk.noEOFCRDeletions,
+                    unifiedLineIndex: unifiedRowIndex,
+                    splitLineIndex: splitRowIndex,
+                  },
+                  additionLine: {
+                    unifiedLineIndex: unifiedRowIndex,
+                    splitLineIndex: splitRowIndex,
+                    lineIndex: additionLineIndex + index,
+                    lineNumber: additionLineNumber + index,
+                    noEOFCR: isLastLine && hunk.noEOFCRAdditions,
+                  },
                 })
               ) {
                 break hunkIterator;
@@ -474,16 +509,23 @@ export function iterateOverDiff({
               hunk: undefined,
               collapsedBefore: 0,
               collapsedAfter: isLastLine ? collapsedLines : 0,
-              unifiedDeletionLineIndex: unifiedLineIndex + index,
-              unifiedAdditionLineIndex: unifiedLineIndex + index,
-              splitLineIndex: splitLineIndex + index,
-              additionLineIndex: additionLineIndex + index,
-              deletionLineIndex: deletionLineIndex + index,
-              additionLineNumber: additionLineNumber + index,
-              deletionLineNumber: deletionLineNumber + index,
               type: 'context-expanded',
-              noEOFCRAddition: false,
-              noEOFCRDeletion: false,
+              // NOTE(amadeus): Maybe create an object cache for this to reduce
+              // garbage collection?
+              deletionLine: {
+                lineNumber: deletionLineNumber + index,
+                lineIndex: deletionLineIndex + index,
+                noEOFCR: false,
+                unifiedLineIndex: unifiedLineIndex + index,
+                splitLineIndex: splitLineIndex + index,
+              },
+              additionLine: {
+                unifiedLineIndex: unifiedLineIndex + index,
+                splitLineIndex: splitLineIndex + index,
+                lineIndex: additionLineIndex + index,
+                lineNumber: additionLineNumber + index,
+                noEOFCR: false,
+              },
             })
           ) {
             break hunkIterator;
@@ -702,64 +744,117 @@ function getChangeLineData({
   unifiedCount,
   splitCount,
 }: GetChangeLineDataProps): DiffLineCallbackProps {
-  if (diffStyle === 'unified') {
+  const unifiedDeletionLineIndex =
+    index < content.deletions ? unifiedLineIndex + index : undefined;
+  const unifiedAdditionLineIndex =
+    diffStyle === 'unified'
+      ? index >= content.deletions
+        ? unifiedLineIndex + index
+        : undefined
+      : index < content.additions
+        ? unifiedLineIndex + content.deletions + index
+        : undefined;
+
+  const resolvedSplitLineIndex =
+    diffStyle === 'unified'
+      ? splitLineIndex +
+        (index < content.deletions ? index : index - content.deletions)
+      : splitLineIndex + index;
+
+  const deletionLineIndexValue =
+    index < content.deletions ? deletionLineIndex + index : undefined;
+  const deletionLineNumberValue =
+    index < content.deletions ? deletionLineNumber + index : undefined;
+  const additionLineIndexValue =
+    diffStyle === 'unified'
+      ? index >= content.deletions
+        ? additionLineIndex + (index - content.deletions)
+        : undefined
+      : index < content.additions
+        ? additionLineIndex + index
+        : undefined;
+  const additionLineNumberValue =
+    diffStyle === 'unified'
+      ? index >= content.deletions
+        ? additionLineNumber + (index - content.deletions)
+        : undefined
+      : index < content.additions
+        ? additionLineNumber + index
+        : undefined;
+
+  const noEOFCRDeletion =
+    diffStyle === 'unified'
+      ? isLastContent &&
+        index === content.deletions - 1 &&
+        hunk.noEOFCRDeletions
+      : isLastContent && index === splitCount - 1 && hunk.noEOFCRDeletions;
+  const noEOFCRAddition =
+    diffStyle === 'unified'
+      ? isLastContent && index === unifiedCount - 1 && hunk.noEOFCRAdditions
+      : isLastContent && index === splitCount - 1 && hunk.noEOFCRAdditions;
+
+  const deletionLine: DiffLineMetadata | undefined =
+    deletionLineIndexValue != null &&
+    deletionLineNumberValue != null &&
+    unifiedDeletionLineIndex != null
+      ? // NOTE(amadeus): Maybe create an object cache for this to reduce
+        // garbage collection?
+        {
+          lineNumber: deletionLineNumberValue,
+          lineIndex: deletionLineIndexValue,
+          noEOFCR: noEOFCRDeletion,
+          unifiedLineIndex: unifiedDeletionLineIndex,
+          splitLineIndex: resolvedSplitLineIndex,
+        }
+      : undefined;
+  const additionLine: DiffLineMetadata | undefined =
+    additionLineIndexValue != null &&
+    additionLineNumberValue != null &&
+    unifiedAdditionLineIndex != null
+      ? // NOTE(amadeus): Maybe create an object cache for this to reduce
+        // garbage collection?
+        {
+          unifiedLineIndex: unifiedAdditionLineIndex,
+          splitLineIndex: resolvedSplitLineIndex,
+          lineIndex: additionLineIndexValue,
+          lineNumber: additionLineNumberValue,
+          noEOFCR: noEOFCRAddition,
+        }
+      : undefined;
+
+  if (deletionLine == null && additionLine != null) {
     return {
       type: 'change',
       hunkIndex,
       hunk,
       collapsedAfter,
       collapsedBefore,
-      unifiedDeletionLineIndex:
-        index < content.deletions ? unifiedLineIndex + index : undefined,
-      unifiedAdditionLineIndex:
-        index >= content.deletions ? unifiedLineIndex + index : undefined,
-      splitLineIndex:
-        splitLineIndex +
-        (index < content.deletions ? index : index - content.deletions),
-      additionLineIndex:
-        index >= content.deletions
-          ? additionLineIndex + (index - content.deletions)
-          : undefined,
-      additionLineNumber:
-        index >= content.deletions
-          ? additionLineNumber + (index - content.deletions)
-          : undefined,
-      deletionLineIndex:
-        index < content.deletions ? deletionLineIndex + index : undefined,
-      deletionLineNumber:
-        index < content.deletions ? deletionLineNumber + index : undefined,
-      noEOFCRDeletion:
-        isLastContent &&
-        index === content.deletions - 1 &&
-        hunk.noEOFCRDeletions,
-      noEOFCRAddition:
-        isLastContent && index === unifiedCount - 1 && hunk.noEOFCRAdditions,
+      deletionLine: undefined,
+      additionLine,
+    };
+  } else if (deletionLine != null && additionLine == null) {
+    return {
+      type: 'change',
+      hunkIndex,
+      hunk,
+      collapsedAfter,
+      collapsedBefore,
+      deletionLine,
+      additionLine: undefined,
     };
   }
+
+  if (deletionLine == null || additionLine == null) {
+    throw new Error('iterateOverDiff: missing change line data');
+  }
+
   return {
     type: 'change',
     hunkIndex,
     hunk,
     collapsedAfter,
     collapsedBefore,
-    unifiedDeletionLineIndex:
-      index < content.deletions ? unifiedLineIndex + index : undefined,
-    unifiedAdditionLineIndex:
-      index < content.additions
-        ? unifiedLineIndex + content.deletions + index
-        : undefined,
-    splitLineIndex: splitLineIndex + index,
-    additionLineIndex:
-      index < content.additions ? additionLineIndex + index : undefined,
-    additionLineNumber:
-      index < content.additions ? additionLineNumber + index : undefined,
-    deletionLineIndex:
-      index < content.deletions ? deletionLineIndex + index : undefined,
-    deletionLineNumber:
-      index < content.deletions ? deletionLineNumber + index : undefined,
-    noEOFCRDeletion:
-      isLastContent && index === splitCount - 1 && hunk.noEOFCRDeletions,
-    noEOFCRAddition:
-      isLastContent && index === splitCount - 1 && hunk.noEOFCRAdditions,
+    deletionLine,
+    additionLine,
   };
 }

@@ -31,17 +31,17 @@ describe('iterateOverDiff', () => {
         results.push({
           lineIndex: (() => {
             return (
-              props.unifiedAdditionLineIndex ??
-              props.unifiedDeletionLineIndex ??
+              props.additionLine?.unifiedLineIndex ??
+              props.deletionLine?.unifiedLineIndex ??
               0
             );
           })(),
           hunkIndex: props.hunkIndex,
           type: props.type,
-          additionLineIndex: props.additionLineIndex,
-          deletionLineIndex: props.deletionLineIndex,
-          additionLineNumber: props.additionLineNumber,
-          deletionLineNumber: props.deletionLineNumber,
+          additionLineIndex: props.additionLine?.lineIndex,
+          deletionLineIndex: props.deletionLine?.lineIndex,
+          additionLineNumber: props.additionLine?.lineNumber,
+          deletionLineNumber: props.deletionLine?.lineNumber,
           collapsedBefore: props.collapsedBefore,
         });
       },
@@ -75,14 +75,14 @@ describe('iterateOverDiff', () => {
         results.push({
           lineIndex: (() => {
             return (
-              props.unifiedAdditionLineIndex ??
-              props.unifiedDeletionLineIndex ??
+              props.additionLine?.unifiedLineIndex ??
+              props.deletionLine?.unifiedLineIndex ??
               0
             );
           })(),
           type: props.type,
-          additionLineIndex: props.additionLineIndex,
-          deletionLineIndex: props.deletionLineIndex,
+          additionLineIndex: props.additionLine?.lineIndex,
+          deletionLineIndex: props.deletionLine?.lineIndex,
         });
       },
     });
@@ -112,8 +112,8 @@ describe('iterateOverDiff', () => {
         results.push({
           lineIndex: (() => {
             return (
-              props.unifiedAdditionLineIndex ??
-              props.unifiedDeletionLineIndex ??
+              props.additionLine?.unifiedLineIndex ??
+              props.deletionLine?.unifiedLineIndex ??
               0
             );
           })(),
@@ -151,8 +151,8 @@ describe('iterateOverDiff', () => {
         results.push(
           (() => {
             return (
-              props.unifiedAdditionLineIndex ??
-              props.unifiedDeletionLineIndex ??
+              props.additionLine?.unifiedLineIndex ??
+              props.deletionLine?.unifiedLineIndex ??
               0
             );
           })()

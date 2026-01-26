@@ -1,7 +1,7 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
 import type { SharedRenderState } from '../types';
-import { createHastElement, createTextNodeElement } from './hast_utils';
+import { createTextNodeElement } from './hast_utils';
 
 export function processLine(
   node: HASTElement,
@@ -19,36 +19,17 @@ export function processLine(
   }
   // We need to convert the current line to a div but keep all the decorations
   // that may be applied
-  node.tagName = 'span';
-  node.properties['data-column-content'] = '';
+  node.tagName = 'div';
+  node.properties['data-line'] = lineInfo.lineNumber;
+  node.properties['data-alt-line'] = lineInfo.altLineNumber;
+  node.properties['data-line-type'] = lineInfo.type;
+  node.properties['data-line-index'] = lineInfo.lineIndex;
 
   // NOTE(amadeus): We need to push newline characters into empty rows or else
   // copy/pasta will have issues
   if (node.children.length === 0) {
     node.children.push(createTextNodeElement('\n'));
   }
-  const children = [
-    createHastElement({
-      tagName: 'span',
-      children: [
-        createHastElement({
-          tagName: 'span',
-          children: [{ type: 'text', value: `${lineInfo.lineNumber}` }],
-          properties: { 'data-line-number-content': '' },
-        }),
-      ],
-      properties: { 'data-column-number': '' },
-    }),
-    node,
-  ];
-  return createHastElement({
-    tagName: 'div',
-    children,
-    properties: {
-      'data-line': lineInfo.lineNumber,
-      'data-alt-line': lineInfo.altLineNumber,
-      'data-line-type': lineInfo.type,
-      'data-line-index': lineInfo.lineIndex,
-    },
-  });
+
+  return node;
 }

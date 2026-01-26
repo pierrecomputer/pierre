@@ -127,6 +127,8 @@ export class FileDiff<LAnnotation = undefined> {
   protected codeUnified: HTMLElement | undefined;
   protected codeDeletions: HTMLElement | undefined;
   protected codeAdditions: HTMLElement | undefined;
+  protected bufferBefore: HTMLElement | undefined;
+  protected bufferAfter: HTMLElement | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected hoverContent: HTMLElement | undefined;
 
@@ -292,6 +294,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.codeUnified = undefined;
     this.codeDeletions = undefined;
     this.codeAdditions = undefined;
+    this.bufferBefore = undefined;
+    this.bufferAfter = undefined;
     this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
     this.lastRenderedHeaderHTML = undefined;
@@ -391,8 +395,8 @@ export class FileDiff<LAnnotation = undefined> {
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
+      this.resizeManager.setup(this.pre);
       if ((this.options.overflow ?? 'scroll') === 'scroll') {
-        this.resizeManager.setup(this.pre);
         if ((this.options.diffStyle ?? 'split') === 'split') {
           this.scrollSyncManager.setup(
             this.pre,
@@ -443,7 +447,7 @@ export class FileDiff<LAnnotation = undefined> {
     fileContainer,
     containerWrapper,
     renderRange,
-  }: FileDiffRenderProps<LAnnotation>): void {
+  }: FileDiffRenderProps<LAnnotation>): boolean {
     if (!this.enabled) {
       // NOTE(amadeus): May need to be a silent failure? Making it loud for now
       // to better understand it
@@ -472,7 +476,7 @@ export class FileDiff<LAnnotation = undefined> {
         // equal
         (fileDiff == null && !filesDidChange))
     ) {
-      return;
+      return false;
     }
 
     this.renderRange = renderRange;
@@ -488,7 +492,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.setLineAnnotations(lineAnnotations);
     }
     if (this.fileDiff == null) {
-      return;
+      return false;
     }
     this.hunksRenderer.setOptions({
       ...this.options,
@@ -525,7 +529,7 @@ export class FileDiff<LAnnotation = undefined> {
         if (this.workerManager != null && !this.workerManager.isInitialized()) {
           void this.workerManager.initialize().then(() => this.rerender());
         }
-        return;
+        return false;
       }
 
       if (hunksResult.headerElement != null) {
@@ -542,9 +546,6 @@ export class FileDiff<LAnnotation = undefined> {
         this.pre.parentNode?.removeChild(this.pre);
         this.pre = undefined;
       }
-      this.renderSeparators(hunksResult.hunkData);
-      this.renderAnnotations();
-      this.renderHoverUtility();
     } catch (error: unknown) {
       if (disableErrorHandling) {
         throw error;
@@ -554,6 +555,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.applyErrorToDOM(error, fileContainer);
       }
     }
+    return true;
   }
 
   private renderSeparators(hunkData: HunkData[]): void {
@@ -795,6 +797,8 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     result: HunksRenderResult
   ): void {
+    const rowSpan =
+      this.options.overflow === 'wrap' ? result.rowCount : undefined;
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
 
@@ -812,6 +816,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.codeUnified = getOrCreateCodeNode({
           code: this.codeUnified,
           columnType: 'unified',
+          rowSpan,
         });
         this.codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
           result.unifiedAST
@@ -828,6 +833,7 @@ export class FileDiff<LAnnotation = undefined> {
           this.codeDeletions = getOrCreateCodeNode({
             code: this.codeDeletions,
             columnType: 'deletions',
+            rowSpan,
           });
           this.codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
             result.deletionsAST
@@ -847,6 +853,7 @@ export class FileDiff<LAnnotation = undefined> {
           this.codeAdditions = getOrCreateCodeNode({
             code: this.codeAdditions,
             columnType: 'additions',
+            rowSpan,
           });
           this.codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
             result.additionsAST
@@ -864,12 +871,47 @@ export class FileDiff<LAnnotation = undefined> {
       pre.replaceChildren(...codeElements);
     }
 
+    // NOTE(amadeus): A very hacky pass at buffers outside the pre elements...
+    // i need to improve this...
+    if (result.bufferBefore > 0) {
+      if (this.bufferBefore == null) {
+        this.bufferBefore = document.createElement('div');
+        this.bufferBefore.dataset.virtualizerBuffer = 'before';
+        this.bufferBefore.style = result.themeStyles;
+        pre.before(this.bufferBefore);
+      }
+      this.bufferBefore.style.setProperty('height', `${result.bufferBefore}px`);
+      this.bufferBefore.style.setProperty('contain', 'strict');
+    } else if (this.bufferBefore != null) {
+      this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+      this.bufferBefore = undefined;
+    }
+
+    if (result.bufferAfter > 0) {
+      if (this.bufferAfter == null) {
+        this.bufferAfter = document.createElement('div');
+        this.bufferAfter.dataset.virtualizerBuffer = 'after';
+        this.bufferAfter.style = result.themeStyles;
+        pre.after(this.bufferAfter);
+      }
+      this.bufferAfter.style.setProperty('height', `${result.bufferAfter}px`);
+      this.bufferAfter.style.setProperty('contain', 'strict');
+    } else if (this.bufferAfter != null) {
+      this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+      this.bufferAfter = undefined;
+    }
+
     this.injectUnsafeCSS();
+
+    this.renderSeparators(result.hunkData);
+    this.renderAnnotations();
+    this.renderHoverUtility();
 
     this.mouseEventManager.setup(pre);
     this.lineSelectionManager.setup(pre);
+    this.resizeManager.setup(pre);
+
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
-      this.resizeManager.setup(pre);
       if ((this.options.diffStyle ?? 'split') === 'split') {
         this.scrollSyncManager.setup(
           pre,
@@ -880,7 +922,6 @@ export class FileDiff<LAnnotation = undefined> {
         this.scrollSyncManager.cleanUp();
       }
     } else {
-      this.resizeManager.cleanUp();
       this.scrollSyncManager.cleanUp();
     }
   }

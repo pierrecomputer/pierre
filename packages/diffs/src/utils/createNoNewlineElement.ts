@@ -1,23 +1,21 @@
 import type { Element as HASTElement } from 'hast';
 
+import type { LineTypes } from '../types';
 import { createHastElement, createTextNodeElement } from './hast_utils';
 
-export function createNoNewlineElement(
-  type: 'context' | 'change-addition' | 'change-deletion'
-): HASTElement {
+export function createNoNewlineElement(type: LineTypes): HASTElement {
   return createHastElement({
     tagName: 'div',
     children: [
       createHastElement({
         tagName: 'span',
-        properties: { 'data-column-number': '' },
-      }),
-      createHastElement({
-        tagName: 'span',
         children: [createTextNodeElement('No newline at end of file')],
-        properties: { 'data-column-content': '' },
       }),
     ],
-    properties: { 'data-no-newline': '', 'data-line-type': type },
+    properties: {
+      'data-no-newline': '',
+      'data-line-type': type,
+      'data-column-content': '',
+    },
   });
 }

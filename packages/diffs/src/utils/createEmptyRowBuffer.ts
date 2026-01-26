@@ -6,7 +6,7 @@ export function createEmptyRowBuffer(size: number): HASTElement {
   return createHastElement({
     tagName: 'div',
     properties: {
-      'data-buffer': '',
+      'data-content-buffer': '',
       style: `grid-row: span ${size};min-height:calc(${size} * 1lh)`,
     },
   });

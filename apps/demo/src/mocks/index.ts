@@ -115,7 +115,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           },
         },
         {
-          lineNumber: 4,
+          lineNumber: 45,
           side: 'deletions',
           metadata: {
             author: 'Marcus Rodriguez',
@@ -123,7 +123,7 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
           },
         },
         {
-          lineNumber: 9,
+          lineNumber: 8,
           side: 'additions',
           metadata: {
             author: 'Emma Thompson',

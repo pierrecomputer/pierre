@@ -4,7 +4,7 @@ import { areVirtualWindowSpecsEqual } from '../utils/areVirtualWindowSpecsEqual'
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 
 interface SubscribedInstance {
-  onScrollUpdate(windowSpecs: VirtualWindowSpecs): void;
+  onScrollUpdate(windowSpecs: VirtualWindowSpecs): boolean;
   onResize(windowSpecs: VirtualWindowSpecs): void;
   reconcileHeights(): void;
 }
@@ -19,10 +19,11 @@ interface ScrollAnchor {
 
 let lastScrollPosition = 0;
 
-// FIXME(amadeus): Make this configurable probably?
-const OVERSCROLL_SIZE = 500;
-const RESIZE_DEBUGGING = false;
+// FIXME(amadeus): Make this configurable probably? These values are temporary
+// and will be more properly set when i make them configurable
+const OVERSCROLL_SIZE = 200;
 const RESIZE_OBSERVER_MARGIN = OVERSCROLL_SIZE * 4;
+const RESIZE_DEBUGGING = false;
 let lastSize = 0;
 
 export class SimpleVirtualizer {
@@ -30,7 +31,7 @@ export class SimpleVirtualizer {
   private scrollTop: number = 0;
   private height: number = 0;
   private scrollHeight: number = 0;
-  public windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
+  private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
   private root: HTMLElement | Document | undefined;
 
   private resizeObserver: ResizeObserver | undefined;
@@ -87,6 +88,19 @@ export class SimpleVirtualizer {
   instanceChanged(instance: SubscribedInstance): void {
     this.instancesChanged.add(instance);
     queueRender(this.computeRenderRangeAndEmit);
+  }
+
+  getWindowSpecs(): VirtualWindowSpecs {
+    if (this.windowSpecs.top === 0 && this.windowSpecs.bottom === 0) {
+      this.windowSpecs = createWindowFromScrollPosition({
+        scrollTop: this.getScrollTop(),
+        height: this.getHeight(),
+        scrollHeight: this.getScrollHeight(),
+        fitPerfectly: false,
+        overscrollSize: OVERSCROLL_SIZE,
+      });
+    }
+    return this.windowSpecs;
   }
 
   private handleContainerResize = (entries: ResizeObserverEntry[]) => {
@@ -153,8 +167,10 @@ export class SimpleVirtualizer {
     if (this.intersectionObserver == null) {
       this.connectQueue.set(container, instance);
     } else {
+      // FIXME(amadeus): Go through the connection phase a bit more closely...
       this.intersectionObserver.observe(container);
       this.observers.set(container, instance);
+      this.instancesChanged.add(instance);
       this.markDOMDirty();
       queueRender(this.computeRenderRangeAndEmit);
     }
@@ -256,13 +272,17 @@ export class SimpleVirtualizer {
     const anchor = this.getScrollAnchor(this.height);
     const updatedInstances = new Set<SubscribedInstance>();
     for (const instance of this.visibleInstances.values()) {
-      instance.onScrollUpdate(this.windowSpecs);
-      updatedInstances.add(instance);
+      if (instance.onScrollUpdate(this.windowSpecs)) {
+        updatedInstances.add(instance);
+      }
     }
     for (const instance of this.instancesChanged) {
       if (updatedInstances.has(instance)) continue;
-      instance.onScrollUpdate(this.windowSpecs);
+      if (instance.onScrollUpdate(this.windowSpecs)) {
+        updatedInstances.add(instance);
+      }
     }
+
     this.scrollFix(anchor);
     // Scroll fix may have marked the dom as dirty, but if there instance
     // changes, we should definitely mark as dirty
@@ -291,7 +311,7 @@ export class SimpleVirtualizer {
       anchor;
     if (lineIndex != null && lineOffset != null) {
       const element = fileElement.shadowRoot?.querySelector(
-        `[data-line-index="${lineIndex}"]`
+        `[data-line][data-line-index="${lineIndex}"]`
       );
       if (element instanceof HTMLElement) {
         const top = getRelativeBoundingTop(element, scrollContainer);
@@ -366,7 +386,7 @@ export class SimpleVirtualizer {
       // Only search for lines if file potentially intersects viewport
       if (fileBottom > 0 && fileTop < viewportHeight) {
         for (const line of fileElement.shadowRoot?.querySelectorAll(
-          '[data-line-index]'
+          '[data-line][data-line-index]'
         ) ?? []) {
           if (!(line instanceof HTMLElement)) continue;
           const lineIndex = line.dataset.lineIndex;

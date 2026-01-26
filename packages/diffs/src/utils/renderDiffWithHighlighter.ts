@@ -128,28 +128,17 @@ export function renderDiffWithHighlighter(
     totalLines,
     expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
     collapsedContextThreshold,
-    callback: ({
-      hunkIndex,
-      additionLineIndex,
-      deletionLineIndex,
-      additionLineNumber,
-      deletionLineNumber,
-      unifiedAdditionLineIndex,
-      unifiedDeletionLineIndex,
-      splitLineIndex,
-      type,
-    }) => {
+    callback: ({ hunkIndex, additionLine, deletionLine, type }) => {
       const bucket = getBucketForHunk(hunkIndex);
+      const splitLineIndex =
+        additionLine != null
+          ? additionLine.splitLineIndex
+          : deletionLine.splitLineIndex;
 
-      if (
-        type === 'change' &&
-        lineDiffType !== 'none' &&
-        additionLineIndex != null &&
-        deletionLineIndex != null
-      ) {
+      if (type === 'change' && additionLine != null && deletionLine != null) {
         computeLineDiffDecorations({
-          additionLine: diff.additionLines[additionLineIndex],
-          deletionLine: diff.deletionLines[deletionLineIndex],
+          additionLine: diff.additionLines[additionLine.lineIndex],
+          deletionLine: diff.deletionLines[deletionLine.lineIndex],
           deletionLineIndex: bucket.deletionContent.length,
           additionLineIndex: bucket.additionContent.length,
           deletionDecorations: bucket.deletionDecorations,
@@ -158,43 +147,39 @@ export function renderDiffWithHighlighter(
         });
       }
 
-      if (
-        deletionLineIndex != null &&
-        deletionLineNumber != null &&
-        unifiedDeletionLineIndex != null
-      ) {
+      if (deletionLine != null) {
         appendContent(
-          diff.deletionLines[deletionLineIndex],
-          deletionLineIndex,
+          diff.deletionLines[deletionLine.lineIndex],
+          deletionLine.lineIndex,
           bucket.deletionSegments,
           bucket.deletionContent
         );
         bucket.deletionInfo.push({
           type: type === 'change' ? 'change-deletion' : type,
-          lineNumber: deletionLineNumber,
+          lineNumber: deletionLine.lineNumber,
           altLineNumber:
-            type === 'change' ? undefined : (additionLineNumber ?? undefined),
-          lineIndex: `${unifiedDeletionLineIndex},${splitLineIndex}`,
+            type === 'change'
+              ? undefined
+              : (additionLine.lineNumber ?? undefined),
+          lineIndex: `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
         });
       }
 
-      if (
-        additionLineIndex != null &&
-        additionLineNumber != null &&
-        unifiedAdditionLineIndex != null
-      ) {
+      if (additionLine != null) {
         appendContent(
-          diff.additionLines[additionLineIndex],
-          additionLineIndex,
+          diff.additionLines[additionLine.lineIndex],
+          additionLine.lineIndex,
           bucket.additionSegments,
           bucket.additionContent
         );
         bucket.additionInfo.push({
           type: type === 'change' ? 'change-addition' : type,
-          lineNumber: additionLineNumber,
+          lineNumber: additionLine.lineNumber,
           altLineNumber:
-            type === 'change' ? undefined : (deletionLineNumber ?? undefined),
-          lineIndex: `${unifiedAdditionLineIndex},${splitLineIndex}`,
+            type === 'change'
+              ? undefined
+              : (deletionLine.lineNumber ?? undefined),
+          lineIndex: `${additionLine.unifiedLineIndex},${splitLineIndex}`,
         });
       }
     },

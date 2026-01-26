@@ -150,11 +150,10 @@ code {
   min-height: 0;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   overflow-anchor: none;
+  background-color: light-dark(white, black);
 }
 
 .wrapper[data-diff] {
-  grid-template-columns: 1fr;
-  grid-template-rows: min-content;
   min-height: auto;
   width: auto;
   height: auto;
@@ -197,6 +196,7 @@ code {
 }
 
 diffs-container {
+  /* content-visibility: auto; */
   margin-top: 2px;
 }
 
