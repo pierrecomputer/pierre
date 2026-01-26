@@ -1,3 +1,4 @@
+import type { TreeDataLoader } from '@headless-tree/core';
 import { describe, expect, test } from 'bun:test';
 
 import { generateLazyDataLoader } from '../src/loader/lazy';
@@ -9,11 +10,21 @@ type NormalizedTree = Record<string, NormalizedTreeNode>;
 
 const resolveValue = async <T>(value: T | Promise<T>): Promise<T> => value;
 
+type Loader = TreeDataLoader<FileTreeNode>;
+
+const resolveChildrenIds = async (
+  loader: Loader,
+  id: string
+): Promise<string[]> => {
+  if ('getChildren' in loader) {
+    return resolveValue(loader.getChildren(id));
+  }
+  const children = await resolveValue(loader.getChildrenWithData(id));
+  return children.map((child) => child.id);
+};
+
 const buildNormalizedTree = async (
-  loader: {
-    getItem: (id: string) => FileTreeNode | Promise<FileTreeNode>;
-    getChildren: (id: string) => string[] | Promise<string[]>;
-  },
+  loader: Loader,
   rootId: string
 ): Promise<NormalizedTree> => {
   const visited = new Set<string>();
@@ -87,13 +98,10 @@ const buildNormalizedTree = async (
 };
 
 const getChildrenPaths = async (
-  loader: {
-    getItem: (id: string) => FileTreeNode | Promise<FileTreeNode>;
-    getChildren: (id: string) => string[] | Promise<string[]>;
-  },
+  loader: Loader,
   id: string
 ): Promise<string[]> => {
-  const children = await resolveValue(loader.getChildren(id));
+  const children = await resolveChildrenIds(loader, id);
   return Promise.all(
     children.map(async (childId) => {
       const item = await resolveValue(loader.getItem(childId));
