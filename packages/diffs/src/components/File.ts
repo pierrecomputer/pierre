@@ -28,11 +28,13 @@ import type {
   LineAnnotation,
   PrePropertiesConfig,
   RenderFileMetadata,
+  RenderRange,
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
+import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createHoverContentNode } from '../utils/createHoverContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -50,6 +52,7 @@ export interface FileRenderProps<LAnnotation> {
   containerWrapper?: HTMLElement;
   forceRender?: boolean;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+  renderRange?: RenderRange;
 }
 
 export interface FileHyrdateProps<LAnnotation> extends Omit<
@@ -97,6 +100,8 @@ export class File<LAnnotation = undefined> {
   private spriteSVG: SVGElement | undefined;
   private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
+  private bufferBefore: HTMLElement | undefined;
+  private bufferAfter: HTMLElement | undefined;
   private unsafeCSSStyle: HTMLStyleElement | undefined;
   private hoverContent: HTMLElement | undefined;
   private errorWrapper: HTMLElement | undefined;
@@ -116,6 +121,7 @@ export class File<LAnnotation = undefined> {
   private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
 
   private file: FileContents | undefined;
+  private renderRange: RenderRange | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -144,7 +150,11 @@ export class File<LAnnotation = undefined> {
 
   rerender(): void {
     if (this.file == null) return;
-    this.render({ file: this.file, forceRender: true });
+    this.render({
+      file: this.file,
+      forceRender: true,
+      renderRange: this.renderRange,
+    });
   }
 
   setOptions(options: FileOptions<LAnnotation> | undefined): void {
@@ -207,6 +217,7 @@ export class File<LAnnotation = undefined> {
     this.lineSelectionManager.cleanUp();
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
+    this.renderRange = undefined;
 
     // Clean up the data
     this.file = undefined;
@@ -220,6 +231,8 @@ export class File<LAnnotation = undefined> {
     }
     this.fileContainer = undefined;
     this.pre = undefined;
+    this.bufferBefore = undefined;
+    this.bufferAfter = undefined;
     this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
     this.lastRenderedHeaderHTML = undefined;
@@ -288,16 +301,23 @@ export class File<LAnnotation = undefined> {
     forceRender = false,
     containerWrapper,
     lineAnnotations,
+    renderRange,
   }: FileRenderProps<LAnnotation>): void {
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
-    if (!forceRender && areFilesEqual(this.file, file) && !annotationsChanged) {
+    if (
+      !forceRender &&
+      areRenderRangesEqual(renderRange, this.renderRange) &&
+      areFilesEqual(this.file, file) &&
+      !annotationsChanged
+    ) {
       return;
     }
 
+    this.renderRange = renderRange;
     this.file = file;
     this.fileRenderer.setOptions(this.options);
     if (lineAnnotations != null) {
@@ -322,7 +342,7 @@ export class File<LAnnotation = undefined> {
     );
 
     try {
-      const fileResult = this.fileRenderer.renderFile(file);
+      const fileResult = this.fileRenderer.renderFile(file, renderRange);
       if (fileResult == null) {
         if (this.workerManager != null && !this.workerManager.isInitialized()) {
           void this.workerManager.initialize().then(() => this.rerender());
@@ -439,6 +459,36 @@ export class File<LAnnotation = undefined> {
     this.code = getOrCreateCodeNode({ code: this.code });
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
     pre.replaceChildren(this.code);
+
+    // Buffer containers for virtualization
+    if (result.bufferBefore > 0) {
+      if (this.bufferBefore == null) {
+        this.bufferBefore = document.createElement('div');
+        this.bufferBefore.dataset.virtualizerBuffer = 'before';
+        this.bufferBefore.style = result.themeStyles;
+        pre.before(this.bufferBefore);
+      }
+      this.bufferBefore.style.setProperty('height', `${result.bufferBefore}px`);
+      this.bufferBefore.style.setProperty('contain', 'strict');
+    } else if (this.bufferBefore != null) {
+      this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+      this.bufferBefore = undefined;
+    }
+
+    if (result.bufferAfter > 0) {
+      if (this.bufferAfter == null) {
+        this.bufferAfter = document.createElement('div');
+        this.bufferAfter.dataset.virtualizerBuffer = 'after';
+        this.bufferAfter.style = result.themeStyles;
+        pre.after(this.bufferAfter);
+      }
+      this.bufferAfter.style.setProperty('height', `${result.bufferAfter}px`);
+      this.bufferAfter.style.setProperty('contain', 'strict');
+    } else if (this.bufferAfter != null) {
+      this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+      this.bufferAfter = undefined;
+    }
+
     this.injectUnsafeCSS();
     this.mouseEventManager.setup(pre);
     this.lineSelectionManager.setup(pre);
