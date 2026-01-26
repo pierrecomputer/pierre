@@ -17,44 +17,53 @@ export type LoaderFactory = (
 type NormalizedTreeNode = Omit<FileTreeNode, 'path'>;
 type NormalizedTree = Record<string, NormalizedTreeNode>;
 
-const buildNormalizedTree = (
+const buildNormalizedTree = async (
   loader: TreeDataLoader<FileTreeNode>,
   rootId: string
-): NormalizedTree => {
+): Promise<NormalizedTree> => {
   const visited = new Set<string>();
   const normalized: NormalizedTree = {};
   const itemCache = new Map<string, FileTreeNode>();
 
-  const getItem = (id: string): FileTreeNode => {
+  const getItem = async (id: string): Promise<FileTreeNode> => {
     const cached = itemCache.get(id);
     if (cached != null) return cached;
-    const item = loader.getItem(id);
+    const item = await loader.getItem(id);
     itemCache.set(id, item);
     return item;
   };
 
-  const getPathById = (id: string): string => {
-    const item = getItem(id);
+  const getPathById = async (id: string): Promise<string> => {
+    const item = await getItem(id);
     return item.path ?? id;
   };
 
-  const visit = (id: string): void => {
+  const mapIds = async (ids: string[]): Promise<string[]> =>
+    Promise.all(ids.map((entry) => getPathById(entry)));
+
+  const visit = async (id: string): Promise<void> => {
     if (visited.has(id)) return;
     visited.add(id);
 
-    const item = getItem(id);
+    const item = await getItem(id);
     const path = item.path ?? id;
+    const flattens = item.flattens ? await mapIds(item.flattens) : undefined;
+    const directChildren = item.children
+      ? await mapIds(item.children.direct)
+      : undefined;
+    const flattenedChildren =
+      item.children?.flattened != null
+        ? await mapIds(item.children.flattened)
+        : undefined;
 
     normalized[path] = {
       name: item.name,
-      ...(item.flattens != null && {
-        flattens: item.flattens.map(getPathById),
-      }),
+      ...(flattens != null && { flattens }),
       ...(item.children != null && {
         children: {
-          direct: item.children.direct.map(getPathById),
+          direct: directChildren ?? [],
           ...(item.children.flattened != null && {
-            flattened: item.children.flattened.map(getPathById),
+            flattened: flattenedChildren ?? [],
           }),
         },
       }),
@@ -62,23 +71,23 @@ const buildNormalizedTree = (
 
     if (item.children != null) {
       for (const child of item.children.direct) {
-        visit(child);
+        await visit(child);
       }
       if (item.children.flattened != null) {
         for (const child of item.children.flattened) {
-          visit(child);
+          await visit(child);
         }
       }
     }
 
     if (item.flattens != null) {
       for (const flattensId of item.flattens) {
-        visit(flattensId);
+        await visit(flattensId);
       }
     }
   };
 
-  visit(rootId);
+  await visit(rootId);
   return normalized;
 };
 
@@ -98,7 +107,7 @@ export function createLoaderTests(
       test('should convert a simple file list to tree structure', async () => {
         const files = ['src/index.ts', 'src/utils/helper.ts'];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         expect(tree.root).toEqual({
           name: 'root',
@@ -128,7 +137,7 @@ export function createLoaderTests(
       test('should handle files at root level', async () => {
         const files = ['README.md', 'package.json'];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         // Semantic sort: case-insensitive alphabetical for files
         expect(tree.root).toEqual({
@@ -146,7 +155,7 @@ export function createLoaderTests(
       test('should handle empty file list', async () => {
         const files: string[] = [];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         expect(tree.root).toEqual({
           name: 'root',
@@ -162,7 +171,7 @@ export function createLoaderTests(
           rootId: 'my-root',
           rootName: 'Project',
         });
-        const tree = buildNormalizedTree(loader, 'my-root');
+        const tree = await buildNormalizedTree(loader, 'my-root');
 
         expect(tree['my-root']).toEqual({
           name: 'Project',
@@ -175,7 +184,7 @@ export function createLoaderTests(
       test('should handle duplicate file paths', async () => {
         const files = ['src/index.ts', 'src/index.ts', 'src/utils.ts'];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         expect(tree.root.children?.direct).toEqual(['src']);
         expect(tree.src.children?.direct).toHaveLength(2);
@@ -188,7 +197,7 @@ export function createLoaderTests(
       test('should handle deeply nested files with flattening', async () => {
         const files = ['a/b/c/d/file.ts'];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         expect(tree.root.children?.flattened).toEqual(['f::a/b/c/d']);
 
@@ -208,7 +217,7 @@ export function createLoaderTests(
           'src/components/Header.tsx',
         ];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         expect(tree.root.children?.flattened).toEqual(['f::src/components']);
 
@@ -228,7 +237,7 @@ export function createLoaderTests(
       test('should not flatten folders with multiple children', async () => {
         const files = ['folder/file1.ts', 'folder/file2.ts'];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         expect(tree.root.children?.flattened).toBeUndefined();
       });
@@ -236,7 +245,7 @@ export function createLoaderTests(
       test('should not flatten folders when child is a file', async () => {
         const files = ['single/file.ts'];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         expect(tree.root.children?.flattened).toBeUndefined();
       });
@@ -248,7 +257,7 @@ export function createLoaderTests(
           'src/utils/deep/nested/file.ts',
         ];
         const loader = await createLoader(files);
-        const tree = buildNormalizedTree(loader, 'root');
+        const tree = await buildNormalizedTree(loader, 'root');
 
         // Semantic sort: folders first, then files
         expect(tree.root.children?.direct).toEqual(['src', 'README.md']);

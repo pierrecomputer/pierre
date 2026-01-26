@@ -3,21 +3,45 @@
 import type { FileTreeOptions } from '@pierre/file-tree';
 import { FileTree } from '@pierre/file-tree';
 import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
-import { startTransition, useCallback, useMemo, useRef, useState } from 'react';
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
+import {
+  FILE_TREE_COOKIE_FLATTEN,
+  FILE_TREE_COOKIE_LAZY,
+  FILE_TREE_COOKIE_VERSION,
+  FILE_TREE_COOKIE_VERSION_NAME,
+} from './cookies';
 import { sharedDemoFileTreeOptions } from './demo-data';
 
 interface ClientPageProps {
   preloadedFileTreeHtml: string;
+  initialFlattenEmptyDirectories?: boolean;
+  initialUseLazyDataLoader?: boolean;
 }
 
-export function ClientPage({ preloadedFileTreeHtml }: ClientPageProps) {
+export function ClientPage({
+  preloadedFileTreeHtml,
+  initialFlattenEmptyDirectories,
+  initialUseLazyDataLoader,
+}: ClientPageProps) {
+  const defaultFlattenEmptyDirectories =
+    sharedDemoFileTreeOptions.flattenEmptyDirectories ?? false;
+  const defaultUseLazyDataLoader =
+    sharedDemoFileTreeOptions.useLazyDataLoader ?? false;
   const [flattenEmptyDirectories, setFlattenEmptyDirectories] = useState(
-    sharedDemoFileTreeOptions.flattenEmptyDirectories ?? false
+    initialFlattenEmptyDirectories ?? defaultFlattenEmptyDirectories
   );
   const [useLazyDataLoader, setUseLazyDataLoader] = useState(
-    sharedDemoFileTreeOptions.useLazyDataLoader ?? false
+    initialUseLazyDataLoader ?? defaultUseLazyDataLoader
   );
+  const skipCookieWriteRef = useRef(false);
 
   const fileTreeOptions = useMemo<FileTreeOptions>(
     () => ({
@@ -38,6 +62,35 @@ export function ClientPage({ preloadedFileTreeHtml }: ClientPageProps) {
       setUseLazyDataLoader((prev: boolean) => !prev);
     });
   };
+  const handleResetControls = () => {
+    skipCookieWriteRef.current = true;
+    const clearCookie = (name: string) => {
+      document.cookie = `${name}=; path=/; max-age=0`;
+    };
+    clearCookie(FILE_TREE_COOKIE_VERSION_NAME);
+    clearCookie(FILE_TREE_COOKIE_FLATTEN);
+    clearCookie(FILE_TREE_COOKIE_LAZY);
+    startTransition(() => {
+      setFlattenEmptyDirectories(defaultFlattenEmptyDirectories);
+      setUseLazyDataLoader(defaultUseLazyDataLoader);
+    });
+  };
+
+  const cookieMaxAge = 60 * 60 * 24 * 365;
+  useEffect(() => {
+    if (skipCookieWriteRef.current) {
+      skipCookieWriteRef.current = false;
+      return;
+    }
+    const cookieSuffix = `; path=/; max-age=${cookieMaxAge}`;
+    document.cookie = `${FILE_TREE_COOKIE_VERSION_NAME}=${FILE_TREE_COOKIE_VERSION}${cookieSuffix}`;
+    document.cookie = `${FILE_TREE_COOKIE_FLATTEN}=${
+      flattenEmptyDirectories ? '1' : '0'
+    }${cookieSuffix}`;
+    document.cookie = `${FILE_TREE_COOKIE_LAZY}=${
+      useLazyDataLoader ? '1' : '0'
+    }${cookieSuffix}`;
+  }, [flattenEmptyDirectories, useLazyDataLoader]);
 
   return (
     <div className="m-4">
@@ -76,6 +129,14 @@ export function ClientPage({ preloadedFileTreeHtml }: ClientPageProps) {
             />
             Lazy Loader
           </label>
+          <button
+            type="button"
+            className="ml-auto rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={handleResetControls}
+          >
+            Reset to Defaults
+          </button>
         </div>
       </div>
 

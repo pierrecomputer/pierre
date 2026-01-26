@@ -21,10 +21,6 @@ export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
   );
 
   useEffect(() => {
-    // currently we are doing this right away, but it also feels like we should do it
-    // when the component is *re-mounted* - so maybe let's look into a way to check for that
-    // tree.current.setMounted(true);
-    // tree.current.rebuildTree();
     return () => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
       tree.current.setMounted(false);
