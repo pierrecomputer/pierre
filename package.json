@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "ws": "bun scripts/ws.js",
     "demo:build": "(cd apps/demo && bun run build)",
     "demo:dev": "(cd apps/demo && bun run dev)",
     "demo:prod": "(cd apps/demo && bun run build && bun run start)",
