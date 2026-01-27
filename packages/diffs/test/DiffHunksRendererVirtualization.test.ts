@@ -51,7 +51,7 @@ describe('DiffHunksRenderer - Virtualization', () => {
 
       const lineCount = countRenderedLines(result.unifiedAST);
       // Total unified lines that are rendered
-      expect(lineCount).toBe(514);
+      expect(lineCount).toBe(517);
     });
 
     test('1.2: No buffers (baseline) - split mode', async () => {
@@ -76,8 +76,8 @@ describe('DiffHunksRenderer - Virtualization', () => {
 
       // These are somewhat arbitrary because there's lots of stuff collapsed
       // between change hunks
-      expect(deletionLines).toBe(264);
-      expect(additionLines).toBe(428);
+      expect(deletionLines).toBe(267);
+      expect(additionLines).toBe(431);
     });
 
     // NOTE(amadeus): These buffer rendering tests are a bit arbitrary right
@@ -275,7 +275,7 @@ describe('DiffHunksRenderer - Virtualization', () => {
       assertDefined(splitResult.deletionsAST, 'deletionsAST should be defined');
 
       const unifiedLines = countRenderedLines(unifiedResult.unifiedAST);
-      expect(unifiedLines).toBe(514);
+      expect(unifiedLines).toBe(517);
 
       // In split mode, total lines across both columns
       const splitAdditionLines = countRenderedLines(splitResult.additionsAST);
@@ -326,7 +326,7 @@ describe('DiffHunksRenderer - Virtualization', () => {
       // First rendered line index -- it's hard coded because it's a bit hard
       // to figure out, so mostly a good reference if tests change these
       // assumptions
-      expect(unifiedIndices[0]).toBe(186);
+      expect(unifiedIndices[0]).toBe(184);
     });
 
     test('2.4: Split vs Unified line counting', async () => {
@@ -845,7 +845,7 @@ describe('DiffHunksRenderer - Virtualization', () => {
       assertDefined(result.unifiedAST, 'unifiedAST should be defined');
 
       const fullCount = countRenderedLines(result.unifiedAST);
-      expect(fullCount).toBe(514);
+      expect(fullCount).toBe(517);
 
       // Compare to partial render
       const partialResult = await unifiedRenderer.asyncRender(fileDiff, {

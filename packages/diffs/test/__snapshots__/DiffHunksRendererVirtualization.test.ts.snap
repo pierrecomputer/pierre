@@ -154,31 +154,9 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
         "down": true,
         "up": true,
       },
-      "hunkIndex": 4,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-4",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
       "hunkIndex": 5,
       "lines": 11,
       "slotName": "hunk-separator-unified-5",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 6,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-6",
       "type": "unified",
     },
     {
@@ -212,17 +190,6 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
       "hunkIndex": 9,
       "lines": 7,
       "slotName": "hunk-separator-unified-9",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 10,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-10",
       "type": "unified",
     },
     {
@@ -4810,71 +4777,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "119",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    }",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 4,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 119,
+        "data-line": 119,
+        "data-line-index": "129,126",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -6667,71 +6612,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "156",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "        } else {",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 6,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 158,
+        "data-line": 156,
+        "data-line-index": "171,165",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -18801,71 +18724,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "401",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "          deletionGroupSize++;",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 10,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 326,
+        "data-line": 401,
+        "data-line-index": "442,430",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -32158,31 +32059,9 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
         "down": true,
         "up": true,
       },
-      "hunkIndex": 4,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-4",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
       "hunkIndex": 5,
       "lines": 11,
       "slotName": "hunk-separator-unified-5",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 6,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-6",
       "type": "unified",
     },
     {
@@ -32216,17 +32095,6 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
       "hunkIndex": 9,
       "lines": 7,
       "slotName": "hunk-separator-unified-9",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 10,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-10",
       "type": "unified",
     },
     {
@@ -36544,71 +36412,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "119",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    }",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 4,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 119,
+        "data-line": 119,
+        "data-line-index": "129,126",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -38401,71 +38247,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "156",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "        } else {",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 6,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 158,
+        "data-line": 156,
+        "data-line-index": "171,165",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -50535,71 +50359,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "401",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "          deletionGroupSize++;",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 10,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 326,
+        "data-line": 401,
+        "data-line-index": "442,430",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -63888,17 +63690,6 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
     },
     {
       "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 4,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-4",
-      "type": "unified",
-    },
-    {
-      "expandable": {
         "chunked": true,
         "down": true,
         "up": true,
@@ -63906,17 +63697,6 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
       "hunkIndex": 5,
       "lines": 11,
       "slotName": "hunk-separator-unified-5",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 6,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-6",
       "type": "unified",
     },
     {
@@ -63950,17 +63730,6 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
       "hunkIndex": 9,
       "lines": 7,
       "slotName": "hunk-separator-unified-9",
-      "type": "unified",
-    },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 10,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-10",
       "type": "unified",
     },
     {
@@ -68580,71 +68349,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "119",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    }",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 4,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 119,
+        "data-line": 119,
+        "data-line-index": "129,126",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -70469,71 +70216,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "156",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "        } else {",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 6,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 158,
+        "data-line": 156,
+        "data-line-index": "171,165",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -82603,71 +82328,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "401",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "          deletionGroupSize++;",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 10,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 326,
+        "data-line": 401,
+        "data-line-index": "442,430",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -95921,17 +95624,6 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
       "slotName": "hunk-separator-unified-3",
       "type": "unified",
     },
-    {
-      "expandable": {
-        "chunked": false,
-        "down": true,
-        "up": true,
-      },
-      "hunkIndex": 4,
-      "lines": 1,
-      "slotName": "hunk-separator-unified-4",
-      "type": "unified",
-    },
   ],
   "preNode": {
     "children": [],
@@ -98625,71 +98317,49 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
             {
               "children": [
                 {
-                  "children": [
-                    {
-                      "children": [],
-                      "properties": {
-                        "href": "#diffs-icon-expand-all",
-                      },
-                      "tagName": "use",
-                      "type": "element",
-                    },
-                  ],
-                  "properties": {
-                    "data-icon": "",
-                    "height": 16,
-                    "viewBox": "0 0 16 16",
-                    "width": 16,
-                  },
-                  "tagName": "svg",
-                  "type": "element",
+                  "type": "text",
+                  "value": "119",
                 },
               ],
               "properties": {
-                "data-expand-both": "",
-                "data-expand-button": "",
-                "data-expand-down": undefined,
-                "data-expand-up": undefined,
+                "data-line-number-content": "",
               },
-              "tagName": "div",
-              "type": "element",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "1 unmodified line",
-                    },
-                  ],
-                  "properties": {
-                    "data-unmodified-lines": "",
-                  },
-                  "tagName": "span",
-                  "type": "element",
-                },
-              ],
-              "properties": {
-                "data-separator-content": "",
-              },
-              "tagName": "div",
+              "tagName": "span",
               "type": "element",
             },
           ],
           "properties": {
-            "data-separator-multi-button": undefined,
-            "data-separator-wrapper": "",
+            "data-column-number": "",
           },
-          "tagName": "div",
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "    }",
+                },
+              ],
+              "properties": {},
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-column-content": "",
+          },
+          "tagName": "span",
           "type": "element",
         },
       ],
       "properties": {
-        "data-expand-index": 4,
-        "data-separator": "line-info",
-        "data-separator-first": undefined,
-        "data-separator-last": undefined,
+        "data-alt-line": 119,
+        "data-line": 119,
+        "data-line-index": "129,126",
+        "data-line-type": "context-expanded",
       },
       "tagName": "div",
       "type": "element",
@@ -98851,60 +98521,6 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
         "data-alt-line": 122,
         "data-line": 122,
         "data-line-index": "132,129",
-        "data-line-type": "context",
-      },
-      "tagName": "div",
-      "type": "element",
-    },
-    {
-      "children": [
-        {
-          "children": [
-            {
-              "children": [
-                {
-                  "type": "text",
-                  "value": "123",
-                },
-              ],
-              "properties": {
-                "data-line-number-content": "",
-              },
-              "tagName": "span",
-              "type": "element",
-            },
-          ],
-          "properties": {
-            "data-column-number": "",
-          },
-          "tagName": "span",
-          "type": "element",
-        },
-        {
-          "children": [
-            {
-              "children": [
-                {
-                  "type": "text",
-                  "value": "",
-                },
-              ],
-              "properties": {},
-              "tagName": "span",
-              "type": "element",
-            },
-          ],
-          "properties": {
-            "data-column-content": "",
-          },
-          "tagName": "span",
-          "type": "element",
-        },
-      ],
-      "properties": {
-        "data-alt-line": 123,
-        "data-line": 123,
-        "data-line-index": "133,130",
         "data-line-type": "context",
       },
       "tagName": "div",
