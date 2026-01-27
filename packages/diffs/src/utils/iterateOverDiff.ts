@@ -197,6 +197,8 @@ export function iterateOverDiff({
       );
     })();
     const expandedLineCount = leadingRegion.fromStart + leadingRegion.fromEnd;
+    const expandedContextType: DiffLineCallbackProps['type'] =
+      leadingRegion.autoExpanded ? 'context' : 'context-expanded';
 
     function getTrailingCollapsedAfter(
       unifiedLineIndex: number,
@@ -262,7 +264,7 @@ export function iterateOverDiff({
               additionLineIndex: additionLineIndex + index,
               deletionLineNumber: deletionLineNumber + index,
               additionLineNumber: additionLineNumber + index,
-              type: 'context-expanded',
+              type: expandedContextType,
               noEOFCRAddition: false,
               noEOFCRDeletion: false,
             })
@@ -307,7 +309,7 @@ export function iterateOverDiff({
               additionLineIndex: additionLineIndex + index,
               deletionLineNumber: deletionLineNumber + index,
               additionLineNumber: additionLineNumber + index,
-              type: 'context-expanded',
+              type: expandedContextType,
               noEOFCRAddition: false,
               noEOFCRDeletion: false,
             })
@@ -460,6 +462,8 @@ export function iterateOverDiff({
     if (trailingRegion != null) {
       const { collapsedLines, fromStart, fromEnd } = trailingRegion;
       const len = fromStart + fromEnd;
+      const trailingContextType: DiffLineCallbackProps['type'] =
+        trailingRegion.autoExpanded ? 'context' : 'context-expanded';
       let index = 0;
       // FIXME: add a skip
       while (index < len) {
@@ -481,7 +485,7 @@ export function iterateOverDiff({
               deletionLineIndex: deletionLineIndex + index,
               additionLineNumber: additionLineNumber + index,
               deletionLineNumber: deletionLineNumber + index,
-              type: 'context-expanded',
+              type: trailingContextType,
               noEOFCRAddition: false,
               noEOFCRDeletion: false,
             })
@@ -502,6 +506,7 @@ interface ExpandedRegionResult {
   fromEnd: number;
   rangeSize: number;
   collapsedLines: number;
+  autoExpanded: boolean;
 }
 
 function getExpandedRegion(
@@ -518,6 +523,7 @@ function getExpandedRegion(
       fromEnd: 0,
       rangeSize,
       collapsedLines: Math.max(rangeSize, 0),
+      autoExpanded: false,
     };
   }
   if (rangeSize <= collpaseHunkThreshold) {
@@ -526,6 +532,7 @@ function getExpandedRegion(
       fromEnd: 0,
       rangeSize,
       collapsedLines: 0,
+      autoExpanded: true,
     };
   }
   if (expandedHunks === true) {
@@ -534,6 +541,7 @@ function getExpandedRegion(
       fromEnd: 0,
       rangeSize,
       collapsedLines: 0,
+      autoExpanded: false,
     };
   }
   const region = expandedHunks?.get(hunkIndex);
@@ -546,6 +554,7 @@ function getExpandedRegion(
     fromEnd: renderAll ? 0 : fromEnd,
     rangeSize,
     collapsedLines: Math.max(rangeSize - expandedCount, 0),
+    autoExpanded: false,
   };
 }
 
