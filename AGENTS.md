@@ -1,5 +1,14 @@
 # PierreJS Monorepo
 
+## Agent Environment
+
+You must set `AGENT=1` at the start of any terminal session to enable
+AI-friendly output from Bun's test runner:
+
+```bash
+export AGENT=1
+```
+
 ## Tooling
 
 - We exclusively use `bun` to run commands and install packages. Don't use `npm`
@@ -88,7 +97,7 @@ When test snapshots need to be updated:
 
 ```bash
 # From the package directory
-bun test --update-snapshots
+bun test -u
 
 # From the monorepo root
 bun run diffs:update-snapshots
