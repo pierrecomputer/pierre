@@ -47,6 +47,7 @@ export interface IterateOverDiffProps {
   startingLine?: number;
   totalLines?: number;
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
+  collpaseHunkThreshold?: number;
   callback: DiffLineCallback;
 }
 
@@ -56,6 +57,7 @@ export function iterateOverDiff({
   startingLine = 0,
   totalLines = Infinity,
   expandedHunks,
+  collpaseHunkThreshold,
   callback,
 }: IterateOverDiffProps): void {
   const state: IterationState = {
@@ -163,7 +165,8 @@ export function iterateOverDiff({
       diff.isPartial,
       hunk.collapsedBefore,
       expandedHunks,
-      hunkIndex
+      hunkIndex,
+      collpaseHunkThreshold
     );
     // We only create a trailing region if it's the last hunk
     const trailingRegion = (() => {
@@ -188,7 +191,8 @@ export function iterateOverDiff({
         trailingRangeSize,
         expandedHunks,
         // hunkIndex for trailing region
-        diff.hunks.length
+        diff.hunks.length,
+        collpaseHunkThreshold
       );
     })();
     const expandedLineCount = leadingRegion.fromStart + leadingRegion.fromEnd;
@@ -503,7 +507,8 @@ function getExpandedRegion(
   isPartial: boolean,
   rangeSize: number,
   expandedHunks: Map<number, HunkExpansionRegion> | true | undefined,
-  hunkIndex: number
+  hunkIndex: number,
+  collpaseHunkThreshold: number | undefined
 ): ExpandedRegionResult {
   rangeSize = Math.max(rangeSize, 0);
   if (rangeSize === 0 || isPartial) {
@@ -512,6 +517,15 @@ function getExpandedRegion(
       fromEnd: 0,
       rangeSize,
       collapsedLines: Math.max(rangeSize, 0),
+    };
+  }
+  const threshold = Math.max(collpaseHunkThreshold ?? 0, 0);
+  if (threshold > 0 && rangeSize <= threshold) {
+    return {
+      fromStart: rangeSize,
+      fromEnd: 0,
+      rangeSize,
+      collapsedLines: 0,
     };
   }
   if (expandedHunks === true) {

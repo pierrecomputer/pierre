@@ -351,6 +351,8 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
   expandUnchanged?: boolean; // false is default
+  // Auto-expand collapsed hunks at or below this size.
+  collpaseHunkThreshold?: number; // 2 is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
   lineDiffType?: LineDiffTypes; // 'word-alt' is default
@@ -528,6 +530,7 @@ export interface ForcePlainTextOptions {
   startingLine?: number;
   totalLines?: number;
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
+  collpaseHunkThreshold?: number;
 }
 
 export interface RenderFileOptions {

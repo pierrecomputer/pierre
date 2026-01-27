@@ -903,13 +903,6 @@
     }
   }
 
-  [data-line-type='context-expanded'] {
-    --diffs-line-bg: var(--diffs-bg-context);
-
-    [data-column-number] {
-      background-color: var(--diffs-bg-context);
-    }
-  }
 
   /* By wrapping hovers in a pointer: fine, we ensure that mobile devices don't
    *  require a double click */
@@ -1060,7 +1053,6 @@
     }
   }
 
-  [data-line-type='context-expanded'],
   [data-line-type='change-addition'],
   [data-line-type='change-deletion'] {
     &[data-selected-line] {

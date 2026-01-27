@@ -501,7 +501,8 @@ export class WorkerPoolManager {
     diff: FileDiffMetadata,
     startingLine: number,
     totalLines: number,
-    expandedHunks?: Map<number, HunkExpansionRegion> | true
+    expandedHunks?: Map<number, HunkExpansionRegion> | true,
+    collpaseHunkThreshold?: number
   ): ThemedDiffResult | undefined {
     return this.highlighter != null
       ? renderDiffWithHighlighter(diff, this.highlighter, this.renderOptions, {
@@ -509,6 +510,7 @@ export class WorkerPoolManager {
           startingLine,
           totalLines,
           expandedHunks,
+          collpaseHunkThreshold,
         })
       : undefined;
   }
