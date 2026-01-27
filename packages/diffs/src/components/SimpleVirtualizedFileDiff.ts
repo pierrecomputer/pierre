@@ -1,5 +1,5 @@
 import {
-  DEFAULT_COLLAPSE_HUNK_THRESHOLD,
+  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DIFF_HEADER_HEIGHT,
   FILE_GAP,
   HUNK_SEPARATOR_HEIGHT,
@@ -203,8 +203,8 @@ export class SimpleVirtualizedFileDiff<
       expandedHunks: expandUnchanged
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
-      collpaseHunkThreshold:
-        this.options.collpaseHunkThreshold ?? DEFAULT_COLLAPSE_HUNK_THRESHOLD,
+      collapsedContextThreshold:
+        this.options.collapsedContextThreshold ?? DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       callback: ({
         hunkIndex,
         collapsedBefore,
@@ -319,7 +319,7 @@ export class SimpleVirtualizedFileDiff<
       };
     }
     const threshold = Math.max(
-      this.options.collpaseHunkThreshold ?? DEFAULT_COLLAPSE_HUNK_THRESHOLD,
+      this.options.collapsedContextThreshold ?? DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       0
     );
     if (threshold > 0 && rangeSize <= threshold) {
@@ -457,8 +457,8 @@ export class SimpleVirtualizedFileDiff<
       expandedHunks: expandUnchanged
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
-      collpaseHunkThreshold:
-        this.options.collpaseHunkThreshold ?? DEFAULT_COLLAPSE_HUNK_THRESHOLD,
+      collapsedContextThreshold:
+        this.options.collapsedContextThreshold ?? DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       callback: ({
         hunkIndex,
         collapsedBefore,

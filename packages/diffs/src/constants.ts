@@ -34,7 +34,7 @@ export const LINE_HEIGHT = 20;
 export const DIFF_HEADER_HEIGHT = 44;
 export const HUNK_SEPARATOR_HEIGHT = 32;
 export const FILE_GAP = 8;
-export const DEFAULT_COLLAPSE_HUNK_THRESHOLD = 2;
+export const DEFAULT_COLLAPSED_CONTEXT_THRESHOLD = 2;
 
 export const DEFAULT_EXPANDED_REGION: HunkExpansionRegion = Object.freeze({
   fromStart: 0,

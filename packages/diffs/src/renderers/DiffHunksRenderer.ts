@@ -2,7 +2,7 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
-  DEFAULT_COLLAPSE_HUNK_THRESHOLD,
+  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DEFAULT_EXPANDED_REGION,
   DEFAULT_THEMES,
 } from '../constants';
@@ -222,7 +222,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableLineNumbers = false,
       disableVirtualizationBuffers = false,
       expandUnchanged = false,
-      collpaseHunkThreshold = DEFAULT_COLLAPSE_HUNK_THRESHOLD,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       expansionLineCount = 100,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
@@ -241,7 +241,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableLineNumbers,
       disableVirtualizationBuffers,
       expandUnchanged,
-      collpaseHunkThreshold,
+      collapsedContextThreshold,
       expansionLineCount,
       hunkSeparators,
       lineDiffType,
@@ -357,7 +357,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             : expandUnchanged
               ? true
               : this.expandedHunks,
-          this.getOptionsWithDefaults().collpaseHunkThreshold
+          this.getOptionsWithDefaults().collapsedContextThreshold
         );
         this.renderCache.renderRange = renderRange;
       }
@@ -475,11 +475,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     forcePlainText = false
   ): RenderDiffResult {
     const { options } = this.getRenderOptions(diff);
-    const { collpaseHunkThreshold } = this.getOptionsWithDefaults();
+    const { collapsedContextThreshold } = this.getOptionsWithDefaults();
     const result = renderDiffWithHighlighter(diff, highlighter, options, {
       forcePlainText,
       expandedHunks: forcePlainText ? true : undefined,
-      collpaseHunkThreshold,
+      collapsedContextThreshold,
     });
     return { result, options };
   }
@@ -525,7 +525,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableVirtualizationBuffers,
       expandUnchanged,
       expansionLineCount,
-      collpaseHunkThreshold,
+      collapsedContextThreshold,
       hunkSeparators,
     } = this.getOptionsWithDefaults();
 
@@ -607,7 +607,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       startingLine: renderRange.startingLine,
       totalLines: renderRange.totalLines,
       expandedHunks: expandUnchanged ? true : this.expandedHunks,
-      collpaseHunkThreshold,
+      collapsedContextThreshold,
       callback: ({
         hunkIndex,
         hunk,

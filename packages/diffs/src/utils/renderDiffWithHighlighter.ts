@@ -41,7 +41,7 @@ export function renderDiffWithHighlighter(
     startingLine,
     totalLines,
     expandedHunks,
-    collpaseHunkThreshold,
+    collapsedContextThreshold,
   }: ForcePlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedDiffResult {
   if (forcePlainText) {
@@ -124,7 +124,7 @@ export function renderDiffWithHighlighter(
     startingLine,
     totalLines,
     expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
-    collpaseHunkThreshold,
+    collapsedContextThreshold,
     callback: ({
       hunkIndex,
       additionLineIndex,
