@@ -1,6 +1,6 @@
 import LRUMapPkg from 'lru_map';
 
-import { DEFAULT_THEMES } from '../constants';
+import { DEFAULT_COLLAPSE_HUNK_THRESHOLD, DEFAULT_THEMES } from '../constants';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
@@ -93,7 +93,7 @@ export class WorkerPoolManager {
       theme = DEFAULT_THEMES,
       lineDiffType = 'word-alt',
       tokenizeMaxLineLength = 1000,
-      collpaseHunkThreshold = 2,
+      collpaseHunkThreshold = DEFAULT_COLLAPSE_HUNK_THRESHOLD,
     }: WorkerInitializationRenderOptions
   ) {
     this.renderOptions = {
@@ -148,7 +148,7 @@ export class WorkerPoolManager {
     theme = DEFAULT_THEMES,
     lineDiffType = 'word-alt',
     tokenizeMaxLineLength = 1000,
-    collpaseHunkThreshold = 2,
+    collpaseHunkThreshold = DEFAULT_COLLAPSE_HUNK_THRESHOLD,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
     const newRenderOptions: WorkerRenderingOptions = {
       theme,

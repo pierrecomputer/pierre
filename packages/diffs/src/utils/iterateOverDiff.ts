@@ -1,3 +1,4 @@
+import { DEFAULT_COLLAPSE_HUNK_THRESHOLD } from '../constants';
 import type {
   ChangeContent,
   FileDiffMetadata,
@@ -57,7 +58,7 @@ export function iterateOverDiff({
   startingLine = 0,
   totalLines = Infinity,
   expandedHunks,
-  collpaseHunkThreshold = 2,
+  collpaseHunkThreshold = DEFAULT_COLLAPSE_HUNK_THRESHOLD,
   callback,
 }: IterateOverDiffProps): void {
   const resolvedCollapseThreshold = Math.max(collpaseHunkThreshold, 0);

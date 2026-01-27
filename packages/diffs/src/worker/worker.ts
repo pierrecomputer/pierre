@@ -1,7 +1,7 @@
 import { createJavaScriptRegexEngine } from '@shikijs/engine-javascript';
 import { createHighlighterCoreSync } from 'shiki/core';
 
-import { DEFAULT_THEMES } from '../constants';
+import { DEFAULT_COLLAPSE_HUNK_THRESHOLD, DEFAULT_THEMES } from '../constants';
 import { attachResolvedLanguages } from '../highlighter/languages/attachResolvedLanguages';
 import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
 import type {
@@ -32,7 +32,7 @@ let renderOptions: WorkerRenderingOptions = {
   theme: DEFAULT_THEMES,
   tokenizeMaxLineLength: 1000,
   lineDiffType: 'word-alt',
-  collpaseHunkThreshold: 2,
+  collpaseHunkThreshold: DEFAULT_COLLAPSE_HUNK_THRESHOLD,
 };
 
 self.addEventListener('error', (event) => {

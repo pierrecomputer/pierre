@@ -1,7 +1,11 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { DEFAULT_EXPANDED_REGION, DEFAULT_THEMES } from '../constants';
+import {
+  DEFAULT_COLLAPSE_HUNK_THRESHOLD,
+  DEFAULT_EXPANDED_REGION,
+  DEFAULT_THEMES,
+} from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -219,7 +223,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableVirtualizationBuffers = false,
       expandUnchanged = false,
       expansionLineCount = 100,
-      collpaseHunkThreshold = 2,
+      collpaseHunkThreshold = DEFAULT_COLLAPSE_HUNK_THRESHOLD,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
@@ -299,7 +303,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         lineDiffType,
         collpaseHunkThreshold,
       } = this.getOptionsWithDefaults();
-      return { theme, tokenizeMaxLineLength, lineDiffType, collpaseHunkThreshold };
+      return {
+        theme,
+        tokenizeMaxLineLength,
+        lineDiffType,
+        collpaseHunkThreshold,
+      };
     })();
     this.getOptionsWithDefaults();
     const { renderCache } = this;

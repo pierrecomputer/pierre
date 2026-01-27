@@ -39,3 +39,5 @@ export const DEFAULT_EXPANDED_REGION: HunkExpansionRegion = Object.freeze({
   fromStart: 0,
   fromEnd: 0,
 });
+
+export const DEFAULT_COLLAPSE_HUNK_THRESHOLD = 2;

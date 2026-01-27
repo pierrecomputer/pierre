@@ -1,4 +1,5 @@
 import {
+  DEFAULT_COLLAPSE_HUNK_THRESHOLD,
   DIFF_HEADER_HEIGHT,
   FILE_GAP,
   HUNK_SEPARATOR_HEIGHT,
@@ -317,7 +318,7 @@ export class SimpleVirtualizedFileDiff<
       };
     }
     const collpaseHunkThreshold = Math.max(
-      this.options.collpaseHunkThreshold ?? 2,
+      this.options.collpaseHunkThreshold ?? DEFAULT_COLLAPSE_HUNK_THRESHOLD,
       0
     );
     if (rangeSize <= collpaseHunkThreshold) {
