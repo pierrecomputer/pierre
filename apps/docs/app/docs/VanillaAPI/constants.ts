@@ -149,6 +149,10 @@ const instance = new FileDiff({
   // Lines revealed per click when expanding collapsed regions
   expansionLineCount: 100,
 
+  // Auto-expand collapsed context regions at or below this size
+  // (default: 2)
+  collapsedContextThreshold: 2,
+
   // ─────────────────────────────────────────────────────────────
   // INLINE CHANGE HIGHLIGHTING
   // ─────────────────────────────────────────────────────────────

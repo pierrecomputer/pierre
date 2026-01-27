@@ -204,7 +204,8 @@ export class SimpleVirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold:
-        this.options.collapsedContextThreshold ?? DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+        this.options.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       callback: ({
         hunkIndex,
         collapsedBefore,
@@ -319,7 +320,8 @@ export class SimpleVirtualizedFileDiff<
       };
     }
     const threshold = Math.max(
-      this.options.collapsedContextThreshold ?? DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      this.options.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       0
     );
     if (threshold > 0 && rangeSize <= threshold) {
@@ -458,7 +460,8 @@ export class SimpleVirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold:
-        this.options.collapsedContextThreshold ?? DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+        this.options.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       callback: ({
         hunkIndex,
         collapsedBefore,

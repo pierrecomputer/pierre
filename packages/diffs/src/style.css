@@ -903,7 +903,6 @@
     }
   }
 
-
   /* By wrapping hovers in a pointer: fine, we ensure that mobile devices don't
    *  require a double click */
   @media (pointer: fine) {
