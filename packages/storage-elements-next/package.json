@@ -1,32 +1,32 @@
 {
   "name": "@pierre/storage-elements-next",
   "version": "0.0.7",
-  "type": "module",
-  "scripts": {
-    "tsc": "tsc --build",
-    "build": "tsc --build"
-  },
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
   "files": [
     "dist"
   ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
+  "scripts": {
+    "tsc": "tsgo --build",
+    "build": "tsgo --build"
+  },
   "dependencies": {
     "@pierre/storage": "catalog:"
-  },
-  "peerDependencies": {
-    "next": ">=15"
   },
   "devDependencies": {
     "@octokit/openapi-types": "catalog:",
     "next": "catalog:",
     "typescript": ">=5"
+  },
+  "peerDependencies": {
+    "next": ">=15"
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { DiffHunksRenderer, parseDiffFromFile } from 'src';
 
+import { DiffHunksRenderer, parseDiffFromFile } from '../src';
 import { mockDiffs } from './mocks';
 import { assertDefined, countSplitRows } from './testUtils';
 

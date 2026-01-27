@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface GitHubAppConnectProps {
   /**
@@ -198,7 +198,6 @@ class GitHubAppConnector {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async connect(props?: GitHubAppConnectionHandlerProps) {
     const onSuccess = props?.onSuccess;
     const width = 600;
@@ -218,7 +217,6 @@ class GitHubAppConnector {
       `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no,status=no`
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.checkInterval = setInterval(async () => {
       if (this.connectionStatus === 'installed') {
         this.clearInterval();
@@ -252,7 +250,6 @@ class GitHubAppConnector {
     }, 1000);
 
     // Use AbortController for automatic cleanup
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     window.addEventListener('message', this.handleMessage, {
       signal: this.abortController.signal,
     });
@@ -308,23 +305,25 @@ export function useGitHubAppConnection({
   // Create the connector once - all config is captured at creation time.
   // We intentionally create this only once to avoid recreating listeners and intervals.
   // Config changes during the component lifecycle are not supported by design.
+  const connectorRef = useRef<GitHubAppConnector | null>(null);
   const connector = useMemo(() => {
-    return new GitHubAppConnector(
-      {
-        slug,
-        origin,
-        redirectUrl,
-        installationsUrl: installationsUrlResolved,
-      },
-      setStatus
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (connectorRef.current == null) {
+      connectorRef.current = new GitHubAppConnector(
+        {
+          slug,
+          origin,
+          redirectUrl,
+          installationsUrl: installationsUrlResolved,
+        },
+        setStatus
+      );
+    }
+    return connectorRef.current;
+  }, [installationsUrlResolved, origin, redirectUrl, slug]);
 
   useEffect(() => {
     return () => connector.destroy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [connector]);
 
   // Return stable callbacks that delegate to the connector
   const handleConnect = useCallback(

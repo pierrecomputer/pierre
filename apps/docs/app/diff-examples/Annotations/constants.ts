@@ -1,4 +1,3 @@
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import {
   type DiffLineAnnotation,
   type FileContents,
@@ -8,6 +7,8 @@ import type {
   PreloadFileDiffOptions,
   PreloadMultiFileDiffOptions,
 } from '@pierre/diffs/ssr';
+
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 export interface AnnotationMetadata {
   key: string;

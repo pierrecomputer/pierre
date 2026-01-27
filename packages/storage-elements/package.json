@@ -3,8 +3,8 @@
   "version": "0.0.2",
   "type": "module",
   "scripts": {
-    "tsc": "tsc --build",
-    "build": "tsc --build"
+    "tsc": "tsgo --build",
+    "build": "tsgo --build"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",

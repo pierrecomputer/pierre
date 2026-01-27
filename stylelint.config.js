@@ -1,5 +1,5 @@
 export default {
-  extends: ['stylelint-config-standard', 'stylelint-prettier/recommended'],
+  extends: ['stylelint-config-standard'],
   rules: {
     // For Tailwind
     'at-rule-no-unknown': [

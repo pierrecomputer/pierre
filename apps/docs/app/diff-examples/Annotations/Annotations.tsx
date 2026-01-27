@@ -1,8 +1,5 @@
 'use client';
 
-import { IconArrowDownRight, IconPlus } from '@/components/icons/icons';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import {
   type AnnotationSide,
   type DiffLineAnnotation,
@@ -23,6 +20,9 @@ import {
   type AcceptRejectMetadata,
   type AnnotationMetadata,
 } from './constants';
+import { IconArrowDownRight, IconPlus } from '@/components/icons/icons';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 
 interface AnnotationsProps {
   prerenderedDiff: PreloadMultiFileDiffResult<AnnotationMetadata>;

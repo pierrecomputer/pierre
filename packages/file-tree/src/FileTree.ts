@@ -67,8 +67,7 @@ export class FileTree {
     this.files = options.files;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  setOptions(options: FileTreeOptions): void {
+  setOptions(_options: FileTreeOptions): void {
     // todo
   }
 

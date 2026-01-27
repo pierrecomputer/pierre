@@ -1,6 +1,7 @@
-import { cn } from '@/lib/utils';
 import { type VariantProps, cva } from 'class-variance-authority';
 import * as React from 'react';
+
+import { cn } from '@/lib/utils';
 
 const noticeVariants = cva('text-md flex gap-2 rounded-lg border p-4', {
   variants: {

@@ -1,9 +1,10 @@
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import { type FileContents, parseDiffFromFile } from '@pierre/diffs';
 import type {
   PreloadFileDiffOptions,
   PreloadMultiFileDiffOptions,
 } from '@pierre/diffs/ssr';
+
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {

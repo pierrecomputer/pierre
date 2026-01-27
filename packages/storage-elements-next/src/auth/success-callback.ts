@@ -37,7 +37,7 @@ export class CodeStorageSuccessCallback {
     if (options.platform !== 'github') {
       throw new Error(
         // The error is intentionally outputting an unexpected value
-        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        // oxlint-disable-next-line typescript/restrict-template-expressions
         `CodeStorageSuccessCallback Error: Invalid platform: ${options.platform}`
       );
     }

@@ -9,8 +9,9 @@ import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export type { FileDiffMetadata };
 
-export interface FileDiffProps<LAnnotation>
-  extends DiffBasePropsReact<LAnnotation> {
+export interface FileDiffProps<
+  LAnnotation,
+> extends DiffBasePropsReact<LAnnotation> {
   fileDiff: FileDiffMetadata;
 }
 

@@ -1,8 +1,8 @@
-import { WorkerPoolManager } from './WorkerPoolManager';
 import type {
   WorkerInitializationRenderOptions,
   WorkerPoolOptions,
 } from './types';
+import { WorkerPoolManager } from './WorkerPoolManager';
 
 let workerPoolSingletone: WorkerPoolManager | undefined;
 

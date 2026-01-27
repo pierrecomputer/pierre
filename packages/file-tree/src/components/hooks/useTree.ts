@@ -21,9 +21,9 @@ export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
   );
 
   useEffect(() => {
+    const instance = tree.current;
     return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      tree.current.setMounted(false);
+      instance.setMounted(false);
     };
   }, [tree]);
 

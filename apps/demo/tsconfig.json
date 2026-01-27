@@ -5,7 +5,11 @@
     "composite": false,
     "noEmit": true,
     "emitDeclarationOnly": false,
-    "baseUrl": ".",
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
-  }
+  },
+  "references": [
+    {
+      "path": "../../packages/diffs/tsconfig.json"
+    }
+  ]
 }

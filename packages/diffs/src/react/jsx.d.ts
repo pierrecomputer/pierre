@@ -1,5 +1,4 @@
 import 'react';
-
 import type { DIFFS_TAG_NAME } from '../constants';
 
 declare module 'react' {

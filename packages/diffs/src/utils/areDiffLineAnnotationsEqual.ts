@@ -1,4 +1,4 @@
-import type { DiffLineAnnotation } from 'src/types';
+import type { DiffLineAnnotation } from '../types';
 
 export function areDiffLineAnnotationsEqual<LAnnotation = undefined>(
   annotationA: DiffLineAnnotation<LAnnotation>,

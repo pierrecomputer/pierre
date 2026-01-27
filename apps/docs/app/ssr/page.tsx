@@ -1,8 +1,8 @@
 import { type DiffLineAnnotation, type FileContents } from '@pierre/diffs';
 import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
-import { SSRPage } from './SSRPage';
 import type { AnnotationMetadata } from './ssr_types';
+import { SSRPage } from './SSRPage';
 
 const OLD_FILE: FileContents = {
   name: 'main.zig',

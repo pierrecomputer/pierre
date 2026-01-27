@@ -18,6 +18,7 @@ const config: UserConfig = defineConfig([
     clean: true,
     dts: {
       sourcemap: true,
+      tsgo: true,
     },
     unbundle: true,
     platform: 'neutral',
@@ -45,7 +46,7 @@ const config: UserConfig = defineConfig([
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',
     clean: false,
-    dts: { sourcemap: true },
+    dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
   },
   {
@@ -55,7 +56,7 @@ const config: UserConfig = defineConfig([
     clean: false,
     unbundle: false,
     noExternal: [/.*/],
-    dts: { sourcemap: true },
+    dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
     format: 'esm',
     treeshake: false,

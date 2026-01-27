@@ -4,7 +4,6 @@
   "compilerOptions": {
     "outDir": "dist",
     "lib": ["ES2020"],
-    "baseUrl": "src",
     "rootDir": "src",
     "emitDeclarationOnly": false
   }

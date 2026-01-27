@@ -1,11 +1,3 @@
-import {
-  IconArrowRight,
-  IconBulbFill,
-  IconCiWarningFill,
-  IconInfoFill,
-} from '@/components/icons';
-import { Button } from '@/components/ui/button';
-import { Notice } from '@/components/ui/notice';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import { compileMDX } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
@@ -29,6 +21,14 @@ import {
 } from '../app/docs/VanillaAPI/ComponentTabs';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
+import {
+  IconArrowRight,
+  IconBulbFill,
+  IconCiWarningFill,
+  IconInfoFill,
+} from '@/components/icons';
+import { Button } from '@/components/ui/button';
+import { Notice } from '@/components/ui/notice';
 
 function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
   const href = props.href;

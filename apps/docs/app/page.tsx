@@ -1,9 +1,5 @@
-import Footer from '@/components/Footer';
-import { Header } from '@/components/Header';
-import { PierreCompanySection } from '@/components/PierreCompanySection';
 import { preloadFileDiff, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
-import { Hero } from './Hero';
 import {
   AcceptRejectExample,
   Annotations,
@@ -14,18 +10,22 @@ import {
 } from './diff-examples/Annotations/constants';
 import { ArbitraryFiles } from './diff-examples/ArbitraryFiles/ArbitraryFiles';
 import { ARBITRARY_DIFF_EXAMPLE } from './diff-examples/ArbitraryFiles/constants';
-import { CustomHeader } from './diff-examples/CustomHeader/CustomHeader';
 import { CUSTOM_HEADER_EXAMPLE } from './diff-examples/CustomHeader/constants';
-import { DiffStyles } from './diff-examples/DiffStyles/DiffStyles';
+import { CustomHeader } from './diff-examples/CustomHeader/CustomHeader';
 import { DIFF_STYLES } from './diff-examples/DiffStyles/constants';
-import { FontStyles } from './diff-examples/FontStyles/FontStyles';
+import { DiffStyles } from './diff-examples/DiffStyles/DiffStyles';
 import { FONT_STYLES } from './diff-examples/FontStyles/constants';
-import { LineSelection } from './diff-examples/LineSelection/LineSelection';
+import { FontStyles } from './diff-examples/FontStyles/FontStyles';
 import { LINE_SELECTION_EXAMPLE } from './diff-examples/LineSelection/constants';
-import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
+import { LineSelection } from './diff-examples/LineSelection/LineSelection';
 import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
-import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
+import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
 import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
+import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
+import { Hero } from './Hero';
+import Footer from '@/components/Footer';
+import { Header } from '@/components/Header';
+import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 export default function Home() {
   return (

@@ -1,0 +1,55 @@
+{
+  "plugins": ["import", "react", "nextjs", "promise", "node", "react-perf"],
+  "categories": {},
+  "rules": {
+    "nextjs/no-head-element": "off",
+    "nextjs/no-html-link-for-pages": "off",
+    "nextjs/no-img-element": "off",
+    "typescript/tsconfig-error": "off"
+  },
+  "settings": {
+    "jsx-a11y": {
+      "polymorphicPropName": null,
+      "components": {},
+      "attributes": {}
+    },
+    "react": {
+      "formComponents": [],
+      "linkComponents": [],
+      "version": null,
+      "componentWrapperFunctions": []
+    },
+    "jsdoc": {
+      "ignorePrivate": false,
+      "ignoreInternal": false,
+      "ignoreReplacesDocs": true,
+      "overrideReplacesDocs": true,
+      "augmentsExtendsReplacesDocs": false,
+      "implementsReplacesDocs": false,
+      "exemptDestructuredRootsFromChecks": false,
+      "tagNamePreference": {}
+    },
+    "vitest": {
+      "typecheck": false
+    }
+  },
+  "env": {
+    "builtin": true
+  },
+  "globals": {},
+  "ignorePatterns": [
+    "**/dist/**",
+    "{packages,apps}/*/node_modules/**",
+    "{packages,apps}/*/.next/**",
+    "{packages,apps}/*/out/**",
+    "{packages,apps}/*/build/**",
+    "{packages,apps}/*/next-env.d.ts",
+    "{packages,apps}/*/.source/**",
+    "{packages,apps}/*/.vinxi/**",
+    "{packages,apps}/*/.output/**",
+    "{packages,apps}/*/.vercel/**",
+    "packages/storage-elements/blocks/git-platform-sync/api/**/*",
+    "packages/storage-elements/blocks/git-platform-sync/pages/**/*",
+    "update-themes.js"
+  ]
+}

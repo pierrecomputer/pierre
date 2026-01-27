@@ -30,14 +30,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build diffs
-        run: bun run diffs:build
-
-      - name: Build storage-elements-next
-        run: bun run storage-elements-next:build
+      - name: Build workspace packages
+        run: bun ws "packages/*" build
 
       - name: Build docs (generates .source)
-        run: bun run docs:build
+        run: bun ws docs build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -45,6 +42,8 @@ jobs:
           name: build-output
           path: |
             packages/diffs/dist/
+            packages/file-tree/dist/
+            packages/storage-elements/dist/
             packages/storage-elements-next/dist/
             apps/docs/.source/
             apps/docs/.next/
@@ -166,7 +165,7 @@ jobs:
           name: build-output
 
       - name: Run tests - precision-diffs
-        run: bun run diffs:test
+        run: bun ws diffs test
 
   typecheck:
     name: TypeScript
@@ -197,15 +196,5 @@ jobs:
         with:
           name: build-output
 
-      - name: Type check - diffs
-        run: bun run diffs:tsc
-
-      - name: Type check - demo
-        run: bun run demo:tsc
-
-      # mdo-do: Restore docs type checking once Fumadocs are removed
-      # - name: Type check - docs
-      #   run: bun run docs:tsc
-
-      - name: Type check - storage-elements
-        run: bun run storage-elements:tsc
+      - name: Type check all workspaces
+        run: bun run ws "*" tsc

@@ -118,13 +118,9 @@ export async function disposeHighlighter(): Promise<void> {
 }
 
 registerCustomTheme('pierre-dark', () => {
-  return import(
-    '../themes/pierre-dark.json'
-  ) as unknown as Promise<ThemeRegistrationResolved>;
+  return import('../themes/pierre-dark.json') as unknown as Promise<ThemeRegistrationResolved>;
 });
 
 registerCustomTheme('pierre-light', () => {
-  return import(
-    '../themes/pierre-light.json'
-  ) as unknown as Promise<ThemeRegistrationResolved>;
+  return import('../themes/pierre-light.json') as unknown as Promise<ThemeRegistrationResolved>;
 });

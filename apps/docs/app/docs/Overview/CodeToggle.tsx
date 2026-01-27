@@ -1,11 +1,11 @@
 'use client';
 
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 import type { DocsExampleTypes } from '../types';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface CodeToggleProps {
   reactSingleFile: PreloadedFileResult<undefined>;

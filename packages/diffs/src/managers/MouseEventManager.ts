@@ -93,8 +93,9 @@ export interface MouseEventManagerBaseOptions<
   __debugMouseEvents?: LogTypes;
 }
 
-export interface MouseEventManagerOptions<TMode extends MouseEventManagerMode>
-  extends MouseEventManagerBaseOptions<TMode> {
+export interface MouseEventManagerOptions<
+  TMode extends MouseEventManagerMode,
+> extends MouseEventManagerBaseOptions<TMode> {
   onHunkExpand?(hunkIndex: number, direction: ExpansionDirections): unknown;
 }
 

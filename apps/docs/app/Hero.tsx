@@ -1,5 +1,9 @@
 'use client';
 
+import Link from 'next/link';
+import { useState } from 'react';
+
+import packageJson from '../../../packages/diffs/package.json';
 import { IconBook, IconCheck, IconCopyFill } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -7,10 +11,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import Link from 'next/link';
-import { useState } from 'react';
-
-import packageJson from '../../../packages/diffs/package.json';
 
 export function Hero() {
   const [copied, setCopied] = useState(false);

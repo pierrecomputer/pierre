@@ -1,9 +1,9 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import * as React from 'react';
 
 import { Button, type ButtonProps } from './button';
+import { cn } from '@/lib/utils';
 
 interface ButtonGroupContextValue {
   selectedValue?: string;

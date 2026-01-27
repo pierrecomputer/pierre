@@ -1,7 +1,7 @@
-import { cn } from '@/lib/utils';
 import React from 'react';
 
 import styles from './Button.module.css';
+import { cn } from '@/lib/utils';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
@@ -9,8 +9,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   asChild?: boolean;
 }
 
-interface ButtonLinkProps
-  extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+interface ButtonLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   children: React.ReactNode;
   variant?: 'default' | 'active';
   asChild?: boolean;

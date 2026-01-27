@@ -25,7 +25,7 @@ export class CodeToTokenTransformStream extends TransformStream<
           recall,
         } = await tokenizer.enqueue(chunk);
         if (allowRecalls && recall > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // oxlint-disable-next-line typescript/no-explicit-any
           controller.enqueue({ recall } as any);
         }
         for (const token of stable) {
@@ -37,7 +37,7 @@ export class CodeToTokenTransformStream extends TransformStream<
           }
         }
       },
-      // eslint-disable-next-line @typescript-eslint/require-await
+      // oxlint-disable-next-line typescript/require-await
       async flush(controller) {
         const { stable } = tokenizer.close();
         // if allow recalls, the tokens should already be sent

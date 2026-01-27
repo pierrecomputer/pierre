@@ -1,15 +1,4 @@
 import '@/app/prose.css';
-import Footer from '@/components/Footer';
-import { PierreCompanySection } from '@/components/PierreCompanySection';
-import {
-  IconArrowUpRight,
-  IconBrandCursor,
-  IconBrandVsCode,
-  IconBrandZed,
-  IconThemes,
-} from '@/components/icons';
-import { Button } from '@/components/ui/button';
-import { renderMDX } from '@/lib/mdx';
 import { preloadFile } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -28,6 +17,17 @@ import {
 } from '../docs/Theming/constants';
 import { ThemeDemo } from './ThemeDemo';
 import { ThemeLayout } from './ThemeLayout';
+import Footer from '@/components/Footer';
+import {
+  IconArrowUpRight,
+  IconBrandCursor,
+  IconBrandVsCode,
+  IconBrandZed,
+  IconThemes,
+} from '@/components/icons';
+import { PierreCompanySection } from '@/components/PierreCompanySection';
+import { Button } from '@/components/ui/button';
+import { renderMDX } from '@/lib/mdx';
 
 export const metadata: Metadata = {
   title: 'Pierre Themes — Themes for Visual Studio Code, Cursor, and Shiki.',

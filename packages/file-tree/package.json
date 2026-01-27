@@ -1,43 +1,47 @@
 {
   "name": "@pierre/file-tree",
   "version": "0.0.1-beta.2",
-  "type": "module",
   "license": "apache-2.0",
-  "scripts": {
-    "build": "tsdown --clean",
-    "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
-    "test": "bun test",
-    "tsc": "tsc --noEmit --pretty",
-    "prepublishOnly": "bun run build"
-  },
-  "sideEffects": [
-    "src/components/web-components.ts"
-  ],
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./react": {
-      "import": "./dist/react/index.js",
-      "types": "./dist/react/index.d.ts"
-    },
-    "./ssr": {
-      "import": "./dist/ssr/index.js",
-      "types": "./dist/ssr/index.d.ts"
-    }
-  },
   "files": [
     "dist",
     "LICENSE.md",
     "README.md"
   ],
+  "type": "module",
+  "sideEffects": [
+    "src/components/web-components.ts"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./ssr": {
+      "types": "./dist/ssr/index.d.ts",
+      "import": "./dist/ssr/index.js"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
+  "scripts": {
+    "build": "tsdown --clean",
+    "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
+    "test": "bun test",
+    "tsc": "tsgo --noEmit --pretty",
+    "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "@headless-tree/core": "catalog:",
+    "preact": "catalog:",
+    "preact-render-to-string": "catalog:"
+  },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
-    "@trivago/prettier-plugin-sort-imports": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "autoprefixer": "catalog:",
@@ -46,11 +50,6 @@
     "react-dom": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
-  },
-  "dependencies": {
-    "@headless-tree/core": "catalog:",
-    "preact": "catalog:",
-    "preact-render-to-string": "catalog:"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",

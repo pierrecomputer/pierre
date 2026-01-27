@@ -53,7 +53,7 @@ export interface FileRenderResult {
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+// oxlint-disable-next-line typescript/no-empty-object-type
 export interface FileRendererOptions extends BaseCodeOptions {}
 
 let instanceId = -1;

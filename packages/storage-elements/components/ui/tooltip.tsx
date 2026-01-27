@@ -1,8 +1,9 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as React from 'react';
+
+import { cn } from '@/lib/utils';
 
 function TooltipProvider({
   delayDuration = 0,

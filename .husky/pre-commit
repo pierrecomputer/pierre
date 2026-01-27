@@ -1,1 +1,1 @@
-bunx lint-staged
+bun scripts/precommit-tsc.ts && bunx lint-staged

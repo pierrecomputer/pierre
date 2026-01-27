@@ -10,16 +10,20 @@
   "exclude": ["node_modules"],
   "references": [
     {
-      "path": "../../packages/diffs"
+      "path": "../../packages/diffs/tsconfig.json"
     },
     {
-      "path": "../../packages/file-tree"
+      "path": "../../packages/file-tree/tsconfig.json"
+    },
+    {
+      "path": "../../packages/storage-elements-next/tsconfig.json"
     }
   ],
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
+    "allowArbitraryExtensions": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,

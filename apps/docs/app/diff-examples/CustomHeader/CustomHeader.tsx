@@ -1,5 +1,11 @@
 'use client';
 
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+import type { ReactNode } from 'react';
+import { useState } from 'react';
+
+import { FeatureHeader } from '../FeatureHeader';
 import {
   IconCodeStyleBars,
   IconCodeStyleBg,
@@ -8,12 +14,6 @@ import {
   IconMoon,
   IconSun,
 } from '@/components/icons';
-import { MultiFileDiff } from '@pierre/diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import type { ReactNode } from 'react';
-import { useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 
 // =============================================================================
 // Local Components

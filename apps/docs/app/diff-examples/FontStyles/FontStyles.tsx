@@ -1,5 +1,10 @@
 'use client';
 
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+import { useState } from 'react';
+
+import { FeatureHeader } from '../FeatureHeader';
 import {
   IconCheck,
   IconChevronSm,
@@ -14,11 +19,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InputWithIcon } from '@/components/ui/input-group';
-import { MultiFileDiff } from '@pierre/diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import { useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 
 const fontMap: Record<string, string> = {
   'Berkeley Mono': '--font-berkeley-mono',

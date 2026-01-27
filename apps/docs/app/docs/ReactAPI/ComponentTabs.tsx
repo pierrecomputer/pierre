@@ -1,10 +1,10 @@
 'use client';
 
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { type CSSProperties, useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 const NumberColumnWidthOverride = {
   '--diffs-min-number-column-width': '3ch',

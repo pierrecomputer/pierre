@@ -1,8 +1,9 @@
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type {
   PreloadFileOptions,
   PreloadMultiFileDiffOptions,
 } from '@pierre/diffs/ssr';
+
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },

@@ -1,7 +1,7 @@
 import { renderToString } from 'preact-render-to-string';
 
-import type { FileTreeOptions } from '../FileTree';
 import { Root } from '../components/Root';
+import type { FileTreeOptions } from '../FileTree';
 import { SVGSpriteSheet } from '../sprite';
 import fileTreeStyles from '../style.css';
 

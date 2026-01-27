@@ -52,14 +52,17 @@ export interface FileRenderProps<LAnnotation> {
   lineAnnotations?: LineAnnotation<LAnnotation>[];
 }
 
-export interface FileHyrdateProps<LAnnotation>
-  extends Omit<FileRenderProps<LAnnotation>, 'fileContainer'> {
+export interface FileHyrdateProps<LAnnotation> extends Omit<
+  FileRenderProps<LAnnotation>,
+  'fileContainer'
+> {
   fileContainer: HTMLElement;
   prerenderedHTML?: string;
 }
 
 export interface FileOptions<LAnnotation>
-  extends BaseCodeOptions,
+  extends
+    BaseCodeOptions,
     MouseEventManagerBaseOptions<'file'>,
     LineSelectionOptions {
   disableFileHeader?: boolean;

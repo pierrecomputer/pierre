@@ -150,8 +150,7 @@ export interface WorkerPoolOptions {
   totalASTLRUCacheSize?: number;
 }
 
-export interface WorkerInitializationRenderOptions
-  extends Partial<WorkerRenderingOptions> {
+export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {
   langs?: SupportedLanguages[];
 }
 

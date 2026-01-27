@@ -1,11 +1,11 @@
 'use client';
 
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
 import { PACKAGE_MANAGERS, type PackageManager } from './constants';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface PackageManagerTabsProps {
   installationExamples: Record<PackageManager, PreloadedFileResult<undefined>>;

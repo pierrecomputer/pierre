@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.options.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["apps/**/*", "packages/**/*", "scripts/**/*", "update-themes.js"],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/out/**",
+    "**/build/**",
+    "**/.source/**",
+    "**/.vinxi/**",
+    "**/.output/**",
+    "**/.vercel/**"
+  ]
+}

@@ -67,14 +67,17 @@ export interface FileDiffRenderProps<LAnnotation> {
   renderRange?: RenderRange;
 }
 
-export interface FileDiffHydrationProps<LAnnotation>
-  extends Omit<FileDiffRenderProps<LAnnotation>, 'fileContainer'> {
+export interface FileDiffHydrationProps<LAnnotation> extends Omit<
+  FileDiffRenderProps<LAnnotation>,
+  'fileContainer'
+> {
   fileContainer: HTMLElement;
   prerenderedHTML?: string;
 }
 
 export interface FileDiffOptions<LAnnotation>
-  extends Omit<BaseDiffOptions, 'hunkSeparators'>,
+  extends
+    Omit<BaseDiffOptions, 'hunkSeparators'>,
     MouseEventManagerBaseOptions<'diff'>,
     LineSelectionOptions {
   hunkSeparators?:
@@ -796,8 +799,6 @@ export class FileDiff<LAnnotation = undefined> {
     this.applyPreNodeAttributes(pre, result);
 
     let shouldReplace = false;
-    let codeDeletions: HTMLElement | undefined;
-    let codeAdditions: HTMLElement | undefined;
     // Create code elements and insert HTML content
     const codeElements: HTMLElement[] = [];
     if (result.unifiedAST != null) {
@@ -870,7 +871,11 @@ export class FileDiff<LAnnotation = undefined> {
     if ((this.options.overflow ?? 'scroll') === 'scroll') {
       this.resizeManager.setup(pre);
       if ((this.options.diffStyle ?? 'split') === 'split') {
-        this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
+        this.scrollSyncManager.setup(
+          pre,
+          this.codeDeletions,
+          this.codeAdditions
+        );
       } else {
         this.scrollSyncManager.cleanUp();
       }

@@ -1,9 +1,10 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
+
+import { Button } from '@/components/ui/button';
 
 const appInstallType = 'git-platform-sync-app-installed--github';
 
@@ -15,7 +16,7 @@ function SuccessPageContent() {
 
   useEffect(() => {
     if (window.opener != null) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      // oxlint-disable-next-line typescript/no-unsafe-call
       window.opener.postMessage(
         {
           type: appInstallType,
@@ -56,7 +57,7 @@ function SuccessPageContent() {
             <Button
               onClick={() => {
                 if (window.opener != null) {
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+                  // oxlint-disable-next-line typescript/no-unsafe-call
                   window.opener.postMessage(
                     {
                       type: appInstallType,

@@ -3,22 +3,25 @@
   "files": [],
   "references": [
     {
-      "path": "apps/demo"
+      "path": "apps/demo/tsconfig.json"
     },
     {
-      "path": "apps/docs"
+      "path": "apps/docs/tsconfig.json"
     },
     {
-      "path": "packages/diffs"
+      "path": "apps/solid-diff-demo/tsconfig.json"
     },
     {
-      "path": "packages/file-tree"
+      "path": "packages/diffs/tsconfig.json"
     },
     {
-      "path": "packages/storage-elements"
+      "path": "packages/file-tree/tsconfig.json"
     },
     {
-      "path": "packages/storage-elements-next"
+      "path": "packages/storage-elements/tsconfig.json"
+    },
+    {
+      "path": "packages/storage-elements-next/tsconfig.json"
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@pierre/js-docs",
+  "name": "@pierre/docs",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -14,7 +14,7 @@
     "dev:deps:tree": "(cd ../../packages/file-tree && bun run dev)",
     "prod": "bun run build && next start",
     "start": "next start",
-    "tsc": "bun run build:deps && tsc --noEmit --pretty"
+    "tsc": "bun run build:deps && tsgo --noEmit --pretty"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",

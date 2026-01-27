@@ -1,11 +1,11 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode } from 'react';
 
 import { IconArrowUpRight } from './icons';
+import { cn } from '@/lib/utils';
 
 interface NavLinkProps {
   href: string;

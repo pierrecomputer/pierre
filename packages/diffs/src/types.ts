@@ -369,17 +369,16 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 // NOTE(amadeus): This is the shared config that all `pre` nodes will need to
 // get setup properly. Whether it's via direct DOM manipulation or via HAST
 // html rendering, this interface can be shared across both of these areas.
-export interface PrePropertiesConfig
-  extends Required<
-    Pick<
-      BaseDiffOptions,
-      | 'diffIndicators'
-      | 'disableBackground'
-      | 'disableLineNumbers'
-      | 'overflow'
-      | 'themeType'
-    >
-  > {
+export interface PrePropertiesConfig extends Required<
+  Pick<
+    BaseDiffOptions,
+    | 'diffIndicators'
+    | 'disableBackground'
+    | 'disableLineNumbers'
+    | 'overflow'
+    | 'themeType'
+  >
+> {
   split: boolean;
   themeStyles: string;
   totalLines: number;
@@ -458,8 +457,10 @@ export interface LineEventBaseProps {
   numberColumn: boolean;
 }
 
-export interface DiffLineEventBaseProps
-  extends Omit<LineEventBaseProps, 'type'> {
+export interface DiffLineEventBaseProps extends Omit<
+  LineEventBaseProps,
+  'type'
+> {
   type: 'diff-line';
   annotationSide: AnnotationSide;
   lineType: LineTypes;

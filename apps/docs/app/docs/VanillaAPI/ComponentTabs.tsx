@@ -1,10 +1,10 @@
 'use client';
 
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '../DocsCodeExample';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 type ComponentType = 'file-diff' | 'file';
 type PropsType = 'file-diff' | 'file';

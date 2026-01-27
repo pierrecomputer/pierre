@@ -6,9 +6,11 @@
     "blocks/git-platform-sync/pages/**/*"
   ],
   "compilerOptions": {
-    "noEmit": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "baseUrl": ".",
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
     "paths": {
       "@/registry/new-york/*": ["./*"],
       "@/*": ["./*"]

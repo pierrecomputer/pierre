@@ -1,5 +1,10 @@
 'use client';
 
+import { parseDiffFromFile, preloadHighlighter } from '@pierre/diffs';
+import { File, FileDiff } from '@pierre/diffs/react';
+import { useTheme } from 'next-themes';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
 import {
   IconCheckCheck,
   IconChevronsNarrow,
@@ -9,10 +14,6 @@ import {
 } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
-import { parseDiffFromFile, preloadHighlighter } from '@pierre/diffs';
-import { File, FileDiff } from '@pierre/diffs/react';
-import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useRef, useState } from 'react';
 
 // Preload themes at module level for earliest possible start
 void preloadHighlighter({

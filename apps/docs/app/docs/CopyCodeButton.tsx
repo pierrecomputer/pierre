@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
+
 import { IconCheck, IconCopy } from '@/components/icons';
 import { cn } from '@/lib/utils';
-import { useEffect, useRef, useState } from 'react';
 
 interface CopyButtonProps {
   content: string;
@@ -13,7 +14,7 @@ export function CopyCodeButton({ content }: CopyButtonProps) {
     void (async () => {
       try {
         await navigator.clipboard.writeText(content);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        // oxlint-disable-next-line no-unused-vars
       } catch (_error) {
         const textarea = document.createElement('textarea');
         textarea.style.position = 'absolute';

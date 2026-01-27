@@ -1,5 +1,6 @@
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
+
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 export const SPLIT_UNIFIED: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: {

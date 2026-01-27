@@ -1,5 +1,10 @@
 'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { Button } from './ui/button';
 import {
   IconBrandDiscord,
   IconBrandGithub,
@@ -7,11 +12,6 @@ import {
   IconParagraph,
 } from '@/components/icons';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-
-import { Button } from './ui/button';
 
 export interface HeaderProps {
   onMobileMenuToggle?: () => void;

@@ -10,8 +10,9 @@ import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
-export interface PatchDiffProps<LAnnotation>
-  extends DiffBasePropsReact<LAnnotation> {
+export interface PatchDiffProps<
+  LAnnotation,
+> extends DiffBasePropsReact<LAnnotation> {
   patch: string;
 }
 

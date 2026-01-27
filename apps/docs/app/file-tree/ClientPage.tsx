@@ -90,7 +90,7 @@ export function ClientPage({
     document.cookie = `${FILE_TREE_COOKIE_LAZY}=${
       useLazyDataLoader ? '1' : '0'
     }${cookieSuffix}`;
-  }, [flattenEmptyDirectories, useLazyDataLoader]);
+  }, [cookieMaxAge, flattenEmptyDirectories, useLazyDataLoader]);
 
   return (
     <div className="m-4">

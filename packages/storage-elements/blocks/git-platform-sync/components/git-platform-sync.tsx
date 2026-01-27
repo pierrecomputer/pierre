@@ -1,5 +1,17 @@
 'use client';
 
+import type * as PopoverPrimitive from '@radix-ui/react-popover';
+import {
+  AlertCircle,
+  BookOpen,
+  CheckIcon,
+  ChevronDown,
+  ChevronsUpDownIcon,
+  Loader2,
+  PlusIcon,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -29,17 +41,6 @@ import {
   useGitHubAppConnection,
   useOwners,
 } from '@/registry/new-york/blocks/git-platform-sync/lib/github-app-connect';
-import type * as PopoverPrimitive from '@radix-ui/react-popover';
-import {
-  AlertCircle,
-  BookOpen,
-  CheckIcon,
-  ChevronDown,
-  ChevronsUpDownIcon,
-  Loader2,
-  PlusIcon,
-} from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export const GitHubIcon = ({
   className,
@@ -113,7 +114,7 @@ export function ComboBox({
   ...props
 }: ComboBoxProps) {
   // We want to make sure the container internal stuff doesn't blow up anyone's types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   const containerProp: any =
     __container != null ? { container: __container } : {};
   const [open, setOpen] = useState(false);
@@ -439,7 +440,7 @@ export function GitPlatformSync({
   }, [statusProp, codeStorageRepoExists]);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   const containerProp: any =
     __container != null ? { container: __container } : {};
 
@@ -661,7 +662,7 @@ function PopoverConductor({
   }, [codeStorageRepo, connectionStatus]);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   const containerProp: any =
     __container != null ? { container: __container } : {};
 
@@ -748,7 +749,7 @@ function StepManage({ codeStorageRepo, __container }: StepManageProps) {
   }, [owners]);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   const containerProp: any =
     __container != null ? { __container: __container } : {};
   return (
@@ -868,7 +869,7 @@ function StepCreate({
   }, [owners]);
 
   // We want to make sure the container internal stuff doesn't blow up anyone's types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   const containerProp: any =
     __container != null ? { __container: __container } : {};
 

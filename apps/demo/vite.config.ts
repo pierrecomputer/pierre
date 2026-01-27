@@ -20,7 +20,7 @@ function makeFilteredLogger(folder: string): Logger {
   const noisyMsg = new RegExp(`page reload\\b[\\s\\S]*${folderPattern}`, 'i');
 
   const passthrough = <T extends keyof Logger>(m: T) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
+    // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return
     ((...args: any[]) => (base[m] as any)(...args)) as Logger[T];
 
   return {
@@ -43,7 +43,7 @@ function makeFilteredLogger(folder: string): Logger {
     warnOnce: passthrough('warnOnce'),
     clearScreen: passthrough('clearScreen'),
     hasWarned: base.hasWarned,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     hasErrorLogged: (base as any).hasErrorLogged,
   };
 }
@@ -74,7 +74,7 @@ export default defineConfig(() => {
         next();
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      // oxlint-disable-next-line typescript/no-misused-promises
       server.middlewares.use('/', handleRoutes);
     },
     configurePreviewServer(server: PreviewServer) {
@@ -82,7 +82,7 @@ export default defineConfig(() => {
         req: IncomingMessage,
         res: ServerResponse,
         next: () => void
-        // eslint-disable-next-line @typescript-eslint/require-await
+        // oxlint-disable-next-line typescript/require-await
       ) => {
         // Handle root path - serve vanilla version
         if (req.url === '/' || req.url === '/index.html') {
@@ -100,7 +100,7 @@ export default defineConfig(() => {
         next();
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      // oxlint-disable-next-line typescript/no-misused-promises
       server.middlewares.use('/', handleRoutes);
     },
   });

@@ -1,5 +1,6 @@
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 export const PACKAGE_MANAGERS = ['npm', 'bun', 'pnpm', 'yarn'] as const;
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];

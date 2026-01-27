@@ -1,6 +1,4 @@
 import '@/app/prose.css';
-import Footer from '@/components/Footer';
-import { renderMDX } from '@/lib/mdx';
 import { preloadFile, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
 import {
@@ -90,6 +88,8 @@ import {
   WORKER_POOL_VSCODE_LOCAL_ROOTS,
   WORKER_POOL_VSCODE_WORKER_URI,
 } from './WorkerPool/constants';
+import Footer from '@/components/Footer';
+import { renderMDX } from '@/lib/mdx';
 
 export default function DocsPage() {
   return (

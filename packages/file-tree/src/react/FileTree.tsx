@@ -3,8 +3,8 @@
 
 import type { ReactNode } from 'react';
 
-import type { FileTreeOptions } from '../FileTree';
 import { FILE_TREE_TAG_NAME } from '../constants';
+import type { FileTreeOptions } from '../FileTree';
 import { useFileTreeInstance } from './utils/useFileTreeInstance';
 
 function renderFileTreeChildren(): ReactNode {

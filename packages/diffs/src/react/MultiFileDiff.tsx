@@ -9,8 +9,9 @@ import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export type { FileContents };
 
-export interface MultiFileDiffProps<LAnnotation>
-  extends DiffBasePropsReact<LAnnotation> {
+export interface MultiFileDiffProps<
+  LAnnotation,
+> extends DiffBasePropsReact<LAnnotation> {
   oldFile: FileContents;
   newFile: FileContents;
 }

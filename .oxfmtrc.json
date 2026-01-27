@@ -1,0 +1,49 @@
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": true,
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
+  "proseWrap": "always",
+  "importOrder": ["<THIRD_PARTY_MODULES>", "^\\."],
+  "importOrderSortSpecifiers": true,
+  "importOrderSeparation": true,
+  "experimentalSortImports": {
+    "groups": [
+      ["value-builtin", "value-external", "type-builtin", "type-external"],
+      [
+        "value-internal",
+        "type-internal",
+        "value-parent",
+        "type-parent",
+        "value-sibling",
+        "type-sibling",
+        "value-index",
+        "type-index"
+      ],
+      "unknown"
+    ],
+    "ignoreCase": true,
+    "internalPattern": ["~/", "@/"],
+    "newlinesBetween": true,
+    "order": "asc",
+    "partitionByComment": false,
+    "partitionByNewline": false,
+    "sortSideEffects": false
+  },
+  "experimentalTailwindcss": {},
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "build",
+    ".vite",
+    "bun.lock",
+    ".next",
+    ".source",
+    ".vercel",
+    "apps/docs/public/r/*",
+    "apps/docs/next-env.d.ts",
+    "*.patch"
+  ]
+}

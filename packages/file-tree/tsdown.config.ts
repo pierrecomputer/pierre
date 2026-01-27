@@ -13,6 +13,7 @@ const config: UserConfig = defineConfig([
     clean: true,
     dts: {
       sourcemap: true,
+      tsgo: true,
     },
     unbundle: true,
     platform: 'neutral',

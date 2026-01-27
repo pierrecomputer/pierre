@@ -1,5 +1,12 @@
 'use client';
 
+import { preloadHighlighter } from '@pierre/diffs';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+import { FeatureHeader } from '../FeatureHeader';
 import {
   IconArrowDownRight,
   IconCheck,
@@ -16,13 +23,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { preloadHighlighter } from '@pierre/diffs';
-import { MultiFileDiff } from '@pierre/diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 
 const LIGHT_THEMES = [
   'pierre-light',

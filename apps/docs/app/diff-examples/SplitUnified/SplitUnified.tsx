@@ -1,12 +1,12 @@
 'use client';
 
-import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
+import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface SplitUnifiedProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;

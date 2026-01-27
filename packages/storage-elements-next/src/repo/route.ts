@@ -35,7 +35,7 @@ export class CodeStorageRepo {
       const body = (await request.json()) as CreateRepoRequest;
       const { owner, name, defaultBranch } = body;
 
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+      // oxlint-disable-next-line typescript/strict-boolean-expressions
       if (!owner || !name) {
         return NextResponse.json(
           { success: false, error: 'Repository owner and name are required' },
@@ -51,10 +51,10 @@ export class CodeStorageRepo {
           name,
           // NOTE(amadeus): Given these types are `any`, not sure the safest way
           // to convert fix them...
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+          // oxlint-disable-next-line typescript/prefer-nullish-coalescing
           defaultBranch: defaultBranch || 'main', // Optional, defaults to 'main'
         },
-        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+        // oxlint-disable-next-line typescript/prefer-nullish-coalescing
         defaultBranch: defaultBranch || 'main', // Optional, defaults to 'main' for the Git Storage repo
       });
 
@@ -69,7 +69,7 @@ export class CodeStorageRepo {
         repository: {
           owner,
           name,
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+          // oxlint-disable-next-line typescript/prefer-nullish-coalescing
           defaultBranch: defaultBranch || 'main',
         },
       });

@@ -1,9 +1,9 @@
 'use client';
 
-import { Header } from '@/components/Header';
 import { type ReactNode, useState } from 'react';
 
 import { SidebarWrapper } from './SidebarWrapper';
+import { Header } from '@/components/Header';
 
 export interface DocsLayoutProps {
   children: ReactNode;

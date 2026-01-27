@@ -1,7 +1,5 @@
 'use client';
 
-import { IconBrandGithub } from '@/components/icons';
-import { cn } from '@/lib/utils';
 import {
   File,
   type FileContents,
@@ -11,6 +9,8 @@ import {
 } from '@pierre/diffs/react';
 
 import { CopyCodeButton } from './CopyCodeButton';
+import { IconBrandGithub } from '@/components/icons';
+import { cn } from '@/lib/utils';
 
 interface DocsCodeExampleProps<LAnnotation> {
   file: FileContents;

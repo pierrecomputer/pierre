@@ -1,9 +1,9 @@
 'use client';
 
-import { Header } from '@/components/Header';
 import { type ReactNode, useState } from 'react';
 
 import { SidebarWrapper } from '../docs/SidebarWrapper';
+import { Header } from '@/components/Header';
 
 export interface ThemeLayoutProps {
   /** Content rendered full-width above the sidebar grid (hero, demo, etc.) */
