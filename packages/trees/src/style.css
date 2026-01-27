@@ -16,6 +16,10 @@
     --ft-internal-font-weight-regular: var(--ft-font-weight-regular, 400);
     --ft-internal-font-weight-semibold: var(--ft-font-weight-semibold, 600);
     --ft-internal-search-font-weight: var(--ft-search-font-weight, 600);
+    --ft-internal-search-background: var(
+      --ft-search-background,
+      var(--ft-internal-color-background)
+    );
     --ft-internal-color-border: var(
       --ft-color-border,
       light-dark(oklch(92.2% 0 0), oklch(100% 0 0 / 0.1))
@@ -70,7 +74,7 @@
     padding-inline: var(--ft-internal-item-padding-x);
     line-height: var(--ft-internal-row-height);
     color: var(--ft-internal-color-foreground);
-    background-color: var(--ft-internal-color-background);
+    background-color: var(--ft-internal-search-background);
     border: 1px solid var(--ft-internal-color-border);
     border-radius: var(--ft-internal-border-radius);
     outline: none;

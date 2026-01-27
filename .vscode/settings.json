@@ -19,7 +19,8 @@
   },
   "files.associations": {
     "**/apps/**/*.css": "tailwindcss",
-    "*.css": "postcss"
+    "*.css": "postcss",
+    "*.mdx": "markdown"
   },
   "stylelint.validate": ["css", "postcss"],
   "css.validate": false,
@@ -56,6 +57,9 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[mdx]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }

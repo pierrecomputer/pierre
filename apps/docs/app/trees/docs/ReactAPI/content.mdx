@@ -1,0 +1,21 @@
+## React API
+
+<Notice icon={<IconInfoFill />}>
+  Import the React component from `@pierre/file-tree/react`.
+</Notice>
+
+The React API exposes one main component: `FileTree`, which renders a file tree
+from a list of file paths with support for selection, search, and customization
+via options.
+
+### Component
+
+<DocsCodeExample {...reactAPIFileTree} />
+
+### Props
+
+`FileTree` accepts an `options` object (see
+[FileTree options](#filetree-options) for full details) plus optional styling
+and SSR props:
+
+<DocsCodeExample {...reactAPIFileTreeProps} />

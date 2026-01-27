@@ -1,0 +1,35 @@
+## Vanilla JS API
+
+<Notice icon={<IconInfoFill />}>
+  Import the vanilla JavaScript class from `@pierre/file-tree`.
+</Notice>
+
+The Vanilla JS API exposes the `FileTree` class. Create an instance with
+options, then call `render({ fileTreeContainer })` or
+`render({ containerWrapper })` to mount the tree into the DOM (pass a host
+element to reuse, or a parent to append the host to).
+
+### Basic usage
+
+<DocsCodeExample {...vanillaAPIFileTreeExample} />
+
+### Constructor options and instance methods
+
+`FileTree` is constructed with an options object (see
+[FileTree options](#filetree-options) for full details). After construction you
+can render, hydrate, or clean up:
+
+<DocsCodeExample {...vanillaAPIFileTreeOptions} />
+
+#### Hydration
+
+When using SSR, pass the pre-rendered container and optional HTML to `hydrate()`
+instead of `render()`:
+
+```ts
+const fileTree = new FileTree({ files });
+fileTree.hydrate({
+  fileTreeContainer: document.querySelector('file-tree-container'),
+  prerenderedHTML: htmlFromServer,
+});
+```

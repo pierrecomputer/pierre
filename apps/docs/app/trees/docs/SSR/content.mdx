@@ -1,0 +1,34 @@
+## SSR
+
+<Notice icon={<IconBulbFill />}>
+  Import SSR utilities from `@pierre/file-tree/ssr`.
+</Notice>
+
+The SSR API lets you pre-render the file tree HTML on the server for fast first
+paint, then hydrate on the client for full interactivity.
+
+### Usage
+
+`preloadFileTree` returns a string of HTML. Pass that string to the client as
+`prerenderedHTML` and pass the same `FileTreeOptions` you used on the server.
+The React component and the vanilla `FileTree` both accept `prerenderedHTML` and
+will hydrate the pre-rendered markup.
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  Options used for pre-rendering must exactly match what you pass on the client.
+  Use the same `FileTreeOptions` object (or equivalent) when calling
+  `preloadFileTree` and when rendering `FileTree` so the tree structure and
+  state hydrate correctly.
+</Notice>
+
+### Preloaders
+
+#### preloadFileTree [toc-ignore]
+
+Preloads the file tree HTML from a `FileTreeOptions` object. Use this in a
+server component or server route; pass the returned HTML and the same options to
+your client component. Pass the HTML to the React `FileTree` via the
+`prerenderedHTML` prop, or use vanilla `FileTree` and call `hydrate()` with the
+container (and optional `prerenderedHTML`).
+
+<DocsCodeExample {...preloadFileTree} />

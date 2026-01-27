@@ -11,6 +11,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { Button } from './ui/button';
+import { getProductFromPathname } from '@/app/product-config';
 import { cn } from '@/lib/utils';
 
 export interface HeaderProps {
@@ -20,15 +21,20 @@ export interface HeaderProps {
 
 interface NavLinkProps {
   href: string;
+  basePath: string;
   children: React.ReactNode;
 }
 
-function NavLink({ href, children }: NavLinkProps) {
+function NavLink({ href, basePath, children }: NavLinkProps) {
   const pathname = usePathname();
+  const fullHref =
+    href === '/' ? (basePath !== '' ? basePath : '/') : `${basePath}${href}`;
 
-  const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
-    return pathname.startsWith(href);
+  const isActive = () => {
+    if (href === '/') {
+      return pathname === (basePath !== '' ? basePath : '/');
+    }
+    return pathname.startsWith(fullHref);
   };
 
   return (
@@ -38,12 +44,10 @@ function NavLink({ href, children }: NavLinkProps) {
       asChild
       className={cn(
         'text-muted-foreground font-norma3 px-2',
-        isActive(href) &&
-          (href === '/' ? pathname === '/' : true) &&
-          'text-foreground pointer-events-none font-medium'
+        isActive() && 'text-foreground pointer-events-none font-medium'
       )}
     >
-      <Link href={href}>{children}</Link>
+      <Link href={fullHref}>{children}</Link>
     </Button>
   );
 }
@@ -72,6 +76,7 @@ function IconLink({ href, label, children }: IconLinkProps) {
 export function Header({ onMobileMenuToggle, className }: HeaderProps) {
   const pathname = usePathname();
   const [isStuck, setIsStuck] = useState(false);
+  const product = getProductFromPathname(pathname);
 
   useEffect(() => {
     let lastStuck: boolean | undefined;
@@ -91,6 +96,10 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const homeHref = product.basePath !== '' ? product.basePath : '/';
+  const showMobileMenu =
+    pathname === product.docsPath || pathname === product.themePath;
+
   return (
     <header
       data-slot="header"
@@ -101,18 +110,20 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
       )}
     >
       <Link
-        href="/"
+        href={homeHref}
         className="text-foreground hover:text-foreground/80 flex items-center gap-2 transition-colors"
       >
         <div className="flex items-baseline gap-1.5">
-          <span className="text-lg leading-[20px] font-semibold">Diffs</span>
+          <span className="text-lg leading-[20px] font-semibold">
+            {product.name}
+          </span>
           <small className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
             by The Pierre Computer Co.
           </small>
         </div>
       </Link>
 
-      {(pathname === '/docs' || pathname === '/theme') && (
+      {showMobileMenu && (
         <div className="mr-auto flex items-center gap-1 md:hidden">
           <IconChevronFlat size={16} className="text-border" />
           <Button variant="ghost" size="icon" onClick={onMobileMenuToggle}>
@@ -122,9 +133,17 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
       )}
 
       <nav className="flex items-center">
-        <NavLink href="/">Home</NavLink>
-        <NavLink href="/docs">Docs</NavLink>
-        <NavLink href="/theme">Theme</NavLink>
+        <NavLink href="/" basePath={product.basePath}>
+          Home
+        </NavLink>
+        <NavLink href="/docs" basePath={product.basePath}>
+          Docs
+        </NavLink>
+        {product.basePath === '' && (
+          <NavLink href="/theme" basePath={product.basePath}>
+            Theme
+          </NavLink>
+        )}
 
         <div className="border-border mx-2 h-5 w-px border-l" />
 
@@ -132,10 +151,7 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <IconBrandDiscord />
         </IconLink>
 
-        <IconLink
-          href="https://github.com/pierrecomputer/pierre"
-          label="GitHub"
-        >
+        <IconLink href={product.githubUrl} label="GitHub">
           <IconBrandGithub />
         </IconLink>
       </nav>
