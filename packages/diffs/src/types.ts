@@ -358,6 +358,9 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 
   // How many lines to expand per click
   expansionLineCount?: number; // 100 is default
+
+  // Collapsed hunks with <= this many lines are expanded by default
+  collpaseHunkThreshold?: number; // 2 is default
 }
 
 // NOTE(amadeus): This is the shared config that all `pre` nodes will need to
@@ -539,6 +542,7 @@ export interface RenderDiffOptions {
   theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  collpaseHunkThreshold: number;
 }
 
 export interface RenderFileResult {

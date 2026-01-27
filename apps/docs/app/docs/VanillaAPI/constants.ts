@@ -149,6 +149,9 @@ const instance = new FileDiff({
   // Lines revealed per click when expanding collapsed regions
   expansionLineCount: 100,
 
+  // Collapsed hunks with <= this many lines are expanded by default
+  collpaseHunkThreshold: 2,
+
   // ─────────────────────────────────────────────────────────────
   // INLINE CHANGE HIGHLIGHTING
   // ─────────────────────────────────────────────────────────────

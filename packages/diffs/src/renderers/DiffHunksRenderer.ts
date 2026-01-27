@@ -219,6 +219,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableVirtualizationBuffers = false,
       expandUnchanged = false,
       expansionLineCount = 100,
+      collpaseHunkThreshold = 2,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
@@ -237,6 +238,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableVirtualizationBuffers,
       expandUnchanged,
       expansionLineCount,
+      collpaseHunkThreshold,
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
@@ -291,9 +293,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (this.workerManager?.isWorkingPool() === true) {
         return this.workerManager.getDiffRenderOptions();
       }
-      const { theme, tokenizeMaxLineLength, lineDiffType } =
-        this.getOptionsWithDefaults();
-      return { theme, tokenizeMaxLineLength, lineDiffType };
+      const {
+        theme,
+        tokenizeMaxLineLength,
+        lineDiffType,
+        collpaseHunkThreshold,
+      } = this.getOptionsWithDefaults();
+      return { theme, tokenizeMaxLineLength, lineDiffType, collpaseHunkThreshold };
     })();
     this.getOptionsWithDefaults();
     const { renderCache } = this;
@@ -516,6 +522,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableVirtualizationBuffers,
       expandUnchanged,
       expansionLineCount,
+      collpaseHunkThreshold,
       hunkSeparators,
     } = this.getOptionsWithDefaults();
 
@@ -597,6 +604,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       startingLine: renderRange.startingLine,
       totalLines: renderRange.totalLines,
       expandedHunks: expandUnchanged ? true : this.expandedHunks,
+      collpaseHunkThreshold,
       callback: ({
         hunkIndex,
         hunk,
@@ -1003,7 +1011,8 @@ function areRenderOptionsEqual(
   return (
     areThemesEqual(optionsA.theme, optionsB.theme) &&
     optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength &&
-    optionsA.lineDiffType === optionsB.lineDiffType
+    optionsA.lineDiffType === optionsB.lineDiffType &&
+    optionsA.collpaseHunkThreshold === optionsB.collpaseHunkThreshold
   );
 }
 

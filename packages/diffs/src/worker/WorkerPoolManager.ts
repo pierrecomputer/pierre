@@ -93,9 +93,15 @@ export class WorkerPoolManager {
       theme = DEFAULT_THEMES,
       lineDiffType = 'word-alt',
       tokenizeMaxLineLength = 1000,
+      collpaseHunkThreshold = 2,
     }: WorkerInitializationRenderOptions
   ) {
-    this.renderOptions = { theme, lineDiffType, tokenizeMaxLineLength };
+    this.renderOptions = {
+      theme,
+      lineDiffType,
+      tokenizeMaxLineLength,
+      collpaseHunkThreshold,
+    };
     this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     void this.initialize(langs);
@@ -142,11 +148,13 @@ export class WorkerPoolManager {
     theme = DEFAULT_THEMES,
     lineDiffType = 'word-alt',
     tokenizeMaxLineLength = 1000,
+    collpaseHunkThreshold = 2,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
     const newRenderOptions: WorkerRenderingOptions = {
       theme,
       lineDiffType,
       tokenizeMaxLineLength,
+      collpaseHunkThreshold,
     };
     if (!this.isInitialized()) {
       await this.initialize();
@@ -159,7 +167,9 @@ export class WorkerPoolManager {
       themesEqual &&
       newRenderOptions.lineDiffType === this.renderOptions.lineDiffType &&
       newRenderOptions.tokenizeMaxLineLength ===
-        this.renderOptions.tokenizeMaxLineLength
+        this.renderOptions.tokenizeMaxLineLength &&
+      newRenderOptions.collpaseHunkThreshold ===
+        this.renderOptions.collpaseHunkThreshold
     ) {
       return;
     }

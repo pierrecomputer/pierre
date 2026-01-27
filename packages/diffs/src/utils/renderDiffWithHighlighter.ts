@@ -123,6 +123,7 @@ export function renderDiffWithHighlighter(
     startingLine,
     totalLines,
     expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
+    collpaseHunkThreshold: options.collpaseHunkThreshold,
     callback: ({
       hunkIndex,
       additionLineIndex,

@@ -202,6 +202,7 @@ export class SimpleVirtualizedFileDiff<
       expandedHunks: expandUnchanged
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
+      collpaseHunkThreshold: this.options.collpaseHunkThreshold,
       callback: ({
         hunkIndex,
         collapsedBefore,
@@ -313,6 +314,18 @@ export class SimpleVirtualizedFileDiff<
         fromEnd: 0,
         collapsedLines: Math.max(rangeSize, 0),
         renderAll: false,
+      };
+    }
+    const collpaseHunkThreshold = Math.max(
+      this.options.collpaseHunkThreshold ?? 2,
+      0
+    );
+    if (rangeSize <= collpaseHunkThreshold) {
+      return {
+        fromStart: rangeSize,
+        fromEnd: 0,
+        collapsedLines: 0,
+        renderAll: true,
       };
     }
     const expandUnchanged = this.options.expandUnchanged ?? false;
@@ -442,6 +455,7 @@ export class SimpleVirtualizedFileDiff<
       expandedHunks: expandUnchanged
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
+      collpaseHunkThreshold: this.options.collpaseHunkThreshold,
       callback: ({
         hunkIndex,
         collapsedBefore,

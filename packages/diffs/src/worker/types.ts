@@ -19,6 +19,7 @@ export interface WorkerRenderingOptions {
   theme: DiffsThemeNames | ThemesType;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  collpaseHunkThreshold: number;
 }
 
 export interface FileRendererInstance {
