@@ -613,7 +613,7 @@
     }
   }
 
-  [data-expand-up] [data-icon] {
+  [data-expand-down] [data-icon] {
     transform: scaleY(-1);
   }
 
