@@ -17,17 +17,29 @@ interface ScrollAnchor {
   lineOffset: number | undefined;
 }
 
-// FIXME(amadeus): Make this configurable probably? These values are temporary
-// and will be more properly set when i make them configurable
-const OVERSCROLL_SIZE = 200;
-const RESIZE_OBSERVER_MARGIN = OVERSCROLL_SIZE * 4;
-const RESIZE_DEBUGGING = false;
+const DEFAULT_OVERSCROLL_SIZE = 200;
+const INTERSECTION_OBSERVER_MARGIN = DEFAULT_OVERSCROLL_SIZE * 4;
+const INTERSECTION_OBSERVER_THRESHOLD = [0, 0.000001, 0.99999, 1];
+
+export interface SimpleVirtualizerConfig {
+  overscrollSize: number;
+  intersectionObserverMargin: number;
+  resizeDebugging: boolean;
+}
+
+const DEFAULT_SIMPLE_VIRTUALIZER_CONFIG: SimpleVirtualizerConfig = {
+  overscrollSize: DEFAULT_OVERSCROLL_SIZE,
+  intersectionObserverMargin: INTERSECTION_OBSERVER_MARGIN,
+  resizeDebugging: false,
+};
+
 let lastSize = 0;
 
 export class SimpleVirtualizer {
   static __STOP: boolean = false;
   static __lastScrollPosition = 0;
 
+  private config: SimpleVirtualizerConfig;
   private intersectionObserver: IntersectionObserver | undefined;
   private scrollTop: number = 0;
   private height: number = 0;
@@ -47,6 +59,10 @@ export class SimpleVirtualizer {
   private renderedObservers = 0;
   private connectQueue: Map<HTMLElement, SubscribedInstance> = new Map();
 
+  constructor(config?: Partial<SimpleVirtualizerConfig>) {
+    this.config = { ...DEFAULT_SIMPLE_VIRTUALIZER_CONFIG, ...config };
+  }
+
   setup(root: HTMLElement | Document, contentContainer?: Element): void {
     if (this.root != null) {
       return;
@@ -57,8 +73,8 @@ export class SimpleVirtualizer {
       this.handleIntersectionChange,
       {
         root: this.root,
-        threshold: [0, 0.000001, 0.99999, 1],
-        rootMargin: `${RESIZE_OBSERVER_MARGIN}px 0px ${RESIZE_OBSERVER_MARGIN}px 0px`,
+        threshold: INTERSECTION_OBSERVER_THRESHOLD,
+        rootMargin: `${this.config.intersectionObserverMargin}px 0px ${this.config.intersectionObserverMargin}px 0px`,
         // FIXME(amadeus): Figure out the other settings we'll want in here, or
         // if we should make them configurable...
       }
@@ -102,14 +118,14 @@ export class SimpleVirtualizer {
         height: this.getHeight(),
         scrollHeight: this.getScrollHeight(),
         fitPerfectly: false,
-        overscrollSize: OVERSCROLL_SIZE,
+        overscrollSize: this.config.overscrollSize,
       });
     }
     return this.windowSpecs;
   }
 
   private handleContainerResize = (entries: ResizeObserverEntry[]) => {
-    if (RESIZE_DEBUGGING) {
+    if (this.config.resizeDebugging) {
       const currentSize = entries[0].borderBoxSize[0].blockSize;
       console.log('handleContainerResize', {
         change: currentSize - lastSize,
@@ -250,7 +266,7 @@ export class SimpleVirtualizer {
         height: this.getHeight(),
         scrollHeight: this.getScrollHeight(),
         fitPerfectly: false,
-        overscrollSize: OVERSCROLL_SIZE,
+        overscrollSize: this.config.overscrollSize,
       });
       if (
         areVirtualWindowSpecsEqual(this.windowSpecs, windowSpecs) &&

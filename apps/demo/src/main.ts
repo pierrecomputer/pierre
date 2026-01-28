@@ -268,6 +268,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           return new SimpleVirtualizedFileDiff<LineCommentMetadata>(
             options,
             virtualizer,
+            undefined,
             manager
           );
         } else {
@@ -593,6 +594,7 @@ if (renderFileButton != null) {
         return new SimpleVirtualizedFile<LineCommentMetadata>(
           options,
           virtualizer,
+          undefined,
           poolManager
         );
       } else {

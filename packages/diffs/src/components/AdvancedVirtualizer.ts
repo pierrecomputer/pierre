@@ -1,5 +1,10 @@
-import { DEFAULT_THEMES, DIFFS_TAG_NAME, FILE_GAP } from '../constants';
+import {
+  DEFAULT_THEMES,
+  DEFAULT_VIRTUAL_FILE_METRICS,
+  DIFFS_TAG_NAME,
+} from '../constants';
 import { queueRender } from '../managers/UniversalRenderingManager';
+import type { VirtualFileMetrics } from '../types';
 import type { ParsedPatch } from '../types';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import type { WorkerPoolManager } from '../worker';
@@ -45,6 +50,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
       disableVirtualizationBuffers: true,
       diffStyle: 'split',
     },
+    private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     private workerManager?: WorkerPoolManager | undefined
   ) {
     this.stickyOffset = document.createElement('div');
@@ -103,6 +109,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
             fileDiff,
           },
           this.fileOptions,
+          this.metrics,
           this.workerManager
         );
 
@@ -110,8 +117,9 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
         // to not immediately subscribe
         vFileDiff.cleanUp(true);
         this.files.push(vFileDiff);
-        this.totalHeightUnified += vFileDiff.unifiedHeight + FILE_GAP;
-        this.totalHeightSplit += vFileDiff.splitHeight + FILE_GAP;
+        this.totalHeightUnified +=
+          vFileDiff.unifiedHeight + this.metrics.fileGap;
+        this.totalHeightSplit += vFileDiff.splitHeight + this.metrics.fileGap;
       }
     }
   }
@@ -219,7 +227,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
       );
       const totalHeight = stickyBottom - stickyTop;
       this.stickyOffset.style.height = `${stickyTop}px`;
-      this.stickyContainer.style.top = `${-totalHeight + height + FILE_GAP}px`;
+      this.stickyContainer.style.top = `${-totalHeight + height + this.metrics.fileGap}px`;
       this.stickyContainer.style.bottom = `${-totalHeight + height}px`;
       this.stickyContainer.style.height = `${totalHeight}px`;
     }

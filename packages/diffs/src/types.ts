@@ -601,3 +601,11 @@ export interface VirtualWindowSpecs {
   top: number;
   bottom: number;
 }
+
+export interface VirtualFileMetrics {
+  hunkLineCount: number;
+  lineHeight: number;
+  diffHeaderHeight: number;
+  hunkSeparatorHeight: number;
+  fileGap: number;
+}

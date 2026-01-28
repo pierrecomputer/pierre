@@ -7,10 +7,16 @@ import {
 } from 'react';
 
 import { File, type FileOptions } from '../../components/File';
+import { SimpleVirtualizedFile } from '../../components/SimpleVirtualizedFile';
 import type { SelectedLineRange } from '../../managers/LineSelectionManager';
 import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
-import type { FileContents, LineAnnotation } from '../../types';
+import type {
+  FileContents,
+  LineAnnotation,
+  VirtualFileMetrics,
+} from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
+import { useSimpleVirtualizer } from '../SimpleVirtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
@@ -23,6 +29,7 @@ interface UseFileInstanceProps<LAnnotation> {
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
+  metrics?: VirtualFileMetrics;
 }
 
 interface UseFileInstanceReturn {
@@ -36,9 +43,13 @@ export function useFileInstance<LAnnotation>({
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
+  metrics,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
+  const simpleVirtualizer = useSimpleVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
-  const instanceRef = useRef<File<LAnnotation> | null>(null);
+  const instanceRef = useRef<
+    File<LAnnotation> | SimpleVirtualizedFile<LAnnotation> | null
+  >(null);
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
       if (instanceRef.current != null) {
@@ -46,9 +57,17 @@ export function useFileInstance<LAnnotation>({
           'File: An instance should not already exist when a node is created'
         );
       }
-      // FIXME: Ideally we don't use FileUI here, and instead amalgamate
-      // the renderers manually
-      instanceRef.current = new File(options, poolManager, true);
+      if (simpleVirtualizer != null) {
+        instanceRef.current = new SimpleVirtualizedFile(
+          options,
+          simpleVirtualizer,
+          metrics,
+          poolManager,
+          true
+        );
+      } else {
+        instanceRef.current = new File(options, poolManager, true);
+      }
       void instanceRef.current.hydrate({
         file,
         fileContainer: node,

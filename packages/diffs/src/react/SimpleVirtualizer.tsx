@@ -10,7 +10,10 @@ import {
   useState,
 } from 'react';
 
-import { SimpleVirtualizer as SimpleVirtualizerClass } from '../components/SimpleVirtualizer';
+import {
+  SimpleVirtualizer as SimpleVirtualizerClass,
+  type SimpleVirtualizerConfig,
+} from '../components/SimpleVirtualizer';
 
 export const SimpleVirtualizerContext: Context<
   SimpleVirtualizerClass | undefined
@@ -18,6 +21,7 @@ export const SimpleVirtualizerContext: Context<
 
 interface SimpleVirtualizerProps {
   children: ReactNode;
+  config?: Partial<SimpleVirtualizerConfig>;
   className?: string;
   style?: CSSProperties;
   contentClassName?: string;
@@ -26,6 +30,7 @@ interface SimpleVirtualizerProps {
 
 export function SimpleVirtualizer({
   children,
+  config,
   className,
   style,
   contentClassName,
@@ -33,7 +38,7 @@ export function SimpleVirtualizer({
 }: SimpleVirtualizerProps): React.JSX.Element {
   const [instance] = useState(() => {
     return typeof window !== 'undefined'
-      ? new SimpleVirtualizerClass()
+      ? new SimpleVirtualizerClass(config)
       : undefined;
   });
   const ref = useCallback(

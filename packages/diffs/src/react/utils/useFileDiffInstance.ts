@@ -14,6 +14,7 @@ import type {
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
+  VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { useSimpleVirtualizer } from '../SimpleVirtualizer';
@@ -31,6 +32,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
+  metrics?: VirtualFileMetrics;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -46,6 +48,7 @@ export function useFileDiffInstance<LAnnotation>({
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
+  metrics,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useSimpleVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -63,6 +66,7 @@ export function useFileDiffInstance<LAnnotation>({
         instanceRef.current = new SimpleVirtualizedFileDiff(
           options,
           simpleVirtualizer,
+          metrics,
           poolManager,
           true
         );

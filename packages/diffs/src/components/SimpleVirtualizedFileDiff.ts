@@ -1,17 +1,13 @@
 import {
   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-  DIFF_HEADER_HEIGHT,
-  FILE_GAP,
-  HUNK_SEPARATOR_HEIGHT,
-  LINE_HEIGHT,
-  LINE_HUNK_COUNT,
+  DEFAULT_VIRTUAL_FILE_METRICS,
 } from '../constants';
 import type {
   ExpansionDirections,
   FileDiffMetadata,
   RenderRange,
   RenderWindow,
-  VirtualWindowSpecs,
+  VirtualFileMetrics,
 } from '../types';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
@@ -42,6 +38,7 @@ export class SimpleVirtualizedFileDiff<
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
     private virtualizer: SimpleVirtualizer,
+    private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
   ) {
@@ -49,13 +46,14 @@ export class SimpleVirtualizedFileDiff<
   }
 
   // Get the height for a line, using cached value if available.
-  // If not cached and hasMetadataLine is true, adds LINE_HEIGHT for the metadata.
+  // If not cached and hasMetadataLine is true, adds lineHeight for the metadata.
   private getLineHeight(lineIndex: number, hasMetadataLine = false): number {
     const cached = this.heightCache.get(lineIndex);
     if (cached != null) {
       return cached;
     }
-    return hasMetadataLine ? LINE_HEIGHT * 2 : LINE_HEIGHT;
+    const multiplier = hasMetadataLine ? 2 : 1;
+    return this.metrics.lineHeight * multiplier;
   }
 
   // Override setOptions to clear height cache when diffStyle changes
@@ -141,7 +139,10 @@ export class SimpleVirtualizedFileDiff<
         hasLineHeightChange = true;
         // Line is back to standard height (e.g., after window resize)
         // Remove from cache
-        if (measuredHeight === LINE_HEIGHT * (hasMetadata ? 2 : 1)) {
+        if (
+          measuredHeight ===
+          this.metrics.lineHeight * (hasMetadata ? 2 : 1)
+        ) {
           this.heightCache.delete(lineIndex);
         }
         // Non-standard height, cache it
@@ -195,7 +196,7 @@ export class SimpleVirtualizedFileDiff<
   }
 
   // Compute the approximate size of the file using cached line heights.
-  // Uses LINE_HEIGHT for lines without cached measurements.
+  // Uses lineHeight for lines without cached measurements.
   // We should probably optimize this if there are no custom line heights...
   // The reason we refer to this as `approximate size` is because heights my
   // dynamically change for a number of reasons so we can never be fully sure
@@ -211,13 +212,14 @@ export class SimpleVirtualizedFileDiff<
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     } = this.options;
+    const { diffHeaderHeight, fileGap, hunkSeparatorHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
 
     // Header or initial padding
     if (!disableFileHeader) {
-      this.height += DIFF_HEADER_HEIGHT;
+      this.height += diffHeaderHeight;
     } else {
-      this.height += FILE_GAP;
+      this.height += fileGap;
     }
 
     iterateOverDiff({
@@ -246,9 +248,9 @@ export class SimpleVirtualizedFileDiff<
           (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
         if (collapsedBefore > 0) {
           if (hunkIndex > 0) {
-            this.height += FILE_GAP;
+            this.height += fileGap;
           }
-          this.height += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
+          this.height += hunkSeparatorHeight + fileGap;
         }
 
         this.height += this.getLineHeight(
@@ -257,14 +259,14 @@ export class SimpleVirtualizedFileDiff<
         );
 
         if (collapsedAfter > 0) {
-          this.height += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
+          this.height += hunkSeparatorHeight + fileGap;
         }
       },
     });
 
     // Bottom padding
     if (this.fileDiff.hunks.length > 0) {
-      this.height += FILE_GAP;
+      this.height += fileGap;
     }
 
     if (this.fileContainer != null && DEBUG_HEIGHT) {
@@ -451,12 +453,19 @@ export class SimpleVirtualizedFileDiff<
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     } = this.options;
+    const {
+      diffHeaderHeight,
+      fileGap,
+      hunkLineCount,
+      hunkSeparatorHeight,
+      lineHeight,
+    } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const fileHeight = this.height;
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
 
     // Calculate headerRegion before early returns
-    const headerRegion = disableFileHeader ? FILE_GAP : DIFF_HEADER_HEIGHT;
+    const headerRegion = disableFileHeader ? fileGap : diffHeaderHeight;
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -469,26 +478,26 @@ export class SimpleVirtualizedFileDiff<
           headerRegion -
           // This last file gap represents the bottom padding that buffers
           // should not account for
-          FILE_GAP,
+          fileGap,
       };
     }
 
-    // Whole file is under LINE_HUNK_COUNT, just render it all
-    if (lineCount <= LINE_HUNK_COUNT || fileDiff.hunks.length === 0) {
+    // Whole file is under hunkLineCount, just render it all
+    if (lineCount <= hunkLineCount || fileDiff.hunks.length === 0) {
       return {
         startingLine: 0,
-        totalLines: LINE_HUNK_COUNT,
+        totalLines: hunkLineCount,
         bufferBefore: 0,
         bufferAfter: 0,
       };
     }
     const estimatedTargetLines = Math.ceil(
-      Math.max(bottom - top, 0) / LINE_HEIGHT
+      Math.max(bottom - top, 0) / lineHeight
     );
     const totalLines =
-      Math.ceil(estimatedTargetLines / LINE_HUNK_COUNT) * LINE_HUNK_COUNT +
-      LINE_HUNK_COUNT;
-    const totalHunks = totalLines / LINE_HUNK_COUNT;
+      Math.ceil(estimatedTargetLines / hunkLineCount) * hunkLineCount +
+      hunkLineCount;
+    const totalHunks = totalLines / hunkLineCount;
     const overflowHunks = totalHunks;
     const hunkOffsets: number[] = [];
     // Halfway between top & bottom, represented as an absolute position
@@ -526,12 +535,12 @@ export class SimpleVirtualizedFileDiff<
           (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
         const gapAdjustment =
           collapsedBefore > 0
-            ? HUNK_SEPARATOR_HEIGHT + FILE_GAP + (hunkIndex > 0 ? FILE_GAP : 0)
+            ? hunkSeparatorHeight + fileGap + (hunkIndex > 0 ? fileGap : 0)
             : 0;
 
         absoluteLineTop += gapAdjustment;
 
-        const isAtHunkBoundary = currentLine % LINE_HUNK_COUNT === 0;
+        const isAtHunkBoundary = currentLine % hunkLineCount === 0;
 
         // Track the boundary positional offset at a hunk
         if (isAtHunkBoundary) {
@@ -553,7 +562,7 @@ export class SimpleVirtualizedFileDiff<
           hasMetadata
         );
 
-        const currentHunk = Math.floor(currentLine / LINE_HUNK_COUNT);
+        const currentHunk = Math.floor(currentLine / hunkLineCount);
 
         // Track visible region
         if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
@@ -583,7 +592,7 @@ export class SimpleVirtualizedFileDiff<
         absoluteLineTop += lineHeight;
 
         if (collapsedAfter > 0) {
-          absoluteLineTop += HUNK_SEPARATOR_HEIGHT + FILE_GAP;
+          absoluteLineTop += hunkSeparatorHeight + fileGap;
         }
 
         return false;
@@ -600,7 +609,7 @@ export class SimpleVirtualizedFileDiff<
           fileHeight -
           headerRegion -
           // We gotta subtract the bottom padding off of the buffer
-          FILE_GAP,
+          fileGap,
       };
     }
 
@@ -613,31 +622,31 @@ export class SimpleVirtualizedFileDiff<
     // Clamp startHunk: at the beginning, reduce totalLines; at the end, shift startHunk back
     const maxStartHunk = Math.max(0, collectedHunks - totalHunks);
     const startHunk = Math.max(0, Math.min(idealStartHunk, maxStartHunk));
-    const startingLine = startHunk * LINE_HUNK_COUNT;
+    const startingLine = startHunk * hunkLineCount;
 
     // If we wanted to start before 0, reduce totalLines by the clamped amount
     const clampedTotalLines =
       idealStartHunk < 0
-        ? totalLines + idealStartHunk * LINE_HUNK_COUNT
+        ? totalLines + idealStartHunk * hunkLineCount
         : totalLines;
 
     // Use hunkOffsets array for efficient buffer calculations
     const bufferBefore = hunkOffsets[startHunk] ?? 0;
 
     // Calculate bufferAfter using hunkOffset if available, otherwise use cumulative height
-    const finalHunkIndex = startHunk + clampedTotalLines / LINE_HUNK_COUNT;
+    const finalHunkIndex = startHunk + clampedTotalLines / hunkLineCount;
     const bufferAfter =
       finalHunkIndex < hunkOffsets.length
         ? fileHeight -
           headerRegion -
           hunkOffsets[finalHunkIndex] -
           // We gotta subtract the bottom padding off of the buffer
-          FILE_GAP
+          fileGap
         : // We stopped early, calculate from current position
           fileHeight -
           (absoluteLineTop - fileTop) -
           // We gotta subtract the bottom padding off of the buffer
-          FILE_GAP;
+          fileGap;
 
     return {
       startingLine,

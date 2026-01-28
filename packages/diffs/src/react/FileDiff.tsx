@@ -18,6 +18,7 @@ export interface FileDiffProps<
 export function FileDiff<LAnnotation = undefined>({
   fileDiff,
   options,
+  metrics,
   lineAnnotations,
   selectedLines,
   className,
@@ -30,6 +31,7 @@ export function FileDiff<LAnnotation = undefined>({
   const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
+    metrics,
     lineAnnotations,
     selectedLines,
     prerenderedHTML,
