@@ -1,12 +1,12 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import { AdvancedVirtualizer, parsePatchFiles } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
 
-import { WorkerPoolStatus } from './WorkerPoolStatus';
 import styles from './advanced-diff.module.css';
+import { WorkerPoolStatus } from './WorkerPoolStatus';
+import { cn } from '@/lib/utils';
 
 interface SubmitButtonProps {
   disabled?: boolean;

@@ -7,12 +7,14 @@ import {
   type FileContents,
   FileDiff,
   type FileDiffOptions,
+  type FileOptions,
   FileStream,
   isHighlighterNull,
   parseDiffFromFile,
   type ParsedPatch,
   parsePatchFiles,
   preloadHighlighter,
+  SimpleVirtualizedFile,
   SimpleVirtualizedFileDiff,
   SimpleVirtualizer,
 } from '@pierre/diffs';
@@ -87,7 +89,7 @@ const poolManager = (() => {
 
 const VIRTUALIZE = true;
 
-const intersectionObserver: SimpleVirtualizer | undefined = (() => {
+const virtualizer: SimpleVirtualizer | undefined = (() => {
   if (VIRTUALIZE) {
     return new SimpleVirtualizer();
   }
@@ -133,7 +135,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
   let patchIndex = 0;
   const themeType = getThemeType();
 
-  intersectionObserver?.setup(globalThis.document);
+  virtualizer?.setup(globalThis.document);
   for (const parsedPatch of parsedPatches) {
     if (parsedPatch.patchMetadata != null) {
       wrapper.appendChild(createFileMetadata(parsedPatch.patchMetadata));
@@ -149,7 +151,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         renderAnnotation: renderDiffAnnotation,
         themeType,
         // hunkSeparators: 'metadata',
-        // enableLineSelection: true,
+        enableLineSelection: true,
         // expandUnchanged: true,
 
         // Hover Decoration Snippets
@@ -245,12 +247,12 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         //   return wrapper;
         // },
 
-        // onLineClick(props) {
-        //   console.log('onLineClick', props);
-        // },
-        // onLineNumberClick(props) {
-        //   console.info('onLineNumberClick', props);
-        // },
+        onLineClick(props) {
+          console.log('onLineClick', props);
+        },
+        onLineNumberClick(props) {
+          console.info('onLineNumberClick', props);
+        },
 
         // Super noisy, but for debuggin
         // onLineEnter(props) {
@@ -262,11 +264,10 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         // __debugMouseEvents: 'click',
       };
       const instance = (() => {
-        // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-        if (intersectionObserver) {
+        if (virtualizer != null) {
           return new SimpleVirtualizedFileDiff<LineCommentMetadata>(
             options,
-            intersectionObserver,
+            virtualizer,
             manager
           );
         } else {
@@ -518,61 +519,89 @@ function toggleTheme() {
   }
 }
 
-const fileExample: FileContents = {
-  name: 'main.tsx',
-  contents: FILE_NEW,
-  cacheKey: 'file',
-};
+const CRAZY_FILE = false;
+
+const fileExample: FileContents | Promise<FileContents> = (() => {
+  if (CRAZY_FILE) {
+    return new Promise<FileContents>((resolve) => {
+      void import('../../../bun.lock?raw').then(({ default: contents }) =>
+        resolve({
+          name: 'file.json',
+          contents,
+          cacheKey: 'diff',
+        })
+      );
+    });
+  }
+  return {
+    name: 'main.tsx',
+    contents: FILE_NEW,
+    cacheKey: 'file',
+  };
+})();
+
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
-  renderFileButton.addEventListener('click', () => {
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  renderFileButton.addEventListener('click', async () => {
+    const file = await fileExample;
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) return;
     cleanupInstances(wrapper);
 
+    virtualizer?.setup(globalThis.document);
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
-    const instance = new File<LineCommentMetadata>(
-      {
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        themeType: getThemeType(),
-        renderAnnotation,
-        onLineClick(props) {
-          console.log('onLineClick', props);
-        },
-        onLineNumberClick(props) {
-          console.info('onLineNumberClick', props);
-        },
-
-        enableLineSelection: true,
-
-        // Hover Decoration Snippets
-        // enableHoverUtility: true,
-        // renderHoverUtility(getHoveredLine) {
-        //   const el = document.createElement('div');
-        //   el.style.width = '20px';
-        //   el.style.height = '20px';
-        //   el.style.backgroundColor = 'blue';
-        //   el.style.borderRadius = '2px';
-        //   el.style.marginRight = '-10px';
-        //   el.style.textAlign = 'center';
-        //   el.style.color = 'white';
-        //   el.innerText = '+';
-        //   el.addEventListener('click', (event) => {
-        //     event.stopPropagation();
-        //     console.log('ZZZZ - clicked', getHoveredLine());
-        //   });
-        //   el.addEventListener('mousedown', (event) => {
-        //     event.stopPropagation();
-        //   });
-        //   return el;
-        // },
+    const options: FileOptions<LineCommentMetadata> = {
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType: getThemeType(),
+      renderAnnotation,
+      onLineClick(props) {
+        console.log('onLineClick', props);
       },
-      poolManager
-    );
+      onLineNumberClick(props) {
+        console.info('onLineNumberClick', props);
+      },
+
+      enableLineSelection: true,
+
+      // Hover Decoration Snippets
+      // enableHoverUtility: true,
+      // renderHoverUtility(getHoveredLine) {
+      //   const el = document.createElement('div');
+      //   el.style.width = '20px';
+      //   el.style.height = '20px';
+      //   el.style.backgroundColor = 'blue';
+      //   el.style.borderRadius = '2px';
+      //   el.style.marginRight = '-10px';
+      //   el.style.textAlign = 'center';
+      //   el.style.color = 'white';
+      //   el.innerText = '+';
+      //   el.addEventListener('click', (event) => {
+      //     event.stopPropagation();
+      //     console.log('ZZZZ - clicked', getHoveredLine());
+      //   });
+      //   el.addEventListener('mousedown', (event) => {
+      //     event.stopPropagation();
+      //   });
+      //   return el;
+      // },
+    };
+
+    const instance = (() => {
+      if (virtualizer != null) {
+        return new SimpleVirtualizedFile<LineCommentMetadata>(
+          options,
+          virtualizer,
+          poolManager
+        );
+      } else {
+        return new File<LineCommentMetadata>(options, poolManager);
+      }
+    })();
 
     void instance.render({
-      file: fileExample,
+      file,
       lineAnnotations: FAKE_LINE_ANNOTATIONS,
       fileContainer,
     });

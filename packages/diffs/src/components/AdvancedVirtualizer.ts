@@ -14,9 +14,10 @@ interface RenderedItems<LAnnotations> {
   element: HTMLElement;
 }
 
-let lastScrollPosition = 0;
-
 export class AdvancedVirtualizer<LAnnotations = undefined> {
+  static __STOP = false;
+  static __lastScrollPosition = 0;
+
   private files: AdvancedVirtualizedFileDiff<LAnnotations>[] = [];
   private totalHeightUnified = 0;
   private totalHeightSplit = 0;
@@ -64,13 +65,13 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
     // FIXME(amadeus): Remove me before release
     window.__INSTANCE = this;
     window.__TOGGLE = () => {
-      if (window.__STOP === true) {
-        window.__STOP = false;
-        window.scrollTo({ top: lastScrollPosition });
+      if (AdvancedVirtualizer.__STOP) {
+        AdvancedVirtualizer.__STOP = false;
+        window.scrollTo({ top: AdvancedVirtualizer.__lastScrollPosition });
         queueRender(this._render);
       } else {
-        lastScrollPosition = window.scrollY;
-        window.__STOP = true;
+        AdvancedVirtualizer.__lastScrollPosition = window.scrollY;
+        AdvancedVirtualizer.__STOP = true;
       }
     };
   }
@@ -122,7 +123,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
   }
 
   _render = (): void => {
-    if (this.files.length === 0 || window.__STOP === true) {
+    if (this.files.length === 0 || AdvancedVirtualizer.__STOP) {
       return;
     }
     const { diffStyle = 'split' } = this.fileOptions;

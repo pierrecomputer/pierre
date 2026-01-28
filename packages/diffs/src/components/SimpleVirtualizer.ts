@@ -4,9 +4,9 @@ import { areVirtualWindowSpecsEqual } from '../utils/areVirtualWindowSpecsEqual'
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 
 interface SubscribedInstance {
-  onScrollUpdate(windowSpecs: VirtualWindowSpecs): boolean;
-  onResize(windowSpecs: VirtualWindowSpecs): void;
+  onRender(dirty: boolean): boolean;
   reconcileHeights(): void;
+  setVisibility(visible: boolean): void;
 }
 
 interface ScrollAnchor {
@@ -17,8 +17,6 @@ interface ScrollAnchor {
   lineOffset: number | undefined;
 }
 
-let lastScrollPosition = 0;
-
 // FIXME(amadeus): Make this configurable probably? These values are temporary
 // and will be more properly set when i make them configurable
 const OVERSCROLL_SIZE = 200;
@@ -27,6 +25,9 @@ const RESIZE_DEBUGGING = false;
 let lastSize = 0;
 
 export class SimpleVirtualizer {
+  static __STOP: boolean = false;
+  static __lastScrollPosition = 0;
+
   private intersectionObserver: IntersectionObserver | undefined;
   private scrollTop: number = 0;
   private height: number = 0;
@@ -47,6 +48,9 @@ export class SimpleVirtualizer {
   private connectQueue: Map<HTMLElement, SubscribedInstance> = new Map();
 
   setup(root: HTMLElement | Document, contentContainer?: Element): void {
+    if (this.root != null) {
+      return;
+    }
     this.root = root;
     this.resizeObserver = new ResizeObserver(this.handleContainerResize);
     this.intersectionObserver = new IntersectionObserver(
@@ -68,13 +72,14 @@ export class SimpleVirtualizer {
     // FIXME(amadeus): Remove me before release
     window.__INSTANCE = this;
     window.__TOGGLE = () => {
-      if (window.__STOP === true) {
-        window.__STOP = false;
-        window.scrollTo({ top: lastScrollPosition });
+      if (SimpleVirtualizer.__STOP) {
+        SimpleVirtualizer.__STOP = false;
+        const scroller = this.getScrollContainerElement() ?? window;
+        scroller.scrollTo({ top: SimpleVirtualizer.__lastScrollPosition });
         queueRender(this.computeRenderRangeAndEmit);
       } else {
-        lastScrollPosition = window.scrollY;
-        window.__STOP = true;
+        SimpleVirtualizer.__lastScrollPosition = this.getScrollTop();
+        SimpleVirtualizer.__STOP = true;
       }
     };
     for (const [container, instance] of this.connectQueue.entries()) {
@@ -149,11 +154,11 @@ export class SimpleVirtualizer {
     this.root = undefined;
   }
 
-  getOffsetInScrollContainer(element: HTMLElement | null): number {
-    return element != null
-      ? this.getScrollTop() +
-          getRelativeBoundingTop(element, this.getScrollContainerElement())
-      : 0;
+  getOffsetInScrollContainer(element: HTMLElement): number {
+    return (
+      this.getScrollTop() +
+      getRelativeBoundingTop(element, this.getScrollContainerElement())
+    );
   }
 
   connect(container: HTMLElement, instance: SubscribedInstance): () => void {
@@ -190,45 +195,40 @@ export class SimpleVirtualizer {
   }
 
   private handleWindowResize = () => {
-    if (window.__STOP === true) return;
+    if (SimpleVirtualizer.__STOP) return;
     this.markDOMDirty();
     queueRender(this.computeRenderRangeAndEmit);
   };
 
   private handleWindowScroll = () => {
-    if (window.__STOP === true) return;
+    if (
+      SimpleVirtualizer.__STOP ||
+      this.root == null ||
+      !(this.root instanceof Document)
+    ) {
+      return;
+    }
     this.scrollDirty = true;
-
-    // FIXME(amadeus): Laziness assumption here... bad for business probably
-    // basically we should be relying on resize observers for stuff like this
-    // probably...
-    this.heightDirty = true;
-    this.scrollHeightDirty = true;
     queueRender(this.computeRenderRangeAndEmit);
   };
 
   private handleElementScroll = () => {
     if (
-      window.__STOP === true ||
+      SimpleVirtualizer.__STOP ||
       this.root == null ||
       this.root instanceof Document
     ) {
       return;
     }
     this.scrollDirty = true;
-
-    // FIXME(amadeus): Laziness assumption here... bad for business probably
-    // basically we should be relying on resize observers for stuff like this
-    // probably...
-    this.heightDirty = true;
-    this.scrollHeightDirty = true;
     queueRender(this.computeRenderRangeAndEmit);
   };
 
   private computeRenderRangeAndEmit = () => {
-    if (window.__STOP === true) {
+    if (SimpleVirtualizer.__STOP) {
       return;
     }
+    const wrapperDirty = this.heightDirty || this.scrollHeightDirty;
     if (
       !this.scrollDirty &&
       !this.scrollHeightDirty &&
@@ -241,20 +241,15 @@ export class SimpleVirtualizer {
       return;
     }
 
-    let fitPerfectly = false;
-    // If we got an emitted update from a bunch of instances, we should
-    // attempt to re-render with the existing windowing logic first, and then
-    // queue up a corrected render after
+    // If we got an emitted update from a bunch of instances, we should skip
+    // the window check first and attempt to render with existing logic first
+    // and then queue up a corrected render after
     if (this.instancesChanged.size === 0) {
-      const { scrollTop: oldScrollTop } = this;
-      const scrollTop = this.getScrollTop();
-      const height = this.getHeight();
-      fitPerfectly = Math.abs(scrollTop - oldScrollTop) > height;
       const windowSpecs = createWindowFromScrollPosition({
-        scrollTop,
-        height,
+        scrollTop: this.getScrollTop(),
+        height: this.getHeight(),
         scrollHeight: this.getScrollHeight(),
-        fitPerfectly,
+        fitPerfectly: false,
         overscrollSize: OVERSCROLL_SIZE,
       });
       if (
@@ -272,13 +267,13 @@ export class SimpleVirtualizer {
     const anchor = this.getScrollAnchor(this.height);
     const updatedInstances = new Set<SubscribedInstance>();
     for (const instance of this.visibleInstances.values()) {
-      if (instance.onScrollUpdate(this.windowSpecs)) {
+      if (instance.onRender(wrapperDirty)) {
         updatedInstances.add(instance);
       }
     }
     for (const instance of this.instancesChanged) {
       if (updatedInstances.has(instance)) continue;
-      if (instance.onScrollUpdate(this.windowSpecs)) {
+      if (instance.onRender(wrapperDirty)) {
         updatedInstances.add(instance);
       }
     }
@@ -290,12 +285,11 @@ export class SimpleVirtualizer {
       this.markDOMDirty();
     }
 
-    // Is this safe? Maybe not, but lets try it for now...
     for (const instance of updatedInstances) {
       instance.reconcileHeights();
     }
 
-    if (fitPerfectly || this.instancesChanged.size > 0) {
+    if (this.instancesChanged.size > 0 || wrapperDirty) {
       queueRender(this.computeRenderRangeAndEmit);
     }
     updatedInstances.clear();
@@ -461,6 +455,7 @@ export class SimpleVirtualizer {
   private handleIntersectionChange = (
     entries: IntersectionObserverEntry[]
   ): void => {
+    this.scrollDirty = true;
     for (const { target, isIntersecting } of entries) {
       if (!(target instanceof HTMLElement)) {
         throw new Error(
@@ -474,11 +469,13 @@ export class SimpleVirtualizer {
         );
       }
       if (isIntersecting && !this.visibleInstances.has(target)) {
-        this.visibleInstancesDirty = true;
+        instance.setVisibility(true);
         this.visibleInstances.set(target, instance);
-      } else if (!isIntersecting && this.visibleInstances.has(target)) {
         this.visibleInstancesDirty = true;
+      } else if (!isIntersecting && this.visibleInstances.has(target)) {
+        instance.setVisibility(false);
         this.visibleInstances.delete(target);
+        this.visibleInstancesDirty = true;
       }
     }
 

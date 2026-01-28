@@ -6,6 +6,7 @@ import type { DiffLineAnnotation, LineTypes } from '../src/types';
 import { fileNew, fileOld } from './mocks';
 import {
   assertDefined,
+  collectAllElements,
   countHastAnnotationElements,
   findHastSlotElements,
   getHastAnnotationIndex,
@@ -39,11 +40,15 @@ describe('Annotation Rendering', () => {
       assertDefined(unifiedAST, 'unifiedAST should be defined');
 
       let foundAnnotationCount = 0;
-      let lastElement: ElementContent | undefined;
-      // Iterate through flat array and verify each annotation follows its line
-      for (const node of unifiedAST) {
-        if (!isHastAnnotationElement(node) || !isHastElement(node)) {
-          lastElement = node;
+      let lastLineElement: ElementContent | undefined;
+      // Iterate through all elements and verify each annotation follows its line
+      const allElements = collectAllElements(unifiedAST);
+      for (const node of allElements) {
+        if (isHastLineElement(node)) {
+          lastLineElement = node;
+          continue;
+        }
+        if (!isHastAnnotationElement(node)) {
           continue;
         }
 
@@ -53,17 +58,13 @@ describe('Annotation Rendering', () => {
         const slots = findHastSlotElements(node);
         foundAnnotationCount += slots.length;
 
-        if (lastElement == null) {
-          throw new Error('lastElement should not be undefined');
-        }
-        // The previous element should be the line this annotation belongs to
-        expect(isHastLineElement(lastElement)).toBe(true);
-        const prevLineIndex = getHastLineIndex(lastElement);
+        assertDefined(lastLineElement, 'lastLineElement should be defined');
+        // The previous line element should be the line this annotation belongs to
+        const prevLineIndex = getHastLineIndex(lastLineElement);
         assertDefined(prevLineIndex, 'prevLineIndex should be defined');
         // In unified, the first value of data-line-index is the unified index
         const [unifiedIdx] = prevLineIndex.split(',');
         expect(unifiedIdx).toBe(lineIdx);
-        lastElement = node;
       }
       expect(foundAnnotationCount).toBe(annotations.length);
       expect(unifiedAST).toMatchSnapshot('unified with annotations');
@@ -102,10 +103,14 @@ describe('Annotation Rendering', () => {
           : deletionsAnnotationIndices;
 
         let foundCount = 0;
-        let lastNode: ElementContent | undefined;
-        for (const node of ast) {
-          if (!isHastAnnotationElement(node) || !isHastElement(node)) {
-            lastNode = node;
+        let lastLineNode: ElementContent | undefined;
+        const allElements = collectAllElements(ast);
+        for (const node of allElements) {
+          if (isHastLineElement(node)) {
+            lastLineNode = node;
+            continue;
+          }
+          if (!isHastAnnotationElement(node)) {
             continue;
           }
 
@@ -119,21 +124,18 @@ describe('Annotation Rendering', () => {
           const slots = findHastSlotElements(node);
           if (slots.length === 0) {
             // Empty annotation wrapper (for sync with other side)
-            lastNode = node;
             continue;
           }
           foundCount += slots.length;
 
           const [, lineIdx] = annotationIndex.split(',');
 
-          assertDefined(lastNode, 'lastNode should be defined');
-          expect(isHastLineElement(lastNode)).toBe(true);
+          assertDefined(lastLineNode, 'lastLineNode should be defined');
 
-          const prevLineIndex = getHastLineIndex(lastNode);
+          const prevLineIndex = getHastLineIndex(lastLineNode);
           assertDefined(prevLineIndex, 'prevLineIndex should be defined');
           const [, splitIdx] = prevLineIndex.split(',');
           expect(splitIdx).toBe(lineIdx);
-          lastNode = node;
         }
         expect(foundCount).toBe(expectedCount);
       }
@@ -230,9 +232,14 @@ describe('Annotation Rendering', () => {
 
       // Check additions AST
       let additionsAnnotationCount = 0;
-      for (let i = 1; i < additionsAST.length; i++) {
-        const node = additionsAST[i];
-        if (!isHastAnnotationElement(node) || !isHastElement(node)) continue;
+      let lastAdditionLine: ElementContent | undefined;
+      const additionsElements = collectAllElements(additionsAST);
+      for (const node of additionsElements) {
+        if (isHastLineElement(node)) {
+          lastAdditionLine = node;
+          continue;
+        }
+        if (!isHastAnnotationElement(node)) continue;
         const slots = findHastSlotElements(node);
         if (slots.length === 0) continue; // Skip empty annotation wrappers
         const slotName = slots[0].properties?.name?.toString();
@@ -240,7 +247,8 @@ describe('Annotation Rendering', () => {
           throw new Error('slot should have a name');
         }
         additionsAnnotationCount++;
-        const prevLineType = getHastLineType(additionsAST[i - 1]);
+        assertDefined(lastAdditionLine, 'lastAdditionLine should be defined');
+        const prevLineType = getHastLineType(lastAdditionLine);
         expect(prevLineType).toBe(additionsExpectedTypes[slotName]);
       }
       expect(additionsAnnotationCount).toBe(
@@ -249,9 +257,14 @@ describe('Annotation Rendering', () => {
 
       // Check deletions AST
       let deletionsAnnotationCount = 0;
-      for (let i = 1; i < deletionsAST.length; i++) {
-        const node = deletionsAST[i];
-        if (!isHastAnnotationElement(node) || !isHastElement(node)) continue;
+      let lastDeletionLine: ElementContent | undefined;
+      const deletionsElements = collectAllElements(deletionsAST);
+      for (const node of deletionsElements) {
+        if (isHastLineElement(node)) {
+          lastDeletionLine = node;
+          continue;
+        }
+        if (!isHastAnnotationElement(node)) continue;
         const slots = findHastSlotElements(node);
         if (slots.length === 0) continue; // Skip empty annotation wrappers
         const slotName = slots[0].properties?.name?.toString();
@@ -259,7 +272,8 @@ describe('Annotation Rendering', () => {
           throw new Error('slot should have a name');
         }
         deletionsAnnotationCount++;
-        const prevLineType = getHastLineType(deletionsAST[i - 1]);
+        assertDefined(lastDeletionLine, 'lastDeletionLine should be defined');
+        const prevLineType = getHastLineType(lastDeletionLine);
         expect(prevLineType).toBe(deletionsExpectedTypes[slotName]);
       }
       expect(deletionsAnnotationCount).toBe(
@@ -292,11 +306,11 @@ describe('Annotation Rendering', () => {
       expect(countHastAnnotationElements(unifiedAST)).toBe(1);
 
       // Find the annotation and verify it has 2 slots
-      const annotationEl = unifiedAST.find(isHastAnnotationElement);
+      const allElements = collectAllElements(unifiedAST);
+      const annotationEl = allElements.find(isHastAnnotationElement);
       assertDefined(annotationEl, 'annotationEl should be defined');
-      expect(isHastElement(annotationEl)).toBe(true);
 
-      const slots = findHastSlotElements(annotationEl as HASTElement);
+      const slots = findHastSlotElements(annotationEl);
       expect(slots.length).toBe(2);
 
       const slotNames = slots.map((s) => s.properties?.name);
@@ -329,17 +343,19 @@ describe('Annotation Rendering', () => {
       expect(countHastAnnotationElements(deletionsAST)).toBe(1);
 
       // Find annotations and verify each has 1 slot
-      const additionAnnotation = additionsAST.find(isHastAnnotationElement);
-      const deletionAnnotation = deletionsAST.find(isHastAnnotationElement);
+      const additionsElements = collectAllElements(additionsAST);
+      const deletionsElements = collectAllElements(deletionsAST);
+      const additionAnnotation = additionsElements.find(
+        isHastAnnotationElement
+      );
+      const deletionAnnotation = deletionsElements.find(
+        isHastAnnotationElement
+      );
       assertDefined(additionAnnotation, 'additionAnnotation should be defined');
       assertDefined(deletionAnnotation, 'deletionAnnotation should be defined');
 
-      const additionSlots = findHastSlotElements(
-        additionAnnotation as HASTElement
-      );
-      const deletionSlots = findHastSlotElements(
-        deletionAnnotation as HASTElement
-      );
+      const additionSlots = findHastSlotElements(additionAnnotation);
+      const deletionSlots = findHastSlotElements(deletionAnnotation);
 
       expect(additionSlots.length).toBe(1);
       expect(deletionSlots.length).toBe(1);

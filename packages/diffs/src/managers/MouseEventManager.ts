@@ -26,7 +26,7 @@ export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
 }
 
 type HandleMouseEventProps =
-  | { eventType: 'click'; event: PointerEvent }
+  | { eventType: 'click'; event: PointerEvent | MouseEvent }
   | { eventType: 'move'; event: PointerEvent };
 
 type EventClickProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
@@ -103,6 +103,9 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   private hoveredLine: EventBaseProps<TMode> | undefined;
   private pre: HTMLPreElement | undefined;
   private hoverSlot: HTMLDivElement | undefined;
+  private interactiveLinesAttr = false;
+  private interactiveLineNumbersAttr = false;
+  private hasEventListeners = false;
 
   constructor(
     private mode: TMode,
@@ -116,9 +119,12 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   cleanUp(): void {
     this.pre?.removeEventListener('click', this.handleMouseClick);
     this.pre?.removeEventListener('pointermove', this.handleMouseMove);
-    this.pre?.removeEventListener('pointerout', this.handleMouseLeave);
+    this.pre?.removeEventListener('pointerleave', this.handleMouseLeave);
     delete this.pre?.dataset.interactiveLines;
     delete this.pre?.dataset.interactiveLineNumbers;
+    this.interactiveLinesAttr = false;
+    this.interactiveLineNumbersAttr = false;
+    this.hasEventListeners = false;
     this.pre = undefined;
   }
 
@@ -133,8 +139,12 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       enableHoverUtility = false,
     } = this.options;
 
-    this.cleanUp();
-    this.pre = pre;
+    const newContainer = this.pre !== pre;
+    if (newContainer) {
+      this.cleanUp();
+      this.pre = pre;
+      this.hasEventListeners = false;
+    }
 
     if (enableHoverUtility && this.hoverSlot == null) {
       this.hoverSlot = document.createElement('div');
@@ -147,16 +157,25 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       this.hoverSlot = undefined;
     }
 
-    if (
+    const requiresEventListeners =
       onLineClick != null ||
       onLineNumberClick != null ||
-      onHunkExpand != null
-    ) {
+      onHunkExpand != null ||
+      onLineEnter != null ||
+      onLineLeave != null ||
+      enableHoverUtility;
+
+    if ((newContainer || !this.hasEventListeners) && requiresEventListeners) {
+      this.hasEventListeners = true;
       pre.addEventListener('click', this.handleMouseClick);
       if (onLineClick != null) {
         pre.dataset.interactiveLines = '';
+        this.interactiveLinesAttr = true;
+        this.interactiveLineNumbersAttr = false;
       } else if (onLineNumberClick != null) {
         pre.dataset.interactiveLineNumbers = '';
+        this.interactiveLinesAttr = false;
+        this.interactiveLineNumbersAttr = true;
       }
       debugLogIfEnabled(
         __debugMouseEvents,
@@ -178,8 +197,6 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
           return reasons;
         })()
       );
-    }
-    if (onLineEnter != null || onLineLeave != null || enableHoverUtility) {
       pre.addEventListener('pointermove', this.handleMouseMove);
       debugLogIfEnabled(
         __debugMouseEvents,
@@ -192,6 +209,42 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
         'move',
         'FileDiff.DEBUG.attachEventListeners: Attaching pointer leave event'
       );
+    } else if (!requiresEventListeners && this.hasEventListeners) {
+      this.pre?.removeEventListener('click', this.handleMouseClick);
+      this.pre?.removeEventListener('pointermove', this.handleMouseMove);
+      this.pre?.removeEventListener('pointerleave', this.handleMouseLeave);
+      this.hasEventListeners = false;
+    }
+
+    if (!newContainer) {
+      if (onLineClick != null) {
+        if (this.interactiveLineNumbersAttr) {
+          delete pre.dataset.interactiveLineNumbers;
+          this.interactiveLineNumbersAttr = false;
+        }
+        if (!this.interactiveLinesAttr) {
+          pre.dataset.interactiveLines = '';
+          this.interactiveLinesAttr = true;
+        }
+      } else if (onLineNumberClick != null) {
+        if (this.interactiveLinesAttr) {
+          delete pre.dataset.interactiveLines;
+          this.interactiveLinesAttr = false;
+        }
+        if (!this.interactiveLineNumbersAttr) {
+          pre.dataset.interactiveLineNumbers = '';
+          this.interactiveLineNumbersAttr = true;
+        }
+      } else {
+        if (this.interactiveLinesAttr) {
+          delete pre.dataset.interactiveLines;
+          this.interactiveLinesAttr = false;
+        }
+        if (this.interactiveLineNumbersAttr) {
+          delete pre.dataset.interactiveLineNumbers;
+          this.interactiveLineNumbersAttr = false;
+        }
+      }
     }
   }
 
@@ -212,7 +265,15 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     return undefined;
   };
 
-  handleMouseClick = (event: PointerEvent): void => {
+  handleMouseClick = (event: MouseEvent): void => {
+    const { onLineClick, onLineNumberClick, onHunkExpand } = this.options;
+    if (
+      onLineClick == null &&
+      onLineNumberClick == null &&
+      onHunkExpand == null
+    ) {
+      return;
+    }
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
       'click',
@@ -223,6 +284,14 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   };
 
   handleMouseMove = (event: PointerEvent): void => {
+    const {
+      onLineEnter,
+      onLineLeave,
+      enableHoverUtility = false,
+    } = this.options;
+    if (!enableHoverUtility && onLineEnter == null && onLineLeave == null) {
+      return;
+    }
     debugLogIfEnabled(
       this.options.__debugMouseEvents,
       'move',

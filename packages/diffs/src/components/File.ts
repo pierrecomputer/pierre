@@ -46,6 +46,8 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
+const EMPTY_LINES: string[] = [];
+
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
   fileContainer?: HTMLElement;
@@ -96,32 +98,32 @@ export class File<LAnnotation = undefined> {
 
   readonly __id: string = `file:${++instanceId}`;
 
-  private fileContainer: HTMLElement | undefined;
-  private spriteSVG: SVGElement | undefined;
-  private pre: HTMLPreElement | undefined;
-  private code: HTMLElement | undefined;
-  private bufferBefore: HTMLElement | undefined;
-  private bufferAfter: HTMLElement | undefined;
-  private unsafeCSSStyle: HTMLStyleElement | undefined;
-  private hoverContent: HTMLElement | undefined;
-  private errorWrapper: HTMLElement | undefined;
-  private lastRenderedHeaderHTML: string | undefined;
-  private appliedPreAttributes: PrePropertiesConfig | undefined;
+  protected fileContainer: HTMLElement | undefined;
+  protected spriteSVG: SVGElement | undefined;
+  protected pre: HTMLPreElement | undefined;
+  protected code: HTMLElement | undefined;
+  protected bufferBefore: HTMLElement | undefined;
+  protected bufferAfter: HTMLElement | undefined;
+  protected unsafeCSSStyle: HTMLStyleElement | undefined;
+  protected hoverContent: HTMLElement | undefined;
+  protected errorWrapper: HTMLElement | undefined;
+  protected lastRenderedHeaderHTML: string | undefined;
+  protected appliedPreAttributes: PrePropertiesConfig | undefined;
 
-  private headerElement: HTMLElement | undefined;
-  private headerMetadata: HTMLElement | undefined;
+  protected headerElement: HTMLElement | undefined;
+  protected headerMetadata: HTMLElement | undefined;
 
-  private fileRenderer: FileRenderer<LAnnotation>;
-  private resizeManager: ResizeManager;
-  private mouseEventManager: MouseEventManager<'file'>;
-  private lineSelectionManager: LineSelectionManager;
+  protected fileRenderer: FileRenderer<LAnnotation>;
+  protected resizeManager: ResizeManager;
+  protected mouseEventManager: MouseEventManager<'file'>;
+  protected lineSelectionManager: LineSelectionManager;
 
-  private annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
+  protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
-  private lineAnnotations: LineAnnotation<LAnnotation>[] = [];
+  protected lineAnnotations: LineAnnotation<LAnnotation>[] = [];
 
-  private file: FileContents | undefined;
-  private renderRange: RenderRange | undefined;
+  protected file: FileContents | undefined;
+  protected renderRange: RenderRange | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -278,6 +280,7 @@ export class File<LAnnotation = undefined> {
     // Otherwise orchestrate our setup
     else {
       const { file, lineAnnotations } = props;
+      const { overflow = 'scroll' } = this.options;
       this.fileContainer = fileContainer;
       delete this.pre.dataset.dehydrated;
 
@@ -289,10 +292,16 @@ export class File<LAnnotation = undefined> {
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
-      if ((this.options.overflow ?? 'scroll') === 'scroll') {
-        this.resizeManager.setup(this.pre);
-      }
+      this.resizeManager.setup(this.pre, overflow === 'wrap');
     }
+  }
+
+  public getOrCreateLineCache(
+    file: FileContents | undefined = this.file
+  ): string[] {
+    return file != null
+      ? this.fileRenderer.getOrCreateLineCache(file)
+      : EMPTY_LINES;
   }
 
   render({
@@ -302,7 +311,7 @@ export class File<LAnnotation = undefined> {
     containerWrapper,
     lineAnnotations,
     renderRange,
-  }: FileRenderProps<LAnnotation>): void {
+  }: FileRenderProps<LAnnotation>): boolean {
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
@@ -314,7 +323,7 @@ export class File<LAnnotation = undefined> {
       areFilesEqual(this.file, file) &&
       !annotationsChanged
     ) {
-      return;
+      return false;
     }
 
     this.renderRange = renderRange;
@@ -347,7 +356,7 @@ export class File<LAnnotation = undefined> {
         if (this.workerManager != null && !this.workerManager.isInitialized()) {
           void this.workerManager.initialize().then(() => this.rerender());
         }
-        return;
+        return false;
       }
       if (fileResult.headerAST != null) {
         this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
@@ -365,6 +374,7 @@ export class File<LAnnotation = undefined> {
         this.applyErrorToDOM(error, fileContainer);
       }
     }
+    return true;
   }
 
   private renderAnnotations(): void {
@@ -453,6 +463,7 @@ export class File<LAnnotation = undefined> {
   }
 
   private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
+    const { overflow = 'scroll' } = this.options;
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
     // Create code elements and insert HTML content
@@ -460,7 +471,27 @@ export class File<LAnnotation = undefined> {
     this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
     pre.replaceChildren(this.code);
 
-    // Buffer containers for virtualization
+    this.applyBuffers(pre, result);
+    this.injectUnsafeCSS();
+    this.mouseEventManager.setup(pre);
+    this.lineSelectionManager.setup(pre);
+    this.resizeManager.setup(pre, overflow === 'wrap');
+  }
+
+  private applyBuffers(pre: HTMLPreElement, result: FileRenderResult) {
+    const { disableVirtualizationBuffers = false } = this.options;
+    if (disableVirtualizationBuffers) {
+      if (this.bufferBefore != null) {
+        this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+        this.bufferBefore = undefined;
+      }
+      if (this.bufferAfter != null) {
+        this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+        this.bufferAfter = undefined;
+      }
+      return;
+    }
+
     if (result.bufferBefore > 0) {
       if (this.bufferBefore == null) {
         this.bufferBefore = document.createElement('div');
@@ -487,16 +518,6 @@ export class File<LAnnotation = undefined> {
     } else if (this.bufferAfter != null) {
       this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
       this.bufferAfter = undefined;
-    }
-
-    this.injectUnsafeCSS();
-    this.mouseEventManager.setup(pre);
-    this.lineSelectionManager.setup(pre);
-    this.lineSelectionManager.setDirty();
-    if ((this.options.overflow ?? 'scroll') === 'scroll') {
-      this.resizeManager.setup(pre);
-    } else {
-      this.resizeManager.cleanUp();
     }
   }
 
@@ -543,7 +564,7 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private getOrCreateFileContainerNode(
+  protected getOrCreateFileContainerNode(
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
@@ -572,15 +593,18 @@ export class File<LAnnotation = undefined> {
   }
 
   private getOrCreatePreNode(container: HTMLElement): HTMLPreElement {
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     // If we haven't created a pre element yet, lets go ahead and do that
     if (this.pre == null) {
       this.pre = document.createElement('pre');
-      container.shadowRoot?.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
+      this.code = undefined;
+      shadowRoot.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
-    else if (this.pre.parentNode !== container) {
+    else if (this.pre.parentNode !== shadowRoot) {
       container.shadowRoot?.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
     }

@@ -896,23 +896,37 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       context.unifiedGutter.properties.style = rowSpan;
     }
 
+    const hasBuffer =
+      renderRange.bufferBefore > 0 || renderRange.bufferAfter > 0;
     if (unifiedAST != null) {
-      unifiedAST = [
-        context.unifiedGutter,
-        createContentColumn(unifiedAST, context.rowCount),
-      ];
+      if (context.rowCount > 0 || hasBuffer) {
+        unifiedAST = [
+          context.unifiedGutter,
+          createContentColumn(unifiedAST, context.rowCount),
+        ];
+      } else {
+        unifiedAST = undefined;
+      }
     }
     if (deletionsAST != null) {
-      deletionsAST = [
-        context.deletionsGutter,
-        createContentColumn(deletionsAST, context.rowCount),
-      ];
+      if (context.rowCount > 0 || hasBuffer) {
+        deletionsAST = [
+          context.deletionsGutter,
+          createContentColumn(deletionsAST, context.rowCount),
+        ];
+      } else {
+        deletionsAST = undefined;
+      }
     }
     if (additionsAST != null) {
-      additionsAST = [
-        context.additionsGutter,
-        createContentColumn(additionsAST, context.rowCount),
-      ];
+      if (context.rowCount > 0 || hasBuffer) {
+        additionsAST = [
+          context.additionsGutter,
+          createContentColumn(additionsAST, context.rowCount),
+        ];
+      } else {
+        additionsAST = undefined;
+      }
     }
 
     const preNode = this.createPreElement(

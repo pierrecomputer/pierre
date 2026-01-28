@@ -14,7 +14,7 @@ export class ResizeManager {
 
   private resizeObserver: ResizeObserver | undefined;
 
-  setup(pre: HTMLPreElement): void {
+  setup(pre: HTMLPreElement, disableAnnotations: boolean): void {
     this.resizeObserver ??= new ResizeObserver(this.handleResizeObserver);
     const codeElements = pre.querySelectorAll('code');
 
@@ -47,7 +47,7 @@ export class ResizeManager {
       }
     }
 
-    if (codeElements.length > 1) {
+    if (codeElements.length > 1 && !disableAnnotations) {
       const annotationElements = pre.querySelectorAll(
         '[data-line-annotation*=","]'
       );
@@ -133,6 +133,16 @@ export class ResizeManager {
     }
 
     for (const element of observedNodes.keys()) {
+      if (element.isConnected) {
+        element.style.removeProperty('--diffs-column-content-width');
+        element.style.removeProperty('--diffs-column-number-width');
+        element.style.removeProperty('--diffs-column-width');
+        if (element.parentElement instanceof HTMLElement) {
+          element.parentElement.style.removeProperty(
+            '--diffs-annotation-min-height'
+          );
+        }
+      }
       this.resizeObserver.unobserve(element);
     }
     observedNodes.clear();
@@ -183,33 +193,40 @@ export class ResizeManager {
         );
         this.applyNewHeight(item, newHeight);
       } else if (item.type === 'code') {
+        // FIXME(amadeus): This needs to be re-worked with display: contents,
+        // not sure setting to auto is a good assumption most of the time...
         if (target === item.codeElement) {
-          const inlineSize = Math.floor(specs.inlineSize) - 1;
+          const inlineSize = Math.max(Math.floor(specs.inlineSize), 0);
           if (inlineSize !== item.codeWidth) {
             item.codeWidth = inlineSize;
+            const targetWidth = Math.max(item.codeWidth - item.numberWidth, 0);
             item.codeElement.style.setProperty(
               '--diffs-column-content-width',
-              `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
+              `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
             );
             item.codeElement.style.setProperty(
               '--diffs-column-width',
-              `${item.codeWidth}px`
+              `${item.codeWidth === 0 ? 'auto' : `${item.codeWidth}px`}`
             );
           }
         } else if (target === item.numberElement) {
-          const inlineSize = Math.ceil(specs.inlineSize);
+          const inlineSize = Math.max(Math.ceil(specs.inlineSize), 0);
           if (inlineSize !== item.numberWidth) {
             item.numberWidth = inlineSize;
             item.codeElement.style.setProperty(
               '--diffs-column-number-width',
-              `${item.numberWidth}px`
+              `${item.numberWidth === 0 ? 'auto' : `${item.numberWidth}px`}`
             );
             // We probably need to update code width variable if
             // `numberWidth` changed
             if (item.codeWidth !== 'auto') {
+              const targetWidth = Math.max(
+                item.codeWidth - item.numberWidth,
+                0
+              );
               item.codeElement.style.setProperty(
                 '--diffs-column-content-width',
-                `${Math.max(item.codeWidth - item.numberWidth, 0)}px`
+                `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
               );
             }
           }

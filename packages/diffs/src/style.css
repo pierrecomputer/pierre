@@ -1291,18 +1291,18 @@
 
   [data-annotation-content] {
     position: relative;
-    width: var(--diffs-column-content-width, auto);
+    display: flow-root;
     align-self: flex-start;
     z-index: 2;
-    height: 100%;
+    min-width: 0;
     isolation: isolate;
-    overflow: hidden;
   }
 
   /* Sticky positioning has a composite costs, so we should _only_ pay it if we
    * need to */
   [data-overflow='scroll'] [data-annotation-content] {
     position: sticky;
+    width: var(--diffs-column-content-width, auto);
     left: var(--diffs-column-number-width, 0);
   }
 

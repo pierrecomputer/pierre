@@ -21,11 +21,383 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-number": "",
+          "data-column-number": 1,
+          "data-line-index": "0",
+          "data-line-type": "context",
         },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "2",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 2,
+          "data-line-index": "1",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "3",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 3,
+          "data-line-index": "2",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "4",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 4,
+          "data-line-index": "3",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "5",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 5,
+          "data-line-index": "4",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "6",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 6,
+          "data-line-index": "5",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "7",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 7,
+          "data-line-index": "6",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "8",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 8,
+          "data-line-index": "7",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "9",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 9,
+          "data-line-index": "8",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "10",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 10,
+          "data-line-index": "9",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "11",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 11,
+          "data-line-index": "10",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "12",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 12,
+          "data-line-index": "11",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "13",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 13,
+          "data-line-index": "12",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "14",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 14,
+          "data-line-index": "13",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "15",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 15,
+          "data-line-index": "14",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "16",
+              },
+            ],
+            "properties": {
+              "data-line-number-content": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-column-number": 16,
+          "data-line-index": "15",
+          "data-line-type": "context",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+    ],
+    "properties": {
+      "data-gutter": "",
+      "style": "grid-row: span 16",
+    },
+    "tagName": "div",
+    "type": "element",
+  },
+  {
+    "children": [
       {
         "children": [
           {
@@ -160,43 +532,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 1,
+          "data-line-index": 0,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 1,
-      "data-line-index": 0,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "2",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -210,43 +551,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 2,
+          "data-line-index": 1,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 2,
-      "data-line-index": 1,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "3",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -305,43 +615,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 3,
+          "data-line-index": 2,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 3,
-      "data-line-index": 2,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "4",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -452,43 +731,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 4,
+          "data-line-index": 3,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 4,
-      "data-line-index": 3,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "5",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -586,43 +834,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 5,
+          "data-line-index": 4,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 5,
-      "data-line-index": 4,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "6",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -668,43 +885,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 6,
+          "data-line-index": 5,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 6,
-      "data-line-index": 5,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "7",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -737,43 +923,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 7,
+          "data-line-index": 6,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 7,
-      "data-line-index": 6,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "8",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -832,43 +987,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 8,
+          "data-line-index": 7,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 8,
-      "data-line-index": 7,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "9",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -927,43 +1051,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 9,
+          "data-line-index": 8,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 9,
-      "data-line-index": 8,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "10",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -1035,43 +1128,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 10,
+          "data-line-index": 9,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 10,
-      "data-line-index": 9,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "11",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -1130,43 +1192,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 11,
+          "data-line-index": 10,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 11,
-      "data-line-index": 10,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "12",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -1199,43 +1230,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 12,
+          "data-line-index": 11,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 12,
-      "data-line-index": 11,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "13",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -1307,43 +1307,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 13,
+          "data-line-index": 12,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 13,
-      "data-line-index": 12,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "14",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -1363,43 +1332,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 14,
+          "data-line-index": 13,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 14,
-      "data-line-index": 13,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "15",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -1627,43 +1565,12 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 15,
+          "data-line-index": 14,
+          "data-line-type": "context",
         },
-        "tagName": "span",
-        "type": "element",
-      },
-    ],
-    "properties": {
-      "data-alt-line": undefined,
-      "data-line": 15,
-      "data-line-index": 14,
-      "data-line-type": "context",
-    },
-    "tagName": "div",
-    "type": "element",
-  },
-  {
-    "children": [
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "type": "text",
-                "value": "16",
-              },
-            ],
-            "properties": {
-              "data-line-number-content": "",
-            },
-            "tagName": "span",
-            "type": "element",
-          },
-        ],
-        "properties": {
-          "data-column-number": "",
-        },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
       {
@@ -1683,17 +1590,18 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
           },
         ],
         "properties": {
-          "data-column-content": "",
+          "data-alt-line": undefined,
+          "data-line": 16,
+          "data-line-index": 15,
+          "data-line-type": "context",
         },
-        "tagName": "span",
+        "tagName": "div",
         "type": "element",
       },
     ],
     "properties": {
-      "data-alt-line": undefined,
-      "data-line": 16,
-      "data-line-index": 15,
-      "data-line-type": "context",
+      "data-content": "",
+      "style": "grid-row: span 16",
     },
     "tagName": "div",
     "type": "element",

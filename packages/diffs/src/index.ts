@@ -8,6 +8,7 @@ export * from './components/AdvancedVirtualizer';
 export * from './components/File';
 export * from './components/FileDiff';
 export * from './components/FileStream';
+export * from './components/SimpleVirtualizedFile';
 export * from './components/SimpleVirtualizedFileDiff';
 export * from './components/SimpleVirtualizer';
 export * from './constants';

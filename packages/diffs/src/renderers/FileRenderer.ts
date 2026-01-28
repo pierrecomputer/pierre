@@ -66,6 +66,11 @@ export interface FileRenderResult {
   bufferAfter: number;
 }
 
+interface LineCache {
+  cacheKey: string | undefined;
+  lines: string[];
+}
+
 // oxlint-disable-next-line typescript/no-empty-object-type
 export interface FileRendererOptions extends BaseCodeOptions {}
 
@@ -78,6 +83,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private lineCache: LineCache | undefined;
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
@@ -121,6 +127,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
+    this.lineCache = undefined;
   }
 
   hydrate(file: FileContents): void {
@@ -173,6 +180,25 @@ export class FileRenderer<LAnnotation = undefined> {
     return { options, forceRender: false };
   }
 
+  public getOrCreateLineCache(file: FileContents): string[] {
+    // Uncached files will get split every time, not the greatest experience
+    // tbh... but something people should try to optimize away
+    if (file.cacheKey == null) {
+      this.lineCache = undefined;
+      return splitFileContents(file.contents);
+    }
+
+    let { lineCache } = this;
+    if (lineCache == null || lineCache.cacheKey !== file.cacheKey) {
+      lineCache = {
+        cacheKey: file.cacheKey,
+        lines: splitFileContents(file.contents),
+      };
+    }
+    this.lineCache = lineCache;
+    return lineCache.lines;
+  }
+
   renderFile(
     file: FileContents | undefined = this.renderCache?.file,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
@@ -207,8 +233,8 @@ export class FileRenderer<LAnnotation = undefined> {
         this.renderCache.result = this.workerManager.getPlainFileAST(
           file,
           renderRange.startingLine,
-          renderRange.totalLines
-          // FIXME: figure out how to in incorporate cached split contents
+          renderRange.totalLines,
+          this.getOrCreateLineCache(file)
         );
         this.renderCache.renderRange = renderRange;
       }
@@ -315,7 +341,7 @@ export class FileRenderer<LAnnotation = undefined> {
     const { disableFileHeader = false } = this.options;
     const contentArray: ElementContent[] = [];
     const gutter = createGutterWrapper();
-    const lines = splitFileContents(file.contents);
+    const lines = this.getOrCreateLineCache(file);
     let rowCount = 0;
 
     iterateOverFile({

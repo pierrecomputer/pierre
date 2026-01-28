@@ -13,11 +13,37 @@ describe('FileRenderer AST Structure', () => {
     // Verify line count matches
     const inputLines = mockFiles.file2.contents.split('\n').length;
     expect(totalLines).toBe(inputLines);
-    expect(codeAST.length).toBe(inputLines);
 
-    // Verify each line has the expected structure
-    for (let i = 0; i < codeAST.length; i++) {
-      const lineElement = codeAST[i] as Element;
+    // Structure: [gutter, contentColumn]
+    expect(codeAST.length).toBe(2);
+
+    const [gutter, contentColumn] = codeAST as Element[];
+
+    // Verify gutter structure
+    expect(gutter.type).toBe('element');
+    expect(gutter.tagName).toBe('div');
+    assertDefined(gutter.properties, 'gutter.properties should be defined');
+    expect(gutter.properties['data-gutter']).toBe('');
+    assertDefined(gutter.children, 'gutter.children should be defined');
+    expect(gutter.children.length).toBe(inputLines);
+
+    // Verify content column structure
+    expect(contentColumn.type).toBe('element');
+    expect(contentColumn.tagName).toBe('div');
+    assertDefined(
+      contentColumn.properties,
+      'contentColumn.properties should be defined'
+    );
+    expect(contentColumn.properties['data-content']).toBe('');
+    assertDefined(
+      contentColumn.children,
+      'contentColumn.children should be defined'
+    );
+    expect(contentColumn.children.length).toBe(inputLines);
+
+    // Verify each line in the content column
+    for (let i = 0; i < contentColumn.children.length; i++) {
+      const lineElement = contentColumn.children[i] as Element;
 
       // Each line should be a div element
       expect(lineElement.type).toBe('element');
@@ -31,25 +57,24 @@ describe('FileRenderer AST Structure', () => {
       expect(lineElement.properties['data-line']).toBe(i + 1);
       expect(lineElement.properties['data-line-type']).toBe('context');
       expect(lineElement.properties['data-line-index']).toBe(i);
+    }
 
-      // Each line should have two child spans: column-number and column-content
+    // Verify each gutter item
+    for (let i = 0; i < gutter.children.length; i++) {
+      const gutterItem = gutter.children[i] as Element;
+
+      // Each gutter item should be a div element
+      expect(gutterItem.type).toBe('element');
+      expect(gutterItem.tagName).toBe('div');
+
+      // Each gutter item should have the correct properties
       assertDefined(
-        lineElement.children,
-        'lineElement.children should be defined'
+        gutterItem.properties,
+        'gutterItem.properties should be defined'
       );
-      expect(lineElement.children.length).toBe(2);
-
-      const [numberColumn, contentColumn] = lineElement.children as Element[];
-
-      // Verify line number column
-      expect(numberColumn.type).toBe('element');
-      expect(numberColumn.tagName).toBe('span');
-      expect(numberColumn.properties['data-column-number']).toBe('');
-
-      // Verify content column
-      expect(contentColumn.type).toBe('element');
-      expect(contentColumn.tagName).toBe('span');
-      expect(contentColumn.properties['data-column-content']).toBe('');
+      expect(gutterItem.properties['data-column-number']).toBe(i + 1);
+      expect(gutterItem.properties['data-line-type']).toBe('context');
+      expect(gutterItem.properties['data-line-index']).toBe(`${i}`);
     }
   });
 

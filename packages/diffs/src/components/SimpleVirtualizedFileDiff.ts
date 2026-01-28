@@ -50,7 +50,7 @@ export class SimpleVirtualizedFileDiff<
 
   // Get the height for a line, using cached value if available.
   // If not cached and hasMetadataLine is true, adds LINE_HEIGHT for the metadata.
-  getLineHeight(lineIndex: number, hasMetadataLine = false): number {
+  private getLineHeight(lineIndex: number, hasMetadataLine = false): number {
     const cached = this.heightCache.get(lineIndex);
     if (cached != null) {
       return cached;
@@ -81,13 +81,17 @@ export class SimpleVirtualizedFileDiff<
   // Called after render to reconcile estimated vs actual heights.
   // Definitely need to optimize this in cases where there aren't any custom
   // line heights or in cases of extremely large files...
-  reconcileHeights(): void {
+  public reconcileHeights(): void {
+    const { overflow = 'scroll' } = this.options;
+    if (this.fileContainer != null) {
+      this.top = this.virtualizer.getOffsetInScrollContainer(
+        this.fileContainer
+      );
+    }
     if (this.fileContainer == null || this.fileDiff == null) {
       this.height = 0;
       return;
     }
-    const { overflow = 'scroll' } = this.options;
-    this.top = this.virtualizer.getOffsetInScrollContainer(this.fileContainer);
     // NOTE(amadeus): We can probably be a lot smarter about this, and we
     // should be thinking about ways to improve this
     // If the file has no annotations and we are using the scroll variant, then
@@ -152,19 +156,16 @@ export class SimpleVirtualizedFileDiff<
     }
   }
 
-  onScrollUpdate = (_windowSpecs: VirtualWindowSpecs): boolean => {
+  public onRender = (dirty: boolean): boolean => {
     if (this.fileContainer == null) {
       return false;
     }
-    return this.render();
-  };
-
-  onResize = (_windowSpecs: VirtualWindowSpecs): void => {
-    if (this.fileContainer == null) {
-      return;
+    if (dirty) {
+      this.top = this.virtualizer.getOffsetInScrollContainer(
+        this.fileContainer
+      );
     }
-    this.top = this.virtualizer.getOffsetInScrollContainer(this.fileContainer);
-    this.render();
+    return this.render();
   };
 
   override cleanUp(): void {
@@ -181,6 +182,16 @@ export class SimpleVirtualizedFileDiff<
     this.virtualizer.instanceChanged(this);
     // NOTE(amadeus): We should probably defer to the virtualizer to re-render
     // this.rerender();
+  }
+
+  // FIXME(amadeus): Probably implement a much bigger visibility interface to
+  // completely render nothing but a single div if not visible
+  public setVisibility(visible: boolean): void {
+    if (this.fileContainer != null && visible) {
+      this.top = this.virtualizer.getOffsetInScrollContainer(
+        this.fileContainer
+      );
+    }
   }
 
   // Compute the approximate size of the file using cached line heights.

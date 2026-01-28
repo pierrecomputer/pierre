@@ -322,6 +322,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
+    const { overflow = 'scroll', diffStyle = 'split' } = this.options;
     const { fileContainer, prerenderedHTML } = props;
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
@@ -395,15 +396,13 @@ export class FileDiff<LAnnotation = undefined> {
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
-      this.resizeManager.setup(this.pre);
-      if ((this.options.overflow ?? 'scroll') === 'scroll') {
-        if ((this.options.diffStyle ?? 'split') === 'split') {
-          this.scrollSyncManager.setup(
-            this.pre,
-            this.codeDeletions,
-            this.codeAdditions
-          );
-        }
+      this.resizeManager.setup(this.pre, overflow === 'wrap');
+      if (overflow === 'scroll' && diffStyle === 'split') {
+        this.scrollSyncManager.setup(
+          this.pre,
+          this.codeDeletions,
+          this.codeAdditions
+        );
       }
     }
   }
@@ -797,8 +796,8 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     result: HunksRenderResult
   ): void {
-    const rowSpan =
-      this.options.overflow === 'wrap' ? result.rowCount : undefined;
+    const { overflow = 'scroll', diffStyle = 'split' } = this.options;
+    const rowSpan = overflow === 'wrap' ? result.rowCount : undefined;
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
 
@@ -871,6 +870,36 @@ export class FileDiff<LAnnotation = undefined> {
       pre.replaceChildren(...codeElements);
     }
 
+    this.applyBuffers(pre, result);
+    this.injectUnsafeCSS();
+    this.renderSeparators(result.hunkData);
+    this.renderAnnotations();
+    this.renderHoverUtility();
+
+    this.mouseEventManager.setup(pre);
+    this.lineSelectionManager.setup(pre);
+    this.resizeManager.setup(pre, overflow === 'wrap');
+
+    if (overflow === 'scroll' && diffStyle === 'split') {
+      this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
+    } else {
+      this.scrollSyncManager.cleanUp();
+    }
+  }
+
+  private applyBuffers(pre: HTMLPreElement, result: HunksRenderResult) {
+    const { disableVirtualizationBuffers = false } = this.options;
+    if (disableVirtualizationBuffers) {
+      if (this.bufferBefore != null) {
+        this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+        this.bufferBefore = undefined;
+      }
+      if (this.bufferAfter != null) {
+        this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+        this.bufferAfter = undefined;
+      }
+      return;
+    }
     // NOTE(amadeus): A very hacky pass at buffers outside the pre elements...
     // i need to improve this...
     if (result.bufferBefore > 0) {
@@ -899,30 +928,6 @@ export class FileDiff<LAnnotation = undefined> {
     } else if (this.bufferAfter != null) {
       this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
       this.bufferAfter = undefined;
-    }
-
-    this.injectUnsafeCSS();
-
-    this.renderSeparators(result.hunkData);
-    this.renderAnnotations();
-    this.renderHoverUtility();
-
-    this.mouseEventManager.setup(pre);
-    this.lineSelectionManager.setup(pre);
-    this.resizeManager.setup(pre);
-
-    if ((this.options.overflow ?? 'scroll') === 'scroll') {
-      if ((this.options.diffStyle ?? 'split') === 'split') {
-        this.scrollSyncManager.setup(
-          pre,
-          this.codeDeletions,
-          this.codeAdditions
-        );
-      } else {
-        this.scrollSyncManager.cleanUp();
-      }
-    } else {
-      this.scrollSyncManager.cleanUp();
     }
   }
 
