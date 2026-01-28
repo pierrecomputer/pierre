@@ -9,7 +9,6 @@ import type {
   ThemedToken,
   ThemeTypes,
 } from '../types';
-import { createRowNodes } from '../utils/createRowNodes';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
 import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
@@ -41,6 +40,9 @@ export class FileStream {
   private fileContainer: HTMLElement | undefined;
   pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
+  private gutterElement: HTMLElement | undefined;
+  private contentElement: HTMLElement | undefined;
+  private currentRowCount = 0;
 
   constructor(public options: FileStreamOptions = { theme: DEFAULT_THEMES }) {
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
@@ -136,6 +138,11 @@ export class FileStream {
 
     this.pre = pre;
     this.code = getOrCreateCodeNode({ code: this.code, pre });
+    this.gutterElement = undefined;
+    this.contentElement = undefined;
+    this.currentRowCount = 0;
+    this.currentLineElement = undefined;
+    this.currentLineIndex = this.options.startingLineIndex ?? 1;
     this.abortController?.abort();
     this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
@@ -200,7 +207,9 @@ export class FileStream {
   private currentLineElement: HTMLElement | undefined;
   private render = () => {
     this.options.onPreRender?.(this);
-    const linesToAppend: HTMLElement[] = [];
+    const { gutter, content } = this.getOrCreateStreamColumns();
+    const gutterFragment = document.createDocumentFragment();
+    const contentFragment = document.createDocumentFragment();
     for (const token of this.queuedTokens) {
       if ('recall' in token) {
         if (this.currentLineElement == null) {
@@ -219,26 +228,81 @@ export class FileStream {
       } else {
         const span = createSpanFromToken(token);
         if (this.currentLineElement == null) {
-          linesToAppend.push(this.createLine());
+          const { gutterLine, contentLine } = this.createLine();
+          gutterFragment.appendChild(gutterLine);
+          contentFragment.appendChild(contentLine);
         }
         this.currentLineElement?.appendChild(span);
         if (token.content === '\n') {
           this.currentLineIndex++;
-          linesToAppend.push(this.createLine());
+          const { gutterLine, contentLine } = this.createLine();
+          gutterFragment.appendChild(gutterLine);
+          contentFragment.appendChild(contentLine);
         }
       }
     }
-    for (const line of linesToAppend) {
-      this.code?.appendChild(line);
+    if (gutterFragment.childNodes.length > 0) {
+      gutter.appendChild(gutterFragment);
+    }
+    if (contentFragment.childNodes.length > 0) {
+      content.appendChild(contentFragment);
     }
     this.queuedTokens.length = 0;
     this.options.onPostRender?.(this);
   };
 
-  private createLine(): HTMLElement {
-    const { row, content } = createRowNodes(this.currentLineIndex);
-    this.currentLineElement = content;
-    return row;
+  private getOrCreateStreamColumns(): {
+    gutter: HTMLElement;
+    content: HTMLElement;
+  } {
+    if (this.code == null) {
+      throw new Error('FileStream: expected code element to exist');
+    }
+    if (this.gutterElement != null && this.contentElement != null) {
+      return { gutter: this.gutterElement, content: this.contentElement };
+    }
+    const gutter = document.createElement('div');
+    gutter.dataset.gutter = '';
+    const content = document.createElement('div');
+    content.dataset.content = '';
+    this.code.appendChild(gutter);
+    this.code.appendChild(content);
+    this.gutterElement = gutter;
+    this.contentElement = content;
+    return { gutter, content };
+  }
+
+  private updateRowSpan(): void {
+    if (this.gutterElement != null) {
+      this.gutterElement.style.gridRow = `span ${this.currentRowCount}`;
+    }
+    if (this.contentElement != null) {
+      this.contentElement.style.gridRow = `span ${this.currentRowCount}`;
+    }
+  }
+
+  private createLine(): { gutterLine: HTMLElement; contentLine: HTMLElement } {
+    const lineNumber = this.currentLineIndex;
+    const lineIndex = `${lineNumber - 1}`;
+    const gutterLine = document.createElement('div');
+    gutterLine.dataset.columnNumber = `${lineNumber}`;
+    gutterLine.dataset.lineType = 'context';
+    gutterLine.dataset.lineIndex = lineIndex;
+
+    const numberContent = document.createElement('span');
+    numberContent.dataset.lineNumberContent = '';
+    numberContent.textContent = `${lineNumber}`;
+    gutterLine.appendChild(numberContent);
+
+    const contentLine = document.createElement('div');
+    contentLine.dataset.line = `${lineNumber}`;
+    contentLine.dataset.lineType = 'context';
+    contentLine.dataset.lineIndex = lineIndex;
+
+    this.currentRowCount += 1;
+    this.updateRowSpan();
+    this.currentLineElement = contentLine;
+    return { gutterLine, contentLine };
   }
 
   private getOrCreateFileContainer(fileContainer?: HTMLElement): HTMLElement {
