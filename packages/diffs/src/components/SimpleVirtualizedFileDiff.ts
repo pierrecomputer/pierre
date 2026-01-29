@@ -34,6 +34,7 @@ export class SimpleVirtualizedFileDiff<
   // Sparse map: view-specific line index -> measured height
   // Only stores lines that differ what is returned from `getLineHeight`
   private heightCache: Map<number, number> = new Map();
+  private isVisible: boolean = false;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
@@ -188,10 +189,17 @@ export class SimpleVirtualizedFileDiff<
   // FIXME(amadeus): Probably implement a much bigger visibility interface to
   // completely render nothing but a single div if not visible
   public setVisibility(visible: boolean): void {
-    if (this.fileContainer != null && visible) {
+    if (this.fileContainer == null) {
+      return;
+    }
+    if (visible && !this.isVisible) {
       this.top = this.virtualizer.getOffsetInScrollContainer(
         this.fileContainer
       );
+      this.isVisible = true;
+    } else if (!visible && this.isVisible) {
+      this.isVisible = false;
+      this.rerender();
     }
   }
 
@@ -318,14 +326,22 @@ export class SimpleVirtualizedFileDiff<
       return false;
     }
 
+    this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     if (isFirstRender) {
       this.computeApproximateSize();
       // Figure out how to properly manage this...
       this.virtualizer.connect(fileContainer, this);
+      this.isVisible = this.virtualizer.isInstanceVisible(
+        this.top,
+        this.height
+      );
+    }
+
+    if (!this.isVisible) {
+      return this.renderPlaceholder(this.height);
     }
 
     const windowSpecs = this.virtualizer.getWindowSpecs();
-    this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     const renderRange = this.computeRenderRangeFromWindow(
       this.fileDiff,
       this.top,

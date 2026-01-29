@@ -136,6 +136,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected headerMetadata: HTMLElement | undefined;
   protected separatorCache: Map<string, CustomHunkElementCache> = new Map();
   protected errorWrapper: HTMLElement | undefined;
+  protected placeHolder: HTMLElement | undefined;
 
   protected hunksRenderer: DiffHunksRenderer<LAnnotation>;
   protected resizeManager: ResizeManager;
@@ -557,6 +558,58 @@ export class FileDiff<LAnnotation = undefined> {
     return true;
   }
 
+  renderPlaceholder(height: number): boolean {
+    if (this.fileContainer == null) {
+      return false;
+    }
+    this.cleanChildNodes();
+
+    if (this.placeHolder == null) {
+      const shadowRoot =
+        this.fileContainer.shadowRoot ??
+        this.fileContainer.attachShadow({ mode: 'open' });
+      this.placeHolder = document.createElement('div');
+      this.placeHolder.dataset.placeholder = '';
+      shadowRoot.appendChild(this.placeHolder);
+    }
+    this.placeHolder.style.setProperty('height', `${height}px`);
+    return true;
+  }
+
+  private cleanChildNodes() {
+    // this.hunksRenderer.cleanUp();
+    this.resizeManager.cleanUp();
+    this.scrollSyncManager.cleanUp();
+    this.mouseEventManager.cleanUp();
+    this.lineSelectionManager.cleanUp();
+
+    this.bufferAfter?.remove();
+    this.bufferBefore?.remove();
+    this.codeAdditions?.remove();
+    this.codeDeletions?.remove();
+    this.codeUnified?.remove();
+    this.errorWrapper?.remove();
+    this.headerElement?.remove();
+    this.hoverContent?.remove();
+    this.pre?.remove();
+    this.spriteSVG?.remove();
+    this.unsafeCSSStyle?.remove();
+
+    this.bufferAfter = undefined;
+    this.bufferBefore = undefined;
+    this.codeAdditions = undefined;
+    this.codeDeletions = undefined;
+    this.codeUnified = undefined;
+    this.errorWrapper = undefined;
+    this.headerElement = undefined;
+    this.hoverContent = undefined;
+    this.pre = undefined;
+    this.spriteSVG = undefined;
+    this.unsafeCSSStyle = undefined;
+
+    this.lastRenderedHeaderHTML = undefined;
+  }
+
   private renderSeparators(hunkData: HunkData[]): void {
     const { hunkSeparators } = this.options;
     if (
@@ -706,6 +759,10 @@ export class FileDiff<LAnnotation = undefined> {
       shadowRoot.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
     }
+
+    this.placeHolder?.remove();
+    this.placeHolder = undefined;
+
     return this.pre;
   }
 
@@ -732,6 +789,8 @@ export class FileDiff<LAnnotation = undefined> {
     container: HTMLElement
   ): void {
     this.cleanupErrorWrapper();
+    this.placeHolder?.remove();
+    this.placeHolder = undefined;
     const headerHTML = toHtml(headerAST);
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');

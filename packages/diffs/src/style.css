@@ -79,7 +79,7 @@
 
   pre,
   code {
-    contain: layout style paint;
+    contain: content;
     background-color: var(--diffs-bg);
   }
 
@@ -391,7 +391,6 @@
   }
 
   [data-code] {
-    display: block;
     display: grid;
     grid-auto-flow: dense;
     grid-template-columns: var(--diffs-code-grid);
@@ -450,6 +449,7 @@
 
   [data-gutter] {
     display: grid;
+    content: contents;
     grid-template-rows: subgrid;
     grid-template-columns: subgrid;
     grid-column: 1;
@@ -1401,5 +1401,9 @@
     [data-error-stack] {
       color: var(--diffs-fg-number);
     }
+  }
+
+  [data-placeholder] {
+    contain: strict;
   }
 }

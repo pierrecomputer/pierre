@@ -25,6 +25,7 @@ export class SimpleVirtualizedFile<
   // Sparse map: line index -> measured height
   // Only stores lines that differ from what is returned from `getLineHeight`
   private heightCache: Map<number, number> = new Map();
+  private isVisible: boolean = false;
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
@@ -239,13 +240,17 @@ export class SimpleVirtualizedFile<
       return false;
     }
 
+    this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     if (isFirstRender) {
       this.computeApproximateSize();
       this.virtualizer.connect(fileContainer, this);
+      this.isVisible = this.virtualizer.isInstanceVisible(
+        this.top,
+        this.height
+      );
     }
 
     const windowSpecs = this.virtualizer.getWindowSpecs();
-    this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     const renderRange = this.computeRenderRangeFromWindow(
       this.file,
       this.top,

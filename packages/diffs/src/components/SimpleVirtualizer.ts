@@ -17,7 +17,7 @@ interface ScrollAnchor {
   lineOffset: number | undefined;
 }
 
-const DEFAULT_OVERSCROLL_SIZE = 200;
+const DEFAULT_OVERSCROLL_SIZE = 500;
 const INTERSECTION_OBSERVER_MARGIN = DEFAULT_OVERSCROLL_SIZE * 4;
 const INTERSECTION_OBSERVER_THRESHOLD = [0, 0.000001, 0.99999, 1];
 
@@ -122,6 +122,15 @@ export class SimpleVirtualizer {
       });
     }
     return this.windowSpecs;
+  }
+
+  isInstanceVisible(elementTop: number, elementHeight: number): boolean {
+    const scrollTop = this.getScrollTop();
+    const height = this.getHeight();
+    const margin = this.config.intersectionObserverMargin;
+    const top = scrollTop - margin;
+    const bottom = scrollTop + height + margin;
+    return !(elementTop < top - elementHeight || elementTop > bottom);
   }
 
   private handleContainerResize = (entries: ResizeObserverEntry[]) => {
