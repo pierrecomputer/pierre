@@ -18,6 +18,11 @@ export function registerCustomLanguage(
    */
   extensionsOrFilenames: string[] = []
 ): void {
+  if (lang === 'text' || lang === 'ansi') {
+    throw new Error(
+      "registerCustomLanguage: 'text' and 'ansi' are reserved language names"
+    );
+  }
   if (RegisteredCustomLanguages.has(lang)) {
     console.error(
       `registerCustomLanguage: lang: ${lang} is already registered`
