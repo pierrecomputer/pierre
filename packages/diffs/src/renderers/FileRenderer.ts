@@ -54,7 +54,8 @@ interface GetRenderOptionsReturn {
 }
 
 export interface FileRenderResult {
-  codeAST: ElementContent[];
+  gutterAST: ElementContent[];
+  contentAST: ElementContent[];
   preAST: HASTElement;
   headerAST: HASTElement | undefined;
   css: string;
@@ -392,10 +393,9 @@ export class FileRenderer<LAnnotation = undefined> {
 
     // Finalize: wrap gutter and content
     gutter.properties.style = `grid-row: span ${rowCount}`;
-    const codeAST = [gutter, createContentColumn(contentArray, rowCount)];
-
     return {
-      codeAST,
+      gutterAST: gutter.children ?? [],
+      contentAST: contentArray,
       preAST: this.createPreElement(lines.length, themeStyles, baseThemeType),
       headerAST: !disableFileHeader
         ? this.renderHeader(file, themeStyles, baseThemeType)
@@ -434,11 +434,22 @@ export class FileRenderer<LAnnotation = undefined> {
     children.push(
       createHastElement({
         tagName: 'code',
-        children: result.codeAST,
+        children: this.renderCodeAST(result),
         properties: { 'data-code': '' },
       })
     );
     return { ...result.preAST, children };
+  }
+
+  renderCodeAST(result: FileRenderResult): ElementContent[] {
+    const gutter = createGutterWrapper();
+    gutter.children = result.gutterAST;
+    gutter.properties.style = `grid-row: span ${result.rowCount}`;
+    const contentColumn = createContentColumn(
+      result.contentAST,
+      result.rowCount
+    );
+    return [gutter, contentColumn];
   }
 
   renderPartialHTML(

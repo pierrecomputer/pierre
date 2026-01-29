@@ -468,7 +468,9 @@ export class File<LAnnotation = undefined> {
     this.applyPreNodeAttributes(pre, result);
     // Create code elements and insert HTML content
     this.code = getOrCreateCodeNode({ code: this.code });
-    this.code.innerHTML = this.fileRenderer.renderPartialHTML(result.codeAST);
+    this.code.innerHTML = this.fileRenderer.renderPartialHTML(
+      this.fileRenderer.renderCodeAST(result)
+    );
     pre.replaceChildren(this.code);
 
     this.applyBuffers(pre, result);

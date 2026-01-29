@@ -686,7 +686,7 @@ export { greet };\`,
 const result: FileRenderResult = await instance.asyncRender(file);
 
 // result contains:
-// - codeAST: array of hast ElementContent nodes for each line
+// - gutterAST/contentAST: arrays of hast ElementContent nodes for each line
 // - preAST: the wrapper <pre> element as a hast node
 // - headerAST: the file header element (if not disabled)
 // - totalLines: number of lines in the file
@@ -696,7 +696,9 @@ const result: FileRenderResult = await instance.asyncRender(file);
 const fullHTML: string = instance.renderFullHTML(result);
 
 // Or render just the code lines to HTML
-const partialHTML: string = instance.renderPartialHTML(result.codeAST);
+const partialHTML: string = instance.renderPartialHTML(
+  instance.renderCodeAST(result)
+);
 
 // Or get the full AST for further transformation
 const fullAST = instance.renderFullAST(result);`,

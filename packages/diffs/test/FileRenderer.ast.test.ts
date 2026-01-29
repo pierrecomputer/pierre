@@ -8,7 +8,9 @@ import { assertDefined } from './testUtils';
 describe('FileRenderer AST Structure', () => {
   test('should generate correct AST structure for JavaScript file', async () => {
     const instance = new FileRenderer();
-    const { codeAST, totalLines } = await instance.asyncRender(mockFiles.file2);
+    const result = await instance.asyncRender(mockFiles.file2);
+    const { totalLines } = result;
+    const codeAST = instance.renderCodeAST(result);
 
     // Verify line count matches
     const inputLines = mockFiles.file2.contents.split('\n').length;
@@ -80,7 +82,8 @@ describe('FileRenderer AST Structure', () => {
 
   test('should apply syntax highlighting with CSS variables', async () => {
     const instance = new FileRenderer();
-    const { codeAST } = await instance.asyncRender(mockFiles.file2);
+    const result = await instance.asyncRender(mockFiles.file2);
+    const codeAST = instance.renderCodeAST(result);
 
     // Helper to recursively find all text nodes with their parent styles
     const findTextNodesWithStyles = (
