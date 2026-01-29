@@ -1,0 +1,30 @@
+import type { DynamicImportLanguageRegistration } from 'shiki';
+
+import { CUSTOM_EXTENSION_TO_FILE_FORMAT } from '../../utils/getFiletypeFromFileName';
+import { RegisteredCustomLanguages } from './constants';
+
+/**
+ * Register a custom language loader and optionally map it to
+ * file names or extensions.
+ */
+export function registerCustomLanguage(
+  lang: string,
+  loader: DynamicImportLanguageRegistration,
+  /**
+   * File names or extensions to map to this language. Use exact filenames
+   * (e.g., "Dockerfile", "CMakeLists.txt") or extension tokens without a dot
+   * (e.g., "proto", "foo"). Compound extensions are supported
+   * (e.g., "blade.php").
+   */
+  extensionsOrFilenames: string[] = []
+): void {
+  if (RegisteredCustomLanguages.has(lang)) {
+    throw new Error(
+      `registerCustomLanguage: lang: ${lang} is already registered`
+    );
+  }
+  RegisteredCustomLanguages.set(lang, loader);
+  for (const extension of extensionsOrFilenames) {
+    CUSTOM_EXTENSION_TO_FILE_FORMAT.set(extension, lang);
+  }
+}

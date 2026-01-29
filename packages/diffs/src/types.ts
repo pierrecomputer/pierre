@@ -313,7 +313,11 @@ export interface FileDiffMetadata {
   cacheKey?: string;
 }
 
-export type SupportedLanguages = BundledLanguage | 'text' | 'ansi';
+export type SupportedLanguages =
+  | BundledLanguage
+  | 'text'
+  | 'ansi'
+  | (string & {});
 
 // Line types that we can parse from a patch file
 export type HunkLineType =

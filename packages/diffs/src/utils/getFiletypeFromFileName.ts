@@ -1,5 +1,8 @@
 import type { ExtensionFormatMap, SupportedLanguages } from '../types';
 
+export const CUSTOM_EXTENSION_TO_FILE_FORMAT: Map<string, SupportedLanguages> =
+  new Map();
+
 export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   '1c': '1c',
   abap: 'abap',
@@ -331,6 +334,9 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
 };
 
 export function getFiletypeFromFileName(fileName: string): SupportedLanguages {
+  if (CUSTOM_EXTENSION_TO_FILE_FORMAT.has(fileName)) {
+    return CUSTOM_EXTENSION_TO_FILE_FORMAT.get(fileName) ?? 'text';
+  }
   // Handle special files without extensions first
   if (EXTENSION_TO_FILE_FORMAT[fileName] != null) {
     return EXTENSION_TO_FILE_FORMAT[fileName];
@@ -338,20 +344,28 @@ export function getFiletypeFromFileName(fileName: string): SupportedLanguages {
 
   // Try compound extensions first (e.g., .blade.php, .component.ts)
   const compoundMatch = fileName.match(/\.([^/\\]+\.[^/\\]+)$/);
-  if (
-    compoundMatch != null &&
-    EXTENSION_TO_FILE_FORMAT[compoundMatch[1]] != null
-  ) {
-    return EXTENSION_TO_FILE_FORMAT[compoundMatch[1]] ?? 'text';
+  if (compoundMatch != null) {
+    if (CUSTOM_EXTENSION_TO_FILE_FORMAT.has(compoundMatch[1])) {
+      return CUSTOM_EXTENSION_TO_FILE_FORMAT.get(compoundMatch[1]) ?? 'text';
+    }
+    if (EXTENSION_TO_FILE_FORMAT[compoundMatch[1]] != null) {
+      return EXTENSION_TO_FILE_FORMAT[compoundMatch[1]] ?? 'text';
+    }
   }
 
   // Fall back to simple extension
-  const simpleMatch = fileName.match(/\.([^.]+)$/);
-  return EXTENSION_TO_FILE_FORMAT[simpleMatch?.[1] ?? ''] ?? 'text';
+  const simpleMatch = fileName.match(/\.([^.]+)$/)?.[1] ?? '';
+  if (CUSTOM_EXTENSION_TO_FILE_FORMAT.has(simpleMatch)) {
+    return CUSTOM_EXTENSION_TO_FILE_FORMAT.get(simpleMatch) ?? 'text';
+  }
+  return EXTENSION_TO_FILE_FORMAT[simpleMatch] ?? 'text';
 }
 
 export function extendFileFormatMap(map: ExtensionFormatMap): void {
   for (const key in map) {
-    EXTENSION_TO_FILE_FORMAT[key] = map[key];
+    const lang = map[key];
+    if (lang != null) {
+      CUSTOM_EXTENSION_TO_FILE_FORMAT.set(key, lang);
+    }
   }
 }

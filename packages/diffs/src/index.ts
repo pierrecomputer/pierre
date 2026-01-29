@@ -18,6 +18,7 @@ export * from './highlighter/languages/constants';
 export * from './highlighter/languages/getResolvedLanguages';
 export * from './highlighter/languages/getResolvedOrResolveLanguage';
 export * from './highlighter/languages/hasResolvedLanguages';
+export * from './highlighter/languages/registerCustomLanguage';
 export * from './highlighter/languages/resolveLanguage';
 export * from './highlighter/languages/resolveLanguages';
 export * from './highlighter/shared_highlighter';

@@ -4,9 +4,17 @@ import type {
   SupportedLanguages,
 } from '../types';
 
-export function setLanguageOverride<T extends FileContents | FileDiffMetadata>(
-  fileOrDiff: T,
+export function setLanguageOverride(
+  fileOrDiff: FileContents,
   lang: SupportedLanguages
-): T {
+): FileContents;
+export function setLanguageOverride(
+  fileOrDiff: FileDiffMetadata,
+  lang: SupportedLanguages
+): FileDiffMetadata;
+export function setLanguageOverride(
+  fileOrDiff: FileContents | FileDiffMetadata,
+  lang: SupportedLanguages
+): FileContents | FileDiffMetadata {
   return { ...fileOrDiff, lang };
 }

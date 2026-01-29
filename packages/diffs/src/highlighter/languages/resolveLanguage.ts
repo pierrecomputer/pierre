@@ -1,9 +1,13 @@
 import { bundledLanguages } from 'shiki';
 
-import type { SupportedLanguages } from '../../types';
+import type { BundledLanguage, SupportedLanguages } from '../../types';
 import { isWorkerContext } from '../../utils/isWorkerContext';
 import type { ResolvedLanguage } from '../../worker';
-import { ResolvedLanguages, ResolvingLanguages } from './constants';
+import {
+  RegisteredCustomLanguages,
+  ResolvedLanguages,
+  ResolvingLanguages,
+} from './constants';
 
 export async function resolveLanguage(
   lang: Exclude<SupportedLanguages, 'text' | 'ansi'>
@@ -22,10 +26,13 @@ export async function resolveLanguage(
   }
 
   try {
-    const loader = bundledLanguages[lang];
+    let loader = RegisteredCustomLanguages.get(lang);
+    if (loader == null && lang in bundledLanguages) {
+      loader = bundledLanguages[lang as BundledLanguage];
+    }
     if (loader == null) {
       throw new Error(
-        `resolveLanguage: "${lang}" not found in bundled languages`
+        `resolveLanguage: "${lang}" not found in bundled or custom languages`
       );
     }
 
