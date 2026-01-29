@@ -322,7 +322,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff == null) {
       return undefined;
     }
-    const { expandUnchanged = false } = this.options;
+    const { expandUnchanged = false, collapsedContextThreshold } =
+      this.getOptionsWithDefaults();
     const cache = this.workerManager?.getDiffResultCache(diff);
     if (cache != null && this.renderCache == null) {
       this.renderCache = {
@@ -357,7 +358,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             : expandUnchanged
               ? true
               : this.expandedHunks,
-          this.getOptionsWithDefaults().collapsedContextThreshold
+          collapsedContextThreshold
         );
         this.renderCache.renderRange = renderRange;
       }

@@ -406,7 +406,11 @@ export class SimpleVirtualizedFileDiff<
     fileTop: number,
     { top, bottom }: RenderWindow
   ): RenderRange {
-    const { disableFileHeader = false, expandUnchanged = false } = this.options;
+    const {
+      disableFileHeader = false,
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
     const diffStyle = this.getDiffStyle();
     const fileHeight = this.height;
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
@@ -451,9 +455,7 @@ export class SimpleVirtualizedFileDiff<
       expandedHunks: expandUnchanged
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
-      collapsedContextThreshold:
-        this.options.collapsedContextThreshold ??
-        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      collapsedContextThreshold,
       callback: ({
         hunkIndex,
         collapsedBefore,
