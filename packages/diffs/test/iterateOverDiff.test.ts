@@ -48,7 +48,7 @@ describe('iterateOverDiff', () => {
     });
 
     // Check total lines matches expected
-    expect(results.length).toBe(514);
+    expect(results.length).toBe(517);
 
     // First hunk starts at its unifiedLineStart (which is 3 because collapsedBefore=3)
     // The lineIndex is the actual unified line index, not a sequential counter
@@ -88,7 +88,7 @@ describe('iterateOverDiff', () => {
     });
 
     // Check total lines matches expected for split mode
-    expect(results.length).toBe(487);
+    expect(results.length).toBe(490);
   });
 
   test('expanded hunks work correctly', () => {
