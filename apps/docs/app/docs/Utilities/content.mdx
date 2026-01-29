@@ -81,6 +81,14 @@ register must match the `name` field inside your theme JSON file.
 
 <DocsCodeExample {...registerCustomTheme} />
 
+### registerCustomLanguage [toc-ignore]
+
+Register a custom Shiki language loader and optionally map it to file names or
+extensions. Use this when you're working with languages not bundled by Shiki or
+want custom highlighting grammars.
+
+<DocsCodeExample {...registerCustomLanguage} />
+
 ### setLanguageOverride [toc-ignore]
 
 Override the syntax highlighting language for a `FileContents` or

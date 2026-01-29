@@ -109,12 +109,12 @@ index abc123..def456 100644
  import { readConfig } from "./config";
  import { parseEnv } from "./env";
  import { setup } from "./setup";
- 
+
  function greet(name: string) {
 -  log("Hello, " + name);
 +  log(format("Hello, " + name));
  }
- 
+
  export { greet };
 \`;
 
@@ -130,14 +130,14 @@ index abc123..def456 100644
 +++ b/example.ts
 @@ -5,7 +5,7 @@
  import { setup } from "./setup";
- 
+
  function greet(name: string) {
 -  log("Hello, " + name);
 +  log(format("Hello, " + name));
  }
- 
+
  export { greet };
- 
+
 */`,
   },
   options,
@@ -179,6 +179,30 @@ registerCustomTheme('inline-theme', async () => ({
   options,
 };
 
+export const HELPER_REGISTER_CUSTOM_LANGUAGE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'registerCustomLanguage.ts',
+    contents: `import { registerCustomLanguage } from '@pierre/diffs';
+
+// Register a custom Shiki language loader before rendering.
+// The language name you register becomes available to Shiki.
+
+// Option 1: Dynamic import (recommended for code splitting)
+registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'), [
+  // File names (exact match)
+  'MySpecialFile',
+  // Extensions (without leading dot)
+  'mylang',
+  // Compound extensions
+  'spec.mylang',
+]);
+
+// Option 2: No extension mapping (use setLanguageOverride instead)
+registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));`,
+  },
+  options,
+};
+
 export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<undefined> = {
   file: {
     name: 'disposeHighlighter.ts',
@@ -210,7 +234,7 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<undefined> = {
 // are loaded on demand as you render different files.
 const highlighter: DiffsHighlighter = await getSharedHighlighter();
 
-// You can use it directly for custom highlighting, see the Shiki 
+// You can use it directly for custom highlighting, see the Shiki
 // docs at https://shiki.style/ for details
 const tokens = highlighter.codeToTokens('const x = 1;'); `,
   },
@@ -303,7 +327,7 @@ instance.render({
 
 // Accept a hunk - keeps the new (additions) version.
 // The hunk is converted to context lines (no longer shows as a change).
-// Note: If the diff has a cacheKey, it's automatically updated by 
+// Note: If the diff has a cacheKey, it's automatically updated by
 // this function.
 fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'accept');
 
