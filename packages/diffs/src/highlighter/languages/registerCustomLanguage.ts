@@ -19,9 +19,10 @@ export function registerCustomLanguage(
   extensionsOrFilenames: string[] = []
 ): void {
   if (RegisteredCustomLanguages.has(lang)) {
-    throw new Error(
+    console.error(
       `registerCustomLanguage: lang: ${lang} is already registered`
     );
+    return;
   }
   RegisteredCustomLanguages.set(lang, loader);
   for (const extension of extensionsOrFilenames) {

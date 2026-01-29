@@ -27,7 +27,10 @@ export async function resolveLanguage(
 
   try {
     let loader = RegisteredCustomLanguages.get(lang);
-    if (loader == null && lang in bundledLanguages) {
+    if (
+      loader == null &&
+      Object.prototype.hasOwnProperty.call(bundledLanguages, lang)
+    ) {
       loader = bundledLanguages[lang as BundledLanguage];
     }
     if (loader == null) {
