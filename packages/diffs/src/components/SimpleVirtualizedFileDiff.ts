@@ -187,7 +187,11 @@ export class SimpleVirtualizedFileDiff<
       return;
     }
 
-    const { disableFileHeader = false, expandUnchanged = false } = this.options;
+    const {
+      disableFileHeader = false,
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
     const diffStyle = this.getDiffStyle();
 
     // Header or initial padding
@@ -203,9 +207,7 @@ export class SimpleVirtualizedFileDiff<
       expandedHunks: expandUnchanged
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
-      collapsedContextThreshold:
-        this.options.collapsedContextThreshold ??
-        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      collapsedContextThreshold,
       callback: ({
         hunkIndex,
         collapsedBefore,
