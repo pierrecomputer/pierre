@@ -321,19 +321,11 @@ export class SimpleVirtualizedFileDiff<
         renderAll: false,
       };
     }
-    const threshold =
-      this.options.collapsedContextThreshold ??
-      DEFAULT_COLLAPSED_CONTEXT_THRESHOLD;
-    if (threshold > 0 && rangeSize <= threshold) {
-      return {
-        fromStart: rangeSize,
-        fromEnd: 0,
-        collapsedLines: 0,
-        renderAll: true,
-      };
-    }
-    const expandUnchanged = this.options.expandUnchanged ?? false;
-    if (expandUnchanged) {
+    const {
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    if (expandUnchanged || rangeSize <= collapsedContextThreshold) {
       return {
         fromStart: rangeSize,
         fromEnd: 0,
