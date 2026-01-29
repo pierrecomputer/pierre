@@ -1,3 +1,4 @@
+import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   ChangeContent,
   FileDiffMetadata,
@@ -57,7 +58,7 @@ export function iterateOverDiff({
   startingLine = 0,
   totalLines = Infinity,
   expandedHunks,
-  collapsedContextThreshold,
+  collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   callback,
 }: IterateOverDiffProps): void {
   const state: IterationState = {
@@ -508,7 +509,7 @@ function getExpandedRegion(
   rangeSize: number,
   expandedHunks: Map<number, HunkExpansionRegion> | true | undefined,
   hunkIndex: number,
-  collapsedContextThreshold: number | undefined
+  collapsedContextThreshold: number
 ): ExpandedRegionResult {
   rangeSize = Math.max(rangeSize, 0);
   if (rangeSize === 0 || isPartial) {
@@ -519,16 +520,7 @@ function getExpandedRegion(
       collapsedLines: Math.max(rangeSize, 0),
     };
   }
-  const threshold = Math.max(collapsedContextThreshold ?? 0, 0);
-  if (threshold > 0 && rangeSize <= threshold) {
-    return {
-      fromStart: rangeSize,
-      fromEnd: 0,
-      rangeSize,
-      collapsedLines: 0,
-    };
-  }
-  if (expandedHunks === true) {
+  if (expandedHunks === true || rangeSize <= collapsedContextThreshold) {
     return {
       fromStart: rangeSize,
       fromEnd: 0,
