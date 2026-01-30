@@ -9,6 +9,6 @@ tasks:
   test:
     command: go test ./...
     inputs:
-      - "**/*.go"
+      - '**/*.go'
       - go.mod
       - go.sum

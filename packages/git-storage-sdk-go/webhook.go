@@ -48,17 +48,17 @@ func ParseSignatureHeader(header string) *ParsedWebhookSignature {
 // ValidateWebhookSignature validates the HMAC signature and timestamp.
 func ValidateWebhookSignature(payload []byte, signatureHeader string, secret string, options WebhookValidationOptions) WebhookValidationResult {
 	if strings.TrimSpace(secret) == "" {
-		return WebhookValidationResult{Valid: false, Error: "Empty secret is not allowed"}
+		return WebhookValidationResult{Valid: false, Error: "empty secret is not allowed"}
 	}
 
 	parsed := ParseSignatureHeader(signatureHeader)
 	if parsed == nil {
-		return WebhookValidationResult{Valid: false, Error: "Invalid signature header format"}
+		return WebhookValidationResult{Valid: false, Error: "invalid signature header format"}
 	}
 
 	timestamp, err := strconv.ParseInt(parsed.Timestamp, 10, 64)
 	if err != nil {
-		return WebhookValidationResult{Valid: false, Error: "Invalid timestamp in signature"}
+		return WebhookValidationResult{Valid: false, Error: "invalid timestamp in signature"}
 	}
 
 	maxAge := options.MaxAgeSeconds
@@ -69,10 +69,10 @@ func ValidateWebhookSignature(payload []byte, signatureHeader string, secret str
 		now := time.Now().Unix()
 		age := now - timestamp
 		if age > int64(maxAge) {
-			return WebhookValidationResult{Valid: false, Error: "Webhook timestamp too old (" + strconv.FormatInt(age, 10) + " seconds)", Timestamp: timestamp}
+			return WebhookValidationResult{Valid: false, Error: "webhook timestamp too old (" + strconv.FormatInt(age, 10) + " seconds)", Timestamp: timestamp}
 		}
 		if age < -60 {
-			return WebhookValidationResult{Valid: false, Error: "Webhook timestamp is in the future", Timestamp: timestamp}
+			return WebhookValidationResult{Valid: false, Error: "webhook timestamp is in the future", Timestamp: timestamp}
 		}
 	}
 
@@ -82,11 +82,11 @@ func ValidateWebhookSignature(payload []byte, signatureHeader string, secret str
 	expected := mac.Sum(nil)
 	provided, err := hex.DecodeString(parsed.Signature)
 	if err != nil {
-		return WebhookValidationResult{Valid: false, Error: "Invalid signature", Timestamp: timestamp}
+		return WebhookValidationResult{Valid: false, Error: "invalid signature", Timestamp: timestamp}
 	}
 
 	if len(expected) != len(provided) || !hmac.Equal(expected, provided) {
-		return WebhookValidationResult{Valid: false, Error: "Invalid signature", Timestamp: timestamp}
+		return WebhookValidationResult{Valid: false, Error: "invalid signature", Timestamp: timestamp}
 	}
 
 	return WebhookValidationResult{Valid: true, Timestamp: timestamp}
@@ -99,7 +99,7 @@ func ValidateWebhook(payload []byte, headers http.Header, secret string, options
 		signatureHeader = headers.Get("x-pierre-signature")
 	}
 	if signatureHeader == "" {
-		return WebhookValidation{WebhookValidationResult: WebhookValidationResult{Valid: false, Error: "Missing or invalid X-Pierre-Signature header"}}
+		return WebhookValidation{WebhookValidationResult: WebhookValidationResult{Valid: false, Error: "missing or invalid X-Pierre-Signature header"}}
 	}
 
 	eventType := headers.Get("X-Pierre-Event")
@@ -107,7 +107,7 @@ func ValidateWebhook(payload []byte, headers http.Header, secret string, options
 		eventType = headers.Get("x-pierre-event")
 	}
 	if eventType == "" {
-		return WebhookValidation{WebhookValidationResult: WebhookValidationResult{Valid: false, Error: "Missing or invalid X-Pierre-Event header"}}
+		return WebhookValidation{WebhookValidationResult: WebhookValidationResult{Valid: false, Error: "missing or invalid X-Pierre-Event header"}}
 	}
 
 	validation := ValidateWebhookSignature(payload, signatureHeader, secret, options)
@@ -120,7 +120,7 @@ func ValidateWebhook(payload []byte, headers http.Header, secret string, options
 	var raw json.RawMessage
 	if err := json.Unmarshal(payload, &raw); err != nil {
 		validation.Valid = false
-		validation.Error = "Invalid JSON payload"
+		validation.Error = "invalid JSON payload"
 		return WebhookValidation{WebhookValidationResult: validation}
 	}
 
@@ -153,7 +153,7 @@ func convertWebhookPayload(eventType string, payload []byte) (WebhookEventPayloa
 			return WebhookEventPayload{}, err
 		}
 		if raw.Repository.ID == "" || raw.Repository.URL == "" || raw.Ref == "" || raw.Before == "" || raw.After == "" || raw.CustomerID == "" || raw.PushedAt == "" {
-			return WebhookEventPayload{}, errors.New("Invalid push payload")
+			return WebhookEventPayload{}, errors.New("invalid push payload")
 		}
 		return WebhookEventPayload{Push: &WebhookPushEvent{
 			Type:        "push",

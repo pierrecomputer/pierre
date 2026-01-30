@@ -153,26 +153,25 @@ func buildDiffCommitMetadata(options CommitFromDiffOptions) *commitMetadataPaylo
 
 func writeDiffChunks(encoder *json.Encoder, reader io.Reader) error {
 	buf := make([]byte, maxChunkBytes)
-	emitted := false
+	var pending []byte
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 {
-			payload := diffChunkEnvelope{
-				DiffChunk: diffChunkPayload{
-					Data: base64.StdEncoding.EncodeToString(buf[:n]),
-					EOF:  err == io.EOF,
-				},
+			if pending != nil {
+				payload := diffChunkEnvelope{
+					DiffChunk: diffChunkPayload{
+						Data: base64.StdEncoding.EncodeToString(pending),
+						EOF:  false,
+					},
+				}
+				if err := encoder.Encode(payload); err != nil {
+					return err
+				}
 			}
-			emitted = true
-			if err := encoder.Encode(payload); err != nil {
-				return err
-			}
-			if err == io.EOF {
-				return nil
-			}
+			pending = append(pending[:0], buf[:n]...)
 		}
 		if err == io.EOF {
-			if !emitted {
+			if pending == nil {
 				payload := diffChunkEnvelope{
 					DiffChunk: diffChunkPayload{
 						Data: "",
@@ -181,7 +180,13 @@ func writeDiffChunks(encoder *json.Encoder, reader io.Reader) error {
 				}
 				return encoder.Encode(payload)
 			}
-			return nil
+			payload := diffChunkEnvelope{
+				DiffChunk: diffChunkPayload{
+					Data: base64.StdEncoding.EncodeToString(pending),
+					EOF:  true,
+				},
+			}
+			return encoder.Encode(payload)
 		}
 		if err != nil {
 			return err

@@ -22,7 +22,9 @@ tasks:
       - pyproject.toml
 
   test-coverage:
-    command: ./venv/bin/pytest --cov=pierre_storage --cov-report=term-missing --cov-report=html
+    command:
+      ./venv/bin/pytest --cov=pierre_storage --cov-report=term-missing
+      --cov-report=html
     deps:
       - ~:setup
     inputs:
@@ -85,7 +87,9 @@ tasks:
       - ~:check-package
 
   clean:
-    command: rm -rf venv/ dist/ build/ *.egg-info htmlcov/ .coverage .pytest_cache/ .mypy_cache/ .ruff_cache/
+    command:
+      rm -rf venv/ dist/ build/ *.egg-info htmlcov/ .coverage .pytest_cache/
+      .mypy_cache/ .ruff_cache/
     options:
       cache: false
       shell: true

@@ -1,6 +1,7 @@
 # Development Guide
 
-This document provides technical details for developers working on the Pierre Storage Python SDK.
+This document provides technical details for developers working on the Pierre
+Storage Python SDK.
 
 ## Architecture
 
@@ -10,7 +11,8 @@ The SDK is organized into the following modules:
 
 - **`client.py`**: Main `GitStorage` class for creating/finding repositories
 - **`repo.py`**: `RepoImpl` class implementing all repository operations
-- **`commit.py`**: `CommitBuilderImpl` for creating commits with streaming support
+- **`commit.py`**: `CommitBuilderImpl` for creating commits with streaming
+  support
 - **`auth.py`**: JWT token generation and signing
 - **`errors.py`**: Custom exception classes
 - **`types.py`**: Type definitions using TypedDict and Enums
@@ -18,8 +20,10 @@ The SDK is organized into the following modules:
 
 ### Design Patterns
 
-1. **Protocol-based interfaces**: Uses `Protocol` classes for type checking without inheritance
-2. **Fluent builder**: `CommitBuilder` provides chainable methods for composing commits
+1. **Protocol-based interfaces**: Uses `Protocol` classes for type checking
+   without inheritance
+2. **Fluent builder**: `CommitBuilder` provides chainable methods for composing
+   commits
 3. **Async/await**: All I/O operations are async for better performance
 4. **Streaming**: Large files are streamed in 4MB chunks to avoid memory issues
 
@@ -28,6 +32,7 @@ The SDK is organized into the following modules:
 ### Authentication (`auth.py`)
 
 JWT generation with automatic algorithm detection:
+
 - ES256 for elliptic curve keys (most common)
 - RS256 for RSA keys
 - EdDSA for Ed25519/Ed448 keys
@@ -37,6 +42,7 @@ Uses `cryptography` library for key loading and PyJWT for signing.
 ### Commit Builder (`commit.py`)
 
 Key features:
+
 - Fluent API for building commits
 - Streaming support for large files
 - Chunking into 4MB segments
@@ -46,6 +52,7 @@ Key features:
 ### Repository Operations (`repo.py`)
 
 Implements all Git storage API endpoints:
+
 - File operations (get, list)
 - Branch and commit listing with pagination
 - Diff operations (branch, commit)
@@ -56,6 +63,7 @@ Implements all Git storage API endpoints:
 ### Type System (`types.py`)
 
 Uses TypedDict for better IDE support and runtime type checking:
+
 - All API options are typed
 - Results are structured with TypedDict
 - Enums for constants (DiffFileState, GitFileMode)

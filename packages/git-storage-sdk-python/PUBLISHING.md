@@ -1,6 +1,7 @@
 # Publishing to PyPI - Complete Guide
 
-This guide walks you through publishing the `pierre-storage` package to PyPI for the first time.
+This guide walks you through publishing the `pierre-storage` package to PyPI for
+the first time.
 
 ## Prerequisites
 
@@ -33,6 +34,7 @@ Do the same for TestPyPI if you want (optional but recommended).
 Instead of using passwords, we'll use API tokens (more secure):
 
 #### For TestPyPI (testing):
+
 1. Go to https://test.pypi.org/manage/account/token/
 2. Click "Add API token"
 3. Token name: `pierre-storage-test`
@@ -41,6 +43,7 @@ Instead of using passwords, we'll use API tokens (more secure):
 6. **Save it immediately** - you won't see it again!
 
 #### For PyPI (production):
+
 1. Go to https://pypi.org/manage/account/token/
 2. Click "Add API token"
 3. Token name: `pierre-storage`
@@ -100,6 +103,7 @@ uv build
 ```
 
 This creates two files in `dist/`:
+
 - `pierre_storage-0.4.2-py3-none-any.whl` (wheel - preferred format)
 - `pierre-storage-0.4.2.tar.gz` (source distribution)
 
@@ -129,9 +133,11 @@ uv run twine upload --repository testpypi dist/*
 # Enter your password: [paste your TestPyPI token starting with pypi-...]
 ```
 
-> **Important**: Username is literally `__token__` (with two underscores), not your username!
+> **Important**: Username is literally `__token__` (with two underscores), not
+> your username!
 
 If successful, you'll see:
+
 ```
 Uploading pierre_storage-0.4.2-py3-none-any.whl
 Uploading pierre-storage-0.4.2.tar.gz
@@ -156,7 +162,8 @@ deactivate
 rm -rf test-env
 ```
 
-> **Note**: We use `--extra-index-url` because dependencies (httpx, pyjwt, etc.) are on the real PyPI, not TestPyPI.
+> **Note**: We use `--extra-index-url` because dependencies (httpx, pyjwt, etc.)
+> are on the real PyPI, not TestPyPI.
 
 ### Step 7: Upload to Real PyPI 🚀
 
@@ -177,6 +184,7 @@ uv run twine upload dist/*
 Success! 🎉
 
 You'll see:
+
 ```
 Uploading pierre_storage-0.4.2-py3-none-any.whl
 Uploading pierre-storage-0.4.2.tar.gz
@@ -231,6 +239,7 @@ password = pypi-YOUR-TEST-TOKEN-HERE
 ```
 
 **Secure the file:**
+
 ```bash
 chmod 600 ~/.pypirc
 ```
@@ -298,6 +307,7 @@ You can't re-upload the same version. You must increment the version number.
 ### Error: "Invalid username or password"
 
 Common mistakes:
+
 - Username should be `__token__` (with two underscores), not your PyPI username
 - Password should be the full token starting with `pypi-`
 - Make sure you're using the right token (TestPyPI vs PyPI)
@@ -307,6 +317,7 @@ Common mistakes:
 You don't have permission to upload to that package name.
 
 **Solutions**:
+
 - If it's your first upload, this shouldn't happen
 - If someone else owns the name, you need to choose a different name
 - Make sure you're logged in to the right account
@@ -318,6 +329,7 @@ Wait a few minutes - PyPI can take 5-15 minutes to index new packages.
 ### Import error after installation
 
 Make sure:
+
 - Your package structure is correct
 - `__init__.py` exports the right things
 - You're testing in a fresh virtual environment
@@ -346,15 +358,18 @@ twine upload dist/*
 
 ## Scoped Tokens (After First Upload)
 
-After your first successful upload, create project-scoped tokens for better security:
+After your first successful upload, create project-scoped tokens for better
+security:
 
 ### For PyPI:
+
 1. Go to https://pypi.org/manage/project/pierre-storage/settings/
 2. Scroll to "API tokens"
 3. Create new token with scope: "Project: pierre-storage"
 4. Update your `~/.pypirc` with the new token
 
 ### For TestPyPI:
+
 Do the same at https://test.pypi.org/manage/project/pierre-storage/settings/
 
 ## Quick Reference
@@ -375,6 +390,7 @@ twine upload dist/*                         # Then production
 ## Next Steps After Publishing
 
 1. **Add PyPI badge to README**:
+
    ```markdown
    [![PyPI version](https://badge.fury.io/py/pierre-storage.svg)](https://badge.fury.io/py/pierre-storage)
    ```

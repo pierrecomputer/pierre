@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -92,10 +93,10 @@ func (r *Repo) FileStream(ctx context.Context, options GetFileOptions) (*http.Re
 		params.Set("ref", options.Ref)
 	}
 	if options.Ephemeral != nil {
-		params.Set("ephemeral", boolToString(*options.Ephemeral))
+		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
 	}
 	if options.EphemeralBase != nil {
-		params.Set("ephemeral_base", boolToString(*options.EphemeralBase))
+		params.Set("ephemeral_base", strconv.FormatBool(*options.EphemeralBase))
 	}
 
 	resp, err := r.client.api.get(ctx, "repos/file", params, jwtToken, nil)
@@ -119,7 +120,7 @@ func (r *Repo) ListFiles(ctx context.Context, options ListFilesOptions) (ListFil
 		params.Set("ref", options.Ref)
 	}
 	if options.Ephemeral != nil {
-		params.Set("ephemeral", boolToString(*options.Ephemeral))
+		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
 	}
 	if len(params) == 0 {
 		params = nil
@@ -403,10 +404,10 @@ func (r *Repo) GetBranchDiff(ctx context.Context, options GetBranchDiffOptions) 
 		params.Set("base", options.Base)
 	}
 	if options.Ephemeral != nil {
-		params.Set("ephemeral", boolToString(*options.Ephemeral))
+		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
 	}
 	if options.EphemeralBase != nil {
-		params.Set("ephemeral_base", boolToString(*options.EphemeralBase))
+		params.Set("ephemeral_base", strconv.FormatBool(*options.EphemeralBase))
 	}
 	for _, path := range options.Paths {
 		if strings.TrimSpace(path) != "" {
@@ -510,18 +511,18 @@ func (r *Repo) Grep(ctx context.Context, options GrepOptions) (GrepResult, error
 		}
 	}
 	if options.Context != nil {
-		ctx := &grepContextPayload{}
+		contextPayload := &grepContextPayload{}
 		hasCtx := false
 		if options.Context.Before != nil {
-			ctx.Before = options.Context.Before
+			contextPayload.Before = options.Context.Before
 			hasCtx = true
 		}
 		if options.Context.After != nil {
-			ctx.After = options.Context.After
+			contextPayload.After = options.Context.After
 			hasCtx = true
 		}
 		if hasCtx {
-			body.Context = ctx
+			body.Context = contextPayload
 		}
 	}
 	if options.Limits != nil {
@@ -605,7 +606,7 @@ func (r *Repo) PullUpstream(ctx context.Context, options PullUpstreamOptions) er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 202 {
-		return errors.New("Pull Upstream failed: " + resp.Status)
+		return errors.New("pull upstream failed: " + resp.Status)
 	}
 	return nil
 }
@@ -732,7 +733,7 @@ func (r *Repo) RestoreCommit(ctx context.Context, options RestoreCommitOptions) 
 		status = httpStatusToRestoreStatus(resp.StatusCode)
 	}
 	if message == "" {
-		message = "Restore commit failed with HTTP " + itoa(resp.StatusCode)
+		message = "restore commit failed with HTTP " + itoa(resp.StatusCode)
 	}
 
 	return RestoreCommitResult{}, newRefUpdateError(message, status, refUpdate)

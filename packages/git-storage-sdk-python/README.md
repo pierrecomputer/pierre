@@ -208,7 +208,8 @@ print(commit_diff["files"])
 
 ### Creating Commits
 
-The SDK provides a fluent builder API for creating commits with streaming support:
+The SDK provides a fluent builder API for creating commits with streaming
+support:
 
 ```python
 # Create a commit
@@ -232,7 +233,8 @@ print(result["ref_update"]["old_sha"])  # All zeroes when ref is created
 The builder exposes:
 
 - `add_file(path, source, *, mode=None)` - Attach bytes from various sources
-- `add_file_from_string(path, contents, encoding="utf-8", *, mode=None)` - Add text files (defaults to UTF-8)
+- `add_file_from_string(path, contents, encoding="utf-8", *, mode=None)` - Add
+  text files (defaults to UTF-8)
 - `delete_path(path)` - Remove files or folders
 - `send()` - Finalize the commit and receive metadata
 
@@ -253,22 +255,29 @@ The builder exposes:
 }
 ```
 
-If the backend reports a failure, the builder raises a `RefUpdateError` containing the status, reason, and ref details.
+If the backend reports a failure, the builder raises a `RefUpdateError`
+containing the status, reason, and ref details.
 
 **Options:**
 
 - `target_branch` (required): Branch name (without `refs/heads/` prefix)
-- `expected_head_sha` (optional): Branch or commit that must match the remote tip
-- `base_branch` (optional): Name of the branch to use as the base when creating a new branch (without `refs/heads/` prefix)
-- `ephemeral` (optional): Mark the target branch as ephemeral (stored in separate namespace)
-- `ephemeral_base` (optional): Indicates the base branch is ephemeral (requires `base_branch`)
+- `expected_head_sha` (optional): Branch or commit that must match the remote
+  tip
+- `base_branch` (optional): Name of the branch to use as the base when creating
+  a new branch (without `refs/heads/` prefix)
+- `ephemeral` (optional): Mark the target branch as ephemeral (stored in
+  separate namespace)
+- `ephemeral_base` (optional): Indicates the base branch is ephemeral (requires
+  `base_branch`)
 - `commit_message` (required): The commit message
 - `author` (required): Dictionary with `name` and `email`
-- `committer` (optional): Dictionary with `name` and `email` (defaults to author)
+- `committer` (optional): Dictionary with `name` and `email` (defaults to
+  author)
 
 ### Creating Commits from Diff Streams
 
-When you already have a unified diff, you can let the SDK apply it directly without building individual file operations:
+When you already have a unified diff, you can let the SDK apply it directly
+without building individual file operations:
 
 ```python
 diff_text = """\
@@ -291,13 +300,21 @@ result = await repo.create_commit_from_diff(
 print(result["commit_sha"])
 ```
 
-`diff` accepts the same source types as the commit builder (string, bytes, async iterator, etc.). The helper automatically streams the diff to the `/diff-commit` endpoint and returns a `CommitResult`. On conflicts or validation errors, it raises `RefUpdateError` with the server-provided status and message.
+`diff` accepts the same source types as the commit builder (string, bytes, async
+iterator, etc.). The helper automatically streams the diff to the `/diff-commit`
+endpoint and returns a `CommitResult`. On conflicts or validation errors, it
+raises `RefUpdateError` with the server-provided status and message.
 
-You can provide the same metadata options as `create_commit`, including `expected_head_sha`, `base_branch`, `ephemeral`, `ephemeral_base`, and `committer`.
+You can provide the same metadata options as `create_commit`, including
+`expected_head_sha`, `base_branch`, `ephemeral`, `ephemeral_base`, and
+`committer`.
 
-> Files are chunked into 4 MiB segments, allowing streaming of large assets without buffering in memory.
+> Files are chunked into 4 MiB segments, allowing streaming of large assets
+> without buffering in memory.
 
-> The `target_branch` must already exist on the remote repository. To seed an empty repository, omit `expected_head_sha`; the service will create the first commit only when no refs are present.
+> The `target_branch` must already exist on the remote repository. To seed an
+> empty repository, omit `expected_head_sha`; the service will create the first
+> commit only when no refs are present.
 
 **Branching Example:**
 
@@ -317,7 +334,9 @@ result = await (
 
 ### Ephemeral Branches
 
-Ephemeral branches are temporary branches that are stored in a separate namespace. They're useful for preview environments, temporary workspaces, or short-lived feature branches that don't need to be permanent.
+Ephemeral branches are temporary branches that are stored in a separate
+namespace. They're useful for preview environments, temporary workspaces, or
+short-lived feature branches that don't need to be permanent.
 
 **Creating an ephemeral branch:**
 
@@ -388,9 +407,12 @@ print(result["target_branch"])  # "feature/awesome-change"
 
 - Ephemeral branches are stored separately from regular branches
 - Use `ephemeral=True` when creating commits, reading files, or listing files
-- Use `ephemeral_base=True` when branching off another ephemeral branch (requires `base_branch`)
-- Promote an ephemeral branch with `repo.promote_ephemeral_branch()`; omit `target_branch` to keep the same name
-- Ephemeral branches are ideal for temporary previews, CI/CD environments, or experiments
+- Use `ephemeral_base=True` when branching off another ephemeral branch
+  (requires `base_branch`)
+- Promote an ephemeral branch with `repo.promote_ephemeral_branch()`; omit
+  `target_branch` to keep the same name
+- Ephemeral branches are ideal for temporary previews, CI/CD environments, or
+  experiments
 
 ### Streaming Large Files
 
@@ -440,9 +462,11 @@ commits = await repo.list_commits()
 
 **How it works:**
 
-1. When you create a repo with `base_repo`, Pierre links it to the specified GitHub repository
+1. When you create a repo with `base_repo`, Pierre links it to the specified
+   GitHub repository
 2. The `pull_upstream()` method fetches the latest changes from GitHub
-3. You can then use all Pierre SDK features (diffs, commits, file access) on the synced content
+3. You can then use all Pierre SDK features (diffs, commits, file access) on the
+   synced content
 4. The provider is automatically set to `"github"` when using `base_repo`
 
 ### Forking Repositories
@@ -688,17 +712,20 @@ else:
 
 ## Authentication
 
-The SDK uses JWT (JSON Web Tokens) for authentication. When you call `get_remote_url()`, it:
+The SDK uses JWT (JSON Web Tokens) for authentication. When you call
+`get_remote_url()`, it:
 
 1. Creates a JWT with your name, repository ID, and requested permissions
 2. Signs it with your private key (ES256, RS256, or EdDSA)
 3. Embeds it in the Git remote URL as the password
 
-The generated URLs are compatible with standard Git clients and include all necessary authentication.
+The generated URLs are compatible with standard Git clients and include all
+necessary authentication.
 
 ### Manual JWT Generation
 
-For advanced use cases, you can generate JWTs manually using the `generate_jwt` helper:
+For advanced use cases, you can generate JWTs manually using the `generate_jwt`
+helper:
 
 ```python
 from pierre_storage import generate_jwt
@@ -725,11 +752,13 @@ git_url = f"https://t:{token}@your-name.code.storage/your-repo-id.git"
 - `key_pem` (required): Private key in PEM format (PKCS8)
 - `issuer` (required): Token issuer (your customer name)
 - `repo_id` (required): Repository identifier
-- `scopes` (optional): List of permission scopes. Defaults to `["git:write", "git:read"]`
+- `scopes` (optional): List of permission scopes. Defaults to
+  `["git:write", "git:read"]`
   - Available scopes: `"git:read"`, `"git:write"`, `"repo:write"`
 - `ttl` (optional): Time-to-live in seconds. Defaults to 31536000 (1 year)
 
-The function automatically detects the key type (RSA, EC, or EdDSA) and uses the appropriate signing algorithm (RS256, ES256, or EdDSA).
+The function automatically detects the key type (RSA, EC, or EdDSA) and uses the
+appropriate signing algorithm (RS256, ES256, or EdDSA).
 
 ## Error Handling
 

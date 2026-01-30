@@ -24,7 +24,7 @@ const (
 // NewClient creates a Git storage client.
 func NewClient(options Options) (*Client, error) {
 	if strings.TrimSpace(options.Name) == "" || strings.TrimSpace(options.Key) == "" {
-		return nil, errors.New("GitStorage requires a name and key. Please check your configuration and try again.")
+		return nil, errors.New("git storage requires a name and key")
 	}
 
 	apiBaseURL := options.APIBaseURL
@@ -168,7 +168,7 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 409 {
-		return nil, errors.New("Repository already exists")
+		return nil, errors.New("repository already exists")
 	}
 
 	if resolvedDefaultBranch == "" {
@@ -281,10 +281,10 @@ func (c *Client) DeleteRepo(ctx context.Context, options DeleteRepoOptions) (Del
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return DeleteRepoResult{}, errors.New("Repository not found")
+		return DeleteRepoResult{}, errors.New("repository not found")
 	}
 	if resp.StatusCode == 409 {
-		return DeleteRepoResult{}, errors.New("Repository already deleted")
+		return DeleteRepoResult{}, errors.New("repository already deleted")
 	}
 
 	var payload struct {

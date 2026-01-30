@@ -96,7 +96,7 @@ func (f *apiFetcher) request(ctx context.Context, method string, path string, pa
 		}
 
 		if message == "" {
-			message = "Request " + method + " " + urlStr + " failed with status " + itoa(resp.StatusCode) + " " + resp.Status
+			message = "request " + method + " " + urlStr + " failed with status " + itoa(resp.StatusCode) + " " + resp.Status
 		}
 
 		return nil, &APIError{

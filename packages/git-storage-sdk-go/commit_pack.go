@@ -59,7 +59,7 @@ func buildCommitResult(ack commitPackAck) (CommitResult, error) {
 	if !ack.Result.Success {
 		message := ack.Result.Message
 		if strings.TrimSpace(message) == "" {
-			message = "Commit failed with status " + ack.Result.Status
+			message = "commit failed with status " + ack.Result.Status
 		}
 		return CommitResult{}, newRefUpdateError(message, ack.Result.Status, &refUpdate)
 	}

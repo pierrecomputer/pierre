@@ -13,13 +13,6 @@ func itoa(value int) string {
 	return strconv.Itoa(value)
 }
 
-func boolToString(value bool) string {
-	if value {
-		return "true"
-	}
-	return "false"
-}
-
 func decodeJSON(resp *http.Response, target interface{}) error {
 	decoder := json.NewDecoder(resp.Body)
 	return decoder.Decode(target)
@@ -180,7 +173,7 @@ func parseNoteWriteResponse(resp *http.Response, method string) (NoteWriteResult
 		}
 	}
 
-	fallback := "Request " + method + " " + resp.Request.URL.String() + " failed with status " + strconv.Itoa(resp.StatusCode) + " " + resp.Status
+	fallback := "request " + method + " " + resp.Request.URL.String() + " failed with status " + strconv.Itoa(resp.StatusCode) + " " + resp.Status
 	if len(rawBody) > 0 {
 		text := strings.TrimSpace(string(rawBody))
 		if text != "" {

@@ -1,6 +1,9 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/base64"
+	"io"
 	"net/url"
 	"strings"
 	"testing"
@@ -51,4 +54,35 @@ func parseJWTFromToken(t *testing.T, token string) jwt.MapClaims {
 		t.Fatalf("parse jwt: %v", err)
 	}
 	return claims
+}
+
+func readNDJSONLines(t *testing.T, body io.Reader) []string {
+	t.Helper()
+	data, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read ndjson body: %v", err)
+	}
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 {
+		return nil
+	}
+	parts := bytes.Split(data, []byte("\n"))
+	lines := make([]string, len(parts))
+	for i, part := range parts {
+		lines[i] = string(part)
+	}
+	return lines
+}
+
+func decodeBase64(t *testing.T, value string) []byte {
+	t.Helper()
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		t.Fatalf("decode base64: %v", err)
+	}
+	return decoded
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }

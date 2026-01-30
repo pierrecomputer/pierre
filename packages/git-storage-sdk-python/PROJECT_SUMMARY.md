@@ -2,9 +2,11 @@
 
 ## ✅ Completed - Version 0.4.2
 
-A fully-functional, production-ready Python SDK for Pierre Git Storage, mirroring the TypeScript SDK functionality.
+A fully-functional, production-ready Python SDK for Pierre Git Storage,
+mirroring the TypeScript SDK functionality.
 
 ### Latest Updates (v0.4.2)
+
 - ✅ One-shot diff commits via `create_commit_from_diff`
 - ✅ Shared commit option normalization across builder/diff flows
 - ✅ Expanded SDK documentation and quick-start examples
@@ -54,6 +56,7 @@ packages/git-storage-sdk-python/
 ## 🎯 Key Features
 
 ### Core Functionality
+
 - ✅ Repository creation and management
 - ✅ JWT-based authentication (ES256, RS256, EdDSA)
 - ✅ Public JWT helper for manual token generation
@@ -65,6 +68,7 @@ packages/git-storage-sdk-python/
 - ✅ Webhook signature validation
 
 ### Developer Experience
+
 - ✅ Full type hints throughout
 - ✅ Async/await API
 - ✅ Fluent commit builder API
@@ -91,6 +95,7 @@ moon run git-storage-sdk-python:test
 ```
 
 ### Test Results
+
 ```
 26 passed in 0.11s ✅
 Coverage: 45% overall
@@ -102,6 +107,7 @@ Coverage: 45% overall
 ## 📦 Dependencies
 
 ### Required (Runtime)
+
 - `httpx` - Async HTTP client with streaming
 - `pyjwt` - JWT encoding/decoding
 - `cryptography` - Key management
@@ -109,6 +115,7 @@ Coverage: 45% overall
 - `typing-extensions` - Type hint backports (Python 3.8-3.9)
 
 ### Development
+
 - `pytest` - Test framework
 - `pytest-asyncio` - Async test support
 - `pytest-cov` - Coverage reporting
@@ -237,21 +244,22 @@ Potential improvements (not required for v0.1.2):
 
 ## 🎓 Comparison with TypeScript SDK
 
-| Feature | TypeScript | Python | Status |
-|---------|-----------|--------|--------|
-| Repository operations | ✅ | ✅ | Complete |
-| JWT authentication | ✅ | ✅ | Complete |
-| Commit builder | ✅ | ✅ | Complete |
-| File streaming | ✅ | ✅ | Complete |
-| Webhook validation | ✅ | ✅ | Complete |
-| Error handling | ✅ | ✅ | Complete |
-| Type definitions | ✅ | ✅ | Complete |
-| Documentation | ✅ | ✅ | Complete |
-| Unit tests | ✅ | ✅ | Complete |
+| Feature               | TypeScript | Python | Status   |
+| --------------------- | ---------- | ------ | -------- |
+| Repository operations | ✅         | ✅     | Complete |
+| JWT authentication    | ✅         | ✅     | Complete |
+| Commit builder        | ✅         | ✅     | Complete |
+| File streaming        | ✅         | ✅     | Complete |
+| Webhook validation    | ✅         | ✅     | Complete |
+| Error handling        | ✅         | ✅     | Complete |
+| Type definitions      | ✅         | ✅     | Complete |
+| Documentation         | ✅         | ✅     | Complete |
+| Unit tests            | ✅         | ✅     | Complete |
 
 ## ✨ Ready for Use
 
 The Python SDK is **production-ready** and can be:
+
 - ✅ Published to PyPI
 - ✅ Used in production applications
 - ✅ Integrated into existing Python projects

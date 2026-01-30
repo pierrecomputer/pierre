@@ -209,7 +209,7 @@ func (b *CommitBuilder) Send(ctx context.Context) (CommitResult, error) {
 
 func (b *CommitBuilder) ensureNotSent() error {
 	if b.sent {
-		return errors.New("createCommit builder cannot be reused after send()")
+		return errors.New("createCommit builder cannot be reused after send")
 	}
 	return nil
 }
@@ -262,27 +262,26 @@ func buildCommitMetadata(options CommitOptions, ops []commitOperation) *commitMe
 
 func writeBlobChunks(encoder *json.Encoder, contentID string, reader io.Reader) error {
 	buf := make([]byte, maxChunkBytes)
-	emitted := false
+	var pending []byte
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 {
-			payload := blobChunkEnvelope{
-				BlobChunk: blobChunkPayload{
-					ContentID: contentID,
-					Data:      base64.StdEncoding.EncodeToString(buf[:n]),
-					EOF:       err == io.EOF,
-				},
+			if pending != nil {
+				payload := blobChunkEnvelope{
+					BlobChunk: blobChunkPayload{
+						ContentID: contentID,
+						Data:      base64.StdEncoding.EncodeToString(pending),
+						EOF:       false,
+					},
+				}
+				if err := encoder.Encode(payload); err != nil {
+					return err
+				}
 			}
-			emitted = true
-			if err := encoder.Encode(payload); err != nil {
-				return err
-			}
-			if err == io.EOF {
-				return nil
-			}
+			pending = append(pending[:0], buf[:n]...)
 		}
 		if err == io.EOF {
-			if !emitted {
+			if pending == nil {
 				payload := blobChunkEnvelope{
 					BlobChunk: blobChunkPayload{
 						ContentID: contentID,
@@ -292,7 +291,14 @@ func writeBlobChunks(encoder *json.Encoder, contentID string, reader io.Reader) 
 				}
 				return encoder.Encode(payload)
 			}
-			return nil
+			payload := blobChunkEnvelope{
+				BlobChunk: blobChunkPayload{
+					ContentID: contentID,
+					Data:      base64.StdEncoding.EncodeToString(pending),
+					EOF:       true,
+				},
+			}
+			return encoder.Encode(payload)
 		}
 		if err != nil {
 			return err
@@ -303,7 +309,7 @@ func writeBlobChunks(encoder *json.Encoder, contentID string, reader io.Reader) 
 func normalizePath(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return "", errors.New("File path must be a non-empty string")
+		return "", errors.New("file path must be a non-empty string")
 	}
 	return strings.TrimPrefix(path, "/"), nil
 }

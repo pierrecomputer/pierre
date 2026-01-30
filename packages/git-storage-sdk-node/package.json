@@ -1,40 +1,40 @@
 {
-	"name": "@pierre/storage",
-	"version": "0.9.3",
-	"description": "Pierre Git Storage SDK",
-	"license": "MIT",
-	"type": "module",
-	"main": "./dist/index.cjs",
-	"module": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js",
-			"require": "./dist/index.cjs",
-			"default": "./dist/index.js"
-		}
-	},
-	"files": [
-		"dist",
-		"src"
-	],
-	"scripts": {
-		"build": "tsup",
-		"dev": "tsup --watch",
-		"prepublishOnly": "pnpm build"
-	},
-	"dependencies": {
-		"jose": "^5.10.0",
-		"snakecase-keys": "^9.0.2",
-		"zod": "^3.23.8"
-	},
-	"devDependencies": {
-		"tsup": "8.5.0",
-		"typescript": "5.8.3",
-		"vitest": "3.2.4"
-	},
-	"publishConfig": {
-		"access": "public"
-	}
+  "name": "@pierre/storage",
+  "version": "0.9.3",
+  "description": "Pierre Git Storage SDK",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "jose": "^5.10.0",
+    "snakecase-keys": "^9.0.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsup": "8.5.0",
+    "typescript": "5.8.3",
+    "vitest": "3.2.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

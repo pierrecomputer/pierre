@@ -6,9 +6,10 @@ Pierre Git Storage SDK for TypeScript/JavaScript applications.
 
 - `node packages/git-storage-sdk/tests/full-workflow.js -e production -s pierre -k /home/ian/pierre-prod-key.pem`  
   Drives
-  the Pierre workflow via the SDK: creates a repository, writes commits, fetches branch and diff
-  data, and confirms storage APIs. Swap in your own private key path when running outside this
-  workstation and adjust `-e`/`-s` for non-production environments.
+  the Pierre workflow via the SDK: creates a repository, writes commits, fetches
+  branch and diff data, and confirms storage APIs. Swap in your own private key
+  path when running outside this workstation and adjust `-e`/`-s` for
+  non-production environments.
 
 ## Installation
 
@@ -99,8 +100,8 @@ const readOnlyUrl = await repo.getRemoteURL({
 
 #### Ephemeral Branches
 
-For working with ephemeral branches (temporary branches isolated from the main repository), use
-`getEphemeralRemote()`:
+For working with ephemeral branches (temporary branches isolated from the main
+repository), use `getEphemeralRemote()`:
 
 ```typescript
 // Get ephemeral namespace remote URL
@@ -109,7 +110,9 @@ const ephemeralUrl = await repo.getEphemeralRemoteURL();
 
 // Configure separate remotes for default and ephemeral branches
 console.log(`Run: git remote add origin ${await repo.getRemoteURL()}`);
-console.log(`Run: git remote add ephemeral ${await repo.getEphemeralRemoteURL()}`);
+console.log(
+  `Run: git remote add ephemeral ${await repo.getEphemeralRemoteURL()}`
+);
 
 // Push ephemeral branch
 // git push ephemeral feature-branch
@@ -224,10 +227,11 @@ console.log(result.refUpdate.oldSha); // All zeroes when the ref is created
 
 The builder exposes:
 
-- `addFile(path, source, options)` to attach bytes from strings, typed arrays, ArrayBuffers, `Blob`
-  or `File` objects, `ReadableStream`s, or iterable/async-iterable sources.
-- `addFileFromString(path, contents, options)` for text helpers (defaults to UTF-8 and accepts any
-  Node.js `BufferEncoding`).
+- `addFile(path, source, options)` to attach bytes from strings, typed arrays,
+  ArrayBuffers, `Blob` or `File` objects, `ReadableStream`s, or
+  iterable/async-iterable sources.
+- `addFileFromString(path, contents, options)` for text helpers (defaults to
+  UTF-8 and accepts any Node.js `BufferEncoding`).
 - `deletePath(path)` to remove files or folders.
 - `send()` to finalize the commit and receive metadata about the new commit.
 
@@ -248,39 +252,46 @@ type CommitResult = {
 };
 ```
 
-If the backend reports a failure (for example, the branch advanced past `expectedHeadSha`) the
-builder throws a `RefUpdateError` containing the status, reason, and ref details.
+If the backend reports a failure (for example, the branch advanced past
+`expectedHeadSha`) the builder throws a `RefUpdateError` containing the status,
+reason, and ref details.
 
 **Options**
 
-- `targetBranch` (required): Branch name (for example `main`) that will receive the commit.
-- `expectedHeadSha` (optional): Commit SHA that must match the remote tip; omit to fast-forward
-  unconditionally.
-- `baseBranch` (optional): Mirrors the `base_branch` metadata and names an existing branch whose tip
-  should seed `targetBranch` if it does not exist. Leave `expectedHeadSha` empty when creating a new
-  branch from `baseBranch`; when both are provided and the branch already exists, `expectedHeadSha`
+- `targetBranch` (required): Branch name (for example `main`) that will receive
+  the commit.
+- `expectedHeadSha` (optional): Commit SHA that must match the remote tip; omit
+  to fast-forward unconditionally.
+- `baseBranch` (optional): Mirrors the `base_branch` metadata and names an
+  existing branch whose tip should seed `targetBranch` if it does not exist.
+  Leave `expectedHeadSha` empty when creating a new branch from `baseBranch`;
+  when both are provided and the branch already exists, `expectedHeadSha`
   continues to enforce the fast-forward guard.
 - `commitMessage` (required): The commit message.
 - `author` (required): Include `name` and `email` for the commit author.
-- `committer` (optional): Include `name` and `email`. If omitted, the author identity is reused.
+- `committer` (optional): Include `name` and `email`. If omitted, the author
+  identity is reused.
 - `signal` (optional): Abort an in-flight upload with `AbortController`.
-- `targetRef` (deprecated, optional): Fully qualified ref (for example `refs/heads/main`). Prefer
-  `targetBranch`, which now accepts plain branch names.
+- `targetRef` (deprecated, optional): Fully qualified ref (for example
+  `refs/heads/main`). Prefer `targetBranch`, which now accepts plain branch
+  names.
 
-> Files are chunked into 4 MiB segments under the hood, so you can stream large assets without
-> buffering them entirely in memory. File paths are normalized relative to the repository root.
+> Files are chunked into 4 MiB segments under the hood, so you can stream large
+> assets without buffering them entirely in memory. File paths are normalized
+> relative to the repository root.
 
-> The `targetBranch` must already exist on the remote repository unless you provide `baseBranch` (or
-> the repository has no refs). To seed an empty repository, point to the default branch and omit
-> `expectedHeadSha`. To create a missing branch within an existing repository, set `baseBranch` to
-> the source branch and omit `expectedHeadSha` so the service clones that tip before applying your
-> changes.
+> The `targetBranch` must already exist on the remote repository unless you
+> provide `baseBranch` (or the repository has no refs). To seed an empty
+> repository, point to the default branch and omit `expectedHeadSha`. To create
+> a missing branch within an existing repository, set `baseBranch` to the source
+> branch and omit `expectedHeadSha` so the service clones that tip before
+> applying your changes.
 
 ### Apply a pre-generated diff
 
-If you already have a patch (for example, the output of `git diff --binary`) you can stream it to
-the gateway with a single call. The SDK handles chunking and NDJSON streaming just like it does for
-regular commits:
+If you already have a patch (for example, the output of `git diff --binary`) you
+can stream it to the gateway with a single call. The SDK handles chunking and
+NDJSON streaming just like it does for regular commits:
 
 ```ts
 const fs = await import('node:fs/promises');
@@ -299,15 +310,16 @@ console.log(diffResult.commitSha);
 console.log(diffResult.refUpdate.newSha);
 ```
 
-The `diff` field accepts a `string`, `Uint8Array`, `ArrayBuffer`, `Blob`, `File`, `ReadableStream`,
-iterable, or async iterable of byte chunks—the same sources supported by the standard commit
-builder. `createCommitFromDiff` returns a `Promise<CommitResult>` and throws a `RefUpdateError` when
-the server rejects the diff (for example, if the branch tip changed).
+The `diff` field accepts a `string`, `Uint8Array`, `ArrayBuffer`, `Blob`,
+`File`, `ReadableStream`, iterable, or async iterable of byte chunks—the same
+sources supported by the standard commit builder. `createCommitFromDiff` returns
+a `Promise<CommitResult>` and throws a `RefUpdateError` when the server rejects
+the diff (for example, if the branch tip changed).
 
 ### Streaming Large Files
 
-The commit builder accepts any async iterable of bytes, so you can stream large assets without
-buffering:
+The commit builder accepts any async iterable of bytes, so you can stream large
+assets without buffering:
 
 ```typescript
 import { createReadStream } from 'node:fs';
@@ -639,14 +651,15 @@ interface RestoreCommitResult {
 
 ## Authentication
 
-The SDK uses JWT (JSON Web Tokens) for authentication. When you call `getRemoteURL()`, it:
+The SDK uses JWT (JSON Web Tokens) for authentication. When you call
+`getRemoteURL()`, it:
 
 1. Creates a JWT with your name, repository ID, and requested permissions
 2. Signs it with your key
 3. Embeds it in the Git remote URL as the password
 
-The generated URLs are compatible with standard Git clients and include all necessary
-authentication.
+The generated URLs are compatible with standard Git clients and include all
+necessary authentication.
 
 ## Error Handling
 
@@ -667,9 +680,9 @@ try {
 -
 ```
 
-- Mutating operations (commit builder, `restoreCommit`) throw `RefUpdateError` when the backend
-  reports a ref failure. Inspect `error.status`, `error.reason`, `error.message`, and
-  `error.refUpdate` for details.
+- Mutating operations (commit builder, `restoreCommit`) throw `RefUpdateError`
+  when the backend reports a ref failure. Inspect `error.status`,
+  `error.reason`, `error.message`, and `error.refUpdate` for details.
 
 ## License
 

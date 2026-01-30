@@ -1,9 +1,9 @@
 {
-	"extends": "../../tsconfig.options.json",
-	"include": ["src/**/*", "tsup.config.ts", "package.json"],
-	"references": [],
-	"compilerOptions": {
-		"outDir": "../../.moon/cache/types/packages/git-storage-sdk",
-		"tsBuildInfoFile": "../../.moon/cache/types/packages/git-storage-sdk/.tsbuildinfo"
-	}
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*", "tsup.config.ts", "package.json"],
+  "references": [],
+  "compilerOptions": {
+    "outDir": "../../.moon/cache/types/packages/git-storage-sdk",
+    "tsBuildInfoFile": "../../.moon/cache/types/packages/git-storage-sdk/.tsbuildinfo"
+  }
 }
