@@ -181,7 +181,7 @@ const instance = new FileDiff({
   disableFileHeader: false,
 
   // Rethrow rendering errors instead of catching and displaying them
-  // in the DOM. Useful for testing or custom error handling. 
+  // in the DOM. Useful for testing or custom error handling.
   // (default: false)
   disableErrorHandling: false,
 
