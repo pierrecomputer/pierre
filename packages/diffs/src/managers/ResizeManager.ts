@@ -5,11 +5,19 @@ export class ResizeManager {
     HTMLElement,
     ObservedAnnotationNodes | ObservedGridNodes
   >();
+  private timeoutID: NodeJS.Timeout | undefined;
+  private queuedUpdates: Map<
+    HTMLElement,
+    [ObservedGridNodes, ResizeObserverSize]
+  > = new Map();
 
   cleanUp(): void {
     // Disconnect any existing observer
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
+    if (this.timeoutID != null) {
+      clearTimeout(this.timeoutID);
+    }
   }
 
   private resizeObserver: ResizeObserver | undefined;
@@ -193,46 +201,61 @@ export class ResizeManager {
         );
         this.applyNewHeight(item, newHeight);
       } else if (item.type === 'code') {
-        // FIXME(amadeus): This needs to be re-worked with display: contents,
-        // not sure setting to auto is a good assumption most of the time...
-        if (target === item.codeElement) {
-          const inlineSize = Math.max(Math.floor(specs.inlineSize), 0);
-          if (inlineSize !== item.codeWidth) {
-            item.codeWidth = inlineSize;
+        // We debounce code column updates to help with resize performance (mb)
+        this.queuedUpdates.set(target, [item, specs]);
+        this.queueColumnUpdate();
+      }
+    }
+  };
+
+  private queueColumnUpdate() {
+    if (this.timeoutID != null) {
+      clearTimeout(this.timeoutID);
+    }
+    // Attempt to debounce resize events to improve general performance... mb
+    this.timeoutID = setTimeout(this.handleColumnChange, 1000 / 30);
+  }
+
+  private handleColumnChange = () => {
+    this.timeoutID = undefined;
+    for (const [target, [item, specs]] of this.queuedUpdates) {
+      // FIXME(amadeus): This needs to be re-worked with display: contents,
+      // not sure setting to auto is a good assumption most of the time...
+      if (target === item.codeElement) {
+        const inlineSize = Math.max(Math.floor(specs.inlineSize), 0);
+        if (inlineSize !== item.codeWidth) {
+          item.codeWidth = inlineSize;
+          const targetWidth = Math.max(item.codeWidth - item.numberWidth, 0);
+          item.codeElement.style.setProperty(
+            '--diffs-column-content-width',
+            `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
+          );
+          item.codeElement.style.setProperty(
+            '--diffs-column-width',
+            `${item.codeWidth === 0 ? 'auto' : `${item.codeWidth}px`}`
+          );
+        }
+      } else if (target === item.numberElement) {
+        const inlineSize = Math.max(Math.ceil(specs.inlineSize), 0);
+        if (inlineSize !== item.numberWidth) {
+          item.numberWidth = inlineSize;
+          item.codeElement.style.setProperty(
+            '--diffs-column-number-width',
+            `${item.numberWidth === 0 ? 'auto' : `${item.numberWidth}px`}`
+          );
+          // We probably need to update code width variable if
+          // `numberWidth` changed
+          if (item.codeWidth !== 'auto') {
             const targetWidth = Math.max(item.codeWidth - item.numberWidth, 0);
             item.codeElement.style.setProperty(
               '--diffs-column-content-width',
               `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
             );
-            item.codeElement.style.setProperty(
-              '--diffs-column-width',
-              `${item.codeWidth === 0 ? 'auto' : `${item.codeWidth}px`}`
-            );
-          }
-        } else if (target === item.numberElement) {
-          const inlineSize = Math.max(Math.ceil(specs.inlineSize), 0);
-          if (inlineSize !== item.numberWidth) {
-            item.numberWidth = inlineSize;
-            item.codeElement.style.setProperty(
-              '--diffs-column-number-width',
-              `${item.numberWidth === 0 ? 'auto' : `${item.numberWidth}px`}`
-            );
-            // We probably need to update code width variable if
-            // `numberWidth` changed
-            if (item.codeWidth !== 'auto') {
-              const targetWidth = Math.max(
-                item.codeWidth - item.numberWidth,
-                0
-              );
-              item.codeElement.style.setProperty(
-                '--diffs-column-content-width',
-                `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
-              );
-            }
           }
         }
       }
     }
+    this.queuedUpdates.clear();
   };
 
   private applyNewHeight(item: ObservedAnnotationNodes, newHeight: number) {

@@ -134,17 +134,45 @@ export class SimpleVirtualizer {
   }
 
   private handleContainerResize = (entries: ResizeObserverEntry[]) => {
-    if (this.config.resizeDebugging) {
-      const currentSize = entries[0].borderBoxSize[0].blockSize;
-      console.log('handleContainerResize', {
-        change: currentSize - lastSize,
-        size: currentSize,
-      });
-      lastSize = currentSize;
+    if (this.root == null) return;
+    let shouldQueueUpdate = false;
+    for (const entry of entries) {
+      const blockSize = entry.borderBoxSize[0].blockSize;
+      if (this.root instanceof Document) {
+        if (blockSize !== this.scrollHeight) {
+          this.scrollHeightDirty = true;
+          shouldQueueUpdate = true;
+          if (this.config.resizeDebugging) {
+            console.log('handleContainerResize', {
+              change: blockSize - lastSize,
+              size: blockSize,
+            });
+            lastSize = blockSize;
+          }
+        }
+      } else {
+        if (entry.target === this.root) {
+          if (blockSize !== this.height) {
+            this.heightDirty = true;
+            shouldQueueUpdate = true;
+          }
+        } else if (entry.target === this.root.firstElementChild) {
+          this.scrollHeightDirty = true;
+          shouldQueueUpdate = true;
+          if (this.config.resizeDebugging) {
+            console.log('handleContainerResize', {
+              change: blockSize - lastSize,
+              size: blockSize,
+            });
+            lastSize = blockSize;
+          }
+        }
+      }
     }
-    this.heightDirty = true;
-    this.scrollHeightDirty = true;
-    queueRender(this.computeRenderRangeAndEmit);
+
+    if (shouldQueueUpdate) {
+      queueRender(this.computeRenderRangeAndEmit);
+    }
   };
 
   private setupWindow() {
@@ -167,6 +195,7 @@ export class SimpleVirtualizer {
     this.root.addEventListener('scroll', this.handleElementScroll, {
       passive: true,
     });
+    this.resizeObserver?.observe(this.root);
     contentContainer ??= this.root.firstElementChild ?? undefined;
     if (contentContainer != null) {
       this.resizeObserver?.observe(contentContainer);
@@ -220,8 +249,10 @@ export class SimpleVirtualizer {
   }
 
   private handleWindowResize = () => {
-    if (SimpleVirtualizer.__STOP) return;
-    this.markDOMDirty();
+    if (SimpleVirtualizer.__STOP || window.innerHeight === this.height) {
+      return;
+    }
+    this.heightDirty = true;
     queueRender(this.computeRenderRangeAndEmit);
   };
 
