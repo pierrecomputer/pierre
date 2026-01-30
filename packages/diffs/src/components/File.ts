@@ -1,7 +1,8 @@
-import type { Element as HASTElement } from 'hast';
+import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
@@ -46,7 +47,8 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
-const EMPTY_LINES: string[] = [];
+const EMPTY_LINES: ElementContent[] = [];
+const EMPTY_STRINGS: string[] = [];
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -109,6 +111,7 @@ export class File<LAnnotation = undefined> {
   protected errorWrapper: HTMLElement | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
+  protected lastRowCount: number | undefined;
 
   protected headerElement: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
@@ -236,6 +239,7 @@ export class File<LAnnotation = undefined> {
     this.bufferBefore = undefined;
     this.bufferAfter = undefined;
     this.appliedPreAttributes = undefined;
+    this.lastRowCount = undefined;
     this.headerElement = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
@@ -301,7 +305,7 @@ export class File<LAnnotation = undefined> {
   ): string[] {
     return file != null
       ? this.fileRenderer.getOrCreateLineCache(file)
-      : EMPTY_LINES;
+      : EMPTY_STRINGS;
   }
 
   render({
@@ -312,6 +316,9 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
+    // console.log('ZZZZZZ - render', { forceRender, ...renderRange });
+    const previousFile = this.file;
+    const previousRenderRange = this.renderRange;
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
@@ -362,7 +369,20 @@ export class File<LAnnotation = undefined> {
         this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
       }
       const pre = this.getOrCreatePreNode(fileContainer);
-      this.applyHunksToDOM(fileResult, pre);
+      const allowPartialUpdate =
+        !forceRender &&
+        !annotationsChanged &&
+        areFilesEqual(previousFile, file) &&
+        previousRenderRange != null &&
+        renderRange != null;
+      this.applyHunksToDOM(
+        fileResult,
+        pre,
+        previousRenderRange,
+        renderRange,
+        allowPartialUpdate,
+        annotationsChanged
+      );
       this.renderAnnotations();
       this.renderHoverUtility();
     } catch (error: unknown) {
@@ -462,22 +482,331 @@ export class File<LAnnotation = undefined> {
     this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
   }
 
-  private applyHunksToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
+  private applyHunksToDOM(
+    result: FileRenderResult,
+    pre: HTMLPreElement,
+    previousRenderRange: RenderRange | undefined,
+    renderRange: RenderRange | undefined,
+    allowPartialUpdate: boolean,
+    annotationsChanged: boolean
+  ): void {
     const { overflow = 'scroll' } = this.options;
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
-    // Create code elements and insert HTML content
-    this.code = getOrCreateCodeNode({ code: this.code });
-    this.code.innerHTML = this.fileRenderer.renderPartialHTML(
-      this.fileRenderer.renderCodeAST(result)
-    );
-    pre.replaceChildren(this.code);
+    const resolvedPreviousRange = previousRenderRange ?? DEFAULT_RENDER_RANGE;
+    const resolvedRenderRange = renderRange ?? DEFAULT_RENDER_RANGE;
+    const shouldAttemptPartialUpdate = allowPartialUpdate && this.code != null;
 
+    if (
+      !shouldAttemptPartialUpdate ||
+      !this.applyPartialUpdate(
+        result,
+        resolvedPreviousRange,
+        resolvedRenderRange,
+        annotationsChanged
+      )
+    ) {
+      // REVIEW: I tweaked this up a bit to have the if/else for the rendering
+      // and then call the same batch of functions afterwards... was this safe?
+      // RESPONSE: Yes. The setup calls are idempotent, and we still execute them
+      // after either path, matching prior behavior while avoiding duplication.
+      // this.injectUnsafeCSS();
+      // this.mouseEventManager.setup(pre);
+      // this.lineSelectionManager.setup(pre);
+      // this.resizeManager.setup(pre, overflow === 'wrap');
+      // return;
+      // Create code elements and insert HTML content
+      this.code = getOrCreateCodeNode({ code: this.code });
+      this.code.innerHTML = this.fileRenderer.renderPartialHTML(
+        this.fileRenderer.renderCodeAST(result)
+      );
+      pre.replaceChildren(this.code);
+      this.lastRowCount = result.rowCount;
+    }
     this.applyBuffers(pre, result);
     this.injectUnsafeCSS();
     this.mouseEventManager.setup(pre);
     this.lineSelectionManager.setup(pre);
     this.resizeManager.setup(pre, overflow === 'wrap');
+  }
+
+  private applyPartialUpdate(
+    result: FileRenderResult,
+    previousRenderRange: RenderRange,
+    renderRange: RenderRange,
+    annotationsChanged: boolean
+  ): boolean {
+    const { code } = this;
+    if (code == null) {
+      return false;
+    }
+    const columns = this.getColumns(code);
+    if (columns == null) {
+      return false;
+    }
+
+    const previousStart = previousRenderRange.startingLine;
+    const nextStart = renderRange.startingLine;
+    const previousEnd =
+      previousRenderRange.totalLines === Infinity
+        ? Number.POSITIVE_INFINITY
+        : previousStart + previousRenderRange.totalLines;
+    const nextEnd =
+      renderRange.totalLines === Infinity
+        ? Number.POSITIVE_INFINITY
+        : nextStart + renderRange.totalLines;
+
+    const overlapStart = Math.max(previousStart, nextStart);
+    const overlapEnd = Math.min(previousEnd, nextEnd);
+    if (overlapEnd <= overlapStart) {
+      return false;
+    }
+
+    if (annotationsChanged && this.mightIntersectAnnotation(columns.gutter)) {
+      return false;
+    }
+
+    if (
+      !this.trimDOMToOverlap(columns.gutter, overlapStart, overlapEnd) ||
+      !this.trimDOMToOverlap(columns.content, overlapStart, overlapEnd)
+    ) {
+      return false;
+    }
+
+    if (this.lastRowCount !== result.rowCount) {
+      columns.gutter.style.setProperty('grid-row', `span ${result.rowCount}`);
+      columns.content.style.setProperty('grid-row', `span ${result.rowCount}`);
+      this.lastRowCount = result.rowCount;
+    }
+
+    const gutterSegments = this.getASTSegments(
+      result.gutterAST,
+      nextStart,
+      overlapStart,
+      overlapEnd,
+      nextEnd
+    );
+    const contentSegments = this.getASTSegments(
+      result.contentAST,
+      nextStart,
+      overlapStart,
+      overlapEnd,
+      nextEnd
+    );
+
+    if (gutterSegments.prepend.length > 0) {
+      columns.gutter.insertAdjacentHTML(
+        'afterbegin',
+        this.fileRenderer.renderPartialHTML(gutterSegments.prepend)
+      );
+    }
+    if (contentSegments.prepend.length > 0) {
+      columns.content.insertAdjacentHTML(
+        'afterbegin',
+        this.fileRenderer.renderPartialHTML(contentSegments.prepend)
+      );
+    }
+
+    if (gutterSegments.append.length > 0) {
+      columns.gutter.insertAdjacentHTML(
+        'beforeend',
+        this.fileRenderer.renderPartialHTML(gutterSegments.append)
+      );
+    }
+    if (contentSegments.append.length > 0) {
+      columns.content.insertAdjacentHTML(
+        'beforeend',
+        this.fileRenderer.renderPartialHTML(contentSegments.append)
+      );
+    }
+
+    return true;
+  }
+
+  private mightIntersectAnnotation(container: HTMLElement): boolean {
+    const { children } = container;
+    for (let i = 0; i < children.length; i += 1) {
+      const child = children[i];
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      if (child.dataset.lineAnnotation != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private getColumns(
+    code: HTMLElement
+  ): { gutter: HTMLElement; content: HTMLElement } | null {
+    const gutter = code.children[0];
+    const content = code.children[1];
+    if (
+      !(gutter instanceof HTMLElement) ||
+      !(content instanceof HTMLElement) ||
+      gutter.dataset.gutter == null ||
+      content.dataset.content == null
+    ) {
+      return null;
+    }
+    return { gutter, content };
+  }
+
+  private trimDOMToOverlap(
+    container: HTMLElement,
+    overlapStart: number,
+    overlapEnd: number
+  ): boolean {
+    const boundaryIndices = this.getDOMBoundaryIndices(container, [
+      overlapStart,
+      overlapEnd,
+    ]);
+    const startIndex =
+      boundaryIndices.get(overlapStart) ?? container.children.length;
+    const endIndex =
+      boundaryIndices.get(overlapEnd) ?? container.children.length;
+
+    if (startIndex > endIndex) {
+      return false;
+    }
+
+    for (let i = container.children.length - 1; i >= endIndex; i -= 1) {
+      container.children[i]?.remove();
+    }
+    for (let i = startIndex - 1; i >= 0; i -= 1) {
+      container.children[i]?.remove();
+    }
+    return true;
+  }
+
+  private getASTSegments(
+    ast: ElementContent[],
+    start: number,
+    overlapStart: number,
+    overlapEnd: number,
+    end: number
+  ): { prepend: ElementContent[]; append: ElementContent[] } {
+    const boundaryIndices = this.getASTBoundaryIndices(ast, [
+      start,
+      overlapStart,
+      overlapEnd,
+      end,
+    ]);
+    const startIndex = boundaryIndices.get(start) ?? ast.length;
+    const overlapStartIndex = boundaryIndices.get(overlapStart) ?? ast.length;
+    const overlapEndIndex = boundaryIndices.get(overlapEnd) ?? ast.length;
+    const endIndex = boundaryIndices.get(end) ?? ast.length;
+
+    return {
+      prepend:
+        startIndex < overlapStartIndex
+          ? ast.slice(startIndex, overlapStartIndex)
+          : EMPTY_LINES,
+      append:
+        overlapEndIndex < endIndex
+          ? ast.slice(overlapEndIndex, endIndex)
+          : EMPTY_LINES,
+    };
+  }
+
+  private getASTBoundaryIndices(
+    ast: ElementContent[],
+    boundaries: number[]
+  ): Map<number, number> {
+    const sortedBoundaries = [...new Set(boundaries)].sort((a, b) => a - b);
+    const boundaryIndices = new Map<number, number>();
+    if (sortedBoundaries.length === 0) {
+      return boundaryIndices;
+    }
+    let boundaryIndex = 0;
+    let nextBoundary = sortedBoundaries[boundaryIndex];
+
+    for (let i = 0; i < ast.length; i += 1) {
+      const lineIndex = this.getLineIndexFromASTNode(ast[i]);
+      if (lineIndex == null) {
+        continue;
+      }
+      while (nextBoundary != null && lineIndex >= nextBoundary) {
+        boundaryIndices.set(nextBoundary, i);
+        boundaryIndex += 1;
+        nextBoundary = sortedBoundaries[boundaryIndex];
+      }
+      if (boundaryIndex >= sortedBoundaries.length) {
+        break;
+      }
+    }
+
+    for (const boundary of sortedBoundaries) {
+      if (!boundaryIndices.has(boundary)) {
+        boundaryIndices.set(boundary, ast.length);
+      }
+    }
+    return boundaryIndices;
+  }
+
+  private getDOMBoundaryIndices(
+    container: HTMLElement,
+    boundaries: number[]
+  ): Map<number, number> {
+    const sortedBoundaries = [...new Set(boundaries)].sort((a, b) => a - b);
+    const boundaryIndices = new Map<number, number>();
+    if (sortedBoundaries.length === 0) {
+      return boundaryIndices;
+    }
+    let boundaryIndex = 0;
+    let nextBoundary = sortedBoundaries[boundaryIndex];
+    const { children } = container;
+
+    for (let i = 0; i < children.length; i += 1) {
+      const child = children[i];
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      const lineIndex = this.getLineIndexFromDOMNode(child);
+      if (lineIndex == null) {
+        continue;
+      }
+      while (nextBoundary != null && lineIndex >= nextBoundary) {
+        boundaryIndices.set(nextBoundary, i);
+        boundaryIndex += 1;
+        nextBoundary = sortedBoundaries[boundaryIndex];
+      }
+      if (boundaryIndex >= sortedBoundaries.length) {
+        break;
+      }
+    }
+
+    for (const boundary of sortedBoundaries) {
+      if (!boundaryIndices.has(boundary)) {
+        boundaryIndices.set(boundary, children.length);
+      }
+    }
+    return boundaryIndices;
+  }
+
+  private getLineIndexFromASTNode(node: ElementContent): number | undefined {
+    if (node.type !== 'element') {
+      return undefined;
+    }
+    const lineIndex = node.properties?.['data-line-index'];
+    if (typeof lineIndex === 'number') {
+      return lineIndex;
+    }
+    if (typeof lineIndex === 'string') {
+      const parsed = Number(lineIndex);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    }
+    return undefined;
+  }
+
+  private getLineIndexFromDOMNode(node: HTMLElement): number | undefined {
+    const lineIndexAttr = node.dataset.lineIndex;
+    if (lineIndexAttr == null) {
+      return undefined;
+    }
+    const parsed = Number(lineIndexAttr);
+    return Number.isNaN(parsed) ? undefined : parsed;
   }
 
   private applyBuffers(pre: HTMLPreElement, result: FileRenderResult) {

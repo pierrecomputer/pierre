@@ -303,7 +303,7 @@ export class SimpleVirtualizedFile<
     );
     const totalLines =
       Math.ceil(estimatedTargetLines / hunkLineCount) * hunkLineCount +
-      hunkLineCount;
+      hunkLineCount * 2;
     const totalHunks = totalLines / hunkLineCount;
     const viewportCenter = (top + bottom) / 2;
 

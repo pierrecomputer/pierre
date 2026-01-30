@@ -17,7 +17,9 @@ interface ScrollAnchor {
   lineOffset: number | undefined;
 }
 
-const DEFAULT_OVERSCROLL_SIZE = 500;
+// 800 seems like the healthy overscan required to
+// keep safari from blanking... if we catch it tho, maybe 900
+const DEFAULT_OVERSCROLL_SIZE = 1000;
 const INTERSECTION_OBSERVER_MARGIN = DEFAULT_OVERSCROLL_SIZE * 4;
 const INTERSECTION_OBSERVER_THRESHOLD = [0, 0.000001, 0.99999, 1];
 
@@ -30,7 +32,7 @@ export interface SimpleVirtualizerConfig {
 const DEFAULT_SIMPLE_VIRTUALIZER_CONFIG: SimpleVirtualizerConfig = {
   overscrollSize: DEFAULT_OVERSCROLL_SIZE,
   intersectionObserverMargin: INTERSECTION_OBSERVER_MARGIN,
-  resizeDebugging: false,
+  resizeDebugging: true,
 };
 
 let lastSize = 0;
