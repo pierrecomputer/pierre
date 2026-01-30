@@ -64,6 +64,7 @@ export interface FileOptions<LAnnotation>
     LineSelectionOptions {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
+  disableErrorHandling?: boolean;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
@@ -296,7 +297,8 @@ export class File<LAnnotation = undefined> {
     }
     this.fileRenderer.setLineAnnotations(this.lineAnnotations);
 
-    const { disableFileHeader = false } = this.options;
+    const { disableFileHeader = false, disableErrorHandling = false } =
+      this.options;
     if (disableFileHeader) {
       // Remove existing header from DOM
       if (this.headerElement != null) {
@@ -327,8 +329,11 @@ export class File<LAnnotation = undefined> {
       this.renderAnnotations();
       this.renderHoverUtility();
     } catch (error: unknown) {
+      if (disableErrorHandling) {
+        throw error;
+      }
+      console.error(error);
       if (error instanceof Error) {
-        console.error(error);
         this.applyErrorToDOM(error, fileContainer);
       }
     }
