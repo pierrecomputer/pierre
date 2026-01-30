@@ -1,0 +1,91 @@
+type: library
+language: python
+project:
+  name: git-storage-sdk-python
+  description: Pierre Git Storage SDK for Python
+
+tasks:
+  setup:
+    command: bash scripts/setup.sh
+    options:
+      cache: false
+    outputs:
+      - venv/
+
+  test:
+    command: ./venv/bin/pytest -v
+    deps:
+      - ~:setup
+    inputs:
+      - pierre_storage/**/*.py
+      - tests/**/*.py
+      - pyproject.toml
+
+  test-coverage:
+    command: ./venv/bin/pytest --cov=pierre_storage --cov-report=term-missing --cov-report=html
+    deps:
+      - ~:setup
+    inputs:
+      - pierre_storage/**/*.py
+      - tests/**/*.py
+
+  typecheck:
+    command: ./venv/bin/mypy pierre_storage
+    deps:
+      - ~:setup
+    inputs:
+      - pierre_storage/**/*.py
+
+  lint:
+    command: ./venv/bin/ruff check pierre_storage
+    deps:
+      - ~:setup
+    inputs:
+      - pierre_storage/**/*.py
+
+  format:
+    command: ./venv/bin/ruff format --check pierre_storage
+    deps:
+      - ~:setup
+    inputs:
+      - pierre_storage/**/*.py
+
+  format-write:
+    command: ./venv/bin/ruff format pierre_storage
+    deps:
+      - ~:setup
+    inputs:
+      - pierre_storage/**/*.py
+
+  build:
+    command: bash -c "PYTHONWARNINGS=ignore ./venv/bin/python -m build"
+    deps:
+      - ~:setup
+    inputs:
+      - pierre_storage/**/*.py
+      - pyproject.toml
+    outputs:
+      - dist/
+
+  check-package:
+    command: ./venv/bin/twine check dist/*
+    deps:
+      - ~:build
+    inputs:
+      - dist/*
+
+  publish-test:
+    command: ./venv/bin/twine upload --repository testpypi dist/*
+    deps:
+      - ~:check-package
+
+  publish:
+    command: ./venv/bin/twine upload dist/*
+    deps:
+      - ~:check-package
+
+  clean:
+    command: rm -rf venv/ dist/ build/ *.egg-info htmlcov/ .coverage .pytest_cache/ .mypy_cache/ .ruff_cache/
+    options:
+      cache: false
+      shell: true

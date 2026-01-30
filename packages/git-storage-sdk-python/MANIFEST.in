@@ -1,0 +1,5 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include pierre_storage *.py
+recursive-include pierre_storage py.typed

@@ -1,0 +1,14 @@
+type: library
+language: go
+
+project:
+  name: git-storage-sdk-go
+  description: Pierre Git Storage SDK for Go
+
+tasks:
+  test:
+    command: go test ./...
+    inputs:
+      - "**/*.go"
+      - go.mod
+      - go.sum

@@ -1,0 +1,44 @@
+type: 'library'
+language: 'typescript'
+
+project:
+  name: 'git-storage-sdk-node'
+  description: 'Pierre Git Storage SDK for external npm publishing'
+
+fileGroups:
+  sourceInputs:
+    - 'src/**/*'
+  configInputs:
+    - 'tsup.config.ts'
+    - 'tsconfig.json'
+    - 'tsconfig.*.json'
+  outputs:
+    - 'dist/**/*'
+
+tasks:
+  build:
+    command:
+      - 'tsup'
+    inputs:
+      - '@globs(configInputs)'
+      - '@globs(sourceInputs)'
+    outputs:
+      - '@globs(outputs)'
+    options:
+      runInCI: true
+      cache: true
+      mergeArgs: replace
+      mergeInputs: replace
+      mergeOutputs: replace
+
+  dev:
+    command:
+      - 'tsup'
+      - '--watch'
+    inputs:
+      - '@globs(configInputs)'
+      - '@globs(sourceInputs)'
+    options:
+      cache: false
+      persistent: true
+      runInCI: false
