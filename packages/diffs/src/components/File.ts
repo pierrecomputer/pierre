@@ -64,6 +64,11 @@ export interface FileOptions<LAnnotation>
     LineSelectionOptions {
   disableFileHeader?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
+  /**
+   * When true, errors during rendering are rethrown instead of being caught
+   * and displayed in the DOM. Useful for testing or when you want to handle
+   * errors yourself.
+   */
   disableErrorHandling?: boolean;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>

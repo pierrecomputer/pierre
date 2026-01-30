@@ -180,6 +180,11 @@ const instance = new FileDiff({
   // Hide the file header with filename and stats
   disableFileHeader: false,
 
+  // Rethrow rendering errors instead of catching and displaying them
+  // in the DOM. Useful for testing or custom error handling. 
+  // (default: false)
+  disableErrorHandling: false,
+
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
@@ -334,6 +339,11 @@ const instance = new File({
 
   // Hide the file header with filename
   disableFileHeader: false,
+
+  // Rethrow rendering errors instead of catching and displaying them
+  // in the DOM. Useful for testing or custom error handling. 
+  // (default: false)
+  disableErrorHandling: false,
 
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,

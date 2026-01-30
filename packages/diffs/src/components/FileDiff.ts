@@ -85,6 +85,11 @@ export interface FileDiffOptions<LAnnotation>
       ) => HTMLElement | DocumentFragment);
   disableFileHeader?: boolean;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
+  /**
+   * When true, errors during rendering are rethrown instead of being caught
+   * and displayed in the DOM. Useful for testing or when you want to handle
+   * errors yourself.
+   */
   disableErrorHandling?: boolean;
   renderAnnotation?(
     annotation: DiffLineAnnotation<LAnnotation>
