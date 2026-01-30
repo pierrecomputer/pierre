@@ -449,17 +449,12 @@
 
   [data-gutter] {
     display: grid;
-    content: contents;
     grid-template-rows: subgrid;
     grid-template-columns: subgrid;
     grid-column: 1;
     z-index: 3;
     position: relative;
     border-right: var(--diffs-gap-style, 2px solid var(--diffs-bg));
-    min-width: var(
-      --diffs-min-number-column-width,
-      var(--diffs-min-number-column-width-default, 3ch)
-    );
     background-color: var(--diffs-bg);
   }
 
@@ -1128,6 +1123,14 @@
     background-color: var(--diffs-bg);
     color: var(--diffs-fg-number);
     padding-left: 2ch;
+  }
+
+  [data-line-number-content] {
+    display: inline-block;
+    min-width: var(
+      --diffs-min-number-column-width,
+      var(--diffs-min-number-column-width-default, 3ch)
+    );
   }
 
   [data-disable-line-numbers] {

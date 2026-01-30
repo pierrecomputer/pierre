@@ -552,10 +552,14 @@ if (renderFileButton != null) {
     if (wrapper == null) return;
     cleanupInstances(wrapper);
 
+    const wrap =
+      wrapCheckbox instanceof HTMLInputElement ? wrapCheckbox.checked : false;
+
     virtualizer?.setup(globalThis.document);
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     const options: FileOptions<LineCommentMetadata> = {
+      overflow: wrap ? 'wrap' : 'scroll',
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       themeType: getThemeType(),
       renderAnnotation,

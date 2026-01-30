@@ -145,10 +145,10 @@ code {
 }
 
 .wrapper {
-  display: grid;
+  /* display: grid; */
+  /* grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); */
   min-width: 0;
   min-height: 0;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   overflow-anchor: none;
   background-color: light-dark(white, black);
 }
