@@ -1,8 +1,7 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
+import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
-  DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
@@ -47,7 +46,6 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
-const EMPTY_LINES: ElementContent[] = [];
 const EMPTY_STRINGS: string[] = [];
 
 export interface FileRenderProps<LAnnotation> {
@@ -91,6 +89,11 @@ export interface FileOptions<LAnnotation>
 interface AnnotationElementCache<LAnnotation> {
   element: HTMLElement;
   annotation: LineAnnotation<LAnnotation>;
+}
+
+interface ColumnElements {
+  gutter: HTMLElement;
+  content: HTMLElement;
 }
 
 let instanceId = -1;
@@ -316,7 +319,6 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    // console.log('ZZZZZZ - render', { forceRender, ...renderRange });
     const previousFile = this.file;
     const previousRenderRange = this.renderRange;
     const annotationsChanged =
@@ -341,8 +343,11 @@ export class File<LAnnotation = undefined> {
     }
     this.fileRenderer.setLineAnnotations(this.lineAnnotations);
 
-    const { disableFileHeader = false, disableErrorHandling = false } =
-      this.options;
+    const {
+      disableErrorHandling = false,
+      disableFileHeader = false,
+      overflow = 'scroll',
+    } = this.options;
     if (disableFileHeader) {
       // Remove existing header from DOM
       if (this.headerElement != null) {
@@ -358,31 +363,39 @@ export class File<LAnnotation = undefined> {
     );
 
     try {
-      const fileResult = this.fileRenderer.renderFile(file, renderRange);
-      if (fileResult == null) {
-        if (this.workerManager != null && !this.workerManager.isInitialized()) {
-          void this.workerManager.initialize().then(() => this.rerender());
-        }
-        return false;
-      }
-      if (fileResult.headerAST != null) {
-        this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
-      }
       const pre = this.getOrCreatePreNode(fileContainer);
-      const allowPartialUpdate =
+      const attemptPartialRender =
         !forceRender &&
         !annotationsChanged &&
         areFilesEqual(previousFile, file) &&
         previousRenderRange != null &&
         renderRange != null;
-      this.applyHunksToDOM(
-        fileResult,
-        pre,
-        previousRenderRange,
-        renderRange,
-        allowPartialUpdate,
-        annotationsChanged
-      );
+      if (
+        !attemptPartialRender ||
+        !this.applyPartialRender(
+          previousRenderRange,
+          renderRange,
+          annotationsChanged
+        )
+      ) {
+        const fileResult = this.fileRenderer.renderFile(file, renderRange);
+        if (fileResult == null) {
+          if (this.workerManager?.isInitialized() === false) {
+            void this.workerManager.initialize().then(() => this.rerender());
+          }
+          return false;
+        }
+        if (fileResult.headerAST != null) {
+          this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
+        }
+        this.applyFullRender(fileResult, pre);
+      }
+
+      this.applyBuffers(pre, renderRange);
+      this.injectUnsafeCSS();
+      this.mouseEventManager.setup(pre);
+      this.lineSelectionManager.setup(pre);
+      this.resizeManager.setup(pre, overflow === 'wrap');
       this.renderAnnotations();
       this.renderHoverUtility();
     } catch (error: unknown) {
@@ -482,66 +495,25 @@ export class File<LAnnotation = undefined> {
     this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
   }
 
-  private applyHunksToDOM(
-    result: FileRenderResult,
-    pre: HTMLPreElement,
-    previousRenderRange: RenderRange | undefined,
-    renderRange: RenderRange | undefined,
-    allowPartialUpdate: boolean,
-    annotationsChanged: boolean
-  ): void {
-    const { overflow = 'scroll' } = this.options;
+  private applyFullRender(result: FileRenderResult, pre: HTMLPreElement): void {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
-    const resolvedPreviousRange = previousRenderRange ?? DEFAULT_RENDER_RANGE;
-    const resolvedRenderRange = renderRange ?? DEFAULT_RENDER_RANGE;
-    const shouldAttemptPartialUpdate = allowPartialUpdate && this.code != null;
-
-    if (
-      !shouldAttemptPartialUpdate ||
-      !this.applyPartialUpdate(
-        result,
-        resolvedPreviousRange,
-        resolvedRenderRange,
-        annotationsChanged
-      )
-    ) {
-      // REVIEW: I tweaked this up a bit to have the if/else for the rendering
-      // and then call the same batch of functions afterwards... was this safe?
-      // RESPONSE: Yes. The setup calls are idempotent, and we still execute them
-      // after either path, matching prior behavior while avoiding duplication.
-      // this.injectUnsafeCSS();
-      // this.mouseEventManager.setup(pre);
-      // this.lineSelectionManager.setup(pre);
-      // this.resizeManager.setup(pre, overflow === 'wrap');
-      // return;
-      // Create code elements and insert HTML content
-      this.code = getOrCreateCodeNode({ code: this.code });
-      this.code.innerHTML = this.fileRenderer.renderPartialHTML(
-        this.fileRenderer.renderCodeAST(result)
-      );
-      pre.replaceChildren(this.code);
-      this.lastRowCount = result.rowCount;
-    }
-    this.applyBuffers(pre, result);
-    this.injectUnsafeCSS();
-    this.mouseEventManager.setup(pre);
-    this.lineSelectionManager.setup(pre);
-    this.resizeManager.setup(pre, overflow === 'wrap');
+    this.code = getOrCreateCodeNode({ code: this.code });
+    this.code.innerHTML = this.fileRenderer.renderPartialHTML(
+      this.fileRenderer.renderCodeAST(result)
+    );
+    pre.replaceChildren(this.code);
+    this.lastRowCount = result.rowCount;
   }
 
-  private applyPartialUpdate(
-    result: FileRenderResult,
+  private applyPartialRender(
     previousRenderRange: RenderRange,
     renderRange: RenderRange,
     annotationsChanged: boolean
   ): boolean {
-    const { code } = this;
-    if (code == null) {
-      return false;
-    }
-    const columns = this.getColumns(code);
-    if (columns == null) {
+    const { file, code } = this;
+    const columns = code != null ? this.getColumns(code) : undefined;
+    if (file == null || code == null || columns == null) {
       return false;
     }
 
@@ -573,51 +545,72 @@ export class File<LAnnotation = undefined> {
       return false;
     }
 
-    if (this.lastRowCount !== result.rowCount) {
-      columns.gutter.style.setProperty('grid-row', `span ${result.rowCount}`);
-      columns.content.style.setProperty('grid-row', `span ${result.rowCount}`);
-      this.lastRowCount = result.rowCount;
+    let { length: rowCount } = columns.content.children;
+
+    const renderChunk = (
+      startingLine: number,
+      totalLines: number
+    ): FileRenderResult | undefined => {
+      if (totalLines <= 0) {
+        return undefined;
+      }
+      return this.fileRenderer.renderFile(file, {
+        startingLine,
+        totalLines,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+    };
+
+    const prependResult =
+      nextStart < overlapStart
+        ? renderChunk(nextStart, overlapStart - nextStart)
+        : undefined;
+    if (prependResult === undefined && nextStart < overlapStart) {
+      return false;
     }
 
-    const gutterSegments = this.getASTSegments(
-      result.gutterAST,
-      nextStart,
-      overlapStart,
-      overlapEnd,
-      nextEnd
-    );
-    const contentSegments = this.getASTSegments(
-      result.contentAST,
-      nextStart,
-      overlapStart,
-      overlapEnd,
-      nextEnd
-    );
+    const appendTotalLines =
+      nextEnd === Number.POSITIVE_INFINITY
+        ? Number.POSITIVE_INFINITY
+        : Math.max(0, nextEnd - overlapEnd);
+    const appendResult =
+      nextEnd > overlapEnd
+        ? renderChunk(overlapEnd, appendTotalLines)
+        : undefined;
+    if (appendResult === undefined && nextEnd > overlapEnd) {
+      return false;
+    }
 
-    if (gutterSegments.prepend.length > 0) {
+    this.cleanupErrorWrapper();
+    if (prependResult != null) {
       columns.gutter.insertAdjacentHTML(
         'afterbegin',
-        this.fileRenderer.renderPartialHTML(gutterSegments.prepend)
+        this.fileRenderer.renderPartialHTML(prependResult.gutterAST)
       );
-    }
-    if (contentSegments.prepend.length > 0) {
       columns.content.insertAdjacentHTML(
         'afterbegin',
-        this.fileRenderer.renderPartialHTML(contentSegments.prepend)
+        this.fileRenderer.renderPartialHTML(prependResult.contentAST)
       );
+      rowCount += prependResult.rowCount;
     }
 
-    if (gutterSegments.append.length > 0) {
+    if (appendResult != null) {
       columns.gutter.insertAdjacentHTML(
         'beforeend',
-        this.fileRenderer.renderPartialHTML(gutterSegments.append)
+        this.fileRenderer.renderPartialHTML(appendResult.gutterAST)
       );
-    }
-    if (contentSegments.append.length > 0) {
       columns.content.insertAdjacentHTML(
         'beforeend',
-        this.fileRenderer.renderPartialHTML(contentSegments.append)
+        this.fileRenderer.renderPartialHTML(appendResult.contentAST)
       );
+      rowCount += appendResult.rowCount;
+    }
+
+    if (this.lastRowCount !== rowCount) {
+      columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
+      columns.content.style.setProperty('grid-row', `span ${rowCount}`);
+      this.lastRowCount = rowCount;
     }
 
     return true;
@@ -637,9 +630,7 @@ export class File<LAnnotation = undefined> {
     return false;
   }
 
-  private getColumns(
-    code: HTMLElement
-  ): { gutter: HTMLElement; content: HTMLElement } | null {
+  private getColumns(code: HTMLElement): ColumnElements | undefined {
     const gutter = code.children[0];
     const content = code.children[1];
     if (
@@ -648,7 +639,7 @@ export class File<LAnnotation = undefined> {
       gutter.dataset.gutter == null ||
       content.dataset.content == null
     ) {
-      return null;
+      return undefined;
     }
     return { gutter, content };
   }
@@ -678,71 +669,6 @@ export class File<LAnnotation = undefined> {
       container.children[i]?.remove();
     }
     return true;
-  }
-
-  private getASTSegments(
-    ast: ElementContent[],
-    start: number,
-    overlapStart: number,
-    overlapEnd: number,
-    end: number
-  ): { prepend: ElementContent[]; append: ElementContent[] } {
-    const boundaryIndices = this.getASTBoundaryIndices(ast, [
-      start,
-      overlapStart,
-      overlapEnd,
-      end,
-    ]);
-    const startIndex = boundaryIndices.get(start) ?? ast.length;
-    const overlapStartIndex = boundaryIndices.get(overlapStart) ?? ast.length;
-    const overlapEndIndex = boundaryIndices.get(overlapEnd) ?? ast.length;
-    const endIndex = boundaryIndices.get(end) ?? ast.length;
-
-    return {
-      prepend:
-        startIndex < overlapStartIndex
-          ? ast.slice(startIndex, overlapStartIndex)
-          : EMPTY_LINES,
-      append:
-        overlapEndIndex < endIndex
-          ? ast.slice(overlapEndIndex, endIndex)
-          : EMPTY_LINES,
-    };
-  }
-
-  private getASTBoundaryIndices(
-    ast: ElementContent[],
-    boundaries: number[]
-  ): Map<number, number> {
-    const sortedBoundaries = [...new Set(boundaries)].sort((a, b) => a - b);
-    const boundaryIndices = new Map<number, number>();
-    if (sortedBoundaries.length === 0) {
-      return boundaryIndices;
-    }
-    let boundaryIndex = 0;
-    let nextBoundary = sortedBoundaries[boundaryIndex];
-
-    for (let i = 0; i < ast.length; i += 1) {
-      const lineIndex = this.getLineIndexFromASTNode(ast[i]);
-      if (lineIndex == null) {
-        continue;
-      }
-      while (nextBoundary != null && lineIndex >= nextBoundary) {
-        boundaryIndices.set(nextBoundary, i);
-        boundaryIndex += 1;
-        nextBoundary = sortedBoundaries[boundaryIndex];
-      }
-      if (boundaryIndex >= sortedBoundaries.length) {
-        break;
-      }
-    }
-
-    for (const boundary of sortedBoundaries) {
-      if (!boundaryIndices.has(boundary)) {
-        boundaryIndices.set(boundary, ast.length);
-      }
-    }
-    return boundaryIndices;
   }
 
   private getDOMBoundaryIndices(
@@ -785,21 +711,6 @@ export class File<LAnnotation = undefined> {
     return boundaryIndices;
   }
 
-  private getLineIndexFromASTNode(node: ElementContent): number | undefined {
-    if (node.type !== 'element') {
-      return undefined;
-    }
-    const lineIndex = node.properties?.['data-line-index'];
-    if (typeof lineIndex === 'number') {
-      return lineIndex;
-    }
-    if (typeof lineIndex === 'string') {
-      const parsed = Number(lineIndex);
-      return Number.isNaN(parsed) ? undefined : parsed;
-    }
-    return undefined;
-  }
-
   private getLineIndexFromDOMNode(node: HTMLElement): number | undefined {
     const lineIndexAttr = node.dataset.lineIndex;
     if (lineIndexAttr == null) {
@@ -809,9 +720,12 @@ export class File<LAnnotation = undefined> {
     return Number.isNaN(parsed) ? undefined : parsed;
   }
 
-  private applyBuffers(pre: HTMLPreElement, result: FileRenderResult) {
+  private applyBuffers(
+    pre: HTMLPreElement,
+    renderRange: RenderRange | undefined
+  ) {
     const { disableVirtualizationBuffers = false } = this.options;
-    if (disableVirtualizationBuffers) {
+    if (disableVirtualizationBuffers || renderRange == null) {
       if (this.bufferBefore != null) {
         this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
         this.bufferBefore = undefined;
@@ -823,28 +737,32 @@ export class File<LAnnotation = undefined> {
       return;
     }
 
-    if (result.bufferBefore > 0) {
+    if (renderRange.bufferBefore > 0) {
       if (this.bufferBefore == null) {
         this.bufferBefore = document.createElement('div');
         this.bufferBefore.dataset.virtualizerBuffer = 'before';
-        this.bufferBefore.style = result.themeStyles;
         pre.before(this.bufferBefore);
       }
-      this.bufferBefore.style.setProperty('height', `${result.bufferBefore}px`);
+      this.bufferBefore.style.setProperty(
+        'height',
+        `${renderRange.bufferBefore}px`
+      );
       this.bufferBefore.style.setProperty('contain', 'strict');
     } else if (this.bufferBefore != null) {
       this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
       this.bufferBefore = undefined;
     }
 
-    if (result.bufferAfter > 0) {
+    if (renderRange.bufferAfter > 0) {
       if (this.bufferAfter == null) {
         this.bufferAfter = document.createElement('div');
         this.bufferAfter.dataset.virtualizerBuffer = 'after';
-        this.bufferAfter.style = result.themeStyles;
         pre.after(this.bufferAfter);
       }
-      this.bufferAfter.style.setProperty('height', `${result.bufferAfter}px`);
+      this.bufferAfter.style.setProperty(
+        'height',
+        `${renderRange.bufferAfter}px`
+      );
       this.bufferAfter.style.setProperty('contain', 'strict');
     } else if (this.bufferAfter != null) {
       this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
