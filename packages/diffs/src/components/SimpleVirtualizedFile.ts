@@ -215,10 +215,17 @@ export class SimpleVirtualizedFile<
   }
 
   public setVisibility(visible: boolean): void {
-    if (this.fileContainer != null && visible) {
+    if (this.fileContainer == null) {
+      return;
+    }
+    if (visible && !this.isVisible) {
       this.top = this.virtualizer.getOffsetInScrollContainer(
         this.fileContainer
       );
+      this.isVisible = true;
+    } else if (!visible && this.isVisible) {
+      this.isVisible = false;
+      this.rerender();
     }
   }
 
@@ -248,6 +255,10 @@ export class SimpleVirtualizedFile<
         this.top,
         this.height
       );
+    }
+
+    if (!this.isVisible) {
+      return this.renderPlaceholder(this.height);
     }
 
     const windowSpecs = this.virtualizer.getWindowSpecs();

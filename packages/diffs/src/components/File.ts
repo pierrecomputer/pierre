@@ -112,6 +112,7 @@ export class File<LAnnotation = undefined> {
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected hoverContent: HTMLElement | undefined;
   protected errorWrapper: HTMLElement | undefined;
+  protected placeHolder: HTMLElement | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRowCount: number | undefined;
@@ -247,6 +248,7 @@ export class File<LAnnotation = undefined> {
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
+    this.placeHolder = undefined;
   }
 
   hydrate(props: FileHyrdateProps<LAnnotation>): void {
@@ -408,6 +410,53 @@ export class File<LAnnotation = undefined> {
       }
     }
     return true;
+  }
+
+  public renderPlaceholder(height: number): boolean {
+    if (this.fileContainer == null) {
+      return false;
+    }
+    this.cleanChildNodes();
+
+    if (this.placeHolder == null) {
+      const shadowRoot =
+        this.fileContainer.shadowRoot ??
+        this.fileContainer.attachShadow({ mode: 'open' });
+      this.placeHolder = document.createElement('div');
+      this.placeHolder.dataset.placeholder = '';
+      shadowRoot.appendChild(this.placeHolder);
+    }
+    this.placeHolder.style.setProperty('height', `${height}px`);
+    return true;
+  }
+
+  private cleanChildNodes() {
+    this.resizeManager.cleanUp();
+    this.mouseEventManager.cleanUp();
+    this.lineSelectionManager.cleanUp();
+
+    this.bufferAfter?.remove();
+    this.bufferBefore?.remove();
+    this.code?.remove();
+    this.errorWrapper?.remove();
+    this.headerElement?.remove();
+    this.hoverContent?.remove();
+    this.pre?.remove();
+    this.spriteSVG?.remove();
+    this.unsafeCSSStyle?.remove();
+
+    this.bufferAfter = undefined;
+    this.bufferBefore = undefined;
+    this.code = undefined;
+    this.errorWrapper = undefined;
+    this.headerElement = undefined;
+    this.hoverContent = undefined;
+    this.pre = undefined;
+    this.spriteSVG = undefined;
+    this.unsafeCSSStyle = undefined;
+
+    this.lastRenderedHeaderHTML = undefined;
+    this.lastRowCount = undefined;
   }
 
   private renderAnnotations(): void {
@@ -777,6 +826,8 @@ export class File<LAnnotation = undefined> {
     const { file } = this;
     if (file == null) return;
     this.cleanupErrorWrapper();
+    this.placeHolder?.remove();
+    this.placeHolder = undefined;
     const headerHTML = toHtml(headerAST);
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');
@@ -857,6 +908,10 @@ export class File<LAnnotation = undefined> {
       container.shadowRoot?.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
     }
+
+    this.placeHolder?.remove();
+    this.placeHolder = undefined;
+
     return this.pre;
   }
 

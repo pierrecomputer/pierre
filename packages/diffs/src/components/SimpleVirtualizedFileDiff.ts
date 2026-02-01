@@ -186,8 +186,6 @@ export class SimpleVirtualizedFileDiff<
     // this.rerender();
   }
 
-  // FIXME(amadeus): Probably implement a much bigger visibility interface to
-  // completely render nothing but a single div if not visible
   public setVisibility(visible: boolean): void {
     if (this.fileContainer == null) {
       return;
