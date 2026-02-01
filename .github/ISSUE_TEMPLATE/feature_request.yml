@@ -10,12 +10,12 @@ body:
       options:
         - label:
             I have
-            [searched](https://github.com/pierre-computer/diffs/issues?q=is%3Aissue)
+            [searched](https://github.com/pierrecomputer/pierre/issues?q=is%3Aissue)
             for duplicate or closed feature requests
           required: true
         - label:
             I have read the [contributing
-            guidelines](https://github.com/pierre-computer/diffs/blob/main/CONTRIBUTING.md)
+            guidelines](https://github.com/pierrecomputer/pierre/blob/main/.github/CONTRIBUTING.md)
           required: true
   - type: textarea
     id: proposal
