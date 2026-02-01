@@ -118,7 +118,7 @@ export interface HunksRenderResult {
   totalLines: number;
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
-  rowCount: number | undefined;
+  rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
 }

@@ -1,4 +1,4 @@
-import type { Element as HASTElement } from 'hast';
+import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -112,6 +112,28 @@ interface CustomHunkElementCache {
   hunkData: HunkData;
 }
 
+interface ColumnElements {
+  gutter: HTMLElement;
+  content: HTMLElement;
+}
+
+interface TrimColumnsToOverlapProps {
+  columns:
+    | [ColumnElements | undefined, ColumnElements | undefined]
+    | ColumnElements;
+  diffStyle: 'split' | 'unified';
+  overlapEnd: number;
+  overlapStart: number;
+  previousStart: number;
+  trimEnd: number;
+  trimStart: number;
+}
+
+interface ApplyPartialRenderProps {
+  previousRenderRange: RenderRange | undefined;
+  renderRange: RenderRange | undefined;
+}
+
 let instanceId = -1;
 
 export class FileDiff<LAnnotation = undefined> {
@@ -154,6 +176,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected renderRange: RenderRange | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
+  protected lastRowCount: number | undefined;
 
   protected enabled = true;
 
@@ -266,6 +289,22 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
+  private canPartiallyRender(
+    forceRender: boolean,
+    annotationsChanged: boolean,
+    didContentChange: boolean
+  ): boolean {
+    if (
+      forceRender ||
+      annotationsChanged ||
+      didContentChange ||
+      typeof this.options.hunkSeparators === 'function'
+    ) {
+      return false;
+    }
+    return true;
+  }
+
   setSelectedLines(range: SelectedLineRange | null): void {
     this.lineSelectionManager.setSelection(range);
   }
@@ -302,6 +341,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
+    this.lastRowCount = undefined;
 
     if (recycle) {
       this.hunksRenderer.recycle();
@@ -438,7 +478,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.rerender();
   }
 
-  render({
+  public render({
     oldFile,
     newFile,
     fileDiff,
@@ -460,11 +500,13 @@ export class FileDiff<LAnnotation = undefined> {
       newFile != null &&
       (!areFilesEqual(oldFile, this.deletionFile) ||
         !areFilesEqual(newFile, this.additionFile));
+    let diffDidChange = fileDiff != null && fileDiff !== this.fileDiff;
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
+
     if (
       areRenderRangesEqual(renderRange, this.renderRange) &&
       !forceRender &&
@@ -479,12 +521,15 @@ export class FileDiff<LAnnotation = undefined> {
       return false;
     }
 
+    const { renderRange: previousRenderRange } = this;
     this.renderRange = renderRange;
     this.deletionFile = oldFile;
     this.additionFile = newFile;
+
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
     } else if (oldFile != null && newFile != null && filesDidChange) {
+      diffDidChange = true;
       this.fileDiff = parseDiffFromFile(oldFile, newFile);
     }
 
@@ -504,8 +549,12 @@ export class FileDiff<LAnnotation = undefined> {
 
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
-    const { disableFileHeader = false, disableErrorHandling = false } =
-      this.options;
+    const {
+      diffStyle = 'split',
+      disableErrorHandling = false,
+      disableFileHeader = false,
+      overflow = 'scroll',
+    } = this.options;
 
     if (disableFileHeader) {
       // Remove existing header from DOM
@@ -521,30 +570,63 @@ export class FileDiff<LAnnotation = undefined> {
     );
 
     try {
-      const hunksResult = this.hunksRenderer.renderDiff(
-        this.fileDiff,
-        renderRange
-      );
-      if (hunksResult == null) {
-        if (this.workerManager != null && !this.workerManager.isInitialized()) {
-          void this.workerManager.initialize().then(() => this.rerender());
+      const pre = this.getOrCreatePreNode(fileContainer);
+
+      // Attempt to partially render
+      const didPartiallyRender =
+        this.canPartiallyRender(
+          forceRender,
+          annotationsChanged,
+          filesDidChange || diffDidChange
+        ) && this.applyPartialRender({ previousRenderRange, renderRange });
+
+      // If we were unable to partially render, perform a full render
+      if (!didPartiallyRender) {
+        const hunksResult = this.hunksRenderer.renderDiff(
+          this.fileDiff,
+          renderRange
+        );
+        if (hunksResult == null) {
+          // FIXME(amadeus): I don't think we actually need this check, as
+          // DiffHunksRenderer should probably take care of it for us?
+          if (this.workerManager?.isInitialized() === false) {
+            void this.workerManager.initialize().then(() => this.rerender());
+          }
+          return false;
         }
-        return false;
+
+        if (hunksResult.headerElement != null) {
+          this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
+        }
+        if (
+          hunksResult.additionsAST != null ||
+          hunksResult.deletionsAST != null ||
+          hunksResult.unifiedAST != null
+        ) {
+          this.applyHunksToDOM(pre, hunksResult);
+        } else if (this.pre != null) {
+          this.pre.parentNode?.removeChild(this.pre);
+          this.pre = undefined;
+        }
+        this.renderSeparators(hunksResult.hunkData);
       }
 
-      if (hunksResult.headerElement != null) {
-        this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
-      }
-      if (
-        hunksResult.additionsAST != null ||
-        hunksResult.deletionsAST != null ||
-        hunksResult.unifiedAST != null
-      ) {
-        const pre = this.getOrCreatePreNode(fileContainer);
-        this.applyHunksToDOM(pre, hunksResult);
-      } else if (this.pre != null) {
-        this.pre.parentNode?.removeChild(this.pre);
-        this.pre = undefined;
+      this.applyBuffers(pre, renderRange);
+      this.injectUnsafeCSS();
+      this.renderAnnotations();
+      this.renderHoverUtility();
+
+      this.mouseEventManager.setup(pre);
+      this.lineSelectionManager.setup(pre);
+      this.resizeManager.setup(pre, overflow === 'wrap');
+      if (overflow === 'scroll' && diffStyle === 'split') {
+        this.scrollSyncManager.setup(
+          pre,
+          this.codeDeletions,
+          this.codeAdditions
+        );
+      } else {
+        this.scrollSyncManager.cleanUp();
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -607,6 +689,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.unsafeCSSStyle = undefined;
 
     this.lastRenderedHeaderHTML = undefined;
+    this.lastRowCount = undefined;
   }
 
   private renderSeparators(hunkData: HunkData[]): void {
@@ -854,7 +937,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     result: HunksRenderResult
   ): void {
-    const { overflow = 'scroll', diffStyle = 'split' } = this.options;
+    const { overflow = 'scroll' } = this.options;
     const rowSpan = overflow === 'wrap' ? result.rowCount : undefined;
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
@@ -928,26 +1011,537 @@ export class FileDiff<LAnnotation = undefined> {
       pre.replaceChildren(...codeElements);
     }
 
-    this.applyBuffers(pre, result);
-    this.injectUnsafeCSS();
-    this.renderSeparators(result.hunkData);
-    this.renderAnnotations();
-    this.renderHoverUtility();
+    this.lastRowCount = result.rowCount;
+  }
 
-    this.mouseEventManager.setup(pre);
-    this.lineSelectionManager.setup(pre);
-    this.resizeManager.setup(pre, overflow === 'wrap');
+  private applyPartialRender({
+    previousRenderRange,
+    renderRange,
+  }: ApplyPartialRenderProps): boolean {
+    const {
+      pre,
+      codeUnified,
+      codeAdditions,
+      codeDeletions,
+      options: { diffStyle = 'split' },
+    } = this;
+    if (
+      pre == null ||
+      // We must have a current and previous render range to do a partial render
+      previousRenderRange == null ||
+      renderRange == null ||
+      // Neither render range may be infinite
+      !Number.isFinite(previousRenderRange.totalLines) ||
+      !Number.isFinite(renderRange.totalLines) ||
+      this.lastRowCount == null
+    ) {
+      return false;
+    }
+    const codeElements = this.getCodeColumns(
+      diffStyle,
+      codeUnified,
+      codeDeletions,
+      codeAdditions
+    );
+    if (codeElements == null) {
+      return false;
+    }
 
-    if (overflow === 'scroll' && diffStyle === 'split') {
-      this.scrollSyncManager.setup(pre, codeDeletions, codeAdditions);
+    const previousStart = previousRenderRange.startingLine;
+    const nextStart = renderRange.startingLine;
+    const previousEnd = previousStart + previousRenderRange.totalLines;
+    const nextEnd = nextStart + renderRange.totalLines;
+
+    const overlapStart = Math.max(previousStart, nextStart);
+    const overlapEnd = Math.min(previousEnd, nextEnd);
+    if (overlapEnd <= overlapStart) {
+      return false;
+    }
+
+    const trimStart = Math.max(0, overlapStart - previousStart);
+    const trimEnd = Math.max(0, previousEnd - overlapEnd);
+
+    const trimResult = this.trimColumns({
+      columns: codeElements,
+      trimStart,
+      trimEnd,
+      previousStart,
+      overlapStart,
+      overlapEnd,
+      diffStyle,
+    });
+    if (trimResult < 0) {
+      throw new Error('applyPartialRender: failed to trim to overlap');
+    }
+
+    if (this.lastRowCount < trimResult) {
+      throw new Error('applyPartialRender: trimmed beyond DOM row count');
+    }
+
+    let rowCount = this.lastRowCount - trimResult;
+    const renderChunk = (
+      startingLine: number,
+      totalLines: number
+    ): HunksRenderResult | undefined => {
+      if (totalLines <= 0 || this.fileDiff == null) {
+        return undefined;
+      }
+      return this.hunksRenderer.renderDiff(this.fileDiff, {
+        startingLine,
+        totalLines,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+    };
+
+    const prependResult = renderChunk(
+      nextStart,
+      Math.max(overlapStart - nextStart, 0)
+    );
+    if (prependResult == null && nextStart < overlapStart) {
+      return false;
+    }
+
+    const appendResult = renderChunk(
+      overlapEnd,
+      Math.max(nextEnd - overlapEnd, 0)
+    );
+    if (appendResult == null && nextEnd > overlapEnd) {
+      return false;
+    }
+
+    const applyChunk = (
+      result: HunksRenderResult | undefined,
+      insertPosition: 'afterbegin' | 'beforeend'
+    ) => {
+      if (result == null) {
+        return;
+      }
+      if (diffStyle === 'unified' && !Array.isArray(codeElements)) {
+        this.insertPartialHTML(diffStyle, codeElements, result, insertPosition);
+      } else if (diffStyle === 'split' && Array.isArray(codeElements)) {
+        this.insertPartialHTML(diffStyle, codeElements, result, insertPosition);
+      } else {
+        throw new Error('u done fuked up, again');
+      }
+      rowCount += result.rowCount;
+    };
+
+    this.cleanupErrorWrapper();
+    applyChunk(prependResult, 'afterbegin');
+    applyChunk(appendResult, 'beforeend');
+
+    if (this.lastRowCount !== rowCount) {
+      this.applyRowSpan(diffStyle, codeElements, rowCount);
+      this.lastRowCount = rowCount;
+    }
+
+    return true;
+  }
+
+  private insertPartialHTML(
+    diffStyle: 'unified',
+    columns: ColumnElements,
+    result: HunksRenderResult,
+    insertPosition: 'afterbegin' | 'beforeend'
+  ): void;
+  private insertPartialHTML(
+    diffStyle: 'split',
+    columns: [ColumnElements | undefined, ColumnElements | undefined],
+    result: HunksRenderResult,
+    insertPosition: 'afterbegin' | 'beforeend'
+  ): void;
+  private insertPartialHTML(
+    diffStyle: 'split' | 'unified',
+    columns:
+      | [ColumnElements | undefined, ColumnElements | undefined]
+      | ColumnElements,
+    result: HunksRenderResult,
+    insertPosition: 'afterbegin' | 'beforeend'
+  ): void {
+    const getElementChildren = (
+      node: ElementContent | undefined
+    ): ElementContent[] | undefined => {
+      if (node == null || node.type !== 'element') {
+        return undefined;
+      }
+      return node.children ?? [];
+    };
+    // FIXME(amadeus): Need to figure out how to re-implement this...
+    // const mergeEdgeBuffers = (
+    //   container: HTMLElement,
+    //   children: ElementContent[],
+    //   position: 'afterbegin' | 'beforeend'
+    // ) => {
+    //   if (children.length === 0) {
+    //     return;
+    //   }
+    //   const edgeIndex = position === 'afterbegin' ? 0 : children.length - 1;
+    //   const edgeChild = children[edgeIndex];
+    //   if (edgeChild?.type !== 'element') {
+    //     return;
+    //   }
+    //   const bufferSize = this.getBufferSize(
+    //     edgeChild.properties as Record<string, string | number | undefined>
+    //   );
+    //   if (bufferSize == null) {
+    //     return;
+    //   }
+    //   const existing =
+    //     position === 'afterbegin'
+    //       ? container.firstElementChild
+    //       : container.lastElementChild;
+    //   if (!(existing instanceof HTMLElement)) {
+    //     return;
+    //   }
+    //   const existingSize = this.getBufferSize(existing.dataset);
+    //   if (existingSize == null) {
+    //     return;
+    //   }
+    //   this.updateBufferSize(existing, existingSize + bufferSize);
+    //   children.splice(edgeIndex, 1);
+    // };
+    const renderColumn = (
+      column: ColumnElements | undefined,
+      ast: ElementContent[] | undefined
+    ) => {
+      if (column == null || ast == null || ast.length < 2) {
+        return;
+      }
+      const [gutterAST, contentAST] = ast;
+      const gutterChildren = getElementChildren(gutterAST);
+      const contentChildren = getElementChildren(contentAST);
+      if (gutterChildren == null || contentChildren == null) {
+        return;
+      }
+      column.gutter.insertAdjacentHTML(
+        insertPosition,
+        this.hunksRenderer.renderPartialHTML(gutterChildren)
+      );
+      column.content.insertAdjacentHTML(
+        insertPosition,
+        this.hunksRenderer.renderPartialHTML(contentChildren)
+      );
+    };
+
+    if (diffStyle === 'unified' && !Array.isArray(columns)) {
+      renderColumn(columns, result.unifiedAST);
+    } else if (diffStyle === 'split' && Array.isArray(columns)) {
+      renderColumn(columns[0], result.deletionsAST);
+      renderColumn(columns[1], result.additionsAST);
     } else {
-      this.scrollSyncManager.cleanUp();
+      throw new Error('u dun fukd up again');
     }
   }
 
-  private applyBuffers(pre: HTMLPreElement, result: HunksRenderResult) {
+  private applyRowSpan(
+    diffStyle: 'split' | 'unified',
+    columns:
+      | [ColumnElements | undefined, ColumnElements | undefined]
+      | ColumnElements,
+    rowCount: number
+  ): void {
+    const applySpan = (column: ColumnElements | undefined) => {
+      if (column == null) {
+        return;
+      }
+      column.gutter.style.setProperty('grid-row', `span ${rowCount}`);
+      column.content.style.setProperty('grid-row', `span ${rowCount}`);
+    };
+    if (diffStyle === 'unified' && !Array.isArray(columns)) {
+      applySpan(columns);
+    } else if (diffStyle === 'split' && Array.isArray(columns)) {
+      applySpan(columns[0]);
+      applySpan(columns[1]);
+    } else {
+      throw new Error('dun fuuuuked up');
+    }
+  }
+
+  trimColumnRows(
+    columns: ColumnElements | undefined,
+    preTrimCount: number,
+    postTrimStart: number
+  ): number {
+    let visibleLineIndex = 0;
+    let rowCount = 0;
+    let rowIndex = 0;
+    let pendingMetadataTrim = false;
+    const hasPostTrim = postTrimStart >= 0;
+
+    if (columns == null) {
+      return 0;
+    }
+    const contentChildren = Array.from(columns.content.children);
+    const gutterChildren = Array.from(columns.gutter.children);
+    if (contentChildren.length !== gutterChildren.length) {
+      throw new Error('FileDiff.trimColumnRows: columns do not match');
+    }
+
+    while (rowIndex < contentChildren.length) {
+      if (preTrimCount <= 0 && !hasPostTrim && !pendingMetadataTrim) {
+        break;
+      }
+      const gutterElement = gutterChildren[rowIndex];
+      const contentElement = contentChildren[rowIndex];
+      rowIndex++;
+
+      if (
+        !(gutterElement instanceof HTMLElement) ||
+        !(contentElement instanceof HTMLElement)
+      ) {
+        console.error({ gutterElement, contentElement });
+        throw new Error('FileDiff.trimColumnRows: invalid row elements');
+      }
+
+      if (pendingMetadataTrim) {
+        pendingMetadataTrim = false;
+        if (
+          (gutterElement.dataset.gutterBuffer === 'annotation' &&
+            'lineAnnotation' in contentElement.dataset) ||
+          (gutterElement.dataset.gutterBuffer === 'metadata' &&
+            'noNewline' in contentElement.dataset)
+        ) {
+          gutterElement.remove();
+          contentElement.remove();
+          rowCount++;
+          continue;
+        }
+      }
+
+      // If we found a line element, lets trim it if necessary
+      if (
+        'lineIndex' in gutterElement.dataset &&
+        'lineIndex' in contentElement.dataset
+      ) {
+        if (
+          preTrimCount > 0 ||
+          (hasPostTrim && visibleLineIndex >= postTrimStart)
+        ) {
+          gutterElement.remove();
+          contentElement.remove();
+          if (preTrimCount > 0) {
+            preTrimCount--;
+            if (preTrimCount === 0) {
+              pendingMetadataTrim = true;
+            }
+          }
+          rowCount++;
+        }
+        visibleLineIndex++;
+        continue;
+      }
+
+      // Separators should be removed, but don't count towards line indices
+      if (
+        'separator' in gutterElement.dataset &&
+        'separator' in contentElement.dataset
+      ) {
+        if (
+          preTrimCount > 0 ||
+          (hasPostTrim && visibleLineIndex >= postTrimStart)
+        ) {
+          gutterElement.remove();
+          contentElement.remove();
+          rowCount++;
+        }
+        continue;
+      }
+
+      // Annotations should be removed, but don't count towards line indices
+      if (
+        gutterElement.dataset.gutterBuffer === 'annotation' &&
+        'lineAnnotation' in contentElement.dataset
+      ) {
+        if (
+          preTrimCount > 0 ||
+          (hasPostTrim && visibleLineIndex >= postTrimStart)
+        ) {
+          gutterElement.remove();
+          contentElement.remove();
+          rowCount++;
+        }
+        continue;
+      }
+
+      if (
+        gutterElement.dataset.gutterBuffer === 'metadata' &&
+        'noNewline' in contentElement.dataset
+      ) {
+        if (
+          preTrimCount > 0 ||
+          (hasPostTrim && visibleLineIndex >= postTrimStart)
+        ) {
+          gutterElement.remove();
+          contentElement.remove();
+          rowCount++;
+        }
+        continue;
+      }
+
+      if (
+        gutterElement.dataset.gutterBuffer === 'buffer' &&
+        'contentBuffer' in contentElement.dataset
+      ) {
+        const totalRows = this.getBufferSize(contentElement.dataset);
+        if (totalRows == null) {
+          throw new Error('u fuked up');
+        }
+        if (preTrimCount > 0) {
+          const rowsToRemove = Math.min(preTrimCount, totalRows);
+          const newSize = totalRows - rowsToRemove;
+          if (newSize > 0) {
+            this.updateBufferSize(gutterElement, newSize);
+            this.updateBufferSize(contentElement, newSize);
+            rowCount += rowsToRemove;
+          } else {
+            gutterElement.remove();
+            contentElement.remove();
+            rowCount += totalRows;
+          }
+          preTrimCount -= rowsToRemove;
+        }
+        // If we are in a post clip era...
+        else if (hasPostTrim) {
+          const bufferStart = visibleLineIndex;
+          const bufferEnd = visibleLineIndex + totalRows - 1;
+          if (postTrimStart <= bufferStart) {
+            gutterElement.remove();
+            contentElement.remove();
+            rowCount += totalRows;
+          } else if (postTrimStart <= bufferEnd) {
+            const rowsToRemove = bufferEnd - postTrimStart + 1;
+            const newSize = totalRows - rowsToRemove;
+            this.updateBufferSize(gutterElement, newSize);
+            this.updateBufferSize(contentElement, newSize);
+            rowCount += rowsToRemove;
+          }
+        }
+        visibleLineIndex += totalRows;
+        continue;
+      }
+
+      console.error({ gutterElement, contentElement });
+      throw new Error('FileDiff.trimColumnRows: unknown row elements');
+    }
+
+    return rowCount;
+  }
+
+  // NOTE(amadeus): If we return -1 it means something went
+  // wrong with the trim...
+  private trimColumns({
+    columns,
+    diffStyle,
+    overlapEnd,
+    overlapStart,
+    previousStart,
+    trimEnd,
+    trimStart,
+  }: TrimColumnsToOverlapProps): number | -1 {
+    const preTrimCount = Math.max(0, overlapStart - previousStart);
+    const postTrimStart = overlapEnd - previousStart;
+    if (postTrimStart < 0) {
+      throw new Error('FileDiff.trimColumns: overlap ends before previous');
+    }
+    const shouldTrimStart = trimStart > 0;
+    const shouldTrimEnd = trimEnd > 0;
+    if (!shouldTrimStart && !shouldTrimEnd) {
+      return 0;
+    }
+    const effectivePreTrimCount = shouldTrimStart ? preTrimCount : 0;
+    const effectivePostTrimStart = shouldTrimEnd ? postTrimStart : -1;
+
+    if (diffStyle === 'unified' && !Array.isArray(columns)) {
+      const removedRows = this.trimColumnRows(
+        columns,
+        effectivePreTrimCount,
+        effectivePostTrimStart
+      );
+      return removedRows;
+    } else if (diffStyle === 'split' && Array.isArray(columns)) {
+      const deletionsTrim = this.trimColumnRows(
+        columns[0],
+        effectivePreTrimCount,
+        effectivePostTrimStart
+      );
+      const additionsTrim = this.trimColumnRows(
+        columns[1],
+        effectivePreTrimCount,
+        effectivePostTrimStart
+      );
+      // We should avoid the trim validation if we are split but
+      // there's only one side
+      if (
+        columns[0] != null &&
+        columns[1] != null &&
+        deletionsTrim !== additionsTrim
+      ) {
+        throw new Error('FileDiff.trimColumns: split columns out of sync');
+      }
+      return columns[0] != null ? deletionsTrim : additionsTrim;
+    } else {
+      console.error({ diffStyle, columns });
+      throw new Error('FileDiff.trimColumns: Invalid columns for diffType');
+    }
+  }
+
+  private getBufferSize(properties: DOMStringMap): number | undefined {
+    const parsed = Number.parseInt(properties?.bufferSize ?? '', 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  private updateBufferSize(element: HTMLElement, size: number): void {
+    element.dataset.bufferSize = `${size}`;
+    element.style.setProperty('grid-row', `span ${size}`);
+    element.style.setProperty('min-height', `calc(${size} * 1lh)`);
+  }
+
+  private getCodeColumns(
+    diffStyle: 'split' | 'unified',
+    codeUnified: HTMLElement | undefined,
+    codeDeletions: HTMLElement | undefined,
+    codeAdditions: HTMLElement | undefined
+  ):
+    | [ColumnElements | undefined, ColumnElements | undefined]
+    | ColumnElements
+    | undefined {
+    function getColumns(
+      code: HTMLElement | undefined
+    ): ColumnElements | undefined {
+      if (code == null) {
+        return undefined;
+      }
+      const gutter = code.children[0];
+      const content = code.children[1];
+      if (
+        !(gutter instanceof HTMLElement) ||
+        !(content instanceof HTMLElement) ||
+        gutter.dataset.gutter == null ||
+        content.dataset.content == null
+      ) {
+        return undefined;
+      }
+      return { gutter, content };
+    }
+
+    if (diffStyle === 'unified') {
+      return getColumns(codeUnified);
+    } else {
+      const deletions = getColumns(codeDeletions);
+      const additions = getColumns(codeAdditions);
+      return deletions != null || additions != null
+        ? [deletions, additions]
+        : undefined;
+    }
+  }
+
+  private applyBuffers(
+    pre: HTMLPreElement,
+    renderRange: RenderRange | undefined
+  ) {
     const { disableVirtualizationBuffers = false } = this.options;
-    if (disableVirtualizationBuffers) {
+    if (disableVirtualizationBuffers || renderRange == null) {
       if (this.bufferBefore != null) {
         this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
         this.bufferBefore = undefined;
@@ -959,29 +1553,33 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
     // NOTE(amadeus): A very hacky pass at buffers outside the pre elements...
-    // i need to improve this...
-    if (result.bufferBefore > 0) {
+    // i may need to improve this...
+    if (renderRange.bufferBefore > 0) {
       if (this.bufferBefore == null) {
         this.bufferBefore = document.createElement('div');
         this.bufferBefore.dataset.virtualizerBuffer = 'before';
-        this.bufferBefore.style = result.themeStyles;
         pre.before(this.bufferBefore);
       }
-      this.bufferBefore.style.setProperty('height', `${result.bufferBefore}px`);
+      this.bufferBefore.style.setProperty(
+        'height',
+        `${renderRange.bufferBefore}px`
+      );
       this.bufferBefore.style.setProperty('contain', 'strict');
     } else if (this.bufferBefore != null) {
       this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
       this.bufferBefore = undefined;
     }
 
-    if (result.bufferAfter > 0) {
+    if (renderRange.bufferAfter > 0) {
       if (this.bufferAfter == null) {
         this.bufferAfter = document.createElement('div');
         this.bufferAfter.dataset.virtualizerBuffer = 'after';
-        this.bufferAfter.style = result.themeStyles;
         pre.after(this.bufferAfter);
       }
-      this.bufferAfter.style.setProperty('height', `${result.bufferAfter}px`);
+      this.bufferAfter.style.setProperty(
+        'height',
+        `${renderRange.bufferAfter}px`
+      );
       this.bufferAfter.style.setProperty('contain', 'strict');
     } else if (this.bufferAfter != null) {
       this.bufferAfter.parentNode?.removeChild(this.bufferAfter);

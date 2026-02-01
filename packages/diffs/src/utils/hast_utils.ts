@@ -125,6 +125,7 @@ export function createGutterGap(
     tagName: 'div',
     properties: {
       'data-gutter-buffer': bufferType,
+      'data-buffer-size': `${size}`,
       'data-line-type': bufferType === 'annotation' ? undefined : type,
       style: `grid-row: span ${size};min-height:calc(${size} * 1lh)`,
     },
