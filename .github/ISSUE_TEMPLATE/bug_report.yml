@@ -15,7 +15,7 @@ body:
           required: true
         - label:
             I have read the [contributing
-            guidelines](https://github.com/pierrecomputer/pierre/blob/main/CONTRIBUTING.md)
+            guidelines](https://github.com/pierrecomputer/pierre/blob/main/.github/CONTRIBUTING.md)
           required: true
   - type: textarea
     id: what-happened
