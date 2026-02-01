@@ -23,7 +23,7 @@
 ### Checklist
 
 - [ ] I have read the
-      [contributing guidelines](https://github.com/pierre-computer/diffs/blob/main/CONTRIBUTING.md)
+      [contributing guidelines](https://github.com/pierrecomputer/pierre/blob/main/.github/CONTRIBUTING.md)
 - [ ] My code follows the code style of the project (`bun run lint`)
 - [ ] My code is formatted properly (`bun run format`)
 - [ ] I have updated the documentation accordingly (if applicable)
