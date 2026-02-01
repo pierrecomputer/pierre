@@ -270,6 +270,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 31,
             "data-gutter-buffer": "buffer",
             "data-line-type": undefined,
             "style": "grid-row: span 31;min-height:calc(31 * 1lh)",
@@ -353,6 +354,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 31,
             "data-content-buffer": "",
             "style": "grid-row: span 31;min-height:calc(31 * 1lh)",
           },

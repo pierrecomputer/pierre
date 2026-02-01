@@ -1159,79 +1159,99 @@ export class FileDiff<LAnnotation = undefined> {
     result: HunksRenderResult,
     insertPosition: 'afterbegin' | 'beforeend'
   ): void {
-    const getElementChildren = (
-      node: ElementContent | undefined
-    ): ElementContent[] | undefined => {
-      if (node == null || node.type !== 'element') {
-        return undefined;
-      }
-      return node.children ?? [];
-    };
-    // FIXME(amadeus): Need to figure out how to re-implement this...
-    // const mergeEdgeBuffers = (
-    //   container: HTMLElement,
-    //   children: ElementContent[],
-    //   position: 'afterbegin' | 'beforeend'
-    // ) => {
-    //   if (children.length === 0) {
-    //     return;
-    //   }
-    //   const edgeIndex = position === 'afterbegin' ? 0 : children.length - 1;
-    //   const edgeChild = children[edgeIndex];
-    //   if (edgeChild?.type !== 'element') {
-    //     return;
-    //   }
-    //   const bufferSize = this.getBufferSize(
-    //     edgeChild.properties as Record<string, string | number | undefined>
-    //   );
-    //   if (bufferSize == null) {
-    //     return;
-    //   }
-    //   const existing =
-    //     position === 'afterbegin'
-    //       ? container.firstElementChild
-    //       : container.lastElementChild;
-    //   if (!(existing instanceof HTMLElement)) {
-    //     return;
-    //   }
-    //   const existingSize = this.getBufferSize(existing.dataset);
-    //   if (existingSize == null) {
-    //     return;
-    //   }
-    //   this.updateBufferSize(existing, existingSize + bufferSize);
-    //   children.splice(edgeIndex, 1);
-    // };
-    const renderColumn = (
-      column: ColumnElements | undefined,
-      ast: ElementContent[] | undefined
-    ) => {
-      if (column == null || ast == null || ast.length < 2) {
-        return;
-      }
-      const [gutterAST, contentAST] = ast;
-      const gutterChildren = getElementChildren(gutterAST);
-      const contentChildren = getElementChildren(contentAST);
-      if (gutterChildren == null || contentChildren == null) {
-        return;
-      }
-      column.gutter.insertAdjacentHTML(
-        insertPosition,
-        this.hunksRenderer.renderPartialHTML(gutterChildren)
-      );
-      column.content.insertAdjacentHTML(
-        insertPosition,
-        this.hunksRenderer.renderPartialHTML(contentChildren)
-      );
-    };
-
     if (diffStyle === 'unified' && !Array.isArray(columns)) {
-      renderColumn(columns, result.unifiedAST);
+      this.renderPartialColumn(columns, result.unifiedAST, insertPosition);
     } else if (diffStyle === 'split' && Array.isArray(columns)) {
-      renderColumn(columns[0], result.deletionsAST);
-      renderColumn(columns[1], result.additionsAST);
+      this.renderPartialColumn(columns[0], result.deletionsAST, insertPosition);
+      this.renderPartialColumn(columns[1], result.additionsAST, insertPosition);
     } else {
-      throw new Error('u dun fukd up again');
+      throw new Error(
+        'FileDiff.insertPartialHTML: Invalid argument composition'
+      );
     }
+  }
+
+  private renderPartialColumn(
+    column: ColumnElements | undefined,
+    ast: ElementContent[] | undefined,
+    insertPosition: 'afterbegin' | 'beforeend'
+  ) {
+    if (column == null || ast == null) {
+      return;
+    }
+    const gutterChildren = getElementChildren(ast[0]);
+    const contentChildren = getElementChildren(ast[1]);
+    if (gutterChildren == null || contentChildren == null) {
+      throw new Error('FileDiff.insertPartialHTML: Unexpected AST structure');
+    }
+    const firstHASTElement = contentChildren.at(0);
+    if (
+      insertPosition === 'beforeend' &&
+      firstHASTElement?.type === 'element' &&
+      typeof firstHASTElement.properties['data-buffer-size'] === 'number'
+    ) {
+      this.mergeBuffersIfNecessary(
+        firstHASTElement.properties['data-buffer-size'],
+        column.content.children[column.content.children.length - 1],
+        column.gutter.children[column.gutter.children.length - 1],
+        gutterChildren,
+        contentChildren,
+        true
+      );
+    }
+    const lastHASTElement = contentChildren.at(-1);
+    if (
+      insertPosition === 'afterbegin' &&
+      lastHASTElement?.type === 'element' &&
+      typeof lastHASTElement.properties['data-buffer-size'] === 'number'
+    ) {
+      this.mergeBuffersIfNecessary(
+        lastHASTElement.properties['data-buffer-size'],
+        column.content.children[0],
+        column.gutter.children[0],
+        gutterChildren,
+        contentChildren,
+        false
+      );
+    }
+
+    column.gutter.insertAdjacentHTML(
+      insertPosition,
+      this.hunksRenderer.renderPartialHTML(gutterChildren)
+    );
+    column.content.insertAdjacentHTML(
+      insertPosition,
+      this.hunksRenderer.renderPartialHTML(contentChildren)
+    );
+  }
+
+  private mergeBuffersIfNecessary(
+    adjustmentSize: number,
+    contentElement: Element,
+    gutterElement: Element,
+    gutterChildren: ElementContent[],
+    contentChildren: ElementContent[],
+    fromStart: boolean
+  ) {
+    if (
+      !(contentElement instanceof HTMLElement) ||
+      !(gutterElement instanceof HTMLElement)
+    ) {
+      return;
+    }
+    const currentSize = this.getBufferSize(contentElement.dataset);
+    if (currentSize == null) {
+      return;
+    }
+    if (fromStart) {
+      gutterChildren.shift();
+      contentChildren.shift();
+    } else {
+      gutterChildren.pop();
+      contentChildren.pop();
+    }
+    this.updateBufferSize(contentElement, currentSize + adjustmentSize);
+    this.updateBufferSize(gutterElement, currentSize + adjustmentSize);
   }
 
   private applyRowSpan(
@@ -1652,4 +1672,13 @@ export class FileDiff<LAnnotation = undefined> {
     this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
     this.errorWrapper = undefined;
   }
+}
+
+function getElementChildren(
+  node: ElementContent | undefined
+): ElementContent[] | undefined {
+  if (node == null || node.type !== 'element') {
+    return undefined;
+  }
+  return node.children ?? [];
 }

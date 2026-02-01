@@ -202,6 +202,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-gutter-buffer": "buffer",
             "data-line-type": undefined,
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -534,6 +535,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-content-buffer": "",
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
           },
@@ -1409,6 +1411,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-gutter-buffer": "buffer",
             "data-line-type": undefined,
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -1563,6 +1566,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-gutter-buffer": "buffer",
             "data-line-type": undefined,
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -1945,6 +1949,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-content-buffer": "",
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
           },
@@ -2264,6 +2269,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-content-buffer": "",
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
           },
@@ -2775,6 +2781,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-gutter-buffer": "buffer",
             "data-line-type": undefined,
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -2929,6 +2936,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-gutter-buffer": "buffer",
             "data-line-type": undefined,
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -3311,6 +3319,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-content-buffer": "",
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
           },
@@ -3630,6 +3639,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-content-buffer": "",
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
           },
@@ -3756,6 +3766,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-gutter-buffer": "buffer",
             "data-line-type": undefined,
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -4088,6 +4099,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
         {
           "children": [],
           "properties": {
+            "data-buffer-size": 1,
             "data-content-buffer": "",
             "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
           },

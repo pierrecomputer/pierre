@@ -199,6 +199,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -737,6 +738,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -819,6 +821,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -79275,6 +79278,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -79813,6 +79817,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -79895,6 +79900,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -80337,6 +80343,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 2,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 2;min-height:calc(2 * 1lh)",
@@ -81763,6 +81770,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 2,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 2;min-height:calc(2 * 1lh)",
@@ -81821,6 +81829,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 4,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 4;min-height:calc(4 * 1lh)",
@@ -82311,6 +82320,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -82777,6 +82787,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -83003,6 +83014,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 11,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 11;min-height:calc(11 * 1lh)",
@@ -83133,6 +83145,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 4,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 4;min-height:calc(4 * 1lh)",
@@ -84391,6 +84404,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 2,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 2;min-height:calc(2 * 1lh)",
@@ -86009,6 +86023,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -86211,6 +86226,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -86293,6 +86309,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -91559,6 +91576,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 29,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 29;min-height:calc(29 * 1lh)",
@@ -99682,6 +99700,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 2,
           "data-content-buffer": "",
           "style": "grid-row: span 2;min-height:calc(2 * 1lh)",
         },
@@ -103463,6 +103482,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 2,
           "data-content-buffer": "",
           "style": "grid-row: span 2;min-height:calc(2 * 1lh)",
         },
@@ -103669,6 +103689,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 4,
           "data-content-buffer": "",
           "style": "grid-row: span 4;min-height:calc(4 * 1lh)",
         },
@@ -105180,6 +105201,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -107036,6 +107058,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -107738,6 +107761,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 11,
           "data-content-buffer": "",
           "style": "grid-row: span 11;min-height:calc(11 * 1lh)",
         },
@@ -107963,6 +107987,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 4,
           "data-content-buffer": "",
           "style": "grid-row: span 4;min-height:calc(4 * 1lh)",
         },
@@ -111601,6 +111626,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 2,
           "data-content-buffer": "",
           "style": "grid-row: span 2;min-height:calc(2 * 1lh)",
         },
@@ -117220,6 +117246,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -118021,6 +118048,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -118333,6 +118361,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -134418,6 +134447,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 29,
           "data-content-buffer": "",
           "style": "grid-row: span 29;min-height:calc(29 * 1lh)",
         },
@@ -148419,6 +148449,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -148429,6 +148460,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -148775,6 +148807,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 7,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 7;min-height:calc(7 * 1lh)",
@@ -148809,6 +148842,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -148891,6 +148925,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "annotation",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -154085,6 +154120,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 55,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 55;min-height:calc(55 * 1lh)",
@@ -154143,6 +154179,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -154321,6 +154358,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -154499,6 +154537,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -154605,6 +154644,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 37,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 37;min-height:calc(37 * 1lh)",
@@ -155191,6 +155231,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -155849,6 +155890,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -156291,6 +156333,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -156829,6 +156872,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 22,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 22;min-height:calc(22 * 1lh)",
@@ -157055,6 +157099,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
@@ -157185,6 +157230,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 47,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 47;min-height:calc(47 * 1lh)",
@@ -158875,6 +158921,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 19,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 19;min-height:calc(19 * 1lh)",
@@ -160421,6 +160468,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 28,
           "data-gutter-buffer": "buffer",
           "data-line-type": undefined,
           "style": "grid-row: span 28;min-height:calc(28 * 1lh)",
@@ -161874,6 +161922,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -163005,6 +163054,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 7,
           "data-content-buffer": "",
           "style": "grid-row: span 7;min-height:calc(7 * 1lh)",
         },
@@ -178774,6 +178824,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 55,
           "data-content-buffer": "",
           "style": "grid-row: span 55;min-height:calc(55 * 1lh)",
         },
@@ -178957,6 +179008,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -179681,6 +179733,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -180405,6 +180458,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -180794,6 +180848,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 37,
           "data-content-buffer": "",
           "style": "grid-row: span 37;min-height:calc(37 * 1lh)",
         },
@@ -182502,6 +182557,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -184419,6 +184475,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -185730,6 +185787,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -187083,6 +187141,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 22,
           "data-content-buffer": "",
           "style": "grid-row: span 22;min-height:calc(22 * 1lh)",
         },
@@ -188081,6 +188140,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 1,
           "data-content-buffer": "",
           "style": "grid-row: span 1;min-height:calc(1 * 1lh)",
         },
@@ -188437,6 +188497,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 47,
           "data-content-buffer": "",
           "style": "grid-row: span 47;min-height:calc(47 * 1lh)",
         },
@@ -193403,6 +193464,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 19,
           "data-content-buffer": "",
           "style": "grid-row: span 19;min-height:calc(19 * 1lh)",
         },
@@ -198140,6 +198202,7 @@ exports[`Annotation Rendering line index matching annotation lineIndex matches p
       {
         "children": [],
         "properties": {
+          "data-buffer-size": 28,
           "data-content-buffer": "",
           "style": "grid-row: span 28;min-height:calc(28 * 1lh)",
         },
