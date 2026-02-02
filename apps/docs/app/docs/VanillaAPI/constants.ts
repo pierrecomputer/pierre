@@ -559,12 +559,14 @@ const fullHTML: string = instance.renderFullHTML(result);
 
 // Or render just a specific column to HTML
 const additionsHTML: string = instance.renderPartialHTML(
-  result.additionsAST,
+  instance.renderCodeAST('additions', result),
   'additions' // wraps in <code data-additions>
 );
 
 // Or render without the <code> wrapper
-const rawHTML: string = instance.renderPartialHTML(result.additionsAST);
+const rawHTML: string = instance.renderPartialHTML(
+  instance.renderCodeAST('additions', result)
+);
 
 // Or get the full AST for further transformation
 const fullAST = instance.renderFullAST(result);`,
@@ -627,20 +629,22 @@ for (const patch of patches) {
     const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
     // result contains hast nodes based on diffStyle:
-    // - 'unified' mode: unifiedAST only
-    // - 'split' mode: additionsAST and deletionsAST
+    // - 'unified' mode: unifiedGutterAST/unifiedContentAST
+    // - 'split' mode: additionsGutterAST/additionsContentAST and deletionsGutterAST/deletionsContentAST
 
     // Render to complete HTML (includes <pre> and <code> wrappers)
     const fullHTML: string = instance.renderFullHTML(result);
 
     // Or render just the unified column with <code> wrapper
     const unifiedHTML: string = instance.renderPartialHTML(
-      result.unifiedAST,
+      instance.renderCodeAST('unified', result),
       'unified'
     );
 
     // Or render without any wrapper
-    const rawHTML: string = instance.renderPartialHTML(result.unifiedAST);
+    const rawHTML: string = instance.renderPartialHTML(
+      instance.renderCodeAST('unified', result)
+    );
 
     // Or get the full AST for custom transformation
     const fullAST = instance.renderFullAST(result);

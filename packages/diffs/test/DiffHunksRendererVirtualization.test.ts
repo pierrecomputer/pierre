@@ -44,12 +44,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const buffers = findBufferElements(result.unifiedAST);
+      const buffers = findBufferElements(result.unifiedContentAST);
       expect(buffers).toHaveLength(0);
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       // Total unified lines that are rendered
       expect(lineCount).toBe(517);
     });
@@ -62,17 +65,23 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.additionsAST, 'additionsAST should be defined');
-      assertDefined(result.deletionsAST, 'deletionsAST should be defined');
+      assertDefined(
+        result.additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        result.deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
 
-      const additionBuffers = findBufferElements(result.additionsAST);
-      const deletionBuffers = findBufferElements(result.deletionsAST);
+      const additionBuffers = findBufferElements(result.additionsContentAST);
+      const deletionBuffers = findBufferElements(result.deletionsContentAST);
 
       expect(additionBuffers).toHaveLength(0);
       expect(deletionBuffers).toHaveLength(0);
 
-      const additionLines = countRenderedLines(result.additionsAST);
-      const deletionLines = countRenderedLines(result.deletionsAST);
+      const additionLines = countRenderedLines(result.additionsContentAST);
+      const deletionLines = countRenderedLines(result.deletionsContentAST);
 
       // These are somewhat arbitrary because there's lots of stuff collapsed
       // between change hunks
@@ -97,16 +106,29 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(unifiedResult.unifiedAST, 'unifiedAST should be defined');
-      assertDefined(splitResult.additionsAST, 'additionsAST should be defined');
-      assertDefined(splitResult.deletionsAST, 'deletionsAST should be defined');
+      assertDefined(
+        unifiedResult.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
+      assertDefined(
+        splitResult.additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        splitResult.deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
 
-      const unifiedLines = countRenderedLines(unifiedResult.unifiedAST);
+      const unifiedLines = countRenderedLines(unifiedResult.unifiedContentAST);
       expect(unifiedLines).toBe(517);
 
       // In split mode, total lines across both columns
-      const splitAdditionLines = countRenderedLines(splitResult.additionsAST);
-      const splitDeletionLines = countRenderedLines(splitResult.deletionsAST);
+      const splitAdditionLines = countRenderedLines(
+        splitResult.additionsContentAST
+      );
+      const splitDeletionLines = countRenderedLines(
+        splitResult.deletionsContentAST
+      );
 
       // Verify against expected totals
       expect(splitAdditionLines + splitDeletionLines).toBeGreaterThan(0);
@@ -121,12 +143,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBeLessThanOrEqual(30);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // Hunk 0 has collapsedBefore: 3, so first index is 3
       expect(unifiedIndices[0]).toBe(3);
       expect(unifiedIndices.length).toBe(30);
@@ -141,12 +166,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBeLessThanOrEqual(50);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // Line indices might not be continuous due to collapsed regions
       // But we should have rendered exactly 50 lines
       expect(unifiedIndices.length).toBe(50);
@@ -174,13 +202,26 @@ describe('DiffHunksRenderer - Virtualization', () => {
         renderRange
       );
 
-      assertDefined(unifiedResult.unifiedAST, 'unifiedAST should be defined');
-      assertDefined(splitResult.additionsAST, 'additionsAST should be defined');
-      assertDefined(splitResult.deletionsAST, 'deletionsAST should be defined');
+      assertDefined(
+        unifiedResult.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
+      assertDefined(
+        splitResult.additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        splitResult.deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
 
-      const unifiedLines = countRenderedLines(unifiedResult.unifiedAST);
-      const splitAdditionLines = countRenderedLines(splitResult.additionsAST);
-      const splitDeletionLines = countRenderedLines(splitResult.deletionsAST);
+      const unifiedLines = countRenderedLines(unifiedResult.unifiedContentAST);
+      const splitAdditionLines = countRenderedLines(
+        splitResult.additionsContentAST
+      );
+      const splitDeletionLines = countRenderedLines(
+        splitResult.deletionsContentAST
+      );
 
       expect(unifiedLines).toBe(50);
       expect(splitAdditionLines).toBe(37);
@@ -202,9 +243,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
 
       // With expandUnchanged, all collapsed lines are rendered
       // Total should be significantly more than 514
@@ -229,9 +273,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
 
       // Should have 20 more lines than unexpanded
       const unexpandedResult = await unifiedRenderer.asyncRender(fileDiff, {
@@ -242,11 +289,11 @@ describe('DiffHunksRenderer - Virtualization', () => {
       });
 
       assertDefined(
-        unexpandedResult.unifiedAST,
-        'unexpandedResult.unifiedAST should be defined'
+        unexpandedResult.unifiedContentAST,
+        'unexpandedResult.unifiedContentAST should be defined'
       );
       const unexpandedLineCount = countRenderedLines(
-        unexpandedResult.unifiedAST
+        unexpandedResult.unifiedContentAST
       );
 
       expect(unifiedIndices.length).toBe(unexpandedLineCount + 20);
@@ -280,9 +327,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
 
       // Should have 15 more lines than unexpanded
       const unexpandedResult = await unifiedRenderer.asyncRender(fileDiff, {
@@ -293,11 +343,11 @@ describe('DiffHunksRenderer - Virtualization', () => {
       });
 
       assertDefined(
-        unexpandedResult.unifiedAST,
-        'unexpandedResult.unifiedAST should be defined'
+        unexpandedResult.unifiedContentAST,
+        'unexpandedResult.unifiedContentAST should be defined'
       );
       const unexpandedLineCount = countRenderedLines(
-        unexpandedResult.unifiedAST
+        unexpandedResult.unifiedContentAST
       );
 
       expect(unifiedIndices.length).toBe(unexpandedLineCount + 15);
@@ -336,9 +386,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
 
       // Should have 20 more lines than unexpanded (10 from start + 10 from end)
       const unexpandedResult = await unifiedRenderer.asyncRender(fileDiff, {
@@ -349,11 +402,11 @@ describe('DiffHunksRenderer - Virtualization', () => {
       });
 
       assertDefined(
-        unexpandedResult.unifiedAST,
-        'unexpandedResult.unifiedAST should be defined'
+        unexpandedResult.unifiedContentAST,
+        'unexpandedResult.unifiedContentAST should be defined'
       );
       const unexpandedLineCount = countRenderedLines(
-        unexpandedResult.unifiedAST
+        unexpandedResult.unifiedContentAST
       );
 
       expect(unifiedIndices.length).toBe(unexpandedLineCount + 20);
@@ -397,9 +450,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
 
       // Should have rendered content (not skipped)
       expect(lineCount).toBeGreaterThan(0);
@@ -419,9 +475,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(9);
     });
 
@@ -434,13 +493,16 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBeGreaterThan(0);
       expect(lineCount).toBeLessThanOrEqual(20);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // First line should be >= 9 (accounting for any collapsed lines)
       expect(unifiedIndices[0]).toBeGreaterThanOrEqual(9);
     });
@@ -453,12 +515,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(1);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       expect(unifiedIndices.length).toBe(1);
       expect(unifiedIndices[0]).toBeGreaterThanOrEqual(50);
     });
@@ -473,12 +538,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
       });
 
       // When window is entirely past content, AST may be undefined
-      if (result.unifiedAST != null) {
-        const lineCount = countRenderedLines(result.unifiedAST);
+      if (result.unifiedContentAST != null) {
+        const lineCount = countRenderedLines(result.unifiedContentAST);
         expect(lineCount).toBe(0);
       } else {
         // AST is undefined when no lines to render
-        expect(result.unifiedAST).toBeUndefined();
+        expect(result.unifiedContentAST).toBeUndefined();
       }
     });
 
@@ -492,13 +557,16 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBeGreaterThan(0);
       expect(lineCount).toBeLessThanOrEqual(50);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // Should start around 150
       expect(unifiedIndices[0]).toBeGreaterThanOrEqual(150);
     });
@@ -513,12 +581,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(50);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // First rendered line should be >= 114
       expect(unifiedIndices[0]).toBeGreaterThanOrEqual(114);
     });
@@ -535,12 +606,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBeGreaterThan(0);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // Should not include any lines from first 3 hunks (< 34)
       expect(unifiedIndices.every((idx) => idx >= 34)).toBe(true);
     });
@@ -555,12 +629,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(34);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // Should have 34 lines total
       expect(unifiedIndices.length).toBe(34);
     });
@@ -574,12 +651,15 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(25);
 
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       // Should have 25 lines
       expect(unifiedIndices.length).toBe(25);
     });
@@ -594,13 +674,16 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(10);
 
       // Verify we got exactly 10 lines
-      const { unifiedIndices } = extractLineNumbers(result.unifiedAST);
+      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
       expect(unifiedIndices.length).toBe(10);
 
       // Snapshot test to verify content structure
@@ -615,20 +698,26 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.additionsAST, 'additionsAST should be defined');
-      assertDefined(result.deletionsAST, 'deletionsAST should be defined');
+      assertDefined(
+        result.additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        result.deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
 
-      const additionLines = countRenderedLines(result.additionsAST);
-      const deletionLines = countRenderedLines(result.deletionsAST);
+      const additionLines = countRenderedLines(result.additionsContentAST);
+      const deletionLines = countRenderedLines(result.deletionsContentAST);
 
       expect(additionLines + deletionLines).toBeGreaterThan(0);
 
       // Verify total lines rendered
       const { splitIndices: additionIndices } = extractLineNumbers(
-        result.additionsAST
+        result.additionsContentAST
       );
       const { splitIndices: deletionIndices } = extractLineNumbers(
-        result.deletionsAST
+        result.deletionsContentAST
       );
 
       expect(additionIndices.length + deletionIndices.length).toBeGreaterThan(
@@ -651,9 +740,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const lineCount = countRenderedLines(result.unifiedAST);
+      const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(20);
 
       // No errors should occur (tests 1ea14dbf fix)
@@ -669,9 +761,12 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      assertDefined(result.unifiedAST, 'unifiedAST should be defined');
+      assertDefined(
+        result.unifiedContentAST,
+        'unifiedContentAST should be defined'
+      );
 
-      const fullCount = countRenderedLines(result.unifiedAST);
+      const fullCount = countRenderedLines(result.unifiedContentAST);
       expect(fullCount).toBe(517);
 
       // Compare to partial render
@@ -683,11 +778,11 @@ describe('DiffHunksRenderer - Virtualization', () => {
       });
 
       assertDefined(
-        partialResult.unifiedAST,
-        'partialResult.unifiedAST should be defined'
+        partialResult.unifiedContentAST,
+        'partialResult.unifiedContentAST should be defined'
       );
 
-      const partialCount = countRenderedLines(partialResult.unifiedAST);
+      const partialCount = countRenderedLines(partialResult.unifiedContentAST);
 
       // Full render should have more lines
       expect(fullCount).toBeGreaterThan(partialCount);

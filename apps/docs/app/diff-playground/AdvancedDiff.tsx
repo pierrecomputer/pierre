@@ -65,6 +65,7 @@ export function AdvancedDiff() {
         bigBoiRef.current ??= new AdvancedVirtualizer(
           ref.current,
           undefined,
+          undefined,
           workerPool
         );
         bigBoiRef.current.reset();

@@ -599,9 +599,9 @@ export class FileDiff<LAnnotation = undefined> {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
         }
         if (
-          hunksResult.additionsAST != null ||
-          hunksResult.deletionsAST != null ||
-          hunksResult.unifiedAST != null
+          hunksResult.additionsContentAST != null ||
+          hunksResult.deletionsContentAST != null ||
+          hunksResult.unifiedContentAST != null
         ) {
           this.applyHunksToDOM(pre, hunksResult);
         } else if (this.pre != null) {
@@ -945,64 +945,83 @@ export class FileDiff<LAnnotation = undefined> {
     let shouldReplace = false;
     // Create code elements and insert HTML content
     const codeElements: HTMLElement[] = [];
-    if (result.unifiedAST != null) {
+    const unifiedAST = this.hunksRenderer.renderCodeAST('unified', result);
+    const deletionsAST = this.hunksRenderer.renderCodeAST('deletions', result);
+    const additionsAST = this.hunksRenderer.renderCodeAST('additions', result);
+    if (unifiedAST != null) {
       shouldReplace =
         this.codeUnified == null ||
         this.codeAdditions != null ||
         this.codeDeletions != null;
+
+      // Clean up addition/deletion elements if necessary
+      this.codeDeletions?.remove();
       this.codeDeletions = undefined;
+      this.codeAdditions?.remove();
       this.codeAdditions = undefined;
-      if (result.unifiedAST.length > 0) {
-        this.codeUnified = getOrCreateCodeNode({
-          code: this.codeUnified,
-          columnType: 'unified',
+
+      this.codeUnified = getOrCreateCodeNode({
+        code: this.codeUnified,
+        columnType: 'unified',
+        rowSpan,
+      });
+      this.codeUnified.innerHTML =
+        this.hunksRenderer.renderPartialHTML(unifiedAST);
+      codeElements.push(this.codeUnified);
+    } else if (deletionsAST != null || additionsAST != null) {
+      if (deletionsAST != null) {
+        shouldReplace = this.codeDeletions == null || this.codeUnified != null;
+
+        // Clean up unified column if necessary
+        this.codeUnified?.remove();
+        this.codeUnified = undefined;
+
+        this.codeDeletions = getOrCreateCodeNode({
+          code: this.codeDeletions,
+          columnType: 'deletions',
           rowSpan,
         });
-        this.codeUnified.innerHTML = this.hunksRenderer.renderPartialHTML(
-          result.unifiedAST
-        );
-        codeElements.push(this.codeUnified);
+        this.codeDeletions.innerHTML =
+          this.hunksRenderer.renderPartialHTML(deletionsAST);
+        codeElements.push(this.codeDeletions);
       } else {
-        this.codeUnified = undefined;
+        // If we have no deletion column, lets clean it up if it exists
+        this.codeDeletions?.remove();
+        this.codeDeletions = undefined;
       }
-    } else {
-      if (result.deletionsAST != null) {
-        shouldReplace = this.codeDeletions == null || this.codeUnified != null;
-        this.codeUnified = undefined;
-        if (result.deletionsAST.length > 0) {
-          this.codeDeletions = getOrCreateCodeNode({
-            code: this.codeDeletions,
-            columnType: 'deletions',
-            rowSpan,
-          });
-          this.codeDeletions.innerHTML = this.hunksRenderer.renderPartialHTML(
-            result.deletionsAST
-          );
-          codeElements.push(this.codeDeletions);
-        } else {
-          this.codeDeletions = undefined;
-        }
-      }
-      if (result.additionsAST != null) {
+
+      if (additionsAST != null) {
         shouldReplace =
           shouldReplace ||
           this.codeAdditions == null ||
           this.codeUnified != null;
+
+        // Clean up unified column if necessary
+        this.codeUnified?.remove();
         this.codeUnified = undefined;
-        if (result.additionsAST.length > 0) {
-          this.codeAdditions = getOrCreateCodeNode({
-            code: this.codeAdditions,
-            columnType: 'additions',
-            rowSpan,
-          });
-          this.codeAdditions.innerHTML = this.hunksRenderer.renderPartialHTML(
-            result.additionsAST
-          );
-          codeElements.push(this.codeAdditions);
-        } else {
-          this.codeAdditions = undefined;
-        }
+
+        this.codeAdditions = getOrCreateCodeNode({
+          code: this.codeAdditions,
+          columnType: 'additions',
+          rowSpan,
+        });
+        this.codeAdditions.innerHTML =
+          this.hunksRenderer.renderPartialHTML(additionsAST);
+        codeElements.push(this.codeAdditions);
+      } else {
+        // If we have no addition column, lets clean it up if it exists
+        this.codeAdditions?.remove();
+        this.codeAdditions = undefined;
       }
+    } else {
+      // if we get in here, there's no content to render, so lets just clean
+      // everything up
+      this.codeUnified?.remove();
+      this.codeUnified = undefined;
+      this.codeDeletions?.remove();
+      this.codeDeletions = undefined;
+      this.codeAdditions?.remove();
+      this.codeAdditions = undefined;
     }
 
     if (codeElements.length === 0) {
@@ -1160,10 +1179,19 @@ export class FileDiff<LAnnotation = undefined> {
     insertPosition: 'afterbegin' | 'beforeend'
   ): void {
     if (diffStyle === 'unified' && !Array.isArray(columns)) {
-      this.renderPartialColumn(columns, result.unifiedAST, insertPosition);
+      const unifiedAST = this.hunksRenderer.renderCodeAST('unified', result);
+      this.renderPartialColumn(columns, unifiedAST, insertPosition);
     } else if (diffStyle === 'split' && Array.isArray(columns)) {
-      this.renderPartialColumn(columns[0], result.deletionsAST, insertPosition);
-      this.renderPartialColumn(columns[1], result.additionsAST, insertPosition);
+      const deletionsAST = this.hunksRenderer.renderCodeAST(
+        'deletions',
+        result
+      );
+      const additionsAST = this.hunksRenderer.renderCodeAST(
+        'additions',
+        result
+      );
+      this.renderPartialColumn(columns[0], deletionsAST, insertPosition);
+      this.renderPartialColumn(columns[1], additionsAST, insertPosition);
     } else {
       throw new Error(
         'FileDiff.insertPartialHTML: Invalid argument composition'
@@ -1612,8 +1640,8 @@ export class FileDiff<LAnnotation = undefined> {
     {
       themeStyles,
       baseThemeType,
-      additionsAST,
-      deletionsAST,
+      additionsContentAST,
+      deletionsContentAST,
       totalLines,
     }: HunksRenderResult
   ): void {
@@ -1633,7 +1661,7 @@ export class FileDiff<LAnnotation = undefined> {
       split:
         diffStyle === 'unified'
           ? false
-          : additionsAST != null && deletionsAST != null,
+          : additionsContentAST != null && deletionsContentAST != null,
       themeStyles,
       themeType: baseThemeType ?? themeType,
       totalLines,

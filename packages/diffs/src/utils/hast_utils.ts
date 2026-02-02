@@ -84,10 +84,11 @@ export function findCodeElement(
   return undefined;
 }
 
-export function createGutterWrapper(): HASTElement {
+export function createGutterWrapper(children?: ElementContent[]): HASTElement {
   return createHastElement({
     tagName: 'div',
     properties: { 'data-gutter': '' },
+    children
   });
 }
 

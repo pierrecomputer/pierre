@@ -92,12 +92,12 @@ interface ProcessContext {
   rowCount: number;
   expansionLineCount: number;
   hunkSeparators: HunkSeparators;
-  unifiedAST: ElementContent[];
-  deletionsAST: ElementContent[];
-  additionsAST: ElementContent[];
-  unifiedGutter: HASTElement;
-  deletionsGutter: HASTElement;
-  additionsGutter: HASTElement;
+  unifiedContentAST: ElementContent[];
+  deletionsContentAST: ElementContent[];
+  additionsContentAST: ElementContent[];
+  unifiedGutterAST: HASTElement;
+  deletionsGutterAST: HASTElement;
+  additionsGutterAST: HASTElement;
   hunkData: HunkData[];
   pushToGutter(type: CodeColumnType, element: HASTElement): void;
   incrementRowCount(count?: number): void;
@@ -108,9 +108,12 @@ type OptionsWithDefaults = Required<
 >;
 
 export interface HunksRenderResult {
-  additionsAST: ElementContent[] | undefined;
-  deletionsAST: ElementContent[] | undefined;
-  unifiedAST: ElementContent[] | undefined;
+  unifiedGutterAST: ElementContent[] | undefined;
+  unifiedContentAST: ElementContent[] | undefined;
+  deletionsGutterAST: ElementContent[] | undefined;
+  deletionsContentAST: ElementContent[] | undefined;
+  additionsGutterAST: ElementContent[] | undefined;
+  additionsContentAST: ElementContent[] | undefined;
   hunkData: HunkData[];
   css: string;
   preNode: HASTElement;
@@ -544,21 +547,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
 
-    let additionsAST: ElementContent[] | undefined = [];
-    let deletionsAST: ElementContent[] | undefined = [];
-    let unifiedAST: ElementContent[] | undefined = [];
+    let additionsContentAST: ElementContent[] | undefined = [];
+    let deletionsContentAST: ElementContent[] | undefined = [];
+    let unifiedContentAST: ElementContent[] | undefined = [];
 
     const hunkData: HunkData[] = [];
     const { additionLines, deletionLines } = code;
     const context: ProcessContext = {
       rowCount: 0,
       hunkSeparators,
-      additionsAST,
-      deletionsAST,
-      unifiedGutter: createGutterWrapper(),
-      deletionsGutter: createGutterWrapper(),
-      additionsGutter: createGutterWrapper(),
-      unifiedAST,
+      additionsContentAST,
+      deletionsContentAST,
+      unifiedContentAST,
+      unifiedGutterAST: createGutterWrapper(),
+      deletionsGutterAST: createGutterWrapper(),
+      additionsGutterAST: createGutterWrapper(),
       expansionLineCount,
       hunkData,
       incrementRowCount(count = 1) {
@@ -567,15 +570,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       pushToGutter(type: CodeColumnType, element: HASTElement) {
         switch (type) {
           case 'unified': {
-            context.unifiedGutter.children.push(element);
+            context.unifiedGutterAST.children.push(element);
             break;
           }
           case 'deletions': {
-            context.deletionsGutter.children.push(element);
+            context.deletionsGutterAST.children.push(element);
             break;
           }
           case 'additions': {
-            context.additionsGutter.children.push(element);
+            context.additionsGutterAST.children.push(element);
             break;
           }
         }
@@ -611,13 +614,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           'additions',
           createGutterGap(undefined, 'buffer', pendingSplitSpanSize)
         );
-        additionsAST?.push(createEmptyRowBuffer(pendingSplitSpanSize));
+        additionsContentAST?.push(createEmptyRowBuffer(pendingSplitSpanSize));
       } else {
         context.pushToGutter(
           'deletions',
           createGutterGap(undefined, 'buffer', pendingSplitSpanSize)
         );
-        deletionsAST?.push(createEmptyRowBuffer(pendingSplitSpanSize));
+        deletionsContentAST?.push(createEmptyRowBuffer(pendingSplitSpanSize));
       }
       pendingSplitSpanSize = 0;
       pendingSplitMissing = undefined;
@@ -808,13 +811,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 ? type
                 : 'change-deletion';
             if (diffStyle === 'unified') {
-              unifiedAST?.push(createNoNewlineElement(noEOFType));
+              context.unifiedContentAST.push(createNoNewlineElement(noEOFType));
               context.pushToGutter(
                 'unified',
                 createGutterGap(noEOFType, 'metadata', 1)
               );
             } else {
-              deletionsAST?.push(createNoNewlineElement(noEOFType));
+              context.deletionsContentAST.push(
+                createNoNewlineElement(noEOFType)
+              );
               context.pushToGutter(
                 'deletions',
                 createGutterGap(noEOFType, 'metadata', 1)
@@ -824,7 +829,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                   'additions',
                   createGutterGap(undefined, 'buffer', 1)
                 );
-                additionsAST?.push(createEmptyRowBuffer(1));
+                context.additionsContentAST.push(createEmptyRowBuffer(1));
               }
             }
           }
@@ -834,13 +839,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 ? type
                 : 'change-addition';
             if (diffStyle === 'unified') {
-              unifiedAST?.push(createNoNewlineElement(noEOFType));
+              context.unifiedContentAST.push(createNoNewlineElement(noEOFType));
               context.pushToGutter(
                 'unified',
                 createGutterGap(noEOFType, 'metadata', 1)
               );
             } else {
-              additionsAST?.push(createNoNewlineElement(noEOFType));
+              context.additionsContentAST.push(
+                createNoNewlineElement(noEOFType)
+              );
               context.pushToGutter(
                 'additions',
                 createGutterGap(noEOFType, 'metadata', 1)
@@ -850,7 +857,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                   'deletions',
                   createGutterGap(undefined, 'buffer', 1)
                 );
-                deletionsAST?.push(createEmptyRowBuffer(1));
+                context.deletionsContentAST.push(createEmptyRowBuffer(1));
               }
             }
           }
@@ -882,64 +889,40 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       fileDiff.deletionLines.length ?? 0
     );
 
-    additionsAST =
-      !unified && fileDiff.type !== 'deleted' ? additionsAST : undefined;
-    deletionsAST =
-      !unified && fileDiff.type !== 'new' ? deletionsAST : undefined;
-    unifiedAST = unified ? unifiedAST : undefined;
-
-    const rowSpan = `grid-row: span ${context.rowCount}`;
-    if (diffStyle === 'split') {
-      context.deletionsGutter.properties.style = rowSpan;
-      context.additionsGutter.properties.style = rowSpan;
-    } else {
-      context.unifiedGutter.properties.style = rowSpan;
-    }
-
     const hasBuffer =
       renderRange.bufferBefore > 0 || renderRange.bufferAfter > 0;
-    if (unifiedAST != null) {
-      if (context.rowCount > 0 || hasBuffer) {
-        unifiedAST = [
-          context.unifiedGutter,
-          createContentColumn(unifiedAST, context.rowCount),
-        ];
-      } else {
-        unifiedAST = undefined;
-      }
-    }
-    if (deletionsAST != null) {
-      if (context.rowCount > 0 || hasBuffer) {
-        deletionsAST = [
-          context.deletionsGutter,
-          createContentColumn(deletionsAST, context.rowCount),
-        ];
-      } else {
-        deletionsAST = undefined;
-      }
-    }
-    if (additionsAST != null) {
-      if (context.rowCount > 0 || hasBuffer) {
-        additionsAST = [
-          context.additionsGutter,
-          createContentColumn(additionsAST, context.rowCount),
-        ];
-      } else {
-        additionsAST = undefined;
-      }
-    }
+    // Determine which ASTs to include based on diff style and file type
+    const shouldIncludeAdditions = !unified && fileDiff.type !== 'deleted';
+    const shouldIncludeDeletions = !unified && fileDiff.type !== 'new';
+    const hasContent = context.rowCount > 0 || hasBuffer;
+
+    additionsContentAST =
+      shouldIncludeAdditions && hasContent ? additionsContentAST : undefined;
+    deletionsContentAST =
+      shouldIncludeDeletions && hasContent ? deletionsContentAST : undefined;
+    unifiedContentAST = unified && hasContent ? unifiedContentAST : undefined;
 
     const preNode = this.createPreElement(
-      deletionsAST != null && additionsAST != null,
+      deletionsContentAST != null && additionsContentAST != null,
       totalLines,
       themeStyles,
       baseThemeType
     );
 
     return {
-      additionsAST,
-      deletionsAST,
-      unifiedAST,
+      unifiedGutterAST:
+        unified && hasContent ? context.unifiedGutterAST.children : undefined,
+      unifiedContentAST,
+      deletionsGutterAST:
+        shouldIncludeDeletions && hasContent
+          ? context.deletionsGutterAST.children
+          : undefined,
+      deletionsContentAST,
+      additionsGutterAST:
+        shouldIncludeAdditions && hasContent
+          ? context.additionsGutterAST.children
+          : undefined,
+      additionsContentAST,
       hunkData,
       preNode,
       themeStyles,
@@ -956,27 +939,59 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
+  renderCodeAST(
+    type: 'unified' | 'deletions' | 'additions',
+    result: HunksRenderResult
+  ): ElementContent[] | undefined {
+    const gutterAST =
+      type === 'unified'
+        ? result.unifiedGutterAST
+        : type === 'deletions'
+          ? result.deletionsGutterAST
+          : result.additionsGutterAST;
+
+    const contentAST =
+      type === 'unified'
+        ? result.unifiedContentAST
+        : type === 'deletions'
+          ? result.deletionsContentAST
+          : result.additionsContentAST;
+
+    if (gutterAST == null || contentAST == null) {
+      return undefined;
+    }
+
+    const gutter = createGutterWrapper(gutterAST);
+    gutter.properties.style = `grid-row: span ${result.rowCount}`;
+    const contentColumn = createContentColumn(contentAST, result.rowCount);
+    return [gutter, contentColumn];
+  }
+
   renderFullAST(
     result: HunksRenderResult,
     children: ElementContent[] = []
   ): HASTElement {
-    if (result.unifiedAST != null) {
+    const unifiedAST = this.renderCodeAST('unified', result);
+    if (unifiedAST != null) {
       children.push(
         createHastElement({
           tagName: 'code',
-          children: result.unifiedAST,
+          children: unifiedAST,
           properties: {
             'data-code': '',
             'data-unified': '',
           },
         })
       );
+      return { ...result.preNode, children };
     }
-    if (result.deletionsAST != null) {
+
+    const deletionsAST = this.renderCodeAST('deletions', result);
+    if (deletionsAST != null) {
       children.push(
         createHastElement({
           tagName: 'code',
-          children: result.deletionsAST,
+          children: deletionsAST,
           properties: {
             'data-code': '',
             'data-deletions': '',
@@ -984,11 +999,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         })
       );
     }
-    if (result.additionsAST != null) {
+    const additionsAST = this.renderCodeAST('additions', result);
+    if (additionsAST != null) {
       children.push(
         createHastElement({
           tagName: 'code',
-          children: result.additionsAST,
+          children: additionsAST,
           properties: {
             'data-code': '',
             'data-additions': '',
@@ -1130,9 +1146,9 @@ function pushLineWithAnnotation({
   let hasAnnotationRow = false;
   if (diffStyle === 'unified') {
     if (deletionLine != null) {
-      context.unifiedAST.push(deletionLine);
+      context.unifiedContentAST.push(deletionLine);
     } else if (additionLine != null) {
-      context.unifiedAST.push(additionLine);
+      context.unifiedContentAST.push(additionLine);
     }
     if (unifiedSpan != null) {
       const lineType =
@@ -1141,7 +1157,7 @@ function pushLineWithAnnotation({
             ? 'change-deletion'
             : 'change-addition'
           : type;
-      context.unifiedAST.push(createAnnotationElement(unifiedSpan));
+      context.unifiedContentAST.push(createAnnotationElement(unifiedSpan));
       context.pushToGutter(
         'unified',
         createGutterGap(lineType, 'annotation', 1)
@@ -1150,10 +1166,10 @@ function pushLineWithAnnotation({
     }
   } else if (diffStyle === 'split') {
     if (deletionLine != null) {
-      context.deletionsAST.push(deletionLine);
+      context.deletionsContentAST.push(deletionLine);
     }
     if (additionLine != null) {
-      context.additionsAST.push(additionLine);
+      context.additionsContentAST.push(additionLine);
     }
     if (deletionSpan != null) {
       const lineType =
@@ -1162,7 +1178,7 @@ function pushLineWithAnnotation({
             ? 'change-deletion'
             : 'context'
           : type;
-      context.deletionsAST.push(createAnnotationElement(deletionSpan));
+      context.deletionsContentAST.push(createAnnotationElement(deletionSpan));
       context.pushToGutter(
         'deletions',
         createGutterGap(lineType, 'annotation', 1)
@@ -1176,7 +1192,7 @@ function pushLineWithAnnotation({
             ? 'change-addition'
             : 'context'
           : type;
-      context.additionsAST.push(createAnnotationElement(additionSpan));
+      context.additionsContentAST.push(createAnnotationElement(additionSpan));
       context.pushToGutter(
         'additions',
         createGutterGap(lineType, 'annotation', 1)
@@ -1207,10 +1223,10 @@ function pushSeparator(
   }
   const linesAST =
     type === 'unified'
-      ? context.unifiedAST
+      ? context.unifiedContentAST
       : type === 'deletions'
-        ? context.deletionsAST
-        : context.additionsAST;
+        ? context.deletionsContentAST
+        : context.additionsContentAST;
 
   if (context.hunkSeparators === 'metadata') {
     if (hunkSpecs != null) {

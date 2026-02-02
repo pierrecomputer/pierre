@@ -263,10 +263,9 @@ export function countRenderedLines(ast: ElementContent[]): number {
 // Each unique line-index represents one visual row in split view
 export function countSplitRows(result: HunksRenderResult): number {
   const lineIndices = new Set<number>();
-  const additionsAST = result.additionsAST ?? [];
-  const deletionsAST = result.deletionsAST ?? [];
+  const { additionsContentAST = [], deletionsContentAST = [] } = result;
 
-  for (const nodes of [additionsAST, deletionsAST]) {
+  for (const nodes of [additionsContentAST, deletionsContentAST]) {
     const allElements = collectAllElements(nodes);
     for (const node of allElements) {
       const lineIndex = node.properties?.['data-line-index'];
