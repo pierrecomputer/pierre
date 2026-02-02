@@ -3,6 +3,7 @@ import type {
   DiffLineEventBaseProps,
   ExpansionDirections,
   LineEventBaseProps,
+  LineTypes,
 } from '../types';
 
 export type LogTypes = 'click' | 'move' | 'both' | 'none';
@@ -438,56 +439,100 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     path: (EventTarget | undefined)[]
   ): GetLineDataResult<TMode> {
     let numberColumn = false;
-    const lineElement = path.find((element) => {
-      if (!(element instanceof HTMLElement)) {
-        return false;
-      }
-      numberColumn = numberColumn || 'columnNumber' in element.dataset;
-      return 'line' in element.dataset || 'expandIndex' in element.dataset;
-    });
-    if (!(lineElement instanceof HTMLElement)) return undefined;
-    if (lineElement.dataset.expandIndex != null) {
-      const hunkIndex = parseInt(lineElement.dataset.expandIndex);
-      if (isNaN(hunkIndex)) {
-        return undefined;
-      }
-      let direction: ExpansionDirections | undefined;
-      for (const element of path) {
-        if (element === lineElement) break;
-        if (element instanceof HTMLElement) {
-          direction =
-            direction ??
-            ('expandUp' in element.dataset ? 'up' : undefined) ??
-            ('expandDown' in element.dataset ? 'down' : undefined) ??
-            ('expandBoth' in element.dataset ? 'both' : undefined);
-          if (direction != null) {
-            break;
-          }
+    let lineType: LineTypes | undefined;
+    let codeElement: HTMLElement | undefined;
+    let lineElement: HTMLElement | undefined;
+    let numberElement: HTMLElement | undefined;
+    let expandInfo:
+      | {
+          hunkIndex: number | undefined;
+          direction: 'up' | 'down' | 'both';
         }
+      | undefined;
+    let lineNumber: number | undefined;
+
+    for (const element of path) {
+      if (!(element instanceof HTMLElement)) continue;
+      // If we've click on a number column line, lets grab the relevant
+      // line info
+      if (numberElement == null && 'columnNumber' in element.dataset) {
+        numberElement = element;
+        lineNumber = Number.parseInt(element.dataset.columnNumber ?? '', 10);
+        numberColumn = true;
+        lineType = getLineTypeFromElement(element);
+        continue;
       }
-      return direction != null
-        ? { type: 'line-info', hunkIndex, direction }
-        : undefined;
+      // If we've clicked on a code column line, lets grab the relevant
+      // line info
+      if (lineElement == null && 'line' in element.dataset) {
+        lineElement = element;
+        lineNumber = Number.parseInt(element.dataset.line ?? '', 10);
+        lineType = getLineTypeFromElement(element);
+        continue;
+      }
+      // If we've clicked on an expand button, lets grab the relevant info
+      if (expandInfo == null && 'expandButton' in element.dataset) {
+        expandInfo = {
+          hunkIndex: undefined,
+          direction: (() => {
+            if ('expandUp' in element.dataset) {
+              return 'up';
+            }
+            if ('expandDown' in element.dataset) {
+              return 'down';
+            }
+            return 'both';
+          })(),
+        };
+        continue;
+      }
+      // If we've clicked on an expand container, lets grab the index off of it
+      // FIXME(amadeus): Might be worth stuffing the expand index into the
+      // buttons themselves?  Requires a small HTML change tho...
+      if (expandInfo != null && 'expandIndex' in element.dataset) {
+        const expandIndex = Number.parseInt(
+          element.dataset.expandIndex ?? '',
+          10
+        );
+        if (!Number.isNaN(expandIndex)) {
+          expandInfo.hunkIndex = expandIndex;
+        }
+        continue;
+      }
+      // And finally, if we managed to get to the code element, then we either
+      // have the necessary info, or we don't, so we can stop iterating through
+      // the path
+      if (codeElement == null && 'code' in element.dataset) {
+        codeElement = element;
+        // Once we've found the code parent, there's no more travesial necessary
+        break;
+      }
     }
-    const lineNumber = parseInt(lineElement.dataset.line ?? '');
-    if (isNaN(lineNumber)) return;
-    const lineType = lineElement.dataset.lineType;
+
+    // If we are handling expansion, lets do that
+    if (expandInfo?.hunkIndex != null) {
+      const { hunkIndex, direction } = expandInfo;
+      return { type: 'line-info', hunkIndex, direction };
+    }
+
+    lineElement ??= queryHTMLElement(
+      codeElement,
+      `[data-line="${lineNumber}"]`
+    );
+    numberElement ??= queryHTMLElement(
+      codeElement,
+      `[data-column-number="${lineNumber}"]`
+    );
+
+    // If we were unable to find the necessary elements, we out.
     if (
-      lineType !== 'context' &&
-      lineType !== 'context-expanded' &&
-      lineType !== 'change-deletion' &&
-      lineType !== 'change-addition'
+      codeElement == null ||
+      lineElement == null ||
+      numberElement == null ||
+      lineType == null
     ) {
       return undefined;
     }
-
-    const numberElement = (() => {
-      const numberElement = lineElement.children[0];
-      return numberElement instanceof HTMLElement &&
-        numberElement.dataset.columnNumber != null
-        ? numberElement
-        : undefined;
-    })();
 
     if (this.mode === 'file') {
       return {
@@ -499,23 +544,20 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       } as GetLineDataResult<TMode>;
     }
 
-    const annotationSide: AnnotationSide = (() => {
-      if (lineType === 'change-deletion') {
-        return 'deletions';
-      }
-      if (lineType === 'change-addition') {
-        return 'additions';
-      }
-      const parent = lineElement.closest('[data-code]');
-      if (!(parent instanceof HTMLElement)) {
-        return 'additions';
-      }
-      return 'deletions' in parent.dataset ? 'deletions' : 'additions';
-    })();
-
     return {
       type: 'diff-line',
-      annotationSide,
+      annotationSide: (() => {
+        switch (lineType) {
+          case 'change-deletion':
+            return 'deletions';
+          case 'change-addition':
+            return 'additions';
+          default:
+            return 'deletions' in codeElement.dataset
+              ? 'deletions'
+              : 'additions';
+        }
+      })(),
       lineType,
       lineElement,
       numberElement,
@@ -569,4 +611,28 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
     __debugMouseEvents,
     onHunkExpand,
   };
+}
+
+function queryHTMLElement(
+  parent: HTMLElement | undefined,
+  query: string
+): HTMLElement | undefined {
+  const element = parent?.querySelector(query);
+  return element instanceof HTMLElement ? element : undefined;
+}
+
+function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {
+  const { lineType } = element.dataset;
+  if (lineType == null) {
+    return undefined;
+  }
+  switch (lineType) {
+    case 'change-deletion':
+    case 'change-addition':
+    case 'context':
+    case 'context-expanded':
+      return lineType;
+    default:
+      return undefined;
+  }
 }
