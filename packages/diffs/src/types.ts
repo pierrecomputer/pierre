@@ -401,6 +401,7 @@ export type RenderFileMetadata = (
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 
 export type AnnotationSide = 'deletions' | 'additions';
+export type SelectionSide = 'deletions' | 'additions';
 
 type OptionalMetadata<T> = T extends undefined
   ? { metadata?: undefined }

@@ -88,7 +88,7 @@ export function createGutterWrapper(children?: ElementContent[]): HASTElement {
   return createHastElement({
     tagName: 'div',
     properties: { 'data-gutter': '' },
-    children
+    children,
   });
 }
 

@@ -1,7 +1,5 @@
-import type { AnnotationSide } from '../types';
+import type { SelectionSide } from '../types';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
-
-export type SelectionSide = AnnotationSide;
 
 export interface SelectedLineRange {
   start: number;
@@ -10,16 +8,22 @@ export interface SelectedLineRange {
   endSide?: SelectionSide;
 }
 
+export type GetLineIndexUtility = (
+  lineNumber: number,
+  side?: SelectionSide
+) => [number, number] | undefined;
+
 export interface LineSelectionOptions {
   enableLineSelection?: boolean;
   onLineSelected?: (range: SelectedLineRange | null) => void;
   onLineSelectionStart?: (range: SelectedLineRange | null) => void;
   onLineSelectionEnd?: (range: SelectedLineRange | null) => void;
+  getLineIndex?: GetLineIndexUtility;
 }
 
 interface MouseInfo {
   lineNumber: number;
-  eventSide: AnnotationSide;
+  eventSide: SelectionSide | undefined;
   lineIndex: number;
 }
 
@@ -34,7 +38,7 @@ export class LineSelectionManager {
   private pre: HTMLPreElement | undefined;
   private selectedRange: SelectedLineRange | null = null;
   private renderedSelectionRange: SelectedLineRange | null | undefined;
-  private anchor: { line: number; side: SelectionSide } | undefined;
+  private anchor: { line: number; side: SelectionSide | undefined } | undefined;
   private _queuedRender: number | undefined;
 
   constructor(private options: LineSelectionOptions = {}) {}
@@ -98,6 +102,16 @@ export class LineSelectionManager {
 
   getSelection(): SelectedLineRange | null {
     return this.selectedRange;
+  }
+
+  getLineIndex(
+    lineNumber: number,
+    side?: SelectionSide
+  ): [number, number] | undefined {
+    const { getLineIndex } = this.options;
+    return getLineIndex != null
+      ? getLineIndex(lineNumber, side)
+      : [lineNumber - 1, lineNumber - 1];
   }
 
   private attachEventListeners(): void {
@@ -187,10 +201,10 @@ export class LineSelectionManager {
   };
 
   private updateSelection(currentLine: null): void;
-  private updateSelection(currentLine: number, side: AnnotationSide): void;
+  private updateSelection(currentLine: number, side?: SelectionSide): void;
   private updateSelection(
     currentLine: number | null,
-    side?: AnnotationSide
+    side?: SelectionSide
   ): void {
     if (currentLine == null) {
       this.selectedRange = null;
@@ -240,7 +254,21 @@ export class LineSelectionManager {
       );
     }
     const split = this.pre.dataset.type === 'split';
-    const rowRange = this.deriveRowRangeFromDOM(this.selectedRange, split);
+    const startIndexes = this.getLineIndex(
+      this.selectedRange.start,
+      this.selectedRange.side
+    );
+    const finalIndexes = this.getLineIndex(
+      this.selectedRange.end,
+      this.selectedRange.endSide ?? this.selectedRange.side
+    );
+    const rowRange =
+      startIndexes != null && finalIndexes != null
+        ? {
+            start: split ? startIndexes[1] : startIndexes[0],
+            end: split ? finalIndexes[1] : finalIndexes[0],
+          }
+        : undefined;
     if (rowRange == null) {
       console.error({ rowRange, selectedRange: this.selectedRange });
       throw new Error(
@@ -268,7 +296,7 @@ export class LineSelectionManager {
           continue;
         }
 
-        const lineIndex = this.getLineIndex(contentElement, split);
+        const lineIndex = this.parseLineIndex(contentElement, split);
         if ((lineIndex ?? 0) > last) break;
         if (lineIndex == null || lineIndex < first) continue;
         let attributeValue = isSingle
@@ -360,9 +388,9 @@ export class LineSelectionManager {
       }
       const side = this.getLineSideFromElement(element);
       if (side === targetSide) {
-        return this.getLineIndex(element, split);
+        return this.parseLineIndex(element, split);
       } else if (parseInt(element.dataset.altLine ?? '') === lineNumber) {
-        return this.getLineIndex(element, split);
+        return this.parseLineIndex(element, split);
       }
     }
     console.error(
@@ -399,7 +427,7 @@ export class LineSelectionManager {
     let lineNumber: number | undefined;
     let lineIndex: number | undefined;
     let isNumberColumn = false;
-    let eventSide: AnnotationSide | undefined;
+    let eventSide: SelectionSide | undefined;
     for (const element of path) {
       if (lineNumber != null && lineIndex != null && eventSide != null) {
         break;
@@ -411,7 +439,7 @@ export class LineSelectionManager {
       if ('lineIndex' in element.dataset) {
         isNumberColumn = 'columnNumber' in element.dataset;
         lineNumber = this.getLineNumber(element);
-        lineIndex = this.getLineIndex(
+        lineIndex = this.parseLineIndex(
           element,
           this.pre?.dataset.type === 'split'
         );
@@ -424,7 +452,12 @@ export class LineSelectionManager {
       }
 
       if ('code' in element.dataset && eventSide == null) {
-        eventSide = 'deletions' in element.dataset ? 'deletions' : 'additions';
+        eventSide =
+          'deletions' in element.dataset
+            ? 'deletions'
+            : 'additions' in element.dataset
+              ? 'additions'
+              : undefined;
         break;
       }
     }
@@ -436,11 +469,7 @@ export class LineSelectionManager {
     ) {
       return undefined;
     }
-    return {
-      lineIndex,
-      lineNumber,
-      eventSide: eventSide ?? 'additions',
-    };
+    return { lineIndex, lineNumber, eventSide };
   }
 
   private getLineNumber(element: HTMLElement): number | undefined {
@@ -451,7 +480,7 @@ export class LineSelectionManager {
     return !Number.isNaN(lineNumber) ? lineNumber : undefined;
   }
 
-  private getLineIndex(
+  private parseLineIndex(
     element: HTMLElement,
     split: boolean
   ): number | undefined {
@@ -483,16 +512,20 @@ export class LineSelectionManager {
   }
 }
 
-export function pluckLineSelectionOptions({
-  enableLineSelection,
-  onLineSelected,
-  onLineSelectionStart,
-  onLineSelectionEnd,
-}: LineSelectionOptions): LineSelectionOptions {
+export function pluckLineSelectionOptions(
+  {
+    enableLineSelection,
+    onLineSelected,
+    onLineSelectionStart,
+    onLineSelectionEnd,
+  }: LineSelectionOptions,
+  getLineIndex?: GetLineIndexUtility
+): LineSelectionOptions {
   return {
     enableLineSelection,
     onLineSelected,
     onLineSelectionStart,
     onLineSelectionEnd,
+    getLineIndex,
   };
 }
