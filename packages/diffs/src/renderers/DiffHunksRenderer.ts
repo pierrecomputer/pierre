@@ -1145,10 +1145,10 @@ function pushLineWithAnnotation({
 }: PushLineWithAnnotation) {
   let hasAnnotationRow = false;
   if (diffStyle === 'unified') {
-    if (deletionLine != null) {
-      context.unifiedContentAST.push(deletionLine);
-    } else if (additionLine != null) {
+    if (additionLine != null) {
       context.unifiedContentAST.push(additionLine);
+    } else if (deletionLine != null) {
+      context.unifiedContentAST.push(deletionLine);
     }
     if (unifiedSpan != null) {
       const lineType =

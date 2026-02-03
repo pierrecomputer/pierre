@@ -5353,7 +5353,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FFA359;--diffs-token-light:#D47628",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
           },
           "tagName": "span",
           "type": "element",
@@ -5412,8 +5412,8 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
         },
       ],
       "properties": {
-        "data-alt-line": 1,
-        "data-line": 2,
+        "data-alt-line": 2,
+        "data-line": 1,
         "data-line-index": "1,1",
         "data-line-type": "context",
       },
@@ -6260,8 +6260,8 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
         },
       ],
       "properties": {
-        "data-alt-line": 11,
-        "data-line": 10,
+        "data-alt-line": 10,
+        "data-line": 11,
         "data-line-index": "13,11",
         "data-line-type": "context",
       },
@@ -6285,8 +6285,8 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
         },
       ],
       "properties": {
-        "data-alt-line": 12,
-        "data-line": 11,
+        "data-alt-line": 11,
+        "data-line": 12,
         "data-line-index": "14,12",
         "data-line-type": "context",
       },
@@ -6310,8 +6310,8 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
         },
       ],
       "properties": {
-        "data-alt-line": 13,
-        "data-line": 12,
+        "data-alt-line": 12,
+        "data-line": 13,
         "data-line-index": "15,13",
         "data-line-type": "context",
       },
