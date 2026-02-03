@@ -46,6 +46,10 @@ If both `oldFile` and `newFile` have a `cacheKey`, the resulting
 `oldKey:newKey`). See [Render Cache](#worker-pool-render-cache) for more
 information.
 
+An optional `throwOnError` parameter (default: `false`) controls error handling.
+When `true`, parsing errors throw exceptions; when `false`, errors are logged to
+the console and parsing continues on a best-effort basis.
+
 <DocsCodeExample {...parseDiffFromFile} />
 
 ### parsePatchFiles [toc-ignore]
@@ -57,6 +61,10 @@ generate cache keys for each file in the patch (format:
 `prefix-patchIndex-fileIndex`), enabling
 [caching of rendered diff results](#worker-pool-render-cache) in the worker
 pool.
+
+An optional `throwOnError` parameter (default: `false`) controls error handling.
+When `true`, parsing errors throw exceptions; when `false`, errors are logged to
+the console and parsing continues on a best-effort basis.
 
 <DocsCodeExample {...parsePatchFiles} />
 

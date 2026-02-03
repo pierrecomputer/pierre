@@ -23,7 +23,8 @@ import { parseLineType } from './parseLineType';
 
 export function processPatch(
   data: string,
-  cacheKeyPrefix?: string
+  cacheKeyPrefix?: string,
+  throwOnError = false
 ): ParsedPatch {
   const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
   const rawFiles = data.split(
@@ -36,10 +37,14 @@ export function processPatch(
       if (patchMetadata == null) {
         patchMetadata = fileOrPatchMetadata;
       } else {
-        console.error(
-          'parsePatchContent: unknown file blob:',
-          fileOrPatchMetadata
-        );
+        if (throwOnError) {
+          throw Error('parsePatchContent: unknown file blob');
+        } else {
+          console.error(
+            'parsePatchContent: unknown file blob:',
+            fileOrPatchMetadata
+          );
+        }
       }
       // If we get in here, it's most likely the introductory metadata from the
       // patch, or something is fucked with the diff format
@@ -51,10 +56,14 @@ export function processPatch(
       if (patchMetadata == null) {
         patchMetadata = fileOrPatchMetadata;
       } else {
-        console.error(
-          'parsePatchContent: unknown file blob:',
-          fileOrPatchMetadata
-        );
+        if (throwOnError) {
+          throw Error('parsePatchContent: unknown file blob');
+        } else {
+          console.error(
+            'parsePatchContent: unknown file blob:',
+            fileOrPatchMetadata
+          );
+        }
       }
       continue;
     }
@@ -64,6 +73,7 @@ export function processPatch(
           ? `${cacheKeyPrefix}-${files.length}`
           : undefined,
       isGitDiff,
+      throwOnError,
     });
     if (currentFile != null) {
       files.push(currentFile);
@@ -77,6 +87,7 @@ interface ProcessFileOptions {
   isGitDiff?: boolean;
   oldFile?: FileContents;
   newFile?: FileContents;
+  throwOnError?: boolean;
 }
 
 export function processFile(
@@ -86,6 +97,7 @@ export function processFile(
     isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(fileDiffString),
     oldFile,
     newFile,
+    throwOnError = false,
   }: ProcessFileOptions = {}
 ): FileDiffMetadata | undefined {
   let lastHunkEnd = 0;
@@ -98,7 +110,11 @@ export function processFile(
     const lines = hunk.split(SPLIT_WITH_NEWLINES);
     const firstLine = lines.shift();
     if (firstLine == null) {
-      console.error('parsePatchContent: invalid hunk', hunk);
+      if (throwOnError) {
+        throw Error('parsePatchContent: invalid hunk');
+      } else {
+        console.error('parsePatchContent: invalid hunk', hunk);
+      }
       continue;
     }
     const fileHeaderMatch = firstLine.match(HUNK_HEADER);
@@ -108,7 +124,11 @@ export function processFile(
     // technically not a hunk
     if (fileHeaderMatch == null || currentFile == null) {
       if (currentFile != null) {
-        console.error('parsePatchContent: Invalid hunk', hunk);
+        if (throwOnError) {
+          throw Error('parsePatchContent: Invalid hunk');
+        } else {
+          console.error('parsePatchContent: Invalid hunk', hunk);
+        }
         continue;
       }
       currentFile = {
@@ -266,7 +286,11 @@ export function processFile(
       isNaN(hunkData.additionStart) ||
       isNaN(hunkData.deletionStart)
     ) {
-      console.error('parsePatchContent: invalid hunk metadata', hunkData);
+      if (throwOnError) {
+        throw Error('parsePatchContent: invalid hunk metadata');
+      } else {
+        console.error('parsePatchContent: invalid hunk metadata', hunkData);
+      }
       continue;
     }
 
@@ -457,7 +481,8 @@ export function processFile(
  */
 export function parsePatchFiles(
   data: string,
-  cacheKeyPrefix?: string
+  cacheKeyPrefix?: string,
+  throwOnError = false
 ): ParsedPatch[] {
   // NOTE(amadeus): This function is pretty forgiving in that it can accept a
   // patch file that includes commit metdata, multiple commits, or not
@@ -469,11 +494,16 @@ export function parsePatchFiles(
           patch,
           cacheKeyPrefix != null
             ? `${cacheKeyPrefix}-${patches.length}`
-            : undefined
+            : undefined,
+          throwOnError
         )
       );
     } catch (error) {
-      console.error(error);
+      if (throwOnError) {
+        throw error;
+      } else {
+        console.error(error);
+      }
     }
   }
   return patches;

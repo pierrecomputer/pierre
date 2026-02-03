@@ -14,7 +14,8 @@ export function parseDiffFromFile(
   // files
   oldFile: FileContents,
   newFile: FileContents,
-  options?: CreatePatchOptionsNonabortable
+  options?: CreatePatchOptionsNonabortable,
+  throwOnError = false
 ): FileDiffMetadata {
   const patch = createTwoFilesPatch(
     oldFile.name,
@@ -35,6 +36,7 @@ export function parseDiffFromFile(
     })(),
     oldFile,
     newFile,
+    throwOnError,
   });
   if (fileData == null) {
     throw new Error(

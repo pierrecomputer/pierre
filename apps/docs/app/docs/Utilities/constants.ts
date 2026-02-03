@@ -36,6 +36,9 @@ export { greet };\`,
 
 const fileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile);
 
+// With strict error handling (throws instead of logging)
+// const fileDiff = parseDiffFromFile(oldFile, newFile, undefined, true);
+
 // fileDiff contains:
 // - name: the filename
 // - hunks: array of diff hunks with line information
@@ -76,6 +79,9 @@ const patches: ParsedPatch[] = parsePatchFiles(patchContent);
 // IMPORTANT: The prefix must change when patchContent changes!
 // Use a stable identifier like a commit SHA or content hash.
 const cachedPatches = parsePatchFiles(patchContent, 'my-pr-123-abc456');
+
+// With strict error handling (throws instead of logging)
+// const patches = parsePatchFiles(patchContent, undefined, true);
 
 // Each ParsedPatch contains:
 // - message: commit message (if present)
