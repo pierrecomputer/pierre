@@ -72,7 +72,10 @@ export class WorkerPoolManager {
   private renderOptions: WorkerRenderingOptions;
   private initialized: Promise<void> | boolean = false;
   private workers: ManagedWorker[] = [];
-  private taskQueue: AllWorkerTasks[] = [];
+  private taskQueue = new Map<
+    FileRendererInstance | DiffRendererInstance,
+    RenderDiffTask | RenderFileTask
+  >();
   private pendingTasks = new Map<WorkerRequestId, AllWorkerTasks>();
   private nextRequestId = 0;
   private themeSubscribers = new Set<ThemeSubscriber>();
@@ -291,12 +294,7 @@ export class WorkerPoolManager {
   cleanUpPendingTasks(
     instance: FileRendererInstance | DiffRendererInstance
   ): void {
-    this.taskQueue = this.taskQueue.filter((task) => {
-      if ('instance' in task) {
-        return task.instance !== instance;
-      }
-      return true;
-    });
+    this.taskQueue.delete(instance);
     for (const [id, task] of Array.from(this.pendingTasks)) {
       if ('instance' in task && task.instance === instance) {
         this.pendingTasks.delete(id);
@@ -424,18 +422,21 @@ export class WorkerPoolManager {
     this._queuedDrain = undefined;
     // If we are initializing or things got cancelled while initializing, we
     // should not attempt to drain the queue
-    if (this.initialized !== true || this.taskQueue.length === 0) {
+    if (this.initialized !== true || this.taskQueue.size === 0) {
       return;
     }
-    while (this.taskQueue.length > 0) {
-      const task = this.taskQueue[0];
+    for (const [instance, task] of this.taskQueue) {
+      // If we have a request in progress for the same instance, we should wait
+      // for it to finish
+      if (this.instanceRequestMap.has(instance)) {
+        continue;
+      }
       const langs = getLangsFromTask(task);
       const availableWorker = this.getAvailableWorker(langs);
       if (availableWorker == null) {
         break;
       }
       this.assignWorkerToTask(task, availableWorker);
-      this.taskQueue.shift();
       void this.resolveLanguagesAndExecuteTask(availableWorker, task, langs);
     }
     this.queueBroadcastStateChanges();
@@ -520,7 +521,7 @@ export class WorkerPoolManager {
     this.fileCache.clear();
     this.diffCache.clear();
     this.instanceRequestMap.clear();
-    this.taskQueue.length = 0;
+    this.taskQueue.clear();
     this.pendingTasks.clear();
     this.highlighter = undefined;
     this.initialized = false;
@@ -549,7 +550,7 @@ export class WorkerPoolManager {
       totalWorkers: this.workers.length,
       workersFailed: this.workersFailed,
       busyWorkers: this.workers.filter((w) => w.request_id != null).length,
-      queuedTasks: this.taskQueue.length,
+      queuedTasks: this.taskQueue.size,
       pendingTasks: this.pendingTasks.size,
       themeSubscribers: this.themeSubscribers.size,
       fileCacheSize: this.fileCache.size,
@@ -596,18 +597,17 @@ export class WorkerPoolManager {
       }
     })();
 
-    this.instanceRequestMap.set(instance, id);
-    this.taskQueue.push(task);
+    this.taskQueue.set(instance, task);
     this.queueDrain();
   }
 
   private async resolveLanguagesAndExecuteTask(
     availableWorker: ManagedWorker,
-    task: AllWorkerTasks,
+    task: RenderFileTask | RenderDiffTask,
     langs: SupportedLanguages[]
   ): Promise<void> {
-    // Add resolved languages if required
-    if (task.type === 'file' || task.type === 'diff') {
+    try {
+      // Add resolved languages if required
       const workerMissingLangs = langs.filter(
         (lang) => !availableWorker.langs.has(lang)
       );
@@ -621,8 +621,10 @@ export class WorkerPoolManager {
             await resolveLanguages(workerMissingLangs);
         }
       }
+      this.executeTask(availableWorker, task);
+    } catch {
+      this.instanceRequestMap.delete(task.instance);
     }
-    this.executeTask(availableWorker, task);
   }
 
   private handleWorkerMessage(
@@ -711,7 +713,7 @@ export class WorkerPoolManager {
     this.pendingTasks.delete(response.id);
     managedWorker.request_id = undefined;
     this.queueBroadcastStateChanges();
-    if (this.taskQueue.length > 0) {
+    if (this.taskQueue.size > 0) {
       // We queue drain so that potentially multiple workers can free up
       // allowing for better language matches if possible
       this.queueDrain();
@@ -730,6 +732,10 @@ export class WorkerPoolManager {
     managedWorker: ManagedWorker
   ) {
     managedWorker.request_id = task.id;
+    if ('instance' in task) {
+      this.taskQueue.delete(task.instance);
+      this.instanceRequestMap.set(task.instance, task.id);
+    }
     this.pendingTasks.set(task.id, task);
   }
 
