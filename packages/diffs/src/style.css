@@ -1206,12 +1206,11 @@
     }
   }
 
-  /* By wrapping hovers in a pointer: fine, we ensure that mobile devices don't
-   *  require a double click */
+  /* FIXME(amadeus): actually hook up this attribute selector */
   @media (pointer: fine) {
     [data-column-number],
     [data-line] {
-      &:hover:not([data-selected-line]) {
+      &[data-hovered] {
         background-color: var(--diffs-bg-hover);
       }
     }
@@ -1219,7 +1218,7 @@
     [data-background] {
       [data-column-number],
       [data-line] {
-        &:hover:not([data-selected-line]) {
+        &[data-hovered] {
           &[data-line-type='change-deletion'] {
             background-color: var(--diffs-bg-deletion-hover);
           }
@@ -1340,13 +1339,14 @@
   }
 
   /* Line selection highlighting */
+  [data-line-type='context-expanded'][data-selected-line],
   [data-line-type='context'][data-selected-line] {
     &[data-column-number] {
       color: var(--diffs-selection-number-fg);
       background-color: var(--diffs-bg-selection-number);
     }
 
-    [data-line] {
+    &[data-line] {
       background-color: var(--diffs-bg-selection);
     }
   }
@@ -1354,7 +1354,6 @@
   [data-line-type='change-addition'],
   [data-line-type='change-deletion'] {
     &[data-selected-line] {
-      /* FIXME: Revisit this when fixing selection */
       &[data-line] {
         background-color: light-dark(
           color-mix(
