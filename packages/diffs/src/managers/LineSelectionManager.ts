@@ -231,7 +231,7 @@ export class LineSelectionManager {
       return;
     }
 
-    const codeElements = this.pre.querySelectorAll('[data-code]');
+    const { children: codeElements } = this.pre;
     if (codeElements.length === 0) return;
     if (codeElements.length > 2) {
       console.error(codeElements);
@@ -251,9 +251,24 @@ export class LineSelectionManager {
     const first = Math.min(rowRange.start, rowRange.end);
     const last = Math.max(rowRange.start, rowRange.end);
     for (const code of codeElements) {
-      for (const element of code.children) {
-        if (!(element instanceof HTMLElement)) continue;
-        const lineIndex = this.getLineIndex(element, split);
+      const [gutter, content] = code.children;
+      const len = content.children.length;
+      if (len !== gutter.children.length) {
+        throw new Error(
+          'LineSelectionManager.renderSelection: gutter and content children dont match, something is wrong'
+        );
+      }
+      for (let i = 0; i < len; i++) {
+        const contentElement = content.children[i];
+        const gutterElement = gutter.children[i];
+        if (
+          !(contentElement instanceof HTMLElement) ||
+          !(gutterElement instanceof HTMLElement)
+        ) {
+          continue;
+        }
+
+        const lineIndex = this.getLineIndex(contentElement, split);
         if ((lineIndex ?? 0) > last) break;
         if (lineIndex == null || lineIndex < first) continue;
         let attributeValue = isSingle
@@ -263,28 +278,34 @@ export class LineSelectionManager {
             : lineIndex === last
               ? 'last'
               : '';
-        element.setAttribute('data-selected-line', attributeValue);
+        contentElement.setAttribute('data-selected-line', attributeValue);
+        gutterElement.setAttribute('data-selected-line', attributeValue);
         // If we have a line annotation following our selected line, we should
         // mark it as selected as well
         if (
-          element.nextSibling instanceof HTMLElement &&
-          element.nextSibling.hasAttribute('data-line-annotation')
+          gutterElement.nextSibling instanceof HTMLElement &&
+          contentElement.nextSibling instanceof HTMLElement &&
+          contentElement.nextSibling.hasAttribute('data-line-annotation')
         ) {
           // Depending on the line's attribute value, lets go ahead and correct
           // it when adding in the annotation row
           if (isSingle) {
             // Single technically becomes 2 selected lines
             attributeValue = 'last';
-            element.setAttribute('data-selected-line', 'first');
+            contentElement.setAttribute('data-selected-line', 'first');
           } else if (lineIndex === first) {
             // We don't want apply 'first' to the line annotation
             attributeValue = '';
           } else if (lineIndex === last) {
             // the annotation will become the last selected line and therefore
             // our existing line should no longer be last
-            element.setAttribute('data-selected-line', '');
+            contentElement.setAttribute('data-selected-line', '');
           }
-          element.nextSibling.setAttribute(
+          contentElement.nextSibling.setAttribute(
+            'data-selected-line',
+            attributeValue
+          );
+          gutterElement.nextSibling.setAttribute(
             'data-selected-line',
             attributeValue
           );
@@ -380,14 +401,15 @@ export class LineSelectionManager {
     let isNumberColumn = false;
     let eventSide: AnnotationSide | undefined;
     for (const element of path) {
+      if (lineNumber != null && lineIndex != null && eventSide != null) {
+        break;
+      }
       if (!(element instanceof HTMLElement)) {
         continue;
       }
-      if (element.hasAttribute('data-column-number')) {
-        isNumberColumn = true;
-        continue;
-      }
-      if (element.hasAttribute('data-line')) {
+
+      if ('lineIndex' in element.dataset) {
+        isNumberColumn = 'columnNumber' in element.dataset;
         lineNumber = this.getLineNumber(element);
         lineIndex = this.getLineIndex(
           element,
@@ -398,31 +420,15 @@ export class LineSelectionManager {
         } else if (element.dataset.lineType === 'change-additions') {
           eventSide = 'additions';
         }
-        // if we can't pull out an index or line number, we can't do anything.
-        if (lineIndex == null || lineNumber == null) {
-          lineIndex = undefined;
-          lineNumber = undefined;
-          break;
-        }
-        // If we already have an eventSide, we done computin
-        if (eventSide != null) {
-          break;
-        } else {
-          // context type lines will need to be discovered higher up
-          // at the data-code level
-        }
         continue;
       }
-      if (element.hasAttribute('data-code')) {
-        eventSide ??= element.hasAttribute('data-deletions')
-          ? 'deletions'
-          : // context in unified style are assumed to be additions based on
-            // their line numbers
-            'additions';
-        // If we got to the code element, we def done, son
+
+      if ('code' in element.dataset && eventSide == null) {
+        eventSide = 'deletions' in element.dataset ? 'deletions' : 'additions';
         break;
       }
     }
+
     if (
       (eventType === 'click' && !isNumberColumn) ||
       lineIndex == null ||
@@ -433,14 +439,15 @@ export class LineSelectionManager {
     return {
       lineIndex,
       lineNumber,
-      // Normally this shouldn't hit unless we broke early for whatever reason,
-      // but for types lets ensure it's additions if undefined
       eventSide: eventSide ?? 'additions',
     };
   }
 
   private getLineNumber(element: HTMLElement): number | undefined {
-    const lineNumber = parseInt(element.dataset.line ?? '', 10);
+    const lineNumber = parseInt(
+      element.dataset.columnNumber ?? element.dataset.line ?? '',
+      10
+    );
     return !Number.isNaN(lineNumber) ? lineNumber : undefined;
   }
 
