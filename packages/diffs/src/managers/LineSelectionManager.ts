@@ -136,15 +136,15 @@ export class LineSelectionManager {
       event.button === 0
         ? this.getMouseEventDataForPath(event.composedPath(), 'click')
         : undefined;
-    if (mouseEventData == null) {
+    if (mouseEventData == null || this.pre == null) {
       return;
     }
     event.preventDefault();
     const { lineNumber, eventSide, lineIndex } = mouseEventData;
     if (event.shiftKey && this.selectedRange != null) {
-      const range = this.deriveRowRangeFromDOM(
+      const range = this.getIndexesFromSelection(
         this.selectedRange,
-        this.pre?.dataset.type === 'split'
+        this.pre.dataset.type === 'split'
       );
       if (range == null) return;
       const useStart =
@@ -221,6 +221,30 @@ export class LineSelectionManager {
     this._queuedRender ??= requestAnimationFrame(this.renderSelection);
   }
 
+  private getIndexesFromSelection(
+    selectedRange: SelectedLineRange,
+    split: boolean
+  ): { start: number; end: number } | undefined {
+    if (this.pre == null) {
+      return undefined;
+    }
+    const startIndexes = this.getLineIndex(
+      selectedRange.start,
+      selectedRange.side
+    );
+    const finalIndexes = this.getLineIndex(
+      selectedRange.end,
+      selectedRange.endSide ?? selectedRange.side
+    );
+
+    return startIndexes != null && finalIndexes != null
+      ? {
+          start: split ? startIndexes[1] : startIndexes[0],
+          end: split ? finalIndexes[1] : finalIndexes[0],
+        }
+      : undefined;
+  }
+
   private renderSelection = (): void => {
     if (this._queuedRender != null) {
       cancelAnimationFrame(this._queuedRender);
@@ -254,21 +278,7 @@ export class LineSelectionManager {
       );
     }
     const split = this.pre.dataset.type === 'split';
-    const startIndexes = this.getLineIndex(
-      this.selectedRange.start,
-      this.selectedRange.side
-    );
-    const finalIndexes = this.getLineIndex(
-      this.selectedRange.end,
-      this.selectedRange.endSide ?? this.selectedRange.side
-    );
-    const rowRange =
-      startIndexes != null && finalIndexes != null
-        ? {
-            start: split ? startIndexes[1] : startIndexes[0],
-            end: split ? finalIndexes[1] : finalIndexes[0],
-          }
-        : undefined;
+    const rowRange = this.getIndexesFromSelection(this.selectedRange, split);
     if (rowRange == null) {
       console.error({ rowRange, selectedRange: this.selectedRange });
       throw new Error(
@@ -341,65 +351,6 @@ export class LineSelectionManager {
       }
     }
   };
-
-  private deriveRowRangeFromDOM(
-    range: SelectedLineRange,
-    split: boolean
-  ): { start: number; end: number } | undefined {
-    if (range == null) return undefined;
-    const start = this.findRowIndexForLineNumber(
-      range.start,
-      range.side,
-      split
-    );
-    const end =
-      range.end === range.start &&
-      (range.endSide == null || range.endSide === range.side)
-        ? start
-        : this.findRowIndexForLineNumber(
-            range.end,
-            range.endSide ?? range.side,
-            split
-          );
-    return start != null && end != null ? { start, end } : undefined;
-  }
-
-  private findRowIndexForLineNumber(
-    lineNumber: number,
-    targetSide: SelectionSide = 'additions',
-    split: boolean
-  ): number | undefined {
-    if (this.pre == null) return undefined;
-    const elements = Array.from(
-      this.pre.querySelectorAll(`[data-line="${lineNumber}"]`)
-    );
-    // Given how unified diffs can order things, we need to always process
-    // `[data-line]` elements before `[data-alt-line]`
-    elements.push(
-      ...Array.from(
-        this.pre.querySelectorAll(`[data-alt-line="${lineNumber}"]`)
-      )
-    );
-    if (elements.length === 0) return undefined;
-
-    for (const element of elements) {
-      if (!(element instanceof HTMLElement)) {
-        continue;
-      }
-      const side = this.getLineSideFromElement(element);
-      if (side === targetSide) {
-        return this.parseLineIndex(element, split);
-      } else if (parseInt(element.dataset.altLine ?? '') === lineNumber) {
-        return this.parseLineIndex(element, split);
-      }
-    }
-    console.error(
-      'LineSelectionManager.findRowIndexForLineNumber: Invalid selection',
-      lineNumber,
-      targetSide
-    );
-    return undefined;
-  }
 
   private notifySelectionChange(): void {
     const { onLineSelected } = this.options;
@@ -495,20 +446,6 @@ export class LineSelectionManager {
       return lineIndexes[0];
     }
     return undefined;
-  }
-
-  private getLineSideFromElement(element: HTMLElement): SelectionSide {
-    if (element.dataset.lineType === 'change-deletion') {
-      return 'deletions';
-    }
-    if (element.dataset.lineType === 'change-addition') {
-      return 'additions';
-    }
-    const parent = element.closest('[data-code]');
-    if (!(parent instanceof HTMLElement)) {
-      return 'additions';
-    }
-    return parent.hasAttribute('data-deletions') ? 'deletions' : 'additions';
   }
 }
 
