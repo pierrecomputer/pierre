@@ -295,10 +295,10 @@ export class WorkerPoolManager {
     instance: FileRendererInstance | DiffRendererInstance
   ): void {
     this.taskQueue.delete(instance);
-    for (const [id, task] of Array.from(this.pendingTasks)) {
-      if ('instance' in task && task.instance === instance) {
-        this.pendingTasks.delete(id);
-      }
+    const requestId = this.instanceRequestMap.get(instance);
+    if (requestId != null) {
+      this.pendingTasks.delete(requestId);
+      this.instanceRequestMap.delete(instance);
     }
     this.queueBroadcastStateChanges();
   }
@@ -623,7 +623,7 @@ export class WorkerPoolManager {
       }
       this.executeTask(availableWorker, task);
     } catch {
-      this.instanceRequestMap.delete(task.instance);
+      this.clearWorkerTask(task, availableWorker);
     }
   }
 
@@ -703,15 +703,9 @@ export class WorkerPoolManager {
       }
     }
 
-    if (
-      task != null &&
-      'instance' in task &&
-      this.instanceRequestMap.get(task.instance) === response.id
-    ) {
-      this.instanceRequestMap.delete(task.instance);
+    if (task != null) {
+      this.clearWorkerTask(task, managedWorker);
     }
-    this.pendingTasks.delete(response.id);
-    managedWorker.request_id = undefined;
     this.queueBroadcastStateChanges();
     if (this.taskQueue.size > 0) {
       // We queue drain so that potentially multiple workers can free up
@@ -739,6 +733,14 @@ export class WorkerPoolManager {
     this.pendingTasks.set(task.id, task);
   }
 
+  private clearWorkerTask(task: AllWorkerTasks, managedWorker: ManagedWorker) {
+    managedWorker.request_id = undefined;
+    if ('instance' in task) {
+      this.instanceRequestMap.delete(task.instance);
+    }
+    this.pendingTasks.delete(task.id);
+  }
+
   private executeTask(
     managedWorker: ManagedWorker,
     task: AllWorkerTasks
@@ -750,9 +752,7 @@ export class WorkerPoolManager {
     try {
       managedWorker.worker.postMessage(task.request);
     } catch (error) {
-      // If postMessage fails, clean up the worker state
-      managedWorker.request_id = undefined;
-      this.pendingTasks.delete(task.id);
+      this.clearWorkerTask(task, managedWorker);
       console.error('Failed to post message to worker:', error);
       if ('instance' in task) {
         task.instance.onHighlightError(error);
