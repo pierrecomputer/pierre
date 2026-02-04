@@ -534,6 +534,10 @@
     min-height: 1lh;
   }
 
+  [data-gutter-buffer='annotation'] {
+    min-height: 0;
+  }
+
   [data-gutter-buffer='buffer'] {
     background-size: 8px 8px;
     background-position: 0 0;

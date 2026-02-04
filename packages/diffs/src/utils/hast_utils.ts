@@ -128,7 +128,10 @@ export function createGutterGap(
       'data-gutter-buffer': bufferType,
       'data-buffer-size': size,
       'data-line-type': bufferType === 'annotation' ? undefined : type,
-      style: `grid-row: span ${size};min-height:calc(${size} * 1lh)`,
+      style:
+        bufferType === 'annotation'
+          ? `grid-row: span ${size};`
+          : `grid-row: span ${size};min-height:calc(${size} * 1lh);`,
     },
   });
 }
