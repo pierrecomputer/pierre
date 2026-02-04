@@ -310,7 +310,7 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
+  public setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
     this.hunksRenderer.setOptions({
@@ -338,7 +338,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes): void {
+  public setThemeType(themeType: ThemeTypes): void {
     if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
@@ -367,11 +367,13 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  getHoveredLine = (): GetHoveredLineResult<'diff'> | undefined => {
+  public getHoveredLine = (): GetHoveredLineResult<'diff'> | undefined => {
     return this.mouseEventManager.getHoveredLine();
   };
 
-  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
+  public setLineAnnotations(
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[]
+  ): void {
     this.lineAnnotations = lineAnnotations;
   }
 
@@ -391,11 +393,11 @@ export class FileDiff<LAnnotation = undefined> {
     return true;
   }
 
-  setSelectedLines(range: SelectedLineRange | null): void {
+  public setSelectedLines(range: SelectedLineRange | null): void {
     this.lineSelectionManager.setSelection(range);
   }
 
-  cleanUp(recycle: boolean = false): void {
+  public cleanUp(recycle: boolean = false): void {
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
     this.scrollSyncManager.cleanUp();
@@ -443,12 +445,12 @@ export class FileDiff<LAnnotation = undefined> {
     this.enabled = false;
   }
 
-  virtualizedSetup(): void {
+  public virtualizedSetup(): void {
     this.enabled = true;
     this.workerManager?.subscribeToThemeChanges(this);
   }
 
-  hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
+  public hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
     const { overflow = 'scroll', diffStyle = 'split' } = this.options;
     const { fileContainer, prerenderedHTML } = props;
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
@@ -534,7 +536,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  rerender(): void {
+  public rerender(): void {
     if (
       !this.enabled ||
       (this.fileDiff == null &&
@@ -552,14 +554,14 @@ export class FileDiff<LAnnotation = undefined> {
     });
   }
 
-  handleExpandHunk = (
+  public handleExpandHunk = (
     hunkIndex: number,
     direction: ExpansionDirections
   ): void => {
     this.expandHunk(hunkIndex, direction);
   };
 
-  expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
+  public expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
     this.hunksRenderer.expandHunk(hunkIndex, direction);
     this.rerender();
   }
@@ -875,7 +877,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.fileContainer.appendChild(this.hoverContent);
   }
 
-  getOrCreateFileContainer(
+  protected getOrCreateFileContainer(
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
@@ -905,7 +907,7 @@ export class FileDiff<LAnnotation = undefined> {
     return this.fileContainer;
   }
 
-  getFileContainer(): HTMLElement | undefined {
+  protected getFileContainer(): HTMLElement | undefined {
     return this.fileContainer;
   }
 
@@ -1392,7 +1394,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  trimColumnRows(
+  private trimColumnRows(
     columns: ColumnElements | undefined,
     preTrimCount: number,
     postTrimStart: number

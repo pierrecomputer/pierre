@@ -157,7 +157,7 @@ export class File<LAnnotation = undefined> {
     this.rerender();
   };
 
-  rerender(): void {
+  public rerender(): void {
     if (this.file == null) return;
     this.render({
       file: this.file,
@@ -166,7 +166,7 @@ export class File<LAnnotation = undefined> {
     });
   }
 
-  setOptions(options: FileOptions<LAnnotation> | undefined): void {
+  public setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
     this.mouseEventManager.setOptions(pluckMouseEventOptions(options));
@@ -177,7 +177,7 @@ export class File<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes): void {
+  public setThemeType(themeType: ThemeTypes): void {
     const currentThemeType = this.options.themeType ?? 'system';
     if (currentThemeType === themeType) {
       return;
@@ -207,19 +207,21 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  getHoveredLine = (): GetHoveredLineResult<'file'> | undefined => {
+  public getHoveredLine = (): GetHoveredLineResult<'file'> | undefined => {
     return this.mouseEventManager.getHoveredLine();
   };
 
-  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
+  public setLineAnnotations(
+    lineAnnotations: LineAnnotation<LAnnotation>[]
+  ): void {
     this.lineAnnotations = lineAnnotations;
   }
 
-  setSelectedLines(range: SelectedLineRange | null): void {
+  public setSelectedLines(range: SelectedLineRange | null): void {
     this.lineSelectionManager.setSelection(range);
   }
 
-  cleanUp(): void {
+  public cleanUp(): void {
     this.fileRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.mouseEventManager.cleanUp();
@@ -251,7 +253,7 @@ export class File<LAnnotation = undefined> {
     this.placeHolder = undefined;
   }
 
-  hydrate(props: FileHyrdateProps<LAnnotation>): void {
+  public hydrate(props: FileHyrdateProps<LAnnotation>): void {
     const { fileContainer, prerenderedHTML } = props;
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(

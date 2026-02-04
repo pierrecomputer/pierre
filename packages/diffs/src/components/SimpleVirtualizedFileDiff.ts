@@ -19,6 +19,13 @@ import {
 } from './FileDiff';
 import type { SimpleVirtualizer } from './SimpleVirtualizer';
 
+interface ExpandedRegionSpecs {
+  fromStart: number;
+  fromEnd: number;
+  collapsedLines: number;
+  renderAll: boolean;
+}
+
 let instanceId = -1;
 
 const DEBUG_HEIGHT = false;
@@ -363,12 +370,7 @@ export class SimpleVirtualizedFileDiff<
     isPartial: boolean,
     hunkIndex: number,
     rangeSize: number
-  ): {
-    fromStart: number;
-    fromEnd: number;
-    collapsedLines: number;
-    renderAll: boolean;
-  } {
+  ): ExpandedRegionSpecs {
     if (rangeSize <= 0 || isPartial) {
       return {
         fromStart: 0,

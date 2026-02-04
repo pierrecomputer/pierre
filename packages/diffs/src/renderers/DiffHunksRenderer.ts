@@ -154,7 +154,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  cleanUp(): void {
+  public cleanUp(): void {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
@@ -163,14 +163,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.onRenderUpdate = undefined;
   }
 
-  recycle(): void {
+  public recycle(): void {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
     this.workerManager?.cleanUpPendingTasks(this);
   }
 
-  setOptions(options: BaseDiffOptions): void {
+  public setOptions(options: BaseDiffOptions): void {
     this.options = options;
   }
 
@@ -178,14 +178,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes): void {
+  public setThemeType(themeType: ThemeTypes): void {
     if (this.getOptionsWithDefaults().themeType === themeType) {
       return;
     }
     this.mergeOptions({ themeType });
   }
 
-  expandHunk(index: number, direction: ExpansionDirections): void {
+  public expandHunk(index: number, direction: ExpansionDirections): void {
     const { expansionLineCount } = this.getOptionsWithDefaults();
     const region = {
       ...(this.expandedHunks.get(index) ?? {
@@ -202,15 +202,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.expandedHunks.set(index, region);
   }
 
-  getExpandedHunk(hunkIndex: number): HunkExpansionRegion {
+  public getExpandedHunk(hunkIndex: number): HunkExpansionRegion {
     return this.expandedHunks.get(hunkIndex) ?? DEFAULT_EXPANDED_REGION;
   }
 
-  getExpandedHunksMap(): Map<number, HunkExpansionRegion> {
+  public getExpandedHunksMap(): Map<number, HunkExpansionRegion> {
     return this.expandedHunks;
   }
 
-  setLineAnnotations(lineAnnotations: DiffLineAnnotation<LAnnotation>[]): void {
+  public setLineAnnotations(
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[]
+  ): void {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     for (const annotation of lineAnnotations) {
@@ -228,7 +230,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  getOptionsWithDefaults(): OptionsWithDefaults {
+  private getOptionsWithDefaults(): OptionsWithDefaults {
     const {
       diffIndicators = 'bars',
       diffStyle = 'split',
@@ -269,14 +271,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  async initializeHighlighter(): Promise<DiffsHighlighter> {
+  private async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );
     return this.highlighter;
   }
 
-  hydrate(diff: FileDiffMetadata | undefined): void {
+  public hydrate(diff: FileDiffMetadata | undefined): void {
     if (diff == null) {
       return;
     }
@@ -330,7 +332,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { options, forceRender: false };
   }
 
-  renderDiff(
+  public renderDiff(
     diff: FileDiffMetadata | undefined = this.renderCache?.diff,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): HunksRenderResult | undefined {
@@ -435,7 +437,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       : undefined;
   }
 
-  async asyncRender(
+  public async asyncRender(
     diff: FileDiffMetadata,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
@@ -500,7 +502,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { result, options };
   }
 
-  onHighlightSuccess(
+  public onHighlightSuccess(
     diff: FileDiffMetadata,
     result: ThemedDiffResult,
     options: RenderDiffOptions
@@ -526,7 +528,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  onHighlightError(error: unknown): void {
+  public onHighlightError(error: unknown): void {
     console.error(error);
   }
 
@@ -939,7 +941,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  renderCodeAST(
+  public renderCodeAST(
     type: 'unified' | 'deletions' | 'additions',
     result: HunksRenderResult
   ): ElementContent[] | undefined {
@@ -967,7 +969,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return [gutter, contentColumn];
   }
 
-  renderFullAST(
+  public renderFullAST(
     result: HunksRenderResult,
     children: ElementContent[] = []
   ): HASTElement {
@@ -1015,14 +1017,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { ...result.preNode, children };
   }
 
-  renderFullHTML(
+  public renderFullHTML(
     result: HunksRenderResult,
     tempChildren: ElementContent[] = []
   ): string {
     return toHtml(this.renderFullAST(result, tempChildren));
   }
 
-  renderPartialHTML(
+  public renderPartialHTML(
     children: ElementContent[],
     columnType?: 'unified' | 'deletions' | 'additions'
   ): string {

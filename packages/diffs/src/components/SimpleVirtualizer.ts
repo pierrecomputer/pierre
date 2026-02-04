@@ -32,7 +32,7 @@ export interface SimpleVirtualizerConfig {
 const DEFAULT_SIMPLE_VIRTUALIZER_CONFIG: SimpleVirtualizerConfig = {
   overscrollSize: DEFAULT_OVERSCROLL_SIZE,
   intersectionObserverMargin: INTERSECTION_OBSERVER_MARGIN,
-  resizeDebugging: true,
+  resizeDebugging: false,
 };
 
 let lastSize = 0;

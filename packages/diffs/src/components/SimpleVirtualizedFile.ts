@@ -4,7 +4,6 @@ import type {
   RenderRange,
   RenderWindow,
   VirtualFileMetrics,
-  VirtualWindowSpecs,
 } from '../types';
 import { iterateOverFile } from '../utils/iterateOverFile';
 import type { WorkerPoolManager } from '../worker';
@@ -23,7 +22,8 @@ export class SimpleVirtualizedFile<
   public top: number | undefined;
   public height: number = 0;
   // Sparse map: line index -> measured height
-  // Only stores lines that differ from what is returned from `getLineHeight`
+  // Only stores lines that differ from what is returned from default line
+  // height
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
 
@@ -40,7 +40,7 @@ export class SimpleVirtualizedFile<
   // Get the height for a line, using cached value if available.
   // If not cached and hasMetadataLine is true, adds lineHeight for the
   // metadata.
-  getLineHeight(lineIndex: number, hasMetadataLine = false): number {
+  public getLineHeight(lineIndex: number, hasMetadataLine = false): number {
     const cached = this.heightCache.get(lineIndex);
     if (cached != null) {
       return cached;
@@ -66,7 +66,7 @@ export class SimpleVirtualizedFile<
 
   // Measure rendered lines and update height cache.
   // Called after render to reconcile estimated vs actual heights.
-  reconcileHeights(): void {
+  public reconcileHeights(): void {
     if (this.fileContainer == null || this.file == null) {
       this.height = 0;
       return;
@@ -133,7 +133,7 @@ export class SimpleVirtualizedFile<
     }
   }
 
-  onRender = (dirty: boolean): boolean => {
+  public onRender = (dirty: boolean): boolean => {
     if (this.fileContainer == null || this.file == null) {
       return false;
     }
@@ -143,14 +143,6 @@ export class SimpleVirtualizedFile<
       );
     }
     return this.render({ file: this.file });
-  };
-
-  onResize = (_windowSpecs: VirtualWindowSpecs): void => {
-    if (this.fileContainer == null || this.file == null) {
-      return;
-    }
-    this.top = this.virtualizer.getOffsetInScrollContainer(this.fileContainer);
-    this.render({ file: this.file });
   };
 
   override cleanUp(): void {

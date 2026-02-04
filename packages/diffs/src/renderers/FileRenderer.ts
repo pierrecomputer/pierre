@@ -98,7 +98,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  setOptions(options: FileRendererOptions): void {
+  public setOptions(options: FileRendererOptions): void {
     this.options = options;
   }
 
@@ -106,7 +106,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  setThemeType(themeType: ThemeTypes): void {
+  public setThemeType(themeType: ThemeTypes): void {
     const currentThemeType = this.options.themeType ?? 'system';
     if (currentThemeType === themeType) {
       return;
@@ -114,7 +114,9 @@ export class FileRenderer<LAnnotation = undefined> {
     this.mergeOptions({ themeType });
   }
 
-  setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
+  public setLineAnnotations(
+    lineAnnotations: LineAnnotation<LAnnotation>[]
+  ): void {
     this.lineAnnotations = {};
     for (const annotation of lineAnnotations) {
       const arr = this.lineAnnotations[annotation.lineNumber] ?? [];
@@ -123,7 +125,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  cleanUp(): void {
+  public cleanUp(): void {
     this.renderCache = undefined;
     this.highlighter = undefined;
     this.workerManager = undefined;
@@ -131,7 +133,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.lineCache = undefined;
   }
 
-  hydrate(file: FileContents): void {
+  public hydrate(file: FileContents): void {
     const { options } = this.getRenderOptions(file);
     let cache = this.workerManager?.getFileResultCache(file);
     if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
@@ -200,7 +202,7 @@ export class FileRenderer<LAnnotation = undefined> {
     return lineCache.lines;
   }
 
-  renderFile(
+  public renderFile(
     file: FileContents | undefined = this.renderCache?.file,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): FileRenderResult | undefined {
@@ -423,11 +425,11 @@ export class FileRenderer<LAnnotation = undefined> {
     });
   }
 
-  renderFullHTML(result: FileRenderResult): string {
+  public renderFullHTML(result: FileRenderResult): string {
     return toHtml(this.renderFullAST(result));
   }
 
-  renderFullAST(
+  public renderFullAST(
     result: FileRenderResult,
     children: ElementContent[] = []
   ): HASTElement {
@@ -441,7 +443,7 @@ export class FileRenderer<LAnnotation = undefined> {
     return { ...result.preAST, children };
   }
 
-  renderCodeAST(result: FileRenderResult): ElementContent[] {
+  public renderCodeAST(result: FileRenderResult): ElementContent[] {
     const gutter = createGutterWrapper();
     gutter.children = result.gutterAST;
     gutter.properties.style = `grid-row: span ${result.rowCount}`;
@@ -452,7 +454,7 @@ export class FileRenderer<LAnnotation = undefined> {
     return [gutter, contentColumn];
   }
 
-  renderPartialHTML(
+  public renderPartialHTML(
     children: ElementContent[],
     includeCodeNode: boolean = false
   ): string {
@@ -468,14 +470,14 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  async initializeHighlighter(): Promise<DiffsHighlighter> {
+  public async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );
     return this.highlighter;
   }
 
-  onHighlightSuccess(
+  public onHighlightSuccess(
     file: FileContents,
     result: ThemedFileResult,
     options: RenderFileOptions
@@ -501,7 +503,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  onHighlightError(error: unknown): void {
+  public onHighlightError(error: unknown): void {
     console.error(error);
   }
 
