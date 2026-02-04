@@ -121,8 +121,8 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     this.pre?.removeEventListener('click', this.handleMouseClick);
     this.pre?.removeEventListener('pointermove', this.handleMouseMove);
     this.pre?.removeEventListener('pointerleave', this.handleMouseLeave);
-    delete this.pre?.dataset.interactiveLines;
-    delete this.pre?.dataset.interactiveLineNumbers;
+    this.pre?.removeAttribute('data-interactive-lines');
+    this.pre?.removeAttribute('data-interactive-line-numbers');
     this.interactiveLinesAttr = false;
     this.interactiveLineNumbersAttr = false;
     this.hasEventListeners = false;
@@ -149,7 +149,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
 
     if (enableHoverUtility && this.hoverSlot == null) {
       this.hoverSlot = document.createElement('div');
-      this.hoverSlot.dataset.hoverSlot = '';
+      this.hoverSlot.setAttribute('data-hover-slot', '');
       const slotElement = document.createElement('slot');
       slotElement.name = 'hover-slot';
       this.hoverSlot.appendChild(slotElement);
@@ -170,11 +170,11 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       this.hasEventListeners = true;
       pre.addEventListener('click', this.handleMouseClick);
       if (onLineClick != null) {
-        pre.dataset.interactiveLines = '';
+        pre.setAttribute('data-interactive-lines', '');
         this.interactiveLinesAttr = true;
         this.interactiveLineNumbersAttr = false;
       } else if (onLineNumberClick != null) {
-        pre.dataset.interactiveLineNumbers = '';
+        pre.setAttribute('data-interactive-line-numbers', '');
         this.interactiveLinesAttr = false;
         this.interactiveLineNumbersAttr = true;
       }
@@ -220,29 +220,29 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     if (!newContainer) {
       if (onLineClick != null) {
         if (this.interactiveLineNumbersAttr) {
-          delete pre.dataset.interactiveLineNumbers;
+          pre.removeAttribute('data-interactive-line-numbers');
           this.interactiveLineNumbersAttr = false;
         }
         if (!this.interactiveLinesAttr) {
-          pre.dataset.interactiveLines = '';
+          pre.setAttribute('data-interactive-lines', '');
           this.interactiveLinesAttr = true;
         }
       } else if (onLineNumberClick != null) {
         if (this.interactiveLinesAttr) {
-          delete pre.dataset.interactiveLines;
+          pre.removeAttribute('data-interactive-lines');
           this.interactiveLinesAttr = false;
         }
         if (!this.interactiveLineNumbersAttr) {
-          pre.dataset.interactiveLineNumbers = '';
+          pre.setAttribute('data-interactive-line-numbers', '');
           this.interactiveLineNumbersAttr = true;
         }
       } else {
         if (this.interactiveLinesAttr) {
-          delete pre.dataset.interactiveLines;
+          pre.removeAttribute('data-interactive-lines');
           this.interactiveLinesAttr = false;
         }
         if (this.interactiveLineNumbersAttr) {
-          delete pre.dataset.interactiveLineNumbers;
+          pre.removeAttribute('data-interactive-line-numbers');
           this.interactiveLineNumbersAttr = false;
         }
       }
@@ -456,32 +456,40 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       if (!(element instanceof HTMLElement)) continue;
       // If we've click on a number column line, lets grab the relevant
       // line info
-      if (numberElement == null && 'columnNumber' in element.dataset) {
+      const _columnNumber =
+        numberElement == null
+          ? (element.getAttribute('data-column-number') ?? undefined)
+          : undefined;
+      if (_columnNumber) {
         numberElement = element;
-        lineNumber = Number.parseInt(element.dataset.columnNumber ?? '', 10);
+        lineNumber = Number.parseInt(_columnNumber, 10);
         numberColumn = true;
         lineType = getLineTypeFromElement(element);
-        lineIndex = element.dataset.lineIndex;
+        lineIndex = element.getAttribute('data-line-index') ?? undefined;
         continue;
       }
       // If we've clicked on a code column line, lets grab the relevant
       // line info
-      if (lineElement == null && 'line' in element.dataset) {
+      const _lineNumber =
+        lineElement == null
+          ? (element.getAttribute('data-line') ?? undefined)
+          : undefined;
+      if (_lineNumber) {
         lineElement = element;
-        lineNumber = Number.parseInt(element.dataset.line ?? '', 10);
+        lineNumber = Number.parseInt(_lineNumber, 10);
         lineType = getLineTypeFromElement(element);
-        lineIndex = element.dataset.lineIndex;
+        lineIndex = element.getAttribute('data-line-index') ?? undefined;
         continue;
       }
       // If we've clicked on an expand button, lets grab the relevant info
-      if (expandInfo == null && 'expandButton' in element.dataset) {
+      if (expandInfo == null && element.hasAttribute('data-expand-button')) {
         expandInfo = {
           hunkIndex: undefined,
           direction: (() => {
-            if ('expandUp' in element.dataset) {
+            if (element.hasAttribute('data-expand-up')) {
               return 'up';
             }
-            if ('expandDown' in element.dataset) {
+            if (element.hasAttribute('data-expand-down')) {
               return 'down';
             }
             return 'both';
@@ -492,11 +500,12 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       // If we've clicked on an expand container, lets grab the index off of it
       // FIXME(amadeus): Might be worth stuffing the expand index into the
       // buttons themselves?  Requires a small HTML change tho...
-      if (expandInfo != null && 'expandIndex' in element.dataset) {
-        const expandIndex = Number.parseInt(
-          element.dataset.expandIndex ?? '',
-          10
-        );
+      const _expandIndex =
+        expandInfo != null
+          ? (element.getAttribute('data-expand-index') ?? undefined)
+          : undefined;
+      if (expandInfo != null && _expandIndex != null) {
+        const expandIndex = Number.parseInt(_expandIndex, 10);
         if (!Number.isNaN(expandIndex)) {
           expandInfo.hunkIndex = expandIndex;
         }
@@ -505,7 +514,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       // And finally, if we managed to get to the code element, then we either
       // have the necessary info, or we don't, so we can stop iterating through
       // the path
-      if (codeElement == null && 'code' in element.dataset) {
+      if (codeElement == null && element.hasAttribute('data-code')) {
         codeElement = element;
         // Once we've found the code parent, there's no more travesial necessary
         break;
@@ -562,7 +571,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
           case 'change-addition':
             return 'additions';
           default:
-            return 'deletions' in codeElement.dataset
+            return codeElement.hasAttribute('data-deletions')
               ? 'deletions'
               : 'additions';
         }
@@ -631,7 +640,7 @@ function queryHTMLElement(
 }
 
 function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {
-  const { lineType } = element.dataset;
+  const lineType = element.getAttribute('data-line-type');
   if (lineType == null) {
     return undefined;
   }

@@ -57,9 +57,7 @@ export class LineSelectionManager {
       cancelAnimationFrame(this._queuedRender);
       this._queuedRender = undefined;
     }
-    if (this.pre != null) {
-      delete this.pre.dataset.interactiveLineNumbers;
-    }
+    this.pre?.removeAttribute('data-interactive-line-numbers');
     this.pre = undefined;
   }
 
@@ -118,7 +116,7 @@ export class LineSelectionManager {
     if (this.pre == null) return;
     // Lets run a cleanup, just in case
     this.removeEventListeners();
-    this.pre.dataset.interactiveLineNumbers = '';
+    this.pre.setAttribute('data-interactive-line-numbers', '');
     this.pre.addEventListener('pointerdown', this.handleMouseDown);
   }
 
@@ -127,7 +125,7 @@ export class LineSelectionManager {
     this.pre.removeEventListener('pointerdown', this.handleMouseDown);
     document.removeEventListener('pointermove', this.handleMouseMove);
     document.removeEventListener('pointerup', this.handleMouseUp);
-    delete this.pre.dataset.interactiveLineNumbers;
+    this.pre.removeAttribute('data-interactive-line-numbers');
   }
 
   private handleMouseDown = (event: PointerEvent): void => {
@@ -144,7 +142,7 @@ export class LineSelectionManager {
     if (event.shiftKey && this.selectedRange != null) {
       const range = this.getIndexesFromSelection(
         this.selectedRange,
-        this.pre.dataset.type === 'split'
+        this.pre.getAttribute('data-type') === 'split'
       );
       if (range == null) return;
       const useStart =
@@ -277,7 +275,7 @@ export class LineSelectionManager {
         'LineSelectionManager.applySelectionToDOM: Somehow there are more than 2 code elements...'
       );
     }
-    const split = this.pre.dataset.type === 'split';
+    const split = this.pre.getAttribute('data-type') === 'split';
     const rowRange = this.getIndexesFromSelection(this.selectedRange, split);
     if (rowRange == null) {
       console.error({ rowRange, selectedRange: this.selectedRange });
@@ -375,6 +373,9 @@ export class LineSelectionManager {
     path: (EventTarget | undefined)[],
     eventType: 'click' | 'move'
   ): MouseInfo | undefined {
+    if (this.pre == null) {
+      return undefined;
+    }
     let lineNumber: number | undefined;
     let lineIndex: number | undefined;
     let isNumberColumn = false;
@@ -387,28 +388,28 @@ export class LineSelectionManager {
         continue;
       }
 
-      if ('lineIndex' in element.dataset) {
-        isNumberColumn = 'columnNumber' in element.dataset;
+      if (element.hasAttribute('data-line-index')) {
+        isNumberColumn = element.hasAttribute('data-column-number');
         lineNumber = this.getLineNumber(element);
         lineIndex = this.parseLineIndex(
           element,
-          this.pre?.dataset.type === 'split'
+          this.pre.getAttribute('data-type') === 'split'
         );
-        if (element.dataset.lineType === 'change-deletion') {
+        const lineType = element.getAttribute('data-line-type');
+        if (lineType === 'change-deletion') {
           eventSide = 'deletions';
-        } else if (element.dataset.lineType === 'change-additions') {
+        } else if (lineType === 'change-additions') {
           eventSide = 'additions';
         }
         continue;
       }
 
-      if ('code' in element.dataset && eventSide == null) {
-        eventSide =
-          'deletions' in element.dataset
-            ? 'deletions'
-            : 'additions' in element.dataset
-              ? 'additions'
-              : undefined;
+      if (eventSide == null && element.hasAttribute('data-code')) {
+        eventSide = element.hasAttribute('data-deletions')
+          ? 'deletions'
+          : element.hasAttribute('data-additions')
+            ? 'additions'
+            : undefined;
         break;
       }
     }
@@ -432,7 +433,9 @@ export class LineSelectionManager {
 
   private getLineNumber(element: HTMLElement): number | undefined {
     const lineNumber = parseInt(
-      element.dataset.columnNumber ?? element.dataset.line ?? '',
+      element.getAttribute('data-column-number') ??
+        element.getAttribute('data-line') ??
+        '',
       10
     );
     return !Number.isNaN(lineNumber) ? lineNumber : undefined;
@@ -442,7 +445,7 @@ export class LineSelectionManager {
     element: HTMLElement,
     split: boolean
   ): number | undefined {
-    const lineIndexes = (element.dataset.lineIndex ?? '')
+    const lineIndexes = (element.getAttribute('data-line-index') ?? '')
       .split(',')
       .map((value) => parseInt(value))
       .filter((value) => !Number.isNaN(value));
