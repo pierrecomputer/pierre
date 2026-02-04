@@ -13,7 +13,7 @@
       "path": "../../packages/diffs"
     },
     {
-      "path": "../../packages/storage-elements-next"
+      "path": "../../packages/file-tree"
     }
   ],
   "compilerOptions": {
