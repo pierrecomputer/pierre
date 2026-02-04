@@ -420,7 +420,14 @@ export class LineSelectionManager {
     ) {
       return undefined;
     }
-    return { lineIndex, lineNumber, eventSide };
+    return {
+      lineIndex,
+      lineNumber,
+      // Default side to 'additions' if we were unable to get a side,
+      // otherwise later on we risk the side getting inverted in future if the
+      // selection expands into a 'deletions' side
+      eventSide: eventSide ?? 'additions',
+    };
   }
 
   private getLineNumber(element: HTMLElement): number | undefined {
