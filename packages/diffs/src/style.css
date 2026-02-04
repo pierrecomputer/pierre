@@ -1000,8 +1000,12 @@
     }
   }
 
-  [data-line-annotation] {
+  [data-line-annotation],
+  [data-gutter-buffer='annotation'] {
     --diffs-line-bg: var(--diffs-bg-context);
+  }
+
+  [data-line-annotation] {
     min-height: var(--diffs-annotation-min-height, 0);
     z-index: 2;
   }
@@ -1339,8 +1343,8 @@
   }
 
   /* Line selection highlighting */
-  [data-line-type='context-expanded'][data-selected-line],
-  [data-line-type='context'][data-selected-line] {
+  [data-selected-line] {
+    &[data-gutter-buffer='annotation'],
     &[data-column-number] {
       color: var(--diffs-selection-number-fg);
       background-color: var(--diffs-bg-selection-number);
