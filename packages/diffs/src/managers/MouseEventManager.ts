@@ -442,6 +442,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     let lineType: LineTypes | undefined;
     let codeElement: HTMLElement | undefined;
     let lineElement: HTMLElement | undefined;
+    let lineIndex: string | undefined;
     let numberElement: HTMLElement | undefined;
     let expandInfo:
       | {
@@ -460,6 +461,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
         lineNumber = Number.parseInt(element.dataset.columnNumber ?? '', 10);
         numberColumn = true;
         lineType = getLineTypeFromElement(element);
+        lineIndex = element.dataset.lineIndex;
         continue;
       }
       // If we've clicked on a code column line, lets grab the relevant
@@ -468,6 +470,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
         lineElement = element;
         lineNumber = Number.parseInt(element.dataset.line ?? '', 10);
         lineType = getLineTypeFromElement(element);
+        lineIndex = element.dataset.lineIndex;
         continue;
       }
       // If we've clicked on an expand button, lets grab the relevant info
@@ -515,14 +518,20 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       return { type: 'line-info', hunkIndex, direction };
     }
 
-    lineElement ??= queryHTMLElement(
-      codeElement,
-      `[data-line="${lineNumber}"]`
-    );
-    numberElement ??= queryHTMLElement(
-      codeElement,
-      `[data-column-number="${lineNumber}"]`
-    );
+    lineElement ??=
+      lineIndex != null
+        ? queryHTMLElement(
+            codeElement,
+            `[data-line][data-line-index="${lineIndex}"]`
+          )
+        : undefined;
+    numberElement ??=
+      lineIndex != null
+        ? queryHTMLElement(
+            codeElement,
+            `[data-column-number][data-line-index="${lineIndex}"]`
+          )
+        : undefined;
 
     // If we were unable to find the necessary elements, we out.
     if (
