@@ -454,8 +454,12 @@
     grid-column: 1;
     z-index: 3;
     position: relative;
-    border-right: var(--diffs-gap-style, 2px solid var(--diffs-bg));
     background-color: var(--diffs-bg);
+
+    [data-gutter-buffer],
+    [data-column-number] {
+      border-right: var(--diffs-gap-style, 2px solid var(--diffs-bg));
+    }
   }
 
   [data-content] {
@@ -1143,7 +1147,7 @@
 
   [data-disable-line-numbers] {
     [data-column-number] {
-      min-width: 0;
+      min-width: 4px;
       padding: 0;
     }
 
