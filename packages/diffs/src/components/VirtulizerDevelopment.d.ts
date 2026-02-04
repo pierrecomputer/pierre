@@ -7,5 +7,6 @@ declare global {
     // oxlint-disable-next-line typescript/no-explicit-any
     __INSTANCE?: AdvancedVirtualizer<any> | SimpleVirtualizer;
     __TOGGLE?: () => void;
+    __LOG?: boolean;
   }
 }
