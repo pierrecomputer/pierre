@@ -323,17 +323,17 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    const previousFile = this.file;
     const previousRenderRange = this.renderRange;
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
+    const didFileChange = !areFilesEqual(this.file, file);
     if (
       !forceRender &&
       areRenderRangesEqual(renderRange, this.renderRange) &&
-      areFilesEqual(this.file, file) &&
+      !didFileChange &&
       !annotationsChanged
     ) {
       return false;
@@ -372,7 +372,7 @@ export class File<LAnnotation = undefined> {
         !this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          areFilesEqual(previousFile, file)
+          didFileChange
         ) ||
         !this.applyPartialRender(previousRenderRange, renderRange)
       ) {
