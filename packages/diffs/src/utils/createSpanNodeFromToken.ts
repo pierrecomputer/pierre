@@ -1,7 +1,7 @@
 import {
-  type ThemedToken,
   getTokenStyleObject,
   stringifyTokenStyle,
+  type ThemedToken,
 } from 'shiki';
 
 export function createSpanFromToken(token: ThemedToken): HTMLSpanElement {

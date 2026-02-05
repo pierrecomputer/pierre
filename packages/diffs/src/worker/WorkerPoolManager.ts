@@ -19,9 +19,9 @@ import type {
   RenderFileOptions,
   RenderFileResult,
   SupportedLanguages,
-  ThemeRegistrationResolved,
   ThemedDiffResult,
   ThemedFileResult,
+  ThemeRegistrationResolved,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';

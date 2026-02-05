@@ -1,9 +1,9 @@
 import {
-  type TreeInstance,
   expandAllFeature,
   hotkeysCoreFeature,
   selectionFeature,
   syncDataLoaderFeature,
+  type TreeInstance,
 } from '@headless-tree/core';
 import type { JSX } from 'preact';
 import { Fragment } from 'preact';

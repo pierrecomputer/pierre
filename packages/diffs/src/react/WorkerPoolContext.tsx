@@ -2,8 +2,8 @@
 
 import {
   type Context,
-  type ReactNode,
   createContext,
+  type ReactNode,
   useContext,
   useEffect,
   useInsertionEffect,
@@ -11,12 +11,12 @@ import {
 } from 'react';
 
 import {
+  getOrCreateWorkerPoolSingleton,
   type SetupWorkerPoolProps,
+  terminateWorkerPoolSingleton,
   type WorkerInitializationRenderOptions,
   type WorkerPoolManager,
   type WorkerPoolOptions,
-  getOrCreateWorkerPoolSingleton,
-  terminateWorkerPoolSingleton,
 } from '../worker';
 
 export type { WorkerPoolOptions, WorkerInitializationRenderOptions };

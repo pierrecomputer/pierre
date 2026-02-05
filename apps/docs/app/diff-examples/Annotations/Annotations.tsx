@@ -2,10 +2,10 @@
 
 import {
   type AnnotationSide,
+  diffAcceptRejectHunk,
   type DiffLineAnnotation,
   type GetHoveredLineResult,
   type SelectedLineRange,
-  diffAcceptRejectHunk,
 } from '@pierre/diffs';
 import { FileDiff, MultiFileDiff } from '@pierre/diffs/react';
 import type {

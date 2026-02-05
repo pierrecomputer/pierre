@@ -7,9 +7,9 @@ import type {
   RenderDiffOptions,
   RenderFileOptions,
   SupportedLanguages,
-  ThemeRegistrationResolved,
   ThemedDiffResult,
   ThemedFileResult,
+  ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 

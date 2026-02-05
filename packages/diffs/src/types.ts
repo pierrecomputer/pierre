@@ -7,8 +7,8 @@ import type {
   HighlighterGeneric,
   LanguageRegistration,
   ShikiTransformer,
-  ThemeRegistrationResolved,
   ThemedToken,
+  ThemeRegistrationResolved,
 } from 'shiki';
 
 /**

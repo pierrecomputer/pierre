@@ -3,7 +3,7 @@ import fs from 'fs';
 import type { IncomingMessage, ServerResponse } from 'http';
 import path, { resolve } from 'path';
 import type { Plugin, PreviewServer, ViteDevServer } from 'vite';
-import { type Logger, createLogger, defineConfig } from 'vite';
+import { createLogger, defineConfig, type Logger } from 'vite';
 
 function escapeRegExp(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

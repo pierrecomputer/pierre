@@ -25,11 +25,11 @@ import type {
   HunkSeparators,
   RenderDiffOptions,
   RenderDiffResult,
-  RenderRange,
   RenderedDiffASTCache,
+  RenderRange,
   SupportedLanguages,
-  ThemeTypes,
   ThemedDiffResult,
+  ThemeTypes,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';

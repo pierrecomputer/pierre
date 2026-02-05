@@ -6,8 +6,8 @@ import type {
   BaseCodeOptions,
   DiffsHighlighter,
   SupportedLanguages,
-  ThemeTypes,
   ThemedToken,
+  ThemeTypes,
 } from '../types';
 import { createRowNodes } from '../utils/createRowNodes';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';

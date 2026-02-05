@@ -10,8 +10,8 @@ import {
 import {
   LineSelectionManager,
   type LineSelectionOptions,
-  type SelectedLineRange,
   pluckLineSelectionOptions,
+  type SelectedLineRange,
 } from '../managers/LineSelectionManager';
 import {
   type GetHoveredLineResult,
@@ -20,7 +20,7 @@ import {
   pluckMouseEventOptions,
 } from '../managers/MouseEventManager';
 import { ResizeManager } from '../managers/ResizeManager';
-import { type FileRenderResult, FileRenderer } from '../renderers/FileRenderer';
+import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseCodeOptions,

@@ -7,13 +7,13 @@ import {
   type FileContents,
   type FileDiff,
   FileStream,
-  type ParsedPatch,
-  SimpleVirtualizedFileDiff,
-  SimpleVirtualizer,
   isHighlighterNull,
   parseDiffFromFile,
+  type ParsedPatch,
   parsePatchFiles,
   preloadHighlighter,
+  SimpleVirtualizedFileDiff,
+  SimpleVirtualizer,
 } from '@pierre/diffs';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 

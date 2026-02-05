@@ -1,7 +1,7 @@
 import {
+  getOrCreateWorkerPoolSingleton,
   type WorkerInitializationRenderOptions,
   type WorkerPoolManager,
-  getOrCreateWorkerPoolSingleton,
 } from '@pierre/diffs/worker';
 // oxlint-disable-next-line import/default -- Vite worker URL provides a default export
 import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';

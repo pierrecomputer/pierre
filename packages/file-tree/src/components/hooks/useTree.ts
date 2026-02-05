@@ -1,8 +1,8 @@
 import {
+  createTree,
   type TreeConfig,
   type TreeInstance,
   type TreeState,
-  createTree,
 } from '@headless-tree/core';
 import { useEffect, useState } from 'preact/hooks';
 

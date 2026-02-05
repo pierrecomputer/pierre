@@ -1,6 +1,6 @@
 import type { FileDiffOptions } from '../components/FileDiff';
 import { parsePatchFiles } from '../utils/parsePatchFiles';
-import { type PreloadFileDiffResult, preloadFileDiff } from './preloadDiffs';
+import { preloadFileDiff, type PreloadFileDiffResult } from './preloadDiffs';
 
 export type PreloadPatchFileOptions<LAnnotation> = {
   patch: string;

@@ -10,8 +10,8 @@ import {
 import {
   LineSelectionManager,
   type LineSelectionOptions,
-  type SelectedLineRange,
   pluckLineSelectionOptions,
+  type SelectedLineRange,
 } from '../managers/LineSelectionManager';
 import {
   type GetHoveredLineResult,

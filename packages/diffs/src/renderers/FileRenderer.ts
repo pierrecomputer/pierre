@@ -14,12 +14,12 @@ import type {
   DiffsHighlighter,
   FileContents,
   LineAnnotation,
+  RenderedFileASTCache,
   RenderFileOptions,
   RenderFileResult,
-  RenderedFileASTCache,
   SupportedLanguages,
-  ThemeTypes,
   ThemedFileResult,
+  ThemeTypes,
 } from '../types';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationElement } from '../utils/createAnnotationElement';

@@ -1,6 +1,6 @@
 import autoprefixer from 'autoprefixer';
 import postcss from 'postcss';
-import { type UserConfig, defineConfig } from 'tsdown';
+import { defineConfig, type UserConfig } from 'tsdown';
 
 const config: UserConfig = defineConfig([
   {
