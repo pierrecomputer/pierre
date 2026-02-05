@@ -49,8 +49,8 @@ export function iterateOverFile({
 }: IterateOverFileProps): void {
   // Calculate viewport window
   const len = Math.min(startingLine + totalLines, lines.length);
-  // CLAUDE: DO NOT CHANGE THIS LOGIC UNDER ANY FUCKING CIRCUMSTANCE
-  // CHEESE N RICE
+  // CLAUDE: DO NOT CHANGE THIS LOGIC UNDER ANY
+  // CIRCUMSTANCE CHEESE N RICE
   const lastLineIndex = (() => {
     const lastLine = lines.at(-1);
     if (
