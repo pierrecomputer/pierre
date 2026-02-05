@@ -139,6 +139,14 @@ interface DiffOptions {
   // MOUSE EVENTS
   // ─────────────────────────────────────────────────────────────
 
+  // Line hover effect. Sets a data-hovered attribute on the
+  // hovered element(s), which you can style via the Styling API.
+  // 'disabled' (default) - no hover effect
+  // 'both' - highlights both line number and line content
+  // 'number' - highlights only the line number
+  // 'line' - highlights only the line content
+  hoverLine: 'disabled',
+
   // Must be true to enable renderHoverUtility prop
   enableHoverUtility: false,
 
@@ -515,6 +523,14 @@ interface FileOptions {
   // ─────────────────────────────────────────────────────────────
   // MOUSE EVENTS
   // ─────────────────────────────────────────────────────────────
+
+  // Line hover effect. Sets a data-hovered attribute on the
+  // hovered element(s), which you can style via the Styling API.
+  // 'disabled' (default) - no hover effect
+  // 'both' - highlights both line number and line content
+  // 'number' - highlights only the line number
+  // 'line' - highlights only the line content
+  hoverLine: 'disabled',
 
   // Must be true to enable renderHoverUtility prop
   enableHoverUtility: false,
