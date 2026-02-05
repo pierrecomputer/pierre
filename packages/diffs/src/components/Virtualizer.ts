@@ -23,13 +23,13 @@ const DEFAULT_OVERSCROLL_SIZE = 1000;
 const INTERSECTION_OBSERVER_MARGIN = DEFAULT_OVERSCROLL_SIZE * 4;
 const INTERSECTION_OBSERVER_THRESHOLD = [0, 0.000001, 0.99999, 1];
 
-export interface SimpleVirtualizerConfig {
+export interface VirtualizerConfig {
   overscrollSize: number;
   intersectionObserverMargin: number;
   resizeDebugging: boolean;
 }
 
-const DEFAULT_SIMPLE_VIRTUALIZER_CONFIG: SimpleVirtualizerConfig = {
+const DEFAULT_VIRTUALIZER_CONFIG: VirtualizerConfig = {
   overscrollSize: DEFAULT_OVERSCROLL_SIZE,
   intersectionObserverMargin: INTERSECTION_OBSERVER_MARGIN,
   resizeDebugging: false,
@@ -37,11 +37,12 @@ const DEFAULT_SIMPLE_VIRTUALIZER_CONFIG: SimpleVirtualizerConfig = {
 
 let lastSize = 0;
 
-export class SimpleVirtualizer {
+export class Virtualizer {
   static __STOP: boolean = false;
   static __lastScrollPosition = 0;
 
-  private config: SimpleVirtualizerConfig;
+  public type = 'basic';
+  private config: VirtualizerConfig;
   private intersectionObserver: IntersectionObserver | undefined;
   private scrollTop: number = 0;
   private height: number = 0;
@@ -61,8 +62,8 @@ export class SimpleVirtualizer {
   private renderedObservers = 0;
   private connectQueue: Map<HTMLElement, SubscribedInstance> = new Map();
 
-  constructor(config?: Partial<SimpleVirtualizerConfig>) {
-    this.config = { ...DEFAULT_SIMPLE_VIRTUALIZER_CONFIG, ...config };
+  constructor(config?: Partial<VirtualizerConfig>) {
+    this.config = { ...DEFAULT_VIRTUALIZER_CONFIG, ...config };
   }
 
   setup(root: HTMLElement | Document, contentContainer?: Element): void {
@@ -90,14 +91,14 @@ export class SimpleVirtualizer {
     // FIXME(amadeus): Remove me before release
     window.__INSTANCE = this;
     window.__TOGGLE = () => {
-      if (SimpleVirtualizer.__STOP) {
-        SimpleVirtualizer.__STOP = false;
+      if (Virtualizer.__STOP) {
+        Virtualizer.__STOP = false;
         const scroller = this.getScrollContainerElement() ?? window;
-        scroller.scrollTo({ top: SimpleVirtualizer.__lastScrollPosition });
+        scroller.scrollTo({ top: Virtualizer.__lastScrollPosition });
         queueRender(this.computeRenderRangeAndEmit);
       } else {
-        SimpleVirtualizer.__lastScrollPosition = this.getScrollTop();
-        SimpleVirtualizer.__STOP = true;
+        Virtualizer.__lastScrollPosition = this.getScrollTop();
+        Virtualizer.__STOP = true;
       }
     };
     for (const [container, instance] of this.connectQueue.entries()) {
@@ -179,7 +180,7 @@ export class SimpleVirtualizer {
 
   private setupWindow() {
     if (this.root == null || !(this.root instanceof Document)) {
-      throw new Error('SimpleVirtualizer.setupWindow: Invalid setup method');
+      throw new Error('Virtualizer.setupWindow: Invalid setup method');
     }
     window.addEventListener('scroll', this.handleWindowScroll, {
       passive: true,
@@ -192,7 +193,7 @@ export class SimpleVirtualizer {
 
   private setupElement(contentContainer: Element | undefined) {
     if (this.root == null || this.root instanceof Document) {
-      throw new Error('SimpleVirtualizer.setupElement: Invalid setup method');
+      throw new Error('Virtualizer.setupElement: Invalid setup method');
     }
     this.root.addEventListener('scroll', this.handleElementScroll, {
       passive: true,
@@ -219,9 +220,7 @@ export class SimpleVirtualizer {
 
   connect(container: HTMLElement, instance: SubscribedInstance): () => void {
     if (this.observers.has(container)) {
-      throw new Error(
-        'SimpleVirtualizer.connect: instance is already connected...'
-      );
+      throw new Error('Virtualizer.connect: instance is already connected...');
     }
     // If we are racing against the intersectionObserver, then we should just
     // queue up the connection for when the observer does get set up
@@ -251,7 +250,7 @@ export class SimpleVirtualizer {
   }
 
   private handleWindowResize = () => {
-    if (SimpleVirtualizer.__STOP || window.innerHeight === this.height) {
+    if (Virtualizer.__STOP || window.innerHeight === this.height) {
       return;
     }
     this.heightDirty = true;
@@ -260,7 +259,7 @@ export class SimpleVirtualizer {
 
   private handleWindowScroll = () => {
     if (
-      SimpleVirtualizer.__STOP ||
+      Virtualizer.__STOP ||
       this.root == null ||
       !(this.root instanceof Document)
     ) {
@@ -272,7 +271,7 @@ export class SimpleVirtualizer {
 
   private handleElementScroll = () => {
     if (
-      SimpleVirtualizer.__STOP ||
+      Virtualizer.__STOP ||
       this.root == null ||
       this.root instanceof Document
     ) {
@@ -283,7 +282,7 @@ export class SimpleVirtualizer {
   };
 
   private computeRenderRangeAndEmit = () => {
-    if (SimpleVirtualizer.__STOP) {
+    if (Virtualizer.__STOP) {
       return;
     }
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;
@@ -517,13 +516,13 @@ export class SimpleVirtualizer {
     for (const { target, isIntersecting } of entries) {
       if (!(target instanceof HTMLElement)) {
         throw new Error(
-          'SimpleVirtualizer.handleIntersectionChange: target not an HTMLElement'
+          'Virtualizer.handleIntersectionChange: target not an HTMLElement'
         );
       }
       const instance = this.observers.get(target);
       if (instance == null) {
         throw new Error(
-          'SimpleVirtualizer.handleIntersectionChange: no instance for target'
+          'Virtualizer.handleIntersectionChange: no instance for target'
         );
       }
       if (isIntersecting && !this.visibleInstances.has(target)) {

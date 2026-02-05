@@ -15,7 +15,7 @@ import {
   type FileDiffOptions,
   type FileDiffRenderProps,
 } from './FileDiff';
-import type { SimpleVirtualizer } from './SimpleVirtualizer';
+import type { Virtualizer } from './Virtualizer';
 
 interface ExpandedRegionSpecs {
   fromStart: number;
@@ -28,7 +28,7 @@ let instanceId = -1;
 
 const DEBUG_HEIGHT = false;
 
-export class SimpleVirtualizedFileDiff<
+export class VirtualizedFileDiff<
   LAnnotation = undefined,
 > extends FileDiff<LAnnotation> {
   override readonly __id: string = `little-virtualized-file-diff:${++instanceId}`;
@@ -40,11 +40,11 @@ export class SimpleVirtualizedFileDiff<
   // Only stores lines that differ what is returned from `getLineHeight`
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
-  private virtualizer: SimpleVirtualizer;
+  private virtualizer: Virtualizer;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
-    virtualizer: SimpleVirtualizer,
+    virtualizer: Virtualizer,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -300,7 +300,7 @@ export class SimpleVirtualizedFileDiff<
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(
-          'SimpleVirtualizedFileDiff.computeApproximateSize: computed height doesnt match',
+          'VirtualizedFileDiff.computeApproximateSize: computed height doesnt match',
           {
             name: this.fileDiff.name,
             elementHeight: rect.height,
@@ -309,7 +309,7 @@ export class SimpleVirtualizedFileDiff<
         );
       } else {
         console.log(
-          'SimpleVirtualizedFileDiff.computeApproximateSize: computed height IS CORRECT'
+          'VirtualizedFileDiff.computeApproximateSize: computed height IS CORRECT'
         );
       }
     }
@@ -340,7 +340,7 @@ export class SimpleVirtualizedFileDiff<
 
     if (this.fileDiff == null) {
       console.error(
-        'SimpleVirtualizedFileDiff.render: attempting to virtually render when we dont have the correct data'
+        'VirtualizedFileDiff.render: attempting to virtually render when we dont have the correct data'
       );
       return false;
     }
@@ -456,7 +456,7 @@ export class SimpleVirtualizedFileDiff<
         (lastHunk.deletionLineIndex + lastHunk.deletionCount);
       if (lastHunk != null && additionRemaining !== deletionRemaining) {
         throw new Error(
-          `SimpleVirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
+          `VirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
         );
       }
       const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);

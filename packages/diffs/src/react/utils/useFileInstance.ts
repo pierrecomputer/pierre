@@ -7,7 +7,7 @@ import {
 } from 'react';
 
 import { File, type FileOptions } from '../../components/File';
-import { SimpleVirtualizedFile } from '../../components/SimpleVirtualizedFile';
+import { VirtualizedFile } from '../../components/VirtualizedFile';
 import type { SelectedLineRange } from '../../managers/LineSelectionManager';
 import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type {
@@ -16,7 +16,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
-import { useSimpleVirtualizer } from '../SimpleVirtualizer';
+import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
@@ -45,10 +45,10 @@ export function useFileInstance<LAnnotation>({
   prerenderedHTML,
   metrics,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
-  const simpleVirtualizer = useSimpleVirtualizer();
+  const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<
-    File<LAnnotation> | SimpleVirtualizedFile<LAnnotation> | null
+    File<LAnnotation> | VirtualizedFile<LAnnotation> | null
   >(null);
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
@@ -58,7 +58,7 @@ export function useFileInstance<LAnnotation>({
         );
       }
       if (simpleVirtualizer != null) {
-        instanceRef.current = new SimpleVirtualizedFile(
+        instanceRef.current = new VirtualizedFile(
           options,
           simpleVirtualizer,
           metrics,

@@ -14,9 +14,9 @@ import {
   type ParsedPatch,
   parsePatchFiles,
   preloadHighlighter,
-  SimpleVirtualizedFile,
-  SimpleVirtualizedFileDiff,
-  SimpleVirtualizer,
+  VirtualizedFile,
+  VirtualizedFileDiff,
+  Virtualizer,
 } from '@pierre/diffs';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 
@@ -40,7 +40,7 @@ FAKE_DIFF_LINE_ANNOTATIONS.length = 0;
 FAKE_LINE_ANNOTATIONS.length = 0;
 const diffInstances: (
   | FileDiff<LineCommentMetadata>
-  | SimpleVirtualizedFileDiff<LineCommentMetadata>
+  | VirtualizedFileDiff<LineCommentMetadata>
 )[] = [];
 const fileInstances: File<unknown>[] = [];
 const streamingInstances: FileStream[] = [];
@@ -91,12 +91,8 @@ const poolManager = (() => {
 
 const VIRTUALIZE = true;
 
-const virtualizer: SimpleVirtualizer | undefined = (() => {
-  if (VIRTUALIZE) {
-    return new SimpleVirtualizer();
-  }
-  return undefined;
-})();
+const virtualizer: Virtualizer | undefined = (() =>
+  VIRTUALIZE ? new Virtualizer() : undefined)();
 
 function startStreaming() {
   const container = document.getElementById('wrapper');
@@ -267,7 +263,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
       };
       const instance = (() => {
         if (virtualizer != null) {
-          return new SimpleVirtualizedFileDiff<LineCommentMetadata>(
+          return new VirtualizedFileDiff<LineCommentMetadata>(
             options,
             virtualizer,
             undefined,
@@ -597,7 +593,7 @@ if (renderFileButton != null) {
 
     const instance = (() => {
       if (virtualizer != null) {
-        return new SimpleVirtualizedFile<LineCommentMetadata>(
+        return new VirtualizedFile<LineCommentMetadata>(
           options,
           virtualizer,
           undefined,

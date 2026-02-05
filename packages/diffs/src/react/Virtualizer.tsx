@@ -11,34 +11,33 @@ import {
 } from 'react';
 
 import {
-  SimpleVirtualizer as SimpleVirtualizerClass,
-  type SimpleVirtualizerConfig,
-} from '../components/SimpleVirtualizer';
+  Virtualizer as VirtualizerClass,
+  type VirtualizerConfig,
+} from '../components/Virtualizer';
 
-export const SimpleVirtualizerContext: Context<
-  SimpleVirtualizerClass | undefined
-> = createContext<SimpleVirtualizerClass | undefined>(undefined);
+export const VirtualizerContext: Context<VirtualizerClass | undefined> =
+  createContext<VirtualizerClass | undefined>(undefined);
 
-interface SimpleVirtualizerProps {
+interface VirtualizerProps {
   children: ReactNode;
-  config?: Partial<SimpleVirtualizerConfig>;
+  config?: Partial<VirtualizerConfig>;
   className?: string;
   style?: CSSProperties;
   contentClassName?: string;
   contentStyle?: CSSProperties;
 }
 
-export function SimpleVirtualizer({
+export function Virtualizer({
   children,
   config,
   className,
   style,
   contentClassName,
   contentStyle,
-}: SimpleVirtualizerProps): React.JSX.Element {
+}: VirtualizerProps): React.JSX.Element {
   const [instance] = useState(() => {
     return typeof window !== 'undefined'
-      ? new SimpleVirtualizerClass(config)
+      ? new VirtualizerClass(config)
       : undefined;
   });
   const ref = useCallback(
@@ -52,16 +51,16 @@ export function SimpleVirtualizer({
     [instance]
   );
   return (
-    <SimpleVirtualizerContext.Provider value={instance}>
+    <VirtualizerContext.Provider value={instance}>
       <div className={className} style={style} ref={ref}>
         <div className={contentClassName} style={contentStyle}>
           {children}
         </div>
       </div>
-    </SimpleVirtualizerContext.Provider>
+    </VirtualizerContext.Provider>
   );
 }
 
-export function useSimpleVirtualizer(): SimpleVirtualizerClass | undefined {
-  return useContext(SimpleVirtualizerContext);
+export function useVirtualizer(): VirtualizerClass | undefined {
+  return useContext(VirtualizerContext);
 }

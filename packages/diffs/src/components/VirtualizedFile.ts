@@ -8,16 +8,16 @@ import type {
 import { iterateOverFile } from '../utils/iterateOverFile';
 import type { WorkerPoolManager } from '../worker';
 import { File, type FileOptions, type FileRenderProps } from './File';
-import type { SimpleVirtualizer } from './SimpleVirtualizer';
+import type { Virtualizer } from './Virtualizer';
 
 let instanceId = -1;
 
 const DEBUG_HEIGHT = false;
 
-export class SimpleVirtualizedFile<
+export class VirtualizedFile<
   LAnnotation = undefined,
 > extends File<LAnnotation> {
-  override readonly __id: string = `simple-virtualized-file:${++instanceId}`;
+  override readonly __id: string = `virtualized-file:${++instanceId}`;
 
   public top: number | undefined;
   public height: number = 0;
@@ -29,7 +29,7 @@ export class SimpleVirtualizedFile<
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
-    private virtualizer: SimpleVirtualizer,
+    private virtualizer: Virtualizer,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -191,7 +191,7 @@ export class SimpleVirtualizedFile<
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(
-          'SimpleVirtualizedFile.computeApproximateSize: computed height doesnt match',
+          'VirtualizedFile.computeApproximateSize: computed height doesnt match',
           {
             name: this.file.name,
             elementHeight: rect.height,
@@ -200,7 +200,7 @@ export class SimpleVirtualizedFile<
         );
       } else {
         console.log(
-          'SimpleVirtualizedFile.computeApproximateSize: computed height IS CORRECT'
+          'VirtualizedFile.computeApproximateSize: computed height IS CORRECT'
         );
       }
     }
@@ -234,7 +234,7 @@ export class SimpleVirtualizedFile<
 
     if (this.file == null) {
       console.error(
-        'SimpleVirtualizedFile.render: attempting to virtually render when we dont have file'
+        'VirtualizedFile.render: attempting to virtually render when we dont have file'
       );
       return false;
     }

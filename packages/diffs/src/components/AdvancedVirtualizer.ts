@@ -23,6 +23,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
 
+  public type = 'advanced';
   private files: AdvancedVirtualizedFileDiff<LAnnotations>[] = [];
   private totalHeightUnified = 0;
   private totalHeightSplit = 0;
