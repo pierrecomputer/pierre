@@ -83,7 +83,10 @@ export interface FileDiffOptions<LAnnotation>
     MouseEventManagerBaseOptions<'diff'>,
     LineSelectionOptions {
   hunkSeparators?:
-    | Exclude<HunkSeparators, 'custom'>
+    | Exclude<HunkSeparators, 'custom'> /**
+       * @deprecated Custom hunk separator functions are deprecated and will be
+       * removed in a future version.
+       */
     | ((
         hunk: HunkData,
         instance: FileDiff<LAnnotation>
