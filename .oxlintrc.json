@@ -1,12 +1,65 @@
 {
-  "plugins": ["import", "react", "nextjs", "promise", "node", "react-perf"],
+  "plugins": [
+    "import",
+    "react",
+    "nextjs",
+    "promise",
+    "node",
+    "react-perf",
+    "typescript"
+  ],
   "categories": {},
   "rules": {
     "nextjs/no-head-element": "off",
     "nextjs/no-html-link-for-pages": "off",
     "nextjs/no-img-element": "off",
-    "typescript/tsconfig-error": "off"
+    "typescript/tsconfig-error": "off",
+    "prefer-const": ["error", { "destructuring": "all" }],
+    "no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unsafe-call": "off",
+    "typescript/no-unsafe-return": "warn",
+    "typescript/require-await": "warn",
+    "typescript/restrict-template-expressions": [
+      "warn",
+      { "allowNumber": true, "allowBoolean": true, "allowNullish": true }
+    ],
+    "typescript/strict-boolean-expressions": [
+      "error",
+      {
+        "allowString": false,
+        "allowNumber": false,
+        "allowNullableObject": false,
+        "allowNullableBoolean": false,
+        "allowNullableString": true,
+        "allowNullableNumber": false
+      }
+    ],
+    "typescript/prefer-nullish-coalescing": "warn",
+    "typescript/prefer-optional-chain": "off",
+    "typescript/no-explicit-any": "warn",
+    "typescript/consistent-type-imports": "off",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "typescript/unbound-method": "off",
+    "typescript/no-meaningless-void-operator": "off",
+    "typescript/no-duplicate-type-constituents": "off"
   },
+  "overrides": [
+    {
+      "files": ["apps/docs/app/file-tree/ClientPage.tsx"],
+      "rules": {
+        "typescript/no-unsafe-return": "off",
+        "typescript/strict-boolean-expressions": "off"
+      }
+    }
+  ],
   "settings": {
     "jsx-a11y": {
       "polymorphicPropName": null,
@@ -38,6 +91,7 @@
   },
   "globals": {},
   "ignorePatterns": [
+    "scripts/**",
     "**/dist/**",
     "{packages,apps}/*/node_modules/**",
     "{packages,apps}/*/.next/**",
@@ -48,8 +102,7 @@
     "{packages,apps}/*/.vinxi/**",
     "{packages,apps}/*/.output/**",
     "{packages,apps}/*/.vercel/**",
-    "packages/storage-elements/blocks/git-platform-sync/api/**/*",
-    "packages/storage-elements/blocks/git-platform-sync/pages/**/*",
+    "packages/storage-elements/blocks/git-platform-sync/**",
     "update-themes.js"
   ]
 }
