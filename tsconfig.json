@@ -9,9 +9,6 @@
       "path": "apps/docs/tsconfig.json"
     },
     {
-      "path": "apps/solid-diff-demo/tsconfig.json"
-    },
-    {
       "path": "packages/diffs/tsconfig.json"
     },
     {
