@@ -1234,7 +1234,6 @@
     }
   }
 
-  /* FIXME(amadeus): actually hook up this attribute selector */
   @media (pointer: fine) {
     [data-column-number],
     [data-line] {
@@ -1382,7 +1381,8 @@
   [data-line-type='change-addition'],
   [data-line-type='change-deletion'] {
     &[data-selected-line] {
-      &[data-line] {
+      &[data-line],
+      &[data-line][data-hovered] {
         background-color: light-dark(
           color-mix(
             in lab,
@@ -1397,7 +1397,8 @@
         );
       }
 
-      &[data-column-number] {
+      &[data-column-number],
+      &[data-column-number][data-hovered] {
         color: var(--diffs-selection-number-fg);
         background-color: light-dark(
           color-mix(

@@ -149,6 +149,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         renderAnnotation: renderDiffAnnotation,
         themeType,
         enableLineSelection: true,
+        lineHoverHighlight: 'both',
         expansionLineCount: 10,
         // expandUnchanged: true,
 

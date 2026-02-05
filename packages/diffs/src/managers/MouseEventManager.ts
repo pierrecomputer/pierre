@@ -86,7 +86,7 @@ function isExpandoEventData(
 export interface MouseEventManagerBaseOptions<
   TMode extends MouseEventManagerMode,
 > {
-  hoverLine?: 'disabled' | 'both' | 'number' | 'line';
+  lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
   enableHoverUtility?: boolean;
   onLineClick?(props: EventClickProps<TMode>): unknown;
   onLineNumberClick?(props: EventClickProps<TMode>): unknown;
@@ -140,7 +140,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       onLineLeave,
       onHunkExpand,
       enableHoverUtility = false,
-      hoverLine = 'disabled',
+      lineHoverHighlight = 'disabled',
     } = this.options;
 
     const newContainer = this.pre !== pre;
@@ -162,7 +162,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     }
 
     const requiresEventListeners =
-      hoverLine !== 'disabled' ||
+      lineHoverHighlight !== 'disabled' ||
       onLineClick != null ||
       onLineNumberClick != null ||
       onHunkExpand != null ||
@@ -290,13 +290,13 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
 
   handleMouseMove = (event: PointerEvent): void => {
     const {
-      hoverLine = 'disabled',
+      lineHoverHighlight = 'disabled',
       onLineEnter,
       onLineLeave,
       enableHoverUtility = false,
     } = this.options;
     if (
-      hoverLine === 'disabled' &&
+      lineHoverHighlight === 'disabled' &&
       !enableHoverUtility &&
       onLineEnter == null &&
       onLineLeave == null
@@ -455,16 +455,16 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   }
 
   private setHoveredLine(hoveredLine: EventBaseProps<TMode>) {
-    const { hoverLine = 'disabled' } = this.options;
+    const { lineHoverHighlight = 'disabled' } = this.options;
     if (this.hoveredLine != null) {
       this.clearHoveredLine();
     }
     this.hoveredLine = hoveredLine;
-    if (hoverLine !== 'disabled') {
-      if (hoverLine === 'both' || hoverLine === 'line') {
+    if (lineHoverHighlight !== 'disabled') {
+      if (lineHoverHighlight === 'both' || lineHoverHighlight === 'line') {
         this.hoveredLine.lineElement.setAttribute('data-hovered', '');
       }
-      if (hoverLine === 'both' || hoverLine === 'number') {
+      if (lineHoverHighlight === 'both' || lineHoverHighlight === 'number') {
         this.hoveredLine.numberElement.setAttribute('data-hovered', '');
       }
     }
@@ -646,7 +646,7 @@ function debugLogIfEnabled(
 
 export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
   {
-    hoverLine,
+    lineHoverHighlight,
     onLineClick,
     onLineNumberClick,
     onLineEnter,
@@ -657,7 +657,7 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
   onHunkExpand?: (hunkIndex: number, direction: ExpansionDirections) => unknown
 ): MouseEventManagerOptions<TMode> {
   return {
-    hoverLine,
+    lineHoverHighlight,
     onLineClick,
     onLineNumberClick,
     onLineEnter,

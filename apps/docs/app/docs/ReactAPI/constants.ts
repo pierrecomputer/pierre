@@ -145,7 +145,7 @@ interface DiffOptions {
   // 'both' - highlights both line number and line content
   // 'number' - highlights only the line number
   // 'line' - highlights only the line content
-  hoverLine: 'disabled',
+  lineHoverHighlight: 'disabled',
 
   // Must be true to enable renderHoverUtility prop
   enableHoverUtility: false,
@@ -530,7 +530,7 @@ interface FileOptions {
   // 'both' - highlights both line number and line content
   // 'number' - highlights only the line number
   // 'line' - highlights only the line content
-  hoverLine: 'disabled',
+  lineHoverHighlight: 'disabled',
 
   // Must be true to enable renderHoverUtility prop
   enableHoverUtility: false,
