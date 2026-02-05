@@ -20,6 +20,16 @@
       { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
     ],
 
+    "sort-imports": [
+      "error",
+      {
+        "allowSeparatedGroups": true,
+        "ignoreDeclarationSort": true,
+        "ignoreMemberSort": false,
+        "ignoreCase": true
+      }
+    ],
+
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",
