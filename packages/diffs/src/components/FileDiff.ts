@@ -1564,8 +1564,6 @@ export class FileDiff<LAnnotation = undefined> {
     return rowCount;
   }
 
-  // NOTE(amadeus): If we return -1 it means something went
-  // wrong with the trim...
   private trimColumns({
     columns,
     diffStyle,
@@ -1574,6 +1572,9 @@ export class FileDiff<LAnnotation = undefined> {
     previousStart,
     trimEnd,
     trimStart,
+    // NOTE(amadeus): If we return -1 it means something went wrong
+    // with the trim...
+    // oxlint-disable-next-line no-redundant-type-constituents
   }: TrimColumnsToOverlapProps): number | -1 {
     const preTrimCount = Math.max(0, overlapStart - previousStart);
     const postTrimStart = overlapEnd - previousStart;
