@@ -148,8 +148,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
         themeType,
-        // hunkSeparators: 'metadata',
         enableLineSelection: true,
+        expansionLineCount: 10,
         // expandUnchanged: true,
 
         // Hover Decoration Snippets
