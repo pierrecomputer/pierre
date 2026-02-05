@@ -1,7 +1,4 @@
-import {
-  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-  DEFAULT_VIRTUAL_FILE_METRICS,
-} from '../constants';
+import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   ExpansionDirections,
   FileDiffMetadata,
@@ -11,6 +8,7 @@ import type {
 } from '../types';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+import { resolveVirtualFileMetrics } from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
 import {
   FileDiff,
@@ -37,20 +35,27 @@ export class SimpleVirtualizedFileDiff<
 
   public top: number | undefined;
   public height: number = 0;
-  public override fileDiff: FileDiffMetadata | undefined = undefined;
+  private metrics: VirtualFileMetrics;
   // Sparse map: view-specific line index -> measured height
   // Only stores lines that differ what is returned from `getLineHeight`
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
+  private virtualizer: SimpleVirtualizer;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
-    private virtualizer: SimpleVirtualizer,
-    private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
+    virtualizer: SimpleVirtualizer,
+    metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
   ) {
     super(options, workerManager, isContainerManaged);
+    const { hunkSeparators = 'line-info' } = this.options;
+    this.virtualizer = virtualizer;
+    this.metrics = resolveVirtualFileMetrics(
+      typeof hunkSeparators === 'function' ? 'custom' : hunkSeparators,
+      metrics
+    );
   }
 
   // Get the height for a line, using cached value if available.
@@ -102,7 +107,11 @@ export class SimpleVirtualizedFileDiff<
     // should be thinking about ways to improve this
     // If the file has no annotations and we are using the scroll variant, then
     // we can probably skip everything
-    if (overflow === 'scroll' && this.lineAnnotations.length === 0) {
+    if (
+      overflow === 'scroll' &&
+      this.lineAnnotations.length === 0 &&
+      !DEBUG_HEIGHT
+    ) {
       return;
     }
     const diffStyle = this.getDiffStyle();
@@ -160,7 +169,7 @@ export class SimpleVirtualizedFileDiff<
       }
     }
 
-    if (hasLineHeightChange) {
+    if (hasLineHeightChange || DEBUG_HEIGHT) {
       this.computeApproximateSize();
     }
   }
@@ -224,14 +233,19 @@ export class SimpleVirtualizedFileDiff<
       disableFileHeader = false,
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      hunkSeparators = 'line-info',
     } = this.options;
     const { diffHeaderHeight, fileGap, hunkSeparatorHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
+    const separatorGap =
+      hunkSeparators === 'simple' || hunkSeparators === 'metadata'
+        ? 0
+        : fileGap;
 
     // Header or initial padding
     if (!disableFileHeader) {
       this.height += diffHeaderHeight;
-    } else {
+    } else if (hunkSeparators !== 'simple' && hunkSeparators !== 'metadata') {
       this.height += fileGap;
     }
 
@@ -261,9 +275,9 @@ export class SimpleVirtualizedFileDiff<
           (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
         if (collapsedBefore > 0) {
           if (hunkIndex > 0) {
-            this.height += fileGap;
+            this.height += separatorGap;
           }
-          this.height += hunkSeparatorHeight + fileGap;
+          this.height += hunkSeparatorHeight + separatorGap;
         }
 
         this.height += this.getLineHeight(
@@ -271,8 +285,8 @@ export class SimpleVirtualizedFileDiff<
           hasMetadata
         );
 
-        if (collapsedAfter > 0) {
-          this.height += hunkSeparatorHeight + fileGap;
+        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+          this.height += separatorGap + hunkSeparatorHeight;
         }
       },
     });
@@ -468,6 +482,7 @@ export class SimpleVirtualizedFileDiff<
       disableFileHeader = false,
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      hunkSeparators = 'line-info',
     } = this.options;
     const {
       diffHeaderHeight,
@@ -518,6 +533,10 @@ export class SimpleVirtualizedFileDiff<
     const hunkOffsets: number[] = [];
     // Halfway between top & bottom, represented as an absolute position
     const viewportCenter = (top + bottom) / 2;
+    const separatorGap =
+      hunkSeparators === 'simple' || hunkSeparators === 'metadata'
+        ? 0
+        : fileGap;
 
     let absoluteLineTop = fileTop + headerRegion;
     let currentLine = 0;
@@ -549,10 +568,15 @@ export class SimpleVirtualizedFileDiff<
             : deletionLine.unifiedLineIndex;
         const hasMetadata =
           (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
-        const gapAdjustment =
+        let gapAdjustment =
           collapsedBefore > 0
-            ? hunkSeparatorHeight + fileGap + (hunkIndex > 0 ? fileGap : 0)
+            ? hunkSeparatorHeight +
+              separatorGap +
+              (hunkIndex > 0 ? separatorGap : 0)
             : 0;
+        if (hunkIndex === 0 && hunkSeparators === 'simple') {
+          gapAdjustment = 0;
+        }
 
         absoluteLineTop += gapAdjustment;
 
@@ -607,7 +631,7 @@ export class SimpleVirtualizedFileDiff<
         currentLine++;
         absoluteLineTop += lineHeight;
 
-        if (collapsedAfter > 0) {
+        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
           absoluteLineTop += hunkSeparatorHeight + fileGap;
         }
 

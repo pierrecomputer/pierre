@@ -1,4 +1,4 @@
-import { DEFAULT_THEMES, DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
+import { DEFAULT_THEMES } from '../constants';
 import type {
   FileDiffMetadata,
   RenderRange,
@@ -6,6 +6,7 @@ import type {
   VirtualFileMetrics,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
+import { resolveVirtualFileMetrics } from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
 import { FileDiff, type FileDiffOptions } from './FileDiff';
 
@@ -33,20 +34,26 @@ export class AdvancedVirtualizedFileDiff<
   public splitTop: number;
   public unifiedHeight: number = 0;
   public splitHeight: number = 0;
+  private metrics: VirtualFileMetrics;
 
   override fileDiff: FileDiffMetadata;
   public renderedRange: RenderRange | undefined;
 
   constructor(
     { unifiedTop, splitTop, fileDiff }: PositionProps,
-    override options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
+    options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager | undefined
   ) {
     super(options, workerManager, true);
     this.fileDiff = fileDiff;
     this.unifiedTop = unifiedTop;
     this.splitTop = splitTop;
+    const { hunkSeparators = 'line-info' } = this.options;
+    this.metrics = resolveVirtualFileMetrics(
+      typeof hunkSeparators === 'function' ? 'custom' : hunkSeparators,
+      metrics
+    );
     this.computeSize();
   }
 

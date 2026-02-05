@@ -867,7 +867,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           context.incrementRowCount(1);
         }
 
-        if (collapsedAfter > 0) {
+        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
           pushSeparators({
             hunkIndex: type === 'context-expanded' ? hunkIndex : hunkIndex + 1,
             collapsedLines: collapsedAfter,
