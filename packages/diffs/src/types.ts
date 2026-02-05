@@ -379,6 +379,7 @@ export interface PrePropertiesConfig extends Required<
     | 'themeType'
   >
 > {
+  type: 'diff' | 'file';
   split: boolean;
   themeStyles: string;
   totalLines: number;
@@ -454,7 +455,7 @@ export interface LineEventBaseProps {
   type: 'line';
   lineNumber: number;
   lineElement: HTMLElement;
-  numberElement: HTMLElement | undefined;
+  numberElement: HTMLElement;
   numberColumn: boolean;
 }
 

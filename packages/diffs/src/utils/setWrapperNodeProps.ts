@@ -3,6 +3,7 @@ import type { PrePropertiesConfig } from '../types';
 export function setPreNodeProperties(
   pre: HTMLPreElement,
   {
+    type,
     diffIndicators,
     disableBackground,
     disableLineNumbers,
@@ -13,33 +14,43 @@ export function setPreNodeProperties(
     totalLines,
   }: PrePropertiesConfig
 ): HTMLPreElement {
-  if (themeType === 'system') {
-    delete pre.dataset.themeType;
+  if (type === 'diff') {
+    pre.setAttribute('data-diff', '');
+    pre.removeAttribute('data-file');
   } else {
-    pre.dataset.themeType = themeType;
+    pre.setAttribute('data-file', '');
+    pre.removeAttribute('data-diff');
+  }
+  if (themeType === 'system') {
+    pre.removeAttribute('data-theme-type');
+  } else {
+    pre.setAttribute('data-theme-type', themeType);
   }
   switch (diffIndicators) {
     case 'bars':
     case 'classic':
-      pre.dataset.indicators = diffIndicators;
+      pre.setAttribute('data-indicators', diffIndicators);
       break;
     case 'none':
-      delete pre.dataset.indicators;
+      pre.removeAttribute('data-indicators');
       break;
   }
   if (disableLineNumbers) {
-    pre.dataset.disableLineNumbers = '';
+    pre.setAttribute('data-disable-line-numbers', '');
   } else {
-    delete pre.dataset.disableLineNumbers;
+    pre.removeAttribute('data-disable-line-numbers');
   }
   if (disableBackground) {
-    delete pre.dataset.background;
+    pre.removeAttribute('data-background');
   } else {
-    pre.dataset.background = '';
+    pre.setAttribute('data-background', '');
   }
-  pre.dataset.type = split ? 'split' : 'file';
-  pre.dataset.overflow = overflow;
-  pre.dataset.diffs = '';
+  if (type === 'diff') {
+    pre.setAttribute('data-diff-type', split ? 'split' : 'single');
+  } else {
+    pre.removeAttribute('data-diff-type');
+  }
+  pre.setAttribute('data-overflow', overflow);
   pre.tabIndex = 0;
   // Set theme color custom properties as inline styles on pre element
   pre.style = themeStyles;

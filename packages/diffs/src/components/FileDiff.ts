@@ -1742,6 +1742,7 @@ export class FileDiff<LAnnotation = undefined> {
       diffStyle = 'split',
     } = this.options;
     const preProperties: PrePropertiesConfig = {
+      type: 'diff',
       diffIndicators,
       disableBackground,
       disableLineNumbers,

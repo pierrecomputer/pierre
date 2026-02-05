@@ -916,6 +916,7 @@ export class File<LAnnotation = undefined> {
       disableLineNumbers = false,
     } = this.options;
     const preProperties: PrePropertiesConfig = {
+      type: 'file',
       split: false,
       themeStyles,
       overflow,

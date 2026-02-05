@@ -518,6 +518,7 @@ export class FileRenderer<LAnnotation = undefined> {
       themeType = 'system',
     } = this.options;
     return createPreElement({
+      type: 'file',
       diffIndicators: 'none',
       disableBackground: true,
       disableLineNumbers,

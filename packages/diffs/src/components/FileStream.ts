@@ -125,6 +125,7 @@ export class FileStream {
     const baseThemeType =
       typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
     const pre = setPreNodeProperties(this.pre, {
+      type: 'file',
       diffIndicators: 'none',
       disableBackground: true,
       disableLineNumbers,

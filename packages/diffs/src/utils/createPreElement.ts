@@ -19,10 +19,13 @@ export function createPreWrapperProperties({
   themeType,
   themeStyles,
   totalLines,
+  type,
 }: PrePropertiesConfig): Properties {
   const properties: Properties = {
-    'data-diffs': '',
-    'data-type': split ? 'split' : 'file',
+    'data-diff': type === 'diff' ? '' : undefined,
+    'data-file': type === 'file' ? '' : undefined,
+    'data-diff-type':
+      type === 'diff' ? (split ? 'split' : 'single') : undefined,
     'data-overflow': overflow,
     'data-disable-line-numbers': disableLineNumbers ? '' : undefined,
     'data-background': !disableBackground ? '' : undefined,

@@ -8,6 +8,7 @@ export function arePrePropertiesEqual(
     return propsA === propsB;
   }
   return (
+    propsA.type === propsB.type &&
     propsA.diffIndicators === propsB.diffIndicators &&
     propsA.disableBackground === propsB.disableBackground &&
     propsA.disableLineNumbers === propsB.disableLineNumbers &&

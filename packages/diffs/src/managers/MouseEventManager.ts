@@ -86,6 +86,7 @@ function isExpandoEventData(
 export interface MouseEventManagerBaseOptions<
   TMode extends MouseEventManagerMode,
 > {
+  hoverLine?: 'disabled' | 'both' | 'number' | 'line';
   enableHoverUtility?: boolean;
   onLineClick?(props: EventClickProps<TMode>): unknown;
   onLineNumberClick?(props: EventClickProps<TMode>): unknown;
@@ -123,6 +124,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     this.pre?.removeEventListener('pointerleave', this.handleMouseLeave);
     this.pre?.removeAttribute('data-interactive-lines');
     this.pre?.removeAttribute('data-interactive-line-numbers');
+    this.clearHoveredLine();
     this.interactiveLinesAttr = false;
     this.interactiveLineNumbersAttr = false;
     this.hasEventListeners = false;
@@ -138,6 +140,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       onLineLeave,
       onHunkExpand,
       enableHoverUtility = false,
+      hoverLine = 'disabled',
     } = this.options;
 
     const newContainer = this.pre !== pre;
@@ -159,6 +162,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     }
 
     const requiresEventListeners =
+      hoverLine !== 'disabled' ||
       onLineClick != null ||
       onLineNumberClick != null ||
       onHunkExpand != null ||
@@ -286,11 +290,17 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
 
   handleMouseMove = (event: PointerEvent): void => {
     const {
+      hoverLine = 'disabled',
       onLineEnter,
       onLineLeave,
       enableHoverUtility = false,
     } = this.options;
-    if (!enableHoverUtility && onLineEnter == null && onLineLeave == null) {
+    if (
+      hoverLine === 'disabled' &&
+      !enableHoverUtility &&
+      onLineEnter == null &&
+      onLineLeave == null
+    ) {
       return;
     }
     debugLogIfEnabled(
@@ -322,7 +332,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       ...this.hoveredLine,
       event,
     } as MouseEventEnterLeaveProps<TMode>);
-    this.hoveredLine = undefined;
+    this.clearHoveredLine();
   };
 
   private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
@@ -372,7 +382,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
             ...this.hoveredLine,
             event,
           } as MouseEventEnterLeaveProps<TMode>);
-          this.hoveredLine = undefined;
+          this.clearHoveredLine();
         }
         if (isLineEventData(data, this.mode)) {
           debugLogIfEnabled(
@@ -380,7 +390,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
             'move',
             "FileDiff.DEBUG.handleMouseEvent: switch, 'move', setting up a new hoveredLine and firing onLineEnter"
           );
-          this.hoveredLine = data;
+          this.setHoveredLine(data);
           if (this.hoverSlot != null) {
             data.numberElement?.appendChild(this.hoverSlot);
           }
@@ -432,6 +442,31 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
           }
         }
         break;
+    }
+  }
+
+  private clearHoveredLine() {
+    if (this.hoveredLine == null) {
+      return;
+    }
+    this.hoveredLine.lineElement.removeAttribute('data-hovered');
+    this.hoveredLine.numberElement.removeAttribute('data-hovered');
+    this.hoveredLine = undefined;
+  }
+
+  private setHoveredLine(hoveredLine: EventBaseProps<TMode>) {
+    const { hoverLine = 'disabled' } = this.options;
+    if (this.hoveredLine != null) {
+      this.clearHoveredLine();
+    }
+    this.hoveredLine = hoveredLine;
+    if (hoverLine !== 'disabled') {
+      if (hoverLine === 'both' || hoverLine === 'line') {
+        this.hoveredLine.lineElement.setAttribute('data-hovered', '');
+      }
+      if (hoverLine === 'both' || hoverLine === 'number') {
+        this.hoveredLine.numberElement.setAttribute('data-hovered', '');
+      }
     }
   }
 
@@ -611,6 +646,7 @@ function debugLogIfEnabled(
 
 export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
   {
+    hoverLine,
     onLineClick,
     onLineNumberClick,
     onLineEnter,
@@ -621,6 +657,7 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
   onHunkExpand?: (hunkIndex: number, direction: ExpansionDirections) => unknown
 ): MouseEventManagerOptions<TMode> {
   return {
+    hoverLine,
     onLineClick,
     onLineNumberClick,
     onLineEnter,

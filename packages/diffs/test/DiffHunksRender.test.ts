@@ -74,7 +74,7 @@ describe('DiffHunksRenderer', () => {
     expect(diff.hunks[0]?.collapsedBefore).toBe(0);
     expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
-    expect(result.preNode.properties?.['data-type']).toBe('file');
+    expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
       result.additionsContentAST,
       'result.additionsContentAST should be defined'
@@ -94,7 +94,7 @@ describe('DiffHunksRenderer', () => {
     expect(diff.hunks[0]?.collapsedBefore).toBe(0);
     expect(diff).toMatchSnapshot('parsed diff');
     const result = await instance.asyncRender(diff);
-    expect(result.preNode.properties?.['data-type']).toBe('file');
+    expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
       result.deletionsContentAST,
       'result.deletionsContentAST should be defined'

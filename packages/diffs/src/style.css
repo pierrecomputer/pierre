@@ -115,7 +115,8 @@
   }
 
   [data-diffs-header],
-  [data-diffs],
+  [data-diff],
+  [data-file],
   [data-error-wrapper],
   [data-virtualizer-buffer] {
     --diffs-bg: light-dark(var(--diffs-light-bg), var(--diffs-dark-bg));
@@ -294,19 +295,37 @@
     color: var(--diffs-fg);
   }
 
-  [data-diffs] {
+  [data-diff],
+  [data-file] {
     /* This feels a bit crazy to me... so I need to think about it a bit more... */
     --diffs-grid-number-column-width: minmax(min-content, max-content);
     --diffs-code-grid: var(--diffs-grid-number-column-width) 1fr;
 
-    [data-line] span {
-      color: light-dark(
-        var(--diffs-token-light, var(--diffs-light)),
-        var(--diffs-token-dark, var(--diffs-dark))
-      );
-      font-weight: var(--diffs-token-light-font-weight, inherit);
-      font-style: var(--diffs-token-light-font-style, inherit);
-      text-decoration: var(--diffs-token-light-text-decoration, inherit);
+    &[data-dehydrated] {
+      --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
+    }
+
+    &[data-theme-type='light'],
+    & {
+      [data-line] span {
+        color: light-dark(
+          var(--diffs-token-light, var(--diffs-light)),
+          var(--diffs-token-dark, var(--diffs-dark))
+        );
+        font-weight: var(--diffs-token-light-font-weight, inherit);
+        font-style: var(--diffs-token-light-font-style, inherit);
+        text-decoration: var(--diffs-token-light-text-decoration, inherit);
+      }
+    }
+
+    &[data-theme-type='dark'] [data-line] span {
+      font-weight: var(--diffs-token-dark-font-weight, inherit);
+      font-style: var(--diffs-token-dark-font-style, inherit);
+      text-decoration: var(--diffs-token-dark-text-decoration, inherit);
+    }
+
+    &:hover [data-code]::-webkit-scrollbar-thumb {
+      background-color: var(--diffs-bg-context);
     }
   }
 
@@ -337,14 +356,11 @@
     }
   }
 
-  [data-diffs][data-dehydrated] {
-    --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
-  }
-
   @media (prefers-color-scheme: dark) {
     [data-diffs-header],
     [data-error-wrapper],
-    [data-diffs] {
+    [data-diff],
+    [data-file] {
       color-scheme: dark;
     }
 
@@ -355,29 +371,19 @@
     }
   }
 
-  [data-diffs-header][data-theme-type='light'],
-  [data-diffs][data-theme-type='light'] {
-    color-scheme: light;
+  [data-diffs-header],
+  [data-diff],
+  [data-file] {
+    &[data-theme-type='light'] {
+      color-scheme: light;
+    }
+
+    &[data-theme-type='dark'] {
+      color-scheme: dark;
+    }
   }
 
-  [data-diffs][data-theme-type='light'] [data-line] span {
-    font-weight: var(--diffs-token-light-font-weight, inherit);
-    font-style: var(--diffs-token-light-font-style, inherit);
-    text-decoration: var(--diffs-token-light-text-decoration, inherit);
-  }
-
-  [data-diffs-header][data-theme-type='dark'],
-  [data-diffs][data-theme-type='dark'] {
-    color-scheme: dark;
-  }
-
-  [data-diffs][data-theme-type='dark'] [data-line] span {
-    font-weight: var(--diffs-token-dark-font-weight, inherit);
-    font-style: var(--diffs-token-dark-font-style, inherit);
-    text-decoration: var(--diffs-token-dark-text-decoration, inherit);
-  }
-
-  [data-type='split'][data-overflow='scroll'] {
+  [data-diff-type='split'][data-overflow='scroll'] {
     display: grid;
     grid-template-columns: 1fr 1fr;
 
@@ -421,10 +427,6 @@
     border-radius: 3px;
   }
 
-  [data-diffs]:hover [data-code]::-webkit-scrollbar-thumb {
-    background-color: var(--diffs-bg-context);
-  }
-
   [data-code]::-webkit-scrollbar-corner {
     background-color: transparent;
   }
@@ -442,9 +444,12 @@
     }
   }
 
-  [data-diffs-header] ~ [data-diffs] [data-code],
-  [data-diffs-header] ~ [data-diffs][data-overflow='wrap'] {
-    padding-top: 0;
+  [data-diffs-header] ~ [data-diff],
+  [data-diffs-header] ~ [data-file] {
+    [data-code],
+    &[data-overflow='wrap'] {
+      padding-top: 0;
+    }
   }
 
   [data-gutter] {
@@ -470,7 +475,7 @@
     min-width: 0;
   }
 
-  [data-type='split'][data-overflow='wrap'] {
+  [data-diff-type='split'][data-overflow='wrap'] {
     display: grid;
     grid-auto-flow: dense;
     grid-template-columns: repeat(2, var(--diffs-code-grid));
@@ -640,7 +645,10 @@
     width: auto;
   }
 
-  [data-type='split'] [data-additions] [data-content] [data-separator-wrapper] {
+  [data-diff-type='split']
+    [data-additions]
+    [data-content]
+    [data-separator-wrapper] {
     display: flex;
     flex-direction: row-reverse;
   }
@@ -715,7 +723,7 @@
     flex: 0 1 auto;
   }
 
-  [data-type='split'] [data-additions] [data-separator-content] {
+  [data-diff-type='split'] [data-additions] [data-separator-content] {
     justify-content: flex-end;
   }
 
@@ -842,7 +850,7 @@
 
   @media (pointer: coarse) {
     [data-unified] [data-gutter],
-    [data-type='split'] [data-deletions] [data-gutter] {
+    [data-diff-type='split'] [data-deletions] [data-gutter] {
       [data-separator-wrapper] {
         [data-expand-both],
         [data-expand-down],
@@ -865,7 +873,7 @@
       }
     }
 
-    [data-type='split'] [data-additions] [data-content] {
+    [data-diff-type='split'] [data-additions] [data-content] {
       [data-separator-wrapper] {
         [data-expand-both],
         [data-expand-down],
@@ -967,7 +975,7 @@
     }
   }
 
-  [data-type='split']
+  [data-diff-type='split']
     [data-deletions]
     [data-gutter]
     [data-separator='line-info']
@@ -976,7 +984,7 @@
     border-bottom-right-radius: 0;
   }
 
-  [data-type='split'] [data-deletions] {
+  [data-diff-type='split'] [data-deletions] {
     [data-content] [data-separator='line-info'] {
       background-color: var(--diffs-bg-separator);
 
@@ -986,7 +994,7 @@
     }
   }
 
-  [data-type='split'] [data-additions] {
+  [data-diff-type='split'] [data-additions] {
     [data-gutter] [data-separator='line-info'] {
       [data-separator='line-info'] {
         background-color: var(--diffs-bg-separator);
@@ -1164,6 +1172,14 @@
     &[data-indicators='bars'] [data-hover-slot] {
       /* Using 5px here because theres a 1px separator after the bar */
       left: 5px;
+    }
+  }
+
+  [data-file][data-disable-line-numbers] {
+    [data-gutter-buffer],
+    [data-column-number] {
+      min-width: 0;
+      border-right: 0;
     }
   }
 

@@ -142,7 +142,7 @@ export class LineSelectionManager {
     if (event.shiftKey && this.selectedRange != null) {
       const range = this.getIndexesFromSelection(
         this.selectedRange,
-        this.pre.getAttribute('data-type') === 'split'
+        this.pre.getAttribute('data-diff-type') === 'split'
       );
       if (range == null) return;
       const useStart =
@@ -275,7 +275,7 @@ export class LineSelectionManager {
         'LineSelectionManager.applySelectionToDOM: Somehow there are more than 2 code elements...'
       );
     }
-    const split = this.pre.getAttribute('data-type') === 'split';
+    const split = this.pre.getAttribute('data-diff-type') === 'split';
     const rowRange = this.getIndexesFromSelection(this.selectedRange, split);
     if (rowRange == null) {
       console.error({ rowRange, selectedRange: this.selectedRange });
@@ -393,7 +393,7 @@ export class LineSelectionManager {
         lineNumber = this.getLineNumber(element);
         lineIndex = this.parseLineIndex(
           element,
-          this.pre.getAttribute('data-type') === 'split'
+          this.pre.getAttribute('data-diff-type') === 'split'
         );
         const lineType = element.getAttribute('data-line-type');
         if (lineType === 'change-deletion') {

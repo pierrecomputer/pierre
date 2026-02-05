@@ -459,6 +459,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themeType,
     } = this.getOptionsWithDefaults();
     return createPreElement({
+      type: 'diff',
       diffIndicators,
       disableBackground,
       disableLineNumbers,
