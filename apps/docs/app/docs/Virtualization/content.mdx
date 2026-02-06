@@ -1,0 +1,79 @@
+## Virtualization
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  Virtualization is in beta and subject to change. It is opt-in and best used
+  when rendering very large files or many diffs in one scroll view.
+</Notice>
+
+Virtualization in Diffs uses estimated line and file heights to keep large
+renders fast. It renders placeholders and spacer buffers for off-screen content,
+then renders visible lines in hunk-sized batches as you scroll.
+
+Internally, the virtualizer listens to scroll and resize updates, computes a
+window with overscan, and reconciles measured DOM heights after render. This
+keeps scroll position stable even when line heights change because of wrapped
+lines or annotations.
+
+For best results, you'll need to pass a `metrics` config object to your files or
+diffs when your layout differs from the defaults. These metrics help the
+Virtualizer estimate file and diff sizes more accurately before content is
+measured. For large diffs, using virtualization with a
+[Worker Pool](#worker-pool) is strongly recommended.
+
+### Getting Started
+
+To use virtualization, start with a scrollable container (an HTML element or the
+window). Directly inside that container, add a content wrapper that holds all
+diff/file instances and any other content you render. The virtualizer uses this
+wrapper to track content size changes.
+
+Inside that scroll container, render the `VirtualizedFile` and
+`VirtualizedFileDiff` components. In React, this is handled automatically by the
+built-in `Virtualizer` context. In vanilla JS, you manage this explicitly by
+creating a `Virtualizer` instance and wiring it to `VirtualizedFile` /
+`VirtualizedFileDiff` instead of the traditional APIs.
+
+<Notice icon={<IconInfoFill />}>
+  These APIs are still early and are subject to change. We may merge related
+  virtualization functionality into the top-level `File` and `FileDiff`
+  components before shipping, so please share feedback as you test these APIs.
+</Notice>
+
+### React
+
+In React, wrap your diff/file components in `Virtualizer` from
+`@pierre/diffs/react`. The `Virtualizer` component is your scroll container.
+Currently, the React wrapper does not support window scrolling unless you
+orchestrate your own provider via `VirtualizerContext.Provider` (from
+`@pierre/diffs/react`) and pass a manually created `Virtualizer` instance (from
+`@pierre/diffs`).
+
+<DocsCodeExample {...reactVirtualizerBasic} />
+
+You can tune virtualization behavior with the `config` prop.
+
+<DocsCodeExample {...reactVirtualizerConfig} />
+
+`Virtualizer` props:
+
+- `config`: partial virtualizer config (`overscrollSize`,
+  `intersectionObserverMargin`, `resizeDebugging`)
+- `className` / `style`: applied to the outer scroll root
+- `contentClassName` / `contentStyle`: applied to the inner content wrapper
+
+### Vanilla JavaScript
+
+In vanilla JS, create a `Virtualizer` instance and pass it into
+`VirtualizedFileDiff` or `VirtualizedFile`.
+
+<DocsCodeExample {...vanillaVirtualizedFileDiff} />
+
+### Notes
+
+- Prefer virtualization for very large files or long diff lists any sort of
+  scenario where it's hard to anticipate the constraints of the of the scroll
+  view
+- Keep `metrics` aligned with your layout if you customize heights.
+- Use `resizeDebugging` with the `Virtualizer` temporarily when tuning metrics,
+  and to confirm everything is working properly. Don't forget to disable it in
+  production.

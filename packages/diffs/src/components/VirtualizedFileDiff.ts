@@ -26,8 +26,6 @@ interface ExpandedRegionSpecs {
 
 let instanceId = -1;
 
-const DEBUG_HEIGHT = false;
-
 export class VirtualizedFileDiff<
   LAnnotation = undefined,
 > extends FileDiff<LAnnotation> {
@@ -110,7 +108,7 @@ export class VirtualizedFileDiff<
     if (
       overflow === 'scroll' &&
       this.lineAnnotations.length === 0 &&
-      !DEBUG_HEIGHT
+      !this.virtualizer.config.resizeDebugging
     ) {
       return;
     }
@@ -169,7 +167,7 @@ export class VirtualizedFileDiff<
       }
     }
 
-    if (hasLineHeightChange || DEBUG_HEIGHT) {
+    if (hasLineHeightChange || this.virtualizer.config.resizeDebugging) {
       this.computeApproximateSize();
     }
   }
@@ -296,7 +294,7 @@ export class VirtualizedFileDiff<
       this.height += fileGap;
     }
 
-    if (this.fileContainer != null && DEBUG_HEIGHT) {
+    if (this.fileContainer != null && this.virtualizer.config.resizeDebugging) {
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(

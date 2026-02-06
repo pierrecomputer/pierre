@@ -12,8 +12,6 @@ import type { Virtualizer } from './Virtualizer';
 
 let instanceId = -1;
 
-const DEBUG_HEIGHT = false;
-
 export class VirtualizedFile<
   LAnnotation = undefined,
 > extends File<LAnnotation> {
@@ -76,7 +74,11 @@ export class VirtualizedFile<
 
     // If the file has no annotations and we are using the scroll variant, then
     // we can probably skip everything
-    if (overflow === 'scroll' && this.lineAnnotations.length === 0) {
+    if (
+      overflow === 'scroll' &&
+      this.lineAnnotations.length === 0 &&
+      !this.virtualizer.config.resizeDebugging
+    ) {
       return;
     }
 
@@ -128,7 +130,7 @@ export class VirtualizedFile<
       }
     }
 
-    if (hasLineHeightChange) {
+    if (hasLineHeightChange || this.virtualizer.config.resizeDebugging) {
       this.computeApproximateSize();
     }
   }
@@ -187,7 +189,7 @@ export class VirtualizedFile<
       this.height += fileGap;
     }
 
-    if (this.fileContainer != null && DEBUG_HEIGHT) {
+    if (this.fileContainer != null && this.virtualizer.config.resizeDebugging) {
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(

@@ -69,6 +69,11 @@ import {
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
 } from './VanillaAPI/constants';
 import {
+  VIRTUALIZATION_REACT_BASIC,
+  VIRTUALIZATION_REACT_CONFIG,
+  VIRTUALIZATION_VANILLA_DIFF,
+} from './Virtualization/constants';
+import {
   WORKER_POOL_API_REFERENCE,
   WORKER_POOL_ARCHITECTURE_ASCII,
   WORKER_POOL_CACHING,
@@ -102,6 +107,7 @@ export default function DocsPage() {
           <CoreTypesSection />
           <ReactAPISection />
           <VanillaAPISection />
+          <VirtualizationSection />
           <UtilitiesSection />
           <StylingSection />
           <ThemingSection />
@@ -248,6 +254,27 @@ async function VanillaAPISection() {
       diffHunksRenderer,
       diffHunksRendererPatch,
       fileRenderer,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function VirtualizationSection() {
+  const [
+    reactVirtualizerBasic,
+    reactVirtualizerConfig,
+    vanillaVirtualizedFileDiff,
+  ] = await Promise.all([
+    preloadFile(VIRTUALIZATION_REACT_BASIC),
+    preloadFile(VIRTUALIZATION_REACT_CONFIG),
+    preloadFile(VIRTUALIZATION_VANILLA_DIFF),
+  ]);
+  const content = await renderMDX({
+    filePath: 'docs/Virtualization/content.mdx',
+    scope: {
+      reactVirtualizerBasic,
+      reactVirtualizerConfig,
+      vanillaVirtualizedFileDiff,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

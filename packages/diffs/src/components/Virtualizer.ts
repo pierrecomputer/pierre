@@ -42,7 +42,7 @@ export class Virtualizer {
   static __lastScrollPosition = 0;
 
   public type = 'basic';
-  private config: VirtualizerConfig;
+  public readonly config: VirtualizerConfig;
   private intersectionObserver: IntersectionObserver | undefined;
   private scrollTop: number = 0;
   private height: number = 0;
@@ -146,9 +146,9 @@ export class Virtualizer {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
           if (this.config.resizeDebugging) {
-            console.log('handleContainerResize', {
-              change: blockSize - lastSize,
-              size: blockSize,
+            console.log('Virtualizer: content size change', {
+              sizeChange: blockSize - lastSize,
+              newSize: blockSize,
             });
             lastSize = blockSize;
           }
@@ -163,9 +163,9 @@ export class Virtualizer {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
           if (this.config.resizeDebugging) {
-            console.log('handleContainerResize', {
-              change: blockSize - lastSize,
-              size: blockSize,
+            console.log('Virtualizer: scroller size change', {
+              sizeChange: blockSize - lastSize,
+              newSize: blockSize,
             });
             lastSize = blockSize;
           }
