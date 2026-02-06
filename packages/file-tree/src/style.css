@@ -219,4 +219,56 @@
       height: calc(100% - 2px);
     }
   }
+
+  /* File metadata section */
+  [data-item-section='metadata'] {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: calc(var(--ft-internal-font-size) - 1px);
+  }
+
+  /* Status dot indicator */
+  [data-item-status]::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  [data-item-status='added']::before {
+    background-color: var(--ft-status-color-added, oklch(65% 0.19 145));
+  }
+
+  [data-item-status='modified']::before {
+    background-color: var(--ft-status-color-modified, oklch(75% 0.15 75));
+  }
+
+  [data-item-status='deleted']::before {
+    background-color: var(--ft-status-color-deleted, oklch(60% 0.21 25));
+  }
+
+  [data-item-status='renamed']::before {
+    background-color: var(--ft-status-color-renamed, oklch(65% 0.15 250));
+  }
+
+  /* Line count badges */
+  [data-item-line-counts] {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-item-additions] {
+    color: var(--ft-additions-color, oklch(65% 0.19 145));
+  }
+
+  [data-item-deletions] {
+    color: var(--ft-deletions-color, oklch(60% 0.21 25));
+  }
 }

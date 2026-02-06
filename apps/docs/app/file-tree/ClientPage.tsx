@@ -41,6 +41,7 @@ export function ClientPage({
   const [useLazyDataLoader, setUseLazyDataLoader] = useState(
     initialUseLazyDataLoader ?? defaultUseLazyDataLoader
   );
+  const [showMetadata, setShowMetadata] = useState(true);
   const skipCookieWriteRef = useRef(false);
 
   const fileTreeOptions = useMemo<FileTreeOptions>(
@@ -48,8 +49,11 @@ export function ClientPage({
       ...sharedDemoFileTreeOptions,
       flattenEmptyDirectories,
       useLazyDataLoader,
+      fileMetadata: showMetadata
+        ? sharedDemoFileTreeOptions.fileMetadata
+        : undefined,
     }),
-    [flattenEmptyDirectories, useLazyDataLoader]
+    [flattenEmptyDirectories, useLazyDataLoader, showMetadata]
   );
 
   const handleToggleFlatten = () => {
@@ -60,6 +64,11 @@ export function ClientPage({
   const handleToggleLazyLoader = () => {
     startTransition(() => {
       setUseLazyDataLoader((prev: boolean) => !prev);
+    });
+  };
+  const handleToggleMetadata = () => {
+    startTransition(() => {
+      setShowMetadata((prev: boolean) => !prev);
     });
   };
   const handleResetControls = () => {
@@ -128,6 +137,19 @@ export function ClientPage({
               onChange={handleToggleLazyLoader}
             />
             Lazy Loader
+          </label>
+          <label
+            htmlFor="show-metadata"
+            className="flex cursor-pointer items-center gap-2 select-none"
+          >
+            <input
+              type="checkbox"
+              id="show-metadata"
+              checked={showMetadata}
+              className="cursor-pointer"
+              onChange={handleToggleMetadata}
+            />
+            File Metadata
           </label>
           <button
             type="button"

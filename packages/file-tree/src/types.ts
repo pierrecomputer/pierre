@@ -15,3 +15,11 @@ export type FileTreeNode = {
 };
 
 export type FileTreeData = Record<string, FileTreeNode>;
+
+export type FileChangeStatus = 'added' | 'modified' | 'deleted' | 'renamed';
+
+export interface FileMetadata {
+  status?: FileChangeStatus;
+  additions?: number;
+  deletions?: number;
+}

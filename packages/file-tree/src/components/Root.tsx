@@ -14,8 +14,9 @@ import type { FileTreeOptions, FileTreeSelectionItem } from '../FileTree';
 import { fileTreeSearchFeature } from '../features/fileTreeSearchFeature';
 import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoader } from '../loader/sync';
-import type { FileTreeNode } from '../types';
+import type { FileMetadata, FileTreeNode } from '../types';
 import { Icon } from './Icon';
+import { MetadataBadge } from './MetadataBadge';
 import { useTree } from './hooks/useTree';
 
 export interface FileTreeRootProps {
@@ -60,8 +61,13 @@ function FlattenedDirectoryName({
 
 export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
   'use no memo';
-  const { config, files, flattenEmptyDirectories, useLazyDataLoader } =
-    fileTreeOptions;
+  const {
+    config,
+    files,
+    fileMetadata,
+    flattenEmptyDirectories,
+    useLazyDataLoader,
+  } = fileTreeOptions;
   const treeData = useMemo(() => fileListToTree(files), [files]);
   const restTreeConfig = useMemo(() => {
     if (config == null) {
@@ -286,6 +292,8 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
         const selectionProps = isSelected ? { 'data-item-selected': true } : {};
 
         const isFlattenedDirectory = itemData?.flattens != null;
+        const metadataPath = getSelectionPath(itemData.path);
+        const metadata: FileMetadata | undefined = fileMetadata?.[metadataPath];
         const isSearchMatch = item.isMatchingSearch();
         const isFocused = hasFocusedItem && item.isFocused();
         const focusedProps = isFocused ? { 'data-item-focused': true } : {};
@@ -331,6 +339,7 @@ export function Root({ fileTreeOptions }: FileTreeRootProps): JSX.Element {
                 itemName
               )}
             </div>
+            {metadata != null ? <MetadataBadge metadata={metadata} /> : null}
           </button>
         );
       })}

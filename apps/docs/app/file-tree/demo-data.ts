@@ -1,4 +1,17 @@
-import type { FileTreeOptions } from '@pierre/file-tree';
+import type { FileMetadata, FileTreeOptions } from '@pierre/file-tree';
+
+const sampleFileMetadata: Record<string, FileMetadata> = {
+  'README.md': { status: 'modified', additions: 12, deletions: 3 },
+  'src/components/Button.tsx': {
+    status: 'modified',
+    additions: 25,
+    deletions: 8,
+  },
+  'src/components/Card.tsx': { status: 'added', additions: 45 },
+  'src/lib/utils.ts': { status: 'deleted', deletions: 30 },
+  'src/utils/stream.ts': { status: 'renamed', additions: 2, deletions: 2 },
+  'Build/scripts.js': { status: 'modified', additions: 5, deletions: 1 },
+};
 
 const sampleFileList: string[] = [
   'README.md',
@@ -46,5 +59,6 @@ export const sharedDemoFileTreeOptions: FileTreeOptions = {
     console.log('selection', selection);
   },
   flattenEmptyDirectories: true,
+  fileMetadata: sampleFileMetadata,
   files: sampleFileList,
 };

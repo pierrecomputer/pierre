@@ -3,7 +3,7 @@ import { type TreeConfig } from '@headless-tree/core';
 import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME } from './constants';
 import { SVGSpriteSheet } from './sprite';
-import { type FileTreeNode } from './types';
+import { type FileMetadata, type FileTreeNode } from './types';
 import {
   preactHydrateRoot,
   preactRenderRoot,
@@ -38,6 +38,7 @@ export type HeadlessTreeConfig = Omit<
 
 export interface FileTreeOptions {
   files: string[];
+  fileMetadata?: Record<string, FileMetadata>;
   id?: string;
   flattenEmptyDirectories?: boolean;
   useLazyDataLoader?: boolean;
@@ -149,6 +150,7 @@ export class FileTree {
       fileTreeOptions: {
         config: this.initialTreeConfig,
         files: this.files,
+        fileMetadata: this.options.fileMetadata,
         flattenEmptyDirectories: this.options.flattenEmptyDirectories,
         useLazyDataLoader: this.options.useLazyDataLoader,
         onSelection: this.options.onSelection,
@@ -185,6 +187,7 @@ export class FileTree {
         fileTreeOptions: {
           config: this.initialTreeConfig,
           files: this.files,
+          fileMetadata: this.options.fileMetadata,
           flattenEmptyDirectories: this.options.flattenEmptyDirectories,
           useLazyDataLoader: this.options.useLazyDataLoader,
           onSelection: this.options.onSelection,
