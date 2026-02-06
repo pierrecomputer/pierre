@@ -1,16 +1,16 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-
-import { Button } from './ui/button';
 import {
   IconBrandDiscord,
   IconBrandGithub,
   IconChevronFlat,
   IconParagraph,
-} from '@/components/icons';
+} from '@pierre/icons';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 
 export interface HeaderProps {

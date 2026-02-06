@@ -1,5 +1,12 @@
 import '@/app/prose.css';
 import { preloadFile } from '@pierre/diffs/ssr';
+import {
+  IconArrowUpRight,
+  IconBrandCursor,
+  IconBrandVsCode,
+  IconBrandZed,
+  IconThemes,
+} from '@pierre/icons';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -18,13 +25,6 @@ import {
 import { ThemeDemo } from './ThemeDemo';
 import { ThemeLayout } from './ThemeLayout';
 import Footer from '@/components/Footer';
-import {
-  IconArrowUpRight,
-  IconBrandCursor,
-  IconBrandVsCode,
-  IconBrandZed,
-  IconThemes,
-} from '@/components/icons';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 import { Button } from '@/components/ui/button';
 import { renderMDX } from '@/lib/mdx';

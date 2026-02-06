@@ -24,7 +24,6 @@ export const spriteConfig = {
   },
 
   source: {
-    directory: './svgs',
     extension: '.svg',
   },
 };

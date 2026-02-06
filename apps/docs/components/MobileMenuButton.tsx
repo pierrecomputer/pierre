@@ -1,5 +1,6 @@
+import { IconParagraph } from '@pierre/icons';
+
 import Button from './Button';
-import { IconParagraph } from './icons';
 
 interface MobileMenuButtonProps {
   onClick: () => void;

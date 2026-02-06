@@ -3,10 +3,6 @@
 import { preloadHighlighter } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 import {
   IconArrowDownRight,
   IconCheck,
@@ -14,7 +10,11 @@ import {
   IconColorAuto,
   IconColorDark,
   IconColorLight,
-} from '@/components/icons';
+} from '@pierre/icons';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+import { FeatureHeader } from '../FeatureHeader';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {

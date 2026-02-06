@@ -2,15 +2,15 @@
 
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import { useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 import {
   IconCheck,
   IconChevronSm,
   IconFunction,
   IconType,
-} from '@/components/icons';
+} from '@pierre/icons';
+import { useState } from 'react';
+
+import { FeatureHeader } from '../FeatureHeader';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,

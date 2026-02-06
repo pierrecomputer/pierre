@@ -2,10 +2,10 @@
 
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+import { IconDiffSplit, IconDiffUnified } from '@pierre/icons';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
-import { IconDiffSplit, IconDiffUnified } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface SplitUnifiedProps {

@@ -1,6 +1,6 @@
+import { IconCheck, IconCopy } from '@pierre/icons';
 import { useEffect, useRef, useState } from 'react';
 
-import { IconCheck, IconCopy } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 interface CopyButtonProps {

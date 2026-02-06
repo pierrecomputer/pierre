@@ -7,9 +7,9 @@ import {
   type FileProps,
   type LineAnnotation,
 } from '@pierre/diffs/react';
+import { IconBrandGithub } from '@pierre/icons';
 
 import { CopyCodeButton } from './CopyCodeButton';
-import { IconBrandGithub } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 interface DocsCodeExampleProps<LAnnotation> {

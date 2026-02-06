@@ -1,10 +1,10 @@
-import Link from 'next/link';
-
 import {
   IconArrowUpRight,
   IconBrandDiscord,
   IconBrandGithub,
-} from '@/components/icons';
+} from '@pierre/icons';
+import Link from 'next/link';
+
 import { Button } from '@/components/ui/button';
 
 export function PierreCompanySection() {

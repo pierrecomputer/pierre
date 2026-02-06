@@ -7,6 +7,14 @@ import { fileURLToPath } from 'url';
 import { spriteConfig } from '../sprite.config.js';
 import { SVGOConfig } from '../svgo.config.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = join(__dirname, '..');
+
+function getIconsSourceDir() {
+  return join(projectRoot, 'node_modules', '@pierre', 'icons', 'svg');
+}
+
 const colors = {
   reset: '\x1b[0m',
   bright: '\x1b[1m',
@@ -16,10 +24,6 @@ const colors = {
   blue: '\x1b[34m',
   cyan: '\x1b[36m',
 };
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '..');
 
 /**
  * Process a single SVG file with SVGO and extract viewBox and content
@@ -81,18 +85,18 @@ ${symbolsHtml}
 async function buildSprite() {
   console.log(`${colors.cyan}➜ Building SVG sprite…${colors.reset}`);
 
-  const sourceDir = join(projectRoot, spriteConfig.source.directory);
+  const sourceDir = getIconsSourceDir();
   const outputFile = join(projectRoot, spriteConfig.output.file);
 
   try {
     await stat(sourceDir);
   } catch (error) {
-    console.erro(error);
+    console.error(error);
     console.error(
       `${colors.red}×Error:${colors.reset} Source directory not found: ${sourceDir}`
     );
     console.log(
-      `${colors.dim}Create the ./svgs directory and add your SVG files there.${colors.reset}`
+      `${colors.dim}Ensure @pierre/icons is installed and exposes a svg/ directory.${colors.reset}`
     );
     process.exit(1);
   }
@@ -119,7 +123,7 @@ async function buildSprite() {
       `${colors.red}× Error:${colors.reset} No matching SVG files found.`
     );
     console.log(
-      `${colors.dim}Make sure you have SVG files in ${sourceDir} with names matching the icons in sprite.config.js${colors.reset}`
+      `${colors.dim}Ensure @pierre/icons svg/ has SVG files matching the icon names in sprite.config.js${colors.reset}`
     );
     process.exit(1);
   }

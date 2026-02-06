@@ -2,16 +2,16 @@
 
 import { parseDiffFromFile, preloadHighlighter } from '@pierre/diffs';
 import { File, FileDiff } from '@pierre/diffs/react';
-import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useRef, useState } from 'react';
-
 import {
   IconCheckCheck,
   IconChevronsNarrow,
   IconColorDark,
   IconColorLight,
   IconFileCode,
-} from '@/components/icons';
+} from '@pierre/icons';
+import { useTheme } from 'next-themes';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 

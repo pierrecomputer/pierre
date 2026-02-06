@@ -1,12 +1,12 @@
 'use client';
 
+import { IconColorDark, IconColorLight } from '@pierre/icons';
 import { useTheme } from 'next-themes';
 import Image, { type StaticImageData } from 'next/image';
 import { useEffect, useState } from 'react';
 
 import pierreDark from '../pierre-dark.png';
 import pierreLight from '../pierre-light.png';
-import { IconColorDark, IconColorLight } from '@/components/icons';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 export function ThemeScreenshots() {

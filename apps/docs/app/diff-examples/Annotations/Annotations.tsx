@@ -13,6 +13,7 @@ import type {
   PreloadFileDiffResult,
   PreloadMultiFileDiffResult,
 } from '@pierre/diffs/ssr';
+import { IconArrowDownRight, IconPlus } from '@pierre/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -20,7 +21,6 @@ import {
   type AcceptRejectMetadata,
   type AnnotationMetadata,
 } from './constants';
-import { IconArrowDownRight, IconPlus } from '@/components/icons/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 

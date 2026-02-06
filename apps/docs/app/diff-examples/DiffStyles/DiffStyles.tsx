@@ -2,11 +2,8 @@
 
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import { useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 import {
-  IconCheckLg,
+  IconCheck,
   IconChevronSm,
   IconCodeStyleBars,
   IconCodeStyleBg,
@@ -15,7 +12,10 @@ import {
   IconParagraph,
   IconSymbolDiffstat,
   IconWordWrap,
-} from '@/components/icons';
+} from '@pierre/icons';
+import { useState } from 'react';
+
+import { FeatureHeader } from '../FeatureHeader';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -123,7 +123,7 @@ export function DiffStyles({
                   className="flex items-start gap-2 py-2"
                 >
                   {lineDiffStyle === option.value ? (
-                    <IconCheckLg className="mt-[1px]" />
+                    <IconCheck className="mt-[1px]" />
                   ) : (
                     <div className="h-4 w-4" />
                   )}

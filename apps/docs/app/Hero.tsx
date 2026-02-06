@@ -1,10 +1,10 @@
 'use client';
 
+import { IconBook, IconCheck, IconCopyFill } from '@pierre/icons';
 import Link from 'next/link';
 import { useState } from 'react';
 
 import packageJson from '../../../packages/diffs/package.json';
-import { IconBook, IconCheck, IconCopyFill } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,

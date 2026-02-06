@@ -3,9 +3,6 @@
 import type { SelectedLineRange } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import { useState } from 'react';
-
-import { FeatureHeader } from '../FeatureHeader';
 import {
   IconCodeStyleBars,
   IconCodeStyleBg,
@@ -14,7 +11,10 @@ import {
   IconMoon,
   IconSun,
   IconXSquircle,
-} from '@/components/icons';
+} from '@pierre/icons';
+import { useState } from 'react';
+
+import { FeatureHeader } from '../FeatureHeader';
 import { Button } from '@/components/ui/button';
 
 interface LineSelectionProps {

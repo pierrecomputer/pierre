@@ -29,5 +29,3 @@ tsconfig.tsbuildinfo
 .vercel
 .claude/*
 
-# Project-specific
-svgs/*

@@ -72,26 +72,15 @@ cd packages/diffs
 bun publish
 ```
 
-## Building Icons
+## Building the sprite
 
-**For Pierre team only.**
-
-To build all our SVG icons from Figma there's a couple preparation steps that
-you need to run first.
-
-Perform a full export of all `Published Icons` the `Pierre Design` Figma file
-
-Do this by selecting all the icons but not the art board and in the bottom right
-click `Export XXX Layers` and make sure to point it to a `./svg` folder at the
-root level of this project
-
-Once that's done, simply run:
+The diff UI uses an SVG sprite built from `@pierre/icons`. From the monorepo
+root:
 
 ```bash
-bun run icons:build
+bun run icons:sprite
 ```
 
-This will run a full build of all the icons into
-`./apps/docs/components/icons/icons`
-
-Then make sure to check in any changes needed
+This reads SVGs from `node_modules/@pierre/icons/svg` and writes
+`packages/diffs/src/sprite.ts`. Run after updating `@pierre/icons` or changing
+`sprite.config.js`.

@@ -3,12 +3,12 @@
 import type { DiffLineAnnotation } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+import { IconBell } from '@pierre/icons';
 import { useState } from 'react';
 
 import type { AnnotationMetadata } from './ssr_types';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
-import { IconBell } from '@/components/icons';
 
 // Annotation component with its own state for proper hydration
 function ErrorAnnotation({ message }: { message: string }) {
