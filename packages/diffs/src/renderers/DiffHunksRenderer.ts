@@ -199,6 +199,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (direction === 'down' || direction === 'both') {
       region.fromEnd += expansionLineCount;
     }
+    // NOTE(amadeus): If our render cache is not highlighted, we need to clear
+    // it, otherwise we won't have the correct AST lines
+    if (this.renderCache?.highlighted !== true) {
+      this.renderCache = undefined;
+    }
     this.expandedHunks.set(index, region);
   }
 
