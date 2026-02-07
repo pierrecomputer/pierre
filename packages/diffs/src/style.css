@@ -617,7 +617,7 @@
   }
 
   [data-separator='metadata'] [data-separator-wrapper] {
-    left: 100%;
+    inset-inline: 100% auto;
     padding-inline: 1ch;
     height: 32px;
     background-color: var(--diffs-bg-separator);
