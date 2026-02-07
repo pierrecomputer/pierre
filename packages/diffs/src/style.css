@@ -586,7 +586,7 @@
   }
 
   [data-separator='simple'] {
-    margin-right: -2px;
+    min-height: 4px;
   }
 
   [data-separator='line-info'],
@@ -601,10 +601,6 @@
   [data-separator='metadata'] {
     height: 32px;
     position: relative;
-  }
-
-  [data-separator='simple'] {
-    min-height: 4px;
   }
 
   [data-separator-wrapper] {
@@ -702,12 +698,6 @@
       user-select: none;
       overflow: clip;
     }
-  }
-
-  [data-additions] [data-gutter] [data-separator-wrapper],
-  [data-additions] [data-separator='line-info-basic'] [data-separator-wrapper],
-  [data-content] [data-separator-wrapper] {
-    display: none;
   }
 
   @supports (width: 1cqi) {
