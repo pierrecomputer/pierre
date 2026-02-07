@@ -79,8 +79,11 @@
 
   pre,
   code {
-    contain: content;
     background-color: var(--diffs-bg);
+  }
+
+  code {
+    contain: content;
   }
 
   *,
@@ -342,10 +345,6 @@
   [data-no-newline] {
     color: var(--diffs-fg);
     background-color: var(--diffs-line-bg, var(--diffs-bg));
-  }
-
-  [data-virtualizer-buffer] {
-    background-color: var(--diffs-bg);
   }
 
   [data-no-newline] {
