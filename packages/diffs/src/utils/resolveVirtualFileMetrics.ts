@@ -28,6 +28,7 @@ function getHunkSeparatorHeight(
       return 4;
     case 'metadata':
     case 'line-info':
+    case 'line-info-basic':
     case 'custom':
       return 32;
   }

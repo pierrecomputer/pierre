@@ -54,7 +54,7 @@ export function createSeparator({
       })
     );
   }
-  if (type === 'line-info' && content != null) {
+  if ((type === 'line-info' || type === 'line-info-basic') && content != null) {
     const contentChildren: ElementContent[] = [];
     if (expandIndex != null) {
       if (!chunked) {

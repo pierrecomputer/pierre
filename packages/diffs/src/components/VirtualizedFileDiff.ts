@@ -236,9 +236,11 @@ export class VirtualizedFileDiff<
     const { diffHeaderHeight, fileGap, hunkSeparatorHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const separatorGap =
-      hunkSeparators === 'simple' || hunkSeparators === 'metadata'
-        ? 0
-        : fileGap;
+      hunkSeparators !== 'simple' &&
+      hunkSeparators !== 'metadata' &&
+      hunkSeparators !== 'line-info-basic'
+        ? fileGap
+        : 0;
 
     // Header or initial padding
     if (!disableFileHeader) {
@@ -532,7 +534,9 @@ export class VirtualizedFileDiff<
     // Halfway between top & bottom, represented as an absolute position
     const viewportCenter = (top + bottom) / 2;
     const separatorGap =
-      hunkSeparators === 'simple' || hunkSeparators === 'metadata'
+      hunkSeparators === 'simple' ||
+      hunkSeparators === 'metadata' ||
+      hunkSeparators === 'line-info-basic'
         ? 0
         : fileGap;
 
@@ -630,7 +634,7 @@ export class VirtualizedFileDiff<
         absoluteLineTop += lineHeight;
 
         if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
-          absoluteLineTop += hunkSeparatorHeight + fileGap;
+          absoluteLineTop += hunkSeparatorHeight + separatorGap;
         }
 
         return false;

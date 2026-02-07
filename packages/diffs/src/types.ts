@@ -332,7 +332,12 @@ export type ThemeTypes = 'system' | 'light' | 'dark';
 /**
  * The `'custom'` variant is deprecated and will be removed in a future version.
  */
-export type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'custom';
+export type HunkSeparators =
+  | 'simple'
+  | 'metadata'
+  | 'line-info'
+  | 'line-info-basic'
+  | 'custom';
 
 export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
 

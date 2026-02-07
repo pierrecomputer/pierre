@@ -208,7 +208,8 @@ export class FileDiff<LAnnotation = undefined> {
       pluckMouseEventOptions(
         options,
         typeof options.hunkSeparators === 'function' ||
-          (options.hunkSeparators ?? 'line-info') === 'line-info'
+          (options.hunkSeparators ?? 'line-info') === 'line-info' ||
+          options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined
       )
@@ -327,7 +328,8 @@ export class FileDiff<LAnnotation = undefined> {
       pluckMouseEventOptions(
         options,
         typeof options.hunkSeparators === 'function' ||
-          (options.hunkSeparators ?? 'line-info') === 'line-info'
+          (options.hunkSeparators ?? 'line-info') === 'line-info' ||
+          options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined
       )
