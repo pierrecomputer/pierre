@@ -138,6 +138,7 @@ const instance = new FileDiff({
 
   // What to show between diff hunks:
   // 'line-info' (default) - shows collapsed line count, clickable to expand
+  // 'line-info-basic' - slightly more compact full width line-info variant
   // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
   // 'simple' - subtle bar separator
   // Or pass a function for custom rendering (see Hunk Separators section)
