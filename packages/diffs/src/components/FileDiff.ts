@@ -1234,7 +1234,9 @@ export class FileDiff<LAnnotation = undefined> {
       } else if (diffStyle === 'split' && Array.isArray(codeElements)) {
         this.insertPartialHTML(diffStyle, codeElements, result, insertPosition);
       } else {
-        throw new Error('u done fuked up, again');
+        throw new Error(
+          'FileDiff.applyPartialRender.applyChunk: invalid chunk application'
+        );
       }
       rowCount += result.rowCount;
     };
@@ -1526,7 +1528,7 @@ export class FileDiff<LAnnotation = undefined> {
       ) {
         const totalRows = this.getBufferSize(contentElement.dataset);
         if (totalRows == null) {
-          throw new Error('u fuked up');
+          throw new Error('FileDiff.trimColumnRows: invalid element');
         }
         if (preTrimCount > 0) {
           const rowsToRemove = Math.min(preTrimCount, totalRows);
