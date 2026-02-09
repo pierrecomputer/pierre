@@ -1,4 +1,4 @@
-import type { GrammarState, ThemedToken } from '@shikijs/core';
+import type { GrammarState, ThemedToken } from 'shiki/core';
 
 import type {
   ShikiStreamTokenizerEnqueueResult,

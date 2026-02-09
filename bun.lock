@@ -24,7 +24,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@pierre/diffs": "workspace:*",
-        "@pierre/icons": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
         "shiki": "catalog:",
@@ -98,10 +97,8 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.1.0-beta.9",
+      "version": "1.1.0-beta.10",
       "dependencies": {
-        "@shikijs/core": "^3.0.0",
-        "@shikijs/engine-javascript": "^3.0.0",
         "@shikijs/transformers": "^3.0.0",
         "diff": "catalog:",
         "hast-util-to-html": "catalog:",

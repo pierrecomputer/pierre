@@ -3,7 +3,7 @@ import type {
   HighlighterCore,
   HighlighterGeneric,
   ThemedToken,
-} from '@shikijs/core';
+} from 'shiki/core';
 
 /**
  * A special token that indicates the number of tokens to be removed from the previous streamed tokens.

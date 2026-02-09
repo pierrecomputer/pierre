@@ -64,8 +64,6 @@
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
-    "@shikijs/core": "^3.0.0",
-    "@shikijs/engine-javascript": "^3.0.0",
     "@shikijs/transformers": "^3.0.0",
     "diff": "catalog:",
     "hast-util-to-html": "catalog:",

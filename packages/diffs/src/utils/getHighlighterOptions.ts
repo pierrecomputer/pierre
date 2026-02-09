@@ -3,19 +3,22 @@ import { getThemes } from './getThemes';
 
 interface HighlighterOptionsShape {
   theme?: DiffsThemeNames | ThemesType;
+  preferWASMHighlighter?: boolean;
 }
 
 interface GetHighlighterOptionsReturn {
   langs: SupportedLanguages[];
   themes: DiffsThemeNames[];
+  preferWASMHighlighter: boolean;
 }
 
 export function getHighlighterOptions(
   lang: SupportedLanguages | undefined,
-  options: HighlighterOptionsShape
+  { theme, preferWASMHighlighter = false }: HighlighterOptionsShape
 ): GetHighlighterOptionsReturn {
   return {
     langs: [lang ?? 'text'],
-    themes: getThemes(options.theme),
+    themes: getThemes(theme),
+    preferWASMHighlighter: preferWASMHighlighter,
   };
 }

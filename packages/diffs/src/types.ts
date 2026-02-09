@@ -350,6 +350,7 @@ export interface BaseCodeOptions {
   disableVirtualizationBuffers?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
+  preferWASMHighlighter?: boolean;
   useCSSClasses?: boolean;
   tokenizeMaxLineLength?: number;
 

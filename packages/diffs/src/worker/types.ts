@@ -59,6 +59,7 @@ export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
+  preferWASMHighlighter: boolean;
   resolvedThemes: ThemeRegistrationResolved[];
   resolvedLanguages?: ResolvedLanguage[];
 }
@@ -152,6 +153,7 @@ export interface WorkerPoolOptions {
 
 export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {
   langs?: SupportedLanguages[];
+  preferWASMHighlighter?: boolean;
 }
 
 export interface InitializeWorkerTask {

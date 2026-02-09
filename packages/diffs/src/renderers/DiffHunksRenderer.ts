@@ -104,7 +104,7 @@ interface ProcessContext {
 }
 
 type OptionsWithDefaults = Required<
-  Omit<BaseDiffOptions, 'lang' | 'unsafeCSS'>
+  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferWASMHighlighter'>
 >;
 
 export interface HunksRenderResult {
@@ -513,6 +513,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     result: ThemedDiffResult,
     options: RenderDiffOptions
   ): void {
+    // NOTE(amadeus): This is a bad assumption, and I should figure out
+    // something better...
     // If renderCache was blown away, we can assume we've run cleanUp()
     if (this.renderCache == null) {
       return;

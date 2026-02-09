@@ -1,4 +1,8 @@
-import { createHighlighter, createJavaScriptRegexEngine } from 'shiki';
+import {
+  createHighlighter,
+  createJavaScriptRegexEngine,
+  createOnigurumaEngine,
+} from 'shiki';
 
 import type {
   DiffsHighlighter,
@@ -25,16 +29,20 @@ let highlighter: CachedOrLoadingHighlighterType;
 interface HighlighterOptions {
   themes: DiffsThemeNames[];
   langs: SupportedLanguages[];
+  preferWASMHighlighter?: boolean;
 }
 
 export async function getSharedHighlighter({
   themes,
   langs,
+  preferWASMHighlighter = false,
 }: HighlighterOptions): Promise<DiffsHighlighter> {
   highlighter ??= createHighlighter({
     themes: [],
     langs: ['text'],
-    engine: createJavaScriptRegexEngine(),
+    engine: preferWASMHighlighter
+      ? createOnigurumaEngine(import('shiki/wasm'))
+      : createJavaScriptRegexEngine(),
   }) as Promise<DiffsHighlighter>;
 
   const instance = isHighlighterLoading(highlighter)

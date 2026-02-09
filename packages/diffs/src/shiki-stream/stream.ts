@@ -1,4 +1,4 @@
-import type { ThemedToken } from '@shikijs/core';
+import type { ThemedToken } from 'shiki/core';
 
 import { ShikiStreamTokenizer } from './tokenizer';
 import type { CodeToTokenTransformStreamOptions, RecallToken } from './types';
