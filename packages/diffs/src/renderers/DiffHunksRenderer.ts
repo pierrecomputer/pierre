@@ -104,7 +104,7 @@ interface ProcessContext {
 }
 
 type OptionsWithDefaults = Required<
-  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferWASMHighlighter'>
+  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter'>
 >;
 
 export interface HunksRenderResult {

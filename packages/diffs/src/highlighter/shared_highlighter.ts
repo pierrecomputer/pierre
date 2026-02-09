@@ -7,6 +7,7 @@ import {
 import type {
   DiffsHighlighter,
   DiffsThemeNames,
+  HighlighterTypes,
   SupportedLanguages,
   ThemeRegistrationResolved,
 } from '../types';
@@ -29,20 +30,21 @@ let highlighter: CachedOrLoadingHighlighterType;
 interface HighlighterOptions {
   themes: DiffsThemeNames[];
   langs: SupportedLanguages[];
-  preferWASMHighlighter?: boolean;
+  preferredHighlighter?: HighlighterTypes;
 }
 
 export async function getSharedHighlighter({
   themes,
   langs,
-  preferWASMHighlighter = false,
+  preferredHighlighter = 'shiki-js',
 }: HighlighterOptions): Promise<DiffsHighlighter> {
   highlighter ??= createHighlighter({
     themes: [],
     langs: ['text'],
-    engine: preferWASMHighlighter
-      ? createOnigurumaEngine(import('shiki/wasm'))
-      : createJavaScriptRegexEngine(),
+    engine:
+      preferredHighlighter === 'shiki-wasm'
+        ? createOnigurumaEngine(import('shiki/wasm'))
+        : createJavaScriptRegexEngine(),
   }) as Promise<DiffsHighlighter>;
 
   const instance = isHighlighterLoading(highlighter)

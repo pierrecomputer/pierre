@@ -79,7 +79,7 @@ const poolManager = (() => {
   const manager = createWorkerAPI({
     theme: DEFAULT_THEMES,
     langs: ['typescript', 'tsx'],
-    preferWASMHighlighter: true,
+    preferredHighlighter: 'shiki-wasm',
   });
   void manager.initialize().then(() => {
     console.log('WorkerPoolManager initialized, with:', manager.getStats());

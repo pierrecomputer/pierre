@@ -7,6 +7,7 @@ import { attachResolvedLanguages } from '../highlighter/languages/attachResolved
 import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
 import type {
   DiffsHighlighter,
+  HighlighterTypes,
   RenderDiffOptions,
   RenderFileOptions,
   ThemedDiffResult,
@@ -73,11 +74,11 @@ async function handleMessage(request: WorkerRequest) {
 async function handleInitialize({
   id,
   renderOptions: options,
-  preferWASMHighlighter,
+  preferredHighlighter,
   resolvedThemes,
   resolvedLanguages,
 }: InitializeWorkerRequest): Promise<void> {
-  let highlighter = getHighlighter(preferWASMHighlighter);
+  let highlighter = getHighlighter(preferredHighlighter);
   if ('then' in highlighter) {
     highlighter = await highlighter;
   }
@@ -155,14 +156,15 @@ async function handleRenderDiff({
 }
 
 function getHighlighter(
-  preferWASMHighlighter: boolean = false
+  preferredHighlighter: HighlighterTypes = 'shiki-js'
 ): Promise<DiffsHighlighter> | DiffsHighlighter {
   highlighter ??= createHighlighterCore({
     themes: [],
     langs: [],
-    engine: preferWASMHighlighter
-      ? createOnigurumaEngine(import('shiki/wasm'))
-      : createJavaScriptRegexEngine(),
+    engine:
+      preferredHighlighter === 'shiki-wasm'
+        ? createOnigurumaEngine(import('shiki/wasm'))
+        : createJavaScriptRegexEngine(),
   }) as Promise<DiffsHighlighter>;
   return highlighter;
 }

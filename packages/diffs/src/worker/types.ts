@@ -2,6 +2,7 @@ import type {
   DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
+  HighlighterTypes,
   LanguageRegistration,
   LineDiffTypes,
   RenderDiffOptions,
@@ -59,7 +60,7 @@ export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
-  preferWASMHighlighter: boolean;
+  preferredHighlighter: HighlighterTypes;
   resolvedThemes: ThemeRegistrationResolved[];
   resolvedLanguages?: ResolvedLanguage[];
 }
@@ -153,7 +154,7 @@ export interface WorkerPoolOptions {
 
 export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {
   langs?: SupportedLanguages[];
-  preferWASMHighlighter?: boolean;
+  preferredHighlighter?: HighlighterTypes;
 }
 
 export interface InitializeWorkerTask {
