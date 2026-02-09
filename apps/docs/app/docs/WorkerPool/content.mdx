@@ -125,7 +125,9 @@ you can then manually pass to all your File/FileDiff instances.
   be ignored. To change render options after WorkerPoolManager instantiates, use
   the `setRenderOptions()` method on the `WorkerPoolManager`. **Note:** Changing
   render options will force all mounted components to re-render and will clear
-  the render cache.
+  the render cache. If you need to control which Shiki engine is used, set
+  `preferredHighlighter` when initializing the pool (`'shiki-js'` by default,
+  `'shiki-wasm'` optional).
 </Notice>
 
 #### React

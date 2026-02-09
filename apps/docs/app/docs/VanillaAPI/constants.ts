@@ -115,6 +115,11 @@ const instance = new FileDiff({
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
+  // Choose the Shiki engine:
+  // 'shiki-js' (default) - JavaScript regex engine
+  // 'shiki-wasm' - WASM Oniguruma engine
+  preferredHighlighter: 'shiki-js',
+
   // ─────────────────────────────────────────────────────────────
   // DIFF DISPLAY
   // ─────────────────────────────────────────────────────────────
@@ -336,6 +341,11 @@ const instance = new File({
   // 'system' (default) - follows OS preference
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
+
+  // Choose the Shiki engine:
+  // 'shiki-js' (default) - JavaScript regex engine
+  // 'shiki-wasm' - WASM Oniguruma engine
+  preferredHighlighter: 'shiki-js',
 
   // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY

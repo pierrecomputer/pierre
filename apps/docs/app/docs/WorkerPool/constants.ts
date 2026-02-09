@@ -292,6 +292,8 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
       }}
       highlighterOptions={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        // Optional: pick the Shiki engine ('shiki-js' is default)
+        // preferredHighlighter: 'shiki-wasm',
         // Optionally preload languages to avoid lazy-loading delays
         langs: ['typescript', 'javascript', 'css', 'html'],
       }}
@@ -363,6 +365,8 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Optional: pick the Shiki engine ('shiki-js' is default)
+    // preferredHighlighter: 'shiki-wasm',
     // Optionally preload languages to avoid lazy-loading delays
     langs: ['typescript', 'javascript', 'css', 'html'],
   },
@@ -418,6 +422,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
+//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
 //   - langs?: SupportedLanguages[] - Array of languages to preload
 
 // Methods:

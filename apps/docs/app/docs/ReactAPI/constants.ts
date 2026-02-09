@@ -44,6 +44,11 @@ interface DiffOptions {
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
+  // Choose the Shiki engine:
+  // 'shiki-js' (default) - JavaScript regex engine
+  // 'shiki-wasm' - WASM Oniguruma engine
+  preferredHighlighter: 'shiki-js',
+
   // ─────────────────────────────────────────────────────────────
   // DIFF DISPLAY
   // ─────────────────────────────────────────────────────────────
@@ -481,6 +486,11 @@ interface FileOptions {
   // 'system' (default) - follows OS preference
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
+
+  // Choose the Shiki engine:
+  // 'shiki-js' (default) - JavaScript regex engine
+  // 'shiki-wasm' - WASM Oniguruma engine
+  preferredHighlighter: 'shiki-js',
 
   // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY
