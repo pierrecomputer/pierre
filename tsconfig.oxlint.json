@@ -3,7 +3,7 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["apps/**/*", "packages/**/*", "scripts/**/*", "update-themes.js"],
+  "include": ["apps/**/*", "packages/**/*", "scripts/**/*"],
   "exclude": [
     "**/node_modules/**",
     "**/dist/**",

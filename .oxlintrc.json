@@ -112,7 +112,6 @@
     "{packages,apps}/*/.vinxi/**",
     "{packages,apps}/*/.output/**",
     "{packages,apps}/*/.vercel/**",
-    "packages/storage-elements/blocks/git-platform-sync/**",
-    "update-themes.js"
+    "packages/storage-elements/blocks/git-platform-sync/**"
   ]
 }
