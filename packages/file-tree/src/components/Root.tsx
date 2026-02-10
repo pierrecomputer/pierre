@@ -188,8 +188,22 @@ export function Root({
     // --- Map top-level state props into config ---
     const baseConfig = config ?? {};
 
-    const mapPathToId = (path: string): string | undefined =>
-      pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path);
+    const mapPathToId = (path: string): string | undefined => {
+      // If the caller explicitly passes a flattened path, respect it.
+      if (path.startsWith(FLATTENED_PREFIX)) {
+        return pathToId.get(path);
+      }
+
+      const shouldFlatten = flattenEmptyDirectories === true;
+
+      // Only prefer flattened IDs when the tree is actually rendering flattened
+      // directories. Otherwise, selecting a path that *could* be flattened would
+      // target a hidden node and the visible folder would not be marked selected.
+      if (shouldFlatten) {
+        return pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path);
+      }
+      return pathToId.get(path);
+    };
 
     const mapPathsToIds = (
       paths: string[] | undefined
@@ -390,7 +404,14 @@ export function Root({
       flattenEmptyDirectories
     );
     onExpandedItemsChange(effectivePaths);
-  }, [expandedSnapshot, callbacksRef, tree, idToPath, pathToId]);
+  }, [
+    expandedSnapshot,
+    callbacksRef,
+    tree,
+    idToPath,
+    pathToId,
+    flattenEmptyDirectories,
+  ]);
 
   // --- Selected items change callback ---
   const selectedSnapshotRef = useRef<string | null>(null);

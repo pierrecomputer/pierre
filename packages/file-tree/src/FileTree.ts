@@ -136,12 +136,19 @@ export class FileTree {
   setSelectedItems(items: string[]): void {
     const handle = this.handleRef.current;
     if (handle == null) return;
+    const flattenEmptyDirectories =
+      this.options.flattenEmptyDirectories === true;
     const ids = items
-      .map(
-        (path) =>
-          handle.pathToId.get(FLATTENED_PREFIX + path) ??
-          handle.pathToId.get(path)
-      )
+      .map((path) => {
+        // If the caller explicitly passes a flattened path, respect it.
+        if (path.startsWith(FLATTENED_PREFIX)) {
+          return handle.pathToId.get(path);
+        }
+        return flattenEmptyDirectories
+          ? (handle.pathToId.get(FLATTENED_PREFIX + path) ??
+              handle.pathToId.get(path))
+          : handle.pathToId.get(path);
+      })
       .filter((id): id is string => id != null);
     handle.tree.applySubStateUpdate('selectedItems', () => ids);
   }

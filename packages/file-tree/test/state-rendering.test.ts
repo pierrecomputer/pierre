@@ -99,6 +99,33 @@ for (const cfg of TEST_CONFIGS) {
       expect(selectedItem.getItemName()).toBe('index.ts');
     });
 
+    test('selection mapping does not select hidden flattened IDs in no-flatten mode', () => {
+      const files = ['config/project/a.txt'];
+      const { tree, idToPath } = createTestTree(files, cfg, {
+        defaultExpandedItems: ['config'],
+        defaultSelectedItems: ['config/project'],
+      });
+
+      if (cfg.flattenEmptyDirectories) {
+        // This specific regression is only about no-flatten mode; flattened mode
+        // may legitimately choose a flattened ID depending on how the loader
+        // represents "flattenable" directories.
+        return;
+      }
+
+      const selectedIds = tree.getState().selectedItems ?? [];
+      expect(selectedIds).toHaveLength(1);
+
+      const selectedId = selectedIds[0];
+      const selectedPath = idToPath.get(selectedId);
+      expect(selectedPath).toBe('config/project');
+
+      // The selected item must be part of the visible item set after expanding
+      // "config". If selection mapped to a flattened-only ID, it would not be.
+      const visibleIds = new Set(tree.getItems().map((i) => i.getId()));
+      expect(visibleIds.has(selectedId)).toBe(true);
+    });
+
     test('file items are not folders', () => {
       const { tree } = createTestTree(standardFiles, cfg, {
         defaultExpandedItems: ['src', 'src/components'],

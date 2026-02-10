@@ -139,10 +139,14 @@ export function createTestTree(
   const mappedSelectedItems =
     defaultSelectedItems != null
       ? defaultSelectedItems
-          .map(
-            (path) =>
-              pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path)
-          )
+          .map((path) => {
+            if (path.startsWith(FLATTENED_PREFIX)) {
+              return pathToId.get(path);
+            }
+            return flattenEmptyDirectories
+              ? (pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path))
+              : pathToId.get(path);
+          })
           .filter((id): id is string => id != null)
       : undefined;
 
@@ -188,9 +192,14 @@ export function createTestTree(
   // Mirror FileTree.setSelectedItems
   const setSelectedItems = (paths: string[]) => {
     const ids = paths
-      .map(
-        (path) => pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path)
-      )
+      .map((path) => {
+        if (path.startsWith(FLATTENED_PREFIX)) {
+          return pathToId.get(path);
+        }
+        return flattenEmptyDirectories
+          ? (pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path))
+          : pathToId.get(path);
+      })
       .filter((id): id is string => id != null);
     tree.applySubStateUpdate('selectedItems', () => ids);
   };
