@@ -8,7 +8,7 @@
     "build:deps": "bun run build:deps:diffs && bun run build:deps:tree",
     "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
     "build:deps:tree": "output=$(cd ../../packages/file-tree && bun run build 2>&1) && echo '[tree] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
-    "dev": "bun run build:deps && concurrently \"bun run dev:deps:diffs\" \"bun run dev:deps:tree\" \"bun run dev:next\" --names \"diffs,tree,docs\" --prefix-colors \"blue,green,yellow\"",
+    "dev": "bun run build:deps && bun concurrently \"bun run dev:deps:diffs\" \"bun run dev:deps:tree\" \"bun run dev:next\" --names \"diffs,tree,docs\" --prefix-colors \"blue,green,yellow\"",
     "dev:next": "next dev --turbopack",
     "dev:deps:diffs": "(cd ../../packages/diffs && bun run dev)",
     "dev:deps:tree": "(cd ../../packages/file-tree && bun run dev)",
