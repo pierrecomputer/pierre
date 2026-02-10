@@ -22,9 +22,10 @@ import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoader } from '../loader/sync';
 import type { FileTreeNode } from '../types';
 import {
-  expandPathsWithAncestors,
-  filterOrphanedPaths,
-} from '../utils/expandPaths';
+  controlledExpandedPathsToExpandedIds,
+  expandedIdsToControlledExpandedPaths,
+} from '../utils/controlledExpandedState';
+import { expandPathsWithAncestors } from '../utils/expandPaths';
 import { fileListToTree } from '../utils/fileListToTree';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
@@ -216,8 +217,7 @@ export function Root({
     };
 
     // Merge top-level defaultExpandedItems/defaultSelectedItems into config.initialState
-    const topLevelInitialExpanded =
-      stateConfig?.defaultExpandedItems ?? stateConfig?.expandedItems;
+    const topLevelInitialExpanded = stateConfig?.defaultExpandedItems;
     const topLevelInitialSelected = stateConfig?.defaultSelectedItems;
     const topLevelInitialExpandedIds =
       topLevelInitialExpanded != null
@@ -246,7 +246,7 @@ export function Root({
     const topLevelSelected = stateConfig?.selectedItems;
     const topLevelExpandedIds =
       topLevelExpanded != null
-        ? expandPathsWithAncestors(topLevelExpanded, pathToId, {
+        ? controlledExpandedPathsToExpandedIds(topLevelExpanded, pathToId, {
             flattenEmptyDirectories,
           })
         : undefined;
@@ -390,20 +390,11 @@ export function Root({
 
     expandedSnapshotRef.current = expandedSnapshot;
     const ids = tree.getState().expandedItems ?? [];
-    const paths = [
-      ...new Set(
-        ids
-          .map((id) => idToPath.get(id))
-          .filter((path): path is string => path != null)
-          .map(getSelectionPath)
-      ),
-    ];
-    const effectivePaths = filterOrphanedPaths(
-      paths,
-      pathToId,
-      flattenEmptyDirectories
+    onExpandedItemsChange(
+      expandedIdsToControlledExpandedPaths(ids, idToPath, pathToId, {
+        flattenEmptyDirectories,
+      })
     );
-    onExpandedItemsChange(effectivePaths);
   }, [
     expandedSnapshot,
     callbacksRef,
