@@ -204,6 +204,7 @@ export class VirtualizedFileDiff<
     if (this.fileContainer == null) {
       return;
     }
+    this.renderRange = undefined;
     if (visible && !this.isVisible) {
       this.top = this.virtualizer.getOffsetInScrollContainer(
         this.fileContainer
