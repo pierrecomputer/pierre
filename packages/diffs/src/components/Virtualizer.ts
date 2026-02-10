@@ -215,6 +215,9 @@ export class Virtualizer {
     this.resizeObserver = undefined;
     this.intersectionObserver?.disconnect();
     this.intersectionObserver = undefined;
+    this.root?.removeEventListener('scroll', this.handleElementScroll);
+    window.removeEventListener('scroll', this.handleWindowScroll);
+    window.removeEventListener('resize', this.handleWindowResize);
     this.root = undefined;
     this.contentContainer = undefined;
     this.observers.clear();
