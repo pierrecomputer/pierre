@@ -18,13 +18,19 @@ export function createWindowFromScrollPosition({
   overscrollSize,
 }: WindowFromScrollPositionProps): VirtualWindowSpecs {
   const windowHeight = height + overscrollSize * 2;
-  if (windowHeight > scrollHeight || fitPerfectly) {
+  const effectiveHeight = fitPerfectly ? height : windowHeight;
+  scrollHeight = Math.max(scrollHeight, effectiveHeight);
+
+  if (windowHeight >= scrollHeight || fitPerfectly) {
+    const top = Math.max(scrollTop - containerOffset, 0);
+    const bottom =
+      Math.min(scrollTop + effectiveHeight, scrollHeight) - containerOffset;
     return {
-      top: Math.max(scrollTop - containerOffset, 0),
-      bottom:
-        scrollTop + (fitPerfectly ? height : windowHeight) - containerOffset,
+      top,
+      bottom: Math.max(bottom, top),
     };
   }
+
   const scrollCenter = scrollTop + height / 2;
   let top = scrollCenter - windowHeight / 2;
   let bottom = top + windowHeight;

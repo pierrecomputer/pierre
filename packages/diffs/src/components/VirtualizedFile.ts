@@ -157,6 +157,7 @@ export class VirtualizedFile<
   // Compute the approximate size of the file using cached line heights.
   // Uses lineHeight for lines without cached measurements.
   private computeApproximateSize(): void {
+    const isFirstCompute = this.height === 0;
     this.height = 0;
     if (this.file == null) {
       return;
@@ -189,7 +190,11 @@ export class VirtualizedFile<
       this.height += fileGap;
     }
 
-    if (this.fileContainer != null && this.virtualizer.config.resizeDebugging) {
+    if (
+      this.fileContainer != null &&
+      this.virtualizer.config.resizeDebugging &&
+      !isFirstCompute
+    ) {
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(
@@ -241,14 +246,16 @@ export class VirtualizedFile<
       return false;
     }
 
-    this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     if (isFirstRender) {
       this.computeApproximateSize();
       this.virtualizer.connect(fileContainer, this);
+      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
       this.isVisible = this.virtualizer.isInstanceVisible(
         this.top,
         this.height
       );
+    } else {
+      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     }
 
     if (!this.isVisible) {

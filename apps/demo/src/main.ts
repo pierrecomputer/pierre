@@ -632,6 +632,15 @@ function getThemeType() {
       : 'system';
 }
 
+const cleanButton = document.getElementById('clean');
+cleanButton?.addEventListener('click', () => {
+  const container = document.getElementById('wrapper');
+  if (container == null) {
+    return;
+  }
+  cleanupInstances(container);
+});
+
 // For quick testing diffs
 // FAKE_DIFF_LINE_ANNOTATIONS.length = 0;
 // (() => {

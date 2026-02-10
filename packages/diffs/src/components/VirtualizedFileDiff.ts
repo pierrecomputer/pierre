@@ -222,6 +222,7 @@ export class VirtualizedFileDiff<
   // dynamically change for a number of reasons so we can never be fully sure
   // if the height is 100% accurate
   private computeApproximateSize(): void {
+    const isFirstCompute = this.height === 0;
     this.height = 0;
     if (this.fileDiff == null) {
       return;
@@ -296,7 +297,11 @@ export class VirtualizedFileDiff<
       this.height += fileGap;
     }
 
-    if (this.fileContainer != null && this.virtualizer.config.resizeDebugging) {
+    if (
+      this.fileContainer != null &&
+      this.virtualizer.config.resizeDebugging &&
+      !isFirstCompute
+    ) {
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(
@@ -345,15 +350,16 @@ export class VirtualizedFileDiff<
       return false;
     }
 
-    this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     if (isFirstRender) {
       this.computeApproximateSize();
-      // Figure out how to properly manage this...
       this.virtualizer.connect(fileContainer, this);
+      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
       this.isVisible = this.virtualizer.isInstanceVisible(
         this.top,
         this.height
       );
+    } else {
+      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     }
 
     if (!this.isVisible) {
