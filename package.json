@@ -55,6 +55,7 @@
       "hast-util-to-html": "9.0.5",
       "hast-util-to-string": "3.0.1",
       "husky": "^9.1.7",
+      "jsdom": "26.1.0",
       "lru_map": "0.4.1",
       "lucide-react": "0.545.0",
       "next": "16.1.1",

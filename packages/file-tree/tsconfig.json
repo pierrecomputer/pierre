@@ -5,6 +5,7 @@
     "src/**/*.tsx",
     "src/**/*.json",
     "test/**/*.ts",
+    "test/**/*.tsx",
     "tsdown.config.ts"
   ],
   "exclude": ["node_modules", "dist"],

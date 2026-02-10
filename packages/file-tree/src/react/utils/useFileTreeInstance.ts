@@ -1,10 +1,20 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { FileTree, type FileTreeOptions } from '../../FileTree';
 
 interface UseFileTreeInstanceProps {
   options: FileTreeOptions;
   prerenderedHTML: string | undefined;
+
+  // Default (uncontrolled) state
+  defaultExpandedItems?: string[];
+  defaultSelectedItems?: string[];
+
+  // Controlled state
+  expandedItems?: string[];
+  selectedItems?: string[];
+  onExpandedItemsChange?: (items: string[]) => void;
+  onSelectedItemsChange?: (items: string[]) => void;
 }
 
 interface UseFileTreeInstanceReturn {
@@ -14,13 +24,60 @@ interface UseFileTreeInstanceReturn {
 export function useFileTreeInstance({
   options,
   prerenderedHTML,
+  defaultExpandedItems,
+  defaultSelectedItems,
+  expandedItems,
+  selectedItems,
+  onExpandedItemsChange,
+  onSelectedItemsChange,
 }: UseFileTreeInstanceProps): UseFileTreeInstanceReturn {
   const containerRef = useRef<HTMLElement | null>(null);
   const instanceRef = useRef<FileTree | null>(null);
 
-  // Ref callback that handles mount/unmount and re-runs when options change.
-  // By including options in the dependency array, the callback identity changes
-  // when options change, causing React to call cleanup then re-invoke with the
+  // Keep a ref to the latest state-related props so the ref callback can read
+  // them at creation time without including them as useMemo deps.
+  const statePropsRef = useRef({
+    expandedItems,
+    selectedItems,
+    onExpandedItemsChange,
+    onSelectedItemsChange,
+    defaultExpandedItems: defaultExpandedItems ?? options.defaultExpandedItems,
+    defaultSelectedItems: defaultSelectedItems ?? options.defaultSelectedItems,
+  });
+  statePropsRef.current = {
+    expandedItems,
+    selectedItems,
+    onExpandedItemsChange,
+    onSelectedItemsChange,
+    defaultExpandedItems: defaultExpandedItems ?? options.defaultExpandedItems,
+    defaultSelectedItems: defaultSelectedItems ?? options.defaultSelectedItems,
+  };
+
+  // Structural options - only these trigger tree recreation.
+  // State-related props (expandedItems, selectedItems, callbacks) are synced
+  // imperatively without destroying the tree.
+  const structuralOptions = useMemo(
+    () => ({
+      files: options.files,
+      flattenEmptyDirectories: options.flattenEmptyDirectories,
+      useLazyDataLoader: options.useLazyDataLoader,
+      config: options.config,
+      id: options.id,
+      onSelection: options.onSelection,
+    }),
+    [
+      options.files,
+      options.flattenEmptyDirectories,
+      options.useLazyDataLoader,
+      options.config,
+      options.id,
+      options.onSelection,
+    ]
+  );
+
+  // Ref callback that handles mount/unmount and re-runs when structural options change.
+  // By including structuralOptions in the dependency array, the callback identity changes
+  // when structural options change, causing React to call cleanup then re-invoke with the
   // same DOM node - allowing us to detect and handle options changes.
   //
   // React 19: Return cleanup function, called when ref changes or element unmounts.
@@ -59,9 +116,19 @@ export function useFileTreeInstance({
       };
 
       const createInstance = (existingId?: string): FileTree => {
+        const sp = statePropsRef.current;
         return new FileTree({
-          ...options,
+          ...structuralOptions,
           id: existingId,
+          // Use controlled values as initial state, but do NOT pass them as
+          // controlled `expandedItems`/`selectedItems` — those bake into
+          // config.state in the Preact Root and override imperative updates.
+          // Subsequent controlled updates flow via the useEffect below calling
+          // setExpandedItems/setSelectedItems imperatively.
+          defaultExpandedItems: sp.defaultExpandedItems ?? sp.expandedItems,
+          defaultSelectedItems: sp.defaultSelectedItems ?? sp.selectedItems,
+          onExpandedItemsChange: sp.onExpandedItemsChange,
+          onSelectedItemsChange: sp.onSelectedItemsChange,
         });
       };
 
@@ -106,8 +173,30 @@ export function useFileTreeInstance({
         containerRef.current = null;
       };
     },
-    [options, prerenderedHTML]
+    [structuralOptions, prerenderedHTML]
   );
+
+  // Sync controlled expanded items imperatively (no tree recreation)
+  useEffect(() => {
+    if (expandedItems !== undefined && instanceRef.current != null) {
+      instanceRef.current.setExpandedItems(expandedItems);
+    }
+  }, [expandedItems]);
+
+  // Sync controlled selected items imperatively (no tree recreation)
+  useEffect(() => {
+    if (selectedItems !== undefined && instanceRef.current != null) {
+      instanceRef.current.setSelectedItems(selectedItems);
+    }
+  }, [selectedItems]);
+
+  // Update callbacks without re-rendering Preact
+  useEffect(() => {
+    instanceRef.current?.setCallbacks({
+      onExpandedItemsChange,
+      onSelectedItemsChange,
+    });
+  }, [onExpandedItemsChange, onSelectedItemsChange]);
 
   return { ref };
 }

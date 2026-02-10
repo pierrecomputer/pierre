@@ -1,6 +1,6 @@
 import type { FileTreeOptions, FileTreeSelectionItem } from '@pierre/file-tree';
 
-const sampleFileList: string[] = [
+export const sampleFileList: string[] = [
   'README.md',
   'package.json',
   'Build/index.mjs',
@@ -22,29 +22,13 @@ const sampleFileList: string[] = [
 ];
 
 export const sharedDemoFileTreeOptions: FileTreeOptions = {
-  config: {
-    initialState: {
-      // TODO: We should be able to specify file paths directly
-      // (e.g., 'Build/assets/images/social') and have the library
-      // automatically compute the required expandedItems. Currently users must:
-      // 1. Know about the internal 'f::' prefix for flattened folder IDs
-      // 2. Specify all intermediate folder paths when not flattened
-      // This leaks internal implementation details.
-      expandedItems: [
-        'Build',
-        // Flattened ID (uses 'f::' prefix)
-        'f::Build/assets/images/social',
-        // Non-flattened IDs (all intermediate folders)
-        'Build/assets',
-        'Build/assets/images',
-        'Build/assets/images/social',
-      ],
-    },
-    fileTreeSearchMode: 'collapse-non-matches',
-  },
+  defaultExpandedItems: ['Build/assets/images/social'],
   onSelection: (selection: FileTreeSelectionItem[]) => {
     console.log('selection', selection);
   },
   flattenEmptyDirectories: true,
   files: sampleFileList,
+  config: {
+    fileTreeSearchMode: 'collapse-non-matches',
+  },
 };

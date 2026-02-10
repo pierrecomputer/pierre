@@ -176,6 +176,45 @@ export function ClientPage({
           />
         </ExampleCard>
       </div>
+
+      {/* Divider */}
+      <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
+
+      {/* State Management Examples */}
+      <h2 id="state" className="mb-4 text-2xl font-bold">
+        State
+      </h2>
+      <div className="grid grid-cols-3 gap-6">
+        <ExampleCard
+          title="Vanilla (SSR) — Imperative State"
+          description="Vanilla FileTree hydrated from SSR, with imperative expand/collapse and state change logging"
+        >
+          <VanillaSSRState
+            options={fileTreeOptions}
+            prerenderedHTML={preloadedFileTreeHtml}
+          />
+        </ExampleCard>
+
+        <ExampleCard
+          title="React (SSR) — Uncontrolled"
+          description="React FileTree with SSR, using onExpandedItemsChange to observe state without controlling it"
+        >
+          <ReactSSRUncontrolled
+            options={fileTreeOptions}
+            prerenderedHTML={preloadedFileTreeHtml}
+          />
+        </ExampleCard>
+
+        <ExampleCard
+          title="React (SSR) — Controlled"
+          description="React FileTree with SSR, expandedItems fully controlled by React state"
+        >
+          <ReactSSRControlled
+            options={fileTreeOptions}
+            prerenderedHTML={preloadedFileTreeHtml}
+          />
+        </ExampleCard>
+      </div>
     </div>
   );
 }
@@ -334,4 +373,230 @@ function ReactServerRendered({
   prerenderedHTML: string;
 }) {
   return <FileTreeReact options={options} prerenderedHTML={prerenderedHTML} />;
+}
+
+/**
+ * Shared log display component for state change events
+ */
+function StateLog({ entries }: { entries: string[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  }, [entries]);
+  return (
+    <div
+      ref={ref}
+      className="mt-2 h-24 overflow-y-auto rounded border p-2 font-mono text-xs"
+      style={{ borderColor: 'var(--color-border)' }}
+    >
+      {entries.length === 0 ? (
+        <span className="text-muted-foreground italic">
+          Interact with the tree to see state changes…
+        </span>
+      ) : (
+        entries.map((entry, i) => <div key={i}>{entry}</div>)
+      )}
+    </div>
+  );
+}
+
+/**
+ * Vanilla FileTree - SSR with imperative state management
+ * Hydrates from SSR, attaches state change callbacks, and provides
+ * buttons to expand/collapse programmatically.
+ */
+function VanillaSSRState({
+  options,
+  prerenderedHTML,
+}: {
+  options: FileTreeOptions;
+  prerenderedHTML: string;
+}) {
+  const instanceRef = useRef<FileTree | null>(null);
+  const hasHydratedRef = useRef(false);
+  const [log, setLog] = useState<string[]>([]);
+
+  const addLog = useCallback((msg: string) => {
+    setLog((prev) => [...prev.slice(-49), msg]);
+  }, []);
+
+  const stateOptions = useMemo<FileTreeOptions>(
+    () => ({
+      ...options,
+      onExpandedItemsChange: (items) =>
+        addLog(`expanded: [${items.join(', ')}]`),
+      onSelectedItemsChange: (items) =>
+        addLog(`selected: [${items.join(', ')}]`),
+    }),
+    [options, addLog]
+  );
+
+  const ref = useCallback(
+    (node: HTMLElement | null) => {
+      if (node == null) {
+        return;
+      }
+
+      const fileTreeContainer = node;
+
+      if (instanceRef.current != null) {
+        instanceRef.current.cleanUp();
+        const shadowRoot = fileTreeContainer.shadowRoot;
+        if (shadowRoot !== null) {
+          const treeElement = Array.from(shadowRoot.children).find(
+            (child): child is HTMLElement =>
+              child instanceof HTMLElement && child.dataset?.fileTreeId != null
+          );
+          treeElement?.replaceChildren();
+        }
+      }
+
+      const fileTree = new FileTree(stateOptions);
+
+      if (!hasHydratedRef.current) {
+        fileTree.hydrate({
+          fileTreeContainer,
+          prerenderedHTML,
+        });
+        hasHydratedRef.current = true;
+      } else {
+        fileTree.render({ fileTreeContainer });
+      }
+
+      instanceRef.current = fileTree;
+
+      return () => {
+        fileTree.cleanUp();
+        instanceRef.current = null;
+      };
+    },
+    [stateOptions, prerenderedHTML]
+  );
+
+  return (
+    <>
+      <div className="mb-2 flex gap-2">
+        <button
+          type="button"
+          className="rounded-sm border px-2 py-1 text-xs"
+          style={{ borderColor: 'var(--color-border)' }}
+          onClick={() => instanceRef.current?.expandItem('src/components')}
+        >
+          Expand src/components
+        </button>
+        <button
+          type="button"
+          className="rounded-sm border px-2 py-1 text-xs"
+          style={{ borderColor: 'var(--color-border)' }}
+          onClick={() => instanceRef.current?.collapseItem('src/components')}
+        >
+          Collapse src/components
+        </button>
+      </div>
+      <file-tree-container
+        ref={ref}
+        dangerouslySetInnerHTML={{
+          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
+        }}
+        suppressHydrationWarning
+      />
+      <StateLog entries={log} />
+    </>
+  );
+}
+
+/**
+ * React FileTree - SSR Uncontrolled
+ * Uses onExpandedItemsChange/onSelectedItemsChange to observe state
+ * without controlling it — tree manages its own state internally.
+ */
+function ReactSSRUncontrolled({
+  options,
+  prerenderedHTML,
+}: {
+  options: FileTreeOptions;
+  prerenderedHTML: string;
+}) {
+  const [log, setLog] = useState<string[]>([]);
+  const addLog = useCallback((msg: string) => {
+    setLog((prev) => [...prev.slice(-49), msg]);
+  }, []);
+
+  return (
+    <>
+      <FileTreeReact
+        options={options}
+        prerenderedHTML={prerenderedHTML}
+        onExpandedItemsChange={(items) =>
+          addLog(`expanded: [${items.join(', ')}]`)
+        }
+        onSelectedItemsChange={(items) =>
+          addLog(`selected: [${items.join(', ')}]`)
+        }
+      />
+      <StateLog entries={log} />
+    </>
+  );
+}
+
+/**
+ * React FileTree - SSR Controlled
+ * Parent React component owns expandedItems state.
+ * onExpandedItemsChange updates the React state, which flows back into the tree.
+ * Buttons allow programmatic state changes from outside the tree.
+ */
+function ReactSSRControlled({
+  options,
+  prerenderedHTML,
+}: {
+  options: FileTreeOptions;
+  prerenderedHTML: string;
+}) {
+  const [expandedItems, setExpandedItems] = useState<string[]>(
+    options.defaultExpandedItems ?? []
+  );
+  const [log, setLog] = useState<string[]>([]);
+  const addLog = useCallback((msg: string) => {
+    setLog((prev) => [...prev.slice(-49), msg]);
+  }, []);
+
+  const handleExpandedChange = useCallback(
+    (items: string[]) => {
+      setExpandedItems(items);
+      addLog(`expanded: [${items.join(', ')}]`);
+    },
+    [addLog]
+  );
+
+  return (
+    <>
+      <div className="mb-2 flex gap-2">
+        <button
+          type="button"
+          className="rounded-sm border px-2 py-1 text-xs"
+          style={{ borderColor: 'var(--color-border)' }}
+          onClick={() =>
+            handleExpandedChange([...expandedItems, 'src/components'])
+          }
+        >
+          Expand src/components
+        </button>
+        <button
+          type="button"
+          className="rounded-sm border px-2 py-1 text-xs"
+          style={{ borderColor: 'var(--color-border)' }}
+          onClick={() => handleExpandedChange([])}
+        >
+          Collapse All
+        </button>
+      </div>
+      <FileTreeReact
+        options={options}
+        prerenderedHTML={prerenderedHTML}
+        expandedItems={expandedItems}
+        onExpandedItemsChange={handleExpandedChange}
+      />
+      <StateLog entries={log} />
+    </>
+  );
 }

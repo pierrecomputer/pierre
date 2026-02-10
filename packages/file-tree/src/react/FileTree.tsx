@@ -35,6 +35,16 @@ export interface FileTreeProps {
   className?: string;
   style?: React.CSSProperties;
   prerenderedHTML?: string;
+
+  // Default (uncontrolled) state
+  defaultExpandedItems?: string[];
+  defaultSelectedItems?: string[];
+
+  // Controlled state
+  expandedItems?: string[];
+  selectedItems?: string[];
+  onExpandedItemsChange?: (items: string[]) => void;
+  onSelectedItemsChange?: (items: string[]) => void;
 }
 
 export function FileTree({
@@ -42,9 +52,24 @@ export function FileTree({
   className,
   style,
   prerenderedHTML,
+  defaultExpandedItems,
+  defaultSelectedItems,
+  expandedItems,
+  selectedItems,
+  onExpandedItemsChange,
+  onSelectedItemsChange,
 }: FileTreeProps): React.JSX.Element {
   const children = renderFileTreeChildren();
-  const { ref } = useFileTreeInstance({ options, prerenderedHTML });
+  const { ref } = useFileTreeInstance({
+    options,
+    prerenderedHTML,
+    defaultExpandedItems,
+    defaultSelectedItems,
+    expandedItems,
+    selectedItems,
+    onExpandedItemsChange,
+    onSelectedItemsChange,
+  });
   return (
     <FILE_TREE_TAG_NAME ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}

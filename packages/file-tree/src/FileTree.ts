@@ -1,9 +1,13 @@
-import { type TreeConfig } from '@headless-tree/core';
+import { type TreeConfig, type TreeInstance } from '@headless-tree/core';
 
 import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME } from './constants';
 import { SVGSpriteSheet } from './sprite';
 import { type FileTreeNode } from './types';
+import {
+  expandPathsWithAncestors,
+  filterOrphanedPaths,
+} from './utils/expandPaths';
 import {
   preactHydrateRoot,
   preactRenderRoot,
@@ -36,13 +40,38 @@ export type HeadlessTreeConfig = Omit<
   fileTreeSearchMode?: FileTreeSearchMode;
 };
 
+export interface FileTreeHandle {
+  tree: TreeInstance<FileTreeNode>;
+  pathToId: Map<string, string>;
+  idToPath: Map<string, string>;
+}
+
+export interface FileTreeCallbacks {
+  onExpandedItemsChange?: (items: string[]) => void;
+  onSelectedItemsChange?: (items: string[]) => void;
+  onSelection?: (items: FileTreeSelectionItem[]) => void;
+}
+
 export interface FileTreeOptions {
   files: string[];
   id?: string;
   flattenEmptyDirectories?: boolean;
   useLazyDataLoader?: boolean;
+
+  // Initial state (uncontrolled - used once at creation)
+  defaultExpandedItems?: string[];
+  defaultSelectedItems?: string[];
+
+  // Controlled state (applied every render, overrides internal state)
+  expandedItems?: string[];
+  selectedItems?: string[];
+
+  // State change callbacks
+  onExpandedItemsChange?: (items: string[]) => void;
+  onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
-  // probably change the name here once i know a better one
+
+  // Advanced headless-tree config (kept for passthrough)
   config?: HeadlessTreeConfig;
 }
 
@@ -52,23 +81,182 @@ export class FileTree {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
   readonly __id: string;
-  private files: string[];
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
   private spriteSVG: SVGElement | undefined;
-  private initialTreeConfig: HeadlessTreeConfig | undefined;
+
+  /** Populated by the Preact Root component with the tree instance + maps. */
+  readonly handleRef: { current: FileTreeHandle | null } = { current: null };
+
+  /** Populated by FileTree, read by the Preact Root for callbacks. */
+  readonly callbacksRef: { current: FileTreeCallbacks };
 
   constructor(public options: FileTreeOptions) {
     if (typeof document !== 'undefined') {
       this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
     }
     this.__id = options.id ?? `ft_${isBrowser ? 'brw' : 'srv'}_${++instanceId}`;
-    this.initialTreeConfig = options.config;
-    this.files = options.files;
+    this.callbacksRef = {
+      current: {
+        onExpandedItemsChange: options.onExpandedItemsChange,
+        onSelectedItemsChange: options.onSelectedItemsChange,
+        onSelection: options.onSelection,
+      },
+    };
   }
 
-  setOptions(_options: FileTreeOptions): void {
-    // todo
+  // --- State setters (imperative) ---
+
+  setExpandedItems(items: string[]): void {
+    const handle = this.handleRef.current;
+    if (handle == null) return;
+    const ids = expandPathsWithAncestors(items, handle.pathToId);
+    handle.tree.applySubStateUpdate('expandedItems', () => ids);
+    // Schedule a lazy rebuild so getItems() returns updated children on the
+    // next render. applySubStateUpdate already triggers a re-render via the
+    // config setState chain; scheduleRebuildTree just sets a flag that
+    // getItems() checks, avoiding a redundant synchronous rebuild+render.
+    handle.tree.scheduleRebuildTree();
+  }
+
+  setSelectedItems(items: string[]): void {
+    const handle = this.handleRef.current;
+    if (handle == null) return;
+    const ids = items
+      .map((path) => handle.pathToId.get(path))
+      .filter((id): id is string => id != null);
+    handle.tree.applySubStateUpdate('selectedItems', () => ids);
+  }
+
+  // --- Convenience methods ---
+
+  expandItem(path: string): void {
+    const current = this.getExpandedItems();
+    if (!current.includes(path)) {
+      this.setExpandedItems([...current, path]);
+    }
+  }
+
+  collapseItem(path: string): void {
+    const handle = this.handleRef.current;
+    if (handle == null) return;
+    // Remove both the regular and flattened IDs for this path so neither
+    // survives to re-expand the folder on a controlled state round-trip.
+    const idsToRemove = new Set<string>();
+    const id = handle.pathToId.get(path);
+    if (id != null) idsToRemove.add(id);
+    const flatId = handle.pathToId.get('f::' + path);
+    if (flatId != null) idsToRemove.add(flatId);
+    if (idsToRemove.size === 0) return;
+    const currentIds = handle.tree.getState().expandedItems ?? [];
+    handle.tree.applySubStateUpdate('expandedItems', () =>
+      currentIds.filter((i) => !idsToRemove.has(i))
+    );
+    handle.tree.scheduleRebuildTree();
+  }
+
+  toggleItemExpanded(path: string): void {
+    const handle = this.handleRef.current;
+    if (handle == null) return;
+    const id = handle.pathToId.get(path) ?? handle.pathToId.get('f::' + path);
+    if (id == null) return;
+    const currentIds = handle.tree.getState().expandedItems ?? [];
+    if (currentIds.includes(id)) {
+      this.collapseItem(path);
+    } else {
+      this.expandItem(path);
+    }
+  }
+
+  // --- Getters ---
+
+  getExpandedItems(): string[] {
+    const handle = this.handleRef.current;
+    if (handle == null) return [];
+    const ids = handle.tree.getState().expandedItems ?? [];
+    const paths = ids
+      .map((id) => handle.idToPath.get(id))
+      .filter((path): path is string => path != null);
+    return filterOrphanedPaths(paths, handle.pathToId);
+  }
+
+  getSelectedItems(): string[] {
+    const handle = this.handleRef.current;
+    if (handle == null) return [];
+    const ids = handle.tree.getState().selectedItems ?? [];
+    return ids
+      .map((id) => handle.idToPath.get(id))
+      .filter((path): path is string => path != null);
+  }
+
+  // --- Callbacks ---
+
+  setCallbacks(callbacks: Partial<FileTreeCallbacks>): void {
+    Object.assign(this.callbacksRef.current, callbacks);
+  }
+
+  // --- Heavier updates (re-render) ---
+
+  setFiles(files: string[]): void {
+    this.options = { ...this.options, files };
+    this.rerender();
+  }
+
+  setOptions(options: Partial<FileTreeOptions>): void {
+    // Update callbacks without re-rendering
+    if (options.onExpandedItemsChange !== undefined) {
+      this.callbacksRef.current.onExpandedItemsChange =
+        options.onExpandedItemsChange;
+    }
+    if (options.onSelectedItemsChange !== undefined) {
+      this.callbacksRef.current.onSelectedItemsChange =
+        options.onSelectedItemsChange;
+    }
+    if (options.onSelection !== undefined) {
+      this.callbacksRef.current.onSelection = options.onSelection;
+    }
+
+    // Check if structural props changed (require re-render)
+    const structuralKeys = [
+      'files',
+      'flattenEmptyDirectories',
+      'useLazyDataLoader',
+      'config',
+    ] as const;
+    let needsRerender = false;
+    for (const key of structuralKeys) {
+      if (key in options) {
+        needsRerender = true;
+        break;
+      }
+    }
+
+    this.options = { ...this.options, ...options };
+
+    if (needsRerender) {
+      this.rerender();
+    } else {
+      // State-only changes - use imperative methods
+      if (options.expandedItems !== undefined) {
+        this.setExpandedItems(options.expandedItems);
+      }
+      if (options.selectedItems !== undefined) {
+        this.setSelectedItems(options.selectedItems);
+      }
+    }
+  }
+
+  private buildRootProps() {
+    return {
+      fileTreeOptions: this.options,
+      handleRef: this.handleRef,
+      callbacksRef: this.callbacksRef,
+    };
+  }
+
+  private rerender(): void {
+    if (this.divWrapper == null) return;
+    preactRenderRoot(this.divWrapper, this.buildRootProps());
   }
 
   private getOrCreateFileTreeContainer(
@@ -144,15 +332,7 @@ export class FileTree {
       containerWrapper
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
-    preactRenderRoot(divWrapper, {
-      fileTreeOptions: {
-        config: this.initialTreeConfig,
-        files: this.files,
-        flattenEmptyDirectories: this.options.flattenEmptyDirectories,
-        useLazyDataLoader: this.options.useLazyDataLoader,
-        onSelection: this.options.onSelection,
-      },
-    });
+    preactRenderRoot(divWrapper, this.buildRootProps());
   }
 
   hydrate(props: FileTreeHydrationProps): void {
@@ -180,15 +360,7 @@ export class FileTree {
       this.render(props);
     } else {
       this.fileTreeContainer = fileTreeContainer;
-      preactHydrateRoot(this.divWrapper, {
-        fileTreeOptions: {
-          config: this.initialTreeConfig,
-          files: this.files,
-          flattenEmptyDirectories: this.options.flattenEmptyDirectories,
-          useLazyDataLoader: this.options.useLazyDataLoader,
-          onSelection: this.options.onSelection,
-        },
-      });
+      preactHydrateRoot(this.divWrapper, this.buildRootProps());
     }
   }
 
@@ -196,6 +368,7 @@ export class FileTree {
     if (this.divWrapper != null) {
       preactUnmountRoot(this.divWrapper);
     }
+    this.handleRef.current = null;
     this.fileTreeContainer = undefined;
     this.divWrapper = undefined;
     this.spriteSVG = undefined;

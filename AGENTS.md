@@ -119,6 +119,16 @@ for (let i = 0; i <= lastMeaningfulIndex; i++) {
 }
 ```
 
+## Running scripts
+
+We use a custom workspace script runner to make typing things out a little
+easier.
+
+`bun ws <project> <task>` `bun ws <project> <task> -- --some --flag`
+
+Note that a few scripts exist at the root and usually operate against all
+packages. e.g. `bun run lint`
+
 ## Testing
 
 We use Bun's built-in testing framework for unit tests. Tests are located in a
@@ -133,7 +143,7 @@ For the diffs package:
 bun test
 
 # From the monorepo root
-bun run diffs:test
+bun ws diffs test
 ```
 
 ### Updating Snapshots
@@ -145,7 +155,7 @@ When test snapshots need to be updated:
 bun test -u
 
 # From the monorepo root
-bun run diffs:update-snapshots
+bun ws diffs update-snapshots
 ```
 
 ### Test Structure
@@ -154,3 +164,15 @@ bun run diffs:update-snapshots
 - Snapshot testing is supported natively via `toMatchSnapshot()`
 - Shared test fixtures and mocks are located in `test/mocks.ts`
 - Test files are included in TypeScript type checking via `tsconfig.json`
+
+## Browser Automation
+
+Use `agent-browser` for web automation. Run `agent-browser --help` for all
+commands.
+
+Core workflow:
+
+1. `agent-browser open <url>` - Navigate to page
+2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
+3. `agent-browser click @e1` / `fill @e2 "text"` - Interact using refs
+4. Re-snapshot after page changes
