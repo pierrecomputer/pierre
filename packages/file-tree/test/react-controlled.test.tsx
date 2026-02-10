@@ -60,7 +60,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import {
   FileTree as FileTreeClass,
-  type FileTreeOptions,
+  type FileTreeStateConfig,
 } from '../src/FileTree';
 import { FileTree as FileTreeReact } from '../src/react/FileTree';
 
@@ -89,11 +89,11 @@ const setCallbacksSpy = spyOn(
   'setCallbacks'
 ).mockImplementation(() => {});
 
-const requireCapturedOptions = (
-  value: FileTreeOptions | null
-): FileTreeOptions => {
+const requireCapturedStateConfig = (
+  value: FileTreeStateConfig | null
+): FileTreeStateConfig => {
   if (value == null) {
-    throw new Error('Expected FileTree options to be captured');
+    throw new Error('Expected FileTree stateConfig to be captured');
   }
   return value;
 };
@@ -313,9 +313,9 @@ describe('React controlled FileTree wrapper', () => {
   // -- Initial state passed to constructor --
 
   test('passes controlled expandedItems as defaultExpandedItems to FileTree constructor', () => {
-    let capturedOptions: FileTreeOptions | null = null;
+    let capturedStateConfig: FileTreeStateConfig | null = null;
     renderSpy.mockImplementation(function (this: FileTreeClass) {
-      capturedOptions = this.options;
+      capturedStateConfig = this.stateConfig;
     });
 
     act(() => {
@@ -324,20 +324,20 @@ describe('React controlled FileTree wrapper', () => {
       );
     });
 
-    expect(capturedOptions).not.toBeNull();
-    const options = requireCapturedOptions(capturedOptions);
-    expect(options.defaultExpandedItems).toEqual(['src']);
-    // Controlled values should NOT be in options.expandedItems
-    expect(options.expandedItems).toBeUndefined();
+    expect(capturedStateConfig).not.toBeNull();
+    const stateConfig = requireCapturedStateConfig(capturedStateConfig);
+    expect(stateConfig.defaultExpandedItems).toEqual(['src']);
+    // Controlled values should NOT be in stateConfig.expandedItems
+    expect(stateConfig.expandedItems).toBeUndefined();
 
     // Restore spy
     renderSpy.mockImplementation(() => {});
   });
 
   test('passes controlled selectedItems as defaultSelectedItems to FileTree constructor', () => {
-    let capturedOptions: FileTreeOptions | null = null;
+    let capturedStateConfig: FileTreeStateConfig | null = null;
     renderSpy.mockImplementation(function (this: FileTreeClass) {
-      capturedOptions = this.options;
+      capturedStateConfig = this.stateConfig;
     });
 
     act(() => {
@@ -349,10 +349,10 @@ describe('React controlled FileTree wrapper', () => {
       );
     });
 
-    expect(capturedOptions).not.toBeNull();
-    const options = requireCapturedOptions(capturedOptions);
-    expect(options.defaultSelectedItems).toEqual(['README.md']);
-    expect(options.selectedItems).toBeUndefined();
+    expect(capturedStateConfig).not.toBeNull();
+    const stateConfig = requireCapturedStateConfig(capturedStateConfig);
+    expect(stateConfig.defaultSelectedItems).toEqual(['README.md']);
+    expect(stateConfig.selectedItems).toBeUndefined();
 
     // Restore spy
     renderSpy.mockImplementation(() => {});

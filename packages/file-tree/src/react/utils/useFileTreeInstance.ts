@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
-import { FileTree, type FileTreeOptions } from '../../FileTree';
+import {
+  FileTree,
+  type FileTreeOptions,
+  type FileTreeSelectionItem,
+  type FileTreeStateConfig,
+} from '../../FileTree';
 
 interface UseFileTreeInstanceProps {
   options: FileTreeOptions;
@@ -15,6 +20,7 @@ interface UseFileTreeInstanceProps {
   selectedItems?: string[];
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectedItemsChange?: (items: string[]) => void;
+  onSelection?: (items: FileTreeSelectionItem[]) => void;
 }
 
 interface UseFileTreeInstanceReturn {
@@ -30,53 +36,34 @@ export function useFileTreeInstance({
   selectedItems,
   onExpandedItemsChange,
   onSelectedItemsChange,
+  onSelection,
 }: UseFileTreeInstanceProps): UseFileTreeInstanceReturn {
   const containerRef = useRef<HTMLElement | null>(null);
   const instanceRef = useRef<FileTree | null>(null);
 
   // Keep a ref to the latest state-related props so the ref callback can read
   // them at creation time without including them as useMemo deps.
-  const statePropsRef = useRef({
+  const statePropsRef = useRef<FileTreeStateConfig>({
     expandedItems,
     selectedItems,
     onExpandedItemsChange,
     onSelectedItemsChange,
-    defaultExpandedItems: defaultExpandedItems ?? options.defaultExpandedItems,
-    defaultSelectedItems: defaultSelectedItems ?? options.defaultSelectedItems,
+    onSelection,
+    defaultExpandedItems,
+    defaultSelectedItems,
   });
   statePropsRef.current = {
     expandedItems,
     selectedItems,
     onExpandedItemsChange,
     onSelectedItemsChange,
-    defaultExpandedItems: defaultExpandedItems ?? options.defaultExpandedItems,
-    defaultSelectedItems: defaultSelectedItems ?? options.defaultSelectedItems,
+    onSelection,
+    defaultExpandedItems,
+    defaultSelectedItems,
   };
 
-  // Structural options - only these trigger tree recreation.
-  // State-related props (expandedItems, selectedItems, callbacks) are synced
-  // imperatively without destroying the tree.
-  const structuralOptions = useMemo(
-    () => ({
-      files: options.files,
-      flattenEmptyDirectories: options.flattenEmptyDirectories,
-      useLazyDataLoader: options.useLazyDataLoader,
-      config: options.config,
-      id: options.id,
-      onSelection: options.onSelection,
-    }),
-    [
-      options.files,
-      options.flattenEmptyDirectories,
-      options.useLazyDataLoader,
-      options.config,
-      options.id,
-      options.onSelection,
-    ]
-  );
-
-  // Ref callback that handles mount/unmount and re-runs when structural options change.
-  // By including structuralOptions in the dependency array, the callback identity changes
+  // Ref callback that handles mount/unmount and re-runs when options change.
+  // By including options in the dependency array, the callback identity changes
   // when structural options change, causing React to call cleanup then re-invoke with the
   // same DOM node - allowing us to detect and handle options changes.
   //
@@ -117,19 +104,21 @@ export function useFileTreeInstance({
 
       const createInstance = (existingId?: string): FileTree => {
         const sp = statePropsRef.current;
-        return new FileTree({
-          ...structuralOptions,
-          id: existingId,
-          // Use controlled values as initial state, but do NOT pass them as
-          // controlled `expandedItems`/`selectedItems` — those bake into
-          // config.state in the Preact Root and override imperative updates.
-          // Subsequent controlled updates flow via the useEffect below calling
-          // setExpandedItems/setSelectedItems imperatively.
-          defaultExpandedItems: sp.defaultExpandedItems ?? sp.expandedItems,
-          defaultSelectedItems: sp.defaultSelectedItems ?? sp.selectedItems,
-          onExpandedItemsChange: sp.onExpandedItemsChange,
-          onSelectedItemsChange: sp.onSelectedItemsChange,
-        });
+        return new FileTree(
+          { ...options, id: existingId },
+          {
+            // Use controlled values as initial state, but do NOT pass them as
+            // controlled `expandedItems`/`selectedItems` — those bake into
+            // config.state in the Preact Root and override imperative updates.
+            // Subsequent controlled updates flow via the useEffect below calling
+            // setExpandedItems/setSelectedItems imperatively.
+            defaultExpandedItems: sp.defaultExpandedItems ?? sp.expandedItems,
+            defaultSelectedItems: sp.defaultSelectedItems ?? sp.selectedItems,
+            onExpandedItemsChange: sp.onExpandedItemsChange,
+            onSelectedItemsChange: sp.onSelectedItemsChange,
+            onSelection: sp.onSelection,
+          }
+        );
       };
 
       const existingFileTreeId = getExistingFileTreeId();
@@ -173,7 +162,7 @@ export function useFileTreeInstance({
         containerRef.current = null;
       };
     },
-    [structuralOptions, prerenderedHTML]
+    [options, prerenderedHTML]
   );
 
   // Sync controlled expanded items imperatively (no tree recreation)
@@ -195,8 +184,9 @@ export function useFileTreeInstance({
     instanceRef.current?.setCallbacks({
       onExpandedItemsChange,
       onSelectedItemsChange,
+      onSelection,
     });
-  }, [onExpandedItemsChange, onSelectedItemsChange]);
+  }, [onExpandedItemsChange, onSelectedItemsChange, onSelection]);
 
   return { ref };
 }

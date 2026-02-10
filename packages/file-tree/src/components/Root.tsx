@@ -16,6 +16,7 @@ import type {
   FileTreeHandle,
   FileTreeOptions,
   FileTreeSelectionItem,
+  FileTreeStateConfig,
 } from '../FileTree';
 import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoader } from '../loader/sync';
@@ -30,6 +31,7 @@ import { Icon } from './Icon';
 
 export interface FileTreeRootProps {
   fileTreeOptions: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
   handleRef?: { current: FileTreeHandle | null };
   callbacksRef?: { current: FileTreeCallbacks };
 }
@@ -70,6 +72,7 @@ function FlattenedDirectoryName({
 
 export function Root({
   fileTreeOptions,
+  stateConfig,
   handleRef,
   callbacksRef,
 }: FileTreeRootProps): JSX.Element {
@@ -192,8 +195,8 @@ export function Root({
 
     // Merge top-level defaultExpandedItems/defaultSelectedItems into config.initialState
     const topLevelInitialExpanded =
-      fileTreeOptions.defaultExpandedItems ?? fileTreeOptions.expandedItems;
-    const topLevelInitialSelected = fileTreeOptions.defaultSelectedItems;
+      stateConfig?.defaultExpandedItems ?? stateConfig?.expandedItems;
+    const topLevelInitialSelected = stateConfig?.defaultSelectedItems;
     const topLevelInitialExpandedIds =
       topLevelInitialExpanded != null
         ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId)
@@ -215,8 +218,8 @@ export function Root({
       : (baseConfig.initialState as TreeStateConfig | undefined);
 
     // Merge top-level expandedItems/selectedItems into config.state
-    const topLevelExpanded = fileTreeOptions.expandedItems;
-    const topLevelSelected = fileTreeOptions.selectedItems;
+    const topLevelExpanded = stateConfig?.expandedItems;
+    const topLevelSelected = stateConfig?.selectedItems;
     const topLevelExpandedIds =
       topLevelExpanded != null
         ? expandPathsWithAncestors(topLevelExpanded, pathToId)
@@ -257,7 +260,7 @@ export function Root({
       ...(initialState.state != null && { initialState: initialState.state }),
       ...(state.state != null && { state: state.state }),
     };
-  }, [config, treeData, pathToId, fileTreeOptions]);
+  }, [config, treeData, pathToId, stateConfig]);
 
   const treeDomId = 'ft';
   const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;

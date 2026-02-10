@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 
 import { FILE_TREE_TAG_NAME } from '../constants';
-import type { FileTreeOptions } from '../FileTree';
+import type { FileTreeOptions, FileTreeSelectionItem } from '../FileTree';
 import { useFileTreeInstance } from './utils/useFileTreeInstance';
 
 function renderFileTreeChildren(): ReactNode {
@@ -45,6 +45,7 @@ export interface FileTreeProps {
   selectedItems?: string[];
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectedItemsChange?: (items: string[]) => void;
+  onSelection?: (items: FileTreeSelectionItem[]) => void;
 }
 
 export function FileTree({
@@ -58,6 +59,7 @@ export function FileTree({
   selectedItems,
   onExpandedItemsChange,
   onSelectedItemsChange,
+  onSelection,
 }: FileTreeProps): React.JSX.Element {
   const children = renderFileTreeChildren();
   const { ref } = useFileTreeInstance({
@@ -69,6 +71,7 @@ export function FileTree({
     selectedItems,
     onExpandedItemsChange,
     onSelectedItemsChange,
+    onSelection,
   });
   return (
     <FILE_TREE_TAG_NAME ref={ref} className={className} style={style}>

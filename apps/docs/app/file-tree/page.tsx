@@ -9,7 +9,7 @@ import {
   FILE_TREE_COOKIE_VERSION,
   FILE_TREE_COOKIE_VERSION_NAME,
 } from './cookies';
-import { sharedDemoFileTreeOptions } from './demo-data';
+import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from './demo-data';
 
 export default async function FileTreePage() {
   if (process.env.NODE_ENV !== 'development') {
@@ -41,7 +41,10 @@ export default async function FileTreePage() {
 
   return (
     <ClientPage
-      preloadedFileTreeHtml={preloadFileTree(fileTreeOptions)}
+      preloadedFileTreeHtml={preloadFileTree(
+        fileTreeOptions,
+        sharedDemoStateConfig
+      )}
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
       initialUseLazyDataLoader={useLazyDataLoader}
     />

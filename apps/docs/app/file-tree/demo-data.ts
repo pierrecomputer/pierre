@@ -1,4 +1,8 @@
-import type { FileTreeOptions, FileTreeSelectionItem } from '@pierre/file-tree';
+import type {
+  FileTreeOptions,
+  FileTreeSelectionItem,
+  FileTreeStateConfig,
+} from '@pierre/file-tree';
 
 export const sampleFileList: string[] = [
   'README.md',
@@ -22,13 +26,16 @@ export const sampleFileList: string[] = [
 ];
 
 export const sharedDemoFileTreeOptions: FileTreeOptions = {
-  defaultExpandedItems: ['Build/assets/images/social'],
-  onSelection: (selection: FileTreeSelectionItem[]) => {
-    console.log('selection', selection);
-  },
   flattenEmptyDirectories: true,
   files: sampleFileList,
   config: {
     fileTreeSearchMode: 'collapse-non-matches',
+  },
+};
+
+export const sharedDemoStateConfig: FileTreeStateConfig = {
+  defaultExpandedItems: ['Build/assets/images/social'],
+  onSelection: (selection: FileTreeSelectionItem[]) => {
+    console.log('selection', selection);
   },
 };

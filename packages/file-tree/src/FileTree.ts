@@ -58,6 +58,11 @@ export interface FileTreeOptions {
   flattenEmptyDirectories?: boolean;
   useLazyDataLoader?: boolean;
 
+  // Advanced headless-tree config (kept for passthrough)
+  config?: HeadlessTreeConfig;
+}
+
+export interface FileTreeStateConfig {
   // Initial state (uncontrolled - used once at creation)
   defaultExpandedItems?: string[];
   defaultSelectedItems?: string[];
@@ -70,9 +75,6 @@ export interface FileTreeOptions {
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
-
-  // Advanced headless-tree config (kept for passthrough)
-  config?: HeadlessTreeConfig;
 }
 
 const isBrowser = typeof document !== 'undefined';
@@ -94,16 +96,19 @@ export class FileTree {
   private expandPathsCache: Map<string, string[]> = new Map();
   private expandPathsCacheFor: Map<string, string> | null = null;
 
-  constructor(public options: FileTreeOptions) {
+  constructor(
+    public options: FileTreeOptions,
+    public stateConfig: FileTreeStateConfig = {}
+  ) {
     if (typeof document !== 'undefined') {
       this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
     }
     this.__id = options.id ?? `ft_${isBrowser ? 'brw' : 'srv'}_${++instanceId}`;
     this.callbacksRef = {
       current: {
-        onExpandedItemsChange: options.onExpandedItemsChange,
-        onSelectedItemsChange: options.onSelectedItemsChange,
-        onSelection: options.onSelection,
+        onExpandedItemsChange: stateConfig.onExpandedItemsChange,
+        onSelectedItemsChange: stateConfig.onSelectedItemsChange,
+        onSelection: stateConfig.onSelection,
       },
     };
   }
@@ -228,18 +233,21 @@ export class FileTree {
     this.rerender();
   }
 
-  setOptions(options: Partial<FileTreeOptions>): void {
+  setOptions(
+    options: Partial<FileTreeOptions>,
+    state?: Partial<FileTreeStateConfig>
+  ): void {
     // Update callbacks without re-rendering
-    if (options.onExpandedItemsChange !== undefined) {
+    if (state?.onExpandedItemsChange !== undefined) {
       this.callbacksRef.current.onExpandedItemsChange =
-        options.onExpandedItemsChange;
+        state.onExpandedItemsChange;
     }
-    if (options.onSelectedItemsChange !== undefined) {
+    if (state?.onSelectedItemsChange !== undefined) {
       this.callbacksRef.current.onSelectedItemsChange =
-        options.onSelectedItemsChange;
+        state.onSelectedItemsChange;
     }
-    if (options.onSelection !== undefined) {
-      this.callbacksRef.current.onSelection = options.onSelection;
+    if (state?.onSelection !== undefined) {
+      this.callbacksRef.current.onSelection = state.onSelection;
     }
 
     // Check if structural props changed (require re-render)
@@ -258,16 +266,19 @@ export class FileTree {
     }
 
     this.options = { ...this.options, ...options };
+    if (state != null) {
+      this.stateConfig = { ...this.stateConfig, ...state };
+    }
 
     if (needsRerender) {
       this.rerender();
     } else {
       // State-only changes - use imperative methods
-      if (options.expandedItems !== undefined) {
-        this.setExpandedItems(options.expandedItems);
+      if (state?.expandedItems !== undefined) {
+        this.setExpandedItems(state.expandedItems);
       }
-      if (options.selectedItems !== undefined) {
-        this.setSelectedItems(options.selectedItems);
+      if (state?.selectedItems !== undefined) {
+        this.setSelectedItems(state.selectedItems);
       }
     }
   }
@@ -275,6 +286,7 @@ export class FileTree {
   private buildRootProps() {
     return {
       fileTreeOptions: this.options,
+      stateConfig: this.stateConfig,
       handleRef: this.handleRef,
       callbacksRef: this.callbacksRef,
     };

@@ -1,6 +1,6 @@
 'use client';
 
-import type { FileTreeOptions } from '@pierre/file-tree';
+import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/file-tree';
 import { FileTree } from '@pierre/file-tree';
 import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
 import {
@@ -18,7 +18,7 @@ import {
   FILE_TREE_COOKIE_VERSION,
   FILE_TREE_COOKIE_VERSION_NAME,
 } from './cookies';
-import { sharedDemoFileTreeOptions } from './demo-data';
+import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from './demo-data';
 
 interface ClientPageProps {
   preloadedFileTreeHtml: string;
@@ -146,7 +146,10 @@ export function ClientPage({
           title="Vanilla (Client-Side Rendered)"
           description="FileTree instance created and rendered entirely on the client"
         >
-          <VanillaClientRendered options={fileTreeOptions} />
+          <VanillaClientRendered
+            options={fileTreeOptions}
+            stateConfig={sharedDemoStateConfig}
+          />
         </ExampleCard>
 
         <ExampleCard
@@ -155,6 +158,7 @@ export function ClientPage({
         >
           <VanillaServerRendered
             options={fileTreeOptions}
+            stateConfig={sharedDemoStateConfig}
             prerenderedHTML={preloadedFileTreeHtml}
           />
         </ExampleCard>
@@ -163,7 +167,10 @@ export function ClientPage({
           title="React (Client-Side Rendered)"
           description="React FileTree component rendered entirely on the client"
         >
-          <ReactClientRendered options={fileTreeOptions} />
+          <ReactClientRendered
+            options={fileTreeOptions}
+            stateConfig={sharedDemoStateConfig}
+          />
         </ExampleCard>
 
         <ExampleCard
@@ -172,6 +179,7 @@ export function ClientPage({
         >
           <ReactServerRendered
             options={fileTreeOptions}
+            stateConfig={sharedDemoStateConfig}
             prerenderedHTML={preloadedFileTreeHtml}
           />
         </ExampleCard>
@@ -187,14 +195,17 @@ export function ClientPage({
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <VanillaSSRState
           options={fileTreeOptions}
+          stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedFileTreeHtml}
         />
         <ReactSSRUncontrolled
           options={fileTreeOptions}
+          stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedFileTreeHtml}
         />
         <ReactSSRControlled
           options={fileTreeOptions}
+          stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedFileTreeHtml}
         />
       </div>
@@ -242,7 +253,13 @@ function ExampleCard({
  * Vanilla FileTree - Client-Side Rendered
  * Uses ref callback to create and render FileTree instance on client mount
  */
-function VanillaClientRendered({ options }: { options: FileTreeOptions }) {
+function VanillaClientRendered({
+  options,
+  stateConfig,
+}: {
+  options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
+}) {
   const instanceRef = useRef<FileTree | null>(null);
 
   const ref = useCallback(
@@ -257,7 +274,7 @@ function VanillaClientRendered({ options }: { options: FileTreeOptions }) {
         node.innerHTML = '';
       }
 
-      const fileTree = new FileTree(options);
+      const fileTree = new FileTree(options, stateConfig);
       fileTree.render({ containerWrapper: node });
       instanceRef.current = fileTree;
 
@@ -266,7 +283,7 @@ function VanillaClientRendered({ options }: { options: FileTreeOptions }) {
         instanceRef.current = null;
       };
     },
-    [options]
+    [options, stateConfig]
   );
 
   return <div ref={ref} />;
@@ -278,9 +295,11 @@ function VanillaClientRendered({ options }: { options: FileTreeOptions }) {
  */
 function VanillaServerRendered({
   options,
+  stateConfig,
   prerenderedHTML,
 }: {
   options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
   const instanceRef = useRef<FileTree | null>(null);
@@ -309,7 +328,7 @@ function VanillaServerRendered({
         }
       }
 
-      const fileTree = new FileTree(options);
+      const fileTree = new FileTree(options, stateConfig);
 
       if (!hasHydratedRef.current) {
         // Initial mount - hydrate the prerendered HTML
@@ -330,7 +349,7 @@ function VanillaServerRendered({
         instanceRef.current = null;
       };
     },
-    [options, prerenderedHTML]
+    [options, stateConfig, prerenderedHTML]
   );
 
   return (
@@ -348,8 +367,21 @@ function VanillaServerRendered({
  * React FileTree - Client-Side Rendered
  * No prerendered HTML, renders entirely on client
  */
-function ReactClientRendered({ options }: { options: FileTreeOptions }) {
-  return <FileTreeReact options={options} />;
+function ReactClientRendered({
+  options,
+  stateConfig,
+}: {
+  options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
+}) {
+  return (
+    <FileTreeReact
+      options={options}
+      defaultExpandedItems={stateConfig?.defaultExpandedItems}
+      defaultSelectedItems={stateConfig?.defaultSelectedItems}
+      onSelection={stateConfig?.onSelection}
+    />
+  );
 }
 
 /**
@@ -358,12 +390,22 @@ function ReactClientRendered({ options }: { options: FileTreeOptions }) {
  */
 function ReactServerRendered({
   options,
+  stateConfig,
   prerenderedHTML,
 }: {
   options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
-  return <FileTreeReact options={options} prerenderedHTML={prerenderedHTML} />;
+  return (
+    <FileTreeReact
+      options={options}
+      prerenderedHTML={prerenderedHTML}
+      defaultExpandedItems={stateConfig?.defaultExpandedItems}
+      defaultSelectedItems={stateConfig?.defaultSelectedItems}
+      onSelection={stateConfig?.onSelection}
+    />
+  );
 }
 
 /**
@@ -426,18 +468,20 @@ function StateLog({ entries }: { entries: string[] }) {
  */
 function VanillaSSRState({
   options,
+  stateConfig,
   prerenderedHTML,
 }: {
   options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
   const instanceRef = useRef<FileTree | null>(null);
   const hasHydratedRef = useRef(false);
   const { log, addLog } = useStateLog();
 
-  const stateOptions = useMemo<FileTreeOptions>(
+  const mergedStateConfig = useMemo<FileTreeStateConfig>(
     () => ({
-      ...options,
+      ...stateConfig,
       onExpandedItemsChange: (items) => {
         addLog(`expanded: [${items.join(', ')}]`);
       },
@@ -445,7 +489,7 @@ function VanillaSSRState({
         addLog(`selected: [${items.join(', ')}]`);
       },
     }),
-    [options, addLog]
+    [stateConfig, addLog]
   );
 
   const ref = useCallback(
@@ -468,7 +512,7 @@ function VanillaSSRState({
         }
       }
 
-      const fileTree = new FileTree(stateOptions);
+      const fileTree = new FileTree(options, mergedStateConfig);
 
       if (!hasHydratedRef.current) {
         fileTree.hydrate({
@@ -487,7 +531,7 @@ function VanillaSSRState({
         instanceRef.current = null;
       };
     },
-    [stateOptions, prerenderedHTML]
+    [options, mergedStateConfig, prerenderedHTML]
   );
 
   return (
@@ -550,9 +594,11 @@ function VanillaSSRState({
  */
 function ReactSSRUncontrolled({
   options,
+  stateConfig,
   prerenderedHTML,
 }: {
   options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
   const { log, addLog } = useStateLog();
@@ -567,6 +613,9 @@ function ReactSSRUncontrolled({
       <FileTreeReact
         options={options}
         prerenderedHTML={prerenderedHTML}
+        defaultExpandedItems={stateConfig?.defaultExpandedItems}
+        defaultSelectedItems={stateConfig?.defaultSelectedItems}
+        onSelection={stateConfig?.onSelection}
         onExpandedItemsChange={(items) => {
           addLog(`expanded: [${items.join(', ')}]`);
         }}
@@ -586,13 +635,15 @@ function ReactSSRUncontrolled({
  */
 function ReactSSRControlled({
   options,
+  stateConfig,
   prerenderedHTML,
 }: {
   options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
   const [expandedItems, setExpandedItems] = useState<string[]>(
-    options.defaultExpandedItems ?? []
+    stateConfig?.defaultExpandedItems ?? []
   );
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const { log, addLog } = useStateLog();
