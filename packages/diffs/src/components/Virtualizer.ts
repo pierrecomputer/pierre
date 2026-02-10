@@ -37,18 +37,22 @@ const DEFAULT_VIRTUALIZER_CONFIG: VirtualizerConfig = {
 
 let lastSize = 0;
 
+let instance = -1;
+
 export class Virtualizer {
   static __STOP: boolean = false;
   static __lastScrollPosition = 0;
 
-  public type = 'basic';
+  public readonly __id: string = `virtualizer-${++instance}`;
   public readonly config: VirtualizerConfig;
+  public type = 'basic';
   private intersectionObserver: IntersectionObserver | undefined;
   private scrollTop: number = 0;
   private height: number = 0;
   private scrollHeight: number = 0;
   private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
   private root: HTMLElement | Document | undefined;
+  private contentContainer: HTMLElement | undefined;
 
   private resizeObserver: ResizeObserver | undefined;
   private observers: Map<HTMLElement, SubscribedInstance> = new Map();
@@ -146,7 +150,7 @@ export class Virtualizer {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
           if (this.config.resizeDebugging) {
-            console.log('Virtualizer: content size change', {
+            console.log('Virtualizer: content size change', this.__id, {
               sizeChange: blockSize - lastSize,
               newSize: blockSize,
             });
@@ -159,11 +163,11 @@ export class Virtualizer {
             this.heightDirty = true;
             shouldQueueUpdate = true;
           }
-        } else if (entry.target === this.root.firstElementChild) {
+        } else if (entry.target === this.contentContainer) {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
           if (this.config.resizeDebugging) {
-            console.log('Virtualizer: scroller size change', {
+            console.log('Virtualizer: scroller size change', this.__id, {
               sizeChange: blockSize - lastSize,
               newSize: blockSize,
             });
@@ -200,15 +204,28 @@ export class Virtualizer {
     });
     this.resizeObserver?.observe(this.root);
     contentContainer ??= this.root.firstElementChild ?? undefined;
-    if (contentContainer != null) {
+    if (contentContainer instanceof HTMLElement) {
+      this.contentContainer = contentContainer;
       this.resizeObserver?.observe(contentContainer);
     }
   }
 
   cleanUp(): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = undefined;
     this.intersectionObserver?.disconnect();
     this.intersectionObserver = undefined;
     this.root = undefined;
+    this.contentContainer = undefined;
+    this.observers.clear();
+    this.visibleInstances.clear();
+    this.instancesChanged.clear();
+    this.connectQueue.clear();
+    this.visibleInstancesDirty = false;
+    this.windowSpecs = { top: 0, bottom: 0 };
+    this.scrollTop = 0;
+    this.height = 0;
+    this.scrollHeight = 0;
   }
 
   getOffsetInScrollContainer(element: HTMLElement): number {
