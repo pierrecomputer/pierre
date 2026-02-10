@@ -129,19 +129,10 @@ export function Root({
       let changed = false;
       const nextState: TreeStateConfig = { ...state };
 
-      // expandedItems uses ancestor expansion
-      if (state.expandedItems != null) {
-        const expanded = expandPathsWithAncestors(
-          state.expandedItems,
-          pathToId
-        );
-        if (
-          expanded.length !== state.expandedItems.length ||
-          expanded.some((id, i) => id !== state.expandedItems![i])
-        ) {
-          nextState.expandedItems = expanded;
-          changed = true;
-        }
+      const mappedExpanded = mapIds(state.expandedItems);
+      if (mappedExpanded !== state.expandedItems) {
+        nextState.expandedItems = mappedExpanded;
+        changed = true;
       }
 
       const mappedSelected = mapIds(state.selectedItems);
@@ -186,21 +177,39 @@ export function Root({
     // --- Map top-level state props into config ---
     const baseConfig = config ?? {};
 
+    const mapPathToId = (path: string): string | undefined =>
+      pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path);
+
+    const mapPathsToIds = (
+      paths: string[] | undefined
+    ): string[] | undefined => {
+      if (paths == null) return undefined;
+      const ids = paths
+        .map(mapPathToId)
+        .filter((id): id is string => id != null);
+      return ids.length > 0 ? ids : [];
+    };
+
     // Merge top-level defaultExpandedItems/defaultSelectedItems into config.initialState
     const topLevelInitialExpanded =
       fileTreeOptions.defaultExpandedItems ?? fileTreeOptions.expandedItems;
     const topLevelInitialSelected = fileTreeOptions.defaultSelectedItems;
+    const topLevelInitialExpandedIds =
+      topLevelInitialExpanded != null
+        ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId)
+        : undefined;
+    const topLevelInitialSelectedIds = mapPathsToIds(topLevelInitialSelected);
     const hasTopLevelInitial =
       topLevelInitialExpanded != null || topLevelInitialSelected != null;
 
     const mergedInitialState = hasTopLevelInitial
       ? {
           ...(baseConfig.initialState as TreeStateConfig | undefined),
-          ...(topLevelInitialExpanded != null && {
-            expandedItems: topLevelInitialExpanded,
+          ...(topLevelInitialExpandedIds != null && {
+            expandedItems: topLevelInitialExpandedIds,
           }),
-          ...(topLevelInitialSelected != null && {
-            selectedItems: topLevelInitialSelected,
+          ...(topLevelInitialSelectedIds != null && {
+            selectedItems: topLevelInitialSelectedIds,
           }),
         }
       : (baseConfig.initialState as TreeStateConfig | undefined);
@@ -208,14 +217,23 @@ export function Root({
     // Merge top-level expandedItems/selectedItems into config.state
     const topLevelExpanded = fileTreeOptions.expandedItems;
     const topLevelSelected = fileTreeOptions.selectedItems;
+    const topLevelExpandedIds =
+      topLevelExpanded != null
+        ? expandPathsWithAncestors(topLevelExpanded, pathToId)
+        : undefined;
+    const topLevelSelectedIds = mapPathsToIds(topLevelSelected);
     const hasTopLevelState =
       topLevelExpanded != null || topLevelSelected != null;
 
     const mergedState = hasTopLevelState
       ? {
           ...(baseConfig.state as TreeStateConfig | undefined),
-          ...(topLevelExpanded != null && { expandedItems: topLevelExpanded }),
-          ...(topLevelSelected != null && { selectedItems: topLevelSelected }),
+          ...(topLevelExpandedIds != null && {
+            expandedItems: topLevelExpandedIds,
+          }),
+          ...(topLevelSelectedIds != null && {
+            selectedItems: topLevelSelectedIds,
+          }),
         }
       : (baseConfig.state as TreeStateConfig | undefined);
 

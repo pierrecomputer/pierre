@@ -100,7 +100,9 @@ function createMockFileTree(
   // Mirror FileTree.setSelectedItems
   const setSelectedItems = (paths: string[]) => {
     const ids = paths
-      .map((path) => pathToId.get(path))
+      .map(
+        (path) => pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path)
+      )
       .filter((id): id is string => id != null);
     tree.applySubStateUpdate('selectedItems', () => ids);
   };
@@ -135,7 +137,8 @@ function createMockFileTree(
     const paths = ids
       .map((id) => idToPath.get(id))
       .filter((path): path is string => path != null);
-    return filterOrphanedPaths(paths, pathToId);
+    const selectionPaths = paths.map(getSelectionPath);
+    return filterOrphanedPaths(selectionPaths, pathToId);
   };
 
   // Mirror FileTree.getSelectedItems
@@ -143,7 +146,8 @@ function createMockFileTree(
     const ids = tree.getState().selectedItems ?? [];
     return ids
       .map((id) => idToPath.get(id))
-      .filter((path): path is string => path != null);
+      .filter((path): path is string => path != null)
+      .map(getSelectionPath);
   };
 
   return {
@@ -328,6 +332,20 @@ describe('flattened directory state management', () => {
 
     const afterNames = ft.tree.getItems().map((i) => i.getItemName());
     expect(afterNames).not.toContain('Button.tsx');
+  });
+
+  test('getExpandedItems returns unprefixed paths for flattened directories', () => {
+    const ft = createMockFileTree(flattenedFiles, {
+      flattenEmptyDirectories: true,
+    });
+
+    ft.setExpandedItems(['src/components/deep']);
+
+    const expanded = ft.getExpandedItems();
+    expect(expanded).toContain('src/components/deep');
+    for (const path of expanded) {
+      expect(path).not.toMatch(/^f::/);
+    }
   });
 
   test('controlled state round-trip preserves IDs for flattened directories', () => {

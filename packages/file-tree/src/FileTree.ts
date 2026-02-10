@@ -1,7 +1,7 @@
 import { type TreeConfig, type TreeInstance } from '@headless-tree/core';
 
 import { FileTreeContainerLoaded } from './components/web-components';
-import { FILE_TREE_TAG_NAME } from './constants';
+import { FILE_TREE_TAG_NAME, FLATTENED_PREFIX } from './constants';
 import { SVGSpriteSheet } from './sprite';
 import { type FileTreeNode } from './types';
 import {
@@ -91,6 +91,9 @@ export class FileTree {
   /** Populated by FileTree, read by the Preact Root for callbacks. */
   readonly callbacksRef: { current: FileTreeCallbacks };
 
+  private expandPathsCache: Map<string, string[]> = new Map();
+  private expandPathsCacheFor: Map<string, string> | null = null;
+
   constructor(public options: FileTreeOptions) {
     if (typeof document !== 'undefined') {
       this.fileTreeContainer = document.createElement(FILE_TREE_TAG_NAME);
@@ -110,7 +113,15 @@ export class FileTree {
   setExpandedItems(items: string[]): void {
     const handle = this.handleRef.current;
     if (handle == null) return;
-    const ids = expandPathsWithAncestors(items, handle.pathToId);
+    if (this.expandPathsCacheFor !== handle.pathToId) {
+      this.expandPathsCache.clear();
+      this.expandPathsCacheFor = handle.pathToId;
+    }
+    const ids = expandPathsWithAncestors(
+      items,
+      handle.pathToId,
+      this.expandPathsCache
+    );
     handle.tree.applySubStateUpdate('expandedItems', () => ids);
     // Schedule a lazy rebuild so getItems() returns updated children on the
     // next render. applySubStateUpdate already triggers a re-render via the
@@ -123,7 +134,11 @@ export class FileTree {
     const handle = this.handleRef.current;
     if (handle == null) return;
     const ids = items
-      .map((path) => handle.pathToId.get(path))
+      .map(
+        (path) =>
+          handle.pathToId.get(FLATTENED_PREFIX + path) ??
+          handle.pathToId.get(path)
+      )
       .filter((id): id is string => id != null);
     handle.tree.applySubStateUpdate('selectedItems', () => ids);
   }
@@ -145,7 +160,7 @@ export class FileTree {
     const idsToRemove = new Set<string>();
     const id = handle.pathToId.get(path);
     if (id != null) idsToRemove.add(id);
-    const flatId = handle.pathToId.get('f::' + path);
+    const flatId = handle.pathToId.get(FLATTENED_PREFIX + path);
     if (flatId != null) idsToRemove.add(flatId);
     if (idsToRemove.size === 0) return;
     const currentIds = handle.tree.getState().expandedItems ?? [];
@@ -158,7 +173,8 @@ export class FileTree {
   toggleItemExpanded(path: string): void {
     const handle = this.handleRef.current;
     if (handle == null) return;
-    const id = handle.pathToId.get(path) ?? handle.pathToId.get('f::' + path);
+    const id =
+      handle.pathToId.get(path) ?? handle.pathToId.get(FLATTENED_PREFIX + path);
     if (id == null) return;
     const currentIds = handle.tree.getState().expandedItems ?? [];
     if (currentIds.includes(id)) {
@@ -177,7 +193,12 @@ export class FileTree {
     const paths = ids
       .map((id) => handle.idToPath.get(id))
       .filter((path): path is string => path != null);
-    return filterOrphanedPaths(paths, handle.pathToId);
+    const selectionPaths = paths.map((path) =>
+      path.startsWith(FLATTENED_PREFIX)
+        ? path.slice(FLATTENED_PREFIX.length)
+        : path
+    );
+    return filterOrphanedPaths(selectionPaths, handle.pathToId);
   }
 
   getSelectedItems(): string[] {
@@ -186,7 +207,12 @@ export class FileTree {
     const ids = handle.tree.getState().selectedItems ?? [];
     return ids
       .map((id) => handle.idToPath.get(id))
-      .filter((path): path is string => path != null);
+      .filter((path): path is string => path != null)
+      .map((path) =>
+        path.startsWith(FLATTENED_PREFIX)
+          ? path.slice(FLATTENED_PREFIX.length)
+          : path
+      );
   }
 
   // --- Callbacks ---
@@ -369,6 +395,8 @@ export class FileTree {
       preactUnmountRoot(this.divWrapper);
     }
     this.handleRef.current = null;
+    this.expandPathsCache.clear();
+    this.expandPathsCacheFor = null;
     this.fileTreeContainer = undefined;
     this.divWrapper = undefined;
     this.spriteSVG = undefined;

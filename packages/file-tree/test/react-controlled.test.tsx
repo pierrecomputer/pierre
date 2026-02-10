@@ -39,13 +39,15 @@ Object.assign(globalThis, { customElements: dom.window.customElements });
 
 // jsdom doesn't support CSSStyleSheet.replaceSync – provide a no-op mock.
 class MockCSSStyleSheet {
-  cssRules: any[] = [];
+  cssRules: unknown[] = [];
   replaceSync(_text: string) {}
 }
 Object.assign(globalThis, { CSSStyleSheet: MockCSSStyleSheet });
 
 // Tell React we're in a test environment so act() doesn't warn.
-(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // ---------------------------------------------------------------------------
 // Imports (after globals are set up)
@@ -56,7 +58,10 @@ import { useState } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { FileTree as FileTreeClass } from '../src/FileTree';
+import {
+  FileTree as FileTreeClass,
+  type FileTreeOptions,
+} from '../src/FileTree';
 import { FileTree as FileTreeReact } from '../src/react/FileTree';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +88,15 @@ const setCallbacksSpy = spyOn(
   FileTreeClass.prototype,
   'setCallbacks'
 ).mockImplementation(() => {});
+
+const requireCapturedOptions = (
+  value: FileTreeOptions | null
+): FileTreeOptions => {
+  if (value == null) {
+    throw new Error('Expected FileTree options to be captured');
+  }
+  return value;
+};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -299,8 +313,8 @@ describe('React controlled FileTree wrapper', () => {
   // -- Initial state passed to constructor --
 
   test('passes controlled expandedItems as defaultExpandedItems to FileTree constructor', () => {
-    let capturedOptions: any = null;
-    renderSpy.mockImplementation(function (this: any) {
+    let capturedOptions: FileTreeOptions | null = null;
+    renderSpy.mockImplementation(function (this: FileTreeClass) {
       capturedOptions = this.options;
     });
 
@@ -311,17 +325,18 @@ describe('React controlled FileTree wrapper', () => {
     });
 
     expect(capturedOptions).not.toBeNull();
-    expect(capturedOptions.defaultExpandedItems).toEqual(['src']);
+    const options = requireCapturedOptions(capturedOptions);
+    expect(options.defaultExpandedItems).toEqual(['src']);
     // Controlled values should NOT be in options.expandedItems
-    expect(capturedOptions.expandedItems).toBeUndefined();
+    expect(options.expandedItems).toBeUndefined();
 
     // Restore spy
     renderSpy.mockImplementation(() => {});
   });
 
   test('passes controlled selectedItems as defaultSelectedItems to FileTree constructor', () => {
-    let capturedOptions: any = null;
-    renderSpy.mockImplementation(function (this: any) {
+    let capturedOptions: FileTreeOptions | null = null;
+    renderSpy.mockImplementation(function (this: FileTreeClass) {
       capturedOptions = this.options;
     });
 
@@ -335,8 +350,9 @@ describe('React controlled FileTree wrapper', () => {
     });
 
     expect(capturedOptions).not.toBeNull();
-    expect(capturedOptions.defaultSelectedItems).toEqual(['README.md']);
-    expect(capturedOptions.selectedItems).toBeUndefined();
+    const options = requireCapturedOptions(capturedOptions);
+    expect(options.defaultSelectedItems).toEqual(['README.md']);
+    expect(options.selectedItems).toBeUndefined();
 
     // Restore spy
     renderSpy.mockImplementation(() => {});

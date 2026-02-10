@@ -64,24 +64,37 @@ export function filterOrphanedPaths(
  */
 export function expandPathsWithAncestors(
   paths: string[],
-  pathToId: Map<string, string>
+  pathToId: Map<string, string>,
+  cache?: Map<string, string[]>
 ): string[] {
   const ids = new Set<string>();
   for (const path of paths) {
-    const parts = path.split('/');
-    for (let i = 1; i <= parts.length; i++) {
-      const ancestor = parts.slice(0, i).join('/');
-      // Prefer the flattened (f::) ID when it exists — that's the actual
-      // item headless-tree renders. Adding both the regular AND flattened
-      // IDs causes controlled-state round-trips to re-add IDs that the
-      // tree's built-in collapse removed.
-      const flatId = pathToId.get('f::' + ancestor);
-      if (flatId != null) {
-        ids.add(flatId);
-      } else {
-        const id = pathToId.get(ancestor);
-        if (id != null) ids.add(id);
+    let expanded = cache?.get(path);
+    if (expanded == null) {
+      const parts = path.split('/');
+      const next: string[] = [];
+      for (let i = 1; i <= parts.length; i++) {
+        const ancestor = parts.slice(0, i).join('/');
+        // Prefer the flattened (f::) ID when it exists — that's the actual
+        // item headless-tree renders. Adding both the regular AND flattened
+        // IDs causes controlled-state round-trips to re-add IDs that the
+        // tree's built-in collapse removed.
+        const flatId = pathToId.get('f::' + ancestor);
+        if (flatId != null) {
+          next.push(flatId);
+        } else {
+          const id = pathToId.get(ancestor);
+          if (id != null) next.push(id);
+        }
       }
+      expanded = next;
+      if (cache != null) {
+        cache.set(path, expanded);
+      }
+    }
+
+    for (const id of expanded) {
+      ids.add(id);
     }
   }
   return Array.from(ids);
