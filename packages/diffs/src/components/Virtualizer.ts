@@ -245,6 +245,9 @@ export class Virtualizer {
     }
     this.intersectionObserver?.unobserve(container);
     this.observers.delete(container);
+    if (this.visibleInstances.delete(container)) {
+      this.visibleInstancesDirty = true;
+    }
     this.markDOMDirty();
     queueRender(this.computeRenderRangeAndEmit);
   }
