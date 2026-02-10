@@ -199,7 +199,9 @@ export function Root({
     const topLevelInitialSelected = stateConfig?.defaultSelectedItems;
     const topLevelInitialExpandedIds =
       topLevelInitialExpanded != null
-        ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId)
+        ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId, {
+            flattenEmptyDirectories,
+          })
         : undefined;
     const topLevelInitialSelectedIds = mapPathsToIds(topLevelInitialSelected);
     const hasTopLevelInitial =
@@ -222,7 +224,9 @@ export function Root({
     const topLevelSelected = stateConfig?.selectedItems;
     const topLevelExpandedIds =
       topLevelExpanded != null
-        ? expandPathsWithAncestors(topLevelExpanded, pathToId)
+        ? expandPathsWithAncestors(topLevelExpanded, pathToId, {
+            flattenEmptyDirectories,
+          })
         : undefined;
     const topLevelSelectedIds = mapPathsToIds(topLevelSelected);
     const hasTopLevelState =
@@ -375,7 +379,11 @@ export function Root({
           .map(getSelectionPath)
       ),
     ];
-    const effectivePaths = filterOrphanedPaths(paths, pathToId);
+    const effectivePaths = filterOrphanedPaths(
+      paths,
+      pathToId,
+      flattenEmptyDirectories
+    );
     onExpandedItemsChange(effectivePaths);
   }, [expandedSnapshot, callbacksRef, tree, idToPath, pathToId]);
 

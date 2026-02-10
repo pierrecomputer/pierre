@@ -49,7 +49,7 @@ describe('expandPathsWithAncestors', () => {
     expect(ids).toContain(srcComponentsId!);
   });
 
-  test('prefers flattened f:: ID when both exist', () => {
+  test('prefers flattened f:: ID when both exist and flatten is on', () => {
     const { pathToId } = buildMaps([
       'src/components/deep/Button.tsx',
       'src/components/deep/Card.tsx',
@@ -63,11 +63,32 @@ describe('expandPathsWithAncestors', () => {
 
     const ids = expandPathsWithAncestors(
       ['src/components/deep/Button.tsx'],
-      pathToId
+      pathToId,
+      { flattenEmptyDirectories: true }
     );
     // Should contain the flattened ID, not the regular one
     expect(ids).toContain(flatId!);
     expect(ids).not.toContain(regularId!);
+  });
+
+  test('uses regular ID when flatten is off even if f:: exists', () => {
+    const { pathToId } = buildMaps([
+      'src/components/deep/Button.tsx',
+      'src/components/deep/Card.tsx',
+    ]);
+    const flatId = pathToId.get('f::src/components/deep');
+    const regularId = pathToId.get('src/components/deep');
+    expect(flatId).toBeDefined();
+    expect(regularId).toBeDefined();
+
+    const ids = expandPathsWithAncestors(
+      ['src/components/deep/Button.tsx'],
+      pathToId,
+      { flattenEmptyDirectories: false }
+    );
+    // Should contain the regular ID, not the flattened one
+    expect(ids).toContain(regularId!);
+    expect(ids).not.toContain(flatId!);
   });
 
   test('falls back to regular ID when no flattened variant', () => {
@@ -216,7 +237,7 @@ describe('filterOrphanedPaths', () => {
     expect(result).toEqual([]);
   });
 
-  test('flattened path kept when only visible parent is expanded', () => {
+  test('flattened path kept when only visible parent is expanded (flatten on)', () => {
     // Build has multiple children (not interior), but Build/assets is a
     // single-child directory (interior to the flattened chain).
     // filterOrphanedPaths should skip the interior ancestor.
@@ -227,7 +248,8 @@ describe('filterOrphanedPaths', () => {
     ]);
     const result = filterOrphanedPaths(
       ['Build', 'Build/assets/images/social'],
-      pathToId
+      pathToId,
+      true
     );
     expect(result).toContain('Build');
     expect(result).toContain('Build/assets/images/social');
@@ -242,8 +264,52 @@ describe('filterOrphanedPaths', () => {
     // Build is NOT in the expanded set — it's collapsed
     const result = filterOrphanedPaths(
       ['Build/assets/images/social'],
-      pathToId
+      pathToId,
+      true
     );
     expect(result).toEqual([]);
+  });
+
+  test('does not skip interior ancestors when flatten is off', () => {
+    // When flattenEmptyDirectories is false, every folder is a real visible
+    // node — even single-child directories. So Build/assets must be in the
+    // expanded set for Build/assets/images to be kept.
+    const { pathToId } = buildMaps([
+      'Build/index.mjs',
+      'Build/scripts.js',
+      'Build/assets/images/social/logo.png',
+    ]);
+    // With flatten off, Build/assets/images/social requires all ancestors
+    const result = filterOrphanedPaths(
+      ['Build', 'Build/assets/images/social'],
+      pathToId,
+      false
+    );
+    // Build is kept (root-level), but Build/assets/images/social is orphaned
+    // because Build/assets is not in the expanded set
+    expect(result).toContain('Build');
+    expect(result).not.toContain('Build/assets/images/social');
+  });
+
+  test('all ancestors expanded keeps path when flatten is off', () => {
+    const { pathToId } = buildMaps([
+      'Build/index.mjs',
+      'Build/scripts.js',
+      'Build/assets/images/social/logo.png',
+    ]);
+    const result = filterOrphanedPaths(
+      [
+        'Build',
+        'Build/assets',
+        'Build/assets/images',
+        'Build/assets/images/social',
+      ],
+      pathToId,
+      false
+    );
+    expect(result).toContain('Build');
+    expect(result).toContain('Build/assets');
+    expect(result).toContain('Build/assets/images');
+    expect(result).toContain('Build/assets/images/social');
   });
 });

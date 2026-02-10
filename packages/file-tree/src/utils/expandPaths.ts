@@ -13,7 +13,8 @@
  */
 export function filterOrphanedPaths(
   expandedPaths: string[],
-  pathToId: Map<string, string>
+  pathToId: Map<string, string>,
+  flattenEmptyDirectories?: boolean
 ): string[] {
   const expandedSet = new Set(expandedPaths);
 
@@ -44,10 +45,16 @@ export function filterOrphanedPaths(
       if (expandedSet.has(ancestor)) {
         continue;
       }
-      // Ancestor is NOT expanded. If this path is a flattened endpoint
-      // (f::path exists) and the ancestor is an interior node (single child),
-      // it's invisible in the tree → skip it.
-      if (isFlattenedPath && childCount.get(ancestor) === 1) {
+      // Ancestor is NOT expanded. If flattening is enabled, this path is a
+      // flattened endpoint (f::path exists) and the ancestor is an interior
+      // node (single child), it's invisible in the tree → skip it.
+      // Without flattening, all folders are real visible nodes — their
+      // expansion state matters.
+      if (
+        flattenEmptyDirectories !== false &&
+        isFlattenedPath &&
+        childCount.get(ancestor) === 1
+      ) {
         continue;
       }
       // Ancestor is a real, visible node but not expanded → path is orphaned
@@ -55,6 +62,11 @@ export function filterOrphanedPaths(
     }
     return true;
   });
+}
+
+export interface ExpandPathsOptions {
+  flattenEmptyDirectories?: boolean;
+  cache?: Map<string, string[]>;
 }
 
 /**
@@ -65,8 +77,10 @@ export function filterOrphanedPaths(
 export function expandPathsWithAncestors(
   paths: string[],
   pathToId: Map<string, string>,
-  cache?: Map<string, string[]>
+  options?: ExpandPathsOptions
 ): string[] {
+  const cache = options?.cache;
+  const flatten = options?.flattenEmptyDirectories !== false;
   const ids = new Set<string>();
   for (const path of paths) {
     let expanded = cache?.get(path);
@@ -75,14 +89,21 @@ export function expandPathsWithAncestors(
       const next: string[] = [];
       for (let i = 1; i <= parts.length; i++) {
         const ancestor = parts.slice(0, i).join('/');
-        // Prefer the flattened (f::) ID when it exists — that's the actual
-        // item headless-tree renders. Adding both the regular AND flattened
-        // IDs causes controlled-state round-trips to re-add IDs that the
-        // tree's built-in collapse removed.
-        const flatId = pathToId.get('f::' + ancestor);
-        if (flatId != null) {
-          next.push(flatId);
+        if (flatten) {
+          // Prefer the flattened (f::) ID when it exists — that's the actual
+          // item headless-tree renders. Adding both the regular AND flattened
+          // IDs causes controlled-state round-trips to re-add IDs that the
+          // tree's built-in collapse removed.
+          const flatId = pathToId.get('f::' + ancestor);
+          if (flatId != null) {
+            next.push(flatId);
+          } else {
+            const id = pathToId.get(ancestor);
+            if (id != null) next.push(id);
+          }
         } else {
+          // Without flattening, only use regular IDs — f:: nodes are not
+          // rendered and would create an ID mismatch in headless-tree.
           const id = pathToId.get(ancestor);
           if (id != null) next.push(id);
         }

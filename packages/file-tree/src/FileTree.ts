@@ -122,11 +122,10 @@ export class FileTree {
       this.expandPathsCache.clear();
       this.expandPathsCacheFor = handle.pathToId;
     }
-    const ids = expandPathsWithAncestors(
-      items,
-      handle.pathToId,
-      this.expandPathsCache
-    );
+    const ids = expandPathsWithAncestors(items, handle.pathToId, {
+      flattenEmptyDirectories: this.options.flattenEmptyDirectories,
+      cache: this.expandPathsCache,
+    });
     handle.tree.applySubStateUpdate('expandedItems', () => ids);
     // Schedule a lazy rebuild so getItems() returns updated children on the
     // next render. applySubStateUpdate already triggers a re-render via the
@@ -203,7 +202,11 @@ export class FileTree {
         ? path.slice(FLATTENED_PREFIX.length)
         : path
     );
-    return filterOrphanedPaths(selectionPaths, handle.pathToId);
+    return filterOrphanedPaths(
+      selectionPaths,
+      handle.pathToId,
+      this.options.flattenEmptyDirectories
+    );
   }
 
   getSelectedItems(): string[] {
