@@ -93,7 +93,7 @@ export function ClientPage({
   }, [cookieMaxAge, flattenEmptyDirectories, useLazyDataLoader]);
 
   return (
-    <div className="m-4">
+    <div className="m-4 pb-[800px]">
       <h1 className="mb-4 text-2xl font-bold">File Tree Examples</h1>
 
       {/* Controls */}
@@ -141,7 +141,7 @@ export function ClientPage({
       </div>
 
       {/* Examples Grid */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <ExampleCard
           title="Vanilla (Client-Side Rendered)"
           description="FileTree instance created and rendered entirely on the client"
@@ -184,36 +184,19 @@ export function ClientPage({
       <h2 id="state" className="mb-4 text-2xl font-bold">
         State
       </h2>
-      <div className="grid grid-cols-3 gap-6">
-        <ExampleCard
-          title="Vanilla (SSR) — Imperative State"
-          description="Vanilla FileTree hydrated from SSR, with imperative expand/collapse and state change logging"
-        >
-          <VanillaSSRState
-            options={fileTreeOptions}
-            prerenderedHTML={preloadedFileTreeHtml}
-          />
-        </ExampleCard>
-
-        <ExampleCard
-          title="React (SSR) — Uncontrolled"
-          description="React FileTree with SSR, using onExpandedItemsChange to observe state without controlling it"
-        >
-          <ReactSSRUncontrolled
-            options={fileTreeOptions}
-            prerenderedHTML={preloadedFileTreeHtml}
-          />
-        </ExampleCard>
-
-        <ExampleCard
-          title="React (SSR) — Controlled"
-          description="React FileTree with SSR, expandedItems fully controlled by React state"
-        >
-          <ReactSSRControlled
-            options={fileTreeOptions}
-            prerenderedHTML={preloadedFileTreeHtml}
-          />
-        </ExampleCard>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <VanillaSSRState
+          options={fileTreeOptions}
+          prerenderedHTML={preloadedFileTreeHtml}
+        />
+        <ReactSSRUncontrolled
+          options={fileTreeOptions}
+          prerenderedHTML={preloadedFileTreeHtml}
+        />
+        <ReactSSRControlled
+          options={fileTreeOptions}
+          prerenderedHTML={preloadedFileTreeHtml}
+        />
       </div>
     </div>
   );
@@ -226,15 +209,22 @@ function ExampleCard({
   title,
   description,
   children,
+  controls,
+  footer,
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
+  controls?: React.ReactNode;
+  footer?: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className="@container/card">
       <h2 className="text-sm font-bold">{title}</h2>
       <p className="text-muted-foreground mb-2 text-xs">{description}</p>
+      {controls !== undefined && (
+        <div className="mb-2 h-[60px]">{controls}</div>
+      )}
       <div
         className="overflow-hidden rounded-md p-5"
         style={{
@@ -243,6 +233,7 @@ function ExampleCard({
       >
         {children}
       </div>
+      {footer}
     </div>
   );
 }
@@ -378,11 +369,35 @@ function ReactServerRendered({
 /**
  * Shared log display component for state change events
  */
+function useStateLog() {
+  const [log, setLog] = useState<string[]>([]);
+
+  const addLog = useCallback((msg: string) => {
+    setLog((prev) => [...prev.slice(-49), msg]);
+  }, []);
+
+  return { log, addLog };
+}
+
 function StateLog({ entries }: { entries: string[] }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [entries]);
+
+  const boldIndices = useMemo(() => {
+    const indices = new Set<number>();
+    const seen = new Set<string>();
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const prefix = entries[i].split(':')[0];
+      if (!seen.has(prefix)) {
+        seen.add(prefix);
+        indices.add(i);
+      }
+    }
+    return indices;
+  }, [entries]);
+
   return (
     <div
       ref={ref}
@@ -394,7 +409,11 @@ function StateLog({ entries }: { entries: string[] }) {
           Interact with the tree to see state changes…
         </span>
       ) : (
-        entries.map((entry, i) => <div key={i}>{entry}</div>)
+        entries.map((entry, i) => (
+          <div key={i} className={boldIndices.has(i) ? 'font-bold' : ''}>
+            {entry}
+          </div>
+        ))
       )}
     </div>
   );
@@ -414,19 +433,17 @@ function VanillaSSRState({
 }) {
   const instanceRef = useRef<FileTree | null>(null);
   const hasHydratedRef = useRef(false);
-  const [log, setLog] = useState<string[]>([]);
-
-  const addLog = useCallback((msg: string) => {
-    setLog((prev) => [...prev.slice(-49), msg]);
-  }, []);
+  const { log, addLog } = useStateLog();
 
   const stateOptions = useMemo<FileTreeOptions>(
     () => ({
       ...options,
-      onExpandedItemsChange: (items) =>
-        addLog(`expanded: [${items.join(', ')}]`),
-      onSelectedItemsChange: (items) =>
-        addLog(`selected: [${items.join(', ')}]`),
+      onExpandedItemsChange: (items) => {
+        addLog(`expanded: [${items.join(', ')}]`);
+      },
+      onSelectedItemsChange: (items) => {
+        addLog(`selected: [${items.join(', ')}]`);
+      },
     }),
     [options, addLog]
   );
@@ -474,25 +491,47 @@ function VanillaSSRState({
   );
 
   return (
-    <>
-      <div className="mb-2 flex gap-2">
-        <button
-          type="button"
-          className="rounded-sm border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--color-border)' }}
-          onClick={() => instanceRef.current?.expandItem('src/components')}
-        >
-          Expand src/components
-        </button>
-        <button
-          type="button"
-          className="rounded-sm border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--color-border)' }}
-          onClick={() => instanceRef.current?.collapseItem('src/components')}
-        >
-          Collapse src/components
-        </button>
-      </div>
+    <ExampleCard
+      title="Vanilla (SSR) — Imperative State"
+      description="Vanilla FileTree hydrated from SSR, with imperative expand/collapse/selection buttons and state change logging"
+      controls={
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => instanceRef.current?.expandItem('src/components')}
+          >
+            Expand src/components
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => instanceRef.current?.collapseItem('src/components')}
+          >
+            Collapse src/components
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => instanceRef.current?.setSelectedItems(['README.md'])}
+          >
+            Select README.md
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => instanceRef.current?.setSelectedItems([])}
+          >
+            Clear Selection
+          </button>
+        </div>
+      }
+      footer={<StateLog entries={log} />}
+    >
       <file-tree-container
         ref={ref}
         dangerouslySetInnerHTML={{
@@ -500,8 +539,7 @@ function VanillaSSRState({
         }}
         suppressHydrationWarning
       />
-      <StateLog entries={log} />
-    </>
+    </ExampleCard>
   );
 }
 
@@ -517,32 +555,33 @@ function ReactSSRUncontrolled({
   options: FileTreeOptions;
   prerenderedHTML: string;
 }) {
-  const [log, setLog] = useState<string[]>([]);
-  const addLog = useCallback((msg: string) => {
-    setLog((prev) => [...prev.slice(-49), msg]);
-  }, []);
+  const { log, addLog } = useStateLog();
 
   return (
-    <>
+    <ExampleCard
+      title="React (SSR) — Uncontrolled"
+      description="React FileTree with SSR, using onExpandedItemsChange to observe state without controlling it"
+      controls={null}
+      footer={<StateLog entries={log} />}
+    >
       <FileTreeReact
         options={options}
         prerenderedHTML={prerenderedHTML}
-        onExpandedItemsChange={(items) =>
-          addLog(`expanded: [${items.join(', ')}]`)
-        }
-        onSelectedItemsChange={(items) =>
-          addLog(`selected: [${items.join(', ')}]`)
-        }
+        onExpandedItemsChange={(items) => {
+          addLog(`expanded: [${items.join(', ')}]`);
+        }}
+        onSelectedItemsChange={(items) => {
+          addLog(`selected: [${items.join(', ')}]`);
+        }}
       />
-      <StateLog entries={log} />
-    </>
+    </ExampleCard>
   );
 }
 
 /**
  * React FileTree - SSR Controlled
- * Parent React component owns expandedItems state.
- * onExpandedItemsChange updates the React state, which flows back into the tree.
+ * Parent React component owns expandedItems and selectedItems state.
+ * onChange callbacks update React state, which flows back into the tree.
  * Buttons allow programmatic state changes from outside the tree.
  */
 function ReactSSRControlled({
@@ -555,10 +594,8 @@ function ReactSSRControlled({
   const [expandedItems, setExpandedItems] = useState<string[]>(
     options.defaultExpandedItems ?? []
   );
-  const [log, setLog] = useState<string[]>([]);
-  const addLog = useCallback((msg: string) => {
-    setLog((prev) => [...prev.slice(-49), msg]);
-  }, []);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const { log, addLog } = useStateLog();
 
   const handleExpandedChange = useCallback(
     (items: string[]) => {
@@ -568,35 +605,66 @@ function ReactSSRControlled({
     [addLog]
   );
 
+  const handleSelectedChange = useCallback(
+    (items: string[]) => {
+      setSelectedItems(items);
+      addLog(`selected: [${items.join(', ')}]`);
+    },
+    [addLog]
+  );
+
   return (
-    <>
-      <div className="mb-2 flex gap-2">
-        <button
-          type="button"
-          className="rounded-sm border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--color-border)' }}
-          onClick={() =>
-            handleExpandedChange([...expandedItems, 'src/components'])
-          }
-        >
-          Expand src/components
-        </button>
-        <button
-          type="button"
-          className="rounded-sm border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--color-border)' }}
-          onClick={() => handleExpandedChange([])}
-        >
-          Collapse All
-        </button>
-      </div>
+    <ExampleCard
+      title="React (SSR) — Controlled"
+      description="React FileTree with SSR, expandedItems and selectedItems fully controlled by React state"
+      controls={
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() =>
+              handleExpandedChange([...expandedItems, 'src/components'])
+            }
+          >
+            Expand src/components
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => handleExpandedChange([])}
+          >
+            Collapse All
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => handleSelectedChange(['README.md'])}
+          >
+            Select README.md
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => handleSelectedChange([])}
+          >
+            Clear Selection
+          </button>
+        </div>
+      }
+      footer={<StateLog entries={log} />}
+    >
       <FileTreeReact
         options={options}
         prerenderedHTML={prerenderedHTML}
         expandedItems={expandedItems}
         onExpandedItemsChange={handleExpandedChange}
+        selectedItems={selectedItems}
+        onSelectedItemsChange={handleSelectedChange}
       />
-      <StateLog entries={log} />
-    </>
+    </ExampleCard>
   );
 }
