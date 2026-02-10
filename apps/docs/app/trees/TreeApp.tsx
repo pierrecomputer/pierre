@@ -16,6 +16,8 @@ export interface TreeAppProps {
   fileContentMap?: Record<string, string>;
   /** File path to select and display on initial load (e.g. 'package.json'). */
   defaultSelectedPath?: string;
+  /** When true, show the search field above the tree. Default: false. */
+  showSearch?: boolean;
 }
 
 /**
@@ -28,6 +30,7 @@ export function TreeApp({
   preloadedFileTreeHtml,
   fileContentMap = {},
   defaultSelectedPath,
+  showSearch = false,
 }: TreeAppProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(
     defaultSelectedPath ?? null
@@ -48,6 +51,7 @@ export function TreeApp({
   const treeOptionsWithSelection = useMemo<FileTreeOptions>(
     () => ({
       ...fileTreeOptions,
+      showSearch,
       config: {
         ...fileTreeOptions.config,
         initialState: {
@@ -59,7 +63,7 @@ export function TreeApp({
       },
       onSelection,
     }),
-    [fileTreeOptions, defaultSelectedPath, onSelection]
+    [fileTreeOptions, showSearch, defaultSelectedPath, onSelection]
   );
 
   const content =
@@ -72,14 +76,8 @@ export function TreeApp({
   // (page outside TreeApp can stay in user's light/dark preference)
   return (
     <div className="dark rounded-lg" style={{ colorScheme: 'dark' }}>
-      <div
-        className="border-border grid aspect-[16/9] gap-0 overflow-hidden rounded-lg border"
-        style={{
-          gridTemplateColumns: 'minmax(200px, 280px) 1fr',
-          minHeight: 320,
-        }}
-      >
-        <div className="border-border dark:border-border overflow-auto border-r bg-neutral-900 p-3 [--ft-search-background:theme(colors.neutral.800)]">
+      <div className="border-border grid min-h-[420px] grid-cols-1 gap-0 overflow-hidden rounded-lg border md:aspect-[16/9] md:grid-cols-[minmax(200px,280px)_1fr]">
+        <div className="border-border dark:border-border min-h-[200px] overflow-auto border-b bg-neutral-900 p-3 [--ft-search-background:theme(colors.neutral.800)] md:min-h-0 md:border-r md:border-b-0">
           <FileTreeReact
             className="[--ft-search-background:theme(colors.neutral.800)]"
             options={treeOptionsWithSelection}
@@ -92,7 +90,7 @@ export function TreeApp({
             }
           />
         </div>
-        <div className="overflow-auto bg-[#070707]">
+        <div className="min-h-[320px] overflow-auto bg-[#070707]">
           {content != null && selectedPath != null ? (
             <File
               file={{ name: selectedPath, contents: content }}

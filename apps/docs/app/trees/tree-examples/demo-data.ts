@@ -1,4 +1,4 @@
-import type { FileTreeOptions } from '@pierre/file-tree';
+import type { FileTreeOptions, FileTreeSearchMode } from '@pierre/file-tree';
 
 import { sharedDemoFileTreeOptions } from '../../file-tree/demo-data';
 
@@ -39,3 +39,14 @@ export function flatteningOptions(flatten: boolean): FileTreeOptions {
 
 /** Base options for all tree example sections. */
 export const baseTreeOptions = sharedDemoFileTreeOptions;
+
+/** Options with search mode for the search example. */
+export function searchOptions(mode: FileTreeSearchMode): FileTreeOptions {
+  return {
+    ...sharedDemoFileTreeOptions,
+    config: {
+      ...sharedDemoFileTreeOptions.config,
+      fileTreeSearchMode: mode,
+    },
+  };
+}
