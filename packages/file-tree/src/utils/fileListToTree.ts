@@ -171,7 +171,11 @@ export function fileListToTree(
   const mapKey = (key: string) => getIdForKey(key);
   const hashedTree: Record<string, FileTreeNode> = {};
 
-  for (const [key, node] of Object.entries(tree)) {
+  // Use a deterministic key order so collision resolution in createIdMaps
+  // stays stable across different loaders and runtimes.
+  const keys = Object.keys(tree).sort();
+  for (const key of keys) {
+    const node = tree[key];
     const mappedKey = mapKey(key);
     const nextNode: FileTreeNode = {
       ...node,

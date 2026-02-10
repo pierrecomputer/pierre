@@ -9,12 +9,16 @@
   ],
   "type": "module",
   "sideEffects": [
-    "src/components/web-components.ts"
+    "./dist/components/web-components.js"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./web-components": {
+      "types": "./dist/web-components.d.ts",
+      "import": "./dist/web-components.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",
@@ -53,7 +57,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "react": "^18.3.1 || ^19.0.0",
-    "react-dom": "^18.3.1 || ^19.0.0"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   }
 }

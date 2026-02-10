@@ -79,6 +79,14 @@ export function Root({
   'use no memo';
   const { config, files, flattenEmptyDirectories, useLazyDataLoader } =
     fileTreeOptions;
+
+  const treeDomId = useMemo(() => {
+    const base = fileTreeOptions.id ?? 'ft';
+    const safe = base.replace(/[^A-Za-z0-9_-]/g, '_');
+    return `ft-${safe}`;
+  }, [fileTreeOptions.id]);
+  const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
+
   const treeData = useMemo(() => fileListToTree(files), [files]);
 
   // Build path↔id maps from treeData
@@ -264,10 +272,7 @@ export function Root({
       ...(initialState.state != null && { initialState: initialState.state }),
       ...(state.state != null && { state: state.state }),
     };
-  }, [config, treeData, pathToId, stateConfig]);
-
-  const treeDomId = 'ft';
-  const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
+  }, [config, treeData, pathToId, stateConfig, flattenEmptyDirectories]);
   const dataLoader = useMemo(
     () =>
       useLazyDataLoader === true

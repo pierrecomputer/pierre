@@ -29,6 +29,20 @@ export function generateLazyDataLoader(
   // Pre-sort for efficient prefix matching
   const sortedPaths = [...filePaths].sort();
 
+  const lowerBound = (target: string): number => {
+    let lo = 0;
+    let hi = sortedPaths.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sortedPaths[mid] < target) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  };
+
   // Pre-compute folder set (fast O(n) scan)
   const folderSet = new Set<string>();
   for (const path of sortedPaths) {
@@ -58,25 +72,33 @@ export function generateLazyDataLoader(
     if (cached != null) return cached;
 
     const children = new Set<string>();
-    const prefix = parentPath === rootId ? '' : `${parentPath}/`;
-    const prefixLen = prefix.length;
 
-    for (const path of sortedPaths) {
-      // For root, all paths are potential children
-      // For other parents, only paths starting with the prefix
-      if (parentPath === rootId || path.startsWith(prefix)) {
-        const relativePath =
-          parentPath === rootId ? path : path.slice(prefixLen);
-        // Skip empty strings (can happen if prefix matches exactly)
+    if (parentPath === rootId) {
+      for (const path of sortedPaths) {
+        const slashIndex = path.indexOf('/');
+        const childSegment = slashIndex >= 0 ? path.slice(0, slashIndex) : path;
+        if (childSegment !== '') {
+          children.add(childSegment);
+        }
+      }
+    } else {
+      const prefix = `${parentPath}/`;
+      const prefixLen = prefix.length;
+      // Jump directly into the matching range; then scan forward until we leave it.
+      for (let i = lowerBound(prefix); i < sortedPaths.length; i += 1) {
+        const path = sortedPaths[i];
+        if (!path.startsWith(prefix)) {
+          break;
+        }
+
+        const relativePath = path.slice(prefixLen);
         if (relativePath === '') continue;
         const slashIndex = relativePath.indexOf('/');
         const childSegment =
           slashIndex >= 0 ? relativePath.slice(0, slashIndex) : relativePath;
-        const childPath =
-          parentPath === rootId
-            ? childSegment
-            : `${parentPath}/${childSegment}`;
-        children.add(childPath);
+        if (childSegment !== '') {
+          children.add(`${parentPath}/${childSegment}`);
+        }
       }
     }
 
@@ -119,7 +141,7 @@ export function generateLazyDataLoader(
   for (const flattenedKey of flattenedKeys) {
     allKeys.add(flattenedKey);
   }
-  for (const key of allKeys) {
+  for (const key of Array.from(allKeys).sort()) {
     getIdForKey(key);
   }
 

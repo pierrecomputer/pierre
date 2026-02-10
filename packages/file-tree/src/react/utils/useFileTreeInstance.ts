@@ -24,7 +24,7 @@ interface UseFileTreeInstanceProps {
 }
 
 interface UseFileTreeInstanceReturn {
-  ref(node: HTMLElement | null): void;
+  ref(node: HTMLElement | null): void | (() => void);
 }
 
 export function useFileTreeInstance({
@@ -71,6 +71,9 @@ export function useFileTreeInstance({
   const ref = useCallback(
     (fileTreeContainer: HTMLElement | null) => {
       if (fileTreeContainer == null) {
+        instanceRef.current?.cleanUp();
+        instanceRef.current = null;
+        containerRef.current = null;
         return;
       }
 
@@ -138,9 +141,9 @@ export function useFileTreeInstance({
         // Initial mount
         containerRef.current = fileTreeContainer;
 
-        // Check if we have prerendered HTML to hydrate
-        const hasPrerenderedContent =
-          prerenderedHTML != null && existingFileTreeId != null;
+        // If markup already exists in the shadow root (typically via SSR
+        // declarative shadow DOM), hydrate it.
+        const hasPrerenderedContent = existingFileTreeId != null;
 
         instanceRef.current = createInstance(existingFileTreeId);
 
@@ -148,7 +151,6 @@ export function useFileTreeInstance({
           // SSR: hydrate the prerendered HTML
           void instanceRef.current.hydrate({
             fileTreeContainer,
-            prerenderedHTML,
           });
         } else {
           // CSR: render from scratch

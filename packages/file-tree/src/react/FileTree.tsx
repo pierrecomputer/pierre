@@ -2,6 +2,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 
 import { FILE_TREE_TAG_NAME } from '../constants';
 import type { FileTreeOptions, FileTreeSelectionItem } from '../FileTree';
@@ -35,6 +36,12 @@ export interface FileTreeProps {
   className?: string;
   style?: React.CSSProperties;
   prerenderedHTML?: string;
+  /**
+   * If provided, attach/hydrate into an existing <file-tree-container> element
+   * (typically rendered by a server component). In this mode, this component
+   * renders nothing.
+   */
+  containerId?: string;
 
   // Default (uncontrolled) state
   defaultExpandedItems?: string[];
@@ -53,6 +60,7 @@ export function FileTree({
   className,
   style,
   prerenderedHTML,
+  containerId,
   defaultExpandedItems,
   defaultSelectedItems,
   expandedItems,
@@ -73,6 +81,23 @@ export function FileTree({
     onSelectedItemsChange,
     onSelection,
   });
+
+  useEffect(() => {
+    if (containerId == null) return;
+    const el = document.getElementById(containerId);
+    if (!(el instanceof HTMLElement)) {
+      return;
+    }
+    const cleanup = ref(el);
+    return () => {
+      if (typeof cleanup === 'function') cleanup();
+      else ref(null);
+    };
+  }, [containerId, ref]);
+
+  if (containerId != null) {
+    return <></>;
+  }
   return (
     <FILE_TREE_TAG_NAME ref={ref} className={className} style={style}>
       {templateRender(children, prerenderedHTML)}

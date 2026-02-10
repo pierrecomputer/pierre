@@ -23,7 +23,6 @@ interface FileTreeRenderProps {
 
 interface FileTreeHydrationProps {
   fileTreeContainer: HTMLElement;
-  prerenderedHTML?: string;
 }
 
 export type FileTreeSearchMode = 'expand-matches' | 'collapse-non-matches';
@@ -82,7 +81,7 @@ const isBrowser = typeof document !== 'undefined';
 export class FileTree {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
-  readonly __id: string;
+  __id: string;
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
   private spriteSVG: SVGElement | undefined;
@@ -314,6 +313,16 @@ export class FileTree {
     ) {
       parentNode.appendChild(this.fileTreeContainer);
     }
+
+    // Best-effort: ensure a shadow root exists even if the custom element
+    // definition hasn't run yet.
+    if (this.fileTreeContainer.shadowRoot == null) {
+      try {
+        this.fileTreeContainer.attachShadow({ mode: 'open' });
+      } catch {
+        // ignore
+      }
+    }
     // First try to find the sprite SVG
     if (this.spriteSVG == null) {
       for (const element of Array.from(
@@ -361,8 +370,11 @@ export class FileTree {
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
-    else if (this.divWrapper.parentNode !== container) {
-      container.shadowRoot?.appendChild(this.divWrapper);
+    else {
+      const targetParent = container.shadowRoot ?? container;
+      if (this.divWrapper.parentNode !== targetParent) {
+        targetParent.appendChild(this.divWrapper);
+      }
     }
     return this.divWrapper;
   }
@@ -378,6 +390,8 @@ export class FileTree {
 
   hydrate(props: FileTreeHydrationProps): void {
     const { fileTreeContainer } = props;
+
+    let discoveredId: string | undefined;
     for (const element of Array.from(
       fileTreeContainer.shadowRoot?.children ?? []
     )) {
@@ -390,11 +404,22 @@ export class FileTree {
       }
       if (
         element instanceof HTMLDivElement &&
-        (element.dataset.fileTreeId?.startsWith('ft_srv_') ?? false)
+        element.dataset.fileTreeId != null
       ) {
-        this.divWrapper = element;
+        discoveredId ??= element.dataset.fileTreeId;
+        if (element.dataset.fileTreeId === this.__id) {
+          this.divWrapper = element;
+          break;
+        }
+        // Fallback: accept the first SSR wrapper and adopt its id.
+        this.divWrapper ??= element;
         continue;
       }
+    }
+
+    if (discoveredId != null && this.__id !== discoveredId) {
+      this.__id = discoveredId;
+      this.options = { ...this.options, id: discoveredId };
     }
     if (this.divWrapper == null) {
       console.warn('FileTree: expected html not found, rendering instead');
