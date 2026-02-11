@@ -1,11 +1,89 @@
 #!/usr/bin/env bun
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter, resolve } from 'node:path';
 
 const args = process.argv.slice(2);
 const cwd = process.cwd();
+
+const SIGNAL_EXIT_CODES: Partial<Record<NodeJS.Signals, number>> = {
+  SIGHUP: 129,
+  SIGINT: 130,
+  SIGTERM: 143,
+};
+
+const FORWARDED_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+
+let didRestoreTTY = false;
+
+process.on('exit', restoreTTY);
+
+function restoreTTY() {
+  if (didRestoreTTY) {
+    return;
+  }
+
+  didRestoreTTY = true;
+
+  if (!process.stdin.isTTY) {
+    return;
+  }
+
+  try {
+    process.stdin.setRawMode?.(false);
+  } catch {
+    // Ignore raw mode restoration errors.
+  }
+
+  try {
+    const stdinFd = process.stdin.fd;
+    if (typeof stdinFd === 'number') {
+      spawnSync('stty', ['sane'], {
+        stdio: [stdinFd, 'ignore', 'ignore'],
+      });
+    }
+  } catch {
+    // Ignore stty errors and allow normal exit handling.
+  }
+
+  try {
+    process.stdout.write('\x1b[?2004l\x1b[?2026l');
+  } catch {
+    // Ignore terminal mode restoration write errors.
+  }
+}
+
+function handleChildExit(proc: ChildProcess) {
+  const listeners = new Map<NodeJS.Signals, () => void>();
+
+  for (const signal of FORWARDED_SIGNALS) {
+    const handler = () => {
+      restoreTTY();
+
+      if (proc.exitCode === null && proc.signalCode === null) {
+        proc.kill(signal);
+      }
+    };
+
+    listeners.set(signal, handler);
+    process.on(signal, handler);
+  }
+
+  proc.on('close', (code, signal) => {
+    for (const [forwardedSignal, handler] of listeners) {
+      process.off(forwardedSignal, handler);
+    }
+
+    restoreTTY();
+
+    if (signal) {
+      process.exit(SIGNAL_EXIT_CODES[signal] ?? 1);
+    }
+
+    process.exit(code ?? 0);
+  });
+}
 
 function createScriptEnv(pkgDir: string) {
   const pathParts = [
@@ -88,7 +166,7 @@ if (pkgArg.includes('*')) {
       env: createScriptEnv(cwd),
     }
   );
-  proc.on('close', (code) => process.exit(code ?? 0));
+  handleChildExit(proc);
 } else {
   // Single package: run directly so stdin/stdout pass through cleanly
   const pkgDir = resolvePackageDir(pkgArg);
@@ -129,5 +207,5 @@ if (pkgArg.includes('*')) {
           env: scriptEnv,
         });
       })();
-  proc.on('close', (code) => process.exit(code ?? 0));
+  handleChildExit(proc);
 }
