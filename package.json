@@ -16,6 +16,7 @@
       "@octokit/rest": "22.0.0",
       "@pierre/icons": "0.1.0",
       "@pierre/storage": "0.0.10",
+      "@playwright/test": "1.51.1",
       "@radix-ui/react-avatar": "1.1.10",
       "@radix-ui/react-dialog": "1.1.15",
       "@radix-ui/react-dropdown-menu": "2.1.16",

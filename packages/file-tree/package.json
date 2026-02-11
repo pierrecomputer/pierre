@@ -36,6 +36,9 @@
     "build": "tsdown --clean",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
+    "test:e2e": "bun run build && (bun ./test/e2e/check-playwright-binary.ts || bun run test:e2e:installbinary) && bunx playwright test -c test/e2e/playwright.config.ts",
+    "test:e2e:installbinary": "bunx playwright@1.51.1 install chromium",
+    "test:e2e:server": "vite --config test/e2e/vite.config.ts",
     "tsc": "tsgo --noEmit --pretty",
     "prepublishOnly": "bun run build"
   },
@@ -46,6 +49,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
+    "@playwright/test": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "autoprefixer": "catalog:",
@@ -54,7 +58,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:"
   },
   "peerDependencies": {
     "react": "^19.0.0",

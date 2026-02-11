@@ -2,9 +2,23 @@
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { delimiter, resolve } from 'node:path';
 
 const args = process.argv.slice(2);
+const cwd = process.cwd();
+
+function createScriptEnv(pkgDir: string) {
+  const pathParts = [
+    resolve(pkgDir, 'node_modules/.bin'),
+    resolve(cwd, 'node_modules/.bin'),
+    process.env.PATH ?? '',
+  ];
+  return {
+    ...process.env,
+    FORCE_COLOR: '1',
+    PATH: pathParts.join(delimiter),
+  };
+}
 
 // Check for --verbose or -v flag (kept for backwards compat, now a no-op)
 const verboseIndex = args.findIndex(
@@ -70,8 +84,8 @@ if (pkgArg.includes('*')) {
     ['run', '-F', filter, '--elide-lines=0', ...scriptArgs],
     {
       stdio: 'inherit',
-      cwd: process.cwd(),
-      env: { ...process.env, FORCE_COLOR: '1' },
+      cwd,
+      env: createScriptEnv(cwd),
     }
   );
   proc.on('close', (code) => process.exit(code ?? 0));
@@ -99,14 +113,20 @@ if (pkgArg.includes('*')) {
   const needsShell = /&&|\|\||[|;]/.test(scriptCmd);
   const fullCmd =
     restArgs.length > 0 ? `${scriptCmd} ${restArgs.join(' ')}` : scriptCmd;
+  const scriptEnv = createScriptEnv(pkgDir);
 
   const proc = needsShell
-    ? spawn('sh', ['-c', fullCmd], { stdio: 'inherit', cwd: pkgDir })
+    ? spawn('sh', ['-c', fullCmd], {
+        stdio: 'inherit',
+        cwd: pkgDir,
+        env: scriptEnv,
+      })
     : (() => {
         const cmdParts = scriptCmd.split(/\s+/);
         return spawn(cmdParts[0], [...cmdParts.slice(1), ...restArgs], {
           stdio: 'inherit',
           cwd: pkgDir,
+          env: scriptEnv,
         });
       })();
   proc.on('close', (code) => process.exit(code ?? 0));

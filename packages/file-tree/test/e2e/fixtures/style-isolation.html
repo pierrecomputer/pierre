@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>file-tree style isolation fixture</title>
+    <style>
+      /* Should style only light DOM */
+      #some-known-internal-id {
+        color: rgb(0, 128, 0) !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="some-known-internal-id" data-test-outside-duplicate-id>
+      outside duplicate-id control
+    </div>
+    <div
+      data-test-outside-pseudo-item
+      data-type="item"
+      data-item-selected="true"
+    >
+      outside pseudo file-tree item
+    </div>
+    <file-tree-container id="test-tree-host"></file-tree-container>
+
+    <script type="module">
+      import '/dist/web-components.js';
+      import { FileTree } from '/dist/index.js';
+
+      const host = document.getElementById('test-tree-host');
+      host.style.setProperty('--ft-selected-background-color', 'rgb(1, 2, 3)');
+      host.style.setProperty('--ft-color-foreground', 'rgb(40, 40, 40)');
+
+      const fileTree = new FileTree(
+        {
+          files: ['README.md', 'src/index.ts'],
+          flattenEmptyDirectories: false,
+        },
+        {
+          defaultExpandedItems: ['src'],
+          defaultSelectedItems: ['src/index.ts'],
+        }
+      );
+      fileTree.render({ fileTreeContainer: host });
+
+      const waitForShadowTree = async () => {
+        const started = performance.now();
+        while (true) {
+          const root = host.shadowRoot;
+          if (root != null && root.querySelector('[role="treeitem"]') != null) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for file-tree render');
+          }
+          await new Promise((resolve) => setTimeout(resolve, 16));
+        }
+      };
+
+      await waitForShadowTree();
+      const root = host.shadowRoot;
+
+      const insideMatch = root?.querySelector('[data-type="item"]');
+      if (insideMatch != null) {
+        insideMatch.id = 'some-known-internal-id';
+        insideMatch.setAttribute('data-test-shadow-dup-id', 'true');
+      }
+
+      const selectedItem = root?.querySelector('[data-item-selected="true"]');
+      if (selectedItem != null) {
+        selectedItem.setAttribute('data-test-selected-item', 'true');
+      }
+
+      window.__fileTreeFixtureReady = true;
+    </script>
+  </body>
+</html>

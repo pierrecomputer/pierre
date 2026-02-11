@@ -134,6 +134,18 @@ packages. e.g. `bun run lint`
 We use Bun's built-in testing framework for unit tests. Tests are located in a
 `test/` folder within each package, separate from the source code.
 
+### Test Strategy
+
+- Prefer unit/integration tests (`bun test`) by default.
+- Add Playwright/browser E2E tests only when behavior cannot be validated
+  without a real browser engine.
+- Good Playwright candidates include computed style checks, shadow DOM
+  encapsulation boundaries, and browser-only rendering behavior.
+- Keep E2E coverage intentionally small and high-value.
+- Prefer explicit assertions over broad snapshots.
+- Avoid snapshot tests unless they are shallow and narrowly scoped to the exact
+  behavior under test.
+
 ### Running Tests
 
 For the diffs package:

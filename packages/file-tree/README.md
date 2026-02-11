@@ -124,6 +124,11 @@ From `packages/file-tree`:
 
 ```bash
 bun test
+bun run test:e2e
 bun run tsc
 bun run build
 ```
+
+Testing policy and E2E guidance:
+
+- `test/TESTING.md`
