@@ -3,6 +3,7 @@
 import '@pierre/file-tree/web-components';
 import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/file-tree';
 import { FileTree } from '@pierre/file-tree';
+import { expandImplicitParentDirectories } from '@pierre/file-tree';
 import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
 import {
   startTransition,
@@ -683,8 +684,8 @@ function ReactSSRControlled({
   stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
-  const [expandedItems, setExpandedItems] = useState<string[]>(
-    stateConfig?.defaultExpandedItems ?? []
+  const [expandedItems, setExpandedItems] = useState<string[]>(() =>
+    expandImplicitParentDirectories(stateConfig?.defaultExpandedItems ?? [])
   );
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const { log, addLog } = useStateLog();
@@ -717,7 +718,12 @@ function ReactSSRControlled({
             className="rounded-sm border px-2 py-1 text-xs"
             style={{ borderColor: 'var(--color-border)' }}
             onClick={() =>
-              handleExpandedChange([...expandedItems, 'src/components'])
+              handleExpandedChange(
+                expandImplicitParentDirectories([
+                  ...expandedItems,
+                  'src/components',
+                ])
+              )
             }
           >
             Expand src/components
