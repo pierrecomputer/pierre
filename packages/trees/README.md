@@ -1,4 +1,4 @@
-# @pierre/file-tree
+# @pierre/trees
 
 File tree UI built on `@headless-tree/core`, shipped as:
 
@@ -12,13 +12,13 @@ its shadow root (SSR and CSR).
 ## Install
 
 ```bash
-bun add @pierre/file-tree
+bun add @pierre/trees
 ```
 
 ## Vanilla Usage
 
 ```ts
-import { FileTree } from '@pierre/file-tree';
+import { FileTree } from '@pierre/trees';
 
 const ft = new FileTree({
   files: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
@@ -40,7 +40,7 @@ ft.cleanUp();
 ```tsx
 'use client';
 
-import { FileTree } from '@pierre/file-tree/react';
+import { FileTree } from '@pierre/trees/react';
 
 export function Example({ files }: { files: string[] }) {
   return (
@@ -63,7 +63,7 @@ styles in the shadow root. Declarative Shadow DOM is the intended path.
 ### 1) Server: generate shadow-root HTML
 
 ```tsx
-import { createFileTreeSsrPayload } from '@pierre/file-tree/ssr';
+import { createFileTreeSsrPayload } from '@pierre/trees/ssr';
 
 export function FileTreeSsr({ files }: { files: string[] }) {
   const payload = createFileTreeSsrPayload({
@@ -91,7 +91,7 @@ With React:
 ```tsx
 'use client';
 
-import { FileTree } from '@pierre/file-tree/react';
+import { FileTree } from '@pierre/trees/react';
 
 export function FileTreeHydrate({
   id,
@@ -107,7 +107,7 @@ export function FileTreeHydrate({
 Or with the imperative API:
 
 ```ts
-import { FileTree } from '@pierre/file-tree';
+import { FileTree } from '@pierre/trees';
 
 const ft = new FileTree({ files });
 ft.hydrate({ fileTreeContainer: document.getElementById(id)! });
@@ -120,7 +120,7 @@ The custom element exposes CSS variables (e.g. `--ft-font-family`,
 
 ## Development
 
-From `packages/file-tree`:
+From `packages/trees`:
 
 ```bash
 bun test

@@ -8,6 +8,6 @@ if (existsSync(executablePath)) {
 }
 
 console.error(
-  `[file-tree:e2e] Missing Playwright Chromium binary at: ${executablePath}`
+  `[trees:e2e] Missing Playwright Chromium binary at: ${executablePath}`
 );
 process.exit(1);

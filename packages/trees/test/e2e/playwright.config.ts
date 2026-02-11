@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const e2ePort = 4173;
 const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
-const e2eOutputDir = '/tmp/pierre-file-tree-playwright-results';
+const e2eOutputDir = '/tmp/pierre-trees-playwright-results';
 
 export default defineConfig({
   testDir: '.',

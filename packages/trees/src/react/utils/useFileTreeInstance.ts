@@ -9,7 +9,6 @@ import {
 
 interface UseFileTreeInstanceProps {
   options: FileTreeOptions;
-  prerenderedHTML: string | undefined;
 
   // Default (uncontrolled) state
   defaultExpandedItems?: string[];
@@ -29,7 +28,6 @@ interface UseFileTreeInstanceReturn {
 
 export function useFileTreeInstance({
   options,
-  prerenderedHTML,
   defaultExpandedItems,
   defaultSelectedItems,
   expandedItems,
@@ -164,7 +162,7 @@ export function useFileTreeInstance({
         containerRef.current = null;
       };
     },
-    [options, prerenderedHTML]
+    [options]
   );
 
   // Sync controlled expanded items imperatively (no tree recreation)

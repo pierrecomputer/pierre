@@ -72,7 +72,6 @@ export function FileTree({
   const children = renderFileTreeChildren();
   const { ref } = useFileTreeInstance({
     options,
-    prerenderedHTML,
     defaultExpandedItems,
     defaultSelectedItems,
     expandedItems,

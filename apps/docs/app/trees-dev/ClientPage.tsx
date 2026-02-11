@@ -1,10 +1,10 @@
 'use client';
 
-import '@pierre/file-tree/web-components';
-import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/file-tree';
-import { FileTree } from '@pierre/file-tree';
-import { expandImplicitParentDirectories } from '@pierre/file-tree';
-import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
+import '@pierre/trees/web-components';
+import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
+import { expandImplicitParentDirectories } from '@pierre/trees';
+import { FileTree as FileTreeReact } from '@pierre/trees/react';
 import {
   startTransition,
   useCallback,
@@ -353,7 +353,7 @@ function VanillaServerRendered({
         instanceRef.current = null;
       };
     },
-    [options, stateConfig, prerenderedHTML]
+    [options, stateConfig]
   );
 
   return (
@@ -444,7 +444,7 @@ function StateLog({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+    if (ref.current != null) ref.current.scrollTop = ref.current.scrollHeight;
   }, [entries]);
 
   const boldIndices = useMemo(() => {
@@ -553,7 +553,7 @@ function VanillaSSRState({
         instanceRef.current = null;
       };
     },
-    [options, mergedStateConfig, prerenderedHTML]
+    [options, mergedStateConfig]
   );
 
   return (

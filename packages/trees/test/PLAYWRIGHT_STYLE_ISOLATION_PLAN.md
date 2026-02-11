@@ -17,12 +17,12 @@ browser engine.
 
 ## Test Surface
 
-Target package: `packages/file-tree`
+Target package: `packages/trees`
 
 Fixture style:
 
 - Static HTML fixture loaded by Playwright.
-- Uses built package outputs from `packages/file-tree/dist`.
+- Uses built package outputs from `packages/trees/dist`.
 - Renders one `file-tree-container` via `FileTree` and adds explicit control
   nodes outside the component.
 
@@ -68,10 +68,10 @@ Checks:
 
 ## Implementation Steps
 
-1. Add Playwright dependency and scripts for `packages/file-tree`.
-2. Add Playwright config in `packages/file-tree` and run tests in Chromium.
-3. Add static fixture page under `packages/file-tree/test/e2e/fixtures`.
-4. Add spec file under `packages/file-tree/test/e2e` with three tests above.
+1. Add Playwright dependency and scripts for `packages/trees`.
+2. Add Playwright config in `packages/trees` and run tests in Chromium.
+3. Add static fixture page under `packages/trees/test/e2e/fixtures`.
+4. Add spec file under `packages/trees/test/e2e` with three tests above.
 5. Run tests and stabilize selectors/assertions.
 
 ## Non-goals (This Pass)

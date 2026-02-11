@@ -13,7 +13,7 @@
       "path": "../../packages/diffs/tsconfig.json"
     },
     {
-      "path": "../../packages/file-tree/tsconfig.json"
+      "path": "../../packages/trees/tsconfig.json"
     },
     {
       "path": "../../packages/storage-elements-next/tsconfig.json"

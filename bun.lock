@@ -43,8 +43,8 @@
       "dependencies": {
         "@icons-pack/react-simple-icons": "catalog:",
         "@pierre/diffs": "workspace:*",
-        "@pierre/file-tree": "workspace:*",
         "@pierre/icons": "catalog:",
+        "@pierre/trees": "workspace:*",
         "@radix-ui/react-avatar": "catalog:",
         "@radix-ui/react-dialog": "catalog:",
         "@radix-ui/react-dropdown-menu": "catalog:",
@@ -122,33 +122,6 @@
         "react-dom": "^18.3.1 || ^19.0.0",
       },
     },
-    "packages/file-tree": {
-      "name": "@pierre/file-tree",
-      "version": "0.0.1-beta.2",
-      "dependencies": {
-        "@headless-tree/core": "catalog:",
-        "preact": "catalog:",
-        "preact-render-to-string": "catalog:",
-      },
-      "devDependencies": {
-        "@arethetypeswrong/core": "catalog:",
-        "@playwright/test": "catalog:",
-        "@types/react": "catalog:",
-        "@types/react-dom": "catalog:",
-        "autoprefixer": "catalog:",
-        "jsdom": "catalog:",
-        "postcss": "catalog:",
-        "react": "catalog:",
-        "react-dom": "catalog:",
-        "tsdown": "catalog:",
-        "typescript": "catalog:",
-        "vite": "catalog:",
-      },
-      "peerDependencies": {
-        "react": "^19.0.0",
-        "react-dom": "^19.0.0",
-      },
-    },
     "packages/storage-elements": {
       "name": "@pierre/storage-elements",
       "version": "0.0.2",
@@ -191,6 +164,33 @@
       },
       "peerDependencies": {
         "next": ">=15",
+      },
+    },
+    "packages/trees": {
+      "name": "@pierre/trees",
+      "version": "0.0.1-beta.2",
+      "dependencies": {
+        "@headless-tree/core": "catalog:",
+        "preact": "catalog:",
+        "preact-render-to-string": "catalog:",
+      },
+      "devDependencies": {
+        "@arethetypeswrong/core": "catalog:",
+        "@playwright/test": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "autoprefixer": "catalog:",
+        "jsdom": "catalog:",
+        "postcss": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "tsdown": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+      },
+      "peerDependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
       },
     },
   },
@@ -640,8 +640,6 @@
 
     "@pierre/docs": ["@pierre/docs@workspace:apps/docs"],
 
-    "@pierre/file-tree": ["@pierre/file-tree@workspace:packages/file-tree"],
-
     "@pierre/icons": ["@pierre/icons@0.1.0", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-wZIUPQSAJ+iE+748Lbm/6AqhPLlyJ+xgqGNxWKQc89DAGg1Z7+OlJs8rC/uepcBtG2cZf220WpTYsNdkFZPtNQ=="],
 
     "@pierre/storage": ["@pierre/storage@0.0.10", "", { "dependencies": { "jose": "^5.10.0", "snakecase-keys": "^9.0.2" } }, "sha512-fDFrsnRiNTq7lpY56MGE4vRjYAHfTFLsxN18wbnxBlOk1XB1pxzgMfx5DwiqRcXs8+Gt2lmeXvlYAa1gGR4c7w=="],
@@ -649,6 +647,8 @@
     "@pierre/storage-elements": ["@pierre/storage-elements@workspace:packages/storage-elements"],
 
     "@pierre/storage-elements-next": ["@pierre/storage-elements-next@workspace:packages/storage-elements-next"],
+
+    "@pierre/trees": ["@pierre/trees@workspace:packages/trees"],
 
     "@playwright/test": ["@playwright/test@1.51.1", "", { "dependencies": { "playwright": "1.51.1" }, "bin": { "playwright": "cli.js" } }, "sha512-nM+kEaTSAoVlXmMPH10017vn3FSiFqr/bh4fKg9vmAdMfd9SDqRZNvPSiAHADc/itWak+qPvMPZQOPwCBW7k7Q=="],
 

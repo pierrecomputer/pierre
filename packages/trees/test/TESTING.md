@@ -34,12 +34,12 @@ If a unit test can prove behavior, write a unit test instead.
 From repo root:
 
 ```bash
-bun ws file-tree test
-bun ws file-tree test:e2e
+bun ws trees test
+bun ws trees test:e2e
 ```
 
 `test:e2e` automatically:
 
-1. builds `packages/file-tree/dist`
+1. builds `packages/trees/dist`
 2. installs Chromium binary if missing
 3. runs Playwright tests

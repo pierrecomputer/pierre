@@ -42,7 +42,7 @@ jobs:
           name: build-output
           path: |
             packages/diffs/dist/
-            packages/file-tree/dist/
+            packages/trees/dist/
             packages/storage-elements/dist/
             packages/storage-elements-next/dist/
             apps/docs/.source/
@@ -175,11 +175,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
-      - name: Install Playwright browser - file-tree
+      - name: Install Playwright browser - trees
         run: bunx playwright@1.51.1 install --with-deps chromium
 
-      - name: Run tests - file-tree e2e
-        run: bun ws file-tree test:e2e
+      - name: Run tests - trees e2e
+        run: bun ws trees test:e2e
 
   typecheck:
     name: TypeScript

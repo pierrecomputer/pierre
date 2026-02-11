@@ -123,7 +123,9 @@ describe('SSR + declarative shadow DOM', () => {
 
   test('FileTree.hydrate falls back to renderRoot when no SSR wrapper is found', () => {
     const container = document.createElement('file-tree-container');
-    container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    if (container.shadowRoot == null) {
+      container.attachShadow({ mode: 'open' });
+    }
 
     const warn = console.warn;
     let warned = 0;
