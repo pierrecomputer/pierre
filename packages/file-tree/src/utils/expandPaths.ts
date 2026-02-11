@@ -64,6 +64,68 @@ export function filterOrphanedPaths(
   });
 }
 
+export function buildDirectChildCountMap(
+  pathToId: Map<string, string>
+): Map<string, number> {
+  const childCount = new Map<string, number>();
+  for (const key of pathToId.keys()) {
+    if (key.startsWith('f::') || key === 'root') continue;
+    const lastSlash = key.lastIndexOf('/');
+    if (lastSlash === -1) continue;
+    const parent = key.substring(0, lastSlash);
+    childCount.set(parent, (childCount.get(parent) ?? 0) + 1);
+  }
+  return childCount;
+}
+
+export function isOrphanedPathForExpandedSet(
+  path: string,
+  expandedSet: ReadonlySet<string>,
+  pathToId: Map<string, string>,
+  options?: {
+    flattenEmptyDirectories?: boolean;
+    childCount?: Map<string, number>;
+  }
+): boolean {
+  const flattenEmptyDirectories = options?.flattenEmptyDirectories;
+  const childCount = options?.childCount ?? buildDirectChildCountMap(pathToId);
+
+  const isFlattenedPath = pathToId.has('f::' + path);
+  const parts = path.split('/');
+  for (let i = 1; i < parts.length; i++) {
+    const ancestor = parts.slice(0, i).join('/');
+
+    // Skip ancestors that aren't actual tree nodes (e.g. intermediate
+    // segments in flattened paths that don't exist in the data at all)
+    if (!pathToId.has(ancestor) && !pathToId.has('f::' + ancestor)) {
+      continue;
+    }
+
+    // Ancestor is expanded → OK
+    if (expandedSet.has(ancestor)) {
+      continue;
+    }
+
+    // Ancestor is NOT expanded. If flattening is enabled, this path is a
+    // flattened endpoint (f::path exists) and the ancestor is an interior
+    // node (single child), it's invisible in the tree → skip it.
+    // Without flattening, all folders are real visible nodes — their
+    // expansion state matters.
+    if (
+      flattenEmptyDirectories !== false &&
+      isFlattenedPath &&
+      childCount.get(ancestor) === 1
+    ) {
+      continue;
+    }
+
+    // Ancestor is a real, visible node but not expanded → path is orphaned
+    return true;
+  }
+
+  return false;
+}
+
 export interface ExpandPathsOptions {
   flattenEmptyDirectories?: boolean;
   cache?: Map<string, string[]>;

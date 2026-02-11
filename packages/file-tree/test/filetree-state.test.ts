@@ -292,6 +292,47 @@ for (const cfg of TEST_CONFIGS) {
       expect(afterRoundTripNames).not.toContain('assets');
     });
 
+    test('collapse parent then re-expand restores subtree expansion state after round-trip', () => {
+      const ft = createTestTree(deepFiles, cfg, {
+        defaultExpandedItems: ['Build/assets/images/social'],
+      });
+
+      // Deep file visible when the subtree is expanded
+      expect(ft.tree.getItems().map((i) => i.getItemName())).toContain(
+        'og.png'
+      );
+
+      // Collapse Build and round-trip (as in controlled React state)
+      ft.collapseItem('Build');
+      ft.setExpandedItems(ft.getExpandedItems());
+
+      // Re-expand Build via the tree (simulate user clicking the folder):
+      // add ONLY the Build ID without touching descendant expansion IDs.
+      const buildId =
+        cfg.flattenEmptyDirectories === true
+          ? (ft.pathToId.get('f::Build') ?? ft.pathToId.get('Build'))
+          : ft.pathToId.get('Build');
+      expect(buildId).toBeDefined();
+      {
+        const current = ft.tree.getState().expandedItems ?? [];
+        if (buildId != null && !current.includes(buildId)) {
+          ft.tree.applySubStateUpdate('expandedItems', () => [
+            ...current,
+            buildId,
+          ]);
+          ft.tree.scheduleRebuildTree();
+          ft.tree.rebuildTree();
+        }
+      }
+
+      // Controlled round-trip after the click.
+      ft.setExpandedItems(ft.getExpandedItems());
+
+      expect(ft.tree.getItems().map((i) => i.getItemName())).toContain(
+        'og.png'
+      );
+    });
+
     test('collapsing Build/assets/images stays collapsed after round-trip', () => {
       const ft = createTestTree(deepFiles, cfg, {
         defaultExpandedItems: ['Build/assets/images/social'],

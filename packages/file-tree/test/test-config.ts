@@ -12,9 +12,12 @@ import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
 import { generateLazyDataLoader } from '../src/loader/lazy';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';
+import { expandImplicitParentDirectories } from '../src/utils/expandImplicitParentDirectories';
 import {
+  buildDirectChildCountMap,
   expandPathsWithAncestors,
   filterOrphanedPaths,
+  isOrphanedPathForExpandedSet,
 } from '../src/utils/expandPaths';
 
 export interface TestConfig {
@@ -180,10 +183,48 @@ export function createTestTree(
 
   // Mirror FileTree.setExpandedItems
   const setExpandedItems = (paths: string[]) => {
+    const desiredExpandedSet = new Set(expandImplicitParentDirectories(paths));
+    const childCount = buildDirectChildCountMap(pathToId);
+
+    const currentIds = tree.getState().expandedItems ?? [];
+    const currentPaths = [
+      ...new Set(
+        currentIds
+          .map((id) => idToPath.get(id))
+          .filter((path): path is string => path != null)
+          .map(getSelectionPath)
+      ),
+    ];
+    const hiddenPathsToPreserve = currentPaths.filter((path) => {
+      if (desiredExpandedSet.has(path)) return false;
+      return isOrphanedPathForExpandedSet(path, desiredExpandedSet, pathToId, {
+        flattenEmptyDirectories,
+        childCount,
+      });
+    });
+
     const ids = expandPathsWithAncestors(paths, pathToId, {
       flattenEmptyDirectories,
     });
-    tree.applySubStateUpdate('expandedItems', () => ids);
+
+    const preserveIds = hiddenPathsToPreserve
+      .map((path) => {
+        if (path.startsWith(FLATTENED_PREFIX)) {
+          return pathToId.get(path);
+        }
+        return flattenEmptyDirectories
+          ? (pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path))
+          : pathToId.get(path);
+      })
+      .filter((id): id is string => id != null);
+
+    if (preserveIds.length === 0) {
+      tree.applySubStateUpdate('expandedItems', () => ids);
+    } else {
+      const next = new Set<string>(ids);
+      for (const id of preserveIds) next.add(id);
+      tree.applySubStateUpdate('expandedItems', () => Array.from(next));
+    }
     tree.scheduleRebuildTree();
     // Force sync rebuild for testing (scheduleRebuildTree is lazy)
     tree.rebuildTree();

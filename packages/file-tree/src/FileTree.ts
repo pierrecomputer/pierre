@@ -4,9 +4,12 @@ import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME, FLATTENED_PREFIX } from './constants';
 import { SVGSpriteSheet } from './sprite';
 import { type FileTreeNode } from './types';
+import { expandImplicitParentDirectories } from './utils/expandImplicitParentDirectories';
 import {
+  buildDirectChildCountMap,
   expandPathsWithAncestors,
   filterOrphanedPaths,
+  isOrphanedPathForExpandedSet,
 } from './utils/expandPaths';
 import {
   preactHydrateRoot,
@@ -94,6 +97,8 @@ export class FileTree {
 
   private expandPathsCache: Map<string, string[]> = new Map();
   private expandPathsCacheFor: Map<string, string> | null = null;
+  private childCountCache: Map<string, number> | null = null;
+  private childCountCacheFor: Map<string, string> | null = null;
 
   constructor(
     public options: FileTreeOptions,
@@ -121,11 +126,77 @@ export class FileTree {
       this.expandPathsCache.clear();
       this.expandPathsCacheFor = handle.pathToId;
     }
+    if (this.childCountCacheFor !== handle.pathToId) {
+      this.childCountCache = buildDirectChildCountMap(handle.pathToId);
+      this.childCountCacheFor = handle.pathToId;
+    }
+
+    // Preserve hidden subtree expansion state even when the controlled
+    // expandedItems list omits descendants (e.g. when collapsing an ancestor).
+    // This avoids losing subtree state in controlled mode, and prevents
+    // "flash closed then reopen" behavior on round-trips.
+    const desiredExpandedSet = new Set(expandImplicitParentDirectories(items));
+
+    const currentIds = handle.tree.getState().expandedItems ?? [];
+    const currentPaths: string[] = [];
+    {
+      const seen = new Set<string>();
+      for (const id of currentIds) {
+        const raw = handle.idToPath.get(id);
+        if (raw == null) continue;
+        const path = raw.startsWith(FLATTENED_PREFIX)
+          ? raw.slice(FLATTENED_PREFIX.length)
+          : raw;
+        if (path === 'root' || path === '') continue;
+        if (seen.has(path)) continue;
+        seen.add(path);
+        currentPaths.push(path);
+      }
+    }
+
+    const hiddenPathsToPreserve: string[] = [];
+    for (const path of currentPaths) {
+      if (desiredExpandedSet.has(path)) continue;
+      if (
+        isOrphanedPathForExpandedSet(
+          path,
+          desiredExpandedSet,
+          handle.pathToId,
+          {
+            flattenEmptyDirectories: this.options.flattenEmptyDirectories,
+            childCount: this.childCountCache ?? undefined,
+          }
+        )
+      ) {
+        hiddenPathsToPreserve.push(path);
+      }
+    }
+
     const ids = expandPathsWithAncestors(items, handle.pathToId, {
       flattenEmptyDirectories: this.options.flattenEmptyDirectories,
       cache: this.expandPathsCache,
     });
-    handle.tree.applySubStateUpdate('expandedItems', () => ids);
+    const flattenEmptyDirectories =
+      this.options.flattenEmptyDirectories === true;
+    const preserveIds = hiddenPathsToPreserve
+      .map((path) => {
+        if (path.startsWith(FLATTENED_PREFIX)) {
+          return handle.pathToId.get(path);
+        }
+        return flattenEmptyDirectories
+          ? (handle.pathToId.get(FLATTENED_PREFIX + path) ??
+              handle.pathToId.get(path))
+          : handle.pathToId.get(path);
+      })
+      .filter((id): id is string => id != null);
+
+    if (preserveIds.length === 0) {
+      handle.tree.applySubStateUpdate('expandedItems', () => ids);
+    } else {
+      const next = new Set<string>(ids);
+      for (const id of preserveIds) next.add(id);
+      handle.tree.applySubStateUpdate('expandedItems', () => Array.from(next));
+    }
     // Schedule a lazy rebuild so getItems() returns updated children on the
     // next render. applySubStateUpdate already triggers a re-render via the
     // config setState chain; scheduleRebuildTree just sets a flag that
