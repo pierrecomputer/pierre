@@ -662,6 +662,14 @@ export function Root({
     onSelectedItemsChange(paths);
   }, [selectedSnapshot, callbacksRef, tree, idToPath]);
 
+  // When tree mounts with initial search in state, run setSearch once so expand/collapse filter is applied.
+  useEffect(() => {
+    const search = tree.getState().search;
+    if (search != null && search.length > 0) {
+      tree.setSearch(search);
+    }
+  }, [tree]);
+
   const { onChange, ...origSearchInputProps } =
     tree.getSearchInputElementProps();
   const hasFocusedItem = tree.getState().focusedItem != null;
