@@ -235,9 +235,11 @@ function ExampleCard({
   return (
     <div className="@container/card">
       <h2 className="text-sm font-bold">{title}</h2>
-      <p className="text-muted-foreground mb-2 text-xs">{description}</p>
+      <p className="text-muted-foreground mb-2 min-h-[3rem] text-xs">
+        {description}
+      </p>
       {controls !== undefined && (
-        <div className="mb-2 h-[60px]">{controls}</div>
+        <div className="mb-2 h-[68px]">{controls}</div>
       )}
       <div
         className="overflow-hidden rounded-md p-5"
@@ -559,7 +561,7 @@ function VanillaSSRState({
       title="Vanilla (SSR) — Imperative State"
       description="Vanilla FileTree hydrated from SSR, with imperative expand/collapse/selection buttons and state change logging"
       controls={
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             className="rounded-sm border px-2 py-1 text-xs"
@@ -594,22 +596,20 @@ function VanillaSSRState({
           </button>
         </div>
       }
-    >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
-        <div className="h-[320px] overflow-auto">
-          <file-tree-container
-            ref={ref}
-            dangerouslySetInnerHTML={{
-              __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-            }}
-            suppressHydrationWarning
-          />
-        </div>
+      footer={
         <StateLog
           entries={log}
-          className="h-[320px] overflow-y-auto rounded border p-2 font-mono text-xs"
+          className="mt-3 h-[140px] overflow-y-auto rounded border p-2 font-mono text-xs"
         />
-      </div>
+      }
+    >
+      <file-tree-container
+        ref={ref}
+        dangerouslySetInnerHTML={{
+          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
+        }}
+        suppressHydrationWarning
+      />
     </ExampleCard>
   );
 }
@@ -636,35 +636,33 @@ function ReactSSRUncontrolled({
       title="React (SSR) — Uncontrolled"
       description="React FileTree with SSR, using onExpandedItemsChange to observe state without controlling it"
       controls={null}
-    >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
-        <div className="h-[320px] overflow-auto">
-          <file-tree-container
-            id={containerId}
-            dangerouslySetInnerHTML={{
-              __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-            }}
-            suppressHydrationWarning
-          />
-          <FileTreeReact
-            containerId={containerId}
-            options={options}
-            defaultExpandedItems={stateConfig?.defaultExpandedItems}
-            defaultSelectedItems={stateConfig?.defaultSelectedItems}
-            onSelection={stateConfig?.onSelection}
-            onExpandedItemsChange={(items) => {
-              addLog(`expanded: [${items.join(', ')}]`);
-            }}
-            onSelectedItemsChange={(items) => {
-              addLog(`selected: [${items.join(', ')}]`);
-            }}
-          />
-        </div>
+      footer={
         <StateLog
           entries={log}
-          className="h-[320px] overflow-y-auto rounded border p-2 font-mono text-xs"
+          className="mt-3 h-[140px] overflow-y-auto rounded border p-2 font-mono text-xs"
         />
-      </div>
+      }
+    >
+      <file-tree-container
+        id={containerId}
+        dangerouslySetInnerHTML={{
+          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
+        }}
+        suppressHydrationWarning
+      />
+      <FileTreeReact
+        containerId={containerId}
+        options={options}
+        defaultExpandedItems={stateConfig?.defaultExpandedItems}
+        defaultSelectedItems={stateConfig?.defaultSelectedItems}
+        onSelection={stateConfig?.onSelection}
+        onExpandedItemsChange={(items) => {
+          addLog(`expanded: [${items.join(', ')}]`);
+        }}
+        onSelectedItemsChange={(items) => {
+          addLog(`selected: [${items.join(', ')}]`);
+        }}
+      />
     </ExampleCard>
   );
 }
@@ -712,7 +710,7 @@ function ReactSSRControlled({
       title="React (SSR) — Controlled"
       description="React FileTree with SSR, expandedItems and selectedItems fully controlled by React state"
       controls={
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             className="rounded-sm border px-2 py-1 text-xs"
@@ -754,31 +752,29 @@ function ReactSSRControlled({
           </button>
         </div>
       }
-    >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
-        <div className="h-[320px] overflow-auto">
-          <file-tree-container
-            id={containerId}
-            dangerouslySetInnerHTML={{
-              __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-            }}
-            suppressHydrationWarning
-          />
-          <FileTreeReact
-            containerId={containerId}
-            options={options}
-            onSelection={stateConfig?.onSelection}
-            expandedItems={expandedItems}
-            onExpandedItemsChange={handleExpandedChange}
-            selectedItems={selectedItems}
-            onSelectedItemsChange={handleSelectedChange}
-          />
-        </div>
+      footer={
         <StateLog
           entries={log}
-          className="h-[320px] overflow-y-auto rounded border p-2 font-mono text-xs"
+          className="mt-3 h-[140px] overflow-y-auto rounded border p-2 font-mono text-xs"
         />
-      </div>
+      }
+    >
+      <file-tree-container
+        id={containerId}
+        dangerouslySetInnerHTML={{
+          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
+        }}
+        suppressHydrationWarning
+      />
+      <FileTreeReact
+        containerId={containerId}
+        options={options}
+        onSelection={stateConfig?.onSelection}
+        expandedItems={expandedItems}
+        onExpandedItemsChange={handleExpandedChange}
+        selectedItems={selectedItems}
+        onSelectedItemsChange={handleSelectedChange}
+      />
     </ExampleCard>
   );
 }
