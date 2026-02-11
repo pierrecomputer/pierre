@@ -4,7 +4,6 @@ import {
   A11ySection,
   DragDropSection,
   FlatteningSection,
-  HugeDatasetSection,
   PathColorsSection,
   SearchSection,
   ThemingSection,
@@ -37,7 +36,6 @@ export default function TreesHome() {
         <SearchSection />
         <A11ySection />
         <ThemingSection />
-        <HugeDatasetSection />
       </section>
 
       <PierreCompanySection />
