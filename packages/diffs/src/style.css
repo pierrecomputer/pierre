@@ -610,6 +610,7 @@
     display: flex;
     align-items: center;
     background-color: var(--diffs-bg);
+    height: 100%;
   }
 
   [data-content] [data-separator-wrapper] {
@@ -619,7 +620,7 @@
   [data-separator='metadata'] [data-separator-wrapper] {
     inset-inline: 100% auto;
     padding-inline: 1ch;
-    height: 32px;
+    height: 100%;
     background-color: var(--diffs-bg-separator);
     color: var(--diffs-fg-number);
     white-space: nowrap;
@@ -667,7 +668,7 @@
     flex-shrink: 0;
     cursor: pointer;
     min-width: 32px;
-    height: 32px;
+    align-self: stretch;
     color: var(--diffs-fg-number);
     border-right: 2px solid var(--diffs-bg);
 
@@ -683,7 +684,7 @@
   [data-separator-content] {
     flex: 1 1 auto;
     padding: 0 1ch;
-    height: 32px;
+    height: 100%;
     color: var(--diffs-fg-number);
 
     overflow: hidden;
@@ -693,7 +694,7 @@
   [data-separator='line-info'],
   [data-separator='line-info-basic'] {
     [data-separator-content] {
-      height: 32px;
+      height: 100%;
       user-select: none;
       overflow: clip;
     }
@@ -745,7 +746,7 @@
 
       [data-gutter] [data-separator='line-info'] [data-separator-wrapper] {
         display: block;
-        height: 32px;
+        height: 100%;
         background-color: var(--diffs-bg-separator);
         border-top-right-radius: 6px;
         border-bottom-right-radius: 6px;
@@ -772,7 +773,7 @@
       [data-separator-wrapper] {
       background-color: var(--diffs-bg-separator);
       display: block;
-      height: 32px;
+      height: 100%;
       margin-right: var(--diffs-gap-inline, var(--diffs-gap-fallback));
       border-top-right-radius: 6px;
       border-bottom-right-radius: 6px;
@@ -847,7 +848,7 @@
   @media (pointer: fine) {
     [data-separator-wrapper][data-separator-multi-button] {
       display: grid;
-      grid-template-rows: 16px 16px;
+      grid-template-rows: 50% 50%;
 
       [data-separator-content] {
         grid-column: 2;
@@ -874,10 +875,6 @@
     [data-separator='line-info'],
     [data-separator='line-info-basic'] {
       [data-separator-multi-button] {
-        [data-expand-button] {
-          height: 16px;
-        }
-
         [data-expand-up] {
           border-bottom: 1px solid var(--diffs-bg);
           border-right: 2px solid var(--diffs-bg);
