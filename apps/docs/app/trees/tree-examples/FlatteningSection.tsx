@@ -1,49 +1,67 @@
 'use client';
 
-import { IconLayers2Bottom } from '@pierre/icons';
-import { startTransition, useState } from 'react';
+import { FileTree } from '@pierre/file-tree/react';
+import { IconFileTreeFill, IconFolders } from '@pierre/icons';
+import type { CSSProperties } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { TreeApp } from '../TreeApp';
-import { flatteningOptions, SHARED_FILE_CONTENT } from './demo-data';
+import { TreePanel } from '../TreePanel';
+import { flatteningOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 
 export function FlatteningSection() {
-  const [flatten, setFlatten] = useState(true);
   return (
     <TreeExampleSection id="flatten">
       <FeatureHeader
         title="Flatten empty directories"
-        description="Collapse single-child folder chains into a single item to save clicks and improve user experience. Toggle below to switch between hierarchical and flattened views."
+        description="Collapse single-child folder chains into a single item to save clicks and improve user experience. Compare the two views below: hierarchical (nested folders) vs flattened (single-child chains collapsed into one row)."
       />
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="gridstack">
-            <Button
-              variant="outline"
-              className="w-auto pr-11"
-              onClick={() => startTransition(() => setFlatten((prev) => !prev))}
-            >
-              <IconLayers2Bottom />
-              Flatten empty directories
-            </Button>
-            <Switch
-              checked={flatten}
-              onCheckedChange={(checked: boolean) =>
-                startTransition(() => setFlatten(checked))
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
+            <IconFileTreeFill />
+            Hierarchical
+          </h3>
+          <TreePanel>
+            <FileTree
+              className="[--ft-search-background:theme(colors.neutral.800)]"
+              options={{
+                ...flatteningOptions(false),
+                id: 'flatten-demo-hierarchical',
+              }}
+              style={
+                {
+                  colorScheme: 'dark',
+                  '--ft-search-background':
+                    'light-dark(#fff, oklch(14.5% 0 0))',
+                } as CSSProperties
               }
-              onClick={(e) => e.stopPropagation()}
-              className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
-          </div>
+          </TreePanel>
         </div>
-        <TreeApp
-          fileTreeOptions={flatteningOptions(flatten)}
-          fileContentMap={SHARED_FILE_CONTENT}
-          defaultSelectedPath="package.json"
-        />
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
+            <IconFolders />
+            Flattened
+          </h3>
+          <TreePanel>
+            <FileTree
+              className="[--ft-search-background:theme(colors.neutral.800)]"
+              options={{
+                ...flatteningOptions(true),
+                id: 'flatten-demo-flattened',
+              }}
+              style={
+                {
+                  colorScheme: 'dark',
+                  '--ft-search-background':
+                    'light-dark(#fff, oklch(14.5% 0 0))',
+                } as CSSProperties
+              }
+            />
+          </TreePanel>
+        </div>
       </div>
     </TreeExampleSection>
   );

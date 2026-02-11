@@ -63,8 +63,14 @@ export function HugeDatasetSection() {
   return (
     <TreeExampleSection id="huge-dataset">
       <FeatureHeader
-        title="Huge dataset"
-        description="Handle hundreds of nodes without freezing. This demo renders 250+ file paths; expand src → features and use search to find files. Lazy loading and virtualization (next section) scale to large monorepos."
+        title="Supports large datasets"
+        description={
+          <>
+            Trees easily handle hundreds of DOM nodes without freezing. This
+            demo renders over 250 file paths. Expand <code>src</code> →{' '}
+            <code>features</code> or use search to find files.
+          </>
+        }
       />
       <div className="space-y-4">
         <p className="text-muted-foreground border-border bg-muted/30 rounded-md border px-3 py-2 text-sm">

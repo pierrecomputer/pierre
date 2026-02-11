@@ -9,8 +9,8 @@ export function A11ySection() {
   return (
     <TreeExampleSection id="a11y">
       <FeatureHeader
-        title="Accessibility (a11y)"
-        description="Keyboard navigation, focus management, and ARIA roles (tree, treeitem, group). Screen reader support for expand/collapse and selection. Meets WCAG 2.1 expectations for tree widgets."
+        title="Accessible from the jump"
+        description="With built-in keyboard navigation, focus management, and ARIA roles (tree, treeitem, group), Trees are immediately accessible to all users. We've designed Trees to meet WCAG 2.1 expectations."
       />
       <div className="space-y-4">
         <p className="text-muted-foreground border-border bg-muted/30 rounded-md border px-3 py-2 text-sm">

@@ -10,7 +10,7 @@ export function DragDropSection() {
     <TreeExampleSection id="drag-drop">
       <FeatureHeader
         title="Drag and drop"
-        description="Reorder or move files and folders via drag and drop. Optional: restrict to same level, or allow cross-folder moves. Reorderable lists and tree moves are planned with configurable validation and callbacks."
+        description="Reorder or move files and folders with drag and drop. You can optionally restrict to same level, or allow cross-folder moves. Reorderable lists and tree moves are planned with configurable validation and callbacks."
       />
       <TreeApp
         fileTreeOptions={baseTreeOptions}

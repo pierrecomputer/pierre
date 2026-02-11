@@ -40,13 +40,23 @@ export function flatteningOptions(flatten: boolean): FileTreeOptions {
 /** Base options for all tree example sections. */
 export const baseTreeOptions = sharedDemoFileTreeOptions;
 
-/** Options with search mode for the search example. */
-export function searchOptions(mode: FileTreeSearchMode): FileTreeOptions {
+/** Options with search mode for the search example. Optional initialSearch prepopulates the search field and filters the tree on load. */
+export function searchOptions(
+  mode: FileTreeSearchMode,
+  initialSearch?: string
+): FileTreeOptions {
   return {
     ...sharedDemoFileTreeOptions,
     config: {
       ...sharedDemoFileTreeOptions.config,
       fileTreeSearchMode: mode,
+      ...(initialSearch != null &&
+        initialSearch.length > 0 && {
+          initialState: {
+            ...sharedDemoFileTreeOptions.config?.initialState,
+            search: initialSearch,
+          },
+        }),
     },
   };
 }
