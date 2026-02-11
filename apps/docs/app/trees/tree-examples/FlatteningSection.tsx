@@ -27,7 +27,12 @@ export function FlatteningSection() {
             <FileTree
               className="[--ft-search-background:theme(colors.neutral.800)]"
               options={{
-                ...flatteningOptions(false),
+                ...flatteningOptions(false, [
+                  'build',
+                  'build/assets',
+                  'build/assets/images',
+                  'build/assets/images/social',
+                ]),
                 id: 'flatten-demo-hierarchical',
               }}
               style={
@@ -49,7 +54,10 @@ export function FlatteningSection() {
             <FileTree
               className="[--ft-search-background:theme(colors.neutral.800)]"
               options={{
-                ...flatteningOptions(true),
+                ...flatteningOptions(true, [
+                  'build',
+                  'f::build/assets/images/social',
+                ]),
                 id: 'flatten-demo-flattened',
               }}
               style={

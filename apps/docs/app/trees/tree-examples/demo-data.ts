@@ -29,11 +29,24 @@ export function run() { return message; }
 `,
 };
 
-/** Options with flatten empty directories enabled (nested folders collapsed). */
-export function flatteningOptions(flatten: boolean): FileTreeOptions {
+/** Options with flatten empty directories enabled (nested folders collapsed). Optional initialExpanded opens those folders on load (e.g. ['build']). */
+export function flatteningOptions(
+  flatten: boolean,
+  initialExpanded?: string[]
+): FileTreeOptions {
   return {
     ...sharedDemoFileTreeOptions,
     flattenEmptyDirectories: flatten,
+    ...(initialExpanded != null &&
+      initialExpanded.length > 0 && {
+        config: {
+          ...sharedDemoFileTreeOptions.config,
+          initialState: {
+            ...sharedDemoFileTreeOptions.config?.initialState,
+            expandedItems: initialExpanded,
+          },
+        },
+      }),
   };
 }
 

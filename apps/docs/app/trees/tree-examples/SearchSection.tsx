@@ -31,7 +31,6 @@ export function SearchSection() {
                 options={{
                   ...searchOptions('expand-matches', PREPOPULATED_SEARCH),
                   id: 'search-demo-expand-matches',
-                  showSearch: true,
                 }}
                 style={
                   {
@@ -54,7 +53,6 @@ export function SearchSection() {
                 options={{
                   ...searchOptions('collapse-non-matches', PREPOPULATED_SEARCH),
                   id: 'search-demo-collapse-non-matches',
-                  showSearch: true,
                 }}
                 style={
                   {

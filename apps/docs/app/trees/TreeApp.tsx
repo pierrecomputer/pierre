@@ -16,8 +16,6 @@ export interface TreeAppProps {
   fileContentMap?: Record<string, string>;
   /** File path to select and display on initial load (e.g. 'package.json'). */
   defaultSelectedPath?: string;
-  /** When true, show the search field above the tree. Default: false. */
-  showSearch?: boolean;
 }
 
 /**
@@ -30,7 +28,6 @@ export function TreeApp({
   preloadedFileTreeHtml,
   fileContentMap = {},
   defaultSelectedPath,
-  showSearch = false,
 }: TreeAppProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(
     defaultSelectedPath ?? null
@@ -51,7 +48,6 @@ export function TreeApp({
   const treeOptionsWithSelection = useMemo<FileTreeOptions>(
     () => ({
       ...fileTreeOptions,
-      showSearch,
       config: {
         ...fileTreeOptions.config,
         initialState: {
@@ -63,7 +59,7 @@ export function TreeApp({
       },
       onSelection,
     }),
-    [fileTreeOptions, showSearch, defaultSelectedPath, onSelection]
+    [fileTreeOptions, defaultSelectedPath, onSelection]
   );
 
   const content =
