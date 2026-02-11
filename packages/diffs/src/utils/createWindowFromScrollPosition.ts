@@ -36,10 +36,9 @@ export function createWindowFromScrollPosition({
   let bottom = top + windowHeight;
   if (top < 0) {
     top = 0;
-    bottom = Math.min(windowHeight, scrollHeight);
-  } else if (bottom > scrollHeight) {
+  }
+  if (bottom > scrollHeight) {
     bottom = scrollHeight;
-    top = Math.max(bottom - windowHeight, 0);
   }
   top = Math.floor(Math.max(top - containerOffset, 0));
   return {
