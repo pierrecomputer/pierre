@@ -9,7 +9,7 @@
   ],
   "type": "module",
   "sideEffects": [
-    "src/components/web-components.ts"
+    "dist/components/web-components.js"
   ],
   "typesVersions": {
     "*": {
