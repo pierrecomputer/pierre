@@ -641,7 +641,7 @@ export class WorkerPoolManager {
       }
       this.executeTask(availableWorker, task);
     } catch {
-      this.clearWorkerTask(task, availableWorker);
+      this.clearWorkerTask(availableWorker, task);
     }
   }
 
@@ -721,14 +721,7 @@ export class WorkerPoolManager {
       }
     }
 
-    if (task != null) {
-      this.clearWorkerTask(task, managedWorker);
-    } else if (managedWorker.request_id === response.id) {
-      // If a task was cleaned up while it was running, we intentionally
-      // ignore its response.But we still need to mark this worker as free,
-      // otherwise it can remain stuck in a busy state forever.
-      managedWorker.request_id = undefined;
-    }
+    this.clearWorkerTask(managedWorker, task);
     this.queueBroadcastStateChanges();
     if (this.taskQueue.size > 0) {
       // We queue drain so that potentially multiple workers can free up
@@ -756,12 +749,14 @@ export class WorkerPoolManager {
     this.pendingTasks.set(task.id, task);
   }
 
-  private clearWorkerTask(task: AllWorkerTasks, managedWorker: ManagedWorker) {
+  private clearWorkerTask(managedWorker: ManagedWorker, task?: AllWorkerTasks) {
     managedWorker.request_id = undefined;
-    if ('instance' in task) {
-      this.instanceRequestMap.delete(task.instance);
+    if (task !== undefined) {
+      if ('instance' in task) {
+        this.instanceRequestMap.delete(task.instance);
+      }
+      this.pendingTasks.delete(task.id);
     }
-    this.pendingTasks.delete(task.id);
   }
 
   private executeTask(
@@ -775,7 +770,7 @@ export class WorkerPoolManager {
     try {
       managedWorker.worker.postMessage(task.request);
     } catch (error) {
-      this.clearWorkerTask(task, managedWorker);
+      this.clearWorkerTask(managedWorker, task);
       console.error('Failed to post message to worker:', error);
       if ('instance' in task) {
         task.instance.onHighlightError(error);
