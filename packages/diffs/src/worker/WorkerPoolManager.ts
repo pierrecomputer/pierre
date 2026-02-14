@@ -754,7 +754,7 @@ export class WorkerPoolManager {
     task?: AllWorkerTasks
   ) {
     managedWorker.request_id = undefined;
-    if (task !== undefined) {
+    if (task != null) {
       if ('instance' in task) {
         this.instanceRequestMap.delete(task.instance);
       }
