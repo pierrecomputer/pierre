@@ -641,7 +641,7 @@ export class WorkerPoolManager {
       }
       this.executeTask(availableWorker, task);
     } catch {
-      this.clearWorkerTask(availableWorker, task);
+      this.cleanWorkerAndTask(availableWorker, task);
     }
   }
 
@@ -721,7 +721,7 @@ export class WorkerPoolManager {
       }
     }
 
-    this.clearWorkerTask(managedWorker, task);
+    this.cleanWorkerAndTask(managedWorker, task);
     this.queueBroadcastStateChanges();
     if (this.taskQueue.size > 0) {
       // We queue drain so that potentially multiple workers can free up
@@ -749,7 +749,10 @@ export class WorkerPoolManager {
     this.pendingTasks.set(task.id, task);
   }
 
-  private clearWorkerTask(managedWorker: ManagedWorker, task?: AllWorkerTasks) {
+  private cleanWorkerAndTask(
+    managedWorker: ManagedWorker,
+    task?: AllWorkerTasks
+  ) {
     managedWorker.request_id = undefined;
     if (task !== undefined) {
       if ('instance' in task) {
@@ -770,7 +773,7 @@ export class WorkerPoolManager {
     try {
       managedWorker.worker.postMessage(task.request);
     } catch (error) {
-      this.clearWorkerTask(managedWorker, task);
+      this.cleanWorkerAndTask(managedWorker, task);
       console.error('Failed to post message to worker:', error);
       if ('instance' in task) {
         task.instance.onHighlightError(error);
