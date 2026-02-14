@@ -723,6 +723,11 @@ export class WorkerPoolManager {
 
     if (task != null) {
       this.clearWorkerTask(task, managedWorker);
+    } else if (managedWorker.request_id === response.id) {
+      // If a task was cleaned up while it was running, we intentionally
+      // ignore its response.But we still need to mark this worker as free,
+      // otherwise it can remain stuck in a busy state forever.
+      managedWorker.request_id = undefined;
     }
     this.queueBroadcastStateChanges();
     if (this.taskQueue.size > 0) {
