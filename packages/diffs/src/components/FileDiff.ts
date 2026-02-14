@@ -1031,6 +1031,8 @@ export class FileDiff<LAnnotation = undefined> {
     result: HunksRenderResult
   ): void {
     const { overflow = 'scroll' } = this.options;
+    const containerSize =
+      (this.options.hunkSeparators ?? 'line-info') === 'line-info';
     const rowSpan = overflow === 'wrap' ? result.rowCount : undefined;
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
@@ -1057,6 +1059,7 @@ export class FileDiff<LAnnotation = undefined> {
         code: this.codeUnified,
         columnType: 'unified',
         rowSpan,
+        containerSize,
       });
       this.codeUnified.innerHTML =
         this.hunksRenderer.renderPartialHTML(unifiedAST);
@@ -1073,6 +1076,7 @@ export class FileDiff<LAnnotation = undefined> {
           code: this.codeDeletions,
           columnType: 'deletions',
           rowSpan,
+          containerSize,
         });
         this.codeDeletions.innerHTML =
           this.hunksRenderer.renderPartialHTML(deletionsAST);
@@ -1097,6 +1101,7 @@ export class FileDiff<LAnnotation = undefined> {
           code: this.codeAdditions,
           columnType: 'additions',
           rowSpan,
+          containerSize,
         });
         this.codeAdditions.innerHTML =
           this.hunksRenderer.renderPartialHTML(additionsAST);

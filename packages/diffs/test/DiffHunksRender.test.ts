@@ -104,4 +104,28 @@ describe('DiffHunksRenderer', () => {
     expect(result.unifiedContentAST).toBeUndefined();
     expect(result).toMatchSnapshot('rendered result');
   });
+
+  test('adds data-container-size for line-info separators', async () => {
+    const instance = new DiffHunksRenderer({ hunkSeparators: 'line-info' });
+    const diff = parseDiffFromFile(
+      mockDiffs.diffRowBufferTest.oldFile,
+      mockDiffs.diffRowBufferTest.newFile
+    );
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+    expect(html).toContain('data-container-size');
+  });
+
+  test('does not add data-container-size for non line-info separators', async () => {
+    const instance = new DiffHunksRenderer({
+      hunkSeparators: 'line-info-basic',
+    });
+    const diff = parseDiffFromFile(
+      mockDiffs.diffRowBufferTest.oldFile,
+      mockDiffs.diffRowBufferTest.newFile
+    );
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+    expect(html).not.toContain('data-container-size');
+  });
 });

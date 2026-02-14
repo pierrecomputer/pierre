@@ -3,6 +3,7 @@ interface CreateCodeNodeProps {
   code?: HTMLElement;
   columnType?: 'additions' | 'deletions' | 'unified';
   rowSpan?: number;
+  containerSize?: boolean;
 }
 
 export function getOrCreateCodeNode({
@@ -10,12 +11,13 @@ export function getOrCreateCodeNode({
   pre,
   columnType,
   rowSpan,
+  containerSize = false,
 }: CreateCodeNodeProps = {}): HTMLElement {
   if (code == null) {
     code = document.createElement('code');
-    code.dataset.code = '';
+    code.setAttribute('data-code', '');
     if (columnType != null) {
-      code.dataset[columnType] = '';
+      code.setAttribute(`data-${columnType}`, '');
     }
     pre?.appendChild(code);
   }
@@ -23,6 +25,11 @@ export function getOrCreateCodeNode({
     code.style.setProperty('grid-row', `span ${rowSpan}`);
   } else {
     code.style.removeProperty('grid-row');
+  }
+  if (containerSize) {
+    code.setAttribute('data-container-size', '');
+  } else {
+    code.removeAttribute('data-container-size');
   }
   return code;
 }

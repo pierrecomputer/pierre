@@ -981,6 +981,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     result: HunksRenderResult,
     children: ElementContent[] = []
   ): HASTElement {
+    const containerSize =
+      this.getOptionsWithDefaults().hunkSeparators === 'line-info';
     const unifiedAST = this.renderCodeAST('unified', result);
     if (unifiedAST != null) {
       children.push(
@@ -989,6 +991,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           children: unifiedAST,
           properties: {
             'data-code': '',
+            'data-container-size': containerSize ? '' : undefined,
             'data-unified': '',
           },
         })
@@ -1004,6 +1007,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           children: deletionsAST,
           properties: {
             'data-code': '',
+            'data-container-size': containerSize ? '' : undefined,
             'data-deletions': '',
           },
         })
@@ -1017,6 +1021,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           children: additionsAST,
           properties: {
             'data-code': '',
+            'data-container-size': containerSize ? '' : undefined,
             'data-additions': '',
           },
         })
@@ -1045,6 +1050,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         children,
         properties: {
           'data-code': '',
+          'data-container-size':
+            this.getOptionsWithDefaults().hunkSeparators === 'line-info'
+              ? ''
+              : undefined,
           [`data-${columnType}`]: '',
         },
       })

@@ -408,6 +408,9 @@
       0px,
       calc(var(--diffs-gap-block, var(--diffs-gap-fallback)) - 6px)
     );
+  }
+
+  [data-container-size] {
     container-type: inline-size;
   }
 
