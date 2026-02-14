@@ -408,6 +408,7 @@
       0px,
       calc(var(--diffs-gap-block, var(--diffs-gap-fallback)) - 6px)
     );
+    /* toggle this line to fix the bug */
     container-type: inline-size;
   }
 
