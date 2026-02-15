@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import diffsPackageJson from '../../../packages/diffs/package.json';
-import treesPackageJson from '../../../packages/file-tree/package.json';
+import treesPackageJson from '../../../packages/trees/package.json';
 import { getProductConfig, type ProductId } from './product-config';
 import { Button } from '@/components/ui/button';
 import {
@@ -117,18 +117,24 @@ function DiffsIcon() {
 
 function TreesIcon() {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="32"
-      height="32"
-      viewBox="0 0 16 16"
-      className="mb-2"
-    >
-      <path
-        d="M1 11V0h1.5v2c0 .69.56 1.25 1.25 1.25H6V1.5A1.5 1.5 0 0 1 7.5 0h2.129a1.5 1.5 0 0 1 1.06.44l.122.12a1.5 1.5 0 0 0 1.06.44H13.5A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-6A1.5 1.5 0 0 1 6 5.5v-.75H3.75c-.45 0-.875-.108-1.25-.3V11c0 .69.56 1.25 1.25 1.25H6V10.5A1.5 1.5 0 0 1 7.5 9h2.129a1.5 1.5 0 0 1 1.06.44l.122.12a1.5 1.5 0 0 0 1.06.44H13.5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 6 14.5v-.75H3.75A2.75 2.75 0 0 1 1 11"
-        fill="currentcolor"
-      />
-    </svg>
+    <div className="mb-2 flex h-8 w-8 items-end">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="36"
+        height="60"
+        viewBox="0 0 18 30"
+      >
+        <path
+          fill="currentcolor"
+          d="M6.585 16c.14 0 .278.014.415.04v1.584l-.03-.018a.75.75 0 0 0-.385-.106H3.25a.75.75 0 0 0-.75.75V21h13v-1.25a.75.75 0 0 0-.75-.75H11v-1.5h3.75A2.25 2.25 0 0 1 17 19.75v1.291c.591.157 1.003.735.918 1.374l-.752 5.632A2.25 2.25 0 0 1 14.938 30H3.063a2.25 2.25 0 0 1-2.23-1.953l-.751-5.632A1.252 1.252 0 0 1 1 21.041V18.25A2.25 2.25 0 0 1 3.25 16h3.335Z"
+        />
+        <path
+          fill="currentcolor"
+          d="M8.47.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1-1.06 1.06L9.75 2.56v1.628l3.5 3.47a.75.75 0 0 1-1.061 1.06L9.75 6.303v2.074l4.03 4.03a.75.75 0 0 1-1.06 1.06l-2.97-2.969V21h-1.5V10.498l-2.97 2.97a.75.75 0 0 1-1.06-1.06l4.03-4.031V6.311L5.844 8.717a.75.75 0 0 1-1.06-1.06L8.25 4.188V2.561L6.28 4.53a.75.75 0 0 1-1.06-1.06L8.47.22Z"
+          opacity=".4"
+        />
+      </svg>
+    </div>
   );
 }
 
