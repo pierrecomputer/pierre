@@ -1,7 +1,7 @@
 ## Vanilla JS API
 
 <Notice icon={<IconInfoFill />}>
-  Import the vanilla JavaScript class from `@pierre/file-tree`.
+  Import the vanilla JavaScript class from `@pierre/trees`.
 </Notice>
 
 The Vanilla JS API exposes the `FileTree` class. Create an instance with
@@ -29,7 +29,7 @@ instead of `render()`:
 ```ts
 const fileTree = new FileTree({ files });
 fileTree.hydrate({
-  fileTreeContainer: document.querySelector('file-tree-container'),
+  fileTreeContainer: document.querySelector("file-tree-container"),
   prerenderedHTML: htmlFromServer,
 });
 ```

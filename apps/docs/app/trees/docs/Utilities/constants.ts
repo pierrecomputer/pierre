@@ -16,7 +16,7 @@ export const HELPER_SORT_CHILDREN: PreloadFileOptions<undefined> = {
   defaultChildrenComparator,
   alphabeticalChildrenComparator,
   type ChildrenComparator,
-} from '@pierre/file-tree';
+} from '@pierre/trees';
 
 // Sort an array of child paths for display in a file tree.
 // Use this when building custom loaders or when you need a specific order.
@@ -54,9 +54,9 @@ export const HELPER_GENERATE_SYNC_DATA_LOADER: PreloadFileOptions<undefined> = {
     contents: `import {
   generateSyncDataLoader,
   type FileTreeOptions,
-} from '@pierre/file-tree';
-import { FileTree } from '@pierre/file-tree';
-// or: import { FileTree } from '@pierre/file-tree/react';
+} from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
+// or: import { FileTree } from '@pierre/trees/react';
 
 // FileTree uses generateSyncDataLoader internally when you pass \`files\`.
 // Use it directly when building custom loaders or integrating with the headless tree.
@@ -95,8 +95,8 @@ export const HELPER_GENERATE_LAZY_DATA_LOADER: PreloadFileOptions<undefined> = {
     contents: `import {
   generateLazyDataLoader,
   type FileTreeOptions,
-} from '@pierre/file-tree';
-import { FileTree } from '@pierre/file-tree';
+} from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
 
 // FileTree uses generateLazyDataLoader internally when you pass
 // \`files\` and \`useLazyDataLoader: true\`. Use it directly for custom integrations.
@@ -133,8 +133,8 @@ tree.render({ container: document.getElementById('tree')! });`,
 export const HELPER_PRELOAD_FILE_TREE: PreloadFileOptions<undefined> = {
   file: {
     name: 'preloadFileTree.ts',
-    contents: `import { preloadFileTree } from '@pierre/file-tree/ssr';
-import type { FileTreeOptions } from '@pierre/file-tree';
+    contents: `import { preloadFileTree } from '@pierre/trees/ssr';
+import type { FileTreeOptions } from '@pierre/trees';
 
 // Prerender the file tree HTML on the server for fast first paint.
 // Hydrate on the client with the same options.

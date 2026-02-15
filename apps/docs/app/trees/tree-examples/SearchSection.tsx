@@ -1,7 +1,7 @@
 'use client';
 
-import { FileTree } from '@pierre/file-tree/react';
 import { IconCollapsedRow, IconExpandRow } from '@pierre/icons';
+import { FileTree } from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';

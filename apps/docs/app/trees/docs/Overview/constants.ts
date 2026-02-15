@@ -1,5 +1,5 @@
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
-import type { FileTreeOptions } from '@pierre/file-tree';
+import type { FileTreeOptions } from '@pierre/trees';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
@@ -27,7 +27,7 @@ const options = {
 export const TREES_REACT_BASIC_USAGE: PreloadFileOptions<undefined> = {
   file: {
     name: 'FileExplorer.tsx',
-    contents: `import { FileTree } from '@pierre/file-tree/react';
+    contents: `import { FileTree } from '@pierre/trees/react';
 
 const files = [
   'src/index.ts',
@@ -46,7 +46,7 @@ export function FileExplorer() {
 export const TREES_VANILLA_BASIC_USAGE: PreloadFileOptions<undefined> = {
   file: {
     name: 'file-explorer.ts',
-    contents: `import { FileTree } from '@pierre/file-tree';
+    contents: `import { FileTree } from '@pierre/trees';
 
 const files = [
   'src/index.ts',

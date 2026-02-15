@@ -27,7 +27,7 @@ file-tree-container,
 export const STYLING_CODE_INLINE: PreloadFileOptions<undefined> = {
   file: {
     name: 'FileExplorer.tsx',
-    contents: `import { FileTree } from '@pierre/file-tree/react';
+    contents: `import { FileTree } from '@pierre/trees/react';
 
 <FileTree
   options={{ files: ['src/index.ts', 'package.json'] }}

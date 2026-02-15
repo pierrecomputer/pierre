@@ -11,7 +11,7 @@ const options = {
 export const VANILLA_API_FILE_TREE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_tree_example.ts',
-    contents: `import { FileTree } from '@pierre/file-tree';
+    contents: `import { FileTree } from '@pierre/trees';
 
 const files = [
   'src/index.ts',
@@ -32,7 +32,7 @@ fileTree.render({ containerWrapper: document.getElementById('tree-container') })
 export const VANILLA_API_FILE_TREE_OPTIONS: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_tree_options.ts',
-    contents: `import { FileTree } from '@pierre/file-tree';
+    contents: `import { FileTree } from '@pierre/trees';
 
 // Constructor options (see FileTree options section for full details)
 const fileTree = new FileTree({

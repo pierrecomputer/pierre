@@ -15,7 +15,7 @@ export const FILE_TREE_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   FileTreeOptions,
   FileTreeSelectionItem,
   HeadlessTreeConfig,
-} from '@pierre/file-tree';
+} from '@pierre/trees';
 
 // FileTreeOptions is the main options object for FileTree (vanilla and React).
 // Pass it to the FileTree constructor or to the <FileTree options={...} /> component.
@@ -60,7 +60,7 @@ const options: FileTreeOptions = {
 export const FILE_TREE_SELECTION_ITEM_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'FileTreeSelectionItem.ts',
-    contents: `import type { FileTreeSelectionItem } from '@pierre/file-tree';
+    contents: `import type { FileTreeSelectionItem } from '@pierre/trees';
 
 // FileTreeSelectionItem describes one item in the selection.
 // Your onSelection callback receives an array of these.
@@ -97,7 +97,7 @@ const options = {
 export const FILE_TREE_SEARCH_MODE_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'FileTreeSearchMode.ts',
-    contents: `import type { FileTreeSearchMode } from '@pierre/file-tree';
+    contents: `import type { FileTreeSearchMode } from '@pierre/trees';
 
 // FileTreeSearchMode is 'expand-matches' | 'collapse-non-matches'.
 // Pass it via config.fileTreeSearchMode in FileTreeOptions.
@@ -119,7 +119,7 @@ const options = {
 export const HEADLESS_TREE_CONFIG_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'HeadlessTreeConfig.ts',
-    contents: `import type { HeadlessTreeConfig, FileTreeSearchMode } from '@pierre/file-tree';
+    contents: `import type { HeadlessTreeConfig, FileTreeSearchMode } from '@pierre/trees';
 
 // HeadlessTreeConfig is the optional config passed inside FileTreeOptions.
 // It is a subset of @headless-tree/core TreeConfig: FileTree wires up

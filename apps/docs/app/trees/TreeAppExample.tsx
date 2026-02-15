@@ -1,6 +1,6 @@
 'use client';
 
-import { sharedDemoFileTreeOptions } from '../file-tree/demo-data';
+import { sharedDemoFileTreeOptions } from '../trees/demo-data';
 import { TreeApp } from './TreeApp';
 
 const STUB_FILE_CONTENT: Record<string, string> = {
@@ -11,7 +11,7 @@ rendering library, wrapped in the \`TreeApp\` component.
 
 ## What you see
 
-- **Left panel** – A \`FileTree\` from \`@pierre/file-tree\`. Use the search field
+- **Left panel** – A \`FileTree\` from \`@pierre/trees\`. Use the search field
   to filter, expand folders, and select files.
 - **Right panel** – The selected file is rendered with \`@pierre/diffs\` \`File\`
   component (syntax highlighting, line numbers, light/dark theme).
@@ -24,7 +24,7 @@ rendering library, wrapped in the \`TreeApp\` component.
 
 ## Tech stack
 
-- [\`@pierre/file-tree\`](.) – File tree UI (vanilla + React, SSR support).
+- [\`@pierre/trees\`](.) – File tree UI (vanilla + React, SSR support).
 - [\`@pierre/diffs\`](.) – File and diff rendering (Shiki, virtualized).
 
 TreeApp connects both with shared styles and selection.

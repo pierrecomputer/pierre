@@ -1,9 +1,9 @@
 'use client';
 
 import { File } from '@pierre/diffs/react';
-import type { FileTreeOptions, FileTreeSelectionItem } from '@pierre/file-tree';
-import { FileTree as FileTreeReact } from '@pierre/file-tree/react';
 import { IconFile } from '@pierre/icons';
+import type { FileTreeOptions, FileTreeSelectionItem } from '@pierre/trees';
+import { FileTree as FileTreeReact } from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 

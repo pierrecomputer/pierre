@@ -11,7 +11,7 @@ const options = {
 export const REACT_API_FILE_TREE: PreloadFileOptions<undefined> = {
   file: {
     name: 'FileExplorer.tsx',
-    contents: `import { FileTree } from '@pierre/file-tree/react';
+    contents: `import { FileTree } from '@pierre/trees/react';
 
 const files = [
   'src/index.ts',
@@ -30,7 +30,7 @@ export function FileExplorer() {
 export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_tree_props.tsx',
-    contents: `import { FileTree } from '@pierre/file-tree/react';
+    contents: `import { FileTree } from '@pierre/trees/react';
 
 // FileTree accepts these props:
 

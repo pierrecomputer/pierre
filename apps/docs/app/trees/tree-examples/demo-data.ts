@@ -1,6 +1,6 @@
-import type { FileTreeOptions, FileTreeSearchMode } from '@pierre/file-tree';
+import type { FileTreeOptions, FileTreeSearchMode } from '@pierre/trees';
 
-import { sharedDemoFileTreeOptions } from '../../file-tree/demo-data';
+import { sharedDemoFileTreeOptions } from '../../trees/demo-data';
 
 /** Shared file content for tree example sections. */
 export const SHARED_FILE_CONTENT: Record<string, string> = {

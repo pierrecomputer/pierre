@@ -1,11 +1,11 @@
 import { MultiFileDiff } from '@pierre/diffs/react';
-import { FileTree } from '@pierre/file-tree/react';
 import {
   IconArrowRight,
   IconBulbFill,
   IconCiWarningFill,
   IconInfoFill,
 } from '@pierre/icons';
+import { FileTree } from '@pierre/trees/react';
 import { compileMDX } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { readFile } from 'node:fs/promises';
