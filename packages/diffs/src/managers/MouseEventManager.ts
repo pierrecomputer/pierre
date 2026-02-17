@@ -6,6 +6,11 @@ import type {
   LineTypes,
 } from '../types';
 
+const isSafari =
+  typeof navigator !== 'undefined' &&
+  navigator.userAgent.toLowerCase().includes('safari') &&
+  !navigator.userAgent.toLowerCase().includes('chrome');
+
 export type LogTypes = 'click' | 'move' | 'both' | 'none';
 
 export type MouseEventManagerMode = 'file' | 'diff';
@@ -153,9 +158,11 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     if (enableHoverUtility && this.hoverSlot == null) {
       this.hoverSlot = document.createElement('div');
       this.hoverSlot.setAttribute('data-hover-slot', '');
-      const slotElement = document.createElement('slot');
-      slotElement.name = 'hover-slot';
-      this.hoverSlot.appendChild(slotElement);
+      if (!isSafari) {
+        const slotElement = document.createElement('slot');
+        slotElement.name = 'hover-slot';
+        this.hoverSlot.appendChild(slotElement);
+      }
     } else if (!enableHoverUtility && this.hoverSlot != null) {
       this.hoverSlot.parentNode?.removeChild(this.hoverSlot);
       this.hoverSlot = undefined;
@@ -392,6 +399,14 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
           );
           this.setHoveredLine(data);
           if (this.hoverSlot != null) {
+            if (isSafari) {
+              const slotContent = document.querySelector(
+                'div[slot="hover-slot"]'
+              );
+              if (slotContent != null) {
+                this.hoverSlot.appendChild(slotContent.cloneNode(true));
+              }
+            }
             data.numberElement?.appendChild(this.hoverSlot);
           }
           onLineEnter?.({
