@@ -21,7 +21,7 @@ bun add @pierre/trees
 import { FileTree } from '@pierre/trees';
 
 const ft = new FileTree({
-  files: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+  initialFiles: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
   flattenEmptyDirectories: true,
   useLazyDataLoader: true,
 });
@@ -45,14 +45,34 @@ import { FileTree } from '@pierre/trees/react';
 export function Example({ files }: { files: string[] }) {
   return (
     <FileTree
-      options={{ files, flattenEmptyDirectories: true }}
-      defaultExpandedItems={['src']}
+      options={{ flattenEmptyDirectories: true }}
+      files={files}
+      initialExpandedItems={['src']}
       onExpandedItemsChange={(paths) => {
         console.log('expanded', paths);
       }}
     />
   );
 }
+```
+
+## Files API Contract
+
+- `initialFiles` is the uncontrolled initial value and is only used when a tree
+  instance is created.
+- React controlled usage should pass `files` and keep parent state
+  authoritative.
+- `onFilesChange` fires when files are applied via:
+  - `fileTree.setFiles(nextFiles)`
+  - `fileTree.setOptions(..., { files: nextFiles })` (including when structural
+    options are changed in the same call)
+- `onFilesChange` does not fire for a no-op update where the exact same array
+  reference is provided.
+- In controlled React mode, use identity-preserving updates in the callback to
+  avoid loops:
+
+```tsx
+onFilesChange={(nextFiles) => setFiles((prev) => (prev === nextFiles ? prev : nextFiles))}
 ```
 
 ## SSR With Declarative Shadow DOM (No Flash)
@@ -63,23 +83,20 @@ styles in the shadow root. Declarative Shadow DOM is the intended path.
 ### 1) Server: generate shadow-root HTML
 
 ```tsx
-import { createFileTreeSsrPayload } from '@pierre/trees/ssr';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
 export function FileTreeSsr({ files }: { files: string[] }) {
-  const payload = createFileTreeSsrPayload({
-    files,
+  const payload = preloadFileTree({
+    initialFiles: files,
     flattenEmptyDirectories: true,
     useLazyDataLoader: true,
   });
 
   return (
-    <file-tree-container id={payload.id} suppressHydrationWarning>
-      <template
-        // @ts-expect-error declarative shadow DOM
-        shadowrootmode="open"
-        dangerouslySetInnerHTML={{ __html: payload.shadowHtml }}
-      />
-    </file-tree-container>
+    <div
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: payload.html }}
+    />
   );
 }
 ```
@@ -100,7 +117,7 @@ export function FileTreeHydrate({
   id: string;
   files: string[];
 }) {
-  return <FileTree containerId={id} options={{ files }} />;
+  return <FileTree containerId={id} options={{}} files={files} />;
 }
 ```
 
@@ -109,7 +126,7 @@ Or with the imperative API:
 ```ts
 import { FileTree } from '@pierre/trees';
 
-const ft = new FileTree({ files });
+const ft = new FileTree({ initialFiles: files });
 ft.hydrate({ fileTreeContainer: document.getElementById(id)! });
 ```
 

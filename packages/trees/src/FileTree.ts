@@ -313,7 +313,11 @@ export class FileTree {
   // --- Heavier updates (re-render) ---
 
   setFiles(files: string[]): void {
+    if (this.options.initialFiles === files) {
+      return;
+    }
     this.options = { ...this.options, initialFiles: files };
+    this.callbacksRef.current.onFilesChange?.(files);
     this.rerender();
   }
 
@@ -356,18 +360,25 @@ export class FileTree {
       }
     }
 
-    this.options = { ...this.options, ...options };
+    const nextFiles = state?.files;
+    const stateFilesChanged =
+      nextFiles !== undefined && this.options.initialFiles !== nextFiles;
+    this.options = {
+      ...this.options,
+      ...options,
+      ...(nextFiles !== undefined && { initialFiles: nextFiles }),
+    };
     if (state != null) {
       this.stateConfig = { ...this.stateConfig, ...state };
     }
 
-    if (needsRerender) {
+    if (needsRerender || stateFilesChanged) {
+      if (stateFilesChanged && nextFiles !== undefined) {
+        this.callbacksRef.current.onFilesChange?.(nextFiles);
+      }
       this.rerender();
     } else {
       // State-only changes - use imperative methods
-      if (state?.files !== undefined) {
-        this.setFiles(state.files);
-      }
       if (state?.expandedItems !== undefined) {
         this.setExpandedItems(state.expandedItems);
       }

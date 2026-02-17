@@ -898,11 +898,17 @@ function ReactControlledFiles({
   stateConfig?: FileTreeStateConfig;
 }) {
   const [files, setFiles] = useState(sharedDemoFileTreeOptions.initialFiles);
+  const [onFilesChangeCalls, setOnFilesChangeCalls] = useState(0);
+
+  const handleFilesChange = useCallback((nextFiles: string[]) => {
+    setOnFilesChangeCalls((count) => count + 1);
+    setFiles(nextFiles);
+  }, []);
 
   return (
     <ExampleCard
       title="React — Controlled Files"
-      description="files prop controlled by React state. Tree updates without instance recreation"
+      description="files prop is controlled by React state, with onFilesChange wired for full control"
       controls={
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -935,13 +941,15 @@ function ReactControlledFiles({
         <p className="mt-2 text-xs text-gray-500">
           {files.includes(EXTRA_FILE)
             ? 'logo2.png added'
-            : 'logo2.png not present'}
+            : 'logo2.png not present'}{' '}
+          ({onFilesChangeCalls} onFilesChange callbacks)
         </p>
       }
     >
       <FileTreeReact
         options={options}
         files={files}
+        onFilesChange={handleFilesChange}
         initialExpandedItems={stateConfig?.initialExpandedItems}
         onSelection={stateConfig?.onSelection}
       />
@@ -963,11 +971,17 @@ function ReactSSRControlledFiles({
   prerenderedHTML: string;
 }) {
   const [files, setFiles] = useState(sharedDemoFileTreeOptions.initialFiles);
+  const [onFilesChangeCalls, setOnFilesChangeCalls] = useState(0);
+
+  const handleFilesChange = useCallback((nextFiles: string[]) => {
+    setOnFilesChangeCalls((count) => count + 1);
+    setFiles(nextFiles);
+  }, []);
 
   return (
     <ExampleCard
       title="React (SSR) — Controlled Files"
-      description="SSR hydration with controlled files prop. Tree updates without instance recreation"
+      description="SSR hydration with controlled files, using onFilesChange to keep parent state authoritative"
       controls={
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -1000,7 +1014,8 @@ function ReactSSRControlledFiles({
         <p className="mt-2 text-xs text-gray-500">
           {files.includes(EXTRA_FILE)
             ? 'logo2.png added'
-            : 'logo2.png not present'}
+            : 'logo2.png not present'}{' '}
+          ({onFilesChangeCalls} onFilesChange callbacks)
         </p>
       }
     >
@@ -1008,6 +1023,7 @@ function ReactSSRControlledFiles({
         options={options}
         prerenderedHTML={prerenderedHTML}
         files={files}
+        onFilesChange={handleFilesChange}
         initialExpandedItems={stateConfig?.initialExpandedItems}
         onSelection={stateConfig?.onSelection}
       />

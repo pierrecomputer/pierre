@@ -143,6 +143,34 @@ describe('SSR + declarative shadow DOM', () => {
     expect(ft.getFiles()).toEqual(['b.txt']);
   });
 
+  test('setOptions applies state.files when structural options also change', () => {
+    const ft = new FileTree({ initialFiles: ['a.txt'] });
+    ft.setOptions({ flattenEmptyDirectories: true }, { files: ['b.txt'] });
+    expect(ft.getFiles()).toEqual(['b.txt']);
+  });
+
+  test('setFiles invokes onFilesChange callback', () => {
+    const calls: string[][] = [];
+    const ft = new FileTree(
+      { initialFiles: ['a.txt'] },
+      { onFilesChange: (files) => calls.push(files) }
+    );
+
+    ft.setFiles(['b.txt', 'c.txt']);
+    expect(calls).toEqual([['b.txt', 'c.txt']]);
+  });
+
+  test('setOptions with state.files invokes onFilesChange callback', () => {
+    const calls: string[][] = [];
+    const ft = new FileTree(
+      { initialFiles: ['a.txt'] },
+      { onFilesChange: (files) => calls.push(files) }
+    );
+
+    ft.setOptions({ flattenEmptyDirectories: true }, { files: ['b.txt'] });
+    expect(calls).toEqual([['b.txt']]);
+  });
+
   test('FileTree.hydrate falls back to renderRoot when no SSR wrapper is found', () => {
     const container = document.createElement('file-tree-container');
     if (container.shadowRoot == null) {
