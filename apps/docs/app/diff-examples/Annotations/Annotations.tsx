@@ -115,10 +115,10 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         options={{
           ...prerenderedDiff.options,
           enableLineSelection: !hasOpenCommentForm,
-          enableHoverUtility: !hasOpenCommentForm,
+          enableGutterUtility: !hasOpenCommentForm,
           onLineSelectionEnd: handleLineSelectionEnd,
         }}
-        renderHoverUtility={renderHoverUtility}
+        renderGutterUtility={renderGutterUtility}
         lineAnnotations={annotations}
         renderAnnotation={(annotation) =>
           annotation.metadata.isThread ? (
@@ -137,7 +137,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   );
 }
 
-function renderHoverUtility(
+function renderGutterUtility(
   getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
 ) {
   return (

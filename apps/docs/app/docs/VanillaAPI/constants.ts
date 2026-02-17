@@ -225,8 +225,9 @@ const instance = new FileDiff({
   // 'line' - highlights only the line content
   lineHoverHighlight: 'disabled',
 
-  // Must be true to enable renderHoverUtility
-  enableHoverUtility: false,
+  // Must be true to enable renderGutterUtility
+  enableGutterUtility: false,
+  // Deprecated alias: enableHoverUtility
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, side, event }) {},
@@ -259,8 +260,8 @@ const instance = new FileDiff({
   },
 
   // Render UI in the line number column on hover
-  // Requires enableHoverUtility: true
-  renderHoverUtility(getHoveredLine) {
+  // Requires enableGutterUtility: true
+  renderGutterUtility(getHoveredLine) {
     const button = document.createElement('button');
     button.textContent = '+';
     button.addEventListener('click', () => {
@@ -398,8 +399,9 @@ const instance = new File({
   // 'line' - highlights only the line content
   lineHoverHighlight: 'disabled',
 
-  // Must be true to enable renderHoverUtility
-  enableHoverUtility: false,
+  // Must be true to enable renderGutterUtility
+  enableGutterUtility: false,
+  // Deprecated alias: enableHoverUtility
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, event }) {},
@@ -433,8 +435,8 @@ const instance = new File({
   },
 
   // Render UI in the line number column on hover
-  // Requires enableHoverUtility: true
-  renderHoverUtility(getHoveredLine) {
+  // Requires enableGutterUtility: true
+  renderGutterUtility(getHoveredLine) {
     const button = document.createElement('button');
     button.textContent = '+';
     button.addEventListener('click', () => {

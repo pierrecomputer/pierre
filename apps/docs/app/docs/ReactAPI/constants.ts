@@ -153,8 +153,9 @@ interface DiffOptions {
   // 'line' - highlights only the line content
   lineHoverHighlight: 'disabled',
 
-  // Must be true to enable renderHoverUtility prop
-  enableHoverUtility: false,
+  // Must be true to enable renderGutterUtility prop
+  enableGutterUtility: false,
+  // Deprecated alias: enableHoverUtility
 
   // Callbacks for mouse events on diff lines
   onLineClick({ lineNumber, side, event }) {
@@ -231,11 +232,11 @@ interface ThreadMetadata {
   // ─────────────────────────────────────────────────────────────
 
   // Render UI in the line number column on hover.
-  // Requires options.enableHoverUtility = true
+  // Requires options.enableGutterUtility = true
   //
   // Note: This is NOT reactive - render is not called on every
   // mouse move. Use getHoveredLine() in click handlers.
-  renderHoverUtility={(getHoveredLine) => (
+  renderGutterUtility={(getHoveredLine) => (
     <button
       onClick={() => {
         const { lineNumber, side } = getHoveredLine();
@@ -315,7 +316,7 @@ export function MyDiff() {
 
       // See "Shared Props" tabs for all available props:
       // lineAnnotations, renderAnnotation, renderHeaderMetadata,
-      // renderHoverUtility, selectedLines, className, style, etc.
+      // renderGutterUtility, selectedLines, className, style, etc.
     />
   );
 }`,
@@ -352,7 +353,7 @@ export function MyPatchDiff() {
 
       // See "Shared Props" tabs for all available props:
       // lineAnnotations, renderAnnotation, renderHeaderMetadata,
-      // renderHoverUtility, selectedLines, className, style, etc.
+      // renderGutterUtility, selectedLines, className, style, etc.
     />
   );
 }`,
@@ -394,7 +395,7 @@ export function MyFileDiff() {
 
       // See "Shared Props" tabs for all available props:
       // lineAnnotations, renderAnnotation, renderHeaderMetadata,
-      // renderHoverUtility, selectedLines, className, style, etc.
+      // renderGutterUtility, selectedLines, className, style, etc.
     />
   );
 }`,
@@ -438,7 +439,7 @@ export function CodeFile() {
 
       // The File component supports similar props to the diff components:
       // lineAnnotations, renderAnnotation, renderHeaderMetadata,
-      // renderHoverUtility, selectedLines, className, style, etc.
+      // renderGutterUtility, selectedLines, className, style, etc.
       //
       // Key difference: File uses LineAnnotation (no 'side' property)
       // instead of DiffLineAnnotation since there's only one column.
@@ -543,8 +544,9 @@ interface FileOptions {
   // 'line' - highlights only the line content
   lineHoverHighlight: 'disabled',
 
-  // Must be true to enable renderHoverUtility prop
-  enableHoverUtility: false,
+  // Must be true to enable renderGutterUtility prop
+  enableGutterUtility: false,
+  // Deprecated alias: enableHoverUtility
 
   // Callbacks for mouse events on file lines
   onLineClick({ lineNumber, event }) {
@@ -622,11 +624,11 @@ interface CommentMetadata {
   // ─────────────────────────────────────────────────────────────
 
   // Render UI in the line number column on hover.
-  // Requires options.enableHoverUtility = true
+  // Requires options.enableGutterUtility = true
   //
   // Note: This is NOT reactive - render is not called on every
   // mouse move. Use getHoveredLine() in click handlers.
-  renderHoverUtility={(getHoveredLine) => (
+  renderGutterUtility={(getHoveredLine) => (
     <button
       onClick={() => {
         const { lineNumber } = getHoveredLine();

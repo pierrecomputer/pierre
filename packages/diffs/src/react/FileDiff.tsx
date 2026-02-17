@@ -26,6 +26,7 @@ export function FileDiff<LAnnotation = undefined>({
   prerenderedHTML,
   renderAnnotation,
   renderHeaderMetadata,
+  renderGutterUtility,
   renderHoverUtility,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine } = useFileDiffInstance({
@@ -40,6 +41,7 @@ export function FileDiff<LAnnotation = undefined>({
     fileDiff,
     renderHeaderMetadata,
     renderAnnotation,
+    renderGutterUtility,
     lineAnnotations,
     renderHoverUtility,
     getHoveredLine,

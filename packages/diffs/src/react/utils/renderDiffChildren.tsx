@@ -4,7 +4,7 @@ import { HEADER_METADATA_SLOT_ID } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type { FileContents, FileDiffMetadata } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
-import { HoverSlotStyles } from '../constants';
+import { GutterUtilitySlotStyles } from '../constants';
 import type { DiffBasePropsReact } from '../types';
 
 interface RenderDiffChildrenProps<LAnnotation> {
@@ -13,6 +13,7 @@ interface RenderDiffChildrenProps<LAnnotation> {
   additionFile?: FileContents;
   renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
+  renderGutterUtility: DiffBasePropsReact<LAnnotation>['renderGutterUtility'];
   renderHoverUtility: DiffBasePropsReact<LAnnotation>['renderHoverUtility'];
   lineAnnotations: DiffBasePropsReact<LAnnotation>['lineAnnotations'];
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
@@ -24,10 +25,12 @@ export function renderDiffChildren<LAnnotation>({
   additionFile,
   renderHeaderMetadata,
   renderAnnotation,
+  renderGutterUtility,
   renderHoverUtility,
   lineAnnotations,
   getHoveredLine,
 }: RenderDiffChildrenProps<LAnnotation>): ReactNode {
+  const gutterUtility = renderGutterUtility ?? renderHoverUtility;
   const metadata = renderHeaderMetadata?.({
     fileDiff,
     deletionFile,
@@ -42,9 +45,9 @@ export function renderDiffChildren<LAnnotation>({
             {renderAnnotation(annotation)}
           </div>
         ))}
-      {renderHoverUtility != null && (
-        <div slot="hover-slot" style={HoverSlotStyles}>
-          {renderHoverUtility(getHoveredLine)}
+      {gutterUtility != null && (
+        <div slot="gutter-utility-slot" style={GutterUtilitySlotStyles}>
+          {gutterUtility(getHoveredLine)}
         </div>
       )}
     </>

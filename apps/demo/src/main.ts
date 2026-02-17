@@ -155,8 +155,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         // expandUnchanged: true,
 
         // Hover Decoration Snippets
-        // enableHoverUtility: true,
-        // renderHoverUtility(getHoveredLine) {
+        // enableGutterUtility: true,
+        // renderGutterUtility(getHoveredLine) {
         //   const el = document.createElement('div');
         //   el.style.width = '20px';
         //   el.style.height = '20px';
@@ -571,8 +571,8 @@ if (renderFileButton != null) {
       enableLineSelection: true,
 
       // Hover Decoration Snippets
-      // enableHoverUtility: true,
-      // renderHoverUtility(getHoveredLine) {
+      // enableGutterUtility: true,
+      // renderGutterUtility(getHoveredLine) {
       //   const el = document.createElement('div');
       //   el.style.width = '20px';
       //   el.style.height = '20px';

@@ -19,6 +19,12 @@ export interface DiffBasePropsReact<LAnnotation> {
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
+  renderGutterUtility?(
+    getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
+  ): ReactNode;
+  /**
+   * @deprecated Use `renderGutterUtility` instead.
+   */
   renderHoverUtility?(
     getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
   ): ReactNode;
@@ -35,6 +41,12 @@ export interface FileProps<LAnnotation> {
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
+  renderGutterUtility?(
+    getHoveredLine: () => GetHoveredLineResult<'file'> | undefined
+  ): ReactNode;
+  /**
+   * @deprecated Use `renderGutterUtility` instead.
+   */
   renderHoverUtility?(
     getHoveredLine: () => GetHoveredLineResult<'file'> | undefined
   ): ReactNode;

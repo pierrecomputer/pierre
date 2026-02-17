@@ -4,7 +4,7 @@ import { HEADER_METADATA_SLOT_ID } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type { FileContents } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
-import { HoverSlotStyles } from '../constants';
+import { GutterUtilitySlotStyles } from '../constants';
 import type { FileProps } from '../types';
 
 interface RenderFileChildrenProps<LAnnotation> {
@@ -12,6 +12,7 @@ interface RenderFileChildrenProps<LAnnotation> {
   renderHeaderMetadata: FileProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: FileProps<LAnnotation>['renderAnnotation'];
   lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
+  renderGutterUtility: FileProps<LAnnotation>['renderGutterUtility'];
   renderHoverUtility: FileProps<LAnnotation>['renderHoverUtility'];
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
 }
@@ -21,9 +22,11 @@ export function renderFileChildren<LAnnotation>({
   renderHeaderMetadata,
   renderAnnotation,
   lineAnnotations,
+  renderGutterUtility,
   renderHoverUtility,
   getHoveredLine,
 }: RenderFileChildrenProps<LAnnotation>): ReactNode {
+  const gutterUtility = renderGutterUtility ?? renderHoverUtility;
   const metadata = renderHeaderMetadata?.(file);
   return (
     <>
@@ -34,9 +37,9 @@ export function renderFileChildren<LAnnotation>({
             {renderAnnotation(annotation)}
           </div>
         ))}
-      {renderHoverUtility != null && (
-        <div slot="hover-slot" style={HoverSlotStyles}>
-          {renderHoverUtility(getHoveredLine)}
+      {gutterUtility != null && (
+        <div slot="gutter-utility-slot" style={GutterUtilitySlotStyles}>
+          {gutterUtility(getHoveredLine)}
         </div>
       )}
     </>

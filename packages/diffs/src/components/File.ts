@@ -36,7 +36,7 @@ import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
-import { createHoverContentNode } from '../utils/createHoverContentNode';
+import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
@@ -71,6 +71,10 @@ export interface FileOptions<LAnnotation>
     MouseEventManagerBaseOptions<'file'>,
     LineSelectionOptions {
   disableFileHeader?: boolean;
+  /**
+   * @deprecated Use `enableGutterUtility` instead.
+   */
+  enableHoverUtility?: boolean;
   renderCustomMetadata?: RenderFileMetadata;
   /**
    * When true, errors during rendering are rethrown instead of being caught
@@ -81,6 +85,12 @@ export interface FileOptions<LAnnotation>
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
+  renderGutterUtility?(
+    getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
+  ): HTMLElement | null;
+  /**
+   * @deprecated Use `renderGutterUtility` instead.
+   */
   renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null;
@@ -110,7 +120,7 @@ export class File<LAnnotation = undefined> {
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
-  protected hoverContent: HTMLElement | undefined;
+  protected gutterUtilityContent: HTMLElement | undefined;
   protected errorWrapper: HTMLElement | undefined;
   protected placeHolder: HTMLElement | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
@@ -299,7 +309,7 @@ export class File<LAnnotation = undefined> {
       this.file = file;
       this.fileRenderer.hydrate(file);
       this.renderAnnotations();
-      this.renderHoverUtility();
+      this.renderGutterUtility();
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
@@ -395,7 +405,7 @@ export class File<LAnnotation = undefined> {
       this.lineSelectionManager.setup(pre);
       this.resizeManager.setup(pre, overflow === 'wrap');
       this.renderAnnotations();
-      this.renderHoverUtility();
+      this.renderGutterUtility();
     } catch (error: unknown) {
       if (disableErrorHandling) {
         throw error;
@@ -447,7 +457,7 @@ export class File<LAnnotation = undefined> {
     this.code?.remove();
     this.errorWrapper?.remove();
     this.headerElement?.remove();
-    this.hoverContent?.remove();
+    this.gutterUtilityContent?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
     this.unsafeCSSStyle?.remove();
@@ -457,7 +467,7 @@ export class File<LAnnotation = undefined> {
     this.code = undefined;
     this.errorWrapper = undefined;
     this.headerElement = undefined;
-    this.hoverContent = undefined;
+    this.gutterUtilityContent = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
     this.unsafeCSSStyle = undefined;
@@ -510,22 +520,26 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private renderHoverUtility() {
-    const { renderHoverUtility } = this.options;
-    if (this.fileContainer == null || renderHoverUtility == null) {
+  private renderGutterUtility() {
+    const renderGutterUtility =
+      this.options.renderGutterUtility ?? this.options.renderHoverUtility;
+    if (this.fileContainer == null || renderGutterUtility == null) {
       return;
     }
-    const element = renderHoverUtility(this.mouseEventManager.getHoveredLine);
-    if (element != null && this.hoverContent != null) {
+    const element = renderGutterUtility(this.mouseEventManager.getHoveredLine);
+    if (element != null && this.gutterUtilityContent != null) {
       return;
     } else if (element == null) {
-      this.hoverContent?.parentNode?.removeChild(this.hoverContent);
-      this.hoverContent = undefined;
+      this.gutterUtilityContent?.parentNode?.removeChild(
+        this.gutterUtilityContent
+      );
+      this.gutterUtilityContent = undefined;
       return;
     }
-    this.hoverContent = createHoverContentNode();
-    this.hoverContent.appendChild(element);
-    this.fileContainer.appendChild(this.hoverContent);
+    const gutterUtilityContent = createGutterUtilityContentNode();
+    gutterUtilityContent.appendChild(element);
+    this.fileContainer.appendChild(gutterUtilityContent);
+    this.gutterUtilityContent = gutterUtilityContent;
   }
 
   private injectUnsafeCSS(): void {

@@ -20,6 +20,7 @@ export function File<LAnnotation = undefined>({
   renderAnnotation,
   renderHeaderMetadata,
   prerenderedHTML,
+  renderGutterUtility,
   renderHoverUtility,
 }: FileProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine } = useFileInstance({
@@ -34,6 +35,7 @@ export function File<LAnnotation = undefined>({
     file,
     renderAnnotation,
     renderHeaderMetadata,
+    renderGutterUtility,
     renderHoverUtility,
     lineAnnotations,
     getHoveredLine,
