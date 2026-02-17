@@ -30,7 +30,7 @@ for (const cfg of TEST_CONFIGS) {
   describe(`controlled subtree expansion preservation [${cfg.label}]`, () => {
     test('collapse parent then expand parent restores previous subtree expanded state', () => {
       const ft = createTestTree(FILES, cfg, {
-        defaultExpandedItems: ['src', 'src/components', 'src/components/deep'],
+        initialExpandedItems: ['src', 'src/components', 'src/components/deep'],
       });
 
       const getExpandedIdForPath = (path: string): string => {

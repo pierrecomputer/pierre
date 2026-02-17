@@ -34,7 +34,7 @@ export const sharedDemoFileTreeOptions: FileTreeOptions = {
 };
 
 export const sharedDemoStateConfig: FileTreeStateConfig = {
-  defaultExpandedItems: ['Build/assets/images/social'],
+  initialExpandedItems: ['Build/assets/images/social'],
   onSelection: (selection: FileTreeSelectionItem[]) => {
     console.log('selection', selection);
   },

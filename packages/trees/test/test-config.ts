@@ -122,26 +122,26 @@ export function createTestTree(
   files: string[],
   config: TestConfig,
   opts: {
-    defaultExpandedItems?: string[];
-    defaultSelectedItems?: string[];
+    initialExpandedItems?: string[];
+    initialSelectedItems?: string[];
   } = {}
 ): TestTree {
   const { flattenEmptyDirectories } = config;
-  const { defaultExpandedItems, defaultSelectedItems } = opts;
+  const { initialExpandedItems, initialSelectedItems } = opts;
 
   const dataLoader = config.createLoader(files, { flattenEmptyDirectories });
   const { pathToId, idToPath } = buildMapsFromLoader(dataLoader, 'root');
 
   const mappedExpandedItems =
-    defaultExpandedItems != null
-      ? expandPathsWithAncestors(defaultExpandedItems, pathToId, {
+    initialExpandedItems != null
+      ? expandPathsWithAncestors(initialExpandedItems, pathToId, {
           flattenEmptyDirectories,
         })
       : undefined;
 
   const mappedSelectedItems =
-    defaultSelectedItems != null
-      ? defaultSelectedItems
+    initialSelectedItems != null
+      ? initialSelectedItems
           .map((path) => {
             if (path.startsWith(FLATTENED_PREFIX)) {
               return pathToId.get(path);

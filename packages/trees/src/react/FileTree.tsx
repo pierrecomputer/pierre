@@ -44,8 +44,8 @@ export interface FileTreeProps {
   containerId?: string;
 
   // Default (uncontrolled) state
-  defaultExpandedItems?: string[];
-  defaultSelectedItems?: string[];
+  initialExpandedItems?: string[];
+  initialSelectedItems?: string[];
 
   // Controlled state
   expandedItems?: string[];
@@ -61,8 +61,8 @@ export function FileTree({
   style,
   prerenderedHTML,
   containerId,
-  defaultExpandedItems,
-  defaultSelectedItems,
+  initialExpandedItems,
+  initialSelectedItems,
   expandedItems,
   selectedItems,
   onExpandedItemsChange,
@@ -72,8 +72,8 @@ export function FileTree({
   const children = renderFileTreeChildren();
   const { ref } = useFileTreeInstance({
     options,
-    defaultExpandedItems,
-    defaultSelectedItems,
+    initialExpandedItems,
+    initialSelectedItems,
     expandedItems,
     selectedItems,
     onExpandedItemsChange,

@@ -381,8 +381,8 @@ function ReactClientRendered({
   return (
     <FileTreeReact
       options={options}
-      defaultExpandedItems={stateConfig?.defaultExpandedItems}
-      defaultSelectedItems={stateConfig?.defaultSelectedItems}
+      initialExpandedItems={stateConfig?.initialExpandedItems}
+      initialSelectedItems={stateConfig?.initialSelectedItems}
       onSelection={stateConfig?.onSelection}
     />
   );
@@ -414,8 +414,8 @@ function ReactServerRendered({
       <FileTreeReact
         containerId={containerId}
         options={options}
-        defaultExpandedItems={stateConfig?.defaultExpandedItems}
-        defaultSelectedItems={stateConfig?.defaultSelectedItems}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        initialSelectedItems={stateConfig?.initialSelectedItems}
         onSelection={stateConfig?.onSelection}
       />
     </>
@@ -653,8 +653,8 @@ function ReactSSRUncontrolled({
       <FileTreeReact
         containerId={containerId}
         options={options}
-        defaultExpandedItems={stateConfig?.defaultExpandedItems}
-        defaultSelectedItems={stateConfig?.defaultSelectedItems}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        initialSelectedItems={stateConfig?.initialSelectedItems}
         onSelection={stateConfig?.onSelection}
         onExpandedItemsChange={(items) => {
           addLog(`expanded: [${items.join(', ')}]`);
@@ -683,7 +683,7 @@ function ReactSSRControlled({
   prerenderedHTML: string;
 }) {
   const [expandedItems, setExpandedItems] = useState<string[]>(() =>
-    expandImplicitParentDirectories(stateConfig?.defaultExpandedItems ?? [])
+    expandImplicitParentDirectories(stateConfig?.initialExpandedItems ?? [])
   );
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const { log, addLog } = useStateLog();

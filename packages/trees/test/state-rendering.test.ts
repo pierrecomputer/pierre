@@ -53,9 +53,9 @@ for (const cfg of TEST_CONFIGS) {
       expect(names).toEqual(['README.md', 'src']);
     });
 
-    test('defaultExpandedItems expands the specified folder', () => {
+    test('initialExpandedItems expands the specified folder', () => {
       const { tree } = createTestTree(standardFiles, cfg, {
-        defaultExpandedItems: ['src'],
+        initialExpandedItems: ['src'],
       });
       const items = tree.getItems();
 
@@ -72,7 +72,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('deeply expanded tree shows nested children', () => {
       const { tree } = createTestTree(standardFiles, cfg, {
-        defaultExpandedItems: ['src', 'src/components', 'src/lib'],
+        initialExpandedItems: ['src', 'src/components', 'src/lib'],
       });
       const items = tree.getItems();
 
@@ -85,10 +85,10 @@ for (const cfg of TEST_CONFIGS) {
       expect(names).toContain('README.md');
     });
 
-    test('defaultSelectedItems marks correct item', () => {
+    test('initialSelectedItems marks correct item', () => {
       const { tree } = createTestTree(standardFiles, cfg, {
-        defaultExpandedItems: ['src'],
-        defaultSelectedItems: ['src/index.ts'],
+        initialExpandedItems: ['src'],
+        initialSelectedItems: ['src/index.ts'],
       });
 
       const selectedIds = tree.getState().selectedItems ?? [];
@@ -102,8 +102,8 @@ for (const cfg of TEST_CONFIGS) {
     test('selection mapping does not select hidden flattened IDs in no-flatten mode', () => {
       const files = ['config/project/a.txt'];
       const { tree, idToPath } = createTestTree(files, cfg, {
-        defaultExpandedItems: ['config'],
-        defaultSelectedItems: ['config/project'],
+        initialExpandedItems: ['config'],
+        initialSelectedItems: ['config/project'],
       });
 
       if (cfg.flattenEmptyDirectories) {
@@ -128,7 +128,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('file items are not folders', () => {
       const { tree } = createTestTree(standardFiles, cfg, {
-        defaultExpandedItems: ['src', 'src/components'],
+        initialExpandedItems: ['src', 'src/components'],
       });
       const items = tree.getItems();
 
@@ -150,7 +150,7 @@ for (const cfg of TEST_CONFIGS) {
     test('different initial states produce different item sets', () => {
       const { tree: collapsed } = createTestTree(standardFiles, cfg);
       const { tree: expanded } = createTestTree(standardFiles, cfg, {
-        defaultExpandedItems: ['src', 'src/components'],
+        initialExpandedItems: ['src', 'src/components'],
       });
 
       expect(collapsed.getItems().length).toBeLessThan(
@@ -179,7 +179,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('collapsing removes children from visible items', () => {
       const { tree } = createTestTree(standardFiles, cfg, {
-        defaultExpandedItems: ['src', 'src/components'],
+        initialExpandedItems: ['src', 'src/components'],
       });
 
       const expandedCount = tree.getItems().length;
@@ -199,7 +199,7 @@ for (const cfg of flattenConfigs) {
     test('flattened directories are present when flattenEmptyDirectories is true', () => {
       const { tree } = createTestTree(flattenedFiles, cfg, {
         // Expand src so we can see its flattened children
-        defaultExpandedItems: ['src'],
+        initialExpandedItems: ['src'],
       });
       const items = tree.getItems();
 
@@ -214,7 +214,7 @@ for (const cfg of flattenConfigs) {
 
     test('expanding a flattened directory shows its children', () => {
       const { tree } = createTestTree(flattenedFiles, cfg, {
-        defaultExpandedItems: ['src/components/deep'],
+        initialExpandedItems: ['src/components/deep'],
       });
       const items = tree.getItems();
 

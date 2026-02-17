@@ -11,8 +11,8 @@ interface UseFileTreeInstanceProps {
   options: FileTreeOptions;
 
   // Default (uncontrolled) state
-  defaultExpandedItems?: string[];
-  defaultSelectedItems?: string[];
+  initialExpandedItems?: string[];
+  initialSelectedItems?: string[];
 
   // Controlled state
   expandedItems?: string[];
@@ -28,8 +28,8 @@ interface UseFileTreeInstanceReturn {
 
 export function useFileTreeInstance({
   options,
-  defaultExpandedItems,
-  defaultSelectedItems,
+  initialExpandedItems,
+  initialSelectedItems,
   expandedItems,
   selectedItems,
   onExpandedItemsChange,
@@ -47,8 +47,8 @@ export function useFileTreeInstance({
     onExpandedItemsChange,
     onSelectedItemsChange,
     onSelection,
-    defaultExpandedItems,
-    defaultSelectedItems,
+    initialExpandedItems,
+    initialSelectedItems,
   });
   statePropsRef.current = {
     expandedItems,
@@ -56,8 +56,8 @@ export function useFileTreeInstance({
     onExpandedItemsChange,
     onSelectedItemsChange,
     onSelection,
-    defaultExpandedItems,
-    defaultSelectedItems,
+    initialExpandedItems,
+    initialSelectedItems,
   };
 
   // Ref callback that handles mount/unmount and re-runs when options change.
@@ -113,8 +113,8 @@ export function useFileTreeInstance({
             // config.state in the Preact Root and override imperative updates.
             // Subsequent controlled updates flow via the useEffect below calling
             // setExpandedItems/setSelectedItems imperatively.
-            defaultExpandedItems: sp.defaultExpandedItems ?? sp.expandedItems,
-            defaultSelectedItems: sp.defaultSelectedItems ?? sp.selectedItems,
+            initialExpandedItems: sp.initialExpandedItems ?? sp.expandedItems,
+            initialSelectedItems: sp.initialSelectedItems ?? sp.selectedItems,
             onExpandedItemsChange: sp.onExpandedItemsChange,
             onSelectedItemsChange: sp.onSelectedItemsChange,
             onSelection: sp.onSelection,

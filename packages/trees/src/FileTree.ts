@@ -66,8 +66,8 @@ export interface FileTreeOptions {
 
 export interface FileTreeStateConfig {
   // Initial state (uncontrolled - used once at creation)
-  defaultExpandedItems?: string[];
-  defaultSelectedItems?: string[];
+  initialExpandedItems?: string[];
+  initialSelectedItems?: string[];
 
   // Controlled state (applied every render, overrides internal state)
   expandedItems?: string[];

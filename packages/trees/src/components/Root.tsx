@@ -216,9 +216,9 @@ export function Root({
       return ids.length > 0 ? ids : [];
     };
 
-    // Merge top-level defaultExpandedItems/defaultSelectedItems into config.initialState
-    const topLevelInitialExpanded = stateConfig?.defaultExpandedItems;
-    const topLevelInitialSelected = stateConfig?.defaultSelectedItems;
+    // Merge top-level initialExpandedItems/initialSelectedItems into config.initialState
+    const topLevelInitialExpanded = stateConfig?.initialExpandedItems;
+    const topLevelInitialSelected = stateConfig?.initialSelectedItems;
     const topLevelInitialExpandedIds =
       topLevelInitialExpanded != null
         ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId, {

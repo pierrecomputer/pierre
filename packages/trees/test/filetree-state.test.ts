@@ -53,7 +53,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('setExpandedItems with empty array collapses all', () => {
       const ft = createTestTree(testFiles, cfg, {
-        defaultExpandedItems: ['src', 'src/components'],
+        initialExpandedItems: ['src', 'src/components'],
       });
 
       // Initially expanded
@@ -78,7 +78,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('collapseItem removes a single folder', () => {
       const ft = createTestTree(testFiles, cfg, {
-        defaultExpandedItems: ['src', 'src/components'],
+        initialExpandedItems: ['src', 'src/components'],
       });
 
       const beforeCount = ft.tree.getItems().length;
@@ -172,7 +172,7 @@ for (const cfg of flattenConfigs) {
 
     test('collapsing a flattened directory hides children', () => {
       const ft = createTestTree(flattenedFiles, cfg, {
-        defaultExpandedItems: ['src/components/deep'],
+        initialExpandedItems: ['src/components/deep'],
       });
 
       const beforeNames = ft.tree.getItems().map((i) => i.getItemName());
@@ -222,7 +222,7 @@ for (const cfg of flattenConfigs) {
 
     test('collapse then round-trip does not re-expand', () => {
       const ft = createTestTree(flattenedFiles, cfg, {
-        defaultExpandedItems: ['src/components/deep', 'src/lib'],
+        initialExpandedItems: ['src/components/deep', 'src/lib'],
       });
 
       // Collapse one folder
@@ -265,7 +265,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('collapsing a top-level folder stays collapsed after round-trip', () => {
       const ft = createTestTree(deepFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       // Build should be expanded (its children visible)
@@ -294,7 +294,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('collapse parent then re-expand restores subtree expansion state after round-trip', () => {
       const ft = createTestTree(deepFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       // Deep file visible when the subtree is expanded
@@ -335,7 +335,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('collapsing Build/assets/images stays collapsed after round-trip', () => {
       const ft = createTestTree(deepFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       ft.collapseItem('Build/assets/images');
@@ -357,7 +357,7 @@ for (const cfg of TEST_CONFIGS) {
 
     test('collapsing Build/assets/images/social stays collapsed after round-trip', () => {
       const ft = createTestTree(deepFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       // Verify social's children are visible
@@ -395,7 +395,7 @@ for (const cfg of flattenConfigs) {
 
     test('collapsing Build stays collapsed after round-trip (flattened)', () => {
       const ft = createTestTree(demoFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       // Build should be expanded
@@ -421,7 +421,7 @@ for (const cfg of flattenConfigs) {
 
     test('collapsing flattened assets/images/social stays collapsed after round-trip', () => {
       const ft = createTestTree(demoFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       // logo.png should be visible (social is expanded)
@@ -446,7 +446,7 @@ for (const cfg of flattenConfigs) {
 
     test('collapsing flattened folder via callback round-trip stays collapsed', () => {
       const ft = createTestTree(demoFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       // Simulate what Root.tsx does: map IDs to paths, strip f::, filter orphans
@@ -484,7 +484,7 @@ for (const cfg of flattenConfigs) {
 
     test('collapse Build → re-expand → expand flattened folder stays expanded via callback', () => {
       const ft = createTestTree(demoFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       const simulateCallbackRoundTrip = () => {
@@ -536,7 +536,7 @@ for (const cfg of flattenConfigs) {
 
     test('collapse Build → re-expand → collapse flattened folder stays collapsed via callback', () => {
       const ft = createTestTree(demoFiles, cfg, {
-        defaultExpandedItems: ['Build/assets/images/social'],
+        initialExpandedItems: ['Build/assets/images/social'],
       });
 
       const simulateCallbackRoundTrip = () => {
