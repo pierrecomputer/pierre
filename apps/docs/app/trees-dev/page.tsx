@@ -39,12 +39,12 @@ export default async function FileTreePage() {
     useLazyDataLoader,
   };
 
+  const mainSsr = preloadFileTree(fileTreeOptions, sharedDemoStateConfig);
+
   return (
     <ClientPage
-      preloadedFileTreeHtml={preloadFileTree(
-        fileTreeOptions,
-        sharedDemoStateConfig
-      )}
+      preloadedFileTreeHtml={mainSsr.shadowHtml}
+      preloadedFileTreeContainerHtml={mainSsr.html}
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
       initialUseLazyDataLoader={useLazyDataLoader}
     />

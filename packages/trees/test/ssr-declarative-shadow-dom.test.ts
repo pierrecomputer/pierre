@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
 let FileTree: typeof import('../src/FileTree').FileTree;
-let createFileTreeSsrPayload: typeof import('../src/ssr/preloadFileTree').createFileTreeSsrPayload;
+let preloadFileTree: typeof import('../src/ssr/preloadFileTree').preloadFileTree;
 let ensureFileTreeStyles: typeof import('../src/components/web-components').ensureFileTreeStyles;
 let adoptDeclarativeShadowDom: typeof import('../src/components/web-components').adoptDeclarativeShadowDom;
 let preactRenderer: typeof import('../src/utils/preactRenderer').preactRenderer;
@@ -35,21 +35,24 @@ beforeAll(async () => {
   Object.assign(globalThis, { CSSStyleSheet: MockCSSStyleSheet });
 
   ({ FileTree } = await import('../src/FileTree'));
-  ({ createFileTreeSsrPayload } = await import('../src/ssr/preloadFileTree'));
+  ({ preloadFileTree } = await import('../src/ssr/preloadFileTree'));
   ({ ensureFileTreeStyles, adoptDeclarativeShadowDom } =
     await import('../src/components/web-components'));
   ({ preactRenderer } = await import('../src/utils/preactRenderer'));
 });
 
 describe('SSR + declarative shadow DOM', () => {
-  test('createFileTreeSsrPayload returns an id and shadow HTML containing the expected wrapper', () => {
-    const payload = createFileTreeSsrPayload({
-      files: ['README.md', 'src/index.ts'],
+  test('preloadFileTree returns an id and shadow HTML containing the expected wrapper', () => {
+    const payload = preloadFileTree({
+      initialFiles: ['README.md', 'src/index.ts'],
     });
 
     expect(payload.id).toMatch(/^ft_srv_/);
     expect(payload.shadowHtml).toContain('data-file-tree-style');
     expect(payload.shadowHtml).toContain(`data-file-tree-id="${payload.id}"`);
+    expect(payload.html).toContain(`<file-tree-container id="${payload.id}">`);
+    expect(payload.html).toContain('<template shadowrootmode="open">');
+    expect(payload.html).toContain(payload.shadowHtml);
   });
 
   test('ensureFileTreeStyles adopts styles and removes SSR inline <style> marker when supported', () => {
@@ -89,8 +92,8 @@ describe('SSR + declarative shadow DOM', () => {
   });
 
   test('FileTree.hydrate uses existing SSR wrapper and calls hydrateRoot (not renderRoot)', () => {
-    const payload = createFileTreeSsrPayload({
-      files: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+    const payload = preloadFileTree({
+      initialFiles: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
     });
 
     const container = document.createElement('file-tree-container');
@@ -110,7 +113,7 @@ describe('SSR + declarative shadow DOM', () => {
     };
 
     try {
-      const ft = new FileTree({ files: ['README.md', 'src/index.ts'] });
+      const ft = new FileTree({ initialFiles: ['README.md', 'src/index.ts'] });
       ft.hydrate({ fileTreeContainer: container });
       expect(ft.__id).toBe(payload.id);
       expect(hydrated).toBe(1);
@@ -119,6 +122,25 @@ describe('SSR + declarative shadow DOM', () => {
       preactRenderer.hydrateRoot = origHydrate;
       preactRenderer.renderRoot = origRender;
     }
+  });
+
+  test('getFiles returns initialFiles from constructor', () => {
+    const files = ['README.md', 'src/index.ts'];
+    const ft = new FileTree({ initialFiles: files });
+    expect(ft.getFiles()).toEqual(files);
+  });
+
+  test('setFiles updates getFiles return value', () => {
+    const ft = new FileTree({ initialFiles: ['a.txt'] });
+    const newFiles = ['b.txt', 'c.txt'];
+    ft.setFiles(newFiles);
+    expect(ft.getFiles()).toEqual(newFiles);
+  });
+
+  test('setOptions with state.files delegates to setFiles', () => {
+    const ft = new FileTree({ initialFiles: ['a.txt'] });
+    ft.setOptions({}, { files: ['b.txt'] });
+    expect(ft.getFiles()).toEqual(['b.txt']);
   });
 
   test('FileTree.hydrate falls back to renderRoot when no SSR wrapper is found', () => {
@@ -145,7 +167,7 @@ describe('SSR + declarative shadow DOM', () => {
     };
 
     try {
-      const ft = new FileTree({ files: ['README.md', 'src/index.ts'] });
+      const ft = new FileTree({ initialFiles: ['README.md', 'src/index.ts'] });
       ft.hydrate({ fileTreeContainer: container });
       expect(hydrated).toBe(0);
       expect(rendered).toBe(1);

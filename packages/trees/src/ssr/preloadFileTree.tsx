@@ -12,11 +12,13 @@ export type FileTreeSsrPayload = {
   id: string;
   /** HTML that should be placed INSIDE a declarative shadow DOM <template>. */
   shadowHtml: string;
+  /** Full HTML including the <file-tree-container> element with declarative shadow DOM. */
+  html: string;
 };
 
 const STYLE_MARKER_ATTR = 'data-file-tree-style';
 
-export function createFileTreeSsrPayload(
+export function preloadFileTree(
   fileTreeOptions: FileTreeOptions,
   stateConfig?: FileTreeStateConfig
 ): FileTreeSsrPayload {
@@ -27,16 +29,7 @@ export function createFileTreeSsrPayload(
 </div>
 `;
 
-  return { id, shadowHtml };
-}
+  const html = `<file-tree-container id="${id}"><template shadowrootmode="open">${shadowHtml}</template></file-tree-container>`;
 
-/**
- * Legacy helper returning only the shadow DOM HTML.
- * Prefer `createFileTreeSsrPayload()` so you can reuse the generated `id`.
- */
-export function preloadFileTree(
-  fileTreeOptions: FileTreeOptions,
-  stateConfig?: FileTreeStateConfig
-): string {
-  return createFileTreeSsrPayload(fileTreeOptions, stateConfig).shadowHtml;
+  return { id, shadowHtml, html };
 }

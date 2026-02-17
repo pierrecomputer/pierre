@@ -78,8 +78,12 @@ export function Root({
   callbacksRef,
 }: FileTreeRootProps): JSX.Element {
   'use no memo';
-  const { config, files, flattenEmptyDirectories, useLazyDataLoader } =
-    fileTreeOptions;
+  const {
+    config,
+    initialFiles: files,
+    flattenEmptyDirectories,
+    useLazyDataLoader,
+  } = fileTreeOptions;
 
   const treeDomId = useMemo(() => {
     const base = fileTreeOptions.id ?? 'ft';

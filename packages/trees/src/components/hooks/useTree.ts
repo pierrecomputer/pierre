@@ -4,7 +4,7 @@ import {
   type TreeInstance,
   type TreeState,
 } from '@headless-tree/core';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
   'use no memo';
@@ -39,6 +39,14 @@ export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
       config.setState?.(state);
     },
   }));
+
+  // Rebuild when the dataLoader changes (e.g. files were updated via setFiles).
+  // Skip the initial render — the constructor already calls rebuildTree().
+  const prevDataLoaderRef = useRef(config.dataLoader);
+  if (prevDataLoaderRef.current !== config.dataLoader) {
+    prevDataLoaderRef.current = config.dataLoader;
+    tree.current.rebuildTree();
+  }
 
   return tree.current;
 };

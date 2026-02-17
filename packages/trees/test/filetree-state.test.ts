@@ -129,6 +129,31 @@ for (const cfg of TEST_CONFIGS) {
       }
     });
 
+    test('toggleItemExpanded opens a closed folder', () => {
+      const ft = createTestTree(testFiles, cfg);
+      // src is initially collapsed
+      expect(ft.getExpandedItems()).not.toContain('src');
+
+      ft.toggleItemExpanded('src');
+
+      expect(ft.getExpandedItems()).toContain('src');
+      const names = ft.tree.getItems().map((i) => i.getItemName());
+      expect(names).toContain('index.ts');
+    });
+
+    test('toggleItemExpanded closes an open folder', () => {
+      const ft = createTestTree(testFiles, cfg, {
+        initialExpandedItems: ['src'],
+      });
+      expect(ft.getExpandedItems()).toContain('src');
+
+      ft.toggleItemExpanded('src');
+
+      expect(ft.getExpandedItems()).not.toContain('src');
+      const names = ft.tree.getItems().map((i) => i.getItemName());
+      expect(names).not.toContain('index.ts');
+    });
+
     test('callback plumbing: onExpandedItemsChange fires with paths', () => {
       const ft = createTestTree(testFiles, cfg);
       const received: string[][] = [];

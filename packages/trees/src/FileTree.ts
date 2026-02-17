@@ -52,10 +52,11 @@ export interface FileTreeCallbacks {
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
+  onFilesChange?: (files: string[]) => void;
 }
 
 export interface FileTreeOptions {
-  files: string[];
+  initialFiles: string[];
   id?: string;
   flattenEmptyDirectories?: boolean;
   useLazyDataLoader?: boolean;
@@ -72,11 +73,13 @@ export interface FileTreeStateConfig {
   // Controlled state (applied every render, overrides internal state)
   expandedItems?: string[];
   selectedItems?: string[];
+  files?: string[];
 
   // State change callbacks
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
+  onFilesChange?: (files: string[]) => void;
 }
 
 const isBrowser = typeof document !== 'undefined';
@@ -113,6 +116,7 @@ export class FileTree {
         onExpandedItemsChange: stateConfig.onExpandedItemsChange,
         onSelectedItemsChange: stateConfig.onSelectedItemsChange,
         onSelection: stateConfig.onSelection,
+        onFilesChange: stateConfig.onFilesChange,
       },
     };
   }
@@ -309,8 +313,12 @@ export class FileTree {
   // --- Heavier updates (re-render) ---
 
   setFiles(files: string[]): void {
-    this.options = { ...this.options, files };
+    this.options = { ...this.options, initialFiles: files };
     this.rerender();
+  }
+
+  getFiles(): string[] {
+    return this.options.initialFiles;
   }
 
   setOptions(
@@ -329,10 +337,13 @@ export class FileTree {
     if (state?.onSelection !== undefined) {
       this.callbacksRef.current.onSelection = state.onSelection;
     }
+    if (state?.onFilesChange !== undefined) {
+      this.callbacksRef.current.onFilesChange = state.onFilesChange;
+    }
 
     // Check if structural props changed (require re-render)
     const structuralKeys = [
-      'files',
+      'initialFiles',
       'flattenEmptyDirectories',
       'useLazyDataLoader',
       'config',
@@ -354,6 +365,9 @@ export class FileTree {
       this.rerender();
     } else {
       // State-only changes - use imperative methods
+      if (state?.files !== undefined) {
+        this.setFiles(state.files);
+      }
       if (state?.expandedItems !== undefined) {
         this.setExpandedItems(state.expandedItems);
       }

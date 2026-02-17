@@ -1,15 +1,13 @@
 'use client';
 
-import '@pierre/trees/web-components';
+import { expandImplicitParentDirectories, FileTree } from '@pierre/trees';
 import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/trees';
-import { FileTree } from '@pierre/trees';
-import { expandImplicitParentDirectories } from '@pierre/trees';
 import { FileTree as FileTreeReact } from '@pierre/trees/react';
+import '@pierre/trees/web-components';
 import {
   startTransition,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -25,12 +23,14 @@ import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from './demo-data';
 
 interface ClientPageProps {
   preloadedFileTreeHtml: string;
+  preloadedFileTreeContainerHtml: string;
   initialFlattenEmptyDirectories?: boolean;
   initialUseLazyDataLoader?: boolean;
 }
 
 export function ClientPage({
   preloadedFileTreeHtml,
+  preloadedFileTreeContainerHtml,
   initialFlattenEmptyDirectories,
   initialUseLazyDataLoader,
 }: ClientPageProps) {
@@ -54,6 +54,9 @@ export function ClientPage({
     }),
     [flattenEmptyDirectories, useLazyDataLoader]
   );
+
+  // For React components, separate initialFiles from options
+  const { initialFiles: reactFiles, ...reactOptions } = fileTreeOptions;
 
   const handleToggleFlatten = () => {
     startTransition(() => {
@@ -162,7 +165,7 @@ export function ClientPage({
           <VanillaServerRendered
             options={fileTreeOptions}
             stateConfig={sharedDemoStateConfig}
-            prerenderedHTML={preloadedFileTreeHtml}
+            containerHtml={preloadedFileTreeContainerHtml}
           />
         </ExampleCard>
 
@@ -171,7 +174,8 @@ export function ClientPage({
           description="React FileTree component rendered entirely on the client"
         >
           <ReactClientRendered
-            options={fileTreeOptions}
+            options={reactOptions}
+            initialFiles={reactFiles}
             stateConfig={sharedDemoStateConfig}
           />
         </ExampleCard>
@@ -181,7 +185,8 @@ export function ClientPage({
           description="React FileTree with prerendered HTML, hydrated on client"
         >
           <ReactServerRendered
-            options={fileTreeOptions}
+            options={reactOptions}
+            initialFiles={reactFiles}
             stateConfig={sharedDemoStateConfig}
             prerenderedHTML={preloadedFileTreeHtml}
           />
@@ -199,15 +204,40 @@ export function ClientPage({
         <VanillaSSRState
           options={fileTreeOptions}
           stateConfig={sharedDemoStateConfig}
-          prerenderedHTML={preloadedFileTreeHtml}
+          containerHtml={preloadedFileTreeContainerHtml}
         />
         <ReactSSRUncontrolled
-          options={fileTreeOptions}
+          options={reactOptions}
+          initialFiles={reactFiles}
           stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedFileTreeHtml}
         />
         <ReactSSRControlled
+          options={reactOptions}
+          initialFiles={reactFiles}
+          stateConfig={sharedDemoStateConfig}
+          prerenderedHTML={preloadedFileTreeHtml}
+        />
+      </div>
+
+      {/* Divider */}
+      <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
+
+      {/* Dynamic Files Examples */}
+      <h2 id="dynamic-files" className="mb-4 text-2xl font-bold">
+        Dynamic Files
+      </h2>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <VanillaDynamicFiles
           options={fileTreeOptions}
+          stateConfig={sharedDemoStateConfig}
+        />
+        <ReactControlledFiles
+          options={reactOptions}
+          stateConfig={sharedDemoStateConfig}
+        />
+        <ReactSSRControlledFiles
+          options={reactOptions}
           stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedFileTreeHtml}
         />
@@ -296,28 +326,30 @@ function VanillaClientRendered({
 
 /**
  * Vanilla FileTree - Server-Side Rendered
- * Uses declarative shadow DOM to prerender HTML, then hydrates with FileTree instance
+ * Uses declarative shadow DOM to prerender HTML, then hydrates with FileTree instance.
+ * The preloadFileTree() `html` output is injected into a wrapper div — the consumer
+ * doesn't need to know about <file-tree-container> or <template shadowrootmode>.
  */
 function VanillaServerRendered({
   options,
   stateConfig,
-  prerenderedHTML,
+  containerHtml,
 }: {
   options: FileTreeOptions;
   stateConfig?: FileTreeStateConfig;
-  prerenderedHTML: string;
+  containerHtml: string;
 }) {
   const instanceRef = useRef<FileTree | null>(null);
   const hasHydratedRef = useRef(false);
 
   const ref = useCallback(
-    (node: HTMLElement | null) => {
+    (node: HTMLDivElement | null) => {
       if (node == null) {
         return;
       }
 
-      // The ref is on the <file-tree-container> custom element itself
-      const fileTreeContainer = node;
+      const fileTreeContainer = node.querySelector('file-tree-container');
+      if (!(fileTreeContainer instanceof HTMLElement)) return;
 
       // Clean up previous instance on options change
       if (instanceRef.current != null) {
@@ -357,11 +389,9 @@ function VanillaServerRendered({
   );
 
   return (
-    <file-tree-container
+    <div
       ref={ref}
-      dangerouslySetInnerHTML={{
-        __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-      }}
+      dangerouslySetInnerHTML={{ __html: containerHtml }}
       suppressHydrationWarning
     />
   );
@@ -373,14 +403,17 @@ function VanillaServerRendered({
  */
 function ReactClientRendered({
   options,
+  initialFiles,
   stateConfig,
 }: {
-  options: FileTreeOptions;
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
   stateConfig?: FileTreeStateConfig;
 }) {
   return (
     <FileTreeReact
       options={options}
+      initialFiles={initialFiles}
       initialExpandedItems={stateConfig?.initialExpandedItems}
       initialSelectedItems={stateConfig?.initialSelectedItems}
       onSelection={stateConfig?.onSelection}
@@ -394,31 +427,24 @@ function ReactClientRendered({
  */
 function ReactServerRendered({
   options,
+  initialFiles,
   stateConfig,
   prerenderedHTML,
 }: {
-  options: FileTreeOptions;
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
   stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
-  const containerId = useId();
   return (
-    <>
-      <file-tree-container
-        id={containerId}
-        dangerouslySetInnerHTML={{
-          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-        }}
-        suppressHydrationWarning
-      />
-      <FileTreeReact
-        containerId={containerId}
-        options={options}
-        initialExpandedItems={stateConfig?.initialExpandedItems}
-        initialSelectedItems={stateConfig?.initialSelectedItems}
-        onSelection={stateConfig?.onSelection}
-      />
-    </>
+    <FileTreeReact
+      options={options}
+      initialFiles={initialFiles}
+      prerenderedHTML={prerenderedHTML}
+      initialExpandedItems={stateConfig?.initialExpandedItems}
+      initialSelectedItems={stateConfig?.initialSelectedItems}
+      onSelection={stateConfig?.onSelection}
+    />
   );
 }
 
@@ -492,11 +518,11 @@ function StateLog({
 function VanillaSSRState({
   options,
   stateConfig,
-  prerenderedHTML,
+  containerHtml,
 }: {
   options: FileTreeOptions;
   stateConfig?: FileTreeStateConfig;
-  prerenderedHTML: string;
+  containerHtml: string;
 }) {
   const instanceRef = useRef<FileTree | null>(null);
   const hasHydratedRef = useRef(false);
@@ -516,12 +542,13 @@ function VanillaSSRState({
   );
 
   const ref = useCallback(
-    (node: HTMLElement | null) => {
+    (node: HTMLDivElement | null) => {
       if (node == null) {
         return;
       }
 
-      const fileTreeContainer = node;
+      const fileTreeContainer = node.querySelector('file-tree-container');
+      if (!(fileTreeContainer instanceof HTMLElement)) return;
 
       if (instanceRef.current != null) {
         instanceRef.current.cleanUp();
@@ -603,11 +630,9 @@ function VanillaSSRState({
         />
       }
     >
-      <file-tree-container
+      <div
         ref={ref}
-        dangerouslySetInnerHTML={{
-          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-        }}
+        dangerouslySetInnerHTML={{ __html: containerHtml }}
         suppressHydrationWarning
       />
     </ExampleCard>
@@ -621,15 +646,16 @@ function VanillaSSRState({
  */
 function ReactSSRUncontrolled({
   options,
+  initialFiles,
   stateConfig,
   prerenderedHTML,
 }: {
-  options: FileTreeOptions;
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
   stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
   const { log, addLog } = useStateLog();
-  const containerId = useId();
 
   return (
     <ExampleCard
@@ -643,16 +669,10 @@ function ReactSSRUncontrolled({
         />
       }
     >
-      <file-tree-container
-        id={containerId}
-        dangerouslySetInnerHTML={{
-          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-        }}
-        suppressHydrationWarning
-      />
       <FileTreeReact
-        containerId={containerId}
         options={options}
+        initialFiles={initialFiles}
+        prerenderedHTML={prerenderedHTML}
         initialExpandedItems={stateConfig?.initialExpandedItems}
         initialSelectedItems={stateConfig?.initialSelectedItems}
         onSelection={stateConfig?.onSelection}
@@ -675,10 +695,12 @@ function ReactSSRUncontrolled({
  */
 function ReactSSRControlled({
   options,
+  initialFiles,
   stateConfig,
   prerenderedHTML,
 }: {
-  options: FileTreeOptions;
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
   stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
@@ -687,7 +709,6 @@ function ReactSSRControlled({
   );
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const { log, addLog } = useStateLog();
-  const containerId = useId();
 
   const handleExpandedChange = useCallback(
     (items: string[]) => {
@@ -759,21 +780,236 @@ function ReactSSRControlled({
         />
       }
     >
-      <file-tree-container
-        id={containerId}
-        dangerouslySetInnerHTML={{
-          __html: `<template shadowrootmode="open">${prerenderedHTML}</template>`,
-        }}
-        suppressHydrationWarning
-      />
       <FileTreeReact
-        containerId={containerId}
         options={options}
+        initialFiles={initialFiles}
+        prerenderedHTML={prerenderedHTML}
         onSelection={stateConfig?.onSelection}
         expandedItems={expandedItems}
         onExpandedItemsChange={handleExpandedChange}
         selectedItems={selectedItems}
         onSelectedItemsChange={handleSelectedChange}
+      />
+    </ExampleCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic Files Examples
+// ---------------------------------------------------------------------------
+
+const EXTRA_FILE = 'Build/assets/images/social/logo2.png';
+
+/**
+ * Vanilla FileTree — Dynamic Files
+ * Uses setFiles() imperatively to add/remove files.
+ */
+function VanillaDynamicFiles({
+  options,
+  stateConfig,
+}: {
+  options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
+}) {
+  const instanceRef = useRef<FileTree | null>(null);
+  const [hasExtra, setHasExtra] = useState(false);
+
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node == null) {
+        return;
+      }
+
+      if (instanceRef.current != null) {
+        instanceRef.current.cleanUp();
+        node.innerHTML = '';
+      }
+
+      const fileTree = new FileTree(
+        { ...options, initialFiles: sharedDemoFileTreeOptions.initialFiles },
+        stateConfig
+      );
+      fileTree.render({ containerWrapper: node });
+      instanceRef.current = fileTree;
+
+      return () => {
+        fileTree.cleanUp();
+        instanceRef.current = null;
+      };
+    },
+    [options, stateConfig]
+  );
+
+  return (
+    <ExampleCard
+      title="Vanilla — Dynamic Files"
+      description="Uses setFiles() imperatively to add/remove files without recreating the tree"
+      controls={
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => {
+              instanceRef.current?.setFiles([
+                ...sharedDemoFileTreeOptions.initialFiles,
+                EXTRA_FILE,
+              ]);
+              setHasExtra(true);
+            }}
+          >
+            Add logo2.png
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => {
+              instanceRef.current?.setFiles(
+                sharedDemoFileTreeOptions.initialFiles
+              );
+              setHasExtra(false);
+            }}
+          >
+            Remove logo2.png
+          </button>
+        </div>
+      }
+      footer={
+        <p className="mt-2 text-xs text-gray-500">
+          {hasExtra ? 'logo2.png added' : 'logo2.png not present'}
+        </p>
+      }
+    >
+      <div ref={ref} />
+    </ExampleCard>
+  );
+}
+
+/**
+ * React FileTree — Controlled Files
+ * files in React state, add/remove buttons, tree reflects changes.
+ */
+function ReactControlledFiles({
+  options,
+  stateConfig,
+}: {
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  stateConfig?: FileTreeStateConfig;
+}) {
+  const [files, setFiles] = useState(sharedDemoFileTreeOptions.initialFiles);
+
+  return (
+    <ExampleCard
+      title="React — Controlled Files"
+      description="files prop controlled by React state. Tree updates without instance recreation"
+      controls={
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => {
+              if (!files.includes(EXTRA_FILE)) {
+                setFiles([...files, EXTRA_FILE]);
+              }
+            }}
+          >
+            Add logo2.png
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => {
+              if (files.includes(EXTRA_FILE)) {
+                setFiles(files.filter((f) => f !== EXTRA_FILE));
+              }
+            }}
+          >
+            Remove logo2.png
+          </button>
+        </div>
+      }
+      footer={
+        <p className="mt-2 text-xs text-gray-500">
+          {files.includes(EXTRA_FILE)
+            ? 'logo2.png added'
+            : 'logo2.png not present'}
+        </p>
+      }
+    >
+      <FileTreeReact
+        options={options}
+        files={files}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        onSelection={stateConfig?.onSelection}
+      />
+    </ExampleCard>
+  );
+}
+
+/**
+ * React FileTree — SSR Controlled Files
+ * Same as ReactControlledFiles but with SSR hydration.
+ */
+function ReactSSRControlledFiles({
+  options,
+  stateConfig,
+  prerenderedHTML,
+}: {
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  stateConfig?: FileTreeStateConfig;
+  prerenderedHTML: string;
+}) {
+  const [files, setFiles] = useState(sharedDemoFileTreeOptions.initialFiles);
+
+  return (
+    <ExampleCard
+      title="React (SSR) — Controlled Files"
+      description="SSR hydration with controlled files prop. Tree updates without instance recreation"
+      controls={
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => {
+              if (!files.includes(EXTRA_FILE)) {
+                setFiles([...files, EXTRA_FILE]);
+              }
+            }}
+          >
+            Add logo2.png
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => {
+              if (files.includes(EXTRA_FILE)) {
+                setFiles(files.filter((f) => f !== EXTRA_FILE));
+              }
+            }}
+          >
+            Remove logo2.png
+          </button>
+        </div>
+      }
+      footer={
+        <p className="mt-2 text-xs text-gray-500">
+          {files.includes(EXTRA_FILE)
+            ? 'logo2.png added'
+            : 'logo2.png not present'}
+        </p>
+      }
+    >
+      <FileTreeReact
+        options={options}
+        prerenderedHTML={prerenderedHTML}
+        files={files}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        onSelection={stateConfig?.onSelection}
       />
     </ExampleCard>
   );
