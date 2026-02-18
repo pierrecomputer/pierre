@@ -305,6 +305,11 @@ export function ClientPage({
           options={reactOptions}
           stateConfig={sharedDemoStateConfig}
         />
+        <ReactDnDControlledSSR
+          options={reactOptions}
+          stateConfig={sharedDemoStateConfig}
+          prerenderedHTML={preloadedFileTreeHtml}
+        />
       </div>
     </div>
   );
@@ -1233,6 +1238,79 @@ function ReactDnDControlled({
     >
       <FileTreeReact
         options={{ ...options, dragAndDrop: true }}
+        files={files}
+        onFilesChange={handleFilesChange}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        onSelection={stateConfig?.onSelection}
+      />
+    </ExampleCard>
+  );
+}
+
+/**
+ * React FileTree — Controlled Drag and Drop with SSR
+ * Same as ReactDnDControlled but hydrated from prerendered HTML.
+ */
+function ReactDnDControlledSSR({
+  options,
+  stateConfig,
+  prerenderedHTML,
+}: {
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  stateConfig?: FileTreeStateConfig;
+  prerenderedHTML: string;
+}) {
+  const [files, setFiles] = useState(sharedDemoFileTreeOptions.initialFiles);
+  const [lockGitignore, setLockGitignore] = useState(false);
+  const { log, addLog } = useStateLog();
+
+  const handleFilesChange = useCallback(
+    (nextFiles: string[]) => {
+      if (lockGitignore) {
+        const oldGitignore = files.find((f) => f.endsWith('.gitignore'));
+        const newGitignore = nextFiles.find((f) => f.endsWith('.gitignore'));
+        if (oldGitignore !== newGitignore) {
+          addLog('REJECTED: .gitignore is locked');
+          return;
+        }
+      }
+      addLog(`files: [${nextFiles.join(', ')}]`);
+      setFiles(nextFiles);
+    },
+    [lockGitignore, files, addLog]
+  );
+
+  return (
+    <ExampleCard
+      title="React (SSR) — Controlled DnD"
+      description="SSR-hydrated controlled DnD. Toggle lock to prevent .gitignore from being moved."
+      controls={
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="lock-gitignore-ssr"
+            className="flex cursor-pointer items-center gap-2 select-none"
+          >
+            <input
+              type="checkbox"
+              id="lock-gitignore-ssr"
+              checked={lockGitignore}
+              className="cursor-pointer"
+              onChange={() => setLockGitignore((prev) => !prev)}
+            />
+            Lock .gitignore
+          </label>
+        </div>
+      }
+      footer={
+        <StateLog
+          entries={log}
+          className="mt-3 h-[140px] overflow-y-auto rounded border p-2 font-mono text-xs"
+        />
+      }
+    >
+      <FileTreeReact
+        options={{ ...options, dragAndDrop: true }}
+        prerenderedHTML={prerenderedHTML}
         files={files}
         onFilesChange={handleFilesChange}
         initialExpandedItems={stateConfig?.initialExpandedItems}

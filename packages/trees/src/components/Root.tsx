@@ -383,13 +383,9 @@ export function Root({
       canReorder: false,
       onDrop: onDropHandler,
       canDrop: (
-        items: ItemInstance<FileTreeNode>[],
+        _items: ItemInstance<FileTreeNode>[],
         target: { item: ItemInstance<FileTreeNode> }
-      ) => {
-        if (!target.item.isFolder()) return false;
-        const targetId = target.item.getId();
-        return !items.every((item) => item.getParent()?.getId() === targetId);
-      },
+      ) => target.item.isFolder(),
       openOnDropDelay: 800,
     }),
   });
