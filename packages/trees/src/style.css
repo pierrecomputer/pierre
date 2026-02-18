@@ -219,4 +219,13 @@
       height: calc(100% - 2px);
     }
   }
+
+  /* Drag and drop */
+  [data-item-drag-target='true'] {
+    background-color: var(--ft-internal-selected-background-color);
+  }
+
+  [data-item-dragging='true'] {
+    opacity: 0.5;
+  }
 }

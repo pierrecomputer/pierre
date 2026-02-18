@@ -145,6 +145,17 @@ export function useFileTreeInstance({
         );
       };
 
+      const setupControlledDnD = (inst: FileTree): void => {
+        const sp = statePropsRef.current;
+        if (sp.files !== undefined && options.dragAndDrop === true) {
+          inst.setCallbacks({
+            _onDragMoveFiles: (newFiles) => {
+              sp.onFilesChange?.(newFiles);
+            },
+          });
+        }
+      };
+
       const existingFileTreeId = getExistingFileTreeId();
 
       // Check if this is a re-run due to options change (same container, but new callback identity)
@@ -157,6 +168,7 @@ export function useFileTreeInstance({
         instanceRef.current?.cleanUp();
         clearExistingFileTree();
         instanceRef.current = createInstance(existingFileTreeId);
+        setupControlledDnD(instanceRef.current);
         void instanceRef.current.render({ fileTreeContainer });
       } else {
         // Initial mount
@@ -167,6 +179,7 @@ export function useFileTreeInstance({
         const hasPrerenderedContent = existingFileTreeId != null;
 
         instanceRef.current = createInstance(existingFileTreeId);
+        setupControlledDnD(instanceRef.current);
 
         if (hasPrerenderedContent) {
           // SSR: hydrate the prerendered HTML
@@ -216,12 +229,22 @@ export function useFileTreeInstance({
       onSelectedItemsChange,
       onSelection,
       onFilesChange,
+      // In controlled DnD mode, override to only fire onFilesChange
+      // without calling setFiles() directly, letting the parent decide.
+      ...(files !== undefined &&
+        options.dragAndDrop === true && {
+          _onDragMoveFiles: (newFiles) => {
+            onFilesChange?.(newFiles);
+          },
+        }),
     });
   }, [
     onExpandedItemsChange,
     onSelectedItemsChange,
     onSelection,
     onFilesChange,
+    files,
+    options.dragAndDrop,
   ]);
 
   return { ref };

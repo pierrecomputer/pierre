@@ -1,13 +1,16 @@
 import {
+  dragAndDropFeature,
   expandAllFeature,
   hotkeysCoreFeature,
+  type ItemInstance,
+  keyboardDragAndDropFeature,
   selectionFeature,
   syncDataLoaderFeature,
   type TreeInstance,
 } from '@headless-tree/core';
 import { Fragment } from 'preact';
 import type { JSX } from 'preact';
-import { useEffect, useMemo, useRef } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks';
 
 import { FLATTENED_PREFIX } from '../constants';
 import { fileTreeSearchFeature } from '../features/fileTreeSearchFeature';
@@ -21,6 +24,7 @@ import type {
 import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoader } from '../loader/sync';
 import type { FileTreeNode } from '../types';
+import { computeNewFilesAfterDrop } from '../utils/computeNewFilesAfterDrop';
 import { controlledExpandedPathsToExpandedIds } from '../utils/controlledExpandedState';
 import {
   expandPathsWithAncestors,
@@ -301,6 +305,46 @@ export function Root({
     [files, flattenEmptyDirectories, useLazyDataLoader]
   );
 
+  const isDnD = fileTreeOptions.dragAndDrop === true;
+
+  const features = useMemo(() => {
+    const base = [
+      syncDataLoaderFeature,
+      selectionFeature,
+      hotkeysCoreFeature,
+      fileTreeSearchFeature,
+      expandAllFeature,
+    ];
+    if (isDnD) {
+      base.push(dragAndDropFeature, keyboardDragAndDropFeature);
+    }
+    return base;
+  }, [isDnD]);
+
+  // Keep a ref to current files so onDrop doesn't capture stale values
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  const onDropHandler = useCallback(
+    (
+      items: ItemInstance<FileTreeNode>[],
+      target: { item: ItemInstance<FileTreeNode> }
+    ) => {
+      const draggedPaths = items.map((item) => item.getItemData().path);
+      const targetPath =
+        target.item.getId() === 'root'
+          ? 'root'
+          : target.item.getItemData().path;
+      const newFiles = computeNewFilesAfterDrop(
+        filesRef.current,
+        draggedPaths,
+        targetPath
+      );
+      callbacksRef?.current._onDragMoveFiles?.(newFiles);
+    },
+    [callbacksRef]
+  );
+
   const tree = useTree<FileTreeNode>({
     ...restTreeConfig,
     rootItemId: 'root',
@@ -325,13 +369,20 @@ export function Root({
         },
       },
     },
-    features: [
-      syncDataLoaderFeature,
-      selectionFeature,
-      hotkeysCoreFeature,
-      fileTreeSearchFeature,
-      expandAllFeature,
-    ],
+    features,
+    ...(isDnD && {
+      canReorder: false,
+      onDrop: onDropHandler,
+      canDrop: (
+        items: ItemInstance<FileTreeNode>[],
+        target: { item: ItemInstance<FileTreeNode> }
+      ) => {
+        if (!target.item.isFolder()) return false;
+        const targetId = target.item.getId();
+        return !items.every((item) => item.getParent()?.getId() === targetId);
+      },
+      openOnDropDelay: 800,
+    }),
   });
 
   // Populate handleRef so the FileTree class can call tree methods directly
@@ -487,6 +538,20 @@ export function Root({
         const searchMatchProps = isSearchMatch
           ? { 'data-item-search-match': true }
           : {};
+        const isDragTarget = isDnD && item.isUnorderedDragTarget?.() === true;
+        const isDragging =
+          isDnD &&
+          tree
+            .getState()
+            .dnd?.draggedItems?.some(
+              (d: ItemInstance<FileTreeNode>) => d.getId() === item.getId()
+            ) === true;
+        const dragProps = isDnD
+          ? {
+              ...(isDragTarget && { 'data-item-drag-target': true }),
+              ...(isDragging && { 'data-item-dragging': true }),
+            }
+          : {};
         return (
           <button
             data-type="item"
@@ -494,6 +559,7 @@ export function Root({
             {...selectionProps}
             {...searchMatchProps}
             {...focusedProps}
+            {...dragProps}
             data-item-id={item.getId()}
             id={getItemDomId(item.getId())}
             {...item.getProps()}

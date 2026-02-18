@@ -28,7 +28,10 @@ interface FileTreeHydrationProps {
   fileTreeContainer: HTMLElement;
 }
 
-export type FileTreeSearchMode = 'expand-matches' | 'collapse-non-matches';
+export type FileTreeSearchMode =
+  | 'expand-matches'
+  | 'collapse-non-matches'
+  | 'hide-non-matches';
 
 export type FileTreeSelectionItem = {
   path: string;
@@ -46,9 +49,12 @@ export interface FileTreeCallbacks {
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
   onFilesChange?: (files: string[]) => void;
+  /** Internal: called when a DnD move produces a new file list. */
+  _onDragMoveFiles?: (newFiles: string[]) => void;
 }
 
 export interface FileTreeOptions {
+  dragAndDrop?: boolean;
   fileTreeSearchMode?: FileTreeSearchMode;
   flattenEmptyDirectories?: boolean;
   id?: string;
@@ -108,6 +114,10 @@ export class FileTree {
         onSelectedItemsChange: stateConfig.onSelectedItemsChange,
         onSelection: stateConfig.onSelection,
         onFilesChange: stateConfig.onFilesChange,
+        _onDragMoveFiles:
+          options.dragAndDrop === true
+            ? (newFiles) => this.setFiles(newFiles)
+            : undefined,
       },
     };
   }
@@ -338,6 +348,7 @@ export class FileTree {
 
     // Check if structural props changed (require re-render)
     const structuralKeys = [
+      'dragAndDrop',
       'initialFiles',
       'flattenEmptyDirectories',
       'useLazyDataLoader',
