@@ -550,6 +550,16 @@ export class FileTree {
     } else {
       this.fileTreeContainer = fileTreeContainer;
       preactHydrateRoot(this.divWrapper, this.buildRootProps());
+      // Preact's hydrate() only attaches function props (event handlers),
+      // skipping non-function props like `draggable`. When DnD is enabled
+      // client-side but wasn't during SSR, patch the attribute manually.
+      if (this.options.dragAndDrop === true) {
+        for (const btn of this.divWrapper.querySelectorAll(
+          'button[data-type="item"]'
+        )) {
+          (btn as HTMLElement).draggable = true;
+        }
+      }
     }
   }
 
