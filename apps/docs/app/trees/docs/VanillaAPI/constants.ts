@@ -20,7 +20,7 @@ const files = [
   'package.json',
 ];
 
-const fileTree = new FileTree({ files });
+const fileTree = new FileTree({ initialFiles: files });
 fileTree.render({ containerWrapper: document.getElementById('tree-container') });
 
 // Clean up when done
@@ -36,7 +36,7 @@ export const VANILLA_API_FILE_TREE_OPTIONS: PreloadFileOptions<undefined> = {
 
 // Constructor options (see FileTree options section for full details)
 const fileTree = new FileTree({
-  files: ['src/index.ts', 'package.json'],
+  initialFiles: ['src/index.ts', 'package.json'],
   id: 'my-tree',
   flattenEmptyDirectories: true,
   useLazyDataLoader: false,

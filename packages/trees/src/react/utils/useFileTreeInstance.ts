@@ -135,13 +135,18 @@ export function useFileTreeInstance({
 
       const createInstance = (existingId?: string): FileTree => {
         const sp = statePropsRef.current;
+        const optionsWithFiles = options as FileTreeOptions;
         syncedGitStatusSignatureRef.current = getGitStatusSignature(
           sp.gitStatus
         );
         return new FileTree(
           {
             ...options,
-            initialFiles: sp.initialFiles ?? sp.files ?? [],
+            initialFiles:
+              sp.initialFiles ??
+              sp.files ??
+              optionsWithFiles.initialFiles ??
+              [],
             id: existingId,
             ...(sp.gitStatus != null && { gitStatus: sp.gitStatus }),
           },

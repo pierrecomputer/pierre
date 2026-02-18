@@ -2,7 +2,7 @@
 
 All options you can pass to FileTree (or to TreeApp via `fileTreeOptions`).
 
-### The `files` option
+### The `initialFiles` option
 
 The tree is built from an array of file paths (strings). Folders are inferred
 from path segments; use forward slashes. Top-level paths (e.g. `README.md`) and
@@ -16,11 +16,11 @@ folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
 
 ### Options reference
 
-`files` is the only required option, all others are optional.
+`initialFiles` is the only required option, all others are optional.
 
 | Option                    | Description                                                                                                                                                            |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `files`                   | **Required.** Array of file paths (strings). Defines the list and hierarchy.                                                                                           |
+| `initialFiles`            | **Required.** Array of file paths (strings). Defines the list and hierarchy.                                                                                           |
 | `id`                      | Unique identifier for this instance (DOM ids, SSR). Default: e.g. `ft_brw_1`.                                                                                          |
 | `flattenEmptyDirectories` | When `true`, single-child folder chains become one row (e.g. `build / assets / images` → `build · assets · images`). Default: `false`. [Live demo](/trees#flattening). |
 | `useLazyDataLoader`       | When `true`, children load when a folder is expanded. Default: `false`.                                                                                                |

@@ -5,7 +5,7 @@ import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 /** File list and options for the live FileTree in the Overview section */
 export const OVERVIEW_FILE_TREE_OPTIONS: FileTreeOptions = {
-  files: [
+  initialFiles: [
     'README.md',
     'package.json',
     'src/index.ts',
@@ -37,7 +37,7 @@ const files = [
 ];
 
 export function FileExplorer() {
-  return <FileTree options={{ files }} />;
+  return <FileTree options={{ initialFiles: files }} />;
 }`,
   },
   options,
@@ -55,7 +55,7 @@ const files = [
   'package.json',
 ];
 
-const fileTree = new FileTree({ files });
+const fileTree = new FileTree({ initialFiles: files });
 fileTree.render({ containerWrapper: document.body });`,
   },
   options,

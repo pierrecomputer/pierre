@@ -27,9 +27,9 @@ When using SSR, pass the pre-rendered container and optional HTML to `hydrate()`
 instead of `render()`:
 
 ```ts
-const fileTree = new FileTree({ files });
+const fileTree = new FileTree({ initialFiles: files });
 fileTree.hydrate({
-  fileTreeContainer: document.querySelector("file-tree-container"),
+  fileTreeContainer: document.querySelector('file-tree-container'),
   prerenderedHTML: htmlFromServer,
 });
 ```

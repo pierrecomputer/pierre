@@ -30,7 +30,7 @@ export const STYLING_CODE_INLINE: PreloadFileOptions<undefined> = {
     contents: `import { FileTree } from '@pierre/trees/react';
 
 <FileTree
-  options={{ files: ['src/index.ts', 'package.json'] }}
+  options={{ initialFiles: ['src/index.ts', 'package.json'] }}
   className="rounded-lg border p-3"
   style={{
     maxHeight: 400,

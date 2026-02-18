@@ -58,7 +58,7 @@ export const HELPER_GENERATE_SYNC_DATA_LOADER: PreloadFileOptions<undefined> = {
 import { FileTree } from '@pierre/trees';
 // or: import { FileTree } from '@pierre/trees/react';
 
-// FileTree uses generateSyncDataLoader internally when you pass \`files\`.
+// FileTree uses generateSyncDataLoader internally when you pass \`initialFiles\`.
 // Use it directly when building custom loaders or integrating with the headless tree.
 
 const filePaths = [
@@ -77,9 +77,9 @@ const dataLoader = generateSyncDataLoader(filePaths, {
   // sortComparator: myCustomComparator,
 });
 
-// When you pass \`files\` to FileTree, it builds the loader like this internally.
+// When you pass \`initialFiles\` to FileTree, it builds the loader like this internally.
 const options: FileTreeOptions = {
-  files: filePaths,
+  initialFiles: filePaths,
   flattenEmptyDirectories: true,
 };
 
@@ -99,7 +99,7 @@ export const HELPER_GENERATE_LAZY_DATA_LOADER: PreloadFileOptions<undefined> = {
 import { FileTree } from '@pierre/trees';
 
 // FileTree uses generateLazyDataLoader internally when you pass
-// \`files\` and \`useLazyDataLoader: true\`. Use it directly for custom integrations.
+// \`initialFiles\` and \`useLazyDataLoader: true\`. Use it directly for custom integrations.
 
 const filePaths = [
   'README.md',
@@ -119,7 +119,7 @@ const dataLoader = generateLazyDataLoader(filePaths, {
 });
 
 const options: FileTreeOptions = {
-  files: filePaths,
+  initialFiles: filePaths,
   useLazyDataLoader: true,
   flattenEmptyDirectories: true,
 };
@@ -141,7 +141,7 @@ import type { FileTreeOptions } from '@pierre/trees';
 
 // Server (e.g. Next.js app router page)
 const fileTreeOptions: FileTreeOptions = {
-  files: ['README.md', 'src/index.ts', 'src/utils/helper.ts'],
+  initialFiles: ['README.md', 'src/index.ts', 'src/utils/helper.ts'],
   flattenEmptyDirectories: true,
 };
 

@@ -21,7 +21,7 @@ export const FILE_TREE_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
 // Pass it to the FileTree constructor or to the <FileTree options={...} /> component.
 interface FileTreeOptions {
   // Required: array of file paths (forward slashes). Defines the tree structure.
-  files: string[];
+  initialFiles: string[];
 
   // Optional: unique id for this instance (DOM ids, SSR). Defaults to ft_brw_1, etc.
   id?: string;
@@ -41,7 +41,7 @@ interface FileTreeOptions {
 
 // Example usage
 const options: FileTreeOptions = {
-  files: [
+  initialFiles: [
     'README.md',
     'package.json',
     'src/index.ts',
@@ -87,7 +87,7 @@ function handleSelection(items: FileTreeSelectionItem[]) {
 
 // Pass to FileTreeOptions
 const options = {
-  files: ['src/index.ts', 'src/components/Button.tsx'],
+  initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
   onSelection: handleSelection,
 };`,
   },
@@ -107,7 +107,7 @@ export const FILE_TREE_SEARCH_MODE_TYPE: PreloadFileOptions<undefined> = {
 // paths and their parents stay visible.
 
 const options = {
-  files: ['src/index.ts', 'src/components/Button.tsx'],
+  initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
   config: {
     fileTreeSearchMode: 'collapse-non-matches',
   },
@@ -137,7 +137,7 @@ interface InitialState {
 // config.setState — optional callback for controlled state updates (advanced)
 
 const options = {
-  files: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+  initialFiles: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
   config: {
     initialState: {
       expandedItems: ['src', 'src/components'],

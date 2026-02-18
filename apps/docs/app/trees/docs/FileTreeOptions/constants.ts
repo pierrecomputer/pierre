@@ -9,7 +9,7 @@ export const FILES_OPTION_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'fileTreeOptions.ts',
     contents: `const fileTreeOptions = {
-  files: [
+  initialFiles: [
     'README.md',
     'package.json',
     'src/index.ts',

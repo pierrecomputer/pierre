@@ -21,7 +21,7 @@ const files = [
 ];
 
 export function FileExplorer() {
-  return <FileTree options={{ files }} />;
+  return <FileTree options={{ initialFiles: files }} />;
 }`,
   },
   options,
@@ -37,7 +37,7 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
 <FileTree
   // Required: file list and tree options (see FileTree options section)
   options={{
-    files: ['src/index.ts', 'package.json'],
+    initialFiles: ['src/index.ts', 'package.json'],
     flattenEmptyDirectories: true,
     onSelection: (items) => console.log(items),
     config: {

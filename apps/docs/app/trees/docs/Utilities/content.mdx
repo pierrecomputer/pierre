@@ -18,7 +18,7 @@ alphabetical). You can pass a custom comparator to implement your own order.
 ### generateSyncDataLoader [toc-ignore]
 
 Build a tree data loader from a flat list of file paths. All nodes are computed
-upfront. FileTree uses this internally when you pass `files` (and
+upfront. FileTree uses this internally when you pass `initialFiles` (and
 `flattenEmptyDirectories`). Use it directly when building custom integrations
 with the headless tree or when you need the same tree shape elsewhere.
 
@@ -27,7 +27,7 @@ with the headless tree or when you need the same tree shape elsewhere.
 ### generateLazyDataLoader [toc-ignore]
 
 Build a tree data loader that computes nodes on demand when folders are
-expanded. FileTree uses this internally when you pass `files` and
+expanded. FileTree uses this internally when you pass `initialFiles` and
 `useLazyDataLoader: true`. Best for large trees where most folders stay
 collapsed.
 
