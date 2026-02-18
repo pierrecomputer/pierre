@@ -916,6 +916,10 @@
   [data-no-newline] {
     position: relative;
     padding-inline: 1ch;
+    /* Limit reflow scope: attribute/style changes on a line element (e.g.
+       data-hovered, hover-slot append) won't trigger layout recalc on
+       sibling lines or the parent grid. */
+    contain: layout style;
   }
 
   [data-indicators='classic'] [data-line] {

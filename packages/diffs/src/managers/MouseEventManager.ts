@@ -27,8 +27,16 @@ export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
 }
 
 type HandleMouseEventProps =
-  | { eventType: 'click'; event: PointerEvent | MouseEvent }
-  | { eventType: 'move'; event: PointerEvent };
+  | {
+      eventType: 'click';
+      event: PointerEvent | MouseEvent;
+      cachedComposedPath?: EventTarget[];
+    }
+  | {
+      eventType: 'move';
+      event: PointerEvent;
+      cachedComposedPath?: EventTarget[];
+    };
 
 type EventClickProps<TMode extends MouseEventManagerMode> = TMode extends 'file'
   ? OnLineClickProps
@@ -108,6 +116,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   private interactiveLinesAttr = false;
   private interactiveLineNumbersAttr = false;
   private hasEventListeners = false;
+  private _pendingAnimationFrame: number | null = null;
 
   constructor(
     private mode: TMode,
@@ -119,6 +128,10 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   }
 
   cleanUp(): void {
+    if (this._pendingAnimationFrame != null) {
+      cancelAnimationFrame(this._pendingAnimationFrame);
+      this._pendingAnimationFrame = null;
+    }
     this.pre?.removeEventListener('click', this.handleMouseClick);
     this.pre?.removeEventListener('pointermove', this.handleMouseMove);
     this.pre?.removeEventListener('pointerleave', this.handleMouseLeave);
@@ -303,16 +316,30 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     ) {
       return;
     }
-    debugLogIfEnabled(
-      this.options.__debugMouseEvents,
-      'move',
-      'FileDiff.DEBUG.handleMouseMove:',
-      event
-    );
-    this.handleMouseEvent({ eventType: 'move', event });
+    // Throttle: only process the latest pointermove per animation frame
+    if (this._pendingAnimationFrame != null) {
+      cancelAnimationFrame(this._pendingAnimationFrame);
+    }
+    // Capture composedPath synchronously - it's empty if read after the event dispatches
+    const cachedComposedPath = event.composedPath() as EventTarget[];
+    this._pendingAnimationFrame = requestAnimationFrame(() => {
+      this._pendingAnimationFrame = null;
+      debugLogIfEnabled(
+        this.options.__debugMouseEvents,
+        'move',
+        'FileDiff.DEBUG.handleMouseMove:',
+        event
+      );
+      this.handleMouseEvent({ eventType: 'move', event, cachedComposedPath });
+    });
   };
 
   handleMouseLeave = (event: PointerEvent): void => {
+    // Cancel any pending rAF move so stale hover doesn't fire after leave
+    if (this._pendingAnimationFrame != null) {
+      cancelAnimationFrame(this._pendingAnimationFrame);
+      this._pendingAnimationFrame = null;
+    }
     const { __debugMouseEvents } = this.options;
     debugLogIfEnabled(
       __debugMouseEvents,
@@ -335,9 +362,13 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     this.clearHoveredLine();
   };
 
-  private handleMouseEvent({ eventType, event }: HandleMouseEventProps) {
+  private handleMouseEvent({
+    eventType,
+    event,
+    cachedComposedPath,
+  }: HandleMouseEventProps) {
     const { __debugMouseEvents } = this.options;
-    const composedPath = event.composedPath();
+    const composedPath = cachedComposedPath ?? event.composedPath();
     debugLogIfEnabled(
       __debugMouseEvents,
       eventType,
