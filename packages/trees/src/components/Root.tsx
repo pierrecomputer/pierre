@@ -5,8 +5,8 @@ import {
   syncDataLoaderFeature,
   type TreeInstance,
 } from '@headless-tree/core';
-import type { JSX } from 'preact';
 import { Fragment } from 'preact';
+import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 
 import { FLATTENED_PREFIX } from '../constants';
@@ -79,7 +79,6 @@ export function Root({
 }: FileTreeRootProps): JSX.Element {
   'use no memo';
   const {
-    config,
     initialFiles: files,
     flattenEmptyDirectories,
     useLazyDataLoader,
@@ -190,8 +189,7 @@ export function Root({
       return { state: changed ? nextState : state, changed };
     };
 
-    // --- Map top-level state props into config ---
-    const baseConfig = config ?? {};
+    const baseConfig: TreeStateConfig = {};
 
     const mapPathToId = (path: string): string | undefined => {
       // If the caller explicitly passes a flattened path, respect it.
@@ -290,7 +288,7 @@ export function Root({
       ...(initialState.state != null && { initialState: initialState.state }),
       ...(state.state != null && { state: state.state }),
     };
-  }, [config, treeData, pathToId, stateConfig, flattenEmptyDirectories]);
+  }, [treeData, pathToId, stateConfig, flattenEmptyDirectories]);
   const dataLoader = useMemo(
     () =>
       useLazyDataLoader === true

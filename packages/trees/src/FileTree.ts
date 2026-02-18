@@ -1,4 +1,4 @@
-import { type TreeConfig, type TreeInstance } from '@headless-tree/core';
+import { type TreeInstance } from '@headless-tree/core';
 
 import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME, FLATTENED_PREFIX } from './constants';
@@ -35,13 +35,6 @@ export type FileTreeSelectionItem = {
   isFolder: boolean;
 };
 
-export type HeadlessTreeConfig = Omit<
-  TreeConfig<FileTreeNode>,
-  'features' | 'dataLoader' | 'rootItemId' | 'getItemName' | 'isItemFolder'
-> & {
-  fileTreeSearchMode?: FileTreeSearchMode;
-};
-
 export interface FileTreeHandle {
   tree: TreeInstance<FileTreeNode>;
   pathToId: Map<string, string>;
@@ -56,13 +49,11 @@ export interface FileTreeCallbacks {
 }
 
 export interface FileTreeOptions {
-  initialFiles: string[];
-  id?: string;
+  fileTreeSearchMode?: FileTreeSearchMode;
   flattenEmptyDirectories?: boolean;
+  id?: string;
+  initialFiles: string[];
   useLazyDataLoader?: boolean;
-
-  // Advanced headless-tree config (kept for passthrough)
-  config?: HeadlessTreeConfig;
 }
 
 export interface FileTreeStateConfig {
