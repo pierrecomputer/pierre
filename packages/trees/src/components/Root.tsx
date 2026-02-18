@@ -351,6 +351,10 @@ export function Root({
     [callbacksRef, onCollision]
   );
 
+  // Track search state via ref so the canDrag callback (evaluated at event
+  // time, not render time) always reads the latest value.
+  const searchActiveRef = useRef(false);
+
   // fileTreeSearchMode is a custom config key read by fileTreeSearchFeature
   // via getConfig(). We spread it from a variable to bypass excess property
   // checks on the TreeConfig object literal.
@@ -383,6 +387,7 @@ export function Root({
     features,
     ...(isDnD && {
       canReorder: false,
+      canDrag: () => !searchActiveRef.current,
       onDrop: onDropHandler,
       canDrop: (
         _items: ItemInstance<FileTreeNode>[],
@@ -391,6 +396,8 @@ export function Root({
       openOnDropDelay: 800,
     }),
   });
+
+  searchActiveRef.current = (tree.getState().search?.length ?? 0) > 0;
 
   // Populate handleRef so the FileTree class can call tree methods directly
   useEffect(() => {

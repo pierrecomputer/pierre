@@ -600,3 +600,35 @@ for (const cfg of TEST_CONFIGS) {
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// canDrag disabled while search is active (mirrors Root.tsx pattern)
+// ---------------------------------------------------------------------------
+
+describe('drag-and-drop disabled during search', () => {
+  test('canDrag returns false when the tree has an active search', () => {
+    const cfg = TEST_CONFIGS[0];
+    const files = ['README.md', 'src/index.ts', 'src/components/Button.tsx'];
+    const tree = createTreeWithFiles(files, cfg, ['src', 'src/components']);
+
+    // Mirror Root.tsx: canDrag reads a ref tracking search state.
+    // Here we read directly from tree state the same way Root.tsx updates
+    // the ref: `(tree.getState().search?.length ?? 0) > 0`
+    const canDrag = () => !((tree.getState().search?.length ?? 0) > 0);
+
+    // No search — dragging allowed
+    expect(canDrag()).toBe(true);
+
+    // Activate search with text — dragging blocked
+    tree.setSearch('Button');
+    expect(canDrag()).toBe(false);
+
+    // Empty search (open but no text) — dragging still allowed
+    tree.setSearch('');
+    expect(canDrag()).toBe(true);
+
+    // Close search — dragging allowed
+    tree.setSearch(null);
+    expect(canDrag()).toBe(true);
+  });
+});
