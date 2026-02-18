@@ -13,7 +13,10 @@ import type { JSX } from 'preact';
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks';
 
 import { FLATTENED_PREFIX } from '../constants';
-import { fileTreeSearchFeature } from '../features/fileTreeSearchFeature';
+import {
+  fileTreeSearchFeature,
+  getSearchVisibleIdSet,
+} from '../features/fileTreeSearchFeature';
 import type {
   FileTreeCallbacks,
   FileTreeHandle,
@@ -85,6 +88,7 @@ export function Root({
   const {
     initialFiles: files,
     flattenEmptyDirectories,
+    fileTreeSearchMode,
     useLazyDataLoader,
   } = fileTreeOptions;
 
@@ -345,8 +349,13 @@ export function Root({
     [callbacksRef]
   );
 
+  // fileTreeSearchMode is a custom config key read by fileTreeSearchFeature
+  // via getConfig(). We spread it from a variable to bypass excess property
+  // checks on the TreeConfig object literal.
+  const searchModeConfig = { fileTreeSearchMode };
   const tree = useTree<FileTreeNode>({
     ...restTreeConfig,
+    ...searchModeConfig,
     rootItemId: 'root',
     dataLoader,
     getItemName: (item) => item.getItemData().name,
@@ -518,7 +527,13 @@ export function Root({
           {...searchInputProps}
         />
       </div>
-      {tree.getItems().map((item) => {
+      {(() => {
+        const allItems = tree.getItems();
+        const visibleIdSet = getSearchVisibleIdSet(tree);
+        return visibleIdSet != null
+          ? allItems.filter((item) => visibleIdSet.has(item.getId()))
+          : allItems;
+      })().map((item) => {
         const itemData = item.getItemData();
         const itemMeta = item.getItemMeta();
         // TODO: is it possible to have empty array as children? is this valid in that case?

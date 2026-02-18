@@ -25,6 +25,7 @@ type SearchCache<T> = {
   matchItems: ItemInstance<T>[];
   matchIds: string[];
   matchIdSet: Set<string>;
+  visibleIdSet: Set<string>;
 };
 
 type FileTreeSearchDataRef<T> = SearchFeatureDataRef<T> & {
@@ -98,6 +99,10 @@ const getSearchCache = <T>(tree: TreeInstance<T>): SearchCache<T> => {
       : [];
   const matchItems = matchIds.map((itemId) => tree.getItemInstance(itemId));
   const matchIdSet = new Set(matchIds);
+  const visibleIdSet = new Set(matchIds);
+  for (const matchId of matchIds) {
+    addAncestorFolders(index.parentById, rootItemId, matchId, visibleIdSet);
+  }
   const nextCache: SearchCache<T> = {
     search,
     rootItemId,
@@ -107,6 +112,7 @@ const getSearchCache = <T>(tree: TreeInstance<T>): SearchCache<T> => {
     matchItems,
     matchIds,
     matchIdSet,
+    visibleIdSet,
   };
 
   dataRef.current.searchCache = nextCache;
@@ -226,10 +232,10 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       const cache = getSearchCache(tree);
       const searchMode = getSearchMode(tree);
       const baselineExpandedItems =
-        searchMode === 'collapse-non-matches'
-          ? []
-          : (dataRef.current.previousExpandedItems ??
-            tree.getState().expandedItems);
+        searchMode === 'expand-matches'
+          ? (dataRef.current.previousExpandedItems ??
+            tree.getState().expandedItems)
+          : [];
       expandForMatches(
         tree,
         cache,
@@ -364,4 +370,19 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       },
     },
   },
+};
+
+/**
+ * Returns the set of item IDs that should be visible when `hide-non-matches`
+ * search mode is active. Returns `null` when no filtering is needed.
+ */
+export const getSearchVisibleIdSet = <T>(
+  tree: TreeInstance<T>
+): Set<string> | null => {
+  if (!tree.isSearchOpen()) return null;
+  const mode = getSearchMode(tree);
+  if (mode !== 'hide-non-matches') return null;
+  const cache = getSearchCache(tree);
+  if (cache.matchIds.length === 0) return null;
+  return cache.visibleIdSet;
 };

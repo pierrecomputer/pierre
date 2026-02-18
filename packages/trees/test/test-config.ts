@@ -9,6 +9,7 @@ import {
 
 import { FLATTENED_PREFIX } from '../src/constants';
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
+import type { FileTreeSearchMode } from '../src/FileTree';
 import { generateLazyDataLoader } from '../src/loader/lazy';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';
@@ -125,10 +126,12 @@ export function createTestTree(
   opts: {
     initialExpandedItems?: string[];
     initialSelectedItems?: string[];
+    fileTreeSearchMode?: FileTreeSearchMode;
   } = {}
 ): TestTree {
   const { flattenEmptyDirectories } = config;
-  const { initialExpandedItems, initialSelectedItems } = opts;
+  const { initialExpandedItems, initialSelectedItems, fileTreeSearchMode } =
+    opts;
 
   const dataLoader = config.createLoader(files, { flattenEmptyDirectories });
   const { pathToId, idToPath } = buildMapsFromLoader(dataLoader, 'root');
@@ -154,7 +157,12 @@ export function createTestTree(
           .filter((id): id is string => id != null)
       : undefined;
 
+  // fileTreeSearchMode is a custom config key read by fileTreeSearchFeature.
+  // Spread from a variable to bypass excess property checks on TreeConfig.
+  const searchModeConfig =
+    fileTreeSearchMode != null ? { fileTreeSearchMode } : {};
   const tree = createTree<FileTreeNode>({
+    ...searchModeConfig,
     rootItemId: 'root',
     dataLoader,
     getItemName: (item) => item.getItemData().name,

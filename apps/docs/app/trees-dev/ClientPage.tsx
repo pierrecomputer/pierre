@@ -246,6 +246,52 @@ export function ClientPage({
       {/* Divider */}
       <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
 
+      {/* Search Modes */}
+      <h2 id="search-modes" className="mb-4 text-2xl font-bold">
+        Search Modes
+      </h2>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <ExampleCard
+          title="expand-matches"
+          description="Expands folders containing matches but keeps all items visible"
+        >
+          <ReactClientRendered
+            options={{ ...reactOptions, fileTreeSearchMode: 'expand-matches' }}
+            initialFiles={reactFiles}
+            stateConfig={sharedDemoStateConfig}
+          />
+        </ExampleCard>
+        <ExampleCard
+          title="collapse-non-matches"
+          description="Collapses folders not containing matches"
+        >
+          <ReactClientRendered
+            options={{
+              ...reactOptions,
+              fileTreeSearchMode: 'collapse-non-matches',
+            }}
+            initialFiles={reactFiles}
+            stateConfig={sharedDemoStateConfig}
+          />
+        </ExampleCard>
+        <ExampleCard
+          title="hide-non-matches"
+          description="Hides files and folders that don't contain matches"
+        >
+          <ReactClientRendered
+            options={{
+              ...reactOptions,
+              fileTreeSearchMode: 'hide-non-matches',
+            }}
+            initialFiles={reactFiles}
+            stateConfig={sharedDemoStateConfig}
+          />
+        </ExampleCard>
+      </div>
+
+      {/* Divider */}
+      <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
+
       {/* Drag and Drop Examples */}
       <h2 id="drag-and-drop" className="mb-4 text-2xl font-bold">
         Drag and Drop
