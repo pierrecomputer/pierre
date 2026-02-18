@@ -26,7 +26,6 @@ const sampleFileList: string[] = [
 ];
 
 export const sharedDemoFileTreeOptions: FileTreeOptions = {
-  fileTreeSearchMode: 'collapse-non-matches',
   flattenEmptyDirectories: true,
   initialFiles: sampleFileList,
 };

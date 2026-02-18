@@ -1,3 +1,4 @@
+import { makeStateUpdater } from '@headless-tree/core';
 import type {
   FeatureImplementation,
   ItemInstance,
@@ -5,7 +6,6 @@ import type {
   TreeConfig,
   TreeInstance,
 } from '@headless-tree/core';
-import { makeStateUpdater } from '@headless-tree/core';
 
 import type { FileTreeSearchMode } from '../FileTree';
 import type { FileTreeNode } from '../types';
@@ -46,7 +46,7 @@ const defaultSearchMatcher = <T>(
 
 const getSearchMode = <T>(tree: TreeInstance<T>): FileTreeSearchMode =>
   (tree.getConfig() as FileTreeSearchConfig).fileTreeSearchMode ??
-  'expand-matches';
+  'hide-non-matches';
 
 const buildSearchIndex = <T>(
   tree: TreeInstance<T>,
