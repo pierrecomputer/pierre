@@ -89,6 +89,7 @@ export function Root({
     initialFiles: files,
     flattenEmptyDirectories,
     fileTreeSearchMode,
+    onCollision,
     useLazyDataLoader,
   } = fileTreeOptions;
 
@@ -342,11 +343,12 @@ export function Root({
       const newFiles = computeNewFilesAfterDrop(
         filesRef.current,
         draggedPaths,
-        targetPath
+        targetPath,
+        { onCollision }
       );
       callbacksRef?.current._onDragMoveFiles?.(newFiles);
     },
-    [callbacksRef]
+    [callbacksRef, onCollision]
   );
 
   // fileTreeSearchMode is a custom config key read by fileTreeSearchFeature

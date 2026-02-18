@@ -149,6 +149,25 @@ describe('SSR + declarative shadow DOM', () => {
     expect(ft.getFiles()).toEqual(['b.txt']);
   });
 
+  test('setOptions applies fileTreeSearchMode changes at runtime', () => {
+    const ft = new FileTree({
+      initialFiles: ['a.txt'],
+      fileTreeSearchMode: 'expand-matches',
+    });
+
+    let rerenders = 0;
+    (
+      ft as unknown as {
+        rerender: () => void;
+      }
+    ).rerender = () => {
+      rerenders += 1;
+    };
+
+    ft.setOptions({ fileTreeSearchMode: 'hide-non-matches' });
+    expect(rerenders).toBe(1);
+  });
+
   test('setFiles invokes onFilesChange callback', () => {
     const calls: string[][] = [];
     const ft = new FileTree(

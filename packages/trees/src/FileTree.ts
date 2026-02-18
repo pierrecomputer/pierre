@@ -38,6 +38,11 @@ export type FileTreeSelectionItem = {
   isFolder: boolean;
 };
 
+export type FileTreeCollision = {
+  origin: string | null;
+  destination: string;
+};
+
 export interface FileTreeHandle {
   tree: TreeInstance<FileTreeNode>;
   pathToId: Map<string, string>;
@@ -59,6 +64,8 @@ export interface FileTreeOptions {
   flattenEmptyDirectories?: boolean;
   id?: string;
   initialFiles: string[];
+  /** Return true to overwrite the destination file when a DnD move collides. */
+  onCollision?: (collision: FileTreeCollision) => boolean;
   useLazyDataLoader?: boolean;
 }
 
@@ -330,6 +337,16 @@ export class FileTree {
     options: Partial<FileTreeOptions>,
     state?: Partial<FileTreeStateConfig>
   ): void {
+    if (options.dragAndDrop === false) {
+      this.callbacksRef.current._onDragMoveFiles = undefined;
+    } else if (
+      options.dragAndDrop === true &&
+      this.callbacksRef.current._onDragMoveFiles == null
+    ) {
+      this.callbacksRef.current._onDragMoveFiles = (newFiles) =>
+        this.setFiles(newFiles);
+    }
+
     // Update callbacks without re-rendering
     if (state?.onExpandedItemsChange !== undefined) {
       this.callbacksRef.current.onExpandedItemsChange =
@@ -349,10 +366,11 @@ export class FileTree {
     // Check if structural props changed (require re-render)
     const structuralKeys = [
       'dragAndDrop',
+      'fileTreeSearchMode',
       'initialFiles',
       'flattenEmptyDirectories',
+      'onCollision',
       'useLazyDataLoader',
-      'config',
     ] as const;
     let needsRerender = false;
     for (const key of structuralKeys) {

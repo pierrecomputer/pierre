@@ -200,6 +200,59 @@ describe('computeNewFilesAfterDrop', () => {
       'package.json',
     ]);
   });
+
+  test('defaults to disallow overwrite when collision handler is missing', () => {
+    const files = ['docs/index.ts', 'src/index.ts'];
+    const result = computeNewFilesAfterDrop(files, ['src/index.ts'], 'docs');
+    expect(result).toEqual(['docs/index.ts', 'src/index.ts']);
+  });
+
+  test('collision handler controls overwrite behavior', () => {
+    const files = ['docs/index.ts', 'src/index.ts'];
+    const calls: Array<{ origin: string | null; destination: string }> = [];
+
+    const disallowResult = computeNewFilesAfterDrop(
+      files,
+      ['src/index.ts'],
+      'docs',
+      {
+        onCollision: (collision) => {
+          calls.push(collision);
+          return false;
+        },
+      }
+    );
+    expect(disallowResult).toEqual(['docs/index.ts', 'src/index.ts']);
+    expect(calls).toEqual([
+      { origin: 'src/index.ts', destination: 'docs/index.ts' },
+    ]);
+
+    const allowResult = computeNewFilesAfterDrop(
+      files,
+      ['src/index.ts'],
+      'docs',
+      {
+        onCollision: () => true,
+      }
+    );
+    expect(allowResult).toEqual(['docs/index.ts']);
+  });
+
+  test('ignores redundant nested drag paths under a dragged folder', () => {
+    const files = ['src/a.ts', 'src/sub/b.ts', 'docs/x.ts'];
+    const result = computeNewFilesAfterDrop(
+      files,
+      ['src', 'src/sub/b.ts'],
+      'docs'
+    );
+    expect(result).toEqual(['docs/src/a.ts', 'docs/src/sub/b.ts', 'docs/x.ts']);
+  });
+
+  test('rejects dropping a folder into its own descendant', () => {
+    const files = ['src/index.ts', 'src/components/a.ts'];
+    const result = computeNewFilesAfterDrop(files, ['src'], 'src/components');
+    expect(result).toEqual(files);
+  });
 });
 
 // ---------------------------------------------------------------------------
