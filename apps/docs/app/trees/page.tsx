@@ -6,6 +6,7 @@ import {
   FlatteningSection,
   PathColorsSection,
   SearchSection,
+  ShikiThemesSection,
   ThemingSection,
 } from './tree-examples';
 // import { TreeAppExample } from './TreeAppExample';
@@ -36,6 +37,7 @@ export default function TreesHome() {
         <SearchSection />
         <A11ySection />
         <ThemingSection />
+        <ShikiThemesSection />
       </section>
 
       <PierreCompanySection />

@@ -2,14 +2,28 @@
 
 @layer base {
   :host {
+    /*
+     * Fallback order: --ft-* (explicit) → --ft-theme-* (e.g. Shiki/VS Code tokens) → default.
+     * Set --ft-theme-side-bar-background etc. when applying a theme; or set --ft-color-foreground
+     * etc. directly. Theme token names mirror Shiki/VS Code in kebab-case.
+     */
     --ft-internal-color-foreground: var(
       --ft-color-foreground,
-      light-dark(oklch(14.5% 0 0), oklch(98.5% 0 0))
+      var(
+        --ft-theme-side-bar-foreground,
+        light-dark(oklch(14.5% 0 0), oklch(98.5% 0 0))
+      )
     );
-    --ft-internal-color-background: var(--ft-color-background, transparent);
+    --ft-internal-color-background: var(
+      --ft-color-background,
+      var(--ft-theme-side-bar-background, transparent)
+    );
     --ft-internal-background-color-muted: var(
       --ft-background-color-muted,
-      light-dark(oklch(97% 0 0), oklch(26.9% 0 0))
+      var(
+        --ft-theme-list-hover-background,
+        light-dark(oklch(97% 0 0), oklch(26.9% 0 0))
+      )
     );
     --ft-internal-font-family: var(--ft-font-family);
     --ft-internal-font-size: var(--ft-font-size, 13px);
@@ -18,25 +32,60 @@
     --ft-internal-search-font-weight: var(--ft-search-font-weight, 600);
     --ft-internal-search-background: var(
       --ft-search-background,
-      var(--ft-internal-color-background)
+      var(--ft-theme-input-background, var(--ft-internal-color-background))
     );
     --ft-internal-color-border: var(
       --ft-color-border,
-      light-dark(oklch(92.2% 0 0), oklch(100% 0 0 / 0.1))
+      var(
+        --ft-theme-side-bar-border,
+        light-dark(oklch(92.2% 0 0), oklch(100% 0 0 / 0.1))
+      )
     );
     --ft-internal-border-radius: var(--ft-border-radius, 6px);
-    --ft-internal-focus-ring-color: var(--ft-focus-ring-color, oklch(87% 0 0));
+    --ft-internal-focus-ring-color: var(
+      --ft-focus-ring-color,
+      var(--ft-theme-list-focus-outline, oklch(87% 0 0))
+    );
     --ft-internal-selected-background-color: var(
       --ft-selected-background-color,
-      #008cff1a
+      var(--ft-theme-list-active-selection-background, #008cff1a)
     );
     --ft-internal-selected-border-color: var(
       --ft-selected-border-color,
-      #008cff26
+      var(--ft-theme-list-focus-outline, #008cff26)
     );
     --ft-internal-selected-focused-border-color: var(
       --ft-selected-focused-border-color,
-      #008cff50
+      var(--ft-theme-list-focus-outline, #008cff50)
+    );
+
+    /* Muted text (e.g. section headers, icons). */
+    --ft-internal-color-muted-foreground: var(
+      --color-muted-foreground,
+      var(
+        --ft-theme-side-bar-section-header-foreground,
+        var(--ft-internal-color-foreground)
+      )
+    );
+
+    /* Git / status colors (e.g. from Shiki theme gitDecoration.*). Optional. */
+    --ft-internal-status-added: var(
+      --ft-status-added,
+      var(--ft-theme-git-decoration-added-resource-foreground, oklch(55% 0.2 145))
+    );
+    --ft-internal-status-modified: var(
+      --ft-status-modified,
+      var(
+        --ft-theme-git-decoration-modified-resource-foreground,
+        oklch(65% 0.2 85)
+      )
+    );
+    --ft-internal-status-deleted: var(
+      --ft-status-deleted,
+      var(
+        --ft-theme-git-decoration-deleted-resource-foreground,
+        oklch(55% 0.22 25)
+      )
     );
     --ft-internal-git-modified-color: var(--ft-git-modified-color, #008cff);
     --ft-internal-git-added-color: var(--ft-git-added-color, #0ebe4e);
@@ -156,7 +205,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--color-muted-foreground);
+    color: var(--ft-internal-color-muted-foreground);
     fill: currentColor;
     width: var(--ft-internal-icon-width);
   }
