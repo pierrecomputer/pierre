@@ -99,7 +99,7 @@ export function DragDropSection() {
               </>
             }
           >
-            With locked file
+            Control file updates
           </TreeExampleHeading>
           <LockedFileExample />
         </div>
