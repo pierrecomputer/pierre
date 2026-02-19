@@ -10,6 +10,11 @@ import { TreePanel } from '../TreePanel';
 import { flatteningOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 
+const flattenStyle = {
+  colorScheme: 'dark',
+  '--ft-search-background': 'light-dark(#fff, oklch(14.5% 0 0))',
+} as CSSProperties;
+
 export function FlatteningSection() {
   return (
     <TreeExampleSection id="flatten">
@@ -36,13 +41,7 @@ export function FlatteningSection() {
                 'build/assets/images',
                 'build/assets/images/social',
               ]}
-              style={
-                {
-                  colorScheme: 'dark',
-                  '--ft-search-background':
-                    'light-dark(#fff, oklch(14.5% 0 0))',
-                } as CSSProperties
-              }
+              style={flattenStyle}
             />
           </TreePanel>
         </div>
@@ -58,13 +57,7 @@ export function FlatteningSection() {
                 id: 'flatten-demo-flattened',
               }}
               initialExpandedItems={['build', 'f::build/assets/images/social']}
-              style={
-                {
-                  colorScheme: 'dark',
-                  '--ft-search-background':
-                    'light-dark(#fff, oklch(14.5% 0 0))',
-                } as CSSProperties
-              }
+              style={flattenStyle}
             />
           </TreePanel>
         </div>

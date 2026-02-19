@@ -23,21 +23,13 @@ export default function TreesHome() {
       <Hero productId={PRODUCT_ID} />
 
       <section className="space-y-12 pb-8">
-        {/* <div className="scroll-mt-[20px] space-y-5">
-          <FeatureHeader
-            title="TreeApp"
-            description="Reusable layout: FileTree on the left, selected file content on the right. TreeApp connects Trees and file rendering with shared styles and selection."
-          />
-          <TreeAppExample />
-        </div> */}
-
         <FlatteningSection />
         <PathColorsSection />
         <DragDropSection />
         <SearchSection />
         <A11ySection />
-        <ThemingSection />
         <ShikiThemesSection />
+        <ThemingSection />
       </section>
 
       <PierreCompanySection />

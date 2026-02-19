@@ -13,6 +13,11 @@ import { TreeExampleSection } from './TreeExampleSection';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
+const dragDropStyle = {
+  colorScheme: 'dark',
+  '--ft-search-background': 'light-dark(#fff, oklch(14.5% 0 0))',
+} as CSSProperties;
+
 const defaultOptions = {
   ...dragDropOptions(),
   id: 'drag-drop-demo-default',
@@ -43,12 +48,7 @@ function LockedFileExample() {
         <FileTree
           className="[--ft-search-background:theme(colors.neutral.800)]"
           options={options}
-          style={
-            {
-              colorScheme: 'dark',
-              '--ft-search-background': 'light-dark(#fff, oklch(14.5% 0 0))',
-            } as CSSProperties
-          }
+          style={dragDropStyle}
         />
       </TreePanel>
     </div>
@@ -85,13 +85,7 @@ export function DragDropSection() {
             <FileTree
               className="[--ft-search-background:theme(colors.neutral.800)]"
               options={defaultOptions}
-              style={
-                {
-                  colorScheme: 'dark',
-                  '--ft-search-background':
-                    'light-dark(#fff, oklch(14.5% 0 0))',
-                } as CSSProperties
-              }
+              style={dragDropStyle}
             />
           </TreePanel>
         </div>

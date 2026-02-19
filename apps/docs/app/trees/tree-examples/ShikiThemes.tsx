@@ -10,9 +10,11 @@ import {
 } from '@pierre/icons';
 import { themeToTreeStyles } from '@pierre/trees';
 import { FileTree } from '@pierre/trees/react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
+import { TreePanel } from '../TreePanel';
 import { baseTreeOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 import { Button } from '@/components/ui/button';
@@ -150,13 +152,16 @@ export function ShikiThemesSection() {
   return (
     <TreeExampleSection id="shiki-themes">
       <FeatureHeader
-        title="Works with Shiki themes, too"
+        title="Style with Shiki themes"
         description={
           <>
-            The same Shiki themes used by <code>@pierre/diffs</code> can drive
-            the <code>FileTree</code>: sidebar and Git decoration colors come
-            from your choice of themes. Pick a theme and switch light/dark to
-            see the tree update live.
+            The same Shiki themes used by{' '}
+            <Link href="../">
+              <code>@pierre/diffs</code>
+            </Link>{' '}
+            can style the <code>FileTree</code>. Sidebar and Git decoration
+            colors come from your choice of themes. Pick a theme and switch
+            light/dark to see the tree update live.
           </>
         }
       />
@@ -248,28 +253,32 @@ export function ShikiThemesSection() {
         </ButtonGroup>
       </div>
 
-      <div
-        className="min-h-[320px] overflow-auto rounded-lg border p-3"
-        style={
-          themeStyles ?? {
-            backgroundColor: 'var(--muted)',
-            color: 'var(--muted-foreground)',
-          }
-        }
-      >
+      <div>
         {loading && (
           <p className="text-muted-foreground py-4 text-sm">Loading theme…</p>
         )}
         {error && <p className="text-destructive py-4 text-sm">{error}</p>}
         {!loading && !error && themeStyles != null ? (
-          <FileTree
-            options={{
-              ...baseTreeOptions,
-              id: 'shiki-themes-tree',
-            }}
-            initialSelectedItems={['package.json']}
-            style={themeStyles}
-          />
+          <>
+            <TreePanel
+              className="min-h-[320px] border"
+              style={
+                themeStyles ?? {
+                  backgroundColor: 'var(--muted)',
+                  color: 'var(--muted-foreground)',
+                }
+              }
+            >
+              <FileTree
+                options={{
+                  ...baseTreeOptions,
+                  id: 'shiki-themes-tree',
+                }}
+                initialSelectedItems={['package.json']}
+                style={themeStyles}
+              />
+            </TreePanel>
+          </>
         ) : null}
       </div>
     </TreeExampleSection>
