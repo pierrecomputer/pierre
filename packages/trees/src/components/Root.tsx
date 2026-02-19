@@ -49,6 +49,9 @@ const getSelectionPath = (path: string): string =>
     ? path.slice(FLATTENED_PREFIX.length)
     : path;
 
+const getFilesSignature = (files: string[]): string =>
+  `${files.length}\0${files.join('\0')}`;
+
 function FlattenedDirectoryName({
   tree,
   flattens,
@@ -330,25 +333,99 @@ export function Root({
   const filesRef = useRef(files);
   filesRef.current = files;
 
+  // --- Flattened sub-folder drop targeting ---
+  const flattenedDropSubfolderIdRef = useRef<string | null>(null);
+  const flattenedHighlightRef = useRef<HTMLElement | null>(null);
+
+  const detectFlattenedSubfolder = useCallback((e: DragEvent) => {
+    let el = e.target as HTMLElement | null;
+    if (el != null && el.nodeType === Node.TEXT_NODE) {
+      el = el.parentElement;
+    }
+    const span = el?.closest?.(
+      '[data-item-flattened-subitem]'
+    ) as HTMLElement | null;
+    const id = span?.getAttribute('data-item-flattened-subitem') ?? null;
+
+    if (id === flattenedDropSubfolderIdRef.current) return;
+
+    if (flattenedHighlightRef.current != null) {
+      flattenedHighlightRef.current.removeAttribute(
+        'data-item-flattened-subitem-drag-target'
+      );
+    }
+
+    if (span != null && id != null) {
+      span.setAttribute('data-item-flattened-subitem-drag-target', 'true');
+      flattenedHighlightRef.current = span;
+      flattenedDropSubfolderIdRef.current = id;
+    } else {
+      flattenedHighlightRef.current = null;
+      flattenedDropSubfolderIdRef.current = null;
+    }
+  }, []);
+
+  const clearFlattenedSubfolder = useCallback(() => {
+    if (flattenedHighlightRef.current != null) {
+      flattenedHighlightRef.current.removeAttribute(
+        'data-item-flattened-subitem-drag-target'
+      );
+    }
+    flattenedHighlightRef.current = null;
+    flattenedDropSubfolderIdRef.current = null;
+  }, []);
+
+  // Keep the previous idToPath so we can translate stale expanded IDs → paths
+  // when files change (DnD or controlled update).
+  const prevIdToPathRef = useRef<Map<string, string>>(idToPath);
+  // DnD-only: pending drop target to auto-expand if/when the exact drop result
+  // is applied to files.
+  const pendingDropTargetExpandRef = useRef<{
+    path: string;
+    expectedFilesSignature: string;
+  } | null>(null);
+
   const onDropHandler = useCallback(
     (
       items: ItemInstance<FileTreeNode>[],
       target: { item: ItemInstance<FileTreeNode> }
     ) => {
       const draggedPaths = items.map((item) => item.getItemData().path);
-      const targetPath =
+      let targetPath =
         target.item.getId() === 'root'
           ? 'root'
           : target.item.getItemData().path;
+
+      if (flattenedDropSubfolderIdRef.current != null) {
+        targetPath =
+          idToPath.get(flattenedDropSubfolderIdRef.current) ?? targetPath;
+        flattenedDropSubfolderIdRef.current = null;
+      }
+
       const newFiles = computeNewFilesAfterDrop(
         filesRef.current,
         draggedPaths,
         targetPath,
         { onCollision }
       );
+
+      // Store the drop target path (stripped of f:: prefix) so the migration
+      // effect can expand it alongside the preserved expansion state, but only
+      // if this exact file result is later applied.
+      if (targetPath !== 'root') {
+        pendingDropTargetExpandRef.current = {
+          path: targetPath.startsWith(FLATTENED_PREFIX)
+            ? targetPath.slice(FLATTENED_PREFIX.length)
+            : targetPath,
+          expectedFilesSignature: getFilesSignature(newFiles),
+        };
+      } else {
+        pendingDropTargetExpandRef.current = null;
+      }
+
       callbacksRef?.current._onDragMoveFiles?.(newFiles);
     },
-    [callbacksRef, onCollision]
+    [callbacksRef, onCollision, idToPath]
   );
 
   // Track search state via ref so the canDrag callback (evaluated at event
@@ -399,6 +476,28 @@ export function Root({
 
   searchActiveRef.current = (tree.getState().search?.length ?? 0) > 0;
 
+  // Detect stale expanded IDs when the file list changes. Flattened chains
+  // may break or form, causing node IDs to change. We snapshot the expanded
+  // paths using the OLD idToPath so the effect can re-map them to new IDs.
+  // This covers both DnD drops and controlled file updates.
+  const pendingExpandMigrationRef = useRef<string[] | null>(null);
+  if (prevIdToPathRef.current !== idToPath) {
+    const currentExpandedIds = tree.getState().expandedItems ?? [];
+    const hasStaleIds = currentExpandedIds.some(
+      (id: string) => !idToPath.has(id)
+    );
+    if (hasStaleIds) {
+      const oldIdToPath = prevIdToPathRef.current;
+      pendingExpandMigrationRef.current = currentExpandedIds
+        .map((id: string) => oldIdToPath.get(id))
+        .filter((p): p is string => p != null)
+        .map((p: string) =>
+          p.startsWith(FLATTENED_PREFIX) ? p.slice(FLATTENED_PREFIX.length) : p
+        );
+    }
+  }
+  prevIdToPathRef.current = idToPath;
+
   // Populate handleRef so the FileTree class can call tree methods directly
   useEffect(() => {
     if (handleRef == null) return;
@@ -407,6 +506,50 @@ export function Root({
       handleRef.current = null;
     };
   }, [tree, pathToId, idToPath, handleRef]);
+
+  // --- Migrate expanded state after file list changes ---
+  // When the file list changes (DnD drop or controlled update), flattened
+  // chains may break or form, changing node IDs. This effect re-maps the
+  // previously-expanded paths to new IDs and optionally expands a drop target
+  // when the applied files match a pending drop result.
+  useEffect(() => {
+    const previousPaths = pendingExpandMigrationRef.current;
+    const pendingDropTarget = pendingDropTargetExpandRef.current;
+    const dropTarget =
+      pendingDropTarget != null &&
+      pendingDropTarget.expectedFilesSignature === getFilesSignature(files)
+        ? pendingDropTarget.path
+        : null;
+    pendingExpandMigrationRef.current = null;
+    pendingDropTargetExpandRef.current = null;
+
+    if (previousPaths == null && dropTarget == null) return;
+
+    const pathsToExpand = previousPaths != null ? [...previousPaths] : [];
+    if (dropTarget != null) {
+      pathsToExpand.push(dropTarget);
+    }
+
+    const expandIds = expandPathsWithAncestors(pathsToExpand, pathToId, {
+      flattenEmptyDirectories,
+    });
+
+    if (previousPaths != null) {
+      // Full replacement — re-map all expanded paths to new IDs.
+      tree.applySubStateUpdate('expandedItems', () => expandIds);
+    } else {
+      // Just adding the drop target — merge with existing expanded state.
+      const currentExpanded = tree.getState().expandedItems ?? [];
+      const currentSet = new Set(currentExpanded);
+      const newIds = expandIds.filter((id) => !currentSet.has(id));
+      if (newIds.length === 0) return;
+      tree.applySubStateUpdate('expandedItems', (prev) => [
+        ...(prev ?? []),
+        ...newIds,
+      ]);
+    }
+    tree.rebuildTree();
+  }, [files, pathToId, tree, flattenEmptyDirectories]);
 
   // --- Selection change callback ---
   const selectionSnapshotRef = useRef<string | null>(null);
@@ -572,6 +715,36 @@ export function Root({
               ...(isDragging && { 'data-item-dragging': true }),
             }
           : {};
+        const baseProps = item.getProps();
+        const itemProps =
+          isDnD && isFlattenedDirectory
+            ? {
+                ...baseProps,
+                onDragOver: (e: DragEvent) => {
+                  (
+                    baseProps.onDragOver as ((e: DragEvent) => void) | undefined
+                  )?.(e);
+                  detectFlattenedSubfolder(e);
+                },
+                onDragLeave: (e: DragEvent) => {
+                  clearFlattenedSubfolder();
+                  (
+                    baseProps.onDragLeave as
+                      | ((e: DragEvent) => void)
+                      | undefined
+                  )?.(e);
+                },
+                onDrop: (e: DragEvent) => {
+                  // Call headless-tree's handler first — it synchronously
+                  // invokes onDropHandler where we read the subfolder ref.
+                  (baseProps.onDrop as ((e: DragEvent) => void) | undefined)?.(
+                    e
+                  );
+                  clearFlattenedSubfolder();
+                },
+              }
+            : baseProps;
+
         return (
           <button
             data-type="item"
@@ -582,7 +755,7 @@ export function Root({
             {...dragProps}
             data-item-id={item.getId()}
             id={getItemDomId(item.getId())}
-            {...item.getProps()}
+            {...itemProps}
             key={item.getId()}
           >
             {level > 0 ? (

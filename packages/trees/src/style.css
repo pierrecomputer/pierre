@@ -137,7 +137,8 @@
     align-items: center;
     gap: 2px;
   }
-  [data-item-flattened-subitem]:hover {
+  [data-item-flattened-subitem]:hover,
+  [data-item-flattened-subitem-drag-target='true'] {
     text-decoration: underline;
   }
 
