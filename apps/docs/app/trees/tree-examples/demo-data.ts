@@ -29,47 +29,30 @@ export function run() { return message; }
 `,
 };
 
-/** Options with flatten empty directories enabled (nested folders collapsed). Optional initialExpanded opens those folders on load (e.g. ['build']). */
-export function flatteningOptions(
-  flatten: boolean,
-  initialExpanded?: string[]
-): FileTreeOptions {
+/** Options with flatten empty directories enabled (nested folders collapsed). Pass initialExpandedItems on the component for initial open folders (e.g. ['build']). */
+export function flatteningOptions(flatten: boolean): FileTreeOptions {
   return {
     ...sharedDemoFileTreeOptions,
     flattenEmptyDirectories: flatten,
-    ...(initialExpanded != null &&
-      initialExpanded.length > 0 && {
-        config: {
-          ...sharedDemoFileTreeOptions.config,
-          initialState: {
-            ...sharedDemoFileTreeOptions.config?.initialState,
-            expandedItems: initialExpanded,
-          },
-        },
-      }),
   };
 }
 
 /** Base options for all tree example sections. */
 export const baseTreeOptions = sharedDemoFileTreeOptions;
 
-/** Options with search mode for the search example. Optional initialSearch prepopulates the search field and filters the tree on load. */
-export function searchOptions(
-  mode: FileTreeSearchMode,
-  initialSearch?: string
-): FileTreeOptions {
+/** Options for drag-and-drop examples. Optional lockedPaths prevents those paths from being dragged. */
+export function dragDropOptions(lockedPaths?: string[]): FileTreeOptions {
+  return {
+    ...baseTreeOptions,
+    dragAndDrop: true,
+    ...(lockedPaths != null && lockedPaths.length > 0 && { lockedPaths }),
+  };
+}
+
+/** Options with search mode for the search example. Pass fileTreeSearchMode at top level so the tree applies it. Use stateConfig.initialSearch in the component for prepopulated search. */
+export function searchOptions(mode: FileTreeSearchMode): FileTreeOptions {
   return {
     ...sharedDemoFileTreeOptions,
-    config: {
-      ...sharedDemoFileTreeOptions.config,
-      fileTreeSearchMode: mode,
-      ...(initialSearch != null &&
-        initialSearch.length > 0 && {
-          initialState: {
-            ...sharedDemoFileTreeOptions.config?.initialState,
-            search: initialSearch,
-          },
-        }),
-    },
+    fileTreeSearchMode: mode,
   };
 }

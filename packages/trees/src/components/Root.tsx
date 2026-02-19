@@ -10,7 +10,13 @@ import {
 } from '@headless-tree/core';
 import { Fragment } from 'preact';
 import type { JSX } from 'preact';
-import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'preact/hooks';
 
 import { FLATTENED_PREFIX } from '../constants';
 import {
@@ -56,29 +62,68 @@ const getSelectionPath = (path: string): string =>
 
 const getFilesSignature = (files: string[]): string =>
   `${files.length}\0${files.join('\0')}`;
+function LockIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      data-item-lock-icon
+      aria-hidden
+    >
+      <path
+        d="M4 5.33569V4C4 1.79086 5.79086 0 8 0C10.2091 0 12 1.79086 12 4V5.33569C13.5856 5.8761 14 7.17857 14 10V11C14 15.1175 13.1175 16 9 16H7C2.8825 16 2 15.1175 2 11V10C2 7.17857 2.41437 5.8761 4 5.33569ZM5.5 4V5.05434C5.94462 5.01617 6.44268 5 7 5H9C9.55732 5 10.0554 5.01617 10.5 5.05434V4C10.5 2.61929 9.38071 1.5 8 1.5C6.61929 1.5 5.5 2.61929 5.5 4ZM3.5 10V11C3.5 11.9951 3.55528 12.6924 3.6665 13.1929C3.77394 13.6763 3.91264 13.8794 4.0166 13.9834C4.12056 14.0874 4.32368 14.2261 4.8071 14.3335C5.30756 14.4447 6.00486 14.5 7 14.5H9C9.99514 14.5 10.6924 14.4447 11.1929 14.3335C11.6763 14.2261 11.8794 14.0874 11.9834 13.9834C12.0874 13.8794 12.2261 13.6763 12.3335 13.1929C12.4447 12.6924 12.5 11.9951 12.5 11V10C12.5 9.00486 12.4447 8.30756 12.3335 7.8071C12.2261 7.32368 12.0874 7.12056 11.9834 7.0166C11.8794 6.91264 11.6763 6.77394 11.1929 6.6665C10.6924 6.55528 9.99514 6.5 9 6.5H7C6.00486 6.5 5.30756 6.55528 4.8071 6.6665C4.32368 6.77394 4.12056 6.91264 4.0166 7.0166C3.91264 7.12056 3.77394 7.32368 3.6665 7.8071C3.55528 8.30756 3.5 9.00486 3.5 10Z"
+        fill="currentcolor"
+      />
+    </svg>
+  );
+}
 
 function FlattenedDirectoryName({
   tree,
+  idToPath,
   flattens,
+  fallbackName,
 }: {
   tree: TreeInstance<FileTreeNode>;
+  idToPath: Map<string, string>;
   flattens: string[];
+  fallbackName: string;
 }): JSX.Element {
   'use no memo';
-  const flattenedItems = useMemo(() => {
-    return flattens.map((name) => tree.getItemInstance(name));
-  }, [flattens, tree]);
+  const segments = useMemo(() => {
+    const result: { id: string; label: string }[] = [];
+    for (const id of flattens) {
+      const item = tree.getItemInstance(id);
+      if (item != null) {
+        result.push({ id: item.getId(), label: item.getItemName() });
+      } else {
+        const path = idToPath.get(id);
+        const label = path != null ? (path.split('/').pop() ?? id) : id;
+        result.push({ id, label });
+      }
+    }
+    return result;
+  }, [flattens, tree, idToPath]);
+
+  if (segments.length === 0) {
+    return (
+      <span data-item-flattened-subitems>
+        {fallbackName.replace(/\//g, ' / ')}
+      </span>
+    );
+  }
+
   return (
     <span data-item-flattened-subitems>
-      {flattenedItems.map((item, index) => {
-        const isLast = index === flattenedItems.length - 1;
-
+      {segments.map(({ id, label }, index) => {
+        const isLast = index === segments.length - 1;
         return (
-          <Fragment key={index}>
-            <span data-item-flattened-subitem={item.getId()}>
-              {item.getItemName()}
-            </span>
-            {!isLast ? '/' : ''}
+          <Fragment key={id}>
+            <span data-item-flattened-subitem={id}>{label}</span>
+            {!isLast ? ' / ' : ''}
           </Fragment>
         );
       })}
@@ -98,6 +143,7 @@ export function Root({
     flattenEmptyDirectories,
     fileTreeSearchMode,
     gitStatus,
+    lockedPaths,
     onCollision,
     useLazyDataLoader,
   } = fileTreeOptions;
@@ -236,9 +282,10 @@ export function Root({
       return ids.length > 0 ? ids : [];
     };
 
-    // Merge top-level initialExpandedItems/initialSelectedItems into config.initialState
+    // Merge top-level initialExpandedItems/initialSelectedItems/initialSearch into config.initialState
     const topLevelInitialExpanded = stateConfig?.initialExpandedItems;
     const topLevelInitialSelected = stateConfig?.initialSelectedItems;
+    const topLevelInitialSearch = stateConfig?.initialSearch;
     const topLevelInitialExpandedIds =
       topLevelInitialExpanded != null
         ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId, {
@@ -247,7 +294,9 @@ export function Root({
         : undefined;
     const topLevelInitialSelectedIds = mapPathsToIds(topLevelInitialSelected);
     const hasTopLevelInitial =
-      topLevelInitialExpanded != null || topLevelInitialSelected != null;
+      topLevelInitialExpanded != null ||
+      topLevelInitialSelected != null ||
+      topLevelInitialSearch != null;
 
     const mergedInitialState = hasTopLevelInitial
       ? {
@@ -257,6 +306,9 @@ export function Root({
           }),
           ...(topLevelInitialSelectedIds != null && {
             selectedItems: topLevelInitialSelectedIds,
+          }),
+          ...(topLevelInitialSearch != null && {
+            search: topLevelInitialSearch,
           }),
         }
       : (baseConfig.initialState as TreeStateConfig | undefined);
@@ -477,7 +529,17 @@ export function Root({
     features,
     ...(isDnD && {
       canReorder: false,
-      canDrag: () => !searchActiveRef.current,
+      canDrag: (items: ItemInstance<FileTreeNode>[]) => {
+        if (searchActiveRef.current) return false;
+        if (lockedPaths == null || lockedPaths.length === 0) return true;
+        const lockedSet = new Set(lockedPaths);
+        for (const item of items) {
+          const path = item.getItemData().path;
+          if (path != null && lockedSet.has(getSelectionPath(path)))
+            return false;
+        }
+        return true;
+      },
       onDrop: onDropHandler,
       canDrop: (
         _items: ItemInstance<FileTreeNode>[],
@@ -663,7 +725,8 @@ export function Root({
   }, [selectedSnapshot, callbacksRef, tree, idToPath]);
 
   // When tree mounts with initial search in state, run setSearch once so expand/collapse filter is applied.
-  useEffect(() => {
+  // useLayoutEffect ensures this runs before paint so the first frame shows the correct expansion.
+  useLayoutEffect(() => {
     const search = tree.getState().search;
     if (search != null && search.length > 0) {
       tree.setSearch(search);
@@ -704,6 +767,10 @@ export function Root({
           visibleIdSet != null
             ? allItems.filter((item) => visibleIdSet.has(item.getId()))
             : allItems;
+        const lockedPathSet =
+          lockedPaths != null && lockedPaths.length > 0
+            ? new Set(lockedPaths)
+            : null;
         return items.map((item) => {
           const itemData = item.getItemData();
           const itemMeta = item.getItemMeta();
@@ -714,6 +781,10 @@ export function Root({
           const startWithCapital =
             itemName.charAt(0).toUpperCase() === itemName.charAt(0);
           const alignCapitals = startWithCapital;
+          const itemPath = itemData?.path;
+          const isLocked =
+            itemPath != null &&
+            lockedPathSet?.has(getSelectionPath(itemPath)) === true;
           const isSelected = item.isSelected();
           const selectionProps = isSelected
             ? { 'data-item-selected': true }
@@ -832,7 +903,9 @@ export function Root({
                 {isFlattenedDirectory ? (
                   <FlattenedDirectoryName
                     tree={tree}
+                    idToPath={idToPath}
                     flattens={itemData?.flattens ?? []}
+                    fallbackName={itemName}
                   />
                 ) : (
                   itemName
@@ -844,6 +917,11 @@ export function Root({
                   {statusLabel ?? (
                     <Icon name="file-tree-icon-dot" width={6} height={6} />
                   )}
+                </div>
+              ) : null}
+              {isLocked ? (
+                <div data-item-section="lock" style={{ marginLeft: 'auto' }}>
+                  <LockIcon />
                 </div>
               ) : null}
             </button>

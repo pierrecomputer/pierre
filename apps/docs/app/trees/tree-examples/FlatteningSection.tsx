@@ -4,6 +4,7 @@ import { IconFileTreeFill, IconFolders } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
 
+import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { TreePanel } from '../TreePanel';
 import { flatteningOptions } from './demo-data';
@@ -19,22 +20,22 @@ export function FlatteningSection() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
-            <IconFileTreeFill />
+          <TreeExampleHeading icon={<IconFileTreeFill />}>
             Hierarchical
-          </h3>
+          </TreeExampleHeading>
           <TreePanel>
             <FileTree
               className="[--ft-search-background:theme(colors.neutral.800)]"
               options={{
-                ...flatteningOptions(false, [
-                  'build',
-                  'build/assets',
-                  'build/assets/images',
-                  'build/assets/images/social',
-                ]),
+                ...flatteningOptions(false),
                 id: 'flatten-demo-hierarchical',
               }}
+              initialExpandedItems={[
+                'build',
+                'build/assets',
+                'build/assets/images',
+                'build/assets/images/social',
+              ]}
               style={
                 {
                   colorScheme: 'dark',
@@ -46,20 +47,17 @@ export function FlatteningSection() {
           </TreePanel>
         </div>
         <div>
-          <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
-            <IconFolders />
+          <TreeExampleHeading icon={<IconFolders />}>
             Flattened
-          </h3>
+          </TreeExampleHeading>
           <TreePanel>
             <FileTree
               className="[--ft-search-background:theme(colors.neutral.800)]"
               options={{
-                ...flatteningOptions(true, [
-                  'build',
-                  'f::build/assets/images/social',
-                ]),
+                ...flatteningOptions(true),
                 id: 'flatten-demo-flattened',
               }}
+              initialExpandedItems={['build', 'f::build/assets/images/social']}
               style={
                 {
                   colorScheme: 'dark',

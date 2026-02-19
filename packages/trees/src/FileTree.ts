@@ -67,6 +67,8 @@ export interface FileTreeOptions {
   gitStatus?: GitStatusEntry[];
   id?: string;
   initialFiles: string[];
+  /** Paths that cannot be dragged (e.g. ['package.json']). Uses same path form as the tree (no f:: prefix). */
+  lockedPaths?: string[];
   /** Return true to overwrite the destination file when a DnD move collides. */
   onCollision?: (collision: FileTreeCollision) => boolean;
   useLazyDataLoader?: boolean;
@@ -76,6 +78,8 @@ export interface FileTreeStateConfig {
   // Initial state (uncontrolled - used once at creation)
   initialExpandedItems?: string[];
   initialSelectedItems?: string[];
+  /** Prepopulate the search field (e.g. for demos). */
+  initialSearch?: string | null;
 
   // Controlled state (applied every render, overrides internal state)
   expandedItems?: string[];
@@ -384,6 +388,7 @@ export class FileTree {
       'gitStatus',
       'initialFiles',
       'flattenEmptyDirectories',
+      'lockedPaths',
       'onCollision',
       'useLazyDataLoader',
     ] as const;

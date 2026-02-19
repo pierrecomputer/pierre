@@ -57,6 +57,7 @@ export interface FileTreeProps {
   // Default (uncontrolled) state
   initialExpandedItems?: string[];
   initialSelectedItems?: string[];
+  initialSearch?: string | null;
 
   // Controlled state
   expandedItems?: string[];
@@ -80,6 +81,7 @@ export function FileTree({
   onFilesChange,
   initialExpandedItems,
   initialSelectedItems,
+  initialSearch,
   expandedItems,
   selectedItems,
   onExpandedItemsChange,
@@ -95,6 +97,7 @@ export function FileTree({
     onFilesChange,
     initialExpandedItems,
     initialSelectedItems,
+    initialSearch,
     expandedItems,
     selectedItems,
     onExpandedItemsChange,

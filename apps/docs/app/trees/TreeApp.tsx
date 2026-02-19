@@ -8,7 +8,7 @@ import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 
 export interface TreeAppProps {
-  /** Options passed to the FileTree (files, config, etc.). onSelection is wired internally. */
+  /** Options passed to the FileTree. initialSelectedItems and onSelection are wired from defaultSelectedPath internally. */
   fileTreeOptions: FileTreeOptions;
   /** Optional prerendered HTML for SSR hydration. */
   preloadedFileTreeHtml?: string;
@@ -45,22 +45,13 @@ export function TreeApp({
     // If selection is only folders (e.g. user clicked a folder to expand/collapse), keep the last open file
   }, []);
 
-  const treeOptionsWithSelection = useMemo<FileTreeOptions>(
-    () => ({
-      ...fileTreeOptions,
-      config: {
-        ...fileTreeOptions.config,
-        initialState: {
-          ...fileTreeOptions.config?.initialState,
-          ...(defaultSelectedPath != null && {
-            selectedItems: [defaultSelectedPath],
-          }),
-        },
-      },
-      onSelection,
-    }),
-    [fileTreeOptions, defaultSelectedPath, onSelection]
-  );
+  const treeOptions = useMemo(() => {
+    const { initialFiles: _f, ...opts } = fileTreeOptions;
+    return opts;
+  }, [fileTreeOptions]);
+  const initialFiles = fileTreeOptions.initialFiles;
+  const initialSelectedItems =
+    defaultSelectedPath != null ? [defaultSelectedPath] : undefined;
 
   const content =
     selectedPath != null
@@ -76,7 +67,10 @@ export function TreeApp({
         <div className="border-border dark:border-border min-h-[200px] overflow-auto border-b bg-neutral-900 p-3 [--ft-search-background:theme(colors.neutral.800)] md:min-h-0 md:border-r md:border-b-0">
           <FileTreeReact
             className="[--ft-search-background:theme(colors.neutral.800)]"
-            options={treeOptionsWithSelection}
+            options={treeOptions}
+            initialFiles={initialFiles}
+            initialSelectedItems={initialSelectedItems}
+            onSelection={onSelection}
             prerenderedHTML={preloadedFileTreeHtml}
             style={
               {

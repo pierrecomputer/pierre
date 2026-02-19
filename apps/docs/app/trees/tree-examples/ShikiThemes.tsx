@@ -150,16 +150,12 @@ export function ShikiThemesSection() {
   return (
     <TreeExampleSection id="shiki-themes">
       <FeatureHeader
-        title="Shiki themes on the tree"
+        title="Works with Shiki themes, too"
         description={
           <>
             The same Shiki themes used by <code>@pierre/diffs</code> can drive
-            the FileTree: sidebar background/foreground, borders, selection,
-            focus ring, and git status colors come from the theme&apos;s{' '}
-            <code>colors</code> (e.g. <code>sideBar.background</code>,{' '}
-            <code>sideBar.foreground</code>,{' '}
-            <code>list.activeSelectionBackground</code>,{' '}
-            <code>gitDecoration.*</code>). Pick a theme and switch light/dark to
+            the <code>FileTree</code>: sidebar and Git decoration colors come
+            from your choice of themes. Pick a theme and switch light/dark to
             see the tree update live.
           </>
         }
@@ -270,14 +266,8 @@ export function ShikiThemesSection() {
             options={{
               ...baseTreeOptions,
               id: 'shiki-themes-tree',
-              config: {
-                ...baseTreeOptions.config,
-                initialState: {
-                  ...baseTreeOptions.config?.initialState,
-                  selectedItems: ['package.json'],
-                },
-              },
             }}
+            initialSelectedItems={['package.json']}
             style={themeStyles}
           />
         ) : null}

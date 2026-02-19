@@ -3,6 +3,7 @@
 import { FileTree } from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
 
+import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { baseTreeOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
@@ -71,7 +72,7 @@ export function ThemingSection() {
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div>
-          <h3 className="mb-3 text-lg font-medium">Light mode</h3>
+          <TreeExampleHeading>Light mode</TreeExampleHeading>
           <div
             className="min-h-[320px] overflow-auto rounded-lg border border-neutral-200 bg-neutral-50 p-3"
             style={lightTheme()}
@@ -80,20 +81,14 @@ export function ThemingSection() {
               options={{
                 ...baseTreeOptions,
                 id: 'theming-demo-light',
-                config: {
-                  ...baseTreeOptions.config,
-                  initialState: {
-                    ...baseTreeOptions.config?.initialState,
-                    selectedItems: ['package.json'],
-                  },
-                },
               }}
+              initialSelectedItems={['package.json']}
               style={lightTheme()}
             />
           </div>
         </div>
         <div>
-          <h3 className="mb-3 text-lg font-medium">Dark mode</h3>
+          <TreeExampleHeading>Dark mode</TreeExampleHeading>
           <div
             className="min-h-[320px] overflow-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3"
             style={darkTheme()}
@@ -102,20 +97,14 @@ export function ThemingSection() {
               options={{
                 ...baseTreeOptions,
                 id: 'theming-demo-dark',
-                config: {
-                  ...baseTreeOptions.config,
-                  initialState: {
-                    ...baseTreeOptions.config?.initialState,
-                    selectedItems: ['package.json'],
-                  },
-                },
               }}
+              initialSelectedItems={['package.json']}
               style={darkTheme()}
             />
           </div>
         </div>
         <div>
-          <h3 className="mb-3 text-lg font-medium">Synthwave &apos;84</h3>
+          <TreeExampleHeading>Synthwave &apos;84</TreeExampleHeading>
           <div
             className="min-h-[320px] overflow-auto rounded-lg border border-[#f92aad]/40 bg-[#1e1b2b] p-3 shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
             style={synthwaveTheme()}
@@ -124,14 +113,8 @@ export function ThemingSection() {
               options={{
                 ...baseTreeOptions,
                 id: 'theming-demo-synthwave',
-                config: {
-                  ...baseTreeOptions.config,
-                  initialState: {
-                    ...baseTreeOptions.config?.initialState,
-                    selectedItems: ['package.json'],
-                  },
-                },
               }}
+              initialSelectedItems={['package.json']}
               style={synthwaveTheme()}
             />
           </div>

@@ -71,7 +71,10 @@
     /* Git / status colors (e.g. from Shiki theme gitDecoration.*). Optional. */
     --ft-internal-status-added: var(
       --ft-status-added,
-      var(--ft-theme-git-decoration-added-resource-foreground, oklch(55% 0.2 145))
+      var(
+        --ft-theme-git-decoration-added-resource-foreground,
+        oklch(55% 0.2 145)
+      )
     );
     --ft-internal-status-modified: var(
       --ft-status-modified,
@@ -361,5 +364,16 @@
 
   [data-item-dragging='true'] {
     opacity: 0.5;
+  }
+
+  /* Lock icon for locked paths (sibling of content) */
+  [data-item-section='lock'] {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: var(--ft-internal-color-muted-foreground);
+  }
+  [data-item-section='lock'] [data-item-lock-icon] {
+    display: block;
   }
 }
