@@ -2,21 +2,24 @@ import type { ReactNode } from 'react';
 
 export interface TreeExampleHeadingProps {
   icon?: ReactNode;
+  description?: ReactNode;
   children: ReactNode;
 }
 
-/**
- * Heading for a tree example subsection (e.g. "Hierarchical", "Default").
- * Optional icon is shown before the label with flex alignment.
- */
 export function TreeExampleHeading({
   icon,
+  description,
   children,
 }: TreeExampleHeadingProps) {
   return (
-    <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
-      {icon != null ? <span className="shrink-0">{icon}</span> : null}
-      {children}
-    </h3>
+    <div className="mb-3">
+      <h3 className="flex items-center gap-1.5 text-lg font-medium">
+        {icon != null ? <span className="shrink-0">{icon}</span> : null}
+        {children}
+      </h3>
+      {description != null ? (
+        <p className="text-muted-foreground text-sm">{description}</p>
+      ) : null}
+    </div>
   );
 }

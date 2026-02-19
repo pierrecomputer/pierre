@@ -71,10 +71,16 @@ export function DragDropSection() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <TreeExampleHeading icon={<IconCursor />}>Default</TreeExampleHeading>
-          <p className="text-muted-foreground -mt-2 mb-3 text-sm">
-            Enable with <code>dragAndDrop: true</code>.
-          </p>
+          <TreeExampleHeading
+            icon={<IconCursor />}
+            description={
+              <>
+                Enable with <code>dragAndDrop: true</code>.
+              </>
+            }
+          >
+            Default
+          </TreeExampleHeading>
           <TreePanel>
             <FileTree
               className="[--ft-search-background:theme(colors.neutral.800)]"
@@ -90,13 +96,17 @@ export function DragDropSection() {
           </TreePanel>
         </div>
         <div>
-          <TreeExampleHeading icon={<IconLock />}>
+          <TreeExampleHeading
+            icon={<IconLock />}
+            description={
+              <>
+                Use <code>lockedPaths</code> to prevent specific paths from
+                being dragged.
+              </>
+            }
+          >
             With locked file
           </TreeExampleHeading>
-          <p className="text-muted-foreground -mt-2 mb-3 text-sm">
-            Use <code>lockedPaths</code> to prevent specific paths from being
-            dragged.
-          </p>
           <LockedFileExample />
         </div>
       </div>

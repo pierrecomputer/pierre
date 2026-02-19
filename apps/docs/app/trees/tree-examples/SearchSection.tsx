@@ -22,17 +22,24 @@ export function SearchSection() {
     <TreeExampleSection id="search">
       <FeatureHeader
         title="Search and filter by name"
-        description="Filter the tree by typing in the search field. Three fileTreeSearchMode options control how non-matching items are shown: expand-matches keeps all items visible and expands folders with matches; collapse-non-matches collapses folders that don't contain matches; hide-non-matches hides files and folders that don't contain matches. All three demos below start with search prepopulated."
+        description={
+          <>
+            Filter the tree by typing in the search field. Trees includes three{' '}
+            <code>fileTreeSearchMode</code> options to control how non-matching
+            items are shown. All three demos below start with search
+            prepopulated to show the different modes.
+          </>
+        }
       />
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <TreeExampleHeading icon={<IconFolderOpen />}>
-              Expand matches
+            <TreeExampleHeading
+              icon={<IconFolderOpen />}
+              description="Keeps all items visible and expand folders with matches"
+            >
+              <code>expand-matches</code>
             </TreeExampleHeading>
-            <p className="text-muted-foreground -mt-2 mb-3 text-sm">
-              Expands folders containing matches but keeps all items visible
-            </p>
             <TreePanel>
               <FileTree
                 className="[--ft-search-background:theme(colors.neutral.800)]"
@@ -46,12 +53,12 @@ export function SearchSection() {
             </TreePanel>
           </div>
           <div>
-            <TreeExampleHeading icon={<IconCollapsedRow />}>
-              Collapse non-matches
+            <TreeExampleHeading
+              icon={<IconCollapsedRow />}
+              description="Collapses folders without any matches"
+            >
+              <code>collapse-non-matches</code>
             </TreeExampleHeading>
-            <p className="text-muted-foreground -mt-2 mb-3 text-sm">
-              Collapses folders not containing matches
-            </p>
             <TreePanel>
               <FileTree
                 className="[--ft-search-background:theme(colors.neutral.800)]"
@@ -65,12 +72,12 @@ export function SearchSection() {
             </TreePanel>
           </div>
           <div>
-            <TreeExampleHeading icon={<IconEyeSlash />}>
-              Hide non-matches
+            <TreeExampleHeading
+              icon={<IconEyeSlash />}
+              description="Hides files and folders without any matches"
+            >
+              <code>hide-non-matches</code>
             </TreeExampleHeading>
-            <p className="text-muted-foreground -mt-2 mb-3 text-sm">
-              Hides files and folders that don't contain matches
-            </p>
             <TreePanel>
               <FileTree
                 className="[--ft-search-background:theme(colors.neutral.800)]"
