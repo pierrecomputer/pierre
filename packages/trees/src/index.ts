@@ -3,4 +3,5 @@ export * from './FileTree';
 export * from './loader';
 export * from './utils/expandImplicitParentDirectories';
 export * from './utils/sortChildren';
+export * from './utils/themeToTreeStyles';
 export { default as fileTreeStyles } from './style.css';

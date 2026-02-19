@@ -8,9 +8,9 @@ import {
   IconColorDark,
   IconColorLight,
 } from '@pierre/icons';
+import { themeToTreeStyles } from '@pierre/trees';
 import { FileTree } from '@pierre/trees/react';
 import { useCallback, useEffect, useState } from 'react';
-import type { ThemeRegistrationResolved } from 'shiki';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { baseTreeOptions } from './demo-data';
@@ -95,73 +95,6 @@ const DARK_THEMES = [
 type LightTheme = (typeof LIGHT_THEMES)[number];
 type DarkTheme = (typeof DARK_THEMES)[number];
 
-/**
- * Map Shiki theme colors to CSS. Sets --ft-theme-* variables so the trees
- * stylesheet fallback chain (--ft-* → --ft-theme-* → default) consumes them.
- */
-function shikiThemeToTreeStyles(
-  theme: ThemeRegistrationResolved
-): React.CSSProperties {
-  const c = theme.colors ?? {};
-  const sideBarBg =
-    c['sideBar.background'] ?? c['editor.background'] ?? theme.bg;
-  const sideBarFg =
-    c['sideBar.foreground'] ?? c['editor.foreground'] ?? theme.fg;
-  const sideBarBorder = c['sideBar.border'] ?? c['editor.background'];
-  const listSelectionBg =
-    c['list.activeSelectionBackground'] ?? c['editor.selectionBackground'];
-  const listHoverBg = c['list.hoverBackground'];
-  const focusOutline = c['list.focusOutline'] ?? c['focusBorder'];
-  const inputBg = c['input.background'] ?? sideBarBg;
-  const inputBorder = c['input.border'] ?? sideBarBorder;
-  const sectionHeaderFg = c['sideBarSectionHeader.foreground'] ?? sideBarFg;
-  const gitAdded =
-    c['gitDecoration.addedResourceForeground'] ?? c['terminal.ansiGreen'];
-  const gitModified =
-    c['gitDecoration.modifiedResourceForeground'] ?? c['terminal.ansiBlue'];
-  const gitDeleted =
-    c['gitDecoration.deletedResourceForeground'] ?? c['terminal.ansiRed'];
-
-  return {
-    colorScheme: theme.type === 'dark' ? 'dark' : 'light',
-    backgroundColor: sideBarBg,
-    color: sideBarFg,
-    borderColor: sideBarBorder,
-    /* Theme token vars (kebab-case): style.css uses these in fallback chains. */
-    ['--ft-theme-side-bar-background' as string]: sideBarBg,
-    ['--ft-theme-side-bar-foreground' as string]: sideBarFg,
-    ['--ft-theme-side-bar-border' as string]: sideBarBorder ?? sideBarBg,
-    ['--ft-theme-side-bar-section-header-foreground' as string]:
-      sectionHeaderFg,
-    ['--ft-theme-list-hover-background' as string]:
-      listHoverBg ??
-      (theme.type === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
-    ['--ft-theme-list-active-selection-background' as string]:
-      listSelectionBg ?? 'transparent',
-    ['--ft-theme-list-focus-outline' as string]: focusOutline ?? sideBarFg,
-    ['--ft-theme-input-background' as string]: inputBg,
-    ['--ft-theme-input-border' as string]: inputBorder ?? sideBarBorder,
-    ...(gitAdded != null && gitAdded !== ''
-      ? {
-          ['--ft-theme-git-decoration-added-resource-foreground' as string]:
-            gitAdded,
-        }
-      : {}),
-    ...(gitModified != null && gitModified !== ''
-      ? {
-          ['--ft-theme-git-decoration-modified-resource-foreground' as string]:
-            gitModified,
-        }
-      : {}),
-    ...(gitDeleted != null && gitDeleted !== ''
-      ? {
-          ['--ft-theme-git-decoration-deleted-resource-foreground' as string]:
-            gitDeleted,
-        }
-      : {}),
-  };
-}
-
 export function ShikiThemesSection() {
   const [selectedLightTheme, setSelectedLightTheme] =
     useState<LightTheme>('pierre-light');
@@ -170,9 +103,9 @@ export function ShikiThemesSection() {
   const [colorMode, setColorMode] = useState<'system' | 'light' | 'dark'>(
     'system'
   );
-  const [themeStyles, setThemeStyles] = useState<React.CSSProperties | null>(
-    null
-  );
+  const [themeStyles, setThemeStyles] = useState<ReturnType<
+    typeof themeToTreeStyles
+  > | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -201,7 +134,7 @@ export function ShikiThemesSection() {
       const theme = await resolveTheme(
         themeName as Parameters<typeof resolveTheme>[0]
       );
-      setThemeStyles(shikiThemeToTreeStyles(theme));
+      setThemeStyles(themeToTreeStyles(theme));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setThemeStyles(null);
