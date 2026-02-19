@@ -884,7 +884,7 @@ function migrateExpandedState(
 ) {
   // Step 1: snapshot expanded paths using OLD map (before file change)
   const currentExpandedIds = tree.getState().expandedItems ?? [];
-  const previousExpandedPaths = (currentExpandedIds)
+  const previousExpandedPaths = currentExpandedIds
     .map((id) => oldIdToPath.get(id))
     .filter((p): p is string => p != null)
     .map((p) =>
@@ -893,9 +893,7 @@ function migrateExpandedState(
 
   // Step 2: check for stale IDs after rebuild
   const { pathToId: newPathToId } = buildMapsFromTreeData(newFiles);
-  const hasStaleIds = (currentExpandedIds).some(
-    (id) => !newPathToId.has(id)
-  );
+  const hasStaleIds = currentExpandedIds.some((id) => !newPathToId.has(id));
 
   if (!hasStaleIds && extraPathsToExpand.length === 0) return;
 
