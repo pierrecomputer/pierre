@@ -16,7 +16,7 @@ function lightTheme(): CSSProperties {
     colorScheme: 'light',
     ['--ft-color-foreground' as string]: 'oklch(14.5% 0 0)',
     ['--ft-background-color-muted' as string]: 'oklch(96% 0 0)',
-    ['--ft-search-background' as string]: 'oklch(98% 0 0)',
+    ['--ft-search-background' as string]: 'oklch(100% 0 0)',
     ['--ft-color-border' as string]: 'oklch(92% 0 0)',
     ['--ft-selected-background-color' as string]: 'oklch(92% 0.06 250)',
     ['--ft-selected-border-color' as string]: 'oklch(65% 0.15 250)',
