@@ -6,8 +6,7 @@ import type { CSSProperties } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { TreePanel } from '../TreePanel';
-import { flatteningOptions } from './demo-data';
+import { DEFAULT_FILE_TREE_PANEL_CLASS, flatteningOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 
 const flattenStyle = {
@@ -28,38 +27,34 @@ export function FlatteningSection() {
           <TreeExampleHeading icon={<IconFileTreeFill />}>
             Hierarchical
           </TreeExampleHeading>
-          <TreePanel>
-            <FileTree
-              className="[--ft-search-background:theme(colors.neutral.800)]"
-              options={{
-                ...flatteningOptions(false),
-                id: 'flatten-demo-hierarchical',
-              }}
-              initialExpandedItems={[
-                'build',
-                'build/assets',
-                'build/assets/images',
-                'build/assets/images/social',
-              ]}
-              style={flattenStyle}
-            />
-          </TreePanel>
+          <FileTree
+            className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            options={{
+              ...flatteningOptions(false),
+              id: 'flatten-demo-hierarchical',
+            }}
+            initialExpandedItems={[
+              'build',
+              'build/assets',
+              'build/assets/images',
+              'build/assets/images/social',
+            ]}
+            style={flattenStyle}
+          />
         </div>
         <div>
           <TreeExampleHeading icon={<IconFolders />}>
             Flattened
           </TreeExampleHeading>
-          <TreePanel>
-            <FileTree
-              className="[--ft-search-background:theme(colors.neutral.800)]"
-              options={{
-                ...flatteningOptions(true),
-                id: 'flatten-demo-flattened',
-              }}
-              initialExpandedItems={['build', 'f::build/assets/images/social']}
-              style={flattenStyle}
-            />
-          </TreePanel>
+          <FileTree
+            className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            options={{
+              ...flatteningOptions(true),
+              id: 'flatten-demo-flattened',
+            }}
+            initialExpandedItems={['build', 'f::build/assets/images/social']}
+            style={flattenStyle}
+          />
         </div>
       </div>
     </TreeExampleSection>

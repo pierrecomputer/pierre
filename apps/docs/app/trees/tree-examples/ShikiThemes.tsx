@@ -14,7 +14,6 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { TreePanel } from '../TreePanel';
 import { baseTreeOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 import { Button } from '@/components/ui/button';
@@ -260,24 +259,20 @@ export function ShikiThemesSection() {
         {error && <p className="text-destructive py-4 text-sm">{error}</p>}
         {!loading && !error && themeStyles != null ? (
           <>
-            <TreePanel
+            <FileTree
               className="min-h-[320px] border"
+              options={{
+                ...baseTreeOptions,
+                id: 'shiki-themes-tree',
+              }}
+              initialSelectedItems={['package.json']}
               style={
                 themeStyles ?? {
                   backgroundColor: 'var(--muted)',
                   color: 'var(--muted-foreground)',
                 }
               }
-            >
-              <FileTree
-                options={{
-                  ...baseTreeOptions,
-                  id: 'shiki-themes-tree',
-                }}
-                initialSelectedItems={['package.json']}
-                style={themeStyles}
-              />
-            </TreePanel>
+            />
           </>
         ) : null}
       </div>

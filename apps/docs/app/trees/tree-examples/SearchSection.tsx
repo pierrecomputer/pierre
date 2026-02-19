@@ -6,8 +6,7 @@ import type { CSSProperties } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { TreePanel } from '../TreePanel';
-import { searchOptions } from './demo-data';
+import { DEFAULT_FILE_TREE_PANEL_CLASS, searchOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 
 const PREPOPULATED_SEARCH = 'tsx';
@@ -40,17 +39,15 @@ export function SearchSection() {
             >
               <code>expand-matches</code>
             </TreeExampleHeading>
-            <TreePanel>
-              <FileTree
-                className="[--ft-search-background:theme(colors.neutral.800)]"
-                options={{
-                  ...searchOptions('expand-matches'),
-                  id: 'search-demo-expand-matches',
-                }}
-                initialSearch={PREPOPULATED_SEARCH}
-                style={searchModeStyle}
-              />
-            </TreePanel>
+            <FileTree
+              className={DEFAULT_FILE_TREE_PANEL_CLASS}
+              options={{
+                ...searchOptions('expand-matches'),
+                id: 'search-demo-expand-matches',
+              }}
+              initialSearch={PREPOPULATED_SEARCH}
+              style={searchModeStyle}
+            />
           </div>
           <div>
             <TreeExampleHeading
@@ -59,17 +56,15 @@ export function SearchSection() {
             >
               <code>collapse-non-matches</code>
             </TreeExampleHeading>
-            <TreePanel>
-              <FileTree
-                className="[--ft-search-background:theme(colors.neutral.800)]"
-                options={{
-                  ...searchOptions('collapse-non-matches'),
-                  id: 'search-demo-collapse-non-matches',
-                }}
-                initialSearch={PREPOPULATED_SEARCH}
-                style={searchModeStyle}
-              />
-            </TreePanel>
+            <FileTree
+              className={DEFAULT_FILE_TREE_PANEL_CLASS}
+              options={{
+                ...searchOptions('collapse-non-matches'),
+                id: 'search-demo-collapse-non-matches',
+              }}
+              initialSearch={PREPOPULATED_SEARCH}
+              style={searchModeStyle}
+            />
           </div>
           <div>
             <TreeExampleHeading
@@ -78,17 +73,15 @@ export function SearchSection() {
             >
               <code>hide-non-matches</code>
             </TreeExampleHeading>
-            <TreePanel>
-              <FileTree
-                className="[--ft-search-background:theme(colors.neutral.800)]"
-                options={{
-                  ...searchOptions('hide-non-matches'),
-                  id: 'search-demo-hide-non-matches',
-                }}
-                initialSearch={PREPOPULATED_SEARCH}
-                style={searchModeStyle}
-              />
-            </TreePanel>
+            <FileTree
+              className={DEFAULT_FILE_TREE_PANEL_CLASS}
+              options={{
+                ...searchOptions('hide-non-matches'),
+                id: 'search-demo-hide-non-matches',
+              }}
+              initialSearch={PREPOPULATED_SEARCH}
+              style={searchModeStyle}
+            />
           </div>
         </div>
       </div>

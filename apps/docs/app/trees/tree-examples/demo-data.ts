@@ -1,6 +1,15 @@
 import type { FileTreeOptions, FileTreeSearchMode } from '@pierre/trees';
+import type { CSSProperties } from 'react';
 
 import { sharedDemoFileTreeOptions } from '../../trees/demo-data';
+
+/** Default panel look for FileTree in docs examples. Apply via className + style on FileTree. */
+export const DEFAULT_FILE_TREE_PANEL_CLASS =
+  'dark min-h-0 flex-1 overflow-auto rounded-lg bg-neutral-900 p-3 [--ft-search-background:theme(colors.neutral.800)]';
+
+export const DEFAULT_FILE_TREE_PANEL_STYLE: CSSProperties = {
+  colorScheme: 'dark',
+};
 
 /** Shared file content for tree example sections. */
 export const SHARED_FILE_CONTENT: Record<string, string> = {

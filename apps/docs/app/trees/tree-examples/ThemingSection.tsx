@@ -5,7 +5,6 @@ import type { CSSProperties } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { TreePanel } from '../TreePanel';
 import { baseTreeOptions } from './demo-data';
 import { styleObjectToCss } from './styleToCss';
 import { TreeCssViewer } from './TreeCssViewer';
@@ -75,19 +74,15 @@ export function ThemingSection() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div>
           <TreeExampleHeading>Light mode</TreeExampleHeading>
-          <TreePanel
+          <FileTree
             className="min-h-[320px] border border-neutral-200 bg-neutral-50"
+            options={{
+              ...baseTreeOptions,
+              id: 'theming-demo-light',
+            }}
+            initialSelectedItems={['package.json']}
             style={lightTheme()}
-          >
-            <FileTree
-              options={{
-                ...baseTreeOptions,
-                id: 'theming-demo-light',
-              }}
-              initialSelectedItems={['package.json']}
-              style={lightTheme()}
-            />
-          </TreePanel>
+          />
           <TreeCssViewer
             contents={styleObjectToCss(lightTheme())}
             filename="light-theme.css"
@@ -95,19 +90,15 @@ export function ThemingSection() {
         </div>
         <div>
           <TreeExampleHeading>Dark mode</TreeExampleHeading>
-          <TreePanel
+          <FileTree
             className="min-h-[320px] border border-neutral-700 bg-neutral-900"
+            options={{
+              ...baseTreeOptions,
+              id: 'theming-demo-dark',
+            }}
+            initialSelectedItems={['package.json']}
             style={darkTheme()}
-          >
-            <FileTree
-              options={{
-                ...baseTreeOptions,
-                id: 'theming-demo-dark',
-              }}
-              initialSelectedItems={['package.json']}
-              style={darkTheme()}
-            />
-          </TreePanel>
+          />
           <TreeCssViewer
             contents={styleObjectToCss(darkTheme())}
             filename="dark-theme.css"
@@ -115,19 +106,15 @@ export function ThemingSection() {
         </div>
         <div>
           <TreeExampleHeading>Synthwave &apos;84</TreeExampleHeading>
-          <TreePanel
+          <FileTree
             className="min-h-[320px] border border-[#f92aad]/40 bg-[#1e1b2b] shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
+            options={{
+              ...baseTreeOptions,
+              id: 'theming-demo-synthwave',
+            }}
+            initialSelectedItems={['package.json']}
             style={synthwaveTheme()}
-          >
-            <FileTree
-              options={{
-                ...baseTreeOptions,
-                id: 'theming-demo-synthwave',
-              }}
-              initialSelectedItems={['package.json']}
-              style={synthwaveTheme()}
-            />
-          </TreePanel>
+          />
           <TreeCssViewer
             contents={styleObjectToCss(synthwaveTheme())}
             filename="synthwave-theme.css"

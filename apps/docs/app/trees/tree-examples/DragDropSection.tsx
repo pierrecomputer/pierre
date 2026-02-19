@@ -7,8 +7,7 @@ import { useMemo, useState } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { TreePanel } from '../TreePanel';
-import { dragDropOptions } from './demo-data';
+import { DEFAULT_FILE_TREE_PANEL_CLASS, dragDropOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -44,13 +43,11 @@ function LockedFileExample() {
           Lock package.json
         </Label>
       </div>
-      <TreePanel>
-        <FileTree
-          className="[--ft-search-background:theme(colors.neutral.800)]"
-          options={options}
-          style={dragDropStyle}
-        />
-      </TreePanel>
+      <FileTree
+        className={DEFAULT_FILE_TREE_PANEL_CLASS}
+        options={options}
+        style={dragDropStyle}
+      />
     </div>
   );
 }
@@ -81,13 +78,11 @@ export function DragDropSection() {
           >
             Default
           </TreeExampleHeading>
-          <TreePanel>
-            <FileTree
-              className="[--ft-search-background:theme(colors.neutral.800)]"
-              options={defaultOptions}
-              style={dragDropStyle}
-            />
-          </TreePanel>
+          <FileTree
+            className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            options={defaultOptions}
+            style={dragDropStyle}
+          />
         </div>
         <div>
           <TreeExampleHeading
