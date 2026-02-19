@@ -75,7 +75,7 @@ export function ThemingSection() {
         <div>
           <TreeExampleHeading>Light mode</TreeExampleHeading>
           <FileTree
-            className="min-h-[320px] border border-neutral-200 bg-neutral-50"
+            className="min-h-[320px] rounded-lg border border-neutral-200 bg-neutral-50 p-2"
             options={{
               ...baseTreeOptions,
               id: 'theming-demo-light',
@@ -91,7 +91,7 @@ export function ThemingSection() {
         <div>
           <TreeExampleHeading>Dark mode</TreeExampleHeading>
           <FileTree
-            className="min-h-[320px] border border-neutral-700 bg-neutral-900"
+            className="min-h-[320px] rounded-lg border border-neutral-700 bg-neutral-900 p-2"
             options={{
               ...baseTreeOptions,
               id: 'theming-demo-dark',
@@ -107,7 +107,7 @@ export function ThemingSection() {
         <div>
           <TreeExampleHeading>Synthwave &apos;84</TreeExampleHeading>
           <FileTree
-            className="min-h-[320px] border border-[#f92aad]/40 bg-[#1e1b2b] shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
+            className="min-h-[320px] rounded-lg border border-[#f92aad]/40 bg-[#1e1b2b] p-2 shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
             options={{
               ...baseTreeOptions,
               id: 'theming-demo-synthwave',

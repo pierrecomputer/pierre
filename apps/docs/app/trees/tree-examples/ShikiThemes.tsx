@@ -260,7 +260,7 @@ export function ShikiThemesSection() {
         {!loading && !error && themeStyles != null ? (
           <>
             <FileTree
-              className="min-h-[320px] border"
+              className="min-h-[320px] rounded-lg border p-2"
               options={{
                 ...baseTreeOptions,
                 id: 'shiki-themes-tree',
