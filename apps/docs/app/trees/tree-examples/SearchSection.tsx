@@ -30,7 +30,7 @@ export function SearchSection() {
             <TreeExampleHeading icon={<IconFolderOpen />}>
               Expand matches
             </TreeExampleHeading>
-            <p className="text-muted-foreground mb-2 text-sm">
+            <p className="text-muted-foreground -mt-2 mb-3 text-sm">
               Expands folders containing matches but keeps all items visible
             </p>
             <TreePanel>
@@ -49,7 +49,7 @@ export function SearchSection() {
             <TreeExampleHeading icon={<IconCollapsedRow />}>
               Collapse non-matches
             </TreeExampleHeading>
-            <p className="text-muted-foreground mb-2 text-sm">
+            <p className="text-muted-foreground -mt-2 mb-3 text-sm">
               Collapses folders not containing matches
             </p>
             <TreePanel>
@@ -68,7 +68,7 @@ export function SearchSection() {
             <TreeExampleHeading icon={<IconEyeSlash />}>
               Hide non-matches
             </TreeExampleHeading>
-            <p className="text-muted-foreground mb-2 text-sm">
+            <p className="text-muted-foreground -mt-2 mb-3 text-sm">
               Hides files and folders that don't contain matches
             </p>
             <TreePanel>

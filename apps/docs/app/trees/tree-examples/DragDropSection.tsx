@@ -10,14 +10,14 @@ import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { TreePanel } from '../TreePanel';
 import { dragDropOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
-/** Example 1: default drag and drop — all items draggable. */
 const defaultOptions = {
   ...dragDropOptions(),
   id: 'drag-drop-demo-default',
 };
 
-/** Example 2: locked file — pass lockedPaths so package.json cannot be dragged. */
 function LockedFileExample() {
   const [lockPackageJson, setLockPackageJson] = useState(true);
   const options = useMemo(
@@ -28,16 +28,17 @@ function LockedFileExample() {
     [lockPackageJson]
   );
   return (
-    <div className="flex flex-col gap-3">
-      <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+    <div className="flex flex-col-reverse gap-3">
+      <div className="text-muted-foreground flex items-center gap-1.5 text-sm">
+        <Switch
+          id="lock-package-json"
           checked={lockPackageJson}
-          onChange={(e) => setLockPackageJson(e.target.checked)}
-          className="rounded border-neutral-600"
+          onCheckedChange={setLockPackageJson}
         />
-        Lock package.json
-      </label>
+        <Label htmlFor="lock-package-json" className="cursor-pointer">
+          Lock package.json
+        </Label>
+      </div>
       <TreePanel>
         <FileTree
           className="[--ft-search-background:theme(colors.neutral.800)]"
@@ -59,12 +60,21 @@ export function DragDropSection() {
     <TreeExampleSection id="drag-drop">
       <FeatureHeader
         title="Drag and drop"
-        description="Move files and folders by dragging them onto other folders or the root. Drop targets open automatically when you hover. Keyboard drag and drop is supported; dragging is disabled while search is active."
+        description={
+          <>
+            Move files and folders by dragging them onto other folders or the
+            root. Drop targets open automatically when you hover. Keyboard drag
+            and drop is supported; dragging is disabled while search is active.
+          </>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
           <TreeExampleHeading icon={<IconCursor />}>Default</TreeExampleHeading>
+          <p className="text-muted-foreground -mt-2 mb-3 text-sm">
+            Enable with <code>dragAndDrop: true</code>.
+          </p>
           <TreePanel>
             <FileTree
               className="[--ft-search-background:theme(colors.neutral.800)]"
@@ -83,16 +93,13 @@ export function DragDropSection() {
           <TreeExampleHeading icon={<IconLock />}>
             With locked file
           </TreeExampleHeading>
+          <p className="text-muted-foreground -mt-2 mb-3 text-sm">
+            Use <code>lockedPaths</code> to prevent specific paths from being
+            dragged.
+          </p>
           <LockedFileExample />
         </div>
       </div>
-
-      <p className="text-muted-foreground text-sm">
-        Enable with <code>dragAndDrop: true</code>. Use <code>lockedPaths</code>{' '}
-        to prevent specific paths from being dragged. Controlled mode:{' '}
-        <code>files</code> + <code>onFilesChange</code>; optional{' '}
-        <code>onCollision</code> for overwrite behavior.
-      </p>
     </TreeExampleSection>
   );
 }
