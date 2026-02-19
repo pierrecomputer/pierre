@@ -316,6 +316,41 @@ for (const cfg of TEST_CONFIGS) {
 
         expect(afterSearch).toEqual(beforeSearch);
       });
+
+      test('closing search expands parents of selected items even if they were collapsed before', () => {
+        for (const mode of [
+          'expand-matches',
+          'collapse-non-matches',
+          'hide-non-matches',
+        ] as FileTreeSearchMode[]) {
+          // src/ is NOT in initialExpandedItems — it starts collapsed
+          const ft = createTestTree(FILES, cfg, {
+            fileTreeSearchMode: mode,
+            // no initialExpandedItems → src/ and src/components/ are collapsed
+          });
+
+          // Open search — this expands ancestors of matches
+          ft.tree.setSearch('Button');
+
+          // Select the matched item while search is open
+          ft.setSelectedItems(['src/components/Button.tsx']);
+
+          // Close search — restoreExpandedItems should keep ancestors of selected items expanded
+          ft.tree.setSearch(null);
+
+          const expandedAfterClose = ft.getExpandedItems();
+          expect(expandedAfterClose).toContain('src');
+          expect(expandedAfterClose).toContain('src/components');
+
+          // The selected item should be visible in the rendered items list
+          const visiblePaths = ft.tree
+            .getItems()
+            .map((item) => ft.idToPath.get(item.getId()))
+            .filter((p): p is string => p != null)
+            .map(getSelectionPath);
+          expect(visiblePaths).toContain('src/components/Button.tsx');
+        }
+      });
     });
   });
 }

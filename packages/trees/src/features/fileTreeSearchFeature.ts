@@ -299,6 +299,27 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       }
       return getSearchCache(tree).matchIdSet.has(item.getId());
     },
+    getProps: ({ tree, prev }) => {
+      const props = prev?.();
+      if (!tree.isSearchOpen()) return props;
+
+      return {
+        ...props,
+        onMouseDown: (e: MouseEvent) => {
+          // Prevent the default focus-transfer so the search input keeps
+          // focus and no blur event fires before the click handler runs.
+          e.preventDefault();
+          (props as Record<string, any>)?.onMouseDown?.(e);
+        },
+        onClick: (e: MouseEvent) => {
+          // Let the selection feature handle the click first (sets
+          // selectedItems), then close search. restoreExpandedItems
+          // will now see the correct selection and expand ancestors.
+          (props as Record<string, any>)?.onClick?.(e);
+          tree.closeSearch();
+        },
+      };
+    },
   },
 
   hotkeys: {
