@@ -373,7 +373,7 @@
     align-items: center;
     color: var(--ft-internal-color-muted-foreground);
   }
-  [data-item-section='lock'] [data-item-lock-icon] {
+  [data-item-section='lock'] svg {
     display: block;
   }
 }

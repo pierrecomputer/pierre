@@ -7,7 +7,7 @@ const DEFAULT_HEIGHT = 16;
 
 const ICON_SIZE_OVERRIDES: Record<
   string,
-  { width: number; height: number } | undefined
+  { width: number; height: number; viewBox?: string } | undefined
 > = {
   'file-tree-icon-chevron': {
     width: 10,
@@ -16,6 +16,11 @@ const ICON_SIZE_OVERRIDES: Record<
   'file-tree-icon-file': {
     width: 12,
     height: 12,
+  },
+  'file-tree-icon-lock': {
+    width: 12,
+    height: 12,
+    viewBox: '0 0 16 16',
   },
 };
 
@@ -34,14 +39,18 @@ export function Icon({
 }): JSX.Element {
   'use no memo';
   const href = `#${name.replace(/^#/, '')}`;
-  const { width: iconWidth, height: iconHeight } = ICON_SIZE_OVERRIDES[
-    name
-  ] ?? {
+  const override = ICON_SIZE_OVERRIDES[name] ?? {
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
   };
+  const {
+    width: iconWidth,
+    height: iconHeight,
+    viewBox: overrideViewBox,
+  } = override;
   const width = propWidth ?? iconWidth;
   const height = propHeight ?? iconHeight;
+  const viewBox = overrideViewBox ?? `0 0 ${iconWidth} ${iconHeight}`;
 
   const a11yProps =
     label != null
@@ -53,7 +62,7 @@ export function Icon({
       data-icon-name={name}
       data-align-capitals={alignCapitals}
       {...a11yProps}
-      viewBox={`0 0 ${iconWidth} ${iconHeight}`}
+      viewBox={viewBox}
       width={width}
       height={height}
     >
