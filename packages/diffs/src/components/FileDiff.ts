@@ -878,6 +878,8 @@ export class FileDiff<LAnnotation = undefined> {
     const renderGutterUtility =
       this.options.renderGutterUtility ?? this.options.renderHoverUtility;
     if (this.fileContainer == null || renderGutterUtility == null) {
+      this.gutterUtilityContent?.remove();
+      this.gutterUtilityContent = undefined;
       return;
     }
     const element = renderGutterUtility(this.mouseEventManager.getHoveredLine);

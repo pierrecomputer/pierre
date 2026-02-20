@@ -156,6 +156,7 @@ interface DiffOptions {
   // Must be true to enable renderGutterUtility prop
   enableGutterUtility: false,
   // Deprecated alias: enableHoverUtility
+  // This boolean controls visibility for both built-in and custom gutter utility UI.
 
   // Callbacks for mouse events on diff lines
   onLineClick({ lineNumber, side, event }) {
@@ -169,6 +170,14 @@ interface DiffOptions {
   },
   onLineLeave({ lineNumber, side }) {
     // Fires when mouse leaves a line
+  },
+
+  // Preferred: built-in gutter utility button (+)
+  // No render callback needed; callback receives current hovered line context.
+  // Callback does not control visibility; options.enableGutterUtility does.
+  // If omitted, button clicks bubble to gutter selection interactions.
+  onGutterUtilityClick({ lineNumber, side }) {
+    console.log(\`Clicked line \${lineNumber} on \${side}\`);
   },
 }`,
   },
@@ -228,11 +237,21 @@ interface ThreadMetadata {
   )}
 
   // ─────────────────────────────────────────────────────────────
-  // HOVER UTILITY
+  // GUTTER UTILITY
   // ─────────────────────────────────────────────────────────────
 
-  // Render UI in the line number column on hover.
+  // Preferred: built-in + button (no custom render function).
+  // Callback receives the same hovered line payload shape.
+  // Visibility is still controlled by options.enableGutterUtility.
+  // If omitted, button clicks bubble to gutter selection interactions.
+  onGutterUtilityClick={({ lineNumber, side }) => {
+    console.log(\`Clicked line \${lineNumber} on \${side}\`);
+  }}
+
+  // Advanced: render your own UI in the line number column on hover.
+  // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires options.enableGutterUtility = true
+  // Do not combine with onGutterUtilityClick.
   //
   // Note: This is NOT reactive - render is not called on every
   // mouse move. Use getHoveredLine() in click handlers.
@@ -547,6 +566,8 @@ interface FileOptions {
   // Must be true to enable renderGutterUtility prop
   enableGutterUtility: false,
   // Deprecated alias: enableHoverUtility
+  // This boolean controls visibility for both built-in and custom gutter
+  // utility UI.
 
   // Callbacks for mouse events on file lines
   onLineClick({ lineNumber, event }) {
@@ -560,6 +581,14 @@ interface FileOptions {
   },
   onLineLeave({ lineNumber }) {
     // Fires when mouse leaves a line
+  },
+
+  // Preferred: built-in gutter utility button (+)
+  // No render callback needed; callback receives current hovered line context.
+  // Callback does not control visibility; options.enableGutterUtility does.
+  // If omitted, button clicks bubble to gutter selection interactions.
+  onGutterUtilityClick({ lineNumber }) {
+    console.log(\`Clicked line \${lineNumber}\`);
   },
 }`,
   },
@@ -620,11 +649,21 @@ interface CommentMetadata {
   )}
 
   // ─────────────────────────────────────────────────────────────
-  // HOVER UTILITY
+  // GUTTER UTILITY
   // ─────────────────────────────────────────────────────────────
 
-  // Render UI in the line number column on hover.
+  // Preferred: built-in + button (no custom render function).
+  // Callback receives the same hovered line payload shape.
+  // Visibility is still controlled by options.enableGutterUtility.
+  // If omitted, button clicks bubble to gutter interactions.
+  onGutterUtilityClick={({ lineNumber }) => {
+    console.log(\`Clicked line \${lineNumber}\`);
+  }}
+
+  // Advanced: render your own UI in the line number column on hover.
+  // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires options.enableGutterUtility = true
+  // Do not combine with onGutterUtilityClick.
   //
   // Note: This is NOT reactive - render is not called on every
   // mouse move. Use getHoveredLine() in click handlers.

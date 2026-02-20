@@ -59,6 +59,7 @@ export * from './utils/createAnnotationWrapperNode';
 export * from './utils/createEmptyRowBuffer';
 export * from './utils/createFileHeaderElement';
 export * from './utils/createGutterUtilityContentNode';
+export * from './utils/createGutterUtilityElement';
 export * from './utils/createNoNewlineElement';
 export * from './utils/createPreElement';
 export * from './utils/createRowNodes';

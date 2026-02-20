@@ -18,6 +18,7 @@ interface CreateHastElementProps {
   tagName:
     | 'span'
     | 'div'
+    | 'button'
     | 'code'
     | 'pre'
     | 'slot'

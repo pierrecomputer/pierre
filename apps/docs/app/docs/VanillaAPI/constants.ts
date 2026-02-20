@@ -228,6 +228,8 @@ const instance = new FileDiff({
   // Must be true to enable renderGutterUtility
   enableGutterUtility: false,
   // Deprecated alias: enableHoverUtility
+  // This boolean controls visibility for both built-in and 
+  // custom gutter utility UI.
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, side, event }) {},
@@ -240,6 +242,14 @@ const instance = new FileDiff({
 
   // Fires when mouse leaves a line
   onLineLeave({ lineNumber, side }) {},
+
+  // Preferred: built-in gutter utility button (+)
+  // No render callback needed; callback receives current hovered line context.
+  // Callback does not control visibility; enableGutterUtility does.
+  // If omitted, button clicks bubble to gutter selection interactions.
+  onGutterUtilityClick({ lineNumber, side }) {
+    console.log('Clicked line', lineNumber, 'on', side);
+  },
 
   // ─────────────────────────────────────────────────────────────
   // RENDER CALLBACKS
@@ -259,8 +269,10 @@ const instance = new FileDiff({
     return element;
   },
 
-  // Render UI in the line number column on hover
+  // Advanced: render your own custom gutter utility UI on hover.
+  // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires enableGutterUtility: true
+  // Do not combine with onGutterUtilityClick.
   renderGutterUtility(getHoveredLine) {
     const button = document.createElement('button');
     button.textContent = '+';
@@ -402,6 +414,8 @@ const instance = new File({
   // Must be true to enable renderGutterUtility
   enableGutterUtility: false,
   // Deprecated alias: enableHoverUtility
+  // This boolean controls visibility for both built-in and 
+  // custom gutter utility UI.
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, event }) {},
@@ -414,6 +428,14 @@ const instance = new File({
 
   // Fires when mouse leaves a line
   onLineLeave({ lineNumber }) {},
+
+  // Preferred: built-in gutter utility button (+)
+  // No render callback needed; callback receives current hovered line context.
+  // Callback does not control visibility; enableGutterUtility does.
+  // If omitted, button clicks bubble to gutter selection interactions.
+  onGutterUtilityClick({ lineNumber }) {
+    console.log('Clicked line', lineNumber);
+  },
 
   // ─────────────────────────────────────────────────────────────
   // RENDER CALLBACKS
@@ -434,8 +456,10 @@ const instance = new File({
     return element;
   },
 
-  // Render UI in the line number column on hover
+  // Advanced: render your own custom gutter utility UI on hover.
+  // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires enableGutterUtility: true
+  // Do not combine with onGutterUtilityClick.
   renderGutterUtility(getHoveredLine) {
     const button = document.createElement('button');
     button.textContent = '+';

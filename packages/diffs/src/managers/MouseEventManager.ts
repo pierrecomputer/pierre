@@ -1,3 +1,5 @@
+import { toHtml } from 'hast-util-to-html';
+
 import type {
   AnnotationSide,
   DiffLineEventBaseProps,
@@ -5,6 +7,7 @@ import type {
   LineEventBaseProps,
   LineTypes,
 } from '../types';
+import { createGutterUtilityElement } from '../utils/createGutterUtilityElement';
 
 export type LogTypes = 'click' | 'move' | 'both' | 'none';
 
@@ -88,6 +91,7 @@ export interface MouseEventManagerBaseOptions<
 > {
   lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
   enableGutterUtility?: boolean;
+  onGutterUtilityClick?(props: GetHoveredLineResult<TMode>): unknown;
   onLineClick?(props: EventClickProps<TMode>): unknown;
   onLineNumberClick?(props: EventClickProps<TMode>): unknown;
   onLineEnter?(props: MouseEventEnterLeaveProps<TMode>): unknown;
@@ -98,13 +102,16 @@ export interface MouseEventManagerBaseOptions<
 export interface MouseEventManagerOptions<
   TMode extends MouseEventManagerMode,
 > extends MouseEventManagerBaseOptions<TMode> {
+  usesCustomGutterUtility?: boolean;
   onHunkExpand?(hunkIndex: number, direction: ExpansionDirections): unknown;
 }
 
 export class MouseEventManager<TMode extends MouseEventManagerMode> {
   private hoveredLine: EventBaseProps<TMode> | undefined;
   private pre: HTMLPreElement | undefined;
-  private gutterUtilitySlot: HTMLDivElement | undefined;
+  private gutterUtilityContainer: HTMLDivElement | undefined;
+  private gutterUtilityButton: HTMLButtonElement | undefined;
+  private gutterUtilitySlot: HTMLSlotElement | undefined;
   private interactiveLinesAttr = false;
   private interactiveLineNumbersAttr = false;
   private hasEventListeners = false;
@@ -124,7 +131,9 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     this.pre?.removeEventListener('pointerleave', this.handleMouseLeave);
     this.pre?.removeAttribute('data-interactive-lines');
     this.pre?.removeAttribute('data-interactive-line-numbers');
-    this.gutterUtilitySlot?.parentNode?.removeChild(this.gutterUtilitySlot);
+    this.gutterUtilityContainer?.remove();
+    this.gutterUtilityContainer = undefined;
+    this.gutterUtilityButton = undefined;
     this.gutterUtilitySlot = undefined;
     this.clearHoveredLine();
     this.interactiveLinesAttr = false;
@@ -140,6 +149,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       onLineNumberClick,
       onLineEnter,
       onLineLeave,
+      usesCustomGutterUtility = false,
       onHunkExpand,
       enableGutterUtility = false,
       lineHoverHighlight = 'disabled',
@@ -152,14 +162,12 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       this.hasEventListeners = false;
     }
 
-    if (enableGutterUtility && this.gutterUtilitySlot == null) {
-      this.gutterUtilitySlot = document.createElement('div');
-      this.gutterUtilitySlot.setAttribute('data-gutter-utility-slot', '');
-      const slotElement = document.createElement('slot');
-      slotElement.name = 'gutter-utility-slot';
-      this.gutterUtilitySlot.appendChild(slotElement);
-    } else if (!enableGutterUtility && this.gutterUtilitySlot != null) {
-      this.gutterUtilitySlot.parentNode?.removeChild(this.gutterUtilitySlot);
+    if (enableGutterUtility) {
+      this.ensureGutterUtilityNode(usesCustomGutterUtility);
+    } else if (this.gutterUtilityContainer != null) {
+      this.gutterUtilityContainer.remove();
+      this.gutterUtilityContainer = undefined;
+      this.gutterUtilityButton = undefined;
       this.gutterUtilitySlot = undefined;
     }
 
@@ -273,11 +281,17 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   };
 
   handleMouseClick = (event: MouseEvent): void => {
-    const { onLineClick, onLineNumberClick, onHunkExpand } = this.options;
+    const {
+      onGutterUtilityClick,
+      onHunkExpand,
+      onLineClick,
+      onLineNumberClick,
+    } = this.options;
     if (
+      onGutterUtilityClick == null &&
+      onHunkExpand == null &&
       onLineClick == null &&
-      onLineNumberClick == null &&
-      onHunkExpand == null
+      onLineNumberClick == null
     ) {
       return;
     }
@@ -329,7 +343,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       );
       return;
     }
-    this.gutterUtilitySlot?.parentElement?.removeChild(this.gutterUtilitySlot);
+    this.gutterUtilityContainer?.remove();
     this.options.onLineLeave?.({
       ...this.hoveredLine,
       event,
@@ -358,6 +372,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       onLineNumberClick,
       onLineEnter,
       onLineLeave,
+      onGutterUtilityClick,
       onHunkExpand,
     } = this.options;
     switch (eventType) {
@@ -379,9 +394,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
             'move',
             "FileDiff.DEBUG.handleMouseEvent: switch, 'move', clearing an existing hovered line and firing onLineLeave"
           );
-          this.gutterUtilitySlot?.parentElement?.removeChild(
-            this.gutterUtilitySlot
-          );
+          this.gutterUtilityContainer?.remove();
           onLineLeave?.({
             ...this.hoveredLine,
             event,
@@ -395,8 +408,8 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
             "FileDiff.DEBUG.handleMouseEvent: switch, 'move', setting up a new hoveredLine and firing onLineEnter"
           );
           this.setHoveredLine(data);
-          if (this.gutterUtilitySlot != null) {
-            data.numberElement?.appendChild(this.gutterUtilitySlot);
+          if (this.gutterUtilityContainer != null) {
+            data.numberElement.appendChild(this.gutterUtilityContainer);
           }
           onLineEnter?.({
             ...this.hoveredLine,
@@ -412,6 +425,18 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
           "FileDiff.DEBUG.handleMouseEvent: switch, 'click', with data:",
           data
         );
+        if (
+          onGutterUtilityClick != null &&
+          this.gutterUtilityButton != null &&
+          composedPathIncludesElement(composedPath, this.gutterUtilityButton)
+        ) {
+          event.stopPropagation();
+          const hoveredLine = this.getHoveredLine();
+          if (hoveredLine != null) {
+            onGutterUtilityClick(hoveredLine);
+          }
+          break;
+        }
         if (data == null) break;
         if (isExpandoEventData(data) && onHunkExpand != null) {
           debugLogIfEnabled(
@@ -473,6 +498,52 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       }
     }
   }
+
+  private ensureGutterUtilityNode(useCustomGutterUtility: boolean): void {
+    if (this.gutterUtilityContainer == null) {
+      this.gutterUtilityContainer = document.createElement('div');
+      this.gutterUtilityContainer.setAttribute('data-gutter-utility-slot', '');
+    }
+    if (useCustomGutterUtility) {
+      this.gutterUtilityButton?.remove();
+      this.gutterUtilityButton = undefined;
+      if (this.gutterUtilitySlot == null) {
+        this.gutterUtilitySlot = document.createElement('slot');
+        this.gutterUtilitySlot.name = 'gutter-utility-slot';
+      }
+      if (this.gutterUtilitySlot.parentNode !== this.gutterUtilityContainer) {
+        this.gutterUtilityContainer.replaceChildren(this.gutterUtilitySlot);
+      }
+    } else {
+      this.gutterUtilitySlot?.remove();
+      this.gutterUtilitySlot = undefined;
+      if (this.gutterUtilityButton == null) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = toHtml(createGutterUtilityElement());
+        const utilityButton = tempDiv.firstElementChild;
+        if (!(utilityButton instanceof HTMLButtonElement)) {
+          throw new Error(
+            'MouseEventManager.ensureGutterUtilityNode: Node element should be a button'
+          );
+        }
+        utilityButton.remove();
+        this.gutterUtilityButton = utilityButton;
+        this.gutterUtilityButton.addEventListener(
+          'pointerdown',
+          this.handleGutterUtilityPointerDown
+        );
+      }
+      if (this.gutterUtilityButton.parentNode !== this.gutterUtilityContainer) {
+        this.gutterUtilityContainer.replaceChildren(this.gutterUtilityButton);
+      }
+    }
+  }
+
+  private handleGutterUtilityPointerDown = (event: PointerEvent): void => {
+    if (this.options.onGutterUtilityClick != null) {
+      event.stopPropagation();
+    }
+  };
 
   private getLineData(
     path: (EventTarget | undefined)[]
@@ -661,13 +732,14 @@ type MouseEventPluckOptions<TMode extends MouseEventManagerMode> =
 
 export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
   {
-    lineHoverHighlight,
-    onLineClick,
-    onLineNumberClick,
-    onLineEnter,
-    onLineLeave,
     enableGutterUtility,
     enableHoverUtility,
+    lineHoverHighlight,
+    onGutterUtilityClick,
+    onLineClick,
+    onLineEnter,
+    onLineLeave,
+    onLineNumberClick,
     renderGutterUtility,
     renderHoverUtility,
     __debugMouseEvents,
@@ -675,19 +747,23 @@ export function pluckMouseEventOptions<TMode extends MouseEventManagerMode>(
   onHunkExpand?: (hunkIndex: number, direction: ExpansionDirections) => unknown
 ): MouseEventManagerOptions<TMode> {
   return {
-    lineHoverHighlight,
-    onLineClick,
-    onLineNumberClick,
-    onLineEnter,
-    onLineLeave,
     enableGutterUtility: resolveEnableGutterUtilityOption({
       enableGutterUtility,
       enableHoverUtility,
       renderGutterUtility,
       renderHoverUtility,
+      onGutterUtilityClick,
     }),
-    __debugMouseEvents,
+    lineHoverHighlight,
+    onGutterUtilityClick,
+    usesCustomGutterUtility:
+      renderGutterUtility != null || renderHoverUtility != null,
     onHunkExpand,
+    onLineClick,
+    onLineEnter,
+    onLineLeave,
+    onLineNumberClick,
+    __debugMouseEvents,
   };
 }
 
@@ -696,12 +772,14 @@ function resolveEnableGutterUtilityOption<TMode extends MouseEventManagerMode>({
   enableHoverUtility,
   renderGutterUtility,
   renderHoverUtility,
+  onGutterUtilityClick,
 }: Pick<
   MouseEventPluckOptions<TMode>,
   | 'enableGutterUtility'
   | 'enableHoverUtility'
   | 'renderGutterUtility'
   | 'renderHoverUtility'
+  | 'onGutterUtilityClick'
 >): boolean {
   if (enableGutterUtility !== undefined && enableHoverUtility !== undefined) {
     throw new Error(
@@ -713,6 +791,14 @@ function resolveEnableGutterUtilityOption<TMode extends MouseEventManagerMode>({
       "Cannot use both 'renderGutterUtility' and deprecated 'renderHoverUtility'. Use only 'renderGutterUtility'."
     );
   }
+  if (
+    onGutterUtilityClick != null &&
+    (renderGutterUtility != null || renderHoverUtility != null)
+  ) {
+    throw new Error(
+      "Cannot use both 'onGutterUtilityClick' and render utility callbacks ('renderGutterUtility'/'renderHoverUtility'). Use only one gutter utility API."
+    );
+  }
   return enableGutterUtility ?? enableHoverUtility ?? false;
 }
 
@@ -722,6 +808,18 @@ function queryHTMLElement(
 ): HTMLElement | undefined {
   const element = parent?.querySelector(query);
   return element instanceof HTMLElement ? element : undefined;
+}
+
+function composedPathIncludesElement(
+  path: (EventTarget | undefined)[],
+  element: Element
+): boolean {
+  for (const pathElement of path) {
+    if (pathElement === element) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {

@@ -4,7 +4,6 @@ import {
   type AnnotationSide,
   diffAcceptRejectHunk,
   type DiffLineAnnotation,
-  type GetHoveredLineResult,
   type SelectedLineRange,
 } from '@pierre/diffs';
 import { FileDiff, MultiFileDiff } from '@pierre/diffs/react';
@@ -13,7 +12,7 @@ import type {
   PreloadFileDiffResult,
   PreloadMultiFileDiffResult,
 } from '@pierre/diffs/ssr';
-import { IconArrowDownRight, IconPlus } from '@pierre/icons';
+import { IconArrowDownRight } from '@pierre/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -118,7 +117,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           enableGutterUtility: !hasOpenCommentForm,
           onLineSelectionEnd: handleLineSelectionEnd,
         }}
-        renderGutterUtility={renderGutterUtility}
         lineAnnotations={annotations}
         renderAnnotation={(annotation) =>
           annotation.metadata.isThread ? (
@@ -134,30 +132,6 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         }
       />
     </div>
-  );
-}
-
-function renderGutterUtility(
-  getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
-) {
-  return (
-    <Button
-      size="icon-sm"
-      variant="default"
-      style={{
-        backgroundColor: '#1a76d4',
-        transition: 'none',
-        cursor: 'pointer',
-      }}
-      onClick={(event) => {
-        const hoveredLine = getHoveredLine();
-        if (hoveredLine == null) return;
-        event.stopPropagation();
-        console.log('Clicked on the decoration at', hoveredLine);
-      }}
-    >
-      <IconPlus />
-    </Button>
   );
 }
 

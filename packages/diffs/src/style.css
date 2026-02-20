@@ -1335,4 +1335,24 @@
   [data-placeholder] {
     contain: strict;
   }
+
+  [data-utility-button] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    appearance: none;
+    width: 1lh;
+    height: 1lh;
+    margin-right: calc((1lh - 1ch) * -1);
+    padding: 0;
+    cursor: pointer;
+    font-size: var(--diffs-font-size, 13px);
+    line-height: var(--diffs-line-height, 20px);
+    border-radius: 4px;
+    background-color: var(--diffs-modified-base);
+    color: var(--diffs-bg);
+    position: relative;
+    z-index: 4;
+  }
 }
