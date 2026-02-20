@@ -13,7 +13,8 @@
     );
     --ft-internal-font-family: var(--ft-font-family);
     --ft-internal-font-size: var(--ft-font-size, 13px);
-    --ft-internal-font-weight: var(--ft-font-weight, 400);
+    --ft-internal-font-weight-regular: var(--ft-font-weight-regular, 400);
+    --ft-internal-font-weight-semibold: var(--ft-font-weight-semibold, 600);
     --ft-internal-search-font-weight: var(--ft-search-font-weight, 600);
     --ft-internal-color-border: var(
       --ft-color-border,
@@ -33,6 +34,9 @@
       --ft-selected-focused-border-color,
       #008cff50
     );
+    --ft-internal-git-modified-color: var(--ft-git-modified-color, #008cff);
+    --ft-internal-git-added-color: var(--ft-git-added-color, #0ebe4e);
+    --ft-internal-git-deleted-color: var(--ft-git-added-color, #ff2e3f);
 
     --ft-internal-level-gap: var(--ft-level-gap, 16px);
     --ft-internal-item-padding-x: var(--ft-item-padding-x, 8px);
@@ -49,7 +53,7 @@
     color: var(--ft-internal-color-foreground);
     background-color: var(--ft-internal-color-background);
     font-family: var(--ft-internal-font-family);
-    font-weight: var(--ft-internal-font-weight);
+    font-weight: var(--ft-internal-font-weight-regular);
   }
 
   [data-file-tree-search-container] {
@@ -164,6 +168,22 @@
     }
   }
 
+  [data-item-section='content'] {
+    flex: 1 1 auto;
+    text-align: start;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-item-section='status'] {
+    flex: 0 0 auto;
+    width: 12px;
+    text-align: center;
+    align-items: center;
+  }
+
   /* Chevron pointing right */
   [aria-expanded='false'][data-item-type='folder']
     > [data-item-section='icon']
@@ -222,28 +242,63 @@
   }
 
   /* Git status indicator */
-  [data-item-section='status'] {
-    margin-left: auto;
-    flex-shrink: 0;
-    font-size: 0.85em;
+
+  /* This is a folder that contains a git change */
+  [data-item-contains-git-change='true'] {
+    color: var(--ft-internal-git-modified-color);
+
+    & > [data-item-section='status'] {
+      color: var(--ft-internal-git-modified-color);
+      opacity: 0.5;
+      fill: currentColor;
+    }
   }
 
-  [data-item-git-status='added'] > [data-item-section='status'] {
-    color: var(--ft-git-color-added, oklch(65% 0.2 145));
+  /* These are files that have a git change */
+  [data-item-git-status] > [data-item-section='status'] {
+    font-weight: var(--ft-internal-font-weight-semibold);
   }
 
-  [data-item-git-status='deleted'] > [data-item-section='status'] {
-    color: var(--ft-git-color-deleted, oklch(65% 0.2 25));
+  [data-item-git-status='added'] {
+    &
+      > [data-item-section='icon']
+      > :not([data-icon-name='file-tree-icon-chevron']) {
+      color: var(--ft-internal-git-added-color);
+    }
+    & > [data-item-section='content'] {
+      color: var(--ft-internal-git-added-color);
+    }
+    & > [data-item-section='status'] {
+      color: var(--ft-internal-git-added-color);
+    }
   }
 
-  [data-item-git-status='modified'] > [data-item-section='status'] {
-    color: var(--ft-git-color-modified, oklch(75% 0.15 85));
+  [data-item-git-status='deleted'] {
+    &
+      > [data-item-section='icon']
+      > :not([data-icon-name='file-tree-icon-chevron']) {
+      color: var(--ft-internal-git-deleted-color);
+    }
+    & > [data-item-section='content'] {
+      color: var(--ft-internal-git-deleted-color);
+    }
+    & > [data-item-section='status'] {
+      color: var(--ft-internal-git-deleted-color);
+    }
   }
 
-  [data-item-git-middot] {
-    color: var(--ft-git-color-modified, oklch(75% 0.15 85));
-    font-size: 1.3em;
-    line-height: 1;
+  [data-item-git-status='modified'] {
+    &
+      > [data-item-section='icon']
+      > :not([data-icon-name='file-tree-icon-chevron']) {
+      color: var(--ft-internal-git-modified-color);
+    }
+    & > [data-item-section='content'] {
+      color: var(--ft-internal-git-modified-color);
+    }
+    & > [data-item-section='status'] {
+      color: var(--ft-internal-git-modified-color);
+    }
   }
 
   /* Drag and drop */

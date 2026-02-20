@@ -742,7 +742,7 @@ export function Root({
               'data-item-git-status': itemGitStatus,
             }),
             ...(itemContainsGitChange === true && {
-              'data-item-contains-git-change': true,
+              'data-item-contains-git-change': 'true',
             }),
           };
 
@@ -786,7 +786,7 @@ export function Root({
                 : itemGitStatus === 'modified'
                   ? 'M'
                   : null;
-          const showMiddot =
+          const showStatusDot =
             statusLabel == null && itemContainsGitChange === true;
 
           return (
@@ -830,11 +830,12 @@ export function Root({
                   itemName
                 )}
               </div>
-              {statusLabel != null ? (
-                <div data-item-section="status">{statusLabel}</div>
-              ) : showMiddot ? (
-                <div data-item-section="status" data-item-git-middot>
-                  {'•'}
+
+              {statusLabel || showStatusDot ? (
+                <div data-item-section="status">
+                  {statusLabel ?? (
+                    <Icon name="file-tree-icon-dot" width={6} height={6} />
+                  )}
                 </div>
               ) : null}
             </button>

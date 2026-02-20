@@ -2,6 +2,7 @@ import type {
   FileTreeOptions,
   FileTreeSelectionItem,
   FileTreeStateConfig,
+  GitStatusEntry,
 } from '@pierre/trees';
 
 const sampleFileList: string[] = [
@@ -29,6 +30,18 @@ export const sharedDemoFileTreeOptions: FileTreeOptions = {
   flattenEmptyDirectories: true,
   initialFiles: sampleFileList,
 };
+
+export const GIT_STATUSES_A: GitStatusEntry[] = [
+  { path: 'src/index.ts', status: 'modified' },
+  { path: 'src/components/Button.tsx', status: 'added' },
+  { path: '.gitignore', status: 'deleted' },
+];
+
+export const GIT_STATUSES_B: GitStatusEntry[] = [
+  { path: 'README.md', status: 'modified' },
+  { path: 'src/lib/utils.ts', status: 'modified' },
+  { path: 'src/utils/worker.ts', status: 'added' },
+];
 
 export const sharedDemoStateConfig: FileTreeStateConfig = {
   initialExpandedItems: ['Build/assets/images/social'],

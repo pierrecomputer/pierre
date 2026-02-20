@@ -51,8 +51,10 @@ test.describe('file-tree git status attributes', () => {
                   'data-item-contains-git-change'
                 ),
                 hasOwnStatus: srcFolder.hasAttribute('data-item-git-status'),
-                hasMiddot:
-                  srcFolder.querySelector('[data-item-git-middot]') != null,
+                hasStatusDot:
+                  srcFolder.querySelector(
+                    '[data-icon-name="file-tree-icon-dot"]'
+                  ) != null,
               },
       };
     });
@@ -73,7 +75,7 @@ test.describe('file-tree git status attributes', () => {
     expect(statusData?.srcFolder).toEqual({
       contains: 'true',
       hasOwnStatus: false,
-      hasMiddot: true,
+      hasStatusDot: true,
     });
   });
 });

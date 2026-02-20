@@ -1,4 +1,7 @@
-export type SVGSpriteNames = 'file-tree-icon-chevron' | 'file-tree-icon-file';
+export type SVGSpriteNames =
+  | 'file-tree-icon-chevron'
+  | 'file-tree-icon-file'
+  | 'file-tree-icon-dot';
 
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="file-tree-icon-chevron" viewBox="0 0 10 6">
@@ -6,5 +9,8 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   </symbol>
   <symbol id="file-tree-icon-file" viewBox="0 0 12 12">
     <path d="M8.0625 0C8.21168 0 8.35472 0.0593057 8.46021 0.164795L11.0852 2.78979C11.1907 2.89528 11.25 3.03832 11.25 3.1875V9.9375C11.25 11.0766 10.3266 12 9.1875 12H2.8125C1.67341 12 0.75 11.0766 0.75 9.9375V2.0625C0.75 0.923413 1.67341 0 2.8125 0H8.0625ZM2.8125 1.125C2.29473 1.125 1.875 1.54473 1.875 2.0625V9.9375C1.875 10.4553 2.29473 10.875 2.8125 10.875H9.1875C9.70527 10.875 10.125 10.4553 10.125 9.9375V3.75H9.1875C8.25552 3.75 7.5 2.99448 7.5 2.0625V1.125H2.8125Z" />
+  </symbol>
+  <symbol id="file-tree-icon-dot" viewBox="0 0 6 6">
+    <circle cx="3" cy="3" r="3" />
   </symbol>
 </svg>`;

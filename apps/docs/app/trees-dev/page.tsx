@@ -9,7 +9,11 @@ import {
   FILE_TREE_COOKIE_VERSION,
   FILE_TREE_COOKIE_VERSION_NAME,
 } from './cookies';
-import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from './demo-data';
+import {
+  GIT_STATUSES_A,
+  sharedDemoFileTreeOptions,
+  sharedDemoStateConfig,
+} from './demo-data';
 
 export default async function FileTreePage() {
   if (process.env.NODE_ENV !== 'development') {
@@ -40,11 +44,16 @@ export default async function FileTreePage() {
   };
 
   const mainSsr = preloadFileTree(fileTreeOptions, sharedDemoStateConfig);
+  const gitStatusSsr = preloadFileTree(
+    { ...fileTreeOptions, gitStatus: GIT_STATUSES_A },
+    sharedDemoStateConfig
+  );
 
   return (
     <ClientPage
       preloadedFileTreeHtml={mainSsr.shadowHtml}
       preloadedFileTreeContainerHtml={mainSsr.html}
+      preloadedGitStatusFileTreeHtml={gitStatusSsr.shadowHtml}
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
       initialUseLazyDataLoader={useLazyDataLoader}
     />

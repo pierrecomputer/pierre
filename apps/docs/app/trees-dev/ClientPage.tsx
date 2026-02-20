@@ -1,11 +1,7 @@
 'use client';
 
 import { expandImplicitParentDirectories, FileTree } from '@pierre/trees';
-import type {
-  FileTreeOptions,
-  FileTreeStateConfig,
-  GitStatusEntry,
-} from '@pierre/trees';
+import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/trees';
 import { FileTree as FileTreeReact } from '@pierre/trees/react';
 import '@pierre/trees/web-components';
 import {
@@ -23,11 +19,17 @@ import {
   FILE_TREE_COOKIE_VERSION,
   FILE_TREE_COOKIE_VERSION_NAME,
 } from './cookies';
-import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from './demo-data';
+import {
+  GIT_STATUSES_A,
+  GIT_STATUSES_B,
+  sharedDemoFileTreeOptions,
+  sharedDemoStateConfig,
+} from './demo-data';
 
 interface ClientPageProps {
   preloadedFileTreeHtml: string;
   preloadedFileTreeContainerHtml: string;
+  preloadedGitStatusFileTreeHtml: string;
   initialFlattenEmptyDirectories?: boolean;
   initialUseLazyDataLoader?: boolean;
 }
@@ -35,6 +37,7 @@ interface ClientPageProps {
 export function ClientPage({
   preloadedFileTreeHtml,
   preloadedFileTreeContainerHtml,
+  preloadedGitStatusFileTreeHtml,
   initialFlattenEmptyDirectories,
   initialUseLazyDataLoader,
 }: ClientPageProps) {
@@ -324,10 +327,20 @@ export function ClientPage({
         Git Status
       </h2>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <VanillaGitStatus
+          options={fileTreeOptions}
+          stateConfig={sharedDemoStateConfig}
+        />
         <GitStatusDemo
           options={reactOptions}
           initialFiles={reactFiles}
           stateConfig={sharedDemoStateConfig}
+        />
+        <ReactSSRGitStatus
+          options={reactOptions}
+          initialFiles={reactFiles}
+          stateConfig={sharedDemoStateConfig}
+          prerenderedHTML={preloadedGitStatusFileTreeHtml}
         />
       </div>
     </div>
@@ -1343,17 +1356,92 @@ function ReactDnDControlledSSR({
 // Git Status Example
 // ---------------------------------------------------------------------------
 
-const GIT_STATUSES_A: GitStatusEntry[] = [
-  { path: 'src/index.ts', status: 'modified' },
-  { path: 'src/components/Button.tsx', status: 'added' },
-  { path: '.gitignore', status: 'deleted' },
-];
+function useGitStatusControls(idSuffix: string) {
+  const [enabled, setEnabled] = useState(true);
+  const [useSetB, setUseSetB] = useState(false);
 
-const GIT_STATUSES_B: GitStatusEntry[] = [
-  { path: 'README.md', status: 'modified' },
-  { path: 'src/lib/utils.ts', status: 'modified' },
-  { path: 'src/utils/worker.ts', status: 'added' },
-];
+  const gitStatus = enabled
+    ? useSetB
+      ? GIT_STATUSES_B
+      : GIT_STATUSES_A
+    : undefined;
+
+  const controls = (
+    <div className="flex items-center gap-4">
+      <label
+        htmlFor={`git-status-enabled-${idSuffix}`}
+        className="flex cursor-pointer items-center gap-2 select-none"
+      >
+        <input
+          type="checkbox"
+          id={`git-status-enabled-${idSuffix}`}
+          checked={enabled}
+          className="cursor-pointer"
+          onChange={() => setEnabled((prev) => !prev)}
+        />
+        Enable
+      </label>
+      <button
+        type="button"
+        className="rounded-sm border px-2 py-1 text-xs"
+        style={{ borderColor: 'var(--color-border)' }}
+        onClick={() => setUseSetB((prev) => !prev)}
+      >
+        {useSetB ? 'Use Set A' : 'Use Set B'}
+      </button>
+    </div>
+  );
+
+  return { gitStatus, controls };
+}
+
+/**
+ * Vanilla FileTree — Git Status
+ * Uses setGitStatus() imperatively to toggle git status indicators.
+ */
+function VanillaGitStatus({
+  options,
+  stateConfig,
+}: {
+  options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
+}) {
+  const instanceRef = useRef<FileTree | null>(null);
+  const { gitStatus, controls } = useGitStatusControls('vanilla');
+
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node == null) {
+        return;
+      }
+
+      if (instanceRef.current != null) {
+        instanceRef.current.cleanUp();
+        node.innerHTML = '';
+      }
+
+      const fileTree = new FileTree({ ...options, gitStatus }, stateConfig);
+      fileTree.render({ containerWrapper: node });
+      instanceRef.current = fileTree;
+
+      return () => {
+        fileTree.cleanUp();
+        instanceRef.current = null;
+      };
+    },
+    [options, stateConfig, gitStatus]
+  );
+
+  return (
+    <ExampleCard
+      title="Vanilla — Git Status"
+      description="Vanilla FileTree with imperative setGitStatus() toggling A/M/D indicators"
+      controls={controls}
+    >
+      <div ref={ref} />
+    </ExampleCard>
+  );
+}
 
 function GitStatusDemo({
   options,
@@ -1364,48 +1452,52 @@ function GitStatusDemo({
   initialFiles?: string[];
   stateConfig?: FileTreeStateConfig;
 }) {
-  const [enabled, setEnabled] = useState(true);
-  const [useSetB, setUseSetB] = useState(false);
-
-  const gitStatus = enabled
-    ? useSetB
-      ? GIT_STATUSES_B
-      : GIT_STATUSES_A
-    : undefined;
+  const { gitStatus, controls } = useGitStatusControls('react');
 
   return (
     <ExampleCard
       title="React — Git Status"
       description="Controlled gitStatus prop showing A/M/D indicators on files and middots on folders with changes"
-      controls={
-        <div className="flex items-center gap-4">
-          <label
-            htmlFor="git-status-enabled"
-            className="flex cursor-pointer items-center gap-2 select-none"
-          >
-            <input
-              type="checkbox"
-              id="git-status-enabled"
-              checked={enabled}
-              className="cursor-pointer"
-              onChange={() => setEnabled((prev) => !prev)}
-            />
-            Enable
-          </label>
-          <button
-            type="button"
-            className="rounded-sm border px-2 py-1 text-xs"
-            style={{ borderColor: 'var(--color-border)' }}
-            onClick={() => setUseSetB((prev) => !prev)}
-          >
-            {useSetB ? 'Use Set A' : 'Use Set B'}
-          </button>
-        </div>
-      }
+      controls={controls}
     >
       <FileTreeReact
         options={options}
         initialFiles={initialFiles}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        onSelection={stateConfig?.onSelection}
+        gitStatus={gitStatus}
+      />
+    </ExampleCard>
+  );
+}
+
+/**
+ * React FileTree — SSR Git Status
+ * Hydrated from prerendered HTML with controlled gitStatus prop.
+ */
+function ReactSSRGitStatus({
+  options,
+  initialFiles,
+  stateConfig,
+  prerenderedHTML,
+}: {
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
+  stateConfig?: FileTreeStateConfig;
+  prerenderedHTML: string;
+}) {
+  const { gitStatus, controls } = useGitStatusControls('react-ssr');
+
+  return (
+    <ExampleCard
+      title="React (SSR) — Git Status"
+      description="SSR-hydrated React FileTree with controlled gitStatus prop"
+      controls={controls}
+    >
+      <FileTreeReact
+        options={options}
+        initialFiles={initialFiles}
+        prerenderedHTML={prerenderedHTML}
         initialExpandedItems={stateConfig?.initialExpandedItems}
         onSelection={stateConfig?.onSelection}
         gitStatus={gitStatus}
