@@ -72,6 +72,10 @@ interface DiffOptions {
 
   // What to show between diff hunks:
   // 'line-info' (default) - shows collapsed line count, clickable to expand
+  // WebKit bug (Safari 26 as of this writing): with custom renderGutterUtility,
+  // avoid 'line-info' to prevent scroll jumps while hovering. Use
+  // 'line-info-basic' or another mode. See:
+  // https://bugs.webkit.org/show_bug.cgi?id=308027
   // 'line-info-basic' - slightly more compact full width line-info variant
   // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
   // 'simple' - subtle bar separator
@@ -176,6 +180,10 @@ interface DiffOptions {
   // No render callback needed; callback receives current hovered line context.
   // Callback does not control visibility; options.enableGutterUtility does.
   // If omitted, button clicks bubble to gutter selection interactions.
+  // With enableLineSelection, omit this handler when you want range-based
+  // annotation workflows (use line selection callbacks instead).
+  // Provide this only when button clicks should do something different than
+  // selection. This handler is click-only (no drag/select behavior).
   onGutterUtilityClick({ lineNumber, side }) {
     console.log(\`Clicked line \${lineNumber} on \${side}\`);
   },
@@ -244,6 +252,10 @@ interface ThreadMetadata {
   // Callback receives the same hovered line payload shape.
   // Visibility is still controlled by options.enableGutterUtility.
   // If omitted, button clicks bubble to gutter selection interactions.
+  // With enableLineSelection, omit this handler for range workflows and use
+  // line selection callbacks instead.
+  // Provide this only when clicks should do something different than selection.
+  // This handler is click-only (no drag/select behavior).
   onGutterUtilityClick={({ lineNumber, side }) => {
     console.log(\`Clicked line \${lineNumber} on \${side}\`);
   }}
@@ -252,6 +264,10 @@ interface ThreadMetadata {
   // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires options.enableGutterUtility = true
   // Do not combine with onGutterUtilityClick.
+  // WebKit bug (Safari 26 as of this writing): use hunkSeparators other than
+  // 'line-info' (for example, 'line-info-basic', 'metadata', or 'simple')
+  // to avoid scroll jumps on hover. See:
+  // https://bugs.webkit.org/show_bug.cgi?id=308027
   //
   // Note: This is NOT reactive - render is not called on every
   // mouse move. Use getHoveredLine() in click handlers.
@@ -587,6 +603,10 @@ interface FileOptions {
   // No render callback needed; callback receives current hovered line context.
   // Callback does not control visibility; options.enableGutterUtility does.
   // If omitted, button clicks bubble to gutter selection interactions.
+  // With enableLineSelection, omit this handler when you want range-based
+  // annotation workflows (use line selection callbacks instead).
+  // Provide this only when button clicks should do something different than
+  // selection. This handler is click-only (no drag/select behavior).
   onGutterUtilityClick({ lineNumber }) {
     console.log(\`Clicked line \${lineNumber}\`);
   },
@@ -656,6 +676,10 @@ interface CommentMetadata {
   // Callback receives the same hovered line payload shape.
   // Visibility is still controlled by options.enableGutterUtility.
   // If omitted, button clicks bubble to gutter interactions.
+  // With enableLineSelection, omit this handler for range workflows and use
+  // line selection callbacks instead.
+  // Provide this only when clicks should do something different than selection.
+  // This handler is click-only (no drag/select behavior).
   onGutterUtilityClick={({ lineNumber }) => {
     console.log(\`Clicked line \${lineNumber}\`);
   }}
@@ -664,6 +688,10 @@ interface CommentMetadata {
   // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires options.enableGutterUtility = true
   // Do not combine with onGutterUtilityClick.
+  // WebKit bug (Safari 26 as of this writing): custom gutter utility can still cause
+  // scroll jumps on hover in File views. File has no hunk separators, so the
+  // line-info workaround does not apply here. See:
+  // https://bugs.webkit.org/show_bug.cgi?id=308027
   //
   // Note: This is NOT reactive - render is not called on every
   // mouse move. Use getHoveredLine() in click handlers.
