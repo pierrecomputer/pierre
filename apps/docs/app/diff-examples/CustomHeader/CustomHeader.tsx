@@ -1,6 +1,5 @@
 'use client';
 
-import type { RenderHeaderMetadataProps } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { IconChevronSm } from '@pierre/icons';
@@ -17,50 +16,19 @@ interface CustomHeaderProps {
 }
 
 export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
-  const [viewedFiles, setViewedFiles] = useState<Record<string, boolean>>({});
-  const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>(
-    {}
-  );
-  const defaultFileKey =
-    typeof prerenderedDiff.newFile.name === 'string'
-      ? prerenderedDiff.newFile.name
-      : prerenderedDiff.oldFile.name;
-  const isCollapsed = collapsedFiles[defaultFileKey] ?? false;
+  const [isViewed, setIsViewed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
-  function getFileKey({
-    fileDiff,
-    additionFile,
-    deletionFile,
-  }: RenderHeaderMetadataProps) {
-    if (typeof fileDiff?.name === 'string') {
-      return fileDiff.name;
-    }
-    if (typeof additionFile?.name === 'string') {
-      return additionFile.name;
-    }
-    if (typeof deletionFile?.name === 'string') {
-      return deletionFile.name;
-    }
-    return '';
+  function toggleCollapsed() {
+    setIsCollapsed((current) => !current);
   }
 
-  function toggleCollapsed(fileKey: string) {
-    setCollapsedFiles((current) => ({
-      ...current,
-      [fileKey]: !current[fileKey],
-    }));
-  }
-
-  function toggleViewed(fileKey: string) {
-    const nextViewed = !(viewedFiles[fileKey] ?? false);
-    setViewedFiles((current) => ({
-      ...current,
-      [fileKey]: nextViewed,
-    }));
-    setCollapsedFiles((current) => ({
-      ...current,
-      [fileKey]: nextViewed,
-    }));
+  function toggleViewed() {
+    setIsViewed((current) => {
+      const next = !current;
+      setIsCollapsed(next);
+      return next;
+    });
   }
 
   return (
@@ -82,34 +50,28 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
           ...prerenderedDiff.options,
           isCollapsed,
         }}
-        renderHeaderPrefix={(props) => {
-          const fileKey = getFileKey(props);
-          const isCollapsedForFile = collapsedFiles[fileKey] ?? false;
-
+        renderHeaderPrefix={() => {
           return (
             <button
               type="button"
-              onClick={() => toggleCollapsed(fileKey)}
-              aria-label={isCollapsedForFile ? 'Expand file' : 'Collapse file'}
-              aria-pressed={isCollapsedForFile}
+              onClick={toggleCollapsed}
+              aria-label={isCollapsed ? 'Expand file' : 'Collapse file'}
+              aria-pressed={isCollapsed}
               style={{ marginLeft: -5 }}
               className="inline-flex cursor-pointer items-center justify-center rounded-sm p-1 px-2 text-white/65 transition hover:bg-white/10 hover:text-white"
             >
               <IconChevronSm
                 size={16}
-                className={`transition-transform ${isCollapsedForFile ? '-rotate-90' : ''}`}
+                className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
               />
             </button>
           );
         }}
-        renderHeaderMetadata={(props) => {
-          const fileKey = getFileKey(props);
-          const isViewed = viewedFiles[fileKey] ?? false;
-
+        renderHeaderMetadata={() => {
           return (
             <button
               type="button"
-              onClick={() => toggleViewed(fileKey)}
+              onClick={toggleViewed}
               aria-pressed={isViewed}
               style={{ marginRight: -8 }}
               className={`inline-flex cursor-pointer items-center gap-2 rounded-sm border px-2 py-1 text-xs transition ${
