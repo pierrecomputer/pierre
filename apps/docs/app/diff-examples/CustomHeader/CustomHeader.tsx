@@ -2,7 +2,7 @@
 
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import { IconChevronSm } from '@pierre/icons';
+import { IconCheckboxFill, IconChevronSm, IconSquircleLg } from '@pierre/icons';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -58,10 +58,9 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
               aria-label={collapsed ? 'Expand file' : 'Collapse file'}
               aria-pressed={collapsed}
               style={{ marginLeft: -5 }}
-              className="inline-flex cursor-pointer items-center justify-center rounded-sm p-1 px-2 text-white/65 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-white/65 transition hover:bg-white/10 hover:text-white"
             >
               <IconChevronSm
-                size={16}
                 className={`transition-transform ${collapsed ? '-rotate-90' : ''}`}
               />
             </button>
@@ -74,23 +73,18 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
               onClick={toggleViewed}
               aria-pressed={isViewed}
               style={{ marginRight: -8 }}
-              className={`inline-flex cursor-pointer items-center gap-2 rounded-sm border px-2 py-1 text-xs transition ${
+              className={`flex cursor-pointer items-center gap-1.5 rounded-md border py-1 pr-2 pl-1 text-xs transition ${
                 isViewed
-                  ? 'border-blue-400/60 bg-blue-500/20 text-blue-100'
+                  ? 'border-blue-400/50 bg-blue-500/25 text-blue-200'
                   : 'border-white/20 bg-transparent text-white/70 hover:border-white/35 hover:bg-white/5 hover:text-white/85'
               }`}
             >
-              <span
-                aria-hidden="true"
-                className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-[2px] border text-[10px] leading-none ${
-                  isViewed
-                    ? 'border-blue-500/70 bg-blue-500 text-white'
-                    : 'border-white/35'
-                }`}
-              >
-                {isViewed ? '✓' : ''}
-              </span>
-              <span>Viewed</span>
+              {isViewed ? (
+                <IconCheckboxFill className="text-blue-400" />
+              ) : (
+                <IconSquircleLg className="text-white/50" />
+              )}
+              Viewed
             </button>
           );
         }}
