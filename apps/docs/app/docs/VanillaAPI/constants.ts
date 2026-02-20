@@ -143,9 +143,12 @@ const instance = new FileDiff({
 
   // What to show between diff hunks:
   // 'line-info' (default) - shows collapsed line count, clickable to expand
-  // WebKit bug (Safari 26 as of this writing): with custom renderGutterUtility,
-  // avoid 'line-info' to prevent scroll jumps while hovering. Use
-  // 'line-info-basic' or another mode. See:
+  // WebKit/Safari bug in version 26 as of this writing: if you use
+  // 'renderGutterUtility' with hunkSeparators: 'line-info', you may see
+  // scroll jumping while moving the mouse.
+  // Recommended: use the built-in gutter utility button by not using this API,
+  // or switch to another hunk separator type (for example 'line-info-basic').
+  // For a status of this bug, visit:
   // https://bugs.webkit.org/show_bug.cgi?id=308027
   // 'line-info-basic' - slightly more compact full width line-info variant
   // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
@@ -281,9 +284,11 @@ const instance = new FileDiff({
   // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires enableGutterUtility: true
   // Do not combine with onGutterUtilityClick.
-  // WebKit bug (Safari 26 as of this writing): use hunkSeparators other than
-  // 'line-info' (for example, 'line-info-basic', 'metadata', or 'simple')
-  // to avoid scroll jumps on hover. See:
+  // WebKit/Safari bug in version 26 as of this writing: if you use this custom
+  // API with hunkSeparators: 'line-info', you may see scroll jumping while
+  // moving the mouse.
+  // Recommended: use the built-in gutter utility API, or switch hunk
+  // separators to 'line-info-basic', 'metadata', or 'simple'. See:
   // https://bugs.webkit.org/show_bug.cgi?id=308027
   renderGutterUtility(getHoveredLine) {
     const button = document.createElement('button');
@@ -476,10 +481,10 @@ const instance = new File({
   // Prefer onGutterUtilityClick unless you need fully custom content.
   // Requires enableGutterUtility: true
   // Do not combine with onGutterUtilityClick.
-  // WebKit bug (Safari 26 as of this writing): custom gutter utility can still cause
-  // scroll jumps on hover in File views. File has no hunk separators, so the
-  // line-info workaround does not apply here. See:
-  // https://bugs.webkit.org/show_bug.cgi?id=308027
+  // WebKit/Safari note: there is a specific scroll-jump issue is tied to 
+  // diff views using custom renderGutterUtility + hunkSeparators:
+  // 'line-info'. File views do not use hunk separators, so this case
+  // does not apply here but you should be aware of it.
   renderGutterUtility(getHoveredLine) {
     const button = document.createElement('button');
     button.textContent = '+';
