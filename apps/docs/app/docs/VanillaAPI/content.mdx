@@ -24,6 +24,15 @@ Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
+Header customization and collapsing behavior:
+
+- Use `renderHeaderMetadata` to render custom UI at the end of the file header 
+  (after the diff stats).
+- Use `renderHeaderPrefix` to render custom UI at the start of the file header
+  (before the filename).
+- Use `isCollapsed` in constructor options to hide file body content while
+  keeping the file header visible.
+
 <VanillaPropTabs fileDiffProps={fileDiffProps} fileProps={fileProps} />
 
 #### Custom Hunk Separators
