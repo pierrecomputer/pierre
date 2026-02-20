@@ -2,6 +2,7 @@ import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  COLLAPSED_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
@@ -48,12 +49,6 @@ import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
 const EMPTY_STRINGS: string[] = [];
-const COLLAPSED_RENDER_RANGE: RenderRange = {
-  startingLine: 0,
-  totalLines: 0,
-  bufferBefore: 0,
-  bufferAfter: 0,
-};
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;

@@ -1,4 +1,7 @@
-import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
+import {
+  COLLAPSED_RENDER_RANGE,
+  DEFAULT_VIRTUAL_FILE_METRICS,
+} from '../constants';
 import type {
   FileContents,
   RenderRange,
@@ -294,12 +297,7 @@ export class VirtualizedFile<
       overflow = 'scroll',
     } = this.options;
     if (isCollapsed) {
-      return {
-        startingLine: 0,
-        totalLines: 0,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
+      return COLLAPSED_RENDER_RANGE;
     }
     const { diffHeaderHeight, fileGap, hunkLineCount, lineHeight } =
       this.metrics;

@@ -2,6 +2,7 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  COLLAPSED_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
@@ -151,13 +152,6 @@ interface ApplyPartialRenderProps {
   previousRenderRange: RenderRange | undefined;
   renderRange: RenderRange | undefined;
 }
-
-const COLLAPSED_RENDER_RANGE: RenderRange = {
-  startingLine: 0,
-  totalLines: 0,
-  bufferBefore: 0,
-  bufferAfter: 0,
-};
 
 let instanceId = -1;
 
