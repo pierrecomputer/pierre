@@ -43,7 +43,7 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
       size="sm"
       asChild
       className={cn(
-        'text-muted-foreground font-norma3 px-2',
+        'text-muted-foreground font-normal px-2',
         isActive() && 'text-foreground pointer-events-none font-medium'
       )}
     >
