@@ -1,7 +1,11 @@
 'use client';
 
 import { expandImplicitParentDirectories, FileTree } from '@pierre/trees';
-import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/trees';
+import type {
+  FileTreeOptions,
+  FileTreeStateConfig,
+  GitStatusEntry,
+} from '@pierre/trees';
 import { FileTree as FileTreeReact } from '@pierre/trees/react';
 import '@pierre/trees/web-components';
 import {
@@ -309,6 +313,21 @@ export function ClientPage({
           options={reactOptions}
           stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedFileTreeHtml}
+        />
+      </div>
+
+      {/* Divider */}
+      <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
+
+      {/* Git Status */}
+      <h2 id="git-status" className="mb-4 text-2xl font-bold">
+        Git Status
+      </h2>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <GitStatusDemo
+          options={reactOptions}
+          initialFiles={reactFiles}
+          stateConfig={sharedDemoStateConfig}
         />
       </div>
     </div>
@@ -1315,6 +1334,81 @@ function ReactDnDControlledSSR({
         onFilesChange={handleFilesChange}
         initialExpandedItems={stateConfig?.initialExpandedItems}
         onSelection={stateConfig?.onSelection}
+      />
+    </ExampleCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Git Status Example
+// ---------------------------------------------------------------------------
+
+const GIT_STATUSES_A: GitStatusEntry[] = [
+  { path: 'src/index.ts', status: 'modified' },
+  { path: 'src/components/Button.tsx', status: 'added' },
+  { path: '.gitignore', status: 'deleted' },
+];
+
+const GIT_STATUSES_B: GitStatusEntry[] = [
+  { path: 'README.md', status: 'modified' },
+  { path: 'src/lib/utils.ts', status: 'modified' },
+  { path: 'src/utils/worker.ts', status: 'added' },
+];
+
+function GitStatusDemo({
+  options,
+  initialFiles,
+  stateConfig,
+}: {
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
+  stateConfig?: FileTreeStateConfig;
+}) {
+  const [enabled, setEnabled] = useState(true);
+  const [useSetB, setUseSetB] = useState(false);
+
+  const gitStatus = enabled
+    ? useSetB
+      ? GIT_STATUSES_B
+      : GIT_STATUSES_A
+    : undefined;
+
+  return (
+    <ExampleCard
+      title="React — Git Status"
+      description="Controlled gitStatus prop showing A/M/D indicators on files and middots on folders with changes"
+      controls={
+        <div className="flex items-center gap-4">
+          <label
+            htmlFor="git-status-enabled"
+            className="flex cursor-pointer items-center gap-2 select-none"
+          >
+            <input
+              type="checkbox"
+              id="git-status-enabled"
+              checked={enabled}
+              className="cursor-pointer"
+              onChange={() => setEnabled((prev) => !prev)}
+            />
+            Enable
+          </label>
+          <button
+            type="button"
+            className="rounded-sm border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => setUseSetB((prev) => !prev)}
+          >
+            {useSetB ? 'Use Set A' : 'Use Set B'}
+          </button>
+        </div>
+      }
+    >
+      <FileTreeReact
+        options={options}
+        initialFiles={initialFiles}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        onSelection={stateConfig?.onSelection}
+        gitStatus={gitStatus}
       />
     </ExampleCard>
   );

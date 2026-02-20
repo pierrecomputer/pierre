@@ -5,7 +5,11 @@ import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 
 import { FILE_TREE_TAG_NAME } from '../constants';
-import type { FileTreeOptions, FileTreeSelectionItem } from '../FileTree';
+import type {
+  FileTreeOptions,
+  FileTreeSelectionItem,
+  GitStatusEntry,
+} from '../FileTree';
 import { useFileTreeInstance } from './utils/useFileTreeInstance';
 
 function renderFileTreeChildren(): ReactNode {
@@ -60,6 +64,9 @@ export interface FileTreeProps {
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
+
+  // Git status
+  gitStatus?: GitStatusEntry[];
 }
 
 export function FileTree({
@@ -78,6 +85,7 @@ export function FileTree({
   onExpandedItemsChange,
   onSelectedItemsChange,
   onSelection,
+  gitStatus,
 }: FileTreeProps): React.JSX.Element {
   const children = renderFileTreeChildren();
   const { ref } = useFileTreeInstance({
@@ -92,6 +100,7 @@ export function FileTree({
     onExpandedItemsChange,
     onSelectedItemsChange,
     onSelection,
+    gitStatus,
   });
 
   useEffect(() => {

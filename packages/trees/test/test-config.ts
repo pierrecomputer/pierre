@@ -9,6 +9,10 @@ import {
 
 import { FLATTENED_PREFIX } from '../src/constants';
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
+import {
+  type GitStatusEntry,
+  gitStatusFeature,
+} from '../src/features/gitStatusFeature';
 import type { FileTreeSearchMode } from '../src/FileTree';
 import { generateLazyDataLoader } from '../src/loader/lazy';
 import { generateSyncDataLoader } from '../src/loader/sync';
@@ -20,6 +24,7 @@ import {
   filterOrphanedPaths,
   isOrphanedPathForExpandedSet,
 } from '../src/utils/expandPaths';
+import { getGitStatusSignature } from '../src/utils/getGitStatusSignature';
 
 export interface TestConfig {
   label: string;
@@ -127,6 +132,7 @@ export function createTestTree(
     initialExpandedItems?: string[];
     initialSelectedItems?: string[];
     fileTreeSearchMode?: FileTreeSearchMode;
+    gitStatus?: GitStatusEntry[];
   } = {}
 ): TestTree {
   const { flattenEmptyDirectories } = config;
@@ -161,8 +167,14 @@ export function createTestTree(
   // Spread from a variable to bypass excess property checks on TreeConfig.
   const searchModeConfig =
     fileTreeSearchMode != null ? { fileTreeSearchMode } : {};
+  const gitStatusConfig = {
+    gitStatus: opts.gitStatus,
+    gitStatusSignature: getGitStatusSignature(opts.gitStatus),
+    gitStatusPathToId: pathToId,
+  };
   const tree = createTree<FileTreeNode>({
     ...searchModeConfig,
+    ...gitStatusConfig,
     rootItemId: 'root',
     dataLoader,
     getItemName: (item) => item.getItemData().name,
@@ -173,6 +185,7 @@ export function createTestTree(
       hotkeysCoreFeature,
       fileTreeSearchFeature,
       expandAllFeature,
+      gitStatusFeature,
     ],
     ...(mappedExpandedItems != null || mappedSelectedItems != null
       ? {

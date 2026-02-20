@@ -300,7 +300,12 @@ export const fileTreeSearchFeature: FeatureImplementation = {
       return getSearchCache(tree).matchIdSet.has(item.getId());
     },
     getProps: ({ tree, prev }) => {
-      const props = prev?.();
+      const props = prev?.() as
+        | (Record<string, unknown> & {
+            onMouseDown?: (e: MouseEvent) => void;
+            onClick?: (e: MouseEvent) => void;
+          })
+        | undefined;
       if (!tree.isSearchOpen()) return props;
 
       return {
@@ -309,13 +314,13 @@ export const fileTreeSearchFeature: FeatureImplementation = {
           // Prevent the default focus-transfer so the search input keeps
           // focus and no blur event fires before the click handler runs.
           e.preventDefault();
-          (props as Record<string, any>)?.onMouseDown?.(e);
+          props?.onMouseDown?.(e);
         },
         onClick: (e: MouseEvent) => {
           // Let the selection feature handle the click first (sets
           // selectedItems), then close search. restoreExpandedItems
           // will now see the correct selection and expand ancestors.
-          (props as Record<string, any>)?.onClick?.(e);
+          props?.onClick?.(e);
           tree.closeSearch();
         },
       };

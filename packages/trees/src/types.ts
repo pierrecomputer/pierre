@@ -1,5 +1,12 @@
 export type FileList = string[];
 
+export type GitStatus = 'added' | 'deleted' | 'modified';
+
+export type GitStatusEntry = {
+  path: string;
+  status: GitStatus;
+};
+
 export type FileTreeNodeChildren = {
   flattened?: string[];
   direct: string[];

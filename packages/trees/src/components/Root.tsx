@@ -17,6 +17,10 @@ import {
   fileTreeSearchFeature,
   getSearchVisibleIdSet,
 } from '../features/fileTreeSearchFeature';
+import {
+  getGitStatusMap,
+  gitStatusFeature,
+} from '../features/gitStatusFeature';
 import type {
   FileTreeCallbacks,
   FileTreeHandle,
@@ -34,6 +38,7 @@ import {
   filterOrphanedPaths,
 } from '../utils/expandPaths';
 import { fileListToTree } from '../utils/fileListToTree';
+import { getGitStatusSignature } from '../utils/getGitStatusSignature';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
 
@@ -92,6 +97,7 @@ export function Root({
     initialFiles: files,
     flattenEmptyDirectories,
     fileTreeSearchMode,
+    gitStatus,
     onCollision,
     useLazyDataLoader,
   } = fileTreeOptions;
@@ -322,6 +328,7 @@ export function Root({
       hotkeysCoreFeature,
       fileTreeSearchFeature,
       expandAllFeature,
+      gitStatusFeature,
     ];
     if (isDnD) {
       base.push(dragAndDropFeature, keyboardDragAndDropFeature);
@@ -436,9 +443,15 @@ export function Root({
   // via getConfig(). We spread it from a variable to bypass excess property
   // checks on the TreeConfig object literal.
   const searchModeConfig = { fileTreeSearchMode };
+  const gitStatusConfig = {
+    gitStatus,
+    gitStatusSignature: getGitStatusSignature(gitStatus),
+    gitStatusPathToId: pathToId,
+  };
   const tree = useTree<FileTreeNode>({
     ...restTreeConfig,
     ...searchModeConfig,
+    ...gitStatusConfig,
     rootItemId: 'root',
     dataLoader,
     getItemName: (item) => item.getItemData().name,
@@ -678,116 +691,156 @@ export function Root({
       {(() => {
         const allItems = tree.getItems();
         const visibleIdSet = getSearchVisibleIdSet(tree);
-        return visibleIdSet != null
-          ? allItems.filter((item) => visibleIdSet.has(item.getId()))
-          : allItems;
-      })().map((item) => {
-        const itemData = item.getItemData();
-        const itemMeta = item.getItemMeta();
-        // TODO: is it possible to have empty array as children? is this valid in that case?
-        const hasChildren = itemData?.children?.direct != null;
-        const itemName = item.getItemName();
-        const level = itemMeta.level;
-        const startWithCapital =
-          itemName.charAt(0).toUpperCase() === itemName.charAt(0);
-        const alignCapitals = startWithCapital;
-        const isSelected = item.isSelected();
-        const selectionProps = isSelected ? { 'data-item-selected': true } : {};
+        const gitStatusMap = getGitStatusMap(tree);
+        const items =
+          visibleIdSet != null
+            ? allItems.filter((item) => visibleIdSet.has(item.getId()))
+            : allItems;
+        return items.map((item) => {
+          const itemData = item.getItemData();
+          const itemMeta = item.getItemMeta();
+          // TODO: is it possible to have empty array as children? is this valid in that case?
+          const hasChildren = itemData?.children?.direct != null;
+          const itemName = item.getItemName();
+          const level = itemMeta.level;
+          const startWithCapital =
+            itemName.charAt(0).toUpperCase() === itemName.charAt(0);
+          const alignCapitals = startWithCapital;
+          const isSelected = item.isSelected();
+          const selectionProps = isSelected
+            ? { 'data-item-selected': true }
+            : {};
 
-        const isFlattenedDirectory = itemData?.flattens != null;
-        const isSearchMatch = item.isMatchingSearch();
-        const isFocused = hasFocusedItem && item.isFocused();
-        const focusedProps = isFocused ? { 'data-item-focused': true } : {};
-        const searchMatchProps = isSearchMatch
-          ? { 'data-item-search-match': true }
-          : {};
-        const isDragTarget = isDnD && item.isUnorderedDragTarget?.() === true;
-        const isDragging =
-          isDnD &&
-          tree
-            .getState()
-            .dnd?.draggedItems?.some(
-              (d: ItemInstance<FileTreeNode>) => d.getId() === item.getId()
-            ) === true;
-        const dragProps = isDnD
-          ? {
-              ...(isDragTarget && { 'data-item-drag-target': true }),
-              ...(isDragging && { 'data-item-dragging': true }),
-            }
-          : {};
-        const baseProps = item.getProps();
-        const itemProps =
-          isDnD && isFlattenedDirectory
+          const isFlattenedDirectory = itemData?.flattens != null;
+          const isSearchMatch = item.isMatchingSearch();
+          const isFocused = hasFocusedItem && item.isFocused();
+          const focusedProps = isFocused ? { 'data-item-focused': true } : {};
+          const searchMatchProps = isSearchMatch
+            ? { 'data-item-search-match': true }
+            : {};
+          const isDragTarget = isDnD && item.isUnorderedDragTarget?.() === true;
+          const isDragging =
+            isDnD &&
+            tree
+              .getState()
+              .dnd?.draggedItems?.some(
+                (d: ItemInstance<FileTreeNode>) => d.getId() === item.getId()
+              ) === true;
+          const dragProps = isDnD
             ? {
-                ...baseProps,
-                onDragOver: (e: DragEvent) => {
-                  (
-                    baseProps.onDragOver as ((e: DragEvent) => void) | undefined
-                  )?.(e);
-                  detectFlattenedSubfolder(e);
-                },
-                onDragLeave: (e: DragEvent) => {
-                  clearFlattenedSubfolder();
-                  (
-                    baseProps.onDragLeave as
-                      | ((e: DragEvent) => void)
-                      | undefined
-                  )?.(e);
-                },
-                onDrop: (e: DragEvent) => {
-                  // Call headless-tree's handler first — it synchronously
-                  // invokes onDropHandler where we read the subfolder ref.
-                  (baseProps.onDrop as ((e: DragEvent) => void) | undefined)?.(
-                    e
-                  );
-                  clearFlattenedSubfolder();
-                },
+                ...(isDragTarget && { 'data-item-drag-target': true }),
+                ...(isDragging && { 'data-item-dragging': true }),
               }
-            : baseProps;
+            : {};
 
-        return (
-          <button
-            data-type="item"
-            data-item-type={hasChildren ? 'folder' : 'file'}
-            {...selectionProps}
-            {...searchMatchProps}
-            {...focusedProps}
-            {...dragProps}
-            data-item-id={item.getId()}
-            id={getItemDomId(item.getId())}
-            {...itemProps}
-            key={item.getId()}
-          >
-            {level > 0 ? (
-              <div data-item-section="spacing">
-                {Array.from({ length: level }).map((_, index) => (
-                  <div key={index} data-item-section="spacing-item" />
-                ))}
+          // Git status
+          const itemGitStatus = gitStatusMap?.statusById.get(item.getId());
+          const itemContainsGitChange =
+            hasChildren && gitStatusMap?.foldersWithChanges.has(item.getId());
+          const gitStatusProps = {
+            ...(itemGitStatus != null && {
+              'data-item-git-status': itemGitStatus,
+            }),
+            ...(itemContainsGitChange === true && {
+              'data-item-contains-git-change': true,
+            }),
+          };
+
+          const baseProps = item.getProps();
+          const itemProps =
+            isDnD && isFlattenedDirectory
+              ? {
+                  ...baseProps,
+                  onDragOver: (e: DragEvent) => {
+                    (
+                      baseProps.onDragOver as
+                        | ((e: DragEvent) => void)
+                        | undefined
+                    )?.(e);
+                    detectFlattenedSubfolder(e);
+                  },
+                  onDragLeave: (e: DragEvent) => {
+                    clearFlattenedSubfolder();
+                    (
+                      baseProps.onDragLeave as
+                        | ((e: DragEvent) => void)
+                        | undefined
+                    )?.(e);
+                  },
+                  onDrop: (e: DragEvent) => {
+                    // Call headless-tree's handler first — it synchronously
+                    // invokes onDropHandler where we read the subfolder ref.
+                    (
+                      baseProps.onDrop as ((e: DragEvent) => void) | undefined
+                    )?.(e);
+                    clearFlattenedSubfolder();
+                  },
+                }
+              : baseProps;
+
+          const statusLabel =
+            itemGitStatus === 'added'
+              ? 'A'
+              : itemGitStatus === 'deleted'
+                ? 'D'
+                : itemGitStatus === 'modified'
+                  ? 'M'
+                  : null;
+          const showMiddot =
+            statusLabel == null && itemContainsGitChange === true;
+
+          return (
+            <button
+              data-type="item"
+              data-item-type={hasChildren ? 'folder' : 'file'}
+              {...selectionProps}
+              {...searchMatchProps}
+              {...focusedProps}
+              {...dragProps}
+              {...gitStatusProps}
+              data-item-id={item.getId()}
+              id={getItemDomId(item.getId())}
+              {...itemProps}
+              key={item.getId()}
+            >
+              {level > 0 ? (
+                <div data-item-section="spacing">
+                  {Array.from({ length: level }).map((_, index) => (
+                    <div key={index} data-item-section="spacing-item" />
+                  ))}
+                </div>
+              ) : null}
+              <div data-item-section="icon">
+                {hasChildren ? (
+                  <Icon
+                    name="file-tree-icon-chevron"
+                    alignCapitals={alignCapitals}
+                  />
+                ) : (
+                  <Icon name="file-tree-icon-file" />
+                )}
               </div>
-            ) : null}
-            <div data-item-section="icon">
-              {hasChildren ? (
-                <Icon
-                  name="file-tree-icon-chevron"
-                  alignCapitals={alignCapitals}
-                />
-              ) : (
-                <Icon name="file-tree-icon-file" />
-              )}
-            </div>
-            <div data-item-section="content">
-              {isFlattenedDirectory ? (
-                <FlattenedDirectoryName
-                  tree={tree}
-                  flattens={itemData?.flattens ?? []}
-                />
-              ) : (
-                itemName
-              )}
-            </div>
-          </button>
-        );
-      })}
+              <div data-item-section="content">
+                {isFlattenedDirectory ? (
+                  <FlattenedDirectoryName
+                    tree={tree}
+                    flattens={itemData?.flattens ?? []}
+                  />
+                ) : (
+                  itemName
+                )}
+              </div>
+              {statusLabel != null ? (
+                <div data-item-section="status">{statusLabel}</div>
+              ) : showMiddot ? (
+                <div data-item-section="status" data-item-git-middot>
+                  {'•'}
+                </div>
+              ) : null}
+            </button>
+          );
+        });
+      })()}
     </div>
   );
 }

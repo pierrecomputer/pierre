@@ -3,7 +3,7 @@ import { type TreeInstance } from '@headless-tree/core';
 import { FileTreeContainerLoaded } from './components/web-components';
 import { FILE_TREE_TAG_NAME, FLATTENED_PREFIX } from './constants';
 import { SVGSpriteSheet } from './sprite';
-import { type FileTreeNode } from './types';
+import type { FileTreeNode, GitStatusEntry } from './types';
 import { expandImplicitParentDirectories } from './utils/expandImplicitParentDirectories';
 import {
   buildDirectChildCountMap,
@@ -16,6 +16,8 @@ import {
   preactRenderRoot,
   preactUnmountRoot,
 } from './utils/preactRenderer';
+
+export type { GitStatusEntry } from './types';
 
 let instanceId = -1;
 
@@ -62,6 +64,7 @@ export interface FileTreeOptions {
   dragAndDrop?: boolean;
   fileTreeSearchMode?: FileTreeSearchMode;
   flattenEmptyDirectories?: boolean;
+  gitStatus?: GitStatusEntry[];
   id?: string;
   initialFiles: string[];
   /** Return true to overwrite the destination file when a DnD move collides. */
@@ -318,6 +321,17 @@ export class FileTree {
     Object.assign(this.callbacksRef.current, callbacks);
   }
 
+  // --- Git status ---
+
+  setGitStatus(entries: GitStatusEntry[] | undefined): void {
+    this.options = { ...this.options, gitStatus: entries };
+    this.rerender();
+  }
+
+  getGitStatus(): GitStatusEntry[] | undefined {
+    return this.options.gitStatus;
+  }
+
   // --- Heavier updates (re-render) ---
 
   setFiles(files: string[]): void {
@@ -367,6 +381,7 @@ export class FileTree {
     const structuralKeys = [
       'dragAndDrop',
       'fileTreeSearchMode',
+      'gitStatus',
       'initialFiles',
       'flattenEmptyDirectories',
       'onCollision',

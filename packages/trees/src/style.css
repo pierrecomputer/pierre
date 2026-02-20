@@ -221,6 +221,31 @@
     }
   }
 
+  /* Git status indicator */
+  [data-item-section='status'] {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.85em;
+  }
+
+  [data-item-git-status='added'] > [data-item-section='status'] {
+    color: var(--ft-git-color-added, oklch(65% 0.2 145));
+  }
+
+  [data-item-git-status='deleted'] > [data-item-section='status'] {
+    color: var(--ft-git-color-deleted, oklch(65% 0.2 25));
+  }
+
+  [data-item-git-status='modified'] > [data-item-section='status'] {
+    color: var(--ft-git-color-modified, oklch(75% 0.15 85));
+  }
+
+  [data-item-git-middot] {
+    color: var(--ft-git-color-modified, oklch(75% 0.15 85));
+    font-size: 1.3em;
+    line-height: 1;
+  }
+
   /* Drag and drop */
   [data-item-drag-target='true'] {
     background-color: var(--ft-internal-selected-background-color);

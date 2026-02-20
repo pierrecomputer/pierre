@@ -5,7 +5,9 @@ import {
   type FileTreeOptions,
   type FileTreeSelectionItem,
   type FileTreeStateConfig,
+  type GitStatusEntry,
 } from '../../FileTree';
+import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
 
 interface UseFileTreeInstanceProps {
   options: Omit<FileTreeOptions, 'initialFiles'>;
@@ -27,6 +29,9 @@ interface UseFileTreeInstanceProps {
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
+
+  // Git status
+  gitStatus?: GitStatusEntry[];
 }
 
 interface UseFileTreeInstanceReturn {
@@ -45,14 +50,19 @@ export function useFileTreeInstance({
   onExpandedItemsChange,
   onSelectedItemsChange,
   onSelection,
+  gitStatus,
 }: UseFileTreeInstanceProps): UseFileTreeInstanceReturn {
   const containerRef = useRef<HTMLElement | null>(null);
   const instanceRef = useRef<FileTree | null>(null);
+  const syncedGitStatusSignatureRef = useRef(getGitStatusSignature(gitStatus));
 
   // Keep a ref to the latest state-related props so the ref callback can read
   // them at creation time without including them as useMemo deps.
   const statePropsRef = useRef<
-    FileTreeStateConfig & { initialFiles?: string[] }
+    FileTreeStateConfig & {
+      initialFiles?: string[];
+      gitStatus?: GitStatusEntry[];
+    }
   >({
     files,
     initialFiles,
@@ -64,6 +74,7 @@ export function useFileTreeInstance({
     onSelection,
     initialExpandedItems,
     initialSelectedItems,
+    gitStatus,
   });
   statePropsRef.current = {
     files,
@@ -76,6 +87,7 @@ export function useFileTreeInstance({
     onSelection,
     initialExpandedItems,
     initialSelectedItems,
+    gitStatus,
   };
 
   // Ref callback that handles mount/unmount and re-runs when options change.
@@ -123,11 +135,15 @@ export function useFileTreeInstance({
 
       const createInstance = (existingId?: string): FileTree => {
         const sp = statePropsRef.current;
+        syncedGitStatusSignatureRef.current = getGitStatusSignature(
+          sp.gitStatus
+        );
         return new FileTree(
           {
             ...options,
             initialFiles: sp.initialFiles ?? sp.files ?? [],
             id: existingId,
+            ...(sp.gitStatus != null && { gitStatus: sp.gitStatus }),
           },
           {
             // Use controlled values as initial state, but do NOT pass them as
@@ -221,6 +237,19 @@ export function useFileTreeInstance({
       instanceRef.current.setSelectedItems(selectedItems);
     }
   }, [selectedItems]);
+
+  const gitStatusSignature = getGitStatusSignature(gitStatus);
+
+  // Sync controlled git status
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (instance == null) return;
+    if (syncedGitStatusSignatureRef.current === gitStatusSignature) {
+      return;
+    }
+    syncedGitStatusSignatureRef.current = gitStatusSignature;
+    instance.setGitStatus(gitStatus);
+  }, [gitStatus, gitStatusSignature]);
 
   // Update callbacks without re-rendering Preact
   useEffect(() => {
