@@ -15,6 +15,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -252,6 +260,8 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
@@ -29209,6 +29219,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -29446,6 +29464,8 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
@@ -58168,6 +58188,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -58405,6 +58433,8 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
@@ -87490,6 +87520,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -87606,6 +87644,8 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
@@ -90277,6 +90317,14 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -90381,6 +90429,8 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
@@ -91518,6 +91568,14 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -91622,6 +91680,8 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },

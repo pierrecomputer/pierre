@@ -2355,6 +2355,14 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -2459,6 +2467,8 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:2ch;",
       "tabIndex": 0,
     },
@@ -4828,6 +4838,14 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -4932,6 +4950,8 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:2ch;",
       "tabIndex": 0,
     },
@@ -5155,6 +5175,14 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -5259,6 +5287,8 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:2ch;",
       "tabIndex": 0,
     },
@@ -7849,6 +7879,14 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -7940,6 +7978,8 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:2ch;",
       "tabIndex": 0,
     },
@@ -8987,6 +9027,14 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
       {
         "children": [
           {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
             "children": [
               {
                 "children": [],
@@ -9078,6 +9126,8 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
+      "data-collapsed": undefined,
+      "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:2ch;",
       "tabIndex": 0,
     },
