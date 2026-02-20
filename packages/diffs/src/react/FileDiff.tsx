@@ -25,6 +25,7 @@ export function FileDiff<LAnnotation = undefined>({
   style,
   prerenderedHTML,
   renderAnnotation,
+  renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
   renderHoverUtility,
@@ -39,6 +40,7 @@ export function FileDiff<LAnnotation = undefined>({
   });
   const children = renderDiffChildren({
     fileDiff,
+    renderHeaderPrefix,
     renderHeaderMetadata,
     renderAnnotation,
     renderGutterUtility,

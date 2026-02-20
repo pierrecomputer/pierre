@@ -1,6 +1,6 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
-import { HEADER_METADATA_SLOT_ID } from '../constants';
+import { HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID } from '../constants';
 import type {
   ChangeTypes,
   FileContents,
@@ -59,6 +59,10 @@ function createHeaderElement({
   iconType,
 }: CreateHeaderElementOptions): HASTElement {
   const children: ElementContent[] = [
+    createHastElement({
+      tagName: 'slot',
+      properties: { name: HEADER_PREFIX_SLOT_ID },
+    }),
     createIconElement({
       name: getIconForType(iconType),
       properties: { 'data-change-icon': iconType },

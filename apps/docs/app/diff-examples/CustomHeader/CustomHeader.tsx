@@ -1,45 +1,12 @@
 'use client';
 
+import type { RenderHeaderMetadataProps } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-import {
-  IconCodeStyleBars,
-  IconCodeStyleBg,
-  IconDiffSplit,
-  IconDiffUnified,
-  IconMoon,
-  IconSun,
-} from '@pierre/icons';
-import type { ReactNode } from 'react';
+import { IconChevronSm } from '@pierre/icons';
 import { useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
-
-// =============================================================================
-// Local Components
-// =============================================================================
-
-type ThemeType = 'dark' | 'light';
-
-interface IconButtonProps {
-  onClick: () => void;
-  icon: ReactNode;
-  title: string;
-}
-
-function IconButton({ onClick, icon, title }: IconButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="cursor-pointer p-1 opacity-60 hover:opacity-100"
-      title={title}
-      aria-label={title}
-    >
-      {icon}
-    </button>
-  );
-}
 
 // =============================================================================
 // Custom Header Example (renderHeaderMetadata)
@@ -50,15 +17,51 @@ interface CustomHeaderProps {
 }
 
 export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
-  const [themeType, setThemeType] = useState<ThemeType>(
-    prerenderedDiff.options?.themeType === 'light' ? 'light' : 'dark'
+  const [viewedFiles, setViewedFiles] = useState<Record<string, boolean>>({});
+  const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>(
+    {}
   );
-  const [disableBackground, setDisableBackground] = useState(
-    prerenderedDiff.options?.disableBackground ?? false
-  );
-  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
-    prerenderedDiff.options?.diffStyle ?? 'split'
-  );
+  const defaultFileKey =
+    typeof prerenderedDiff.newFile.name === 'string'
+      ? prerenderedDiff.newFile.name
+      : prerenderedDiff.oldFile.name;
+  const isCollapsed = collapsedFiles[defaultFileKey] ?? false;
+
+  function getFileKey({
+    fileDiff,
+    additionFile,
+    deletionFile,
+  }: RenderHeaderMetadataProps) {
+    if (typeof fileDiff?.name === 'string') {
+      return fileDiff.name;
+    }
+    if (typeof additionFile?.name === 'string') {
+      return additionFile.name;
+    }
+    if (typeof deletionFile?.name === 'string') {
+      return deletionFile.name;
+    }
+    return '';
+  }
+
+  function toggleCollapsed(fileKey: string) {
+    setCollapsedFiles((current) => ({
+      ...current,
+      [fileKey]: !current[fileKey],
+    }));
+  }
+
+  function toggleViewed(fileKey: string) {
+    const nextViewed = !(viewedFiles[fileKey] ?? false);
+    setViewedFiles((current) => ({
+      ...current,
+      [fileKey]: nextViewed,
+    }));
+    setCollapsedFiles((current) => ({
+      ...current,
+      [fileKey]: nextViewed,
+    }));
+  }
 
   return (
     <div className="scroll-mt-[20px] space-y-5" id="custom-header">
@@ -66,10 +69,9 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
         title="Custom header metadata"
         description={
           <>
-            Use <code>renderHeaderMetadata</code> to inject custom content and
-            components into the file header. Perfect for adding view toggles,
-            theme switchers, copy buttons, or any other file-level actions while
-            preserving the built-in header.
+            Use <code>renderHeaderPrefix</code> and{' '}
+            <code>renderHeaderMetadata</code> to inject custom content into the
+            file header while preserving the built-in layout.
           </>
         }
       />
@@ -78,57 +80,58 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
         className="diff-container"
         options={{
           ...prerenderedDiff.options,
-          themeType,
-          diffStyle,
-          disableBackground,
+          isCollapsed,
         }}
-        renderHeaderMetadata={() => (
-          <div className="-mr-1 flex items-center gap-1">
-            <IconButton
-              onClick={() =>
-                setDiffStyle((c) => (c === 'split' ? 'unified' : 'split'))
-              }
-              icon={
-                diffStyle === 'split' ? (
-                  <IconDiffSplit size={16} />
-                ) : (
-                  <IconDiffUnified size={16} />
-                )
-              }
-              title={
-                diffStyle === 'split' ? 'Switch to unified' : 'Switch to split'
-              }
-            />
-            <IconButton
-              onClick={() => setDisableBackground((c) => !c)}
-              icon={
-                disableBackground ? (
-                  <IconCodeStyleBars size={16} />
-                ) : (
-                  <IconCodeStyleBg size={16} />
-                )
-              }
-              title={
-                disableBackground ? 'Enable background' : 'Disable background'
-              }
-            />
-            <IconButton
-              onClick={() =>
-                setThemeType((c) => (c === 'dark' ? 'light' : 'dark'))
-              }
-              icon={
-                themeType === 'dark' ? (
-                  <IconMoon size={16} />
-                ) : (
-                  <IconSun size={16} />
-                )
-              }
-              title={
-                themeType === 'dark' ? 'Switch to light' : 'Switch to dark'
-              }
-            />
-          </div>
-        )}
+        renderHeaderPrefix={(props) => {
+          const fileKey = getFileKey(props);
+          const isCollapsedForFile = collapsedFiles[fileKey] ?? false;
+
+          return (
+            <button
+              type="button"
+              onClick={() => toggleCollapsed(fileKey)}
+              aria-label={isCollapsedForFile ? 'Expand file' : 'Collapse file'}
+              aria-pressed={isCollapsedForFile}
+              style={{ marginLeft: -5 }}
+              className="inline-flex cursor-pointer items-center justify-center rounded-sm p-1 px-2 text-white/65 transition hover:bg-white/10 hover:text-white"
+            >
+              <IconChevronSm
+                size={16}
+                className={`transition-transform ${isCollapsedForFile ? '-rotate-90' : ''}`}
+              />
+            </button>
+          );
+        }}
+        renderHeaderMetadata={(props) => {
+          const fileKey = getFileKey(props);
+          const isViewed = viewedFiles[fileKey] ?? false;
+
+          return (
+            <button
+              type="button"
+              onClick={() => toggleViewed(fileKey)}
+              aria-pressed={isViewed}
+              style={{ marginRight: -8 }}
+              className={`inline-flex cursor-pointer items-center gap-2 rounded-sm border px-2 py-1 text-xs transition ${
+                isViewed
+                  ? 'border-blue-400/60 bg-blue-500/20 text-blue-100'
+                  : 'border-white/20 bg-transparent text-white/70 hover:border-white/35 hover:bg-white/5 hover:text-white/85'
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-[2px] border text-[10px] leading-none ${
+                  isViewed
+                    ? 'border-blue-500/70 bg-blue-500 text-white'
+                    : 'border-white/35'
+                }`}
+              >
+                {isViewed ? '✓' : ''}
+              </span>
+              <span>Viewed</span>
+            </button>
+          );
+        }}
       />
     </div>
   );

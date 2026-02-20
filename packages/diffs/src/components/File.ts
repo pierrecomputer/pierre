@@ -5,6 +5,7 @@ import {
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
+  HEADER_PREFIX_SLOT_ID,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import {
@@ -47,6 +48,12 @@ import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
 const EMPTY_STRINGS: string[] = [];
+const COLLAPSED_RENDER_RANGE: RenderRange = {
+  startingLine: 0,
+  totalLines: 0,
+  bufferBefore: 0,
+  bufferAfter: 0,
+};
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -75,6 +82,7 @@ export interface FileOptions<LAnnotation>
    * @deprecated Use `enableGutterUtility` instead.
    */
   enableHoverUtility?: boolean;
+  renderHeaderPrefix?: RenderFileMetadata;
   renderCustomMetadata?: RenderFileMetadata;
   /**
    * When true, errors during rendering are rethrown instead of being caught
@@ -128,6 +136,7 @@ export class File<LAnnotation = undefined> {
   protected lastRowCount: number | undefined;
 
   protected headerElement: HTMLElement | undefined;
+  protected headerPrefix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
 
   protected fileRenderer: FileRenderer<LAnnotation>;
@@ -257,6 +266,8 @@ export class File<LAnnotation = undefined> {
     this.appliedPreAttributes = undefined;
     this.lastRowCount = undefined;
     this.headerElement = undefined;
+    this.headerPrefix = undefined;
+    this.headerMetadata = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
@@ -333,6 +344,8 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
+    const { isCollapsed = false } = this.options;
+    const nextRenderRange = isCollapsed ? COLLAPSED_RENDER_RANGE : renderRange;
     const previousRenderRange = this.renderRange;
     const annotationsChanged =
       lineAnnotations != null &&
@@ -342,14 +355,14 @@ export class File<LAnnotation = undefined> {
     const didFileChange = !areFilesEqual(this.file, file);
     if (
       !forceRender &&
-      areRenderRangesEqual(renderRange, this.renderRange) &&
+      areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
       !annotationsChanged
     ) {
       return false;
     }
 
-    this.renderRange = renderRange;
+    this.renderRange = nextRenderRange;
     this.file = file;
     this.fileRenderer.setOptions(this.options);
     if (lineAnnotations != null) {
@@ -369,6 +382,14 @@ export class File<LAnnotation = undefined> {
         this.headerElement = undefined;
         this.lastRenderedHeaderHTML = undefined;
       }
+      if (this.headerPrefix != null) {
+        this.headerPrefix.parentNode?.removeChild(this.headerPrefix);
+        this.headerPrefix = undefined;
+      }
+      if (this.headerMetadata != null) {
+        this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+        this.headerMetadata = undefined;
+      }
     }
 
     fileContainer = this.getOrCreateFileContainerNode(
@@ -384,9 +405,9 @@ export class File<LAnnotation = undefined> {
           annotationsChanged,
           didFileChange
         ) ||
-        !this.applyPartialRender(previousRenderRange, renderRange)
+        !this.applyPartialRender(previousRenderRange, nextRenderRange)
       ) {
-        const fileResult = this.fileRenderer.renderFile(file, renderRange);
+        const fileResult = this.fileRenderer.renderFile(file, nextRenderRange);
         if (fileResult == null) {
           if (this.workerManager?.isInitialized() === false) {
             void this.workerManager.initialize().then(() => this.rerender());
@@ -399,7 +420,7 @@ export class File<LAnnotation = undefined> {
         this.applyFullRender(fileResult, pre);
       }
 
-      this.applyBuffers(pre, renderRange);
+      this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(pre);
       this.lineSelectionManager.setup(pre);
@@ -458,6 +479,8 @@ export class File<LAnnotation = undefined> {
     this.errorWrapper?.remove();
     this.headerElement?.remove();
     this.gutterUtilityContent?.remove();
+    this.headerPrefix?.remove();
+    this.headerMetadata?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
     this.unsafeCSSStyle?.remove();
@@ -468,6 +491,8 @@ export class File<LAnnotation = undefined> {
     this.errorWrapper = undefined;
     this.headerElement = undefined;
     this.gutterUtilityContent = undefined;
+    this.headerPrefix = undefined;
+    this.headerMetadata = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
     this.unsafeCSSStyle = undefined;
@@ -854,11 +879,25 @@ export class File<LAnnotation = undefined> {
 
     if (this.isContainerManaged) return;
 
-    const { renderCustomMetadata } = this.options;
+    const { renderHeaderPrefix, renderCustomMetadata } = this.options;
+    if (this.headerPrefix != null) {
+      this.headerPrefix.parentNode?.removeChild(this.headerPrefix);
+    }
     if (this.headerMetadata != null) {
       this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
     }
+    const prefix = renderHeaderPrefix?.(file) ?? undefined;
     const content = renderCustomMetadata?.(file) ?? undefined;
+    if (prefix != null) {
+      this.headerPrefix = document.createElement('div');
+      this.headerPrefix.slot = HEADER_PREFIX_SLOT_ID;
+      if (prefix instanceof Element) {
+        this.headerPrefix.appendChild(prefix);
+      } else {
+        this.headerPrefix.innerText = `${prefix}`;
+      }
+      container.appendChild(this.headerPrefix);
+    }
     if (content != null) {
       this.headerMetadata = document.createElement('div');
       this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
@@ -930,6 +969,7 @@ export class File<LAnnotation = undefined> {
       overflow = 'scroll',
       themeType = 'system',
       disableLineNumbers = false,
+      isCollapsed = false,
     } = this.options;
     const preProperties: PrePropertiesConfig = {
       type: 'file',
@@ -937,6 +977,7 @@ export class File<LAnnotation = undefined> {
       themeStyles,
       overflow,
       disableLineNumbers,
+      isCollapsed,
       themeType: baseThemeType ?? themeType,
       diffIndicators: 'none',
       disableBackground: true,

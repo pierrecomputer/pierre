@@ -14,6 +14,7 @@ export function createPreWrapperProperties({
   diffIndicators,
   disableBackground,
   disableLineNumbers,
+  isCollapsed,
   overflow,
   split,
   themeType,
@@ -29,6 +30,7 @@ export function createPreWrapperProperties({
     'data-overflow': overflow,
     'data-disable-line-numbers': disableLineNumbers ? '' : undefined,
     'data-background': !disableBackground ? '' : undefined,
+    'data-collapsed': isCollapsed ? '' : undefined,
     'data-indicators':
       diffIndicators === 'bars' || diffIndicators === 'classic'
         ? diffIndicators
@@ -37,7 +39,8 @@ export function createPreWrapperProperties({
     // NOTE(amadeus): Alex, here we would probably set a class property
     // instead, when that's working and supported
     style: themeStyles,
-    tabIndex: 0,
+    hidden: isCollapsed ? true : undefined,
+    tabIndex: isCollapsed ? -1 : 0,
   };
   properties.style += `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`;
 

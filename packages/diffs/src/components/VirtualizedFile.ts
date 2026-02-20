@@ -163,7 +163,11 @@ export class VirtualizedFile<
       return;
     }
 
-    const { disableFileHeader = false, overflow = 'scroll' } = this.options;
+    const {
+      disableFileHeader = false,
+      isCollapsed = false,
+      overflow = 'scroll',
+    } = this.options;
     const { diffHeaderHeight, fileGap, lineHeight } = this.metrics;
     const lines = this.getOrCreateLineCache(this.file);
 
@@ -172,6 +176,9 @@ export class VirtualizedFile<
       this.height += diffHeaderHeight;
     } else {
       this.height += fileGap;
+    }
+    if (isCollapsed) {
+      return;
     }
 
     if (overflow === 'scroll' && this.lineAnnotations.length === 0) {
@@ -281,7 +288,19 @@ export class VirtualizedFile<
     fileTop: number,
     { top, bottom }: RenderWindow
   ): RenderRange {
-    const { disableFileHeader = false, overflow = 'scroll' } = this.options;
+    const {
+      disableFileHeader = false,
+      isCollapsed = false,
+      overflow = 'scroll',
+    } = this.options;
+    if (isCollapsed) {
+      return {
+        startingLine: 0,
+        totalLines: 0,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
+    }
     const { diffHeaderHeight, fileGap, hunkLineCount, lineHeight } =
       this.metrics;
     const lines = this.getOrCreateLineCache(file);

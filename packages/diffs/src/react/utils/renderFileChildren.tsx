@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 
-import { HEADER_METADATA_SLOT_ID } from '../../constants';
+import {
+  HEADER_METADATA_SLOT_ID,
+  HEADER_PREFIX_SLOT_ID,
+} from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
 import type { FileContents } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
@@ -9,6 +12,7 @@ import type { FileProps } from '../types';
 
 interface RenderFileChildrenProps<LAnnotation> {
   file: FileContents;
+  renderHeaderPrefix: FileProps<LAnnotation>['renderHeaderPrefix'];
   renderHeaderMetadata: FileProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: FileProps<LAnnotation>['renderAnnotation'];
   lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
@@ -19,6 +23,7 @@ interface RenderFileChildrenProps<LAnnotation> {
 
 export function renderFileChildren<LAnnotation>({
   file,
+  renderHeaderPrefix,
   renderHeaderMetadata,
   renderAnnotation,
   lineAnnotations,
@@ -27,9 +32,11 @@ export function renderFileChildren<LAnnotation>({
   getHoveredLine,
 }: RenderFileChildrenProps<LAnnotation>): ReactNode {
   const gutterUtility = renderGutterUtility ?? renderHoverUtility;
+  const prefix = renderHeaderPrefix?.(file);
   const metadata = renderHeaderMetadata?.(file);
   return (
     <>
+      {prefix != null && <div slot={HEADER_PREFIX_SLOT_ID}>{prefix}</div>}
       {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (

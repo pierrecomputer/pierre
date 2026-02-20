@@ -26,6 +26,7 @@ export function PatchDiff<LAnnotation = undefined>({
   style,
   prerenderedHTML,
   renderAnnotation,
+  renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
   renderHoverUtility,
@@ -41,6 +42,7 @@ export function PatchDiff<LAnnotation = undefined>({
   });
   const children = renderDiffChildren({
     fileDiff,
+    renderHeaderPrefix,
     renderHeaderMetadata,
     renderAnnotation,
     lineAnnotations,

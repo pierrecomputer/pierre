@@ -232,6 +232,7 @@ export class VirtualizedFileDiff<
     const {
       disableFileHeader = false,
       expandUnchanged = false,
+      isCollapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
@@ -249,6 +250,9 @@ export class VirtualizedFileDiff<
       this.height += diffHeaderHeight;
     } else if (hunkSeparators !== 'simple' && hunkSeparators !== 'metadata') {
       this.height += fileGap;
+    }
+    if (isCollapsed) {
+      return;
     }
 
     iterateOverDiff({
@@ -488,6 +492,7 @@ export class VirtualizedFileDiff<
     const {
       disableFileHeader = false,
       expandUnchanged = false,
+      isCollapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
@@ -501,6 +506,14 @@ export class VirtualizedFileDiff<
     const diffStyle = this.getDiffStyle();
     const fileHeight = this.height;
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
+    if (isCollapsed) {
+      return {
+        startingLine: 0,
+        totalLines: 0,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
+    }
 
     // Calculate headerRegion before early returns
     const headerRegion = disableFileHeader ? fileGap : diffHeaderHeight;

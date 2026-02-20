@@ -18,6 +18,7 @@ export function File<LAnnotation = undefined>({
   className,
   style,
   renderAnnotation,
+  renderHeaderPrefix,
   renderHeaderMetadata,
   prerenderedHTML,
   renderGutterUtility,
@@ -34,6 +35,7 @@ export function File<LAnnotation = undefined>({
   const children = renderFileChildren({
     file,
     renderAnnotation,
+    renderHeaderPrefix,
     renderHeaderMetadata,
     renderGutterUtility,
     renderHoverUtility,
