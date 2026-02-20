@@ -133,6 +133,10 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     this.pre?.removeAttribute('data-interactive-line-numbers');
     this.gutterUtilityContainer?.remove();
     this.gutterUtilityContainer = undefined;
+    this.gutterUtilityButton?.removeEventListener(
+      'pointerdown',
+      this.handleGutterUtilityPointerDown
+    );
     this.gutterUtilityButton = undefined;
     this.gutterUtilitySlot = undefined;
     this.clearHoveredLine();
@@ -167,6 +171,10 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     } else if (this.gutterUtilityContainer != null) {
       this.gutterUtilityContainer.remove();
       this.gutterUtilityContainer = undefined;
+      this.gutterUtilityButton?.removeEventListener(
+        'pointerdown',
+        this.handleGutterUtilityPointerDown
+      );
       this.gutterUtilityButton = undefined;
       this.gutterUtilitySlot = undefined;
     }
@@ -505,8 +513,14 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       this.gutterUtilityContainer.setAttribute('data-gutter-utility-slot', '');
     }
     if (useCustomGutterUtility) {
-      this.gutterUtilityButton?.remove();
-      this.gutterUtilityButton = undefined;
+      if (this.gutterUtilityButton != null) {
+        this.gutterUtilityButton.removeEventListener(
+          'pointerdown',
+          this.handleGutterUtilityPointerDown
+        );
+        this.gutterUtilityButton.remove();
+        this.gutterUtilityButton = undefined;
+      }
       if (this.gutterUtilitySlot == null) {
         this.gutterUtilitySlot = document.createElement('slot');
         this.gutterUtilitySlot.name = 'gutter-utility-slot';
