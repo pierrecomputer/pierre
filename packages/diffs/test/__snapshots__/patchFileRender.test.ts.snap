@@ -2701,6 +2701,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
     "children": [],
     "properties": {
       "data-background": "",
+      "data-collapsed": undefined,
       "data-diff": "",
       "data-diff-type": "split",
       "data-disable-line-numbers": undefined,
@@ -2708,7 +2709,6 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "data-indicators": "bars",
       "data-overflow": "scroll",
       "data-theme-type": undefined,
-      "data-collapsed": undefined,
       "hidden": undefined,
       "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:4ch;",
       "tabIndex": 0,
