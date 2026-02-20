@@ -339,8 +339,8 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    const { isCollapsed = false } = this.options;
-    const nextRenderRange = isCollapsed ? COLLAPSED_RENDER_RANGE : renderRange;
+    const { collapsed = false } = this.options;
+    const nextRenderRange = collapsed ? COLLAPSED_RENDER_RANGE : renderRange;
     const previousRenderRange = this.renderRange;
     const annotationsChanged =
       lineAnnotations != null &&
@@ -964,7 +964,7 @@ export class File<LAnnotation = undefined> {
       overflow = 'scroll',
       themeType = 'system',
       disableLineNumbers = false,
-      isCollapsed = false,
+      collapsed = false,
     } = this.options;
     const preProperties: PrePropertiesConfig = {
       type: 'file',
@@ -972,7 +972,7 @@ export class File<LAnnotation = undefined> {
       themeStyles,
       overflow,
       disableLineNumbers,
-      isCollapsed,
+      collapsed,
       themeType: baseThemeType ?? themeType,
       diffIndicators: 'none',
       disableBackground: true,

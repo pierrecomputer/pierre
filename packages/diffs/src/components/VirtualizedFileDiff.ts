@@ -235,7 +235,7 @@ export class VirtualizedFileDiff<
     const {
       disableFileHeader = false,
       expandUnchanged = false,
-      isCollapsed = false,
+      collapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
@@ -254,7 +254,7 @@ export class VirtualizedFileDiff<
     } else if (hunkSeparators !== 'simple' && hunkSeparators !== 'metadata') {
       this.height += fileGap;
     }
-    if (isCollapsed) {
+    if (collapsed) {
       return;
     }
 
@@ -495,7 +495,7 @@ export class VirtualizedFileDiff<
     const {
       disableFileHeader = false,
       expandUnchanged = false,
-      isCollapsed = false,
+      collapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
@@ -509,7 +509,7 @@ export class VirtualizedFileDiff<
     const diffStyle = this.getDiffStyle();
     const fileHeight = this.height;
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
-    if (isCollapsed) {
+    if (collapsed) {
       return COLLAPSED_RENDER_RANGE;
     }
 

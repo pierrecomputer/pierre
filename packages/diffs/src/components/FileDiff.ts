@@ -605,8 +605,8 @@ export class FileDiff<LAnnotation = undefined> {
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
-    const { isCollapsed = false } = this.options;
-    const nextRenderRange = isCollapsed ? COLLAPSED_RENDER_RANGE : renderRange;
+    const { collapsed = false } = this.options;
+    const nextRenderRange = collapsed ? COLLAPSED_RENDER_RANGE : renderRange;
     const filesDidChange =
       oldFile != null &&
       newFile != null &&
@@ -1810,7 +1810,7 @@ export class FileDiff<LAnnotation = undefined> {
       diffIndicators = 'bars',
       disableBackground = false,
       disableLineNumbers = false,
-      isCollapsed = false,
+      collapsed = false,
       overflow = 'scroll',
       themeType = 'system',
       diffStyle = 'split',
@@ -1820,7 +1820,7 @@ export class FileDiff<LAnnotation = undefined> {
       diffIndicators,
       disableBackground,
       disableLineNumbers,
-      isCollapsed,
+      collapsed,
       overflow,
       split:
         diffStyle === 'unified'

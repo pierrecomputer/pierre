@@ -17,16 +17,16 @@ interface CustomHeaderProps {
 
 export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
   const [isViewed, setIsViewed] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   function toggleCollapsed() {
-    setIsCollapsed((current) => !current);
+    setCollapsed((current) => !current);
   }
 
   function toggleViewed() {
     setIsViewed((current) => {
       const next = !current;
-      setIsCollapsed(next);
+      setCollapsed(next);
       return next;
     });
   }
@@ -48,21 +48,21 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
         className="diff-container"
         options={{
           ...prerenderedDiff.options,
-          isCollapsed,
+          collapsed,
         }}
         renderHeaderPrefix={() => {
           return (
             <button
               type="button"
               onClick={toggleCollapsed}
-              aria-label={isCollapsed ? 'Expand file' : 'Collapse file'}
-              aria-pressed={isCollapsed}
+              aria-label={collapsed ? 'Expand file' : 'Collapse file'}
+              aria-pressed={collapsed}
               style={{ marginLeft: -5 }}
               className="inline-flex cursor-pointer items-center justify-center rounded-sm p-1 px-2 text-white/65 transition hover:bg-white/10 hover:text-white"
             >
               <IconChevronSm
                 size={16}
-                className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+                className={`transition-transform ${collapsed ? '-rotate-90' : ''}`}
               />
             </button>
           );

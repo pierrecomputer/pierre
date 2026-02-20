@@ -168,7 +168,7 @@ export class VirtualizedFile<
 
     const {
       disableFileHeader = false,
-      isCollapsed = false,
+      collapsed = false,
       overflow = 'scroll',
     } = this.options;
     const { diffHeaderHeight, fileGap, lineHeight } = this.metrics;
@@ -180,7 +180,7 @@ export class VirtualizedFile<
     } else {
       this.height += fileGap;
     }
-    if (isCollapsed) {
+    if (collapsed) {
       return;
     }
 
@@ -293,10 +293,10 @@ export class VirtualizedFile<
   ): RenderRange {
     const {
       disableFileHeader = false,
-      isCollapsed = false,
+      collapsed = false,
       overflow = 'scroll',
     } = this.options;
-    if (isCollapsed) {
+    if (collapsed) {
       return COLLAPSED_RENDER_RANGE;
     }
     const { diffHeaderHeight, fileGap, hunkLineCount, lineHeight } =

@@ -12,7 +12,7 @@ export function arePrePropertiesEqual(
     propsA.diffIndicators === propsB.diffIndicators &&
     propsA.disableBackground === propsB.disableBackground &&
     propsA.disableLineNumbers === propsB.disableLineNumbers &&
-    propsA.isCollapsed === propsB.isCollapsed &&
+    propsA.collapsed === propsB.collapsed &&
     propsA.overflow === propsB.overflow &&
     propsA.split === propsB.split &&
     propsA.themeStyles === propsB.themeStyles &&

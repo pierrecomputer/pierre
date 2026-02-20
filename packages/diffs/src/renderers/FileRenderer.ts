@@ -514,7 +514,7 @@ export class FileRenderer<LAnnotation = undefined> {
   ): HASTElement {
     const {
       disableLineNumbers = false,
-      isCollapsed = false,
+      collapsed = false,
       overflow = 'scroll',
       themeType = 'system',
     } = this.options;
@@ -523,7 +523,7 @@ export class FileRenderer<LAnnotation = undefined> {
       diffIndicators: 'none',
       disableBackground: true,
       disableLineNumbers,
-      isCollapsed,
+      collapsed,
       overflow,
       themeStyles,
       themeType: baseThemeType ?? themeType,

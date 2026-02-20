@@ -7,7 +7,7 @@ export function setPreNodeProperties(
     diffIndicators,
     disableBackground,
     disableLineNumbers,
-    isCollapsed,
+    collapsed,
     overflow,
     split,
     themeStyles,
@@ -46,7 +46,7 @@ export function setPreNodeProperties(
   } else {
     pre.setAttribute('data-background', '');
   }
-  if (isCollapsed) {
+  if (collapsed) {
     pre.setAttribute('data-collapsed', '');
     pre.setAttribute('hidden', '');
     pre.tabIndex = -1;

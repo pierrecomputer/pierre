@@ -348,7 +348,7 @@ export interface BaseCodeOptions {
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
-  isCollapsed?: boolean;
+  collapsed?: boolean;
   disableFileHeader?: boolean;
   disableVirtualizationBuffers?: boolean;
 
@@ -387,7 +387,7 @@ export interface PrePropertiesConfig extends Required<
     | 'diffIndicators'
     | 'disableBackground'
     | 'disableLineNumbers'
-    | 'isCollapsed'
+    | 'collapsed'
     | 'overflow'
     | 'themeType'
   >

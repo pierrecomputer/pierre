@@ -109,7 +109,7 @@ export class FileStream {
   ): void {
     const {
       disableLineNumbers = false,
-      isCollapsed = false,
+      collapsed = false,
       overflow = 'scroll',
       theme = DEFAULT_THEMES,
       themeType = 'system',
@@ -130,7 +130,7 @@ export class FileStream {
       diffIndicators: 'none',
       disableBackground: true,
       disableLineNumbers,
-      isCollapsed,
+      collapsed,
       overflow,
       split: false,
       themeType: baseThemeType ?? themeType,
