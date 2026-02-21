@@ -4,7 +4,7 @@ import {
   A11ySection,
   DragDropSection,
   FlatteningSection,
-  PathColorsSection,
+  GitStatusSection,
   SearchSection,
   ShikiThemesSection,
   ThemingSection,
@@ -24,7 +24,7 @@ export default function TreesHome() {
 
       <section className="space-y-12 pb-8">
         <FlatteningSection />
-        <PathColorsSection />
+        <GitStatusSection />
         <DragDropSection />
         <SearchSection />
         <A11ySection />
