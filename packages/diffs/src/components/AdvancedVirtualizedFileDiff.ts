@@ -1,4 +1,4 @@
-import { COLLAPSED_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
+import { DEFAULT_THEMES } from '../constants';
 import type {
   FileDiffMetadata,
   RenderRange,
@@ -140,7 +140,12 @@ export class AdvancedVirtualizedFileDiff<
         'VirtulizedFileDiff.computeRenderRangeFromWindow: invalid render',
         this.fileDiff.name
       );
-      return COLLAPSED_RENDER_RANGE;
+      return {
+        startingLine: 0,
+        totalLines: 0,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
     }
 
     // Whole file is under HUNK_LINE_COUNT, just render it all

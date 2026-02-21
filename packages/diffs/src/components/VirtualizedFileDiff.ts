@@ -1,7 +1,4 @@
-import {
-  COLLAPSED_RENDER_RANGE,
-  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-} from '../constants';
+import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   ExpansionDirections,
   FileDiffMetadata,
@@ -495,7 +492,6 @@ export class VirtualizedFileDiff<
     const {
       disableFileHeader = false,
       expandUnchanged = false,
-      collapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
@@ -509,9 +505,6 @@ export class VirtualizedFileDiff<
     const diffStyle = this.getDiffStyle();
     const fileHeight = this.height;
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
-    if (collapsed) {
-      return COLLAPSED_RENDER_RANGE;
-    }
 
     // Calculate headerRegion before early returns
     const headerRegion = disableFileHeader ? fileGap : diffHeaderHeight;

@@ -2,7 +2,6 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
-  COLLAPSED_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
@@ -606,7 +605,7 @@ export class FileDiff<LAnnotation = undefined> {
       );
     }
     const { collapsed = false } = this.options;
-    const nextRenderRange = collapsed ? COLLAPSED_RENDER_RANGE : renderRange;
+    const nextRenderRange = collapsed ? undefined : renderRange;
     const filesDidChange =
       oldFile != null &&
       newFile != null &&
@@ -620,6 +619,7 @@ export class FileDiff<LAnnotation = undefined> {
         : false;
 
     if (
+      !collapsed &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !forceRender &&
       !annotationsChanged &&
@@ -688,6 +688,35 @@ export class FileDiff<LAnnotation = undefined> {
       fileContainer,
       containerWrapper
     );
+
+    if (collapsed) {
+      this.removeRenderedCode();
+      this.clearAuxiliaryNodes();
+      this.renderRange = undefined;
+
+      try {
+        const hunksResult = this.hunksRenderer.renderDiff(this.fileDiff, {
+          startingLine: 0,
+          totalLines: 0,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        });
+        if (hunksResult?.headerElement != null) {
+          this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
+        }
+        this.renderSeparators([]);
+        this.injectUnsafeCSS();
+      } catch (error: unknown) {
+        if (disableErrorHandling) {
+          throw error;
+        }
+        console.error(error);
+        if (error instanceof Error) {
+          this.applyErrorToDOM(error, fileContainer);
+        }
+      }
+      return true;
+    }
 
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
@@ -762,6 +791,46 @@ export class FileDiff<LAnnotation = undefined> {
       }
     }
     return true;
+  }
+
+  private removeRenderedCode(): void {
+    this.resizeManager.cleanUp();
+    this.scrollSyncManager.cleanUp();
+    this.mouseEventManager.cleanUp();
+    this.lineSelectionManager.cleanUp();
+
+    this.bufferBefore?.remove();
+    this.bufferBefore = undefined;
+    this.bufferAfter?.remove();
+    this.bufferAfter = undefined;
+
+    this.codeUnified?.remove();
+    this.codeUnified = undefined;
+    this.codeDeletions?.remove();
+    this.codeDeletions = undefined;
+    this.codeAdditions?.remove();
+    this.codeAdditions = undefined;
+
+    this.pre?.remove();
+    this.pre = undefined;
+
+    this.appliedPreAttributes = undefined;
+    this.lastRowCount = undefined;
+  }
+
+  private clearAuxiliaryNodes(): void {
+    for (const { element } of this.separatorCache.values()) {
+      element.parentNode?.removeChild(element);
+    }
+    this.separatorCache.clear();
+
+    for (const { element } of this.annotationCache.values()) {
+      element.parentNode?.removeChild(element);
+    }
+    this.annotationCache.clear();
+
+    this.gutterUtilityContent?.remove();
+    this.gutterUtilityContent = undefined;
   }
 
   public renderPlaceholder(height: number): boolean {

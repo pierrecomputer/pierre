@@ -2,7 +2,6 @@ import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
-  COLLAPSED_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   HEADER_METADATA_SLOT_ID,
@@ -340,7 +339,7 @@ export class File<LAnnotation = undefined> {
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
     const { collapsed = false } = this.options;
-    const nextRenderRange = collapsed ? COLLAPSED_RENDER_RANGE : renderRange;
+    const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const annotationsChanged =
       lineAnnotations != null &&
@@ -349,6 +348,7 @@ export class File<LAnnotation = undefined> {
         : false;
     const didFileChange = !areFilesEqual(this.file, file);
     if (
+      !collapsed &&
       !forceRender &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
@@ -392,6 +392,34 @@ export class File<LAnnotation = undefined> {
       containerWrapper
     );
 
+    if (collapsed) {
+      this.removeRenderedCode();
+      this.clearAuxiliaryNodes();
+      this.renderRange = undefined;
+
+      try {
+        const fileResult = this.fileRenderer.renderFile(file, {
+          startingLine: 0,
+          totalLines: 0,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        });
+        if (fileResult?.headerAST != null) {
+          this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
+        }
+        this.injectUnsafeCSS();
+      } catch (error: unknown) {
+        if (disableErrorHandling) {
+          throw error;
+        }
+        console.error(error);
+        if (error instanceof Error) {
+          this.applyErrorToDOM(error, fileContainer);
+        }
+      }
+      return true;
+    }
+
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
       if (
@@ -432,6 +460,36 @@ export class File<LAnnotation = undefined> {
       }
     }
     return true;
+  }
+
+  private removeRenderedCode(): void {
+    this.resizeManager.cleanUp();
+    this.mouseEventManager.cleanUp();
+    this.lineSelectionManager.cleanUp();
+
+    this.bufferBefore?.remove();
+    this.bufferBefore = undefined;
+    this.bufferAfter?.remove();
+    this.bufferAfter = undefined;
+
+    this.code?.remove();
+    this.code = undefined;
+
+    this.pre?.remove();
+    this.pre = undefined;
+
+    this.appliedPreAttributes = undefined;
+    this.lastRowCount = undefined;
+  }
+
+  private clearAuxiliaryNodes(): void {
+    for (const { element } of this.annotationCache.values()) {
+      element.parentNode?.removeChild(element);
+    }
+    this.annotationCache.clear();
+
+    this.gutterUtilityContent?.remove();
+    this.gutterUtilityContent = undefined;
   }
 
   private canPartiallyRender(
