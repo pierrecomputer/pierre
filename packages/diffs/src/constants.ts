@@ -54,3 +54,10 @@ export const DEFAULT_RENDER_RANGE: RenderRange = {
   bufferBefore: 0,
   bufferAfter: 0,
 };
+
+export const EMPTY_RENDER_RANGE: RenderRange = {
+  startingLine: 0,
+  totalLines: 0,
+  bufferBefore: 0,
+  bufferAfter: 0,
+};

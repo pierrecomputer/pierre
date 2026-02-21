@@ -1,4 +1,4 @@
-import { DEFAULT_THEMES } from '../constants';
+import { DEFAULT_THEMES, EMPTY_RENDER_RANGE } from '../constants';
 import type {
   FileDiffMetadata,
   RenderRange,
@@ -140,12 +140,7 @@ export class AdvancedVirtualizedFileDiff<
         'VirtulizedFileDiff.computeRenderRangeFromWindow: invalid render',
         this.fileDiff.name
       );
-      return {
-        startingLine: 0,
-        totalLines: 0,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
+      return EMPTY_RENDER_RANGE;
     }
 
     // Whole file is under HUNK_LINE_COUNT, just render it all

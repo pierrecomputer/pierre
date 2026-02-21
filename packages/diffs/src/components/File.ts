@@ -4,6 +4,7 @@ import { toHtml } from 'hast-util-to-html';
 import {
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
+  EMPTY_RENDER_RANGE,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
   UNSAFE_CSS_ATTRIBUTE,
@@ -398,12 +399,10 @@ export class File<LAnnotation = undefined> {
       this.renderRange = undefined;
 
       try {
-        const fileResult = this.fileRenderer.renderFile(file, {
-          startingLine: 0,
-          totalLines: 0,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        });
+        const fileResult = this.fileRenderer.renderFile(
+          file,
+          EMPTY_RENDER_RANGE
+        );
         if (fileResult?.headerAST != null) {
           this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
         }

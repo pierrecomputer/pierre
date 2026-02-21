@@ -4,6 +4,7 @@ import { toHtml } from 'hast-util-to-html';
 import {
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
+  EMPTY_RENDER_RANGE,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
   UNSAFE_CSS_ATTRIBUTE,
@@ -695,12 +696,10 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderRange = undefined;
 
       try {
-        const hunksResult = this.hunksRenderer.renderDiff(this.fileDiff, {
-          startingLine: 0,
-          totalLines: 0,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        });
+        const hunksResult = this.hunksRenderer.renderDiff(
+          this.fileDiff,
+          EMPTY_RENDER_RANGE
+        );
         if (hunksResult?.headerElement != null) {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
         }
