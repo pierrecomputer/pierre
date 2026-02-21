@@ -115,6 +115,7 @@ export class Virtualizer {
 
   instanceChanged(instance: SubscribedInstance): void {
     this.instancesChanged.add(instance);
+    this.markDOMDirty();
     queueRender(this.computeRenderRangeAndEmit);
   }
 
@@ -346,7 +347,11 @@ export class Virtualizer {
     this.renderedObservers = this.observers.size;
     const anchor = this.getScrollAnchor(this.height);
     const updatedInstances = new Set<SubscribedInstance>();
-    for (const instance of this.visibleInstances.values()) {
+    // NOTE(amadeus): If the wrapper is dirty, we need to force every component
+    // to re-render
+    for (const instance of wrapperDirty
+      ? this.observers.values()
+      : this.visibleInstances.values()) {
       if (instance.onRender(wrapperDirty)) {
         updatedInstances.add(instance);
       }

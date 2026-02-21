@@ -1,7 +1,4 @@
-import {
-  COLLAPSED_RENDER_RANGE,
-  DEFAULT_VIRTUAL_FILE_METRICS,
-} from '../constants';
+import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
 import type {
   FileContents,
   RenderRange,
@@ -54,10 +51,14 @@ export class VirtualizedFile<
   override setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     const previousOverflow = this.options.overflow;
+    const previousCollapsed = this.options.collapsed;
 
     super.setOptions(options);
 
-    if (previousOverflow !== this.options.overflow) {
+    if (
+      previousOverflow !== this.options.overflow ||
+      previousCollapsed !== this.options.collapsed
+    ) {
       this.heightCache.clear();
       this.computeApproximateSize();
       this.renderRange = undefined;
@@ -291,14 +292,7 @@ export class VirtualizedFile<
     fileTop: number,
     { top, bottom }: RenderWindow
   ): RenderRange {
-    const {
-      disableFileHeader = false,
-      collapsed = false,
-      overflow = 'scroll',
-    } = this.options;
-    if (collapsed) {
-      return COLLAPSED_RENDER_RANGE;
-    }
+    const { disableFileHeader = false, overflow = 'scroll' } = this.options;
     const { diffHeaderHeight, fileGap, hunkLineCount, lineHeight } =
       this.metrics;
     const lines = this.getOrCreateLineCache(file);
