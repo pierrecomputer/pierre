@@ -143,11 +143,28 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
+      let instance:
+        | FileDiff<LineCommentMetadata>
+        | VirtualizedFileDiff<LineCommentMetadata>;
       const options: FileDiffOptions<LineCommentMetadata> = {
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         diffStyle: unified ? 'unified' : 'split',
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
+        renderHeaderMetadata() {
+          return createCollapsedToggle(
+            instance?.options.collapsed ?? false,
+            (checked) => {
+              instance?.setOptions({
+                ...instance.options,
+                collapsed: checked,
+              });
+              if (!VIRTUALIZE) {
+                void instance.rerender();
+              }
+            }
+          );
+        },
         themeType,
         enableLineSelection: true,
         lineHoverHighlight: 'both',
@@ -266,7 +283,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         // },
         // __debugMouseEvents: 'click',
       };
-      const instance = (() => {
+      instance = (() => {
         if (virtualizer != null) {
           return new VirtualizedFileDiff<LineCommentMetadata>(
             options,
@@ -559,11 +576,28 @@ if (renderFileButton != null) {
     virtualizer?.setup(globalThis.document);
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
+    let instance:
+      | File<LineCommentMetadata>
+      | VirtualizedFile<LineCommentMetadata>;
     const options: FileOptions<LineCommentMetadata> = {
       overflow: wrap ? 'wrap' : 'scroll',
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       themeType: getThemeType(),
       renderAnnotation,
+      renderCustomMetadata() {
+        return createCollapsedToggle(
+          instance?.options.collapsed ?? false,
+          (checked) => {
+            instance?.setOptions({
+              ...instance.options,
+              collapsed: checked,
+            });
+            if (!VIRTUALIZE) {
+              void instance.rerender();
+            }
+          }
+        );
+      },
       onLineClick(props) {
         console.log('onLineClick', props);
       },
@@ -599,7 +633,7 @@ if (renderFileButton != null) {
       // },
     };
 
-    const instance = (() => {
+    instance = (() => {
       if (virtualizer != null) {
         return new VirtualizedFile<LineCommentMetadata>(
           options,
@@ -646,6 +680,23 @@ cleanButton?.addEventListener('click', () => {
   }
   cleanupInstances(container);
 });
+
+function createCollapsedToggle(
+  checked: boolean,
+  onChange: (checked: boolean) => void
+): HTMLElement {
+  const label = document.createElement('label');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.addEventListener('change', () => {
+    onChange(input.checked);
+  });
+  label.dataset.collapser = '';
+  label.appendChild(input);
+  label.append(' Collapse');
+  return label;
+}
 
 // For quick testing diffs
 // FAKE_DIFF_LINE_ANNOTATIONS.length = 0;

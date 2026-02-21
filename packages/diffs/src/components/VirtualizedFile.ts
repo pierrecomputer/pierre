@@ -51,10 +51,14 @@ export class VirtualizedFile<
   override setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     const previousOverflow = this.options.overflow;
+    const previousCollapsed = this.options.collapsed;
 
     super.setOptions(options);
 
-    if (previousOverflow !== this.options.overflow) {
+    if (
+      previousOverflow !== this.options.overflow ||
+      previousCollapsed !== this.options.collapsed
+    ) {
       this.heightCache.clear();
       this.computeApproximateSize();
       this.renderRange = undefined;

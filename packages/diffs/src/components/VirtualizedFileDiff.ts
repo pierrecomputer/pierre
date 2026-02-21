@@ -72,12 +72,14 @@ export class VirtualizedFileDiff<
     if (options == null) return;
     const previousDiffStyle = this.options.diffStyle;
     const previousOverflow = this.options.overflow;
+    const previousCollapsed = this.options.collapsed;
 
     super.setOptions(options);
 
     if (
       previousDiffStyle !== this.options.diffStyle ||
-      previousOverflow !== this.options.overflow
+      previousOverflow !== this.options.overflow ||
+      previousCollapsed !== this.options.collapsed
     ) {
       this.heightCache.clear();
       this.computeApproximateSize();

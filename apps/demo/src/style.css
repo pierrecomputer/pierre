@@ -231,3 +231,9 @@ diffs-container {
 .comment h6 {
   font-size: 14px;
 }
+
+[data-collapser] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
