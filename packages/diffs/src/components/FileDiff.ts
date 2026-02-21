@@ -1877,7 +1877,6 @@ export class FileDiff<LAnnotation = undefined> {
       diffIndicators = 'bars',
       disableBackground = false,
       disableLineNumbers = false,
-      collapsed = false,
       overflow = 'scroll',
       themeType = 'system',
       diffStyle = 'split',
@@ -1887,7 +1886,6 @@ export class FileDiff<LAnnotation = undefined> {
       diffIndicators,
       disableBackground,
       disableLineNumbers,
-      collapsed,
       overflow,
       split:
         diffStyle === 'unified'

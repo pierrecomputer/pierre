@@ -462,7 +462,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diffIndicators,
       disableBackground,
       disableLineNumbers,
-      collapsed,
       overflow,
       themeType,
     } = this.getOptionsWithDefaults();
@@ -471,7 +470,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diffIndicators,
       disableBackground,
       disableLineNumbers,
-      collapsed,
       overflow,
       themeStyles,
       split,

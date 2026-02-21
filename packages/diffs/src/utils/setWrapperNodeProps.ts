@@ -7,7 +7,6 @@ export function setPreNodeProperties(
     diffIndicators,
     disableBackground,
     disableLineNumbers,
-    collapsed,
     overflow,
     split,
     themeStyles,
@@ -46,21 +45,13 @@ export function setPreNodeProperties(
   } else {
     pre.setAttribute('data-background', '');
   }
-  if (collapsed) {
-    pre.setAttribute('data-collapsed', '');
-    pre.setAttribute('hidden', '');
-    pre.tabIndex = -1;
-  } else {
-    pre.removeAttribute('data-collapsed');
-    pre.removeAttribute('hidden');
-    pre.tabIndex = 0;
-  }
   if (type === 'diff') {
     pre.setAttribute('data-diff-type', split ? 'split' : 'single');
   } else {
     pre.removeAttribute('data-diff-type');
   }
   pre.setAttribute('data-overflow', overflow);
+  pre.tabIndex = 0;
   // Set theme color custom properties as inline styles on pre element
   pre.style = themeStyles;
   // Set CSS custom property for line number column width

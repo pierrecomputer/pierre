@@ -387,7 +387,6 @@ export interface PrePropertiesConfig extends Required<
     | 'diffIndicators'
     | 'disableBackground'
     | 'disableLineNumbers'
-    | 'collapsed'
     | 'overflow'
     | 'themeType'
   >

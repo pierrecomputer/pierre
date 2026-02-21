@@ -1020,7 +1020,6 @@ export class File<LAnnotation = undefined> {
       overflow = 'scroll',
       themeType = 'system',
       disableLineNumbers = false,
-      collapsed = false,
     } = this.options;
     const preProperties: PrePropertiesConfig = {
       type: 'file',
@@ -1028,7 +1027,6 @@ export class File<LAnnotation = undefined> {
       themeStyles,
       overflow,
       disableLineNumbers,
-      collapsed,
       themeType: baseThemeType ?? themeType,
       diffIndicators: 'none',
       disableBackground: true,
