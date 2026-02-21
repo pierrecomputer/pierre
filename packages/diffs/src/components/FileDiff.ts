@@ -693,7 +693,6 @@ export class FileDiff<LAnnotation = undefined> {
     if (collapsed) {
       this.removeRenderedCode();
       this.clearAuxiliaryNodes();
-      this.renderRange = undefined;
 
       try {
         const hunksResult = this.hunksRenderer.renderDiff(

@@ -396,7 +396,6 @@ export class File<LAnnotation = undefined> {
     if (collapsed) {
       this.removeRenderedCode();
       this.clearAuxiliaryNodes();
-      this.renderRange = undefined;
 
       try {
         const fileResult = this.fileRenderer.renderFile(
