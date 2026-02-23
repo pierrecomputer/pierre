@@ -8,9 +8,9 @@ import type {
 const sampleFileList: string[] = [
   'README.md',
   'package.json',
-  'build/index.mjs',
-  'build/scripts.js',
-  'build/assets/images/social/logo.png',
+  'Build/index.mjs',
+  'Build/scripts.js',
+  'Build/assets/images/social/logo.png',
   'config/project/app.config.json',
   'src/components/Button.tsx',
   'src/components/Card.tsx',
