@@ -42,15 +42,27 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
   }}
   initialFiles={['src/index.ts', 'package.json']}
 
-  // Optional: state defaults and callbacks are top-level props
+  // Optional: uncontrolled state defaults
   initialExpandedItems={['src']}
   initialSelectedItems={['package.json']}
+  initialSearch="Button"
+
+  // Optional: controlled state (overrides internal state each render)
+  // files={controlledFiles}
+  // expandedItems={controlledExpanded}
+  // selectedItems={controlledSelected}
+
+  // Optional: state change callbacks
   onSelection={(items) => console.log(items)}
+  onExpandedItemsChange={(items) => console.log('expanded', items)}
+  onSelectedItemsChange={(items) => console.log('selected', items)}
+  onFilesChange={(files) => console.log('files', files)}
 
-  // Optional: CSS class name
+  // Optional: git status
+  gitStatus={gitStatusEntries}
+
+  // Optional: CSS class name and inline styles
   className="my-file-tree"
-
-  // Optional: inline styles
   style={{ maxHeight: 400 }}
 
   // Optional: pre-rendered HTML for SSR hydration

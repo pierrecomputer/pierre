@@ -19,7 +19,7 @@
   },
   "files.associations": {
     "**/apps/**/*.css": "tailwindcss",
-    "*.css": "postcss",
+    "*.css": "css",
     "*.mdx": "markdown"
   },
   "stylelint.validate": ["css", "postcss"],

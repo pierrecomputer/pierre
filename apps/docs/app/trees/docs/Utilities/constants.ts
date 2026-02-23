@@ -129,36 +129,3 @@ tree.render({ containerWrapper: document.getElementById('tree')! });`,
   },
   options,
 };
-
-export const HELPER_PRELOAD_FILE_TREE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'preloadFileTree.ts',
-    contents: `import { preloadFileTree } from '@pierre/trees/ssr';
-import type { FileTreeOptions } from '@pierre/trees';
-
-// Prerender the file tree HTML on the server for fast first paint.
-// Hydrate on the client with the same options.
-
-// Server (e.g. Next.js app router page)
-const fileTreeOptions: FileTreeOptions = {
-  initialFiles: ['README.md', 'src/index.ts', 'src/utils/helper.ts'],
-  flattenEmptyDirectories: true,
-};
-
-export default async function Page() {
-  const payload = preloadFileTree(fileTreeOptions);
-
-  return (
-    <div
-      dangerouslySetInnerHTML={{ __html: payload.html }}
-      data-file-tree-props={JSON.stringify(fileTreeOptions)}
-    />
-  );
-}
-
-// Client: use the React component with prerenderedHTML to hydrate,
-// or use vanilla FileTree and pass the same options + container that
-// holds the prerendered markup.`,
-  },
-  options,
-};

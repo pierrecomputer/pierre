@@ -15,6 +15,8 @@ export const FILE_TREE_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   FileTreeOptions,
   FileTreeStateConfig,
   FileTreeSearchMode,
+  FileTreeCollision,
+  GitStatusEntry,
 } from '@pierre/trees';
 
 // FileTreeOptions is the main options object for FileTree (vanilla and React).
@@ -34,6 +36,18 @@ interface FileTreeOptions {
 
   // Optional: file tree search behavior.
   fileTreeSearchMode?: FileTreeSearchMode;
+
+  // Optional: enable built-in drag and drop. Default: false.
+  dragAndDrop?: boolean;
+
+  // Optional: Git status entries for file status indicators.
+  gitStatus?: GitStatusEntry[];
+
+  // Optional: paths that cannot be dragged when drag and drop is enabled.
+  lockedPaths?: string[];
+
+  // Optional: return true to overwrite the destination on DnD collision.
+  onCollision?: (collision: FileTreeCollision) => boolean;
 }
 
 // Example usage
@@ -148,4 +162,50 @@ const fileTree = new FileTree(
 );`,
   },
   options,
+};
+
+export const FILES_OPTION_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'fileTreeOptions.ts',
+    contents: `const fileTreeOptions = {
+  initialFiles: [
+    'README.md',
+    'package.json',
+    'src/index.ts',
+    'src/components/Button.tsx',
+    'src/utils/helpers.ts',
+  ],
+  // …
+};`,
+  },
+  options: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    disableFileHeader: true,
+  },
+};
+
+export const ON_SELECTION_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'onSelection.ts',
+    contents: `// React: top-level prop
+<FileTree
+  options={{ initialFiles: ['src/index.ts', 'src/components/Button.tsx'] }}
+  onSelection={(items: FileTreeSelectionItem[]) => {
+    const file = items.find((i) => !i.isFolder);
+    if (file) setSelectedPath(file.path);
+  }}
+/>;
+
+// Vanilla: FileTreeStateConfig (second constructor argument)
+const stateConfig = {
+  onSelection: (items: FileTreeSelectionItem[]) => {
+  const file = items.find((i) => !i.isFolder);
+  if (file) setSelectedPath(file.path);
+  },
+};`,
+  },
+  options: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    disableFileHeader: true,
+  },
 };

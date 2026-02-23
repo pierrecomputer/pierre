@@ -9,11 +9,9 @@ import {
   FILE_TREE_SEARCH_MODE_TYPE,
   FILE_TREE_SELECTION_ITEM_TYPE,
   FILE_TREE_STATE_CONFIG_TYPE,
-} from './CoreTypes/constants';
-import {
   FILES_OPTION_EXAMPLE,
   ON_SELECTION_EXAMPLE,
-} from './FileTreeOptions/constants';
+} from './CoreTypes/constants';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
@@ -28,11 +26,11 @@ import {
   REACT_API_FILE_TREE_PROPS,
   REACT_API_GIT_STATUS_EXAMPLE,
 } from './ReactAPI/constants';
+import { SSR_HYDRATION_EXAMPLE, SSR_PRELOAD_FILE_TREE } from './SSR/constants';
 import { STYLING_CODE_GLOBAL, STYLING_CODE_INLINE } from './Styling/constants';
 import {
   HELPER_GENERATE_LAZY_DATA_LOADER,
   HELPER_GENERATE_SYNC_DATA_LOADER,
-  HELPER_PRELOAD_FILE_TREE,
   HELPER_SORT_CHILDREN,
 } from './Utilities/constants';
 import {
@@ -54,7 +52,6 @@ export default function TreesDocsPage() {
           <CoreTypesSection />
           <ReactAPISection />
           <VanillaAPISection />
-          <FileTreeOptionsSection />
           <UtilitiesSection />
           <StylingSection />
           <SSRSection />
@@ -103,11 +100,15 @@ async function CoreTypesSection() {
     fileTreeSelectionItemType,
     fileTreeSearchModeType,
     fileTreeStateConfigType,
+    filesOptionExample,
+    onSelectionExample,
   ] = await Promise.all([
     preloadFile(FILE_TREE_OPTIONS_TYPE),
     preloadFile(FILE_TREE_SELECTION_ITEM_TYPE),
     preloadFile(FILE_TREE_SEARCH_MODE_TYPE),
     preloadFile(FILE_TREE_STATE_CONFIG_TYPE),
+    preloadFile(FILES_OPTION_EXAMPLE),
+    preloadFile(ON_SELECTION_EXAMPLE),
   ]);
   const content = await renderMDX({
     filePath: 'trees/docs/CoreTypes/content.mdx',
@@ -116,6 +117,8 @@ async function CoreTypesSection() {
       fileTreeSelectionItemType,
       fileTreeSearchModeType,
       fileTreeStateConfigType,
+      filesOptionExample,
+      onSelectionExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
@@ -160,50 +163,32 @@ async function VanillaAPISection() {
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
-async function FileTreeOptionsSection() {
-  const [filesOptionExample, onSelectionExample] = await Promise.all([
-    preloadFile(FILES_OPTION_EXAMPLE),
-    preloadFile(ON_SELECTION_EXAMPLE),
-  ]);
-  const content = await renderMDX({
-    filePath: 'trees/docs/FileTreeOptions/content.mdx',
-    scope: {
-      filesOptionExample,
-      onSelectionExample,
-    },
-  });
-  return <ProseWrapper>{content}</ProseWrapper>;
-}
-
 async function UtilitiesSection() {
-  const [
-    sortChildren,
-    generateSyncDataLoader,
-    generateLazyDataLoader,
-    preloadFileTree,
-  ] = await Promise.all([
-    preloadFile(HELPER_SORT_CHILDREN),
-    preloadFile(HELPER_GENERATE_SYNC_DATA_LOADER),
-    preloadFile(HELPER_GENERATE_LAZY_DATA_LOADER),
-    preloadFile(HELPER_PRELOAD_FILE_TREE),
-  ]);
+  const [sortChildren, generateSyncDataLoader, generateLazyDataLoader] =
+    await Promise.all([
+      preloadFile(HELPER_SORT_CHILDREN),
+      preloadFile(HELPER_GENERATE_SYNC_DATA_LOADER),
+      preloadFile(HELPER_GENERATE_LAZY_DATA_LOADER),
+    ]);
   const content = await renderMDX({
     filePath: 'trees/docs/Utilities/content.mdx',
     scope: {
       sortChildren,
       generateSyncDataLoader,
       generateLazyDataLoader,
-      preloadFileTree,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function SSRSection() {
-  const preloadFileTree = await preloadFile(HELPER_PRELOAD_FILE_TREE);
+  const [preloadFileTree, ssrHydrationExample] = await Promise.all([
+    preloadFile(SSR_PRELOAD_FILE_TREE),
+    preloadFile(SSR_HYDRATION_EXAMPLE),
+  ]);
   const content = await renderMDX({
     filePath: 'trees/docs/SSR/content.mdx',
-    scope: { preloadFileTree },
+    scope: { preloadFileTree, ssrHydrationExample },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

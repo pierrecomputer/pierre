@@ -11,11 +11,47 @@ creating a vanilla `FileTree` instance or when rendering the React
 flattening behavior, search mode, and other structural behavior.
 
 **Tip:** To pre-render the tree on the server, use
-[`preloadFileTree`](#utilities-preloadfiletree) from `@pierre/trees/ssr` and
-pass `payload.html` as the `prerenderedHTML` prop (React) or hydrate the same
+[`preloadFileTree`](#ssr-preloadfiletree) from `@pierre/trees/ssr` and pass
+`payload.html` as the `prerenderedHTML` prop (React) or hydrate the same
 container in vanilla. See [SSR](#ssr) for usage.
 
 <DocsCodeExample {...fileTreeOptionsType} />
+
+#### The `initialFiles` option [toc-ignore]
+
+The tree is built from an array of file paths (strings). Folders are inferred
+from path segments; use forward slashes. Top-level paths (e.g. `README.md`) and
+nested paths (e.g. `src/components/Button.tsx`) are both valid.
+
+<DocsCodeExample {...filesOptionExample} />
+
+That produces a tree with `README.md` and `package.json` at the root and a `src`
+folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
+`Button.tsx`.
+
+#### Options reference [toc-ignore]
+
+`initialFiles` is the only required option, all others are optional.
+
+| Option                    | Description                                                                                                                                                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `initialFiles`            | **Required.** Array of file paths (strings). Defines the list and hierarchy.                                                                                                                        |
+| `id`                      | Unique identifier for this instance (DOM ids, SSR). Default: e.g. `ft_brw_1`.                                                                                                                       |
+| `flattenEmptyDirectories` | When `true`, single-child folder chains become one row (e.g. `build / assets / images` → `build · assets · images`). Default: `false`. [Live demo](/trees#flattening).                              |
+| `fileTreeSearchMode`      | Search behavior: `'expand-matches'` (default), `'collapse-non-matches'`, or `'hide-non-matches'`.                                                                                                   |
+| `useLazyDataLoader`       | When `true`, children load when a folder is expanded. Default: `false`.                                                                                                                             |
+| `dragAndDrop`             | Enables built-in drag and drop interactions. Default: `false`.                                                                                                                                      |
+| `lockedPaths`             | Optional list of file/folder paths that cannot be dragged when drag and drop is enabled.                                                                                                            |
+| `onCollision`             | Optional callback for drag collisions. Return `true` to overwrite destination.                                                                                                                      |
+| `gitStatus`               | Optional `GitStatusEntry[]` used to show Git-style file status (`added`, `modified`, `deleted`). Folders with changed descendants also receive a change indicator. [Live demo](/trees#path-colors). |
+
+`onSelection` is configured in React as a top-level prop
+(`\<FileTree onSelection={...} />`) and in vanilla via `FileTreeStateConfig`
+(second constructor argument).
+
+**onSelection examples**
+
+<DocsCodeExample {...onSelectionExample} />
 
 ### FileTreeSelectionItem
 
@@ -26,15 +62,15 @@ React top-level props). Each item has a `path` (the file or folder path) and
 
 <DocsCodeExample {...fileTreeSelectionItemType} />
 
-### GitStatus and GitStatusEntry
+### GitStatus & GitStatusEntry
 
-`GitStatus` is a union of `'added' | 'modified' | 'deleted'`. `GitStatusEntry`
-pairs a file `path` with one of those status values:
-`{ path: string; status: GitStatus }`.
+`GitStatusEntry` pairs a file `path` with a status value
+(`'added' | 'modified' | 'deleted'`):
+`{ path: string; status: 'added' | 'modified' | 'deleted' }`.
 
-Use these entries with `gitStatus` in FileTree options/props to show Git-style
-status indicators on files. `path` should match your tree file paths (for
-example, `src/index.ts`).
+Import `GitStatusEntry` from `@pierre/trees` and use it with `gitStatus` in
+FileTree options/props to show Git-style status indicators on files. `path`
+should match your tree file paths (for example, `src/index.ts`).
 
 ### FileTreeSearchMode
 

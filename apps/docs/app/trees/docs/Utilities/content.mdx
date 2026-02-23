@@ -1,8 +1,8 @@
 ## Utilities
 
 <Notice icon={<IconInfoFill />}>
-  Import utility functions from `@pierre/trees` (or `@pierre/trees/ssr` for
-  SSR). These can be used with any framework or rendering approach.
+  Import utility functions from `@pierre/trees`. These can be used with any
+  framework or rendering approach.
 </Notice>
 
 ### sortChildren [toc-ignore]
@@ -32,13 +32,3 @@ expanded. FileTree uses this internally when you pass `initialFiles` and
 collapsed.
 
 <DocsCodeExample {...generateLazyDataLoader} />
-
-### preloadFileTree [toc-ignore]
-
-Prerender the file tree HTML on the server for fast first paint. Import from
-`@pierre/trees/ssr`. Pass the same `FileTreeOptions` you use on the client. Use
-`payload.html` with the React component's `prerenderedHTML` prop, or hydrate a
-server-rendered container with a vanilla FileTree instance. See [SSR](#ssr) for
-full usage.
-
-<DocsCodeExample {...preloadFileTree} />

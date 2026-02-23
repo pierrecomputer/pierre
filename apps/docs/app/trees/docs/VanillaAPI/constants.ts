@@ -54,13 +54,21 @@ const fileTree = new FileTree(options, stateConfig);
 
 // Render into the DOM
 fileTree.render({
-  fileTreeContainer: existingElement,  // optional: reuse a <file-tree> element
+  fileTreeContainer: existingElement,  // optional: reuse a <file-tree-container> element
   containerWrapper: document.body,     // optional: append to this parent
 });
 
 // Instance methods
 fileTree.getFileTreeContainer();  // get the root <file-tree-container> element
 fileTree.setOptions({ fileTreeSearchMode: 'hide-non-matches' });
+
+// Imperative state
+fileTree.setExpandedItems(['src', 'src/components']);
+fileTree.expandItem('src');
+fileTree.collapseItem('src/components');
+fileTree.setFiles(['src/index.ts', 'src/new-file.ts', 'package.json']);
+console.log(fileTree.getFiles(), fileTree.getExpandedItems());
+
 fileTree.cleanUp();               // unmount and clear references`,
   },
   options,

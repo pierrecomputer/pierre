@@ -25,10 +25,18 @@ pre-rendered container into the page and call `hydrate({ fileTreeContainer })`.
 
 #### preloadFileTree [toc-ignore]
 
-Preloads the file tree HTML from a `FileTreeOptions` object. Use this in a
+Preloads the file tree HTML from a `FileTreeOptions` object and an optional
+`FileTreeStateConfig` (for initial expanded/selected items). Use this in a
 server component or server route; pass the returned payload and the same options
 to your client component. Pass `payload.html` to the React `FileTree` via the
 `prerenderedHTML` prop, or use vanilla `FileTree` and call `hydrate()` with the
 server-rendered container.
 
 <DocsCodeExample {...preloadFileTree} />
+
+### Vanilla hydration
+
+When using the vanilla `FileTree` class with SSR, call `hydrate()` instead of
+`render()` and pass the server-rendered container:
+
+<DocsCodeExample {...ssrHydrationExample} />
