@@ -45,7 +45,7 @@ export function SearchSection() {
                 ...searchOptions('expand-matches'),
                 id: 'search-demo-expand-matches',
               }}
-              initialSearch={PREPOPULATED_SEARCH}
+              initialSearchQuery={PREPOPULATED_SEARCH}
               style={searchModeStyle}
             />
           </div>
@@ -62,7 +62,7 @@ export function SearchSection() {
                 ...searchOptions('collapse-non-matches'),
                 id: 'search-demo-collapse-non-matches',
               }}
-              initialSearch={PREPOPULATED_SEARCH}
+              initialSearchQuery={PREPOPULATED_SEARCH}
               style={searchModeStyle}
             />
           </div>
@@ -79,7 +79,7 @@ export function SearchSection() {
                 ...searchOptions('hide-non-matches'),
                 id: 'search-demo-hide-non-matches',
               }}
-              initialSearch={PREPOPULATED_SEARCH}
+              initialSearchQuery={PREPOPULATED_SEARCH}
               style={searchModeStyle}
             />
           </div>

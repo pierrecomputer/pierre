@@ -45,7 +45,7 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
   // Optional: uncontrolled state defaults
   initialExpandedItems={['src']}
   initialSelectedItems={['package.json']}
-  initialSearch="Button"
+  initialSearchQuery="Button"
 
   // Optional: controlled state (overrides internal state each render)
   // files={controlledFiles}

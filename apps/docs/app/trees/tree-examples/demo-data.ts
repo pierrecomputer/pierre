@@ -58,7 +58,7 @@ export function dragDropOptions(lockedPaths?: string[]): FileTreeOptions {
   };
 }
 
-/** Options with search mode for the search example. Pass fileTreeSearchMode at top level so the tree applies it. Use stateConfig.initialSearch in the component for prepopulated search. */
+/** Options with search mode for the search example. Pass fileTreeSearchMode at top level so the tree applies it. Use stateConfig.initialSearchQuery in the component for prepopulated search. */
 export function searchOptions(mode: FileTreeSearchMode): FileTreeOptions {
   return {
     ...sharedDemoFileTreeOptions,

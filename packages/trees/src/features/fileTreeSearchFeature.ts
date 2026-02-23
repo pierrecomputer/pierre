@@ -240,7 +240,7 @@ export const fileTreeSearchFeature: FeatureImplementation = {
 
       const cache = getSearchCache(tree);
       const searchMode = getSearchMode(tree);
-      // When mount has initialSearch, we re-apply the same search in an effect.
+      // When mount has initialSearchQuery, we re-apply the same search in an effect.
       // expand-matches: keep all folders expanded (baseline = all folder ids) so "all items visible".
       // collapse-non-matches: baseline stays [] so only ancestors of matches are expanded.
       const isInitialApply =
@@ -299,16 +299,19 @@ export const fileTreeSearchFeature: FeatureImplementation = {
         tree.setSearch(target?.value ?? '');
       },
       onBlur: () => {
-        // Defer so we can see where focus moved. Don't close when focus moved
-        // to another file-tree search input (avoids layout thrash when clicking
-        // between search fields across multiple trees).
+        // Defer so we can check where focus landed. If focus stayed inside this
+        // tree (e.g. clicking a tree item, or another input within the shadow
+        // root), keep search open.
         setTimeout(() => {
-          const active = document.activeElement;
-          if (
-            active != null &&
-            active.getAttribute?.('data-file-tree-search-input') != null
-          ) {
-            return;
+          const searchInput = tree.getSearchInputElement();
+          if (searchInput == null) return;
+          const rootNode = searchInput.getRootNode();
+          if (rootNode instanceof ShadowRoot) {
+            if (document.activeElement === rootNode.host) return;
+          } else {
+            const container = searchInput.closest('[data-rct-tree]');
+            if (container != null && container.contains(document.activeElement))
+              return;
           }
           tree.closeSearch();
         }, 0);

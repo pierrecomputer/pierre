@@ -264,10 +264,10 @@ export function Root({
       return ids.length > 0 ? ids : [];
     };
 
-    // Merge top-level initialExpandedItems/initialSelectedItems/initialSearch into config.initialState
+    // Merge top-level initialExpandedItems/initialSelectedItems/initialSearchQuery into config.initialState
     const topLevelInitialExpanded = stateConfig?.initialExpandedItems;
     const topLevelInitialSelected = stateConfig?.initialSelectedItems;
-    const topLevelInitialSearch = stateConfig?.initialSearch;
+    const topLevelInitialSearch = stateConfig?.initialSearchQuery;
     const topLevelInitialExpandedIds =
       topLevelInitialExpanded != null
         ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId, {

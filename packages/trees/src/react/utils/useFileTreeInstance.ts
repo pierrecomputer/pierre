@@ -22,7 +22,7 @@ interface UseFileTreeInstanceProps {
   // Default (uncontrolled) state
   initialExpandedItems?: string[];
   initialSelectedItems?: string[];
-  initialSearch?: string | null;
+  initialSearchQuery?: string | null;
 
   // Controlled state
   expandedItems?: string[];
@@ -46,7 +46,7 @@ export function useFileTreeInstance({
   onFilesChange,
   initialExpandedItems,
   initialSelectedItems,
-  initialSearch,
+  initialSearchQuery,
   expandedItems,
   selectedItems,
   onExpandedItemsChange,
@@ -77,7 +77,7 @@ export function useFileTreeInstance({
     initialExpandedItems,
     initialSelectedItems,
     gitStatus,
-    initialSearch,
+    initialSearchQuery,
   });
   statePropsRef.current = {
     files,
@@ -91,7 +91,7 @@ export function useFileTreeInstance({
     initialExpandedItems,
     initialSelectedItems,
     gitStatus,
-    initialSearch,
+    initialSearchQuery,
   };
 
   // Ref callback that handles mount/unmount and re-runs when options change.
@@ -162,7 +162,7 @@ export function useFileTreeInstance({
             // setExpandedItems/setSelectedItems imperatively.
             initialExpandedItems: sp.initialExpandedItems ?? sp.expandedItems,
             initialSelectedItems: sp.initialSelectedItems ?? sp.selectedItems,
-            initialSearch: sp.initialSearch,
+            initialSearchQuery: sp.initialSearchQuery,
             onExpandedItemsChange: sp.onExpandedItemsChange,
             onSelectedItemsChange: sp.onSelectedItemsChange,
             onSelection: sp.onSelection,

@@ -79,7 +79,7 @@ export interface FileTreeStateConfig {
   initialExpandedItems?: string[];
   initialSelectedItems?: string[];
   /** Prepopulate the search field (e.g. for demos). */
-  initialSearch?: string | null;
+  initialSearchQuery?: string | null;
 
   // Controlled state (applied every render, overrides internal state)
   expandedItems?: string[];
