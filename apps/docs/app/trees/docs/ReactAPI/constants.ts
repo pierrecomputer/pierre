@@ -58,3 +58,42 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
   },
   options,
 };
+
+export const REACT_API_GIT_STATUS_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'git_status_file_tree.tsx',
+    contents: `import { useEffect, useState } from 'react';
+import type { GitStatusEntry } from '@pierre/trees';
+import { FileTree } from '@pierre/trees/react';
+
+const files = [
+  'README.md',
+  'package.json',
+  'src/index.ts',
+  'src/components/Button.tsx',
+  'src/lib/utils.ts',
+];
+
+export function GitAwareTree() {
+  const [gitStatus, setGitStatus] = useState<GitStatusEntry[] | undefined>();
+
+  useEffect(() => {
+    // Replace this with your VCS/remote status source.
+    setGitStatus([
+      { path: 'src/index.ts', status: 'modified' },
+      { path: 'src/components/Button.tsx', status: 'added' },
+      { path: 'README.md', status: 'deleted' },
+    ]);
+  }, []);
+
+  return (
+    <FileTree
+      options={{ initialFiles: files, id: 'git-aware-tree' }}
+      initialExpandedItems={['src', 'src/components']}
+      gitStatus={gitStatus}
+    />
+  );
+}`,
+  },
+  options,
+};

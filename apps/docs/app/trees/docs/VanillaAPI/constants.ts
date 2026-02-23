@@ -60,3 +60,48 @@ fileTree.cleanUp();               // unmount and clear references`,
   },
   options,
 };
+
+export const VANILLA_API_GIT_STATUS_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'git_status_file_tree.ts',
+    contents: `import type { GitStatusEntry } from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
+
+const files = [
+  'README.md',
+  'package.json',
+  'src/index.ts',
+  'src/components/Button.tsx',
+  'src/lib/utils.ts',
+];
+
+const initialGitStatus: GitStatusEntry[] = [
+  { path: 'src/index.ts', status: 'modified' },
+  { path: 'src/components/Button.tsx', status: 'added' },
+];
+
+const fileTree = new FileTree({
+  initialFiles: files,
+  id: 'git-aware-tree-vanilla',
+  gitStatus: initialGitStatus,
+});
+
+fileTree.render({
+  containerWrapper: document.getElementById('tree-container') ?? undefined,
+});
+
+async function refreshGitStatus() {
+  // Replace this with your VCS/remote status source.
+  const nextStatus: GitStatusEntry[] = [
+    { path: 'src/lib/utils.ts', status: 'modified' },
+    { path: 'README.md', status: 'deleted' },
+  ];
+
+  fileTree.setGitStatus(nextStatus);
+  console.log(fileTree.getGitStatus());
+}
+
+void refreshGitStatus();`,
+  },
+  options,
+};

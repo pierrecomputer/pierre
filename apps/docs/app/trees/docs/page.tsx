@@ -26,6 +26,7 @@ import {
 import {
   REACT_API_FILE_TREE,
   REACT_API_FILE_TREE_PROPS,
+  REACT_API_GIT_STATUS_EXAMPLE,
 } from './ReactAPI/constants';
 import { STYLING_CODE_GLOBAL, STYLING_CODE_INLINE } from './Styling/constants';
 import {
@@ -37,6 +38,7 @@ import {
 import {
   VANILLA_API_FILE_TREE_EXAMPLE,
   VANILLA_API_FILE_TREE_OPTIONS,
+  VANILLA_API_GIT_STATUS_EXAMPLE,
 } from './VanillaAPI/constants';
 import Footer from '@/components/Footer';
 import { renderMDX } from '@/lib/mdx';
@@ -120,31 +122,39 @@ async function CoreTypesSection() {
 }
 
 async function ReactAPISection() {
-  const [reactAPIFileTree, reactAPIFileTreeProps] = await Promise.all([
-    preloadFile(REACT_API_FILE_TREE),
-    preloadFile(REACT_API_FILE_TREE_PROPS),
-  ]);
+  const [reactAPIFileTree, reactAPIFileTreeProps, reactAPIGitStatusExample] =
+    await Promise.all([
+      preloadFile(REACT_API_FILE_TREE),
+      preloadFile(REACT_API_FILE_TREE_PROPS),
+      preloadFile(REACT_API_GIT_STATUS_EXAMPLE),
+    ]);
   const content = await renderMDX({
     filePath: 'trees/docs/ReactAPI/content.mdx',
     scope: {
       reactAPIFileTree,
       reactAPIFileTreeProps,
+      reactAPIGitStatusExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function VanillaAPISection() {
-  const [vanillaAPIFileTreeExample, vanillaAPIFileTreeOptions] =
-    await Promise.all([
-      preloadFile(VANILLA_API_FILE_TREE_EXAMPLE),
-      preloadFile(VANILLA_API_FILE_TREE_OPTIONS),
-    ]);
+  const [
+    vanillaAPIFileTreeExample,
+    vanillaAPIFileTreeOptions,
+    vanillaAPIGitStatusExample,
+  ] = await Promise.all([
+    preloadFile(VANILLA_API_FILE_TREE_EXAMPLE),
+    preloadFile(VANILLA_API_FILE_TREE_OPTIONS),
+    preloadFile(VANILLA_API_GIT_STATUS_EXAMPLE),
+  ]);
   const content = await renderMDX({
     filePath: 'trees/docs/VanillaAPI/content.mdx',
     scope: {
       vanillaAPIFileTreeExample,
       vanillaAPIFileTreeOptions,
+      vanillaAPIGitStatusExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

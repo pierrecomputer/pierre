@@ -25,6 +25,16 @@ file or folder path) and `isFolder` (whether it's a folder or file).
 
 <DocsCodeExample {...fileTreeSelectionItemType} />
 
+### GitStatus and GitStatusEntry
+
+`GitStatus` is a union of `'added' | 'modified' | 'deleted'`. `GitStatusEntry`
+pairs a file `path` with one of those status values:
+`{ path: string; status: GitStatus }`.
+
+Use these entries with `gitStatus` in FileTree options/props to show Git-style
+status indicators on files. `path` should match your tree file paths (for
+example, `src/index.ts`).
+
 ### FileTreeSearchMode
 
 `FileTreeSearchMode` controls how search affects the tree. Pass it via

@@ -19,3 +19,12 @@ via options.
 and SSR props:
 
 <DocsCodeExample {...reactAPIFileTreeProps} />
+
+### With `gitStatus`
+
+Use the optional `gitStatus` prop to pass a controlled array of `GitStatusEntry`
+items. Updating `gitStatus` updates file status indicators (`added`, `modified`,
+`deleted`) and folder change hints for descendants. Try the live demo at
+[/trees#path-colors](/trees#path-colors).
+
+<DocsCodeExample {...reactAPIGitStatusExample} />

@@ -21,6 +21,19 @@ can render, hydrate, or clean up:
 
 <DocsCodeExample {...vanillaAPIFileTreeOptions} />
 
+### With `gitStatus`
+
+For VCS integrations, pass `gitStatus` in constructor options and update it
+imperatively as changes arrive:
+
+- `fileTree.setGitStatus(entries | undefined)` updates the current git statuses
+  and re-renders.
+- `fileTree.getGitStatus()` returns the current `GitStatusEntry[] | undefined`.
+
+Try the live behavior at [/trees#path-colors](/trees#path-colors).
+
+<DocsCodeExample {...vanillaAPIGitStatusExample} />
+
 #### Hydration
 
 When using SSR, pass the pre-rendered container and optional HTML to `hydrate()`
@@ -29,7 +42,7 @@ instead of `render()`:
 ```ts
 const fileTree = new FileTree({ initialFiles: files });
 fileTree.hydrate({
-  fileTreeContainer: document.querySelector('file-tree-container'),
+  fileTreeContainer: document.querySelector("file-tree-container"),
   prerenderedHTML: htmlFromServer,
 });
 ```
