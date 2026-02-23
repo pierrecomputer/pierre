@@ -13,8 +13,8 @@ export const FILE_TREE_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
     name: 'FileTreeOptions.ts',
     contents: `import type {
   FileTreeOptions,
-  FileTreeSelectionItem,
-  HeadlessTreeConfig,
+  FileTreeStateConfig,
+  FileTreeSearchMode,
 } from '@pierre/trees';
 
 // FileTreeOptions is the main options object for FileTree (vanilla and React).
@@ -32,11 +32,8 @@ interface FileTreeOptions {
   // Optional: load children when a folder is expanded (for very large trees). Default: false.
   useLazyDataLoader?: boolean;
 
-  // Optional: callback when selection changes. Receives FileTreeSelectionItem[].
-  onSelection?: (items: FileTreeSelectionItem[]) => void;
-
-  // Optional: headless tree config (initialState, fileTreeSearchMode, setState, etc.).
-  config?: HeadlessTreeConfig;
+  // Optional: file tree search behavior.
+  fileTreeSearchMode?: FileTreeSearchMode;
 }
 
 // Example usage
@@ -48,9 +45,17 @@ const options: FileTreeOptions = {
     'src/components/Button.tsx',
   ],
   flattenEmptyDirectories: true,
+  fileTreeSearchMode: 'collapse-non-matches',
+};
+
+// State callbacks and controlled state are configured separately:
+const stateConfig: FileTreeStateConfig = {
+  initialExpandedItems: ['src'],
   onSelection: (items) => {
-    const file = items.find((i) => !i.isFolder);
-    if (file) console.log('Selected:', file.path);
+    const first = items.find((item) => !item.isFolder);
+    if (first) {
+      console.log('Selected:', first.path);
+    }
   },
 };`,
   },
@@ -88,7 +93,6 @@ function handleSelection(items: FileTreeSelectionItem[]) {
 // Pass to FileTreeOptions
 const options = {
   initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
-  onSelection: handleSelection,
 };`,
   },
   options,
@@ -99,53 +103,49 @@ export const FILE_TREE_SEARCH_MODE_TYPE: PreloadFileOptions<undefined> = {
     name: 'FileTreeSearchMode.ts',
     contents: `import type { FileTreeSearchMode } from '@pierre/trees';
 
-// FileTreeSearchMode is 'expand-matches' | 'collapse-non-matches'.
-// Pass it via config.fileTreeSearchMode in FileTreeOptions.
+// FileTreeSearchMode is:
+// - 'expand-matches' (default)
+// - 'collapse-non-matches'
+// - 'hide-non-matches'
+// Pass it via fileTreeSearchMode in FileTreeOptions.
 //
 // 'expand-matches' (default): expand nodes that match the search.
 // 'collapse-non-matches': hide non-matching branches; only matching
 // paths and their parents stay visible.
+// 'hide-non-matches': keep branch structure, but hide non-matching rows.
 
 const options = {
   initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
-  config: {
-    fileTreeSearchMode: 'collapse-non-matches',
-  },
+  fileTreeSearchMode: 'collapse-non-matches' as FileTreeSearchMode,
 };`,
   },
   options,
 };
 
-export const HEADLESS_TREE_CONFIG_TYPE: PreloadFileOptions<undefined> = {
+export const FILE_TREE_STATE_CONFIG_TYPE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'HeadlessTreeConfig.ts',
-    contents: `import type { HeadlessTreeConfig, FileTreeSearchMode } from '@pierre/trees';
+    name: 'FileTreeStateConfig.ts',
+    contents: `import { FileTree } from '@pierre/trees';
+import type { FileTreeStateConfig } from '@pierre/trees';
 
-// HeadlessTreeConfig is the optional config passed inside FileTreeOptions.
-// It is a subset of @headless-tree/core TreeConfig: FileTree wires up
-// dataLoader, rootItemId, getItemName, isItemFolder, and features for you.
-// You can pass:
-
-// config.initialState — initial tree state
-interface InitialState {
-  expandedItems?: string[];  // item ids to expand on load (paths or f::... for flattened)
-  selectedItems?: string[]; // item ids to select on load (e.g. ['package.json'])
-  focusedItem?: string | null; // item id to focus, or null
-}
-
-// config.fileTreeSearchMode — how search affects the tree (see FileTreeSearchMode)
-// config.setState — optional callback for controlled state updates (advanced)
-
-const options = {
-  initialFiles: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-  config: {
-    initialState: {
-      expandedItems: ['src', 'src/components'],
-      selectedItems: ['src/index.ts'],
-    },
-    fileTreeSearchMode: 'collapse-non-matches' as FileTreeSearchMode,
+// FileTreeStateConfig controls default/controlled tree state and callbacks.
+const stateConfig: FileTreeStateConfig = {
+  initialExpandedItems: ['src', 'src/components'],
+  initialSelectedItems: ['src/index.ts'],
+  onSelection: (items) => {
+    console.log(items);
   },
-} as const;`,
+  onExpandedItemsChange: (items) => {
+    console.log('expanded', items);
+  },
+};
+
+const fileTree = new FileTree(
+  {
+    initialFiles: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+  },
+  stateConfig
+);`,
   },
   options,
 };

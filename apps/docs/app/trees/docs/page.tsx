@@ -8,7 +8,7 @@ import {
   FILE_TREE_OPTIONS_TYPE,
   FILE_TREE_SEARCH_MODE_TYPE,
   FILE_TREE_SELECTION_ITEM_TYPE,
-  HEADLESS_TREE_CONFIG_TYPE,
+  FILE_TREE_STATE_CONFIG_TYPE,
 } from './CoreTypes/constants';
 import {
   FILES_OPTION_EXAMPLE,
@@ -56,8 +56,8 @@ export default function TreesDocsPage() {
           <VanillaAPISection />
           <FileTreeOptionsSection />
           <UtilitiesSection />
-          <SSRSection />
           <StylingSection />
+          <SSRSection />
         </div>
       </DocsLayout>
       <Footer />
@@ -102,12 +102,12 @@ async function CoreTypesSection() {
     fileTreeOptionsType,
     fileTreeSelectionItemType,
     fileTreeSearchModeType,
-    headlessTreeConfigType,
+    fileTreeStateConfigType,
   ] = await Promise.all([
     preloadFile(FILE_TREE_OPTIONS_TYPE),
     preloadFile(FILE_TREE_SELECTION_ITEM_TYPE),
     preloadFile(FILE_TREE_SEARCH_MODE_TYPE),
-    preloadFile(HEADLESS_TREE_CONFIG_TYPE),
+    preloadFile(FILE_TREE_STATE_CONFIG_TYPE),
   ]);
   const content = await renderMDX({
     filePath: 'trees/docs/CoreTypes/content.mdx',
@@ -115,7 +115,7 @@ async function CoreTypesSection() {
       fileTreeOptionsType,
       fileTreeSelectionItemType,
       fileTreeSearchModeType,
-      headlessTreeConfigType,
+      fileTreeStateConfigType,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

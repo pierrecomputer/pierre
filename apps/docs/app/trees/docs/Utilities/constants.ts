@@ -84,7 +84,7 @@ const options: FileTreeOptions = {
 };
 
 const tree = new FileTree(options);
-tree.render({ container: document.getElementById('tree')! });`,
+tree.render({ containerWrapper: document.getElementById('tree')! });`,
   },
   options,
 };
@@ -125,7 +125,7 @@ const options: FileTreeOptions = {
 };
 
 const tree = new FileTree(options);
-tree.render({ container: document.getElementById('tree')! });`,
+tree.render({ containerWrapper: document.getElementById('tree')! });`,
   },
   options,
 };
@@ -146,11 +146,11 @@ const fileTreeOptions: FileTreeOptions = {
 };
 
 export default async function Page() {
-  const preloadedHtml = preloadFileTree(fileTreeOptions);
+  const payload = preloadFileTree(fileTreeOptions);
 
   return (
     <div
-      dangerouslySetInnerHTML={{ __html: preloadedHtml }}
+      dangerouslySetInnerHTML={{ __html: payload.html }}
       data-file-tree-props={JSON.stringify(fileTreeOptions)}
     />
   );

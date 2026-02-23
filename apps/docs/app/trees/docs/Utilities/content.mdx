@@ -36,8 +36,9 @@ collapsed.
 ### preloadFileTree [toc-ignore]
 
 Prerender the file tree HTML on the server for fast first paint. Import from
-`@pierre/trees/ssr`. Pass the same `FileTreeOptions` you use on the client;
-hydrate with the React component's `prerenderedHTML` prop or with a vanilla
-FileTree instance. See [SSR](#ssr) for full usage.
+`@pierre/trees/ssr`. Pass the same `FileTreeOptions` you use on the client. Use
+`payload.html` with the React component's `prerenderedHTML` prop, or hydrate a
+server-rendered container with a vanilla FileTree instance. See [SSR](#ssr) for
+full usage.
 
 <DocsCodeExample {...preloadFileTree} />

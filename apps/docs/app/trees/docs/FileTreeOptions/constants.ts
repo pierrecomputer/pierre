@@ -25,9 +25,21 @@ export const FILES_OPTION_EXAMPLE: PreloadFileOptions<undefined> = {
 export const ON_SELECTION_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'onSelection.ts',
-    contents: `onSelection: (items: FileTreeSelectionItem[]) => {
+    contents: `// React: top-level prop
+<FileTree
+  options={{ initialFiles: ['src/index.ts', 'src/components/Button.tsx'] }}
+  onSelection={(items: FileTreeSelectionItem[]) => {
+    const file = items.find((i) => !i.isFolder);
+    if (file) setSelectedPath(file.path);
+  }}
+/>;
+
+// Vanilla: FileTreeStateConfig (second constructor argument)
+const stateConfig = {
+  onSelection: (items: FileTreeSelectionItem[]) => {
   const file = items.find((i) => !i.isFolder);
   if (file) setSelectedPath(file.path);
+  },
 };`,
   },
   options,

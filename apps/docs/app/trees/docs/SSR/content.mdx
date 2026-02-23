@@ -9,10 +9,10 @@ paint, then hydrate on the client for full interactivity.
 
 ### Usage
 
-`preloadFileTree` returns a string of HTML. Pass that string to the client as
-`prerenderedHTML` and pass the same `FileTreeOptions` you used on the server.
-The React component and the vanilla `FileTree` both accept `prerenderedHTML` and
-will hydrate the pre-rendered markup.
+`preloadFileTree` returns a payload object: `{ id, shadowHtml, html }`. Pass
+`payload.html` to the client as `prerenderedHTML` (React) and pass the same
+`FileTreeOptions` you used on the server. For vanilla hydration, render the
+pre-rendered container into the page and call `hydrate({ fileTreeContainer })`.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Options used for pre-rendering must exactly match what you pass on the client.
@@ -26,9 +26,9 @@ will hydrate the pre-rendered markup.
 #### preloadFileTree [toc-ignore]
 
 Preloads the file tree HTML from a `FileTreeOptions` object. Use this in a
-server component or server route; pass the returned HTML and the same options to
-your client component. Pass the HTML to the React `FileTree` via the
+server component or server route; pass the returned payload and the same options
+to your client component. Pass `payload.html` to the React `FileTree` via the
 `prerenderedHTML` prop, or use vanilla `FileTree` and call `hydrate()` with the
-container (and optional `prerenderedHTML`).
+server-rendered container.
 
 <DocsCodeExample {...preloadFileTree} />

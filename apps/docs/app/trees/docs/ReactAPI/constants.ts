@@ -21,7 +21,7 @@ const files = [
 ];
 
 export function FileExplorer() {
-  return <FileTree options={{ initialFiles: files }} />;
+  return <FileTree options={{}} initialFiles={files} />;
 }`,
   },
   options,
@@ -35,16 +35,17 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
 // FileTree accepts these props:
 
 <FileTree
-  // Required: file list and tree options (see FileTree options section)
+  // Required: options object + initialFiles (or controlled files)
   options={{
-    initialFiles: ['src/index.ts', 'package.json'],
     flattenEmptyDirectories: true,
-    onSelection: (items) => console.log(items),
-    config: {
-      initialState: { expandedItems: ['src'], selectedItems: ['package.json'] },
-      fileTreeSearchMode: 'expand-matches',
-    },
+    fileTreeSearchMode: 'expand-matches',
   }}
+  initialFiles={['src/index.ts', 'package.json']}
+
+  // Optional: state defaults and callbacks are top-level props
+  initialExpandedItems={['src']}
+  initialSelectedItems={['package.json']}
+  onSelection={(items) => console.log(items)}
 
   // Optional: CSS class name
   className="my-file-tree"
@@ -88,7 +89,8 @@ export function GitAwareTree() {
 
   return (
     <FileTree
-      options={{ initialFiles: files, id: 'git-aware-tree' }}
+      options={{ id: 'git-aware-tree' }}
+      initialFiles={files}
       initialExpandedItems={['src', 'src/components']}
       gitStatus={gitStatus}
     />

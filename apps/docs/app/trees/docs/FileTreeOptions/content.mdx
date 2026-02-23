@@ -23,19 +23,21 @@ folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
 | `initialFiles`            | **Required.** Array of file paths (strings). Defines the list and hierarchy.                                                                                                                        |
 | `id`                      | Unique identifier for this instance (DOM ids, SSR). Default: e.g. `ft_brw_1`.                                                                                                                       |
 | `flattenEmptyDirectories` | When `true`, single-child folder chains become one row (e.g. `build / assets / images` → `build · assets · images`). Default: `false`. [Live demo](/trees#flattening).                              |
+| `fileTreeSearchMode`      | Search behavior: `'expand-matches'` (default), `'collapse-non-matches'`, or `'hide-non-matches'`.                                                                                                   |
 | `useLazyDataLoader`       | When `true`, children load when a folder is expanded. Default: `false`.                                                                                                                             |
+| `dragAndDrop`             | Enables built-in drag and drop interactions. Default: `false`.                                                                                                                                      |
+| `lockedPaths`             | Optional list of file/folder paths that cannot be dragged when drag and drop is enabled.                                                                                                            |
+| `onCollision`             | Optional callback for drag collisions. Return `true` to overwrite destination.                                                                                                                      |
 | `gitStatus`               | Optional `GitStatusEntry[]` used to show Git-style file status (`added`, `modified`, `deleted`). Folders with changed descendants also receive a change indicator. [Live demo](/trees#path-colors). |
-| `onSelection`             | Callback when selection changes. Receives `FileTreeSelectionItem[]` (`path`, `isFolder`). See example below.                                                                                        |
-| `config`                  | Extra headless-tree options: `initialState`, `fileTreeSearchMode`, `setState`. See table below.                                                                                                     |
 
-**onSelection example**
+`onSelection` is configured in React as a top-level prop
+(`\<FileTree onSelection={...} />`) and in vanilla via `FileTreeStateConfig`
+(second constructor argument).
+
+**onSelection examples**
 
 <DocsCodeExample {...onSelectionExample} />
 
-### config sub-options
-
-| Sub-option                  | Description                                                                                                                                                                                          |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.initialState`       | Initial state: `expandedItems` (path or flattened ids; use `f::` prefix for flattened, e.g. `f::build/assets/images`), `selectedItems` (e.g. `['package.json']`), `focusedItem` (item id or `null`). |
-| `config.fileTreeSearchMode` | `'expand-matches'` (default) — expand matching nodes; `'collapse-non-matches'` — hide non-matching branches.                                                                                         |
-| `config.setState`           | Optional callback for controlled state updates (advanced).                                                                                                                                           |
+For full state config details, see
+[Core Types](#core-types-filetreestateconfig), [React API](#react-api), and
+[Vanilla JS API](#vanilla-js-api).

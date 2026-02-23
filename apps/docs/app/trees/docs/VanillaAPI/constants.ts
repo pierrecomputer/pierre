@@ -33,19 +33,24 @@ export const VANILLA_API_FILE_TREE_OPTIONS: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_tree_options.ts',
     contents: `import { FileTree } from '@pierre/trees';
+import type { FileTreeStateConfig } from '@pierre/trees';
 
 // Constructor options (see FileTree options section for full details)
-const fileTree = new FileTree({
+const options = {
   initialFiles: ['src/index.ts', 'package.json'],
   id: 'my-tree',
   flattenEmptyDirectories: true,
+  fileTreeSearchMode: 'expand-matches',
   useLazyDataLoader: false,
+};
+
+const stateConfig: FileTreeStateConfig = {
+  initialExpandedItems: ['src'],
+  initialSelectedItems: ['package.json'],
   onSelection: (items) => console.log(items),
-  config: {
-    initialState: { expandedItems: ['src'], selectedItems: ['package.json'] },
-    fileTreeSearchMode: 'expand-matches',
-  },
-});
+};
+
+const fileTree = new FileTree(options, stateConfig);
 
 // Render into the DOM
 fileTree.render({
@@ -55,7 +60,7 @@ fileTree.render({
 
 // Instance methods
 fileTree.getFileTreeContainer();  // get the root <file-tree-container> element
-fileTree.setOptions({ ... });     // not yet implemented
+fileTree.setOptions({ fileTreeSearchMode: 'hide-non-matches' });
 fileTree.cleanUp();               // unmount and clear references`,
   },
   options,

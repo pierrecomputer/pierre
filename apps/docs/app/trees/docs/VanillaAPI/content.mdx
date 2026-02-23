@@ -36,13 +36,12 @@ Try the live behavior at [/trees#path-colors](/trees#path-colors).
 
 #### Hydration
 
-When using SSR, pass the pre-rendered container and optional HTML to `hydrate()`
-instead of `render()`:
+When using SSR, pass the pre-rendered container to `hydrate()` instead of
+`render()`:
 
 ```ts
 const fileTree = new FileTree({ initialFiles: files });
 fileTree.hydrate({
-  fileTreeContainer: document.querySelector("file-tree-container"),
-  prerenderedHTML: htmlFromServer,
+  fileTreeContainer: document.querySelector('file-tree-container'),
 });
 ```

@@ -8,20 +8,21 @@ core data structures used throughout the library.
 `FileTreeOptions` is the main options object for `FileTree`. Use it when
 creating a vanilla `FileTree` instance or when rendering the React
 `<FileTree options={...} />` component. It defines the file list, instance id,
-flattening behavior, selection callback, and optional headless tree config.
+flattening behavior, search mode, and other structural behavior.
 
 **Tip:** To pre-render the tree on the server, use
 [`preloadFileTree`](#utilities-preloadfiletree) from `@pierre/trees/ssr` and
-pass the returned HTML as the `prerenderedHTML` prop (React) or to `hydrate()`
-(vanilla). See [SSR](#ssr) for usage.
+pass `payload.html` as the `prerenderedHTML` prop (React) or hydrate the same
+container in vanilla. See [SSR](#ssr) for usage.
 
 <DocsCodeExample {...fileTreeOptionsType} />
 
 ### FileTreeSelectionItem
 
 `FileTreeSelectionItem` describes one item in the tree selection. Your
-`onSelection` callback receives an array of these. Each item has a `path` (the
-file or folder path) and `isFolder` (whether it's a folder or file).
+`onSelection` callback receives an array of these (in vanilla state config or
+React top-level props). Each item has a `path` (the file or folder path) and
+`isFolder` (whether it's a folder or file).
 
 <DocsCodeExample {...fileTreeSelectionItemType} />
 
@@ -38,19 +39,21 @@ example, `src/index.ts`).
 ### FileTreeSearchMode
 
 `FileTreeSearchMode` controls how search affects the tree. Pass it via
-`config.fileTreeSearchMode` in `FileTreeOptions`. Use `'expand-matches'`
-(default) to expand nodes that match the search, or `'collapse-non-matches'` to
-hide non-matching branches so only matching paths and their parents stay
-visible.
+`fileTreeSearchMode` in `FileTreeOptions`.
+
+- `'expand-matches'` (default): expand nodes that match the search.
+- `'collapse-non-matches'`: hide non-matching branches so only matching paths
+  and their parents stay visible.
+- `'hide-non-matches'`: keep branch structure but hide non-matching rows.
 
 <DocsCodeExample {...fileTreeSearchModeType} />
 
-### HeadlessTreeConfig
+### FileTreeStateConfig
 
-`HeadlessTreeConfig` is the optional `config` object inside `FileTreeOptions`.
-It is a subset of the headless tree's config: FileTree wires up the data loader,
-root, item names, and features for you. You can pass `initialState` (expanded
-items, selected items, focused item), `fileTreeSearchMode`, and optionally
-`setState` for controlled state updates.
+`FileTreeStateConfig` is the state/callback config for the vanilla `FileTree`
+constructor's second argument. Use it for defaults (`initialExpandedItems`,
+`initialSelectedItems`, `initialSearch`) and callbacks/controlled values
+(`onSelection`, `onExpandedItemsChange`, `onSelectedItemsChange`,
+`onFilesChange`, plus `expandedItems`/`selectedItems`/`files` when controlled).
 
-<DocsCodeExample {...headlessTreeConfigType} />
+<DocsCodeExample {...fileTreeStateConfigType} />
