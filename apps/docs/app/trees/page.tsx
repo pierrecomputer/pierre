@@ -22,13 +22,6 @@ export const metadata: Metadata = {
   title: 'Pierre Trees — A file tree rendering library.',
   description:
     "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
-  openGraph: {
-    images: [{ url: '/og-trees.png' }],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    images: ['/og-trees.png'],
-  },
 };
 
 export default function TreesHome() {

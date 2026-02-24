@@ -46,13 +46,6 @@ export const metadata: Metadata = {
   title: 'Pierre Trees Docs — API reference and guides.',
   description:
     'Documentation for @pierre/trees — installation, core types, React and vanilla APIs, utilities, styling, and SSR.',
-  openGraph: {
-    images: [{ url: '/og-trees.png' }],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    images: ['/og-trees.png'],
-  },
 };
 
 export default function TreesDocsPage() {
