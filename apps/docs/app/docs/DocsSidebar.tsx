@@ -1,8 +1,38 @@
 'use client';
 
+import { IconArrowUpRightCircle } from '@pierre/icons';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import NavLink from '../../components/NavLink';
+import { getProductFromPathname, PRODUCTS } from '@/app/product-config';
+import { cn } from '@/lib/utils';
+
+function MobileNavLink({
+  href,
+  children,
+  external,
+}: {
+  href: string;
+  children: React.ReactNode;
+  external?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'text-foreground flex items-center gap-1.5 rounded-md px-3 py-2 text-base transition-colors',
+        'hover:bg-muted active:bg-muted/70'
+      )}
+    >
+      {children}
+      {external === true && (
+        <IconArrowUpRightCircle className="text-muted-foreground" />
+      )}
+    </Link>
+  );
+}
 
 interface DocsSidebarProps {
   isMobileOpen?: boolean;
@@ -20,6 +50,8 @@ export function DocsSidebar({
   isMobileOpen = false,
   onMobileClose,
 }: DocsSidebarProps) {
+  const pathname = usePathname();
+  const product = getProductFromPathname(pathname);
   const navRef = useRef<HTMLElement>(null);
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [activeHeading, setActiveHeading] = useState<string>('');
@@ -131,6 +163,27 @@ export function DocsSidebar({
         className={`docs-sidebar ${isMobileOpen ? 'is-open' : ''}`}
         onClick={onMobileClose}
       >
+        {isMobileOpen && (
+          <div className="border-border mb-4 border-b pb-4 md:hidden">
+            <MobileNavLink
+              href={product.basePath !== '' ? product.basePath : '/'}
+            >
+              Home
+            </MobileNavLink>
+            <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
+            {product.themePath != null && (
+              <MobileNavLink href={product.themePath}>Theme</MobileNavLink>
+            )}
+            {product.id === 'diffs' && (
+              <MobileNavLink href={PRODUCTS.trees.basePath}>
+                Trees
+              </MobileNavLink>
+            )}
+            {product.id === 'trees' && (
+              <MobileNavLink href="/">Diffs</MobileNavLink>
+            )}
+          </div>
+        )}
         {headings.map((heading) => (
           <NavLink
             key={heading.id}

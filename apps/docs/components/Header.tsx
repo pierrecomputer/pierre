@@ -98,7 +98,8 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
 
   const homeHref = product.basePath !== '' ? product.basePath : '/';
   const showMobileMenu =
-    pathname === product.docsPath || pathname === product.themePath;
+    pathname === product.docsPath ||
+    (product.themePath != null && pathname === product.themePath);
 
   return (
     <header

@@ -7,7 +7,7 @@ export interface ProductConfig {
   description: string;
   basePath: string;
   docsPath: string;
-  themePath: string;
+  themePath?: string;
   packageName: string;
   installCommand: string;
   githubUrl: string;
@@ -35,7 +35,6 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
       "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
     basePath: '/trees',
     docsPath: '/trees/docs',
-    themePath: '/trees/theme',
     packageName: '@pierre/trees',
     installCommand: 'bun i @pierre/trees',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
