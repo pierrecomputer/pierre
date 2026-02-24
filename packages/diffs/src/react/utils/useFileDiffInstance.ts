@@ -35,9 +35,11 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   metrics?: VirtualFileMetrics;
 }
 
-interface UseFileDiffInstanceReturn {
+export interface UseFileDiffInstanceReturn {
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
+  expandAll(): void;
+  collapseAll(): void;
 }
 
 export function useFileDiffInstance<LAnnotation>({
@@ -115,5 +117,13 @@ export function useFileDiffInstance<LAnnotation>({
     return instanceRef.current?.getHoveredLine();
   }, []);
 
-  return { ref, getHoveredLine };
+  const expandAll = useCallback((): void => {
+    instanceRef.current?.expandAll();
+  }, []);
+
+  const collapseAll = useCallback((): void => {
+    instanceRef.current?.collapseAll();
+  }, []);
+
+  return { ref, getHoveredLine, expandAll, collapseAll };
 }

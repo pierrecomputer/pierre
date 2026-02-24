@@ -25,6 +25,7 @@ export const INDEX_LINE_METADATA: RegExp =
 
 export const HEADER_PREFIX_SLOT_ID = 'header-prefix';
 export const HEADER_METADATA_SLOT_ID = 'header-metadata';
+export const EXPAND_ALL_SLOT_ID = 'expand-all-button';
 
 export const DEFAULT_THEMES: ThemesType = {
   dark: 'pierre-dark',
