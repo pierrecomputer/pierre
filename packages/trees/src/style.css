@@ -146,6 +146,7 @@
 
   /* LIST ITEM */
   [data-type='item'] {
+    color: inherit;
     font-family: var(--ft-internal-font-family);
     font-size: var(--ft-internal-font-size);
     outline: none;

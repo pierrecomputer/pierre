@@ -1,5 +1,5 @@
 // sort-imports-ignore
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { ThemeProvider } from 'next-themes';
 import {
   Fira_Code,
@@ -51,6 +51,11 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: 'Diffs, from Pierre',
