@@ -2395,6 +2395,14 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
@@ -4876,6 +4884,14 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
@@ -5209,6 +5225,14 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
               "data-title": "",
             },
             "tagName": "div",
+            "type": "element",
+          },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
             "type": "element",
           },
         ],
@@ -7913,6 +7937,14 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
@@ -9057,6 +9089,14 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
               "data-title": "",
             },
             "tagName": "div",
+            "type": "element",
+          },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
             "type": "element",
           },
         ],

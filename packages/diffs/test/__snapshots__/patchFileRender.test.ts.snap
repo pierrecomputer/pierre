@@ -2634,6 +2634,14 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
