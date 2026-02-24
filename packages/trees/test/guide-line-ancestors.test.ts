@@ -106,6 +106,16 @@ describe('buildChildToParent (with flattening)', () => {
     const indexId = idForPath(treeData, 'src/index.ts');
     expect(map.get(indexId)).toBe(srcId);
   });
+
+  test('nested flattened composite maps to its visible parent segment', () => {
+    const files = ['a/b/c/d/e/f.txt', 'a/b/c/x.ts'];
+    const treeData = fileListToTree(files);
+    const map = buildChildToParent(treeData, true);
+
+    const aId = idForPath(treeData, 'a');
+    const nestedCompositeId = idForPath(treeData, 'f::a/b/c/d/e');
+    expect(map.get(nestedCompositeId)).toBe(aId);
+  });
 });
 
 describe('buildAncestorChains (no flattening)', () => {
@@ -204,5 +214,28 @@ describe('buildAncestorChains (with flattening)', () => {
     const indexId = idForPath(treeData, 'src/index.ts');
     const srcId = idForPath(treeData, 'src');
     expect(chains.get(indexId)).toEqual([srcId]);
+  });
+
+  test('nested flattened composite has visible parent in ancestor chain', () => {
+    const files = ['a/b/c/d/e/f.txt', 'a/b/c/x.ts'];
+    const treeData = fileListToTree(files);
+    const map = buildChildToParent(treeData, true);
+    const chains = buildAncestorChains(treeData, map);
+
+    const aId = idForPath(treeData, 'a');
+    const nestedCompositeId = idForPath(treeData, 'f::a/b/c/d/e');
+    expect(chains.get(nestedCompositeId)).toEqual([aId]);
+  });
+
+  test('file inside nested flattened composite has root-outward ancestors', () => {
+    const files = ['a/b/c/d/e/f.txt', 'a/b/c/x.ts'];
+    const treeData = fileListToTree(files);
+    const map = buildChildToParent(treeData, true);
+    const chains = buildAncestorChains(treeData, map);
+
+    const fileId = idForPath(treeData, 'a/b/c/d/e/f.txt');
+    const chain = chains.get(fileId)!;
+    const paths = chainAsPaths(treeData, chain);
+    expect(paths).toEqual(['a', 'a/b/c/d']);
   });
 });

@@ -39,7 +39,12 @@ export function buildChildToParent(
     if (compositeParent != null) {
       map.set(firstSegmentId, compositeParent);
     }
-    for (const childId of treeData[compositeId]?.children?.direct ?? []) {
+    const compositeNode = treeData[compositeId];
+    const childIds = [
+      ...(compositeNode?.children?.direct ?? []),
+      ...(compositeNode?.children?.flattened ?? []),
+    ];
+    for (const childId of childIds) {
       map.set(childId, firstSegmentId);
     }
   }
