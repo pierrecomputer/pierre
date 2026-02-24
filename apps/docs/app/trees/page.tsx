@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+
 import { Hero } from '../Hero';
 import type { ProductId } from '../product-config';
 import {
@@ -15,6 +17,19 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 const PRODUCT_ID: ProductId = 'trees';
+
+export const metadata: Metadata = {
+  title: 'Pierre Trees — A file tree rendering library.',
+  description:
+    "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
+  openGraph: {
+    images: [{ url: '/og-trees.png' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['/og-trees.png'],
+  },
+};
 
 export default function TreesHome() {
   return (
