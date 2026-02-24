@@ -226,6 +226,8 @@
     border-left: 1px solid var(--ft-internal-color-border);
     height: 100%;
     margin-right: calc(var(--ft-internal-level-gap) - 1px);
+    opacity: 0;
+    transition: opacity 150ms ease;
 
     & + & {
       margin-left: calc(
@@ -233,6 +235,10 @@
           calc(var(--ft-internal-icon-width) / 2) - 0.5px
       );
     }
+  }
+
+  :host(:hover) [data-item-section='spacing-item'] {
+    opacity: 0.55;
   }
   [data-item-selected='true'],
   [data-type='item']:focus-visible {
