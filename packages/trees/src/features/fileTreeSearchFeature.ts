@@ -298,24 +298,7 @@ export const fileTreeSearchFeature: FeatureImplementation = {
         const target = event.target as HTMLInputElement | null;
         tree.setSearch(target?.value ?? '');
       },
-      onBlur: () => {
-        // Defer so we can check where focus landed. If focus stayed inside this
-        // tree (e.g. clicking a tree item, or another input within the shadow
-        // root), keep search open.
-        setTimeout(() => {
-          const searchInput = tree.getSearchInputElement();
-          if (searchInput == null) return;
-          const rootNode = searchInput.getRootNode();
-          if (rootNode instanceof ShadowRoot) {
-            if (document.activeElement === rootNode.host) return;
-          } else {
-            const container = searchInput.closest('[data-rct-tree]');
-            if (container != null && container.contains(document.activeElement))
-              return;
-          }
-          tree.closeSearch();
-        }, 0);
-      },
+      onBlur: () => tree.closeSearch(),
       ref: tree.registerSearchInputElement,
     }),
 
