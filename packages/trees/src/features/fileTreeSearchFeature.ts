@@ -240,16 +240,15 @@ export const fileTreeSearchFeature: FeatureImplementation = {
 
       const cache = getSearchCache(tree);
       const searchMode = getSearchMode(tree);
-      // When mount has initialSearchQuery, we re-apply the same search in an effect.
-      // expand-matches: keep all folders expanded (baseline = all folder ids) so "all items visible".
-      // collapse-non-matches: baseline stays [] so only ancestors of matches are expanded.
-      const isInitialApply =
-        searchMode === 'expand-matches' &&
+      // When mount has initialSearchQuery the useLayoutEffect re-applies the
+      // same value. Detect that so we can (a) pick the right baseline for
+      // expand-matches and (b) skip scrollTo which would jump the viewport.
+      const isInitialReapply =
         dataRef.current.previousExpandedItems == null &&
         previousSearch === search;
       const baselineExpandedItems =
         searchMode === 'expand-matches'
-          ? isInitialApply
+          ? isInitialReapply
             ? getAllFolderIds(tree, cache.index)
             : (dataRef.current.previousExpandedItems ??
               tree.getState().expandedItems)
@@ -261,10 +260,12 @@ export const fileTreeSearchFeature: FeatureImplementation = {
         searchMode === 'expand-matches'
       );
       cache.matchItems[0]?.setFocused();
-      void cache.matchItems[0]?.scrollTo({
-        block: 'nearest',
-        inline: 'nearest',
-      });
+      if (!isInitialReapply) {
+        void cache.matchItems[0]?.scrollTo({
+          block: 'nearest',
+          inline: 'nearest',
+        });
+      }
     },
     openSearch: ({ tree }, initialValue = '') => {
       tree.setSearch(initialValue);
