@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { h } from 'preact';
+import { renderToString } from 'preact-render-to-string';
 
+import { Root } from '../src/components/Root';
 import type { FileTreeData } from '../src/types';
 import { fileListToTree } from '../src/utils/fileListToTree';
 import {
@@ -237,5 +240,92 @@ describe('buildAncestorChains (with flattening)', () => {
     const chain = chains.get(fileId)!;
     const paths = chainAsPaths(treeData, chain);
     expect(paths).toEqual(['a', 'a/b/c/d']);
+  });
+});
+
+describe('SSR guide-line style output', () => {
+  function renderTree(
+    files: string[],
+    opts: {
+      flattenEmptyDirectories?: boolean;
+      initialExpandedItems?: string[];
+      initialSelectedItems?: string[];
+    }
+  ): string {
+    return renderToString(
+      h(Root, {
+        fileTreeOptions: {
+          initialFiles: files,
+          flattenEmptyDirectories: opts.flattenEmptyDirectories ?? false,
+          id: 'ssr-test',
+        },
+        stateConfig: {
+          initialExpandedItems: opts.initialExpandedItems,
+          initialSelectedItems: opts.initialSelectedItems,
+        },
+      })
+    );
+  }
+
+  test('no style element when nothing is selected', () => {
+    const html = renderTree(['src/index.ts'], {
+      initialExpandedItems: ['src'],
+    });
+    expect(html).not.toContain('opacity: 1');
+  });
+
+  test('style element contains valid CSS with unescaped quotes', () => {
+    const html = renderTree(['src/index.ts', 'src/lib/utils.ts'], {
+      initialExpandedItems: ['src'],
+      initialSelectedItems: ['src/index.ts'],
+    });
+    expect(html).toContain('opacity: 1');
+    // Ensure quotes are real quotes, not HTML entities
+    expect(html).not.toContain('&quot;');
+    const styleMatch = html.match(/<style>(.*?)<\/style>/);
+    expect(styleMatch).not.toBeNull();
+    expect(styleMatch![1]).toContain('data-ancestor-id=');
+  });
+
+  test('data-ancestor-id attributes are present on spacing items', () => {
+    const html = renderTree(['src/components/Button.tsx', 'src/index.ts'], {
+      initialExpandedItems: ['src', 'src/components'],
+      initialSelectedItems: ['src/components/Button.tsx'],
+    });
+    expect(html).toMatch(/data-ancestor-id="[^"]+"/);
+  });
+
+  test('style selector ID matches a data-ancestor-id in the markup', () => {
+    const html = renderTree(['src/components/Button.tsx', 'src/index.ts'], {
+      initialExpandedItems: ['src', 'src/components'],
+      initialSelectedItems: ['src/components/Button.tsx'],
+    });
+    const styleMatch = html.match(/<style>(.*?)<\/style>/);
+    expect(styleMatch).not.toBeNull();
+    // Extract the ancestor ID from the CSS selector
+    const cssIdMatch = styleMatch![1].match(/data-ancestor-id="([^"]+)"/);
+    expect(cssIdMatch).not.toBeNull();
+    const cssAncestorId = cssIdMatch![1];
+    // The same ID should appear as an attribute in the HTML
+    expect(html).toContain(`data-ancestor-id="${cssAncestorId}"`);
+  });
+
+  test('SSR works with flattened directories', () => {
+    const html = renderTree(
+      ['src/components/utils/helper.ts', 'src/index.ts'],
+      {
+        flattenEmptyDirectories: true,
+        initialExpandedItems: ['src', 'src/components/utils'],
+        initialSelectedItems: ['src/components/utils/helper.ts'],
+      }
+    );
+    expect(html).toContain('opacity: 1');
+    expect(html).not.toContain('&quot;');
+    // Style selector ID should match an attribute in the markup
+    const styleMatch = html.match(/<style>(.*?)<\/style>/);
+    expect(styleMatch).not.toBeNull();
+    const cssIdMatch = styleMatch![1].match(/data-ancestor-id="([^"]+)"/);
+    expect(cssIdMatch).not.toBeNull();
+    expect(html).toContain(`data-ancestor-id="${cssIdMatch![1]}"`);
   });
 });

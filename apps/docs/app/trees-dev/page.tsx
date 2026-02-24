@@ -44,6 +44,10 @@ export default async function FileTreePage() {
   };
 
   const mainSsr = preloadFileTree(fileTreeOptions, sharedDemoStateConfig);
+  const controlledSsr = preloadFileTree(fileTreeOptions, {
+    ...sharedDemoStateConfig,
+    initialSelectedItems: ['Build/assets/images/social/logo.png'],
+  });
   const gitStatusSsr = preloadFileTree(
     { ...fileTreeOptions, gitStatus: GIT_STATUSES_A },
     sharedDemoStateConfig
@@ -53,6 +57,7 @@ export default async function FileTreePage() {
     <ClientPage
       preloadedFileTreeHtml={mainSsr.shadowHtml}
       preloadedFileTreeContainerHtml={mainSsr.html}
+      preloadedControlledFileTreeHtml={controlledSsr.shadowHtml}
       preloadedGitStatusFileTreeHtml={gitStatusSsr.shadowHtml}
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
       initialUseLazyDataLoader={useLazyDataLoader}

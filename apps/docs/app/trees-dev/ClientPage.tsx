@@ -29,6 +29,7 @@ import {
 interface ClientPageProps {
   preloadedFileTreeHtml: string;
   preloadedFileTreeContainerHtml: string;
+  preloadedControlledFileTreeHtml: string;
   preloadedGitStatusFileTreeHtml: string;
   initialFlattenEmptyDirectories?: boolean;
   initialUseLazyDataLoader?: boolean;
@@ -37,6 +38,7 @@ interface ClientPageProps {
 export function ClientPage({
   preloadedFileTreeHtml,
   preloadedFileTreeContainerHtml,
+  preloadedControlledFileTreeHtml,
   preloadedGitStatusFileTreeHtml,
   initialFlattenEmptyDirectories,
   initialUseLazyDataLoader,
@@ -222,8 +224,11 @@ export function ClientPage({
         <ReactSSRControlled
           options={reactOptions}
           initialFiles={reactFiles}
-          stateConfig={sharedDemoStateConfig}
-          prerenderedHTML={preloadedFileTreeHtml}
+          stateConfig={{
+            ...sharedDemoStateConfig,
+            initialSelectedItems: ['Build/assets/images/social/logo.png'],
+          }}
+          prerenderedHTML={preloadedControlledFileTreeHtml}
         />
       </div>
 
@@ -808,7 +813,9 @@ function ReactSSRControlled({
   const [expandedItems, setExpandedItems] = useState<string[]>(() =>
     expandImplicitParentDirectories(stateConfig?.initialExpandedItems ?? [])
   );
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedItems, setSelectedItems] = useState<string[]>(
+    () => stateConfig?.initialSelectedItems ?? []
+  );
   const { log, addLog } = useStateLog();
 
   const handleExpandedChange = useCallback(

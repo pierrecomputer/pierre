@@ -694,15 +694,9 @@ export function Root({
     onInput: onChange,
   };
   // --- Dynamic guide-line highlighting for selected items ---
-  const guideStyleRef = useRef<HTMLStyleElement>(null);
-
-  useEffect(() => {
-    if (guideStyleRef.current == null) return;
+  const guideStyleText = useMemo(() => {
     const selectedIds = tree.getState().selectedItems ?? [];
-    if (selectedIds.length === 0) {
-      guideStyleRef.current.textContent = '';
-      return;
-    }
+    if (selectedIds.length === 0) return '';
     const parentIds = new Set<string>();
     for (const id of selectedIds) {
       const parentId = childToParent.get(id);
@@ -710,10 +704,7 @@ export function Root({
         parentIds.add(parentId);
       }
     }
-    if (parentIds.size === 0) {
-      guideStyleRef.current.textContent = '';
-      return;
-    }
+    if (parentIds.size === 0) return '';
     const escape = (v: string) => v.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const selectors = Array.from(parentIds)
       .map(
@@ -721,12 +712,13 @@ export function Root({
           `[data-item-section="spacing-item"][data-ancestor-id="${escape(id)}"]`
       )
       .join(',\n');
-    guideStyleRef.current.textContent = `:is(${selectors}) { opacity: 1; }`;
+    return `:is(${selectors}) { opacity: 1; }`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionSnapshot, childToParent]);
 
   return (
     <div {...tree.getContainerProps()} id={treeDomId}>
-      <style ref={guideStyleRef} />
+      <style dangerouslySetInnerHTML={{ __html: guideStyleText }} />
       <div data-file-tree-search-container>
         <input
           placeholder="Search…"
