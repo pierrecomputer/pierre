@@ -749,12 +749,18 @@ export function Root({
   // --- Dynamic guide-line highlighting for selected items ---
   const guideStyleText = useMemo(() => {
     const selectedIds = tree.getState().selectedItems ?? [];
-    if (selectedIds.length === 0) return '';
+    if (selectedIds.length === 0 && focusedItemId == null) return '';
     const parentIds = new Set<string>();
     for (const id of selectedIds) {
       const parentId = childToParent.get(id);
       if (parentId != null && parentId !== 'root') {
         parentIds.add(parentId);
+      }
+    }
+    if (focusedItemId != null) {
+      const focusedParentId = childToParent.get(focusedItemId);
+      if (focusedParentId != null && focusedParentId !== 'root') {
+        parentIds.add(focusedParentId);
       }
     }
     if (parentIds.size === 0) return '';
@@ -767,7 +773,7 @@ export function Root({
       .join(',\n');
     return `:is(${selectors}) { opacity: 1; }`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectionSnapshot, childToParent]);
+  }, [selectionSnapshot, focusedItemId, childToParent]);
 
   return (
     <div {...tree.getContainerProps()} id={treeDomId}>
