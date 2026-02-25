@@ -164,7 +164,7 @@ describe('FileRenderer AST Structure', () => {
   });
 
   test('should include merge conflict metadata in file line and gutter nodes', async () => {
-    const instance = new FileRenderer();
+    const instance = new FileRenderer({ mergeConflictActions: 'none' });
     const mergeConflictFile = {
       name: 'conflict.ts',
       contents: [
@@ -204,5 +204,89 @@ describe('FileRenderer AST Structure', () => {
       expect(contentLine.properties?.['data-line-type']).toBe('context');
       expect(gutterLine.properties?.['data-line-type']).toBe('context');
     }
+  });
+
+  test('should render default merge conflict action row in file output', async () => {
+    const instance = new FileRenderer();
+    const mergeConflictFile = {
+      name: 'conflict.ts',
+      contents: [
+        'const stable = 1;',
+        '<<<<<<< HEAD',
+        'const ours = true;',
+        '=======',
+        'const theirs = true;',
+        '>>>>>>> feature',
+      ].join('\n'),
+    };
+
+    const result = await instance.asyncRender(mergeConflictFile);
+    const [gutter, contentColumn] = instance.renderCodeAST(result) as Element[];
+    const actionRows = contentColumn.children.filter(
+      (child) =>
+        child.type === 'element' &&
+        child.properties?.['data-merge-conflict-actions'] === ''
+    ) as Element[];
+
+    expect(actionRows.length).toBe(1);
+    const [actionRow] = actionRows;
+    expect(actionRow.properties?.['data-merge-conflict-index']).toBe('0');
+    expect(actionRow.properties?.['data-line-annotation']).toBeUndefined();
+
+    const actionButtons = actionRow.children[0] as Element;
+    expect(actionButtons.children.length).toBe(5);
+    expect(
+      (actionButtons.children[0] as Element).properties?.[
+        'data-merge-conflict-action'
+      ]
+    ).toBe('current');
+    expect(
+      (actionButtons.children[2] as Element).properties?.[
+        'data-merge-conflict-action'
+      ]
+    ).toBe('incoming');
+    expect(
+      (actionButtons.children[4] as Element).properties?.[
+        'data-merge-conflict-action'
+      ]
+    ).toBe('both');
+
+    const actionGutterRows = gutter.children.filter(
+      (child) =>
+        child.type === 'element' &&
+        child.properties?.['data-merge-conflict-actions-gutter'] === ''
+    );
+    expect(actionGutterRows.length).toBe(1);
+  });
+
+  test('should render merge conflict action slot rows when custom renderer is provided', async () => {
+    const instance = new FileRenderer({
+      mergeConflictActions: 'custom',
+    });
+    const mergeConflictFile = {
+      name: 'conflict.ts',
+      contents: [
+        'const stable = 1;',
+        '<<<<<<< HEAD',
+        'const ours = true;',
+        '=======',
+        'const theirs = true;',
+        '>>>>>>> feature',
+      ].join('\n'),
+    };
+
+    const result = await instance.asyncRender(mergeConflictFile);
+    const [, contentColumn] = instance.renderCodeAST(result) as Element[];
+    const actionRows = contentColumn.children.filter(
+      (child) =>
+        child.type === 'element' &&
+        child.properties?.['data-merge-conflict-actions'] === ''
+    ) as Element[];
+
+    expect(actionRows.length).toBe(1);
+    const actionContent = actionRows[0].children[0] as Element;
+    const slot = actionContent.children[0] as Element;
+    expect(slot.tagName).toBe('slot');
+    expect(slot.properties?.name).toBe('merge-conflict-action-0');
   });
 });

@@ -14,6 +14,7 @@ import type {
   DiffsHighlighter,
   FileContents,
   LineAnnotation,
+  MergeConflictRegion,
   RenderedFileASTCache,
   RenderFileOptions,
   RenderFileResult,
@@ -27,12 +28,16 @@ import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
+import { createMergeConflictActionsElement } from '../utils/createMergeConflictActionsElement';
 import { createPreElement } from '../utils/createPreElement';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import {
+  getMergeConflictActionLineNumber,
   getMergeConflictLineTypes,
+  getMergeConflictRegions,
   type MergeConflictLineType,
 } from '../utils/getMergeConflictLineTypes';
 import { getThemes } from '../utils/getThemes';
@@ -69,6 +74,7 @@ export interface FileRenderResult {
   rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
+  mergeConflicts: MergeConflictRegion[];
 }
 
 interface LineCache {
@@ -76,8 +82,16 @@ interface LineCache {
   lines: string[];
 }
 
+interface MergeConflictCache {
+  lines: string[];
+  lineTypes: MergeConflictLineType[];
+  regions: MergeConflictRegion[];
+}
+
 // oxlint-disable-next-line typescript/no-empty-object-type
-export interface FileRendererOptions extends BaseCodeOptions {}
+export interface FileRendererOptions extends BaseCodeOptions {
+  mergeConflictActions?: 'none' | 'default' | 'custom';
+}
 
 let instanceId = -1;
 
@@ -89,6 +103,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   private lineCache: LineCache | undefined;
+  private mergeConflictCache: MergeConflictCache | undefined;
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
@@ -135,6 +150,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
     this.lineCache = undefined;
+    this.mergeConflictCache = undefined;
   }
 
   public hydrate(file: FileContents): void {
@@ -204,6 +220,39 @@ export class FileRenderer<LAnnotation = undefined> {
     }
     this.lineCache = lineCache;
     return lineCache.lines;
+  }
+
+  public getMergeConflictRegions(
+    file: FileContents,
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE
+  ): MergeConflictRegion[] {
+    const lines = this.getOrCreateLineCache(file);
+    const { regions } = this.getOrCreateMergeConflictCache(lines);
+    return filterMergeConflictsByRange(regions, renderRange, lines.length);
+  }
+
+  public getMergeConflictRegionByIndex(
+    file: FileContents,
+    conflictIndex: number
+  ): MergeConflictRegion | undefined {
+    const lines = this.getOrCreateLineCache(file);
+    const { regions } = this.getOrCreateMergeConflictCache(lines);
+    return regions.find((region) => region.conflictIndex === conflictIndex);
+  }
+
+  private getOrCreateMergeConflictCache(lines: string[]): MergeConflictCache {
+    if (this.mergeConflictCache?.lines === lines) {
+      return this.mergeConflictCache;
+    }
+
+    const lineTypes = getMergeConflictLineTypes(lines);
+    const regions = getMergeConflictRegions(lines);
+    this.mergeConflictCache = {
+      lines,
+      lineTypes,
+      regions,
+    };
+    return this.mergeConflictCache;
   }
 
   public renderFile(
@@ -345,11 +394,32 @@ export class FileRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     { code, themeStyles, baseThemeType }: ThemedFileResult
   ): FileRenderResult {
-    const { disableFileHeader = false } = this.options;
+    const { disableFileHeader = false, mergeConflictActions = 'default' } =
+      this.options;
     const contentArray: ElementContent[] = [];
     const gutter = createGutterWrapper();
     const lines = this.getOrCreateLineCache(file);
-    const mergeConflictLineTypes = getMergeConflictLineTypes(lines);
+    const { lineTypes: mergeConflictLineTypes, regions: mergeConflictRegions } =
+      this.getOrCreateMergeConflictCache(lines);
+    const mergeConflictActionType = mergeConflictActions ?? 'default';
+    const mergeConflictActionsByLine: Record<
+      number,
+      MergeConflictRegion[] | undefined
+    > = {};
+    const visibleMergeConflictRegions = filterMergeConflictsByRange(
+      mergeConflictRegions,
+      renderRange,
+      lines.length
+    );
+
+    if (mergeConflictActionType !== 'none') {
+      for (const conflict of visibleMergeConflictRegions) {
+        const actionLineNumber = getMergeConflictActionLineNumber(conflict);
+        const existing = mergeConflictActionsByLine[actionLineNumber] ?? [];
+        existing.push(conflict);
+        mergeConflictActionsByLine[actionLineNumber] = existing;
+      }
+    }
     let rowCount = 0;
 
     iterateOverFile({
@@ -386,6 +456,29 @@ export class FileRenderer<LAnnotation = undefined> {
           contentArray.push(line);
           rowCount++;
 
+          if (mergeConflictActionType !== 'none') {
+            const mergeConflictActions =
+              mergeConflictActionsByLine[lineNumber] ?? [];
+            for (const conflict of mergeConflictActions) {
+              const gutterAction = createGutterGap('context', 'metadata', 1);
+              gutterAction.properties['data-merge-conflict-actions-gutter'] =
+                '';
+              gutter.children.push(gutterAction);
+              contentArray.push(
+                createMergeConflictActionsElement({
+                  type: mergeConflictActionType,
+                  conflictIndex: conflict.conflictIndex,
+                  lineIndex,
+                  slotName:
+                    mergeConflictActionType === 'custom'
+                      ? getMergeConflictActionSlotName(conflict)
+                      : undefined,
+                })
+              );
+              rowCount++;
+            }
+          }
+
           // Check annotations using ACTUAL line number from file
           const annotations = this.lineAnnotations[lineNumber];
           if (annotations != null) {
@@ -421,6 +514,7 @@ export class FileRenderer<LAnnotation = undefined> {
       baseThemeType: baseThemeType,
       bufferBefore: renderRange.bufferBefore,
       bufferAfter: renderRange.bufferAfter,
+      mergeConflicts: visibleMergeConflictRegions,
       css: '',
     };
   }
@@ -552,6 +646,29 @@ function areRenderOptionsEqual(
     areThemesEqual(optionsA.theme, optionsB.theme) &&
     optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength
   );
+}
+
+function filterMergeConflictsByRange(
+  conflicts: MergeConflictRegion[],
+  renderRange: RenderRange,
+  totalLines: number
+): MergeConflictRegion[] {
+  const startLineNumber = renderRange.startingLine + 1;
+  const endLineNumberExclusive =
+    renderRange.totalLines === Infinity
+      ? Number.POSITIVE_INFINITY
+      : Math.min(
+          renderRange.startingLine + renderRange.totalLines,
+          totalLines
+        ) + 1;
+
+  return conflicts.filter((conflict) => {
+    const actionLineNumber = getMergeConflictActionLineNumber(conflict);
+    return (
+      actionLineNumber >= startLineNumber &&
+      actionLineNumber < endLineNumberExclusive
+    );
+  });
 }
 
 function setMergeConflictAttribute(

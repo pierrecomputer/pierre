@@ -2,6 +2,7 @@ import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
@@ -17,12 +18,19 @@ import {
   type SelectedLineRange,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
-import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
+import {
+  FileRenderer,
+  type FileRendererOptions,
+  type FileRenderResult,
+} from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
+  MergeConflictActionPayload,
+  MergeConflictRegion,
+  MergeConflictResolution,
   PrePropertiesConfig,
   RenderFileMetadata,
   RenderRange,
@@ -30,6 +38,7 @@ import type {
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
+import { areMergeConflictRegionsEqual } from '../utils/areMergeConflictRegionsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
@@ -37,6 +46,7 @@ import { createGutterUtilityContentNode } from '../utils/createGutterUtilityCont
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -80,6 +90,17 @@ export interface FileOptions<LAnnotation>
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
+  mergeConflictActions?:
+    | 'none'
+    | 'default'
+    | ((
+        conflict: MergeConflictRegion,
+        instance: File<LAnnotation>
+      ) => HTMLElement | DocumentFragment);
+  onMergeConflictAction?(
+    payload: MergeConflictActionPayload,
+    instance: File<LAnnotation>
+  ): unknown;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null;
@@ -99,6 +120,11 @@ interface AnnotationElementCache<LAnnotation> {
 interface ColumnElements {
   gutter: HTMLElement;
   content: HTMLElement;
+}
+
+interface MergeConflictActionElementCache {
+  element: HTMLElement;
+  conflict: MergeConflictRegion;
 }
 
 let instanceId = -1;
@@ -132,7 +158,12 @@ export class File<LAnnotation = undefined> {
 
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
+  protected mergeConflictActionCache: Map<
+    string,
+    MergeConflictActionElementCache
+  > = new Map();
   protected lineAnnotations: LineAnnotation<LAnnotation>[] = [];
+  protected mergeConflictListenerPre: HTMLPreElement | undefined;
 
   protected file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
@@ -143,7 +174,7 @@ export class File<LAnnotation = undefined> {
     private isContainerManaged = false
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(
-      options,
+      this.getFileRendererOptions(options),
       this.handleHighlightRender,
       this.workerManager
     );
@@ -176,6 +207,20 @@ export class File<LAnnotation = undefined> {
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
     this.options = { ...this.options, ...options };
+  }
+
+  private getFileRendererOptions(
+    options: FileOptions<LAnnotation> = this.options
+  ): FileRendererOptions {
+    const mergeConflictActions =
+      typeof options.mergeConflictActions === 'function'
+        ? 'custom'
+        : (options.mergeConflictActions ?? 'default');
+
+    return {
+      ...options,
+      mergeConflictActions,
+    };
   }
 
   public setThemeType(themeType: ThemeTypes): void {
@@ -212,6 +257,47 @@ export class File<LAnnotation = undefined> {
     return this.interactionManager.getHoveredLine();
   };
 
+  private handleMergeConflictActionClick = (event: Event): void => {
+    const target = event.target;
+    if (!(target instanceof Element) || this.file == null) {
+      return;
+    }
+
+    const actionButton = target.closest('[data-merge-conflict-action]');
+    if (!(actionButton instanceof HTMLElement)) {
+      return;
+    }
+
+    if (this.pre == null || !this.pre.contains(actionButton)) {
+      return;
+    }
+
+    const resolution = actionButton.dataset
+      .mergeConflictAction as MergeConflictResolution;
+    if (!isMergeConflictResolution(resolution)) {
+      return;
+    }
+
+    const conflictIndex = Number.parseInt(
+      actionButton.dataset.mergeConflictIndex ?? '',
+      10
+    );
+    if (Number.isNaN(conflictIndex)) {
+      return;
+    }
+
+    const conflict = this.fileRenderer.getMergeConflictRegionByIndex(
+      this.file,
+      conflictIndex
+    );
+    if (conflict == null) {
+      return;
+    }
+
+    event.preventDefault();
+    this.options.onMergeConflictAction?.({ resolution, conflict }, this);
+  };
+
   public setLineAnnotations(
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): void {
@@ -226,6 +312,8 @@ export class File<LAnnotation = undefined> {
     this.fileRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
+    this.cleanupMergeConflictActionListeners();
+
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
     this.renderRange = undefined;
@@ -253,6 +341,7 @@ export class File<LAnnotation = undefined> {
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
     this.placeHolder = undefined;
+    this.mergeConflictActionCache.clear();
   }
 
   public hydrate(props: FileHyrdateProps<LAnnotation>): void {
@@ -301,9 +390,11 @@ export class File<LAnnotation = undefined> {
       this.file = file;
       this.fileRenderer.hydrate(file);
       this.renderAnnotations();
+      this.renderMergeConflictActions();
       this.renderGutterUtility();
       this.injectUnsafeCSS();
       this.interactionManager.setup(this.pre);
+      this.setupMergeConflictActionListeners(this.pre);
       this.resizeManager.setup(this.pre, overflow === 'wrap');
     }
   }
@@ -345,7 +436,7 @@ export class File<LAnnotation = undefined> {
 
     this.renderRange = nextRenderRange;
     this.file = file;
-    this.fileRenderer.setOptions(this.options);
+    this.fileRenderer.setOptions(this.getFileRendererOptions());
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
@@ -431,7 +522,9 @@ export class File<LAnnotation = undefined> {
       this.interactionManager.setup(pre);
       this.resizeManager.setup(pre, overflow === 'wrap');
       this.renderAnnotations();
+      this.renderMergeConflictActions();
       this.renderGutterUtility();
+      this.setupMergeConflictActionListeners(pre);
     } catch (error: unknown) {
       if (disableErrorHandling) {
         throw error;
@@ -447,6 +540,7 @@ export class File<LAnnotation = undefined> {
   private removeRenderedCode(): void {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
+    this.cleanupMergeConflictActionListeners();
 
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
@@ -468,6 +562,11 @@ export class File<LAnnotation = undefined> {
       element.parentNode?.removeChild(element);
     }
     this.annotationCache.clear();
+
+    for (const { element } of this.mergeConflictActionCache.values()) {
+      element.parentNode?.removeChild(element);
+    }
+    this.mergeConflictActionCache.clear();
 
     this.gutterUtilityContent?.remove();
     this.gutterUtilityContent = undefined;
@@ -505,6 +604,7 @@ export class File<LAnnotation = undefined> {
   private cleanChildNodes() {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
+    this.cleanupMergeConflictActionListeners();
 
     this.bufferAfter?.remove();
     this.bufferBefore?.remove();
@@ -532,6 +632,7 @@ export class File<LAnnotation = undefined> {
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
+    this.mergeConflictActionCache.clear();
   }
 
   private renderAnnotations(): void {
@@ -576,6 +677,81 @@ export class File<LAnnotation = undefined> {
       this.annotationCache.delete(id);
       element.parentNode?.removeChild(element);
     }
+  }
+
+  private renderMergeConflictActions(): void {
+    if (
+      this.isContainerManaged ||
+      this.fileContainer == null ||
+      this.file == null
+    ) {
+      for (const { element } of this.mergeConflictActionCache.values()) {
+        element.parentNode?.removeChild(element);
+      }
+      this.mergeConflictActionCache.clear();
+      return;
+    }
+
+    const { mergeConflictActions } = this.options;
+    if (typeof mergeConflictActions !== 'function') {
+      for (const { element } of this.mergeConflictActionCache.values()) {
+        element.parentNode?.removeChild(element);
+      }
+      this.mergeConflictActionCache.clear();
+      return;
+    }
+
+    const staleActions = new Map(this.mergeConflictActionCache);
+    const renderRange = this.renderRange ?? DEFAULT_RENDER_RANGE;
+    const conflicts = this.fileRenderer.getMergeConflictRegions(
+      this.file,
+      renderRange
+    );
+    for (const conflict of conflicts) {
+      const slotName = getMergeConflictActionSlotName(conflict);
+      let cache = this.mergeConflictActionCache.get(slotName);
+      if (
+        cache == null ||
+        !areMergeConflictRegionsEqual(conflict, cache.conflict)
+      ) {
+        cache?.element.parentNode?.removeChild(cache.element);
+        const element = document.createElement('div');
+        element.style.display = 'contents';
+        element.slot = slotName;
+        element.appendChild(mergeConflictActions(conflict, this));
+        this.fileContainer.appendChild(element);
+        cache = { element, conflict };
+        this.mergeConflictActionCache.set(slotName, cache);
+      }
+      staleActions.delete(slotName);
+    }
+
+    for (const [slotName, { element }] of staleActions.entries()) {
+      this.mergeConflictActionCache.delete(slotName);
+      element.parentNode?.removeChild(element);
+    }
+  }
+
+  private setupMergeConflictActionListeners(pre: HTMLPreElement): void {
+    const mergeConflictActions = this.options.mergeConflictActions ?? 'default';
+    if (mergeConflictActions !== 'default') {
+      this.cleanupMergeConflictActionListeners();
+      return;
+    }
+    if (this.mergeConflictListenerPre === pre) {
+      return;
+    }
+    this.cleanupMergeConflictActionListeners();
+    pre.addEventListener('click', this.handleMergeConflictActionClick);
+    this.mergeConflictListenerPre = pre;
+  }
+
+  private cleanupMergeConflictActionListeners(): void {
+    this.mergeConflictListenerPre?.removeEventListener(
+      'click',
+      this.handleMergeConflictActionClick
+    );
+    this.mergeConflictListenerPre = undefined;
   }
 
   private renderGutterUtility() {
@@ -1023,6 +1199,7 @@ export class File<LAnnotation = undefined> {
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
+    this.cleanupMergeConflictActionListeners();
     const pre = this.getOrCreatePreNode(container);
     pre.innerHTML = '';
     pre.parentNode?.removeChild(pre);
@@ -1048,4 +1225,10 @@ export class File<LAnnotation = undefined> {
     this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
     this.errorWrapper = undefined;
   }
+}
+
+function isMergeConflictResolution(
+  value: string
+): value is MergeConflictResolution {
+  return value === 'current' || value === 'incoming' || value === 'both';
 }

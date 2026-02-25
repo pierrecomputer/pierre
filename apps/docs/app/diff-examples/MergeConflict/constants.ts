@@ -1,35 +1,11 @@
-import type { LineAnnotation } from '@pierre/diffs';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export interface ConflictActionsAnnotation {
-  type: 'actions';
-  regionIndex: number;
-  conflictNumber: number;
-  totalConflicts: number;
-}
-
-export type MergeConflictAnnotation = ConflictActionsAnnotation;
-
-const MERGE_CONFLICT_INITIAL_ANNOTATIONS: LineAnnotation<MergeConflictAnnotation>[] =
-  [
-    {
-      lineNumber: 3,
-      metadata: {
-        type: 'actions',
-        regionIndex: 0,
-        conflictNumber: 1,
-        totalConflicts: 1,
-      },
-    },
-  ];
-
-export const MERGE_CONFLICT_EXAMPLE: PreloadFileOptions<MergeConflictAnnotation> =
-  {
-    file: {
-      name: 'auth-session.ts',
-      contents: `import { db } from './db';
+export const MERGE_CONFLICT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'auth-session.ts',
+    contents: `import { db } from './db';
 
 export async function createSession(userId: string) {
 <<<<<<< HEAD
@@ -50,11 +26,10 @@ export async function createSession(userId: string) {
   return session;
 }
 `,
-    },
-    options: {
-      theme: 'pierre-dark',
-      overflow: 'wrap',
-      unsafeCSS: CustomScrollbarCSS,
-    },
-    annotations: MERGE_CONFLICT_INITIAL_ANNOTATIONS,
-  };
+  },
+  options: {
+    theme: 'pierre-dark',
+    overflow: 'wrap',
+    unsafeCSS: CustomScrollbarCSS,
+  },
+};

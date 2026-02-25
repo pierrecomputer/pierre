@@ -1,5 +1,8 @@
 import type { FileOptions } from '../components/File';
-import { FileRenderer } from '../renderers/FileRenderer';
+import {
+  FileRenderer,
+  type FileRendererOptions,
+} from '../renderers/FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import { createStyleElement } from '../utils/createStyleElement';
 import { renderHTML } from './renderHTML';
@@ -22,7 +25,17 @@ export async function preloadFile<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
-  const fileRenderer = new FileRenderer<LAnnotation>(options);
+  const rendererOptions =
+    options == null
+      ? undefined
+      : ({
+          ...options,
+          mergeConflictActions:
+            typeof options.mergeConflictActions === 'function'
+              ? 'custom'
+              : options.mergeConflictActions,
+        } as FileRendererOptions);
+  const fileRenderer = new FileRenderer<LAnnotation>(rendererOptions);
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {

@@ -1021,6 +1021,11 @@
     z-index: 2;
   }
 
+  [data-merge-conflict-actions] {
+    min-height: var(--diffs-annotation-min-height, 0);
+    z-index: 2;
+  }
+
   [data-separator='custom'] {
     display: grid;
     grid-template-columns: subgrid;
@@ -1238,17 +1243,25 @@
   }
 
   [data-file] [data-merge-conflict='marker-start'][data-line]::after {
-    content: ' (Current Change)';
+    content: '  (Current Change)';
     color: var(--diffs-fg);
     opacity: 0.5;
     font-style: normal;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
   }
 
   [data-file] [data-merge-conflict='marker-end'][data-line]::after {
-    content: ' (Incoming Change)';
+    content: '  (Incoming Change)';
     color: var(--diffs-fg);
     opacity: 0.5;
     font-style: normal;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
   }
 
   [data-file] [data-merge-conflict='marker-start'][data-line],
@@ -1285,15 +1298,7 @@
     [data-merge-conflict='current'] {
       &[data-column-number] {
         &::before {
-          background-image: linear-gradient(
-            0deg,
-            var(--conflict-bg-current) 50%,
-            var(--diffs-addition-base) 50%
-          );
-          background-repeat: repeat;
-          background-size: 2px 2px;
-          background-size: calc(1lh / round(1lh / 2px))
-            calc(1lh / round(1lh / 2px));
+          background-color: var(--diffs-addition-base);
         }
       }
     }
@@ -1487,9 +1492,49 @@
     isolation: isolate;
   }
 
+  [data-merge-conflict-actions-content] {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+    min-height: 1.75rem;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: var(--diffs-fg);
+  }
+
+  [data-merge-conflict-action] {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--diffs-fg-number);
+    font: inherit;
+    font-style: normal;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  [data-merge-conflict-action]:hover {
+    color: var(--diffs-fg);
+  }
+
+  [data-merge-conflict-action-separator] {
+    color: var(--diffs-fg-number);
+  }
+
   /* Sticky positioning has a composite costs, so we should _only_ pay it if we
    * need to */
   [data-overflow='scroll'] [data-annotation-content] {
+    position: sticky;
+    width: var(--diffs-column-content-width, auto);
+    left: var(--diffs-column-number-width, 0);
+  }
+
+  [data-overflow='scroll'] [data-merge-conflict-actions-content] {
     position: sticky;
     width: var(--diffs-column-content-width, auto);
     left: var(--diffs-column-number-width, 0);
