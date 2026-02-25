@@ -92,16 +92,23 @@ export const getInsertionIndex = <T>(
   childIndex: number,
   draggedItems: ItemInstance<T>[] | undefined
 ): number => {
-  const numberOfDragItemsBeforeTarget =
-    children
-      .slice(0, childIndex)
-      .reduce(
-        (counter, child) =>
-          child && draggedItems?.some((i) => i.getId() === child.getId())
-            ? ++counter
-            : counter,
-        0
-      ) ?? 0;
+  if (!draggedItems || draggedItems.length === 0) {
+    return childIndex;
+  }
+
+  const draggedIds = new Set<string>();
+  for (const draggedItem of draggedItems) {
+    draggedIds.add(draggedItem.getId());
+  }
+
+  const endIndex = Math.min(childIndex, children.length);
+  let numberOfDragItemsBeforeTarget = 0;
+  for (let i = 0; i < endIndex; i++) {
+    if (draggedIds.has(children[i].getId())) {
+      numberOfDragItemsBeforeTarget++;
+    }
+  }
+
   return childIndex - numberOfDragItemsBeforeTarget;
 };
 

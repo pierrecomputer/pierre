@@ -267,6 +267,9 @@ const startTouchDrag = (
     dataRef.current.lastDragCode = undefined;
     clearTimeout(dataRef.current.autoExpandTimeout);
 
+    let dropTarget: DragTarget<unknown> | undefined;
+    let draggedItems: ItemInstance<unknown>[] | undefined;
+
     if (dropped && e) {
       const touch = e.changedTouches[0];
       if (touch) {
@@ -279,17 +282,8 @@ const startTouchDrag = (
           const proxy = createTouchProxy(touch);
           const target = getDragTarget(proxy, targetItem, tree);
           if (canDrop(null, target, tree)) {
-            const draggedItems = tree.getState().dnd?.draggedItems;
-            tree.applySubStateUpdate('dnd', {
-              draggedItems: undefined,
-              draggingOverItem: undefined,
-              dragTarget: undefined,
-            });
-            if (draggedItems) {
-              await config.onDrop?.(draggedItems, target);
-            }
-            config._onTouchDragEnd?.();
-            return;
+            draggedItems = tree.getState().dnd?.draggedItems;
+            dropTarget = target;
           }
         }
       }
@@ -300,7 +294,20 @@ const startTouchDrag = (
       draggingOverItem: undefined,
       dragTarget: undefined,
     });
-    config._onTouchDragEnd?.();
+
+    try {
+      if (draggedItems && dropTarget) {
+        await config.onDrop?.(draggedItems, dropTarget);
+      }
+    } catch (error) {
+      console.error('Touch drag-and-drop onDrop failed', error);
+    } finally {
+      try {
+        config._onTouchDragEnd?.();
+      } catch (error) {
+        console.error('Touch drag-and-drop cleanup callback failed', error);
+      }
+    }
   };
 
   const onTouchEnd = (e: TouchEvent) => {
