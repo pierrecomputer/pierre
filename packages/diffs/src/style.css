@@ -31,6 +31,7 @@
     --diffs-fg-number-override
     --diffs-fg-number-addition-override
     --diffs-fg-number-deletion-override
+    --diffs-fg-conflict-marker-override
 
     --diffs-deletion-color-override
     --diffs-addition-color-override
@@ -162,6 +163,116 @@
         color-mix(in lab, var(--diffs-bg-context) 60%, var(--diffs-bg))
       )
     );
+    --diffs-bg-conflict-marker: var(
+      --diffs-bg-conflict-marker-override,
+      light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-bg-context) 88%,
+          var(--diffs-modified-base)
+        ),
+        color-mix(
+          in lab,
+          var(--diffs-bg-context) 80%,
+          var(--diffs-modified-base)
+        )
+      )
+    );
+    --diffs-bg-conflict-current: var(
+      --diffs-bg-conflict-current-override,
+      light-dark(#e5f8ea, #274432)
+    );
+    --diffs-bg-conflict-base: var(
+      --diffs-bg-conflict-base-override,
+      light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-bg-context) 90%,
+          var(--diffs-modified-base)
+        ),
+        color-mix(
+          in lab,
+          var(--diffs-bg-context) 82%,
+          var(--diffs-modified-base)
+        )
+      )
+    );
+    --diffs-bg-conflict-incoming: var(
+      --diffs-bg-conflict-incoming-override,
+      light-dark(#e6f1ff, #253b5a)
+    );
+    --diffs-bg-conflict-marker-number: var(
+      --diffs-bg-conflict-marker-number-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg-conflict-marker) 72%, var(--diffs-bg)),
+        color-mix(in lab, var(--diffs-bg-conflict-marker) 54%, var(--diffs-bg))
+      )
+    );
+    --diffs-bg-conflict-current-number: var(
+      --diffs-bg-conflict-current-number-override,
+      light-dark(#d7f1de, #30533d)
+    );
+    --diffs-bg-conflict-base-number: var(
+      --diffs-bg-conflict-base-number-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg-conflict-base) 72%, var(--diffs-bg)),
+        color-mix(in lab, var(--diffs-bg-conflict-base) 54%, var(--diffs-bg))
+      )
+    );
+    --diffs-bg-conflict-incoming-number: var(
+      --diffs-bg-conflict-incoming-number-override,
+      light-dark(#d8e8ff, #2f4b73)
+    );
+    --conflict-bg-current: var(
+      --conflict-bg-current-override,
+      var(--diffs-bg-addition)
+    );
+    --conflict-bg-incoming: var(
+      --conflict-bg-incoming-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 88%, var(--diffs-modified-base)),
+        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-modified-base))
+      )
+    );
+    --conflict-bg-current-number: var(
+      --conflict-bg-current-number-override,
+      var(--diffs-bg-addition-number)
+    );
+    --conflict-bg-incoming-number: var(
+      --conflict-bg-incoming-number-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-modified-base)),
+        color-mix(in lab, var(--diffs-bg) 85%, var(--diffs-modified-base))
+      )
+    );
+    --conflict-bg-current-header: var(
+      --conflict-bg-current-header-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 78%, var(--diffs-addition-base)),
+        color-mix(in lab, var(--diffs-bg) 68%, var(--diffs-addition-base))
+      )
+    );
+    --conflict-bg-incoming-header: var(
+      --conflict-bg-incoming-header-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 78%, var(--diffs-modified-base)),
+        color-mix(in lab, var(--diffs-bg) 68%, var(--diffs-modified-base))
+      )
+    );
+    --conflict-bg-current-header-number: var(
+      --conflict-bg-current-header-number-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 72%, var(--diffs-addition-base)),
+        color-mix(in lab, var(--diffs-bg) 62%, var(--diffs-addition-base))
+      )
+    );
+    --conflict-bg-incoming-header-number: var(
+      --conflict-bg-incoming-header-number-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg) 72%, var(--diffs-modified-base)),
+        color-mix(in lab, var(--diffs-bg) 62%, var(--diffs-modified-base))
+      )
+    );
 
     --diffs-bg-separator: var(
       --diffs-bg-separator-override,
@@ -178,6 +289,10 @@
         color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg)),
         color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg))
       )
+    );
+    --diffs-fg-conflict-marker: var(
+      --diffs-fg-conflict-marker-override,
+      var(--diffs-fg-number)
     );
 
     --diffs-deletion-base: var(
@@ -1118,6 +1233,171 @@
 
     &[data-column-number] {
       background-color: var(--diffs-bg-deletion-number);
+    }
+  }
+
+  [data-file] [data-merge-conflict^='marker-'][data-line] {
+    color: var(--diffs-fg-conflict-marker);
+  }
+
+  [data-file] [data-merge-conflict^='marker-'][data-line] span {
+    color: var(--diffs-fg-conflict-marker) !important;
+  }
+
+  [data-file] [data-merge-conflict='marker-start'][data-line]::after {
+    content: ' (Current Change)';
+    color: var(--diffs-fg);
+    opacity: 0.5;
+    font-style: normal;
+  }
+
+  [data-file] [data-merge-conflict='marker-end'][data-line]::after {
+    content: ' (Incoming Change)';
+    color: var(--diffs-fg);
+    opacity: 0.5;
+    font-style: normal;
+  }
+
+  [data-file] [data-merge-conflict='marker-start'][data-line],
+  [data-file] [data-merge-conflict='marker-end'][data-line] {
+    color: var(--diffs-fg);
+  }
+
+  [data-file] [data-merge-conflict='marker-start'][data-line] span,
+  [data-file] [data-merge-conflict='marker-end'][data-line] span {
+    color: var(--diffs-fg) !important;
+  }
+
+  [data-file] {
+    [data-merge-conflict='marker-start'],
+    [data-merge-conflict='current'],
+    [data-merge-conflict='incoming'],
+    [data-merge-conflict='marker-end'] {
+      &[data-column-number] {
+        &::before {
+          content: '';
+          display: block;
+          width: 4px;
+          height: 100%;
+          position: absolute;
+          top: 0;
+          left: 0;
+          user-select: none;
+          contain: strict;
+        }
+      }
+    }
+
+    [data-merge-conflict='marker-start'],
+    [data-merge-conflict='current'] {
+      &[data-column-number] {
+        &::before {
+          background-image: linear-gradient(
+            0deg,
+            var(--conflict-bg-current) 50%,
+            var(--diffs-addition-base) 50%
+          );
+          background-repeat: repeat;
+          background-size: 2px 2px;
+          background-size: calc(1lh / round(1lh / 2px))
+            calc(1lh / round(1lh / 2px));
+        }
+      }
+    }
+
+    [data-merge-conflict='incoming'],
+    [data-merge-conflict='marker-end'] {
+      &[data-column-number] {
+        &::before {
+          background-color: var(--diffs-modified-base);
+        }
+      }
+    }
+
+    [data-merge-conflict='marker-start'],
+    [data-merge-conflict='marker-base'],
+    [data-merge-conflict='marker-separator'],
+    [data-merge-conflict='marker-end'] {
+      &[data-line],
+      &[data-no-newline] {
+        background-color: var(--diffs-bg-conflict-marker);
+      }
+
+      &[data-column-number] {
+        background-color: var(--diffs-bg-conflict-marker-number);
+        color: var(--diffs-fg-conflict-marker);
+      }
+    }
+
+    [data-merge-conflict='current'] {
+      &[data-line],
+      &[data-no-newline] {
+        background-color: var(--conflict-bg-current);
+      }
+
+      &[data-column-number] {
+        background-color: var(--conflict-bg-current-number);
+        color: var(--diffs-addition-base);
+      }
+    }
+
+    [data-merge-conflict='marker-start'] {
+      &[data-line],
+      &[data-no-newline] {
+        background-color: var(--conflict-bg-current-header);
+      }
+
+      &[data-column-number] {
+        background-color: var(--conflict-bg-current-header-number);
+        color: var(--diffs-addition-base);
+      }
+    }
+
+    [data-merge-conflict='marker-end'] {
+      &[data-line],
+      &[data-no-newline] {
+        background-color: var(--conflict-bg-incoming-header);
+      }
+
+      &[data-column-number] {
+        background-color: var(--conflict-bg-incoming-header-number);
+        color: var(--diffs-modified-base);
+      }
+    }
+
+    [data-merge-conflict='marker-separator'] {
+      &[data-line],
+      &[data-no-newline] {
+        background-color: var(--diffs-bg);
+      }
+
+      &[data-column-number] {
+        background-color: var(--diffs-bg);
+      }
+    }
+
+    [data-merge-conflict='base'] {
+      &[data-line],
+      &[data-no-newline] {
+        background-color: var(--diffs-bg-conflict-base);
+      }
+
+      &[data-column-number] {
+        background-color: var(--diffs-bg-conflict-base-number);
+        color: var(--diffs-modified-base);
+      }
+    }
+
+    [data-merge-conflict='incoming'] {
+      &[data-line],
+      &[data-no-newline] {
+        background-color: var(--conflict-bg-incoming);
+      }
+
+      &[data-column-number] {
+        background-color: var(--conflict-bg-incoming-number);
+        color: var(--diffs-modified-base);
+      }
     }
   }
 

@@ -1,6 +1,8 @@
 import '@/app/prose.css';
 import { preloadFile, preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
+import { MERGE_CONFLICT_EXAMPLE } from '../diff-examples/MergeConflict/constants';
+import { MergeConflict } from '../diff-examples/MergeConflict/MergeConflict';
 import {
   FILE_CONTENTS_TYPE,
   FILE_DIFF_METADATA_TYPE,
@@ -107,6 +109,7 @@ export default function DocsPage() {
         <div className="min-w-0 space-y-8">
           <HeadingAnchors />
           <OverviewSection />
+          <MergeConflictDemoSection />
           <InstallationSection />
           <CoreTypesSection />
           <ReactAPISection />
@@ -122,6 +125,14 @@ export default function DocsPage() {
       </DocsLayout>
       <Footer />
     </div>
+  );
+}
+
+async function MergeConflictDemoSection() {
+  return (
+    <MergeConflict
+      prerenderedFile={await preloadFile(MERGE_CONFLICT_EXAMPLE)}
+    />
   );
 }
 

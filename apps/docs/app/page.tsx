@@ -1,4 +1,8 @@
-import { preloadFileDiff, preloadMultiFileDiff } from '@pierre/diffs/ssr';
+import {
+  preloadFile,
+  preloadFileDiff,
+  preloadMultiFileDiff,
+} from '@pierre/diffs/ssr';
 
 import {
   AcceptRejectExample,
@@ -20,6 +24,8 @@ import { FONT_STYLES } from './diff-examples/FontStyles/constants';
 import { FontStyles } from './diff-examples/FontStyles/FontStyles';
 import { LINE_SELECTION_EXAMPLE } from './diff-examples/LineSelection/constants';
 import { LineSelection } from './diff-examples/LineSelection/LineSelection';
+import { MERGE_CONFLICT_EXAMPLE } from './diff-examples/MergeConflict/constants';
+import { MergeConflict } from './diff-examples/MergeConflict/MergeConflict';
 import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
 import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
 import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
@@ -44,6 +50,7 @@ export default function Home() {
         <FontStylesSection />
         <CustomHunkSeparatorsSection />
         <CustomHeaderSection />
+        <MergeConflictSection />
         {/* <PrebuiltReact /> */}
         <AnnotationsSection />
         <AcceptRejectSection />
@@ -105,6 +112,14 @@ async function CustomHunkSeparatorsSection() {
       prerenderedDiff={await preloadMultiFileDiff(
         CUSTOM_HUNK_SEPARATORS_EXAMPLE
       )}
+    />
+  );
+}
+
+async function MergeConflictSection() {
+  return (
+    <MergeConflict
+      prerenderedFile={await preloadFile(MERGE_CONFLICT_EXAMPLE)}
     />
   );
 }
