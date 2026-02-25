@@ -70,7 +70,7 @@ export function DiffStyles({
   );
 
   return (
-    <div className="scroll-mt-[20px] space-y-5" id="styles">
+    <div className="scroll-mt-20 space-y-5" id="styles">
       <div className="space-y-4">
         <FeatureHeader
           title="Choose how changes are styled"

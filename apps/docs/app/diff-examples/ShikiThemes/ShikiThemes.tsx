@@ -124,7 +124,7 @@ export function ShikiThemes({
   >('system');
 
   return (
-    <div className="scroll-mt-[20px] space-y-5" id="themes">
+    <div className="scroll-mt-20 space-y-5" id="themes">
       <FeatureHeader
         title="Adapts to any Shiki theme"
         description={

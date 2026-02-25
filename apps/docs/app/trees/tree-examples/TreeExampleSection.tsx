@@ -8,7 +8,7 @@ export function TreeExampleSection({
   children: ReactNode;
 }) {
   return (
-    <div className="scroll-mt-[20px] space-y-5" id={id}>
+    <div className="scroll-mt-20 space-y-5" id={id}>
       {children}
     </div>
   );

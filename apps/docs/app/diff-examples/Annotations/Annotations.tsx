@@ -95,7 +95,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   );
 
   return (
-    <div className="scroll-mt-[20px] space-y-5" id="annotations">
+    <div className="scroll-mt-20 space-y-5" id="annotations">
       <FeatureHeader
         title="Comments & Annotations"
         description={
@@ -395,7 +395,7 @@ export function AcceptRejectExample({
   }, []);
 
   return (
-    <div className="scroll-mt-[20px] space-y-5" id="accept-reject">
+    <div className="scroll-mt-20 space-y-5" id="accept-reject">
       <FeatureHeader
         title="Accept/Reject Changes"
         description="Annotations can also be used to build interactive code review interfaces similar to AI-assisted coding tools like Cursor. Use it to track the state of each change, inject custom UI like accept/reject buttons, and provide immediate visual feedback."
