@@ -31,6 +31,10 @@ import { createPreElement } from '../utils/createPreElement';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import {
+  getMergeConflictLineTypes,
+  type MergeConflictLineType,
+} from '../utils/getMergeConflictLineTypes';
 import { getThemes } from '../utils/getThemes';
 import {
   createGutterGap,
@@ -345,6 +349,7 @@ export class FileRenderer<LAnnotation = undefined> {
     const contentArray: ElementContent[] = [];
     const gutter = createGutterWrapper();
     const lines = this.getOrCreateLineCache(file);
+    const mergeConflictLineTypes = getMergeConflictLineTypes(lines);
     let rowCount = 0;
 
     iterateOverFile({
@@ -354,6 +359,7 @@ export class FileRenderer<LAnnotation = undefined> {
       callback: ({ lineIndex, lineNumber }) => {
         // Sparse array - directly indexed by lineIndex
         const line = code[lineIndex];
+        const mergeConflictType = mergeConflictLineTypes[lineIndex];
         if (line == null) {
           const message = 'FileRenderer.processFileResult: Line doesnt exist';
           console.error(message, {
@@ -366,10 +372,17 @@ export class FileRenderer<LAnnotation = undefined> {
         }
 
         if (line != null) {
+          setMergeConflictAttribute(line, mergeConflictType);
+
           // Add gutter line number
-          gutter.children.push(
-            createGutterItem('context', lineNumber, `${lineIndex}`)
+          const gutterItem = createGutterItem(
+            'context',
+            lineNumber,
+            `${lineIndex}`
           );
+          setMergeConflictAttribute(gutterItem, mergeConflictType);
+          gutter.children.push(gutterItem);
+
           contentArray.push(line);
           rowCount++;
 
@@ -539,4 +552,18 @@ function areRenderOptionsEqual(
     areThemesEqual(optionsA.theme, optionsB.theme) &&
     optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength
   );
+}
+
+function setMergeConflictAttribute(
+  node: ElementContent,
+  type: MergeConflictLineType
+): void {
+  if (node.type !== 'element') {
+    return;
+  }
+  if (type === 'none') {
+    delete node.properties['data-merge-conflict'];
+    return;
+  }
+  node.properties['data-merge-conflict'] = type;
 }

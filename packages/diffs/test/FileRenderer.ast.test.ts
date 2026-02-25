@@ -162,4 +162,47 @@ describe('FileRenderer AST Structure', () => {
     expect(preAST.tagName).toBe('pre');
     assertDefined(preAST.properties, 'preAST.properties should be defined');
   });
+
+  test('should include merge conflict metadata in file line and gutter nodes', async () => {
+    const instance = new FileRenderer();
+    const mergeConflictFile = {
+      name: 'conflict.ts',
+      contents: [
+        'const stable = 1;',
+        '<<<<<<< HEAD',
+        'const ours = true;',
+        '||||||| base',
+        'const previous = true;',
+        '=======',
+        'const theirs = true;',
+        '>>>>>>> feature',
+        'const done = true;',
+      ].join('\n'),
+    };
+
+    const result = await instance.asyncRender(mergeConflictFile);
+    const [gutter, contentColumn] = instance.renderCodeAST(result) as Element[];
+    const expectedTypes = [
+      undefined,
+      'marker-start',
+      'current',
+      'marker-base',
+      'base',
+      'marker-separator',
+      'incoming',
+      'marker-end',
+      undefined,
+    ];
+
+    for (const [index, expectedType] of expectedTypes.entries()) {
+      const contentLine = contentColumn.children[index] as Element;
+      const gutterLine = gutter.children[index] as Element;
+      expect(contentLine.properties?.['data-merge-conflict']).toBe(
+        expectedType
+      );
+      expect(gutterLine.properties?.['data-merge-conflict']).toBe(expectedType);
+      expect(contentLine.properties?.['data-line-type']).toBe('context');
+      expect(gutterLine.properties?.['data-line-type']).toBe('context');
+    }
+  });
 });
