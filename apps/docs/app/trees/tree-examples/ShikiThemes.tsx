@@ -129,7 +129,6 @@ export function ShikiThemesSection() {
           : selectedLightTheme;
 
   const loadTheme = useCallback(async (themeName: string) => {
-    setLoading(true);
     setError(null);
     try {
       const theme = await resolveTheme(
@@ -138,7 +137,6 @@ export function ShikiThemesSection() {
       setThemeStyles(themeToTreeStyles(theme));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      setThemeStyles(null);
     } finally {
       setLoading(false);
     }
@@ -253,28 +251,21 @@ export function ShikiThemesSection() {
       </div>
 
       <div>
-        {loading && (
+        {loading && themeStyles == null && (
           <p className="text-muted-foreground py-4 text-sm">Loading theme…</p>
         )}
         {error && <p className="text-destructive py-4 text-sm">{error}</p>}
-        {!loading && !error && themeStyles != null ? (
-          <>
-            <FileTree
-              className="min-h-[320px] rounded-lg border p-2"
-              options={{
-                ...baseTreeOptions,
-                id: 'shiki-themes-tree',
-              }}
-              initialSelectedItems={['package.json']}
-              style={
-                themeStyles ?? {
-                  backgroundColor: 'var(--muted)',
-                  color: 'var(--muted-foreground)',
-                }
-              }
-            />
-          </>
-        ) : null}
+        {themeStyles != null && (
+          <FileTree
+            className="min-h-[320px] rounded-lg border p-2"
+            options={{
+              ...baseTreeOptions,
+              id: 'shiki-themes-tree',
+            }}
+            initialSelectedItems={['package.json']}
+            style={themeStyles}
+          />
+        )}
       </div>
     </TreeExampleSection>
   );
