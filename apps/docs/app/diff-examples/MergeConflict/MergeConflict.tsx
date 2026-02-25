@@ -1,15 +1,14 @@
 'use client';
 
-import { File, type LineAnnotation } from '@pierre/diffs/react';
+import { File, type MergeConflictActionPayload } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useCallback, useMemo, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
-import type { MergeConflictAnnotation } from './constants';
 import { Button } from '@/components/ui/button';
 
 interface MergeConflictProps {
-  prerenderedFile: PreloadedFileResult<MergeConflictAnnotation>;
+  prerenderedFile: PreloadedFileResult<undefined>;
 }
 
 type ResolutionMode = 'current' | 'incoming' | 'both';
@@ -32,10 +31,6 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const lines = useMemo(() => contents.split('\n'), [contents]);
   const conflictRegions = useMemo(() => findConflictRegions(lines), [lines]);
   const hasConflict = conflictRegions.length > 0;
-  const lineAnnotations = useMemo(
-    () => createConflictAnnotations(conflictRegions),
-    [conflictRegions]
-  );
 
   const file = useMemo(
     () => ({ ...prerenderedFile.file, contents }),
@@ -44,49 +39,22 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const prerenderedHTML =
     contents === initialContents ? prerenderedFile.prerenderedHTML : undefined;
 
-  const resolveConflict = useCallback(
-    (regionIndex: number, mode: ResolutionMode) => {
+  const onMergeConflictAction = useCallback(
+    ({ conflict, resolution }: MergeConflictActionPayload) => {
       setContents((previous) =>
-        applyConflictResolution(previous, regionIndex, mode)
+        applyConflictResolution(previous, conflict.conflictIndex, resolution)
       );
     },
     []
+  );
+  const options = useMemo(
+    () => ({ ...prerenderedFile.options, onMergeConflictAction }),
+    [prerenderedFile.options, onMergeConflictAction]
   );
 
   function reset() {
     setContents(initialContents);
   }
-
-  const renderAnnotation = useCallback(
-    (annotation: LineAnnotation<MergeConflictAnnotation>) => {
-      const metadata = annotation.metadata;
-      return (
-        <div className="px-2 font-mono text-xs text-[#fff]">
-          <button
-            className={MERGE_ACTION_LINK_CLASS}
-            onClick={() => resolveConflict(metadata.regionIndex, 'current')}
-          >
-            Accept current change
-          </button>
-          <span className="text-[#6a6a6a]"> | </span>
-          <button
-            className={MERGE_ACTION_LINK_CLASS}
-            onClick={() => resolveConflict(metadata.regionIndex, 'incoming')}
-          >
-            Accept incoming change
-          </button>
-          <span className="text-[#6a6a6a]"> | </span>
-          <button
-            className={MERGE_ACTION_LINK_CLASS}
-            onClick={() => resolveConflict(metadata.regionIndex, 'both')}
-          >
-            Accept both
-          </button>
-        </div>
-      );
-    },
-    [resolveConflict]
-  );
 
   return (
     <div className="scroll-mt-[20px] space-y-5" id="merge-conflict-resolution">
@@ -119,18 +87,13 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
 
       <File
         file={file}
-        options={prerenderedFile.options}
+        options={options}
         prerenderedHTML={prerenderedHTML}
-        lineAnnotations={lineAnnotations}
-        renderAnnotation={renderAnnotation}
         className="diff-container"
       />
     </div>
   );
 }
-
-const MERGE_ACTION_LINK_CLASS =
-  'cursor-pointer py-1 text-[#fff] transition-colors hover:text-[#9bd0ff]';
 
 function applyConflictResolution(
   contents: string,
@@ -159,27 +122,6 @@ function applyConflictResolution(
     ...mergedLines,
     ...lines.slice(region.endIndex + 1),
   ].join('\n');
-}
-
-function createConflictAnnotations(
-  regions: ConflictRegion[]
-): LineAnnotation<MergeConflictAnnotation>[] {
-  const annotations: LineAnnotation<MergeConflictAnnotation>[] = [];
-  const totalConflicts = regions.length;
-
-  for (const [regionIndex, region] of regions.entries()) {
-    annotations.push({
-      lineNumber: Math.max(1, region.startIndex),
-      metadata: {
-        type: 'actions',
-        regionIndex,
-        conflictNumber: regionIndex + 1,
-        totalConflicts,
-      },
-    });
-  }
-
-  return annotations;
 }
 
 function findConflictRegions(lines: string[]): ConflictRegion[] {

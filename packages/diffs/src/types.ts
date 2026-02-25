@@ -433,6 +433,25 @@ export type DiffLineAnnotation<T = undefined> = {
   lineNumber: number;
 } & OptionalMetadata<T>;
 
+export type MergeConflictResolution = 'current' | 'incoming' | 'both';
+
+export interface MergeConflictRegion {
+  conflictIndex: number;
+  startLineIndex: number;
+  startLineNumber: number;
+  separatorLineIndex: number;
+  separatorLineNumber: number;
+  endLineIndex: number;
+  endLineNumber: number;
+  baseMarkerLineIndex?: number;
+  baseMarkerLineNumber?: number;
+}
+
+export interface MergeConflictActionPayload {
+  resolution: MergeConflictResolution;
+  conflict: MergeConflictRegion;
+}
+
 export interface GapSpan {
   type: 'gap';
   rows: number;
