@@ -50,7 +50,7 @@ export function createMergeConflictActionsElement({
           createHastElement({
             tagName: 'span',
             properties: { 'data-merge-conflict-action-separator': '' },
-            children: [createTextNodeElement(' | ')],
+            children: [createTextNodeElement(' │ ')],
           }),
           createActionButton({
             conflictIndex,
@@ -60,7 +60,7 @@ export function createMergeConflictActionsElement({
           createHastElement({
             tagName: 'span',
             properties: { 'data-merge-conflict-action-separator': '' },
-            children: [createTextNodeElement(' | ')],
+            children: [createTextNodeElement(' │ ')],
           }),
           createActionButton({
             conflictIndex,
