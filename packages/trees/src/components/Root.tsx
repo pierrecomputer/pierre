@@ -1,5 +1,4 @@
 import {
-  dragAndDropFeature,
   expandAllFeature,
   hotkeysCoreFeature,
   type ItemInstance,
@@ -19,6 +18,7 @@ import {
 } from 'preact/hooks';
 
 import { FLATTENED_PREFIX } from '../constants';
+import { dragAndDropFeature } from '../features/dragAndDropFeature';
 import {
   fileTreeSearchFeature,
   getSearchVisibleIdSet,
@@ -430,6 +430,44 @@ export function Root({
     flattenedDropSubfolderIdRef.current = null;
   }, []);
 
+  const detectFlattenedSubfolderFromPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const treeEl = tree.getElement();
+      const root = treeEl?.getRootNode() as Document | ShadowRoot;
+      let el = (root ?? document).elementFromPoint(
+        clientX,
+        clientY
+      ) as HTMLElement | null;
+      if (el != null && el.nodeType === Node.TEXT_NODE) {
+        el = el.parentElement;
+      }
+      const span = el?.closest?.(
+        '[data-item-flattened-subitem]'
+      ) as HTMLElement | null;
+      const id = span?.getAttribute('data-item-flattened-subitem') ?? null;
+
+      if (id === flattenedDropSubfolderIdRef.current) return;
+
+      if (flattenedHighlightRef.current != null) {
+        flattenedHighlightRef.current.removeAttribute(
+          'data-item-flattened-subitem-drag-target'
+        );
+      }
+
+      if (span != null && id != null) {
+        span.setAttribute('data-item-flattened-subitem-drag-target', 'true');
+        flattenedHighlightRef.current = span;
+        flattenedDropSubfolderIdRef.current = id;
+      } else {
+        flattenedHighlightRef.current = null;
+        flattenedDropSubfolderIdRef.current = null;
+      }
+    },
+    // tree.getElement() is stable across renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
   // Keep the previous idToPath so we can translate stale expanded IDs → paths
   // when files change (DnD or controlled update).
   const prevIdToPathRef = useRef<Map<string, string>>(idToPath);
@@ -542,6 +580,8 @@ export function Root({
         target: { item: ItemInstance<FileTreeNode> }
       ) => target.item.isFolder(),
       openOnDropDelay: 800,
+      _onTouchDragMove: detectFlattenedSubfolderFromPoint,
+      _onTouchDragEnd: clearFlattenedSubfolder,
     }),
   });
 

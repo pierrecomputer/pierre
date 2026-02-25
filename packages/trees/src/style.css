@@ -158,6 +158,8 @@
     margin: 0 var(--ft-internal-item-margin-x);
     cursor: pointer;
     user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
     display: flex;
     align-items: center;
     line-height: var(--ft-internal-row-height);
