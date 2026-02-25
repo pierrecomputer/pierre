@@ -93,10 +93,7 @@ export interface FileOptions<LAnnotation>
   mergeConflictActions?:
     | 'none'
     | 'default'
-    | ((
-        conflict: MergeConflictRegion,
-        instance: File<LAnnotation>
-      ) => HTMLElement | DocumentFragment);
+    | MergeConflictActionsRenderer<LAnnotation>;
   onMergeConflictAction?(
     payload: MergeConflictActionPayload,
     instance: File<LAnnotation>
@@ -116,6 +113,13 @@ interface AnnotationElementCache<LAnnotation> {
   element: HTMLElement;
   annotation: LineAnnotation<LAnnotation>;
 }
+
+type MergeConflictActionsRenderer<LAnnotation> = {
+  bivarianceHack(
+    conflict: MergeConflictRegion,
+    instance: File<LAnnotation>
+  ): HTMLElement | DocumentFragment;
+}['bivarianceHack'];
 
 interface ColumnElements {
   gutter: HTMLElement;
