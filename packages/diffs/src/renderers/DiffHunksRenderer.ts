@@ -104,7 +104,10 @@ interface ProcessContext {
 }
 
 type OptionsWithDefaults = Required<
-  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter'>
+  Omit<
+    BaseDiffOptions,
+    'unsafeCSS' | 'preferredHighlighter' | 'disableExpandAllButton'
+  >
 >;
 
 export interface HunksRenderResult {
@@ -135,6 +138,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private diff: FileDiffMetadata | undefined;
 
   private expandedHunks = new Map<number, HunkExpansionRegion>();
+  private allExpanded = false;
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
@@ -158,6 +162,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
+    this.allExpanded = false;
     this.workerManager?.cleanUpPendingTasks(this);
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
@@ -167,6 +172,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
+    this.allExpanded = false;
     this.workerManager?.cleanUpPendingTasks(this);
   }
 
@@ -213,6 +219,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public getExpandedHunksMap(): Map<number, HunkExpansionRegion> {
     return this.expandedHunks;
+  }
+
+  public expandAll(): void {
+    this.allExpanded = true;
+    if (this.renderCache?.highlighted !== true) {
+      this.renderCache = undefined;
+    }
+  }
+
+  public collapseAll(): void {
+    this.allExpanded = false;
+    this.expandedHunks.clear();
+    if (this.renderCache?.highlighted !== true) {
+      this.renderCache = undefined;
+    }
+  }
+
+  public isAllExpanded(): boolean {
+    return this.allExpanded;
   }
 
   public setLineAnnotations(
@@ -379,7 +404,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           // everything
           isDefaultRenderRange(renderRange)
             ? true
-            : expandUnchanged
+            : expandUnchanged || this.allExpanded
               ? true
               : this.expandedHunks,
           collapsedContextThreshold
@@ -653,7 +678,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diffStyle,
       startingLine: renderRange.startingLine,
       totalLines: renderRange.totalLines,
-      expandedHunks: expandUnchanged ? true : this.expandedHunks,
+      expandedHunks:
+        expandUnchanged || this.allExpanded ? true : this.expandedHunks,
       collapsedContextThreshold,
       callback: ({
         hunkIndex,

@@ -55,6 +55,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
@@ -29257,6 +29265,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
@@ -58222,6 +58238,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "data-title": "",
             },
             "tagName": "div",
+            "type": "element",
+          },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
             "type": "element",
           },
         ],
@@ -87554,6 +87578,14 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
@@ -90349,6 +90381,14 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
             "tagName": "div",
             "type": "element",
           },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
         ],
         "properties": {
           "data-header-content": "",
@@ -91596,6 +91636,14 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
               "data-title": "",
             },
             "tagName": "div",
+            "type": "element",
+          },
+          {
+            "children": [],
+            "properties": {
+              "name": "expand-all-button",
+            },
+            "tagName": "slot",
             "type": "element",
           },
         ],

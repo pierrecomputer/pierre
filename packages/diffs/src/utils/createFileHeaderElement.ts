@@ -1,6 +1,10 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
-import { HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID } from '../constants';
+import {
+  EXPAND_ALL_SLOT_ID,
+  HEADER_METADATA_SLOT_ID,
+  HEADER_PREFIX_SLOT_ID,
+} from '../constants';
 import type {
   ChangeTypes,
   FileContents,
@@ -92,6 +96,12 @@ function createHeaderElement({
       tagName: 'div',
       children: [createTextNodeElement(name)],
       properties: { 'data-title': '' },
+    })
+  );
+  children.push(
+    createHastElement({
+      tagName: 'slot',
+      properties: { name: EXPAND_ALL_SLOT_ID },
     })
   );
   return createHastElement({

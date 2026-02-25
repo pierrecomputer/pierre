@@ -367,6 +367,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
   expandUnchanged?: boolean; // false is default
+  disableExpandAllButton?: boolean; // false is default
   // Auto-expand collapsed context at or below this size.
   collapsedContextThreshold?: number; // 2 is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated

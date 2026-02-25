@@ -1198,6 +1198,20 @@
     color: var(--diffs-deletion-base);
   }
 
+  [data-expand-all-button] {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--diffs-fg-number);
+    font-family: var(--diffs-header-font-family, var(--diffs-header-font-fallback));
+    font-size: inherit;
+
+    &:hover {
+      color: var(--diffs-fg);
+    }
+  }
+
   [data-annotation-content] {
     position: relative;
     display: flow-root;

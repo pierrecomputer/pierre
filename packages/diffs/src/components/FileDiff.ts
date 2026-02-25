@@ -5,6 +5,7 @@ import {
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
+  EXPAND_ALL_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
   UNSAFE_CSS_ATTRIBUTE,
@@ -176,6 +177,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected headerElement: HTMLElement | undefined;
   protected headerPrefix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
+  protected expandAllButton: HTMLElement | undefined;
   protected separatorCache: Map<string, CustomHunkElementCache> = new Map();
   protected errorWrapper: HTMLElement | undefined;
   protected placeHolder: HTMLElement | undefined;
@@ -448,6 +450,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerElement = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.expandAllButton = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
@@ -544,6 +547,7 @@ export class FileDiff<LAnnotation = undefined> {
       // this.renderSeparators();
       this.renderAnnotations();
       this.renderGutterUtility();
+      this.renderExpandAllButton();
       this.injectUnsafeCSS();
       this.mouseEventManager.setup(this.pre);
       this.lineSelectionManager.setup(this.pre);
@@ -585,6 +589,16 @@ export class FileDiff<LAnnotation = undefined> {
 
   public expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
     this.hunksRenderer.expandHunk(hunkIndex, direction);
+    this.rerender();
+  }
+
+  public expandAll(): void {
+    this.hunksRenderer.expandAll();
+    this.rerender();
+  }
+
+  public collapseAll(): void {
+    this.hunksRenderer.collapseAll();
     this.rerender();
   }
 
@@ -766,6 +780,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.injectUnsafeCSS();
       this.renderAnnotations();
       this.renderGutterUtility();
+      this.renderExpandAllButton();
 
       this.mouseEventManager.setup(pre);
       this.lineSelectionManager.setup(pre);
@@ -829,6 +844,8 @@ export class FileDiff<LAnnotation = undefined> {
 
     this.gutterUtilityContent?.remove();
     this.gutterUtilityContent = undefined;
+    this.expandAllButton?.remove();
+    this.expandAllButton = undefined;
   }
 
   public renderPlaceholder(height: number): boolean {
@@ -865,6 +882,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.gutterUtilityContent?.remove();
     this.headerPrefix?.remove();
     this.headerMetadata?.remove();
+    this.expandAllButton?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
     this.unsafeCSSStyle?.remove();
@@ -879,6 +897,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.gutterUtilityContent = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.expandAllButton = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
     this.unsafeCSSStyle = undefined;
@@ -965,6 +984,51 @@ export class FileDiff<LAnnotation = undefined> {
       element.parentNode?.removeChild(element);
     }
   }
+
+  protected renderExpandAllButton(): void {
+    const {
+      disableExpandAllButton = false,
+      expandUnchanged = false,
+      disableFileHeader = false,
+    } = this.options;
+    if (
+      this.isContainerManaged ||
+      this.fileContainer == null ||
+      disableExpandAllButton ||
+      expandUnchanged ||
+      disableFileHeader
+    ) {
+      this.expandAllButton?.remove();
+      this.expandAllButton = undefined;
+      return;
+    }
+
+    if (this.expandAllButton == null) {
+      this.expandAllButton = document.createElement('button');
+      this.expandAllButton.slot = EXPAND_ALL_SLOT_ID;
+      this.expandAllButton.dataset.expandAllButton = '';
+      this.expandAllButton.addEventListener('click', this.handleExpandAllClick);
+      this.fileContainer.appendChild(this.expandAllButton);
+    }
+
+    const isExpanded = this.hunksRenderer.isAllExpanded();
+    this.expandAllButton.textContent = isExpanded
+      ? 'Collapse all'
+      : 'Expand all';
+    if (isExpanded) {
+      this.expandAllButton.dataset.expanded = '';
+    } else {
+      delete this.expandAllButton.dataset.expanded;
+    }
+  }
+
+  private handleExpandAllClick = (): void => {
+    if (this.hunksRenderer.isAllExpanded()) {
+      this.collapseAll();
+    } else {
+      this.expandAll();
+    }
+  };
 
   private renderGutterUtility() {
     const renderGutterUtility =
