@@ -18,6 +18,9 @@ export interface TouchDndDataRef extends DndDataRef {
   touchCancelHandler?: (e: TouchEvent) => void;
   selectStartHandler?: (e: Event) => void;
   touchDragElement?: HTMLElement;
+  touchGhostElement?: HTMLElement;
+  touchGhostOffsetX?: number;
+  touchGhostOffsetY?: number;
 }
 
 export interface DndState<T> {

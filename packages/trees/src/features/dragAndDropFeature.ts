@@ -108,6 +108,12 @@ const cleanupTouchListeners = (dataRef: { current: TouchDndDataRef }) => {
     dataRef.current.touchDragElement.style.removeProperty('touch-action');
     dataRef.current.touchDragElement = undefined;
   }
+  if (dataRef.current.touchGhostElement) {
+    dataRef.current.touchGhostElement.remove();
+    dataRef.current.touchGhostElement = undefined;
+    dataRef.current.touchGhostOffsetX = undefined;
+    dataRef.current.touchGhostOffsetY = undefined;
+  }
 };
 
 interface TouchDragConfig {
@@ -161,10 +167,53 @@ const startTouchDrag = (
     draggingOverItem: tree.getFocusedItem(),
   });
 
+  // Create ghost element that follows the user's finger
+  const itemEl = item.getElement();
+  if (itemEl) {
+    const rect = itemEl.getBoundingClientRect();
+    const ghost = itemEl.cloneNode(true) as HTMLElement;
+    ghost.removeAttribute('data-item-id');
+    ghost.removeAttribute('id');
+    Object.assign(ghost.style, {
+      position: 'fixed',
+      left: '0px',
+      top: '0px',
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+      transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
+      pointerEvents: 'none',
+      opacity: '0.85',
+      zIndex: '10000',
+      margin: '0',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      willChange: 'transform',
+    });
+
+    const treeEl = tree.getElement();
+    const root = treeEl?.getRootNode();
+    if (root instanceof ShadowRoot) {
+      root.appendChild(ghost);
+    } else {
+      document.body.appendChild(ghost);
+    }
+
+    dataRef.current.touchGhostElement = ghost;
+    dataRef.current.touchGhostOffsetX =
+      (dataRef.current.touchStartX ?? 0) - rect.left;
+    dataRef.current.touchGhostOffsetY =
+      (dataRef.current.touchStartY ?? 0) - rect.top;
+  }
+
   const onTouchMove = (e: TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
     e.preventDefault();
+
+    if (dataRef.current.touchGhostElement) {
+      const x = touch.clientX - (dataRef.current.touchGhostOffsetX ?? 0);
+      const y = touch.clientY - (dataRef.current.touchGhostOffsetY ?? 0);
+      dataRef.current.touchGhostElement.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    }
 
     const proxy = createTouchProxy(touch);
     const targetItem = findItemUnderPoint(tree, touch.clientX, touch.clientY);
