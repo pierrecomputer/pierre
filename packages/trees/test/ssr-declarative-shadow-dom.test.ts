@@ -41,6 +41,22 @@ beforeAll(async () => {
   ({ preactRenderer } = await import('../src/utils/preactRenderer'));
 });
 
+const CUSTOM_SPRITE_A = `
+<svg>
+  <symbol id="custom-a" viewBox="0 0 12 12">
+    <circle cx="6" cy="6" r="6" />
+  </symbol>
+</svg>
+`;
+
+const CUSTOM_SPRITE_B = `
+<svg>
+  <symbol id="custom-b" viewBox="0 0 12 12">
+    <rect x="0" y="0" width="12" height="12" />
+  </symbol>
+</svg>
+`;
+
 describe('SSR + declarative shadow DOM', () => {
   test('preloadFileTree returns an id and shadow HTML containing the expected wrapper', () => {
     const payload = preloadFileTree({
@@ -220,6 +236,129 @@ describe('SSR + declarative shadow DOM', () => {
 
     ft.setOptions({ fileTreeSearchMode: 'hide-non-matches' });
     expect(rerenders).toBe(1);
+  });
+
+  test('setOptions applies icons changes at runtime', () => {
+    const ft = new FileTree({ initialFiles: ['a.txt'] });
+
+    let rerenders = 0;
+    (
+      ft as unknown as {
+        rerender: () => void;
+      }
+    ).rerender = () => {
+      rerenders += 1;
+    };
+
+    ft.setOptions({
+      icons: {
+        spriteSheet: CUSTOM_SPRITE_A,
+        remap: {
+          'file-tree-icon-file': 'custom-a',
+        },
+      },
+    });
+    expect(rerenders).toBe(1);
+  });
+
+  test('setOptions swaps custom sprite sheets at runtime', () => {
+    const container = document.createElement('file-tree-container');
+    const ft = new FileTree({
+      initialFiles: ['README.md'],
+      icons: {
+        spriteSheet: CUSTOM_SPRITE_A,
+        remap: {
+          'file-tree-icon-file': 'custom-a',
+        },
+      },
+    });
+
+    const origRender = preactRenderer.renderRoot;
+    preactRenderer.renderRoot = () => {};
+    try {
+      ft.render({ fileTreeContainer: container });
+
+      const shadowRoot = container.shadowRoot;
+      expect(shadowRoot).not.toBeNull();
+      const getTopLevelSpriteCount = () =>
+        Array.from(shadowRoot?.children ?? []).filter(
+          (element) => element instanceof SVGElement
+        ).length;
+      expect(getTopLevelSpriteCount()).toBe(2);
+      expect(shadowRoot?.querySelector('#custom-a')).not.toBeNull();
+
+      ft.setOptions({
+        icons: {
+          spriteSheet: CUSTOM_SPRITE_B,
+          remap: {
+            'file-tree-icon-file': 'custom-b',
+          },
+        },
+      });
+
+      expect(getTopLevelSpriteCount()).toBe(2);
+      expect(shadowRoot?.querySelector('#custom-a')).toBeNull();
+      expect(shadowRoot?.querySelector('#custom-b')).not.toBeNull();
+    } finally {
+      preactRenderer.renderRoot = origRender;
+    }
+  });
+
+  test('setOptions removes custom sprite sheet when icons are unset', () => {
+    const container = document.createElement('file-tree-container');
+    const ft = new FileTree({
+      initialFiles: ['README.md'],
+      icons: {
+        spriteSheet: CUSTOM_SPRITE_A,
+        remap: {
+          'file-tree-icon-file': 'custom-a',
+        },
+      },
+    });
+
+    const origRender = preactRenderer.renderRoot;
+    preactRenderer.renderRoot = () => {};
+    try {
+      ft.render({ fileTreeContainer: container });
+
+      const shadowRoot = container.shadowRoot;
+      const getTopLevelSpriteCount = () =>
+        Array.from(shadowRoot?.children ?? []).filter(
+          (element) => element instanceof SVGElement
+        ).length;
+      expect(getTopLevelSpriteCount()).toBe(2);
+      expect(shadowRoot?.querySelector('#custom-a')).not.toBeNull();
+
+      ft.setOptions({ icons: undefined });
+
+      expect(getTopLevelSpriteCount()).toBe(1);
+      expect(shadowRoot?.querySelector('#custom-a')).toBeNull();
+    } finally {
+      preactRenderer.renderRoot = origRender;
+    }
+  });
+
+  test('preloadFileTree includes custom sprite sheets without requiring marker attrs', () => {
+    const payload = preloadFileTree({
+      initialFiles: ['README.md'],
+      icons: {
+        spriteSheet: CUSTOM_SPRITE_A,
+        remap: {
+          'file-tree-icon-file': 'custom-a',
+        },
+      },
+    });
+
+    const container = document.createElement('file-tree-container');
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = payload.shadowHtml;
+
+    expect(shadowRoot.querySelectorAll('svg[data-icon-sprite]')).toHaveLength(
+      1
+    );
+    expect(shadowRoot.querySelector('#custom-a')).not.toBeNull();
+    expect(payload.shadowHtml).toContain('<symbol id="custom-a"');
   });
 
   test('setFiles invokes onFilesChange callback', () => {

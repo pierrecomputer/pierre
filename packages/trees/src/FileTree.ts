@@ -60,6 +60,19 @@ export interface FileTreeCallbacks {
   _onDragMoveFiles?: (newFiles: string[]) => void;
 }
 
+type RemappedIcon =
+  | string
+  | {
+      name: string;
+      width?: number;
+      height?: number;
+      viewBox?: string;
+    };
+export interface FileTreeIconConfig {
+  spriteSheet?: string;
+  remap?: Record<string, RemappedIcon>;
+}
+
 export interface FileTreeOptions {
   dragAndDrop?: boolean;
   fileTreeSearchMode?: FileTreeSearchMode;
@@ -72,6 +85,7 @@ export interface FileTreeOptions {
   /** Return true to overwrite the destination file when a DnD move collides. */
   onCollision?: (collision: FileTreeCollision) => boolean;
   useLazyDataLoader?: boolean;
+  icons?: FileTreeIconConfig;
 }
 
 export interface FileTreeStateConfig {
@@ -101,7 +115,7 @@ export class FileTree {
   __id: string;
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
-  private spriteSVG: SVGElement | undefined;
+  private defaultSpriteSheet: SVGElement | undefined;
 
   /** Populated by the Preact Root component with the tree instance + maps. */
   readonly handleRef: { current: FileTreeHandle | null } = { current: null };
@@ -387,6 +401,7 @@ export class FileTree {
       'fileTreeSearchMode',
       'gitStatus',
       'initialFiles',
+      'icons',
       'flattenEmptyDirectories',
       'lockedPaths',
       'onCollision',
@@ -439,7 +454,106 @@ export class FileTree {
 
   private rerender(): void {
     if (this.divWrapper == null) return;
+    if (this.fileTreeContainer != null) {
+      this.syncIconSpriteSheets(this.fileTreeContainer);
+    }
     preactRenderRoot(this.divWrapper, this.buildRootProps());
+  }
+
+  private parseSpriteSheet(spriteSheet: string): SVGElement | undefined {
+    const fragment = document.createElement('div');
+    fragment.innerHTML = spriteSheet;
+    const svg = fragment.querySelector('svg');
+    if (svg instanceof SVGElement) {
+      return svg;
+    }
+    return undefined;
+  }
+
+  private isDefaultSpriteSheet(spriteSheet: SVGElement): boolean {
+    return (
+      spriteSheet.querySelector('#file-tree-icon-chevron') instanceof
+        SVGElement &&
+      spriteSheet.querySelector('#file-tree-icon-file') instanceof SVGElement &&
+      spriteSheet.querySelector('#file-tree-icon-dot') instanceof SVGElement &&
+      spriteSheet.querySelector('#file-tree-icon-lock') instanceof SVGElement
+    );
+  }
+
+  private getTopLevelSpriteSheets(shadowRoot: ShadowRoot): SVGElement[] {
+    return Array.from(shadowRoot.children).filter(
+      (element): element is SVGElement => element instanceof SVGElement
+    );
+  }
+
+  private ensureDefaultSpriteSheet(shadowRoot: ShadowRoot): void {
+    let defaultSprite =
+      this.defaultSpriteSheet != null &&
+      this.defaultSpriteSheet.parentNode === shadowRoot
+        ? this.defaultSpriteSheet
+        : undefined;
+
+    defaultSprite ??= this.getTopLevelSpriteSheets(shadowRoot).find((sprite) =>
+        this.isDefaultSpriteSheet(sprite)
+      );
+
+    if (defaultSprite == null) {
+      const builtInSprite = this.parseSpriteSheet(SVGSpriteSheet);
+      if (builtInSprite != null) {
+        shadowRoot.appendChild(builtInSprite);
+        defaultSprite = builtInSprite;
+      }
+    }
+
+    this.defaultSpriteSheet = defaultSprite;
+  }
+
+  private syncCustomSpriteSheet(shadowRoot: ShadowRoot): void {
+    const topLevelSprites = this.getTopLevelSpriteSheets(shadowRoot);
+    const defaultSprite = topLevelSprites.find((sprite) =>
+      this.isDefaultSpriteSheet(sprite)
+    );
+    const currentCustomSprites = topLevelSprites.filter(
+      (sprite) => sprite !== defaultSprite
+    );
+
+    const customSpriteSheet = this.options.icons?.spriteSheet?.trim() ?? '';
+    if (customSpriteSheet.length === 0) {
+      for (const customSprite of currentCustomSprites) {
+        customSprite.remove();
+      }
+      return;
+    }
+
+    const customSprite = this.parseSpriteSheet(customSpriteSheet);
+    if (customSprite == null) {
+      for (const customSprite of currentCustomSprites) {
+        customSprite.remove();
+      }
+      return;
+    }
+
+    if (
+      currentCustomSprites.length === 1 &&
+      currentCustomSprites[0].outerHTML === customSprite.outerHTML
+    ) {
+      return;
+    }
+
+    for (const currentCustomSprite of currentCustomSprites) {
+      currentCustomSprite.remove();
+    }
+    shadowRoot.appendChild(customSprite);
+  }
+
+  private syncIconSpriteSheets(fileTreeContainer: HTMLElement): void {
+    const shadowRoot = fileTreeContainer.shadowRoot;
+    if (shadowRoot == null) {
+      return;
+    }
+
+    this.ensureDefaultSpriteSheet(shadowRoot);
+    this.syncCustomSpriteSheet(shadowRoot);
   }
 
   private getOrCreateFileTreeContainer(
@@ -466,26 +580,8 @@ export class FileTree {
         // ignore
       }
     }
-    // First try to find the sprite SVG
-    if (this.spriteSVG == null) {
-      for (const element of Array.from(
-        this.fileTreeContainer.shadowRoot?.children ?? []
-      )) {
-        if (element instanceof SVGElement) {
-          this.spriteSVG = element;
-          break;
-        }
-      }
-    }
-    if (this.spriteSVG == null) {
-      const fragment = document.createElement('div');
-      fragment.innerHTML = SVGSpriteSheet;
-      const firstChild = fragment.firstChild;
-      if (firstChild instanceof SVGElement) {
-        this.spriteSVG = firstChild;
-        this.fileTreeContainer.shadowRoot?.appendChild(this.spriteSVG);
-      }
-    }
+
+    this.syncIconSpriteSheets(this.fileTreeContainer);
     return this.fileTreeContainer;
   }
 
@@ -539,7 +635,6 @@ export class FileTree {
       fileTreeContainer.shadowRoot?.children ?? []
     )) {
       if (element instanceof SVGElement) {
-        this.spriteSVG = element;
         continue;
       }
       if (!(element instanceof HTMLElement)) {
@@ -564,11 +659,14 @@ export class FileTree {
       this.__id = discoveredId;
       this.options = { ...this.options, id: discoveredId };
     }
+
+    this.fileTreeContainer = fileTreeContainer;
+    this.syncIconSpriteSheets(fileTreeContainer);
+
     if (this.divWrapper == null) {
       console.warn('FileTree: expected html not found, rendering instead');
       this.render(props);
     } else {
-      this.fileTreeContainer = fileTreeContainer;
       preactHydrateRoot(this.divWrapper, this.buildRootProps());
       // Preact's hydrate() only attaches function props (event handlers),
       // skipping non-function props like `draggable`. When DnD is enabled
@@ -592,6 +690,6 @@ export class FileTree {
     this.expandPathsCacheFor = null;
     this.fileTreeContainer = undefined;
     this.divWrapper = undefined;
-    this.spriteSVG = undefined;
+    this.defaultSpriteSheet = undefined;
   }
 }

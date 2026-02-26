@@ -20,6 +20,7 @@ import {
   FILE_TREE_COOKIE_VERSION_NAME,
 } from './cookies';
 import {
+  customSpriteSheet,
   GIT_STATUSES_A,
   GIT_STATUSES_B,
   sharedDemoFileTreeOptions,
@@ -31,6 +32,7 @@ interface ClientPageProps {
   preloadedFileTreeContainerHtml: string;
   preloadedControlledFileTreeHtml: string;
   preloadedGitStatusFileTreeHtml: string;
+  preloadedCustomIconsFileTreeHtml: string;
   initialFlattenEmptyDirectories?: boolean;
   initialUseLazyDataLoader?: boolean;
 }
@@ -40,6 +42,7 @@ export function ClientPage({
   preloadedFileTreeContainerHtml,
   preloadedControlledFileTreeHtml,
   preloadedGitStatusFileTreeHtml,
+  preloadedCustomIconsFileTreeHtml,
   initialFlattenEmptyDirectories,
   initialUseLazyDataLoader,
 }: ClientPageProps) {
@@ -346,6 +349,38 @@ export function ClientPage({
           initialFiles={reactFiles}
           stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedGitStatusFileTreeHtml}
+        />
+      </div>
+
+      {/* Divider */}
+      <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
+
+      {/* Custom Icons */}
+      <h2 id="custom-icons" className="mb-4 text-2xl font-bold">
+        Custom Icons
+      </h2>
+      <div
+        style={
+          {
+            '--ft-icon-width': '16px',
+          } as React.CSSProperties
+        }
+        className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        <VanillaCustomIcons
+          options={fileTreeOptions}
+          stateConfig={sharedDemoStateConfig}
+        />
+        <ReactCustomIcons
+          options={reactOptions}
+          initialFiles={reactFiles}
+          stateConfig={sharedDemoStateConfig}
+        />
+        <ReactSSRCustomIcons
+          options={reactOptions}
+          initialFiles={reactFiles}
+          stateConfig={sharedDemoStateConfig}
+          prerenderedHTML={preloadedCustomIconsFileTreeHtml}
         />
       </div>
     </div>
@@ -1508,6 +1543,121 @@ function ReactSSRGitStatus({
         initialExpandedItems={stateConfig?.initialExpandedItems}
         onSelection={stateConfig?.onSelection}
         gitStatus={gitStatus}
+      />
+    </ExampleCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Custom Icons Examples
+// ---------------------------------------------------------------------------
+
+const CUSTOM_ICONS_REMAP = {
+  'file-tree-icon-file': 'custom-hamburger-icon',
+  'file-tree-icon-chevron': {
+    name: 'custom-chevron-icon',
+    width: 16,
+    height: 16,
+  },
+} as const;
+
+/**
+ * Vanilla FileTree — Custom Icons (CSR)
+ */
+function VanillaCustomIcons({
+  options,
+  stateConfig,
+}: {
+  options: FileTreeOptions;
+  stateConfig?: FileTreeStateConfig;
+}) {
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node == null) return;
+      node.innerHTML = '';
+      const fileTree = new FileTree(
+        {
+          ...options,
+          icons: { spriteSheet: customSpriteSheet, remap: CUSTOM_ICONS_REMAP },
+        },
+        stateConfig
+      );
+      fileTree.render({ containerWrapper: node });
+      return () => {
+        fileTree.cleanUp();
+      };
+    },
+    [options, stateConfig]
+  );
+
+  return (
+    <ExampleCard
+      title="Vanilla — Custom Icons"
+      description="Vanilla CSR tree with a custom spritesheet replacing the file icon with a custom file icon"
+    >
+      <div ref={ref} />
+    </ExampleCard>
+  );
+}
+
+/**
+ * React FileTree — Custom Icons (CSR)
+ */
+function ReactCustomIcons({
+  options,
+  initialFiles,
+  stateConfig,
+}: {
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
+  stateConfig?: FileTreeStateConfig;
+}) {
+  return (
+    <ExampleCard
+      title="React — Custom Icons"
+      description="React CSR tree with a custom spritesheet replacing the file icon with a custom file icon"
+    >
+      <FileTreeReact
+        options={{
+          ...options,
+          icons: { spriteSheet: customSpriteSheet, remap: CUSTOM_ICONS_REMAP },
+        }}
+        initialFiles={initialFiles}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        onSelection={stateConfig?.onSelection}
+      />
+    </ExampleCard>
+  );
+}
+
+/**
+ * React FileTree — Custom Icons (SSR)
+ */
+function ReactSSRCustomIcons({
+  options,
+  initialFiles,
+  stateConfig,
+  prerenderedHTML,
+}: {
+  options: Omit<FileTreeOptions, 'initialFiles'>;
+  initialFiles?: string[];
+  stateConfig?: FileTreeStateConfig;
+  prerenderedHTML: string;
+}) {
+  return (
+    <ExampleCard
+      title="React (SSR) — Custom Icons"
+      description="SSR-hydrated React tree with a custom spritesheet replacing the chevron with a folder icon"
+    >
+      <FileTreeReact
+        options={{
+          ...options,
+          icons: { spriteSheet: customSpriteSheet, remap: CUSTOM_ICONS_REMAP },
+        }}
+        initialFiles={initialFiles}
+        prerenderedHTML={prerenderedHTML}
+        initialExpandedItems={stateConfig?.initialExpandedItems}
+        onSelection={stateConfig?.onSelection}
       />
     </ExampleCard>
   );

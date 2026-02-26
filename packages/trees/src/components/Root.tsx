@@ -36,6 +36,7 @@ import type {
 } from '../FileTree';
 import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoader } from '../loader/sync';
+import type { SVGSpriteNames } from '../sprite';
 import type { FileTreeNode } from '../types';
 import { computeNewFilesAfterDrop } from '../utils/computeNewFilesAfterDrop';
 import { controlledExpandedPathsToExpandedIds } from '../utils/controlledExpandedState';
@@ -133,6 +134,22 @@ export function Root({
     onCollision,
     useLazyDataLoader,
   } = fileTreeOptions;
+
+  const iconRemap = fileTreeOptions.icons?.remap;
+  const remapIcon = (
+    name: SVGSpriteNames
+  ): {
+    name: string;
+    remappedFrom?: string;
+    width?: number;
+    height?: number;
+    viewBox?: string;
+  } => {
+    const entry = iconRemap?.[name];
+    if (entry == null) return { name };
+    if (typeof entry === 'string') return { name: entry, remappedFrom: name };
+    return { ...entry, remappedFrom: name };
+  };
 
   const treeDomId = useMemo(() => {
     const base = fileTreeOptions.id ?? 'ft';
@@ -964,11 +981,11 @@ export function Root({
               <div data-item-section="icon">
                 {hasChildren ? (
                   <Icon
-                    name="file-tree-icon-chevron"
+                    {...remapIcon('file-tree-icon-chevron')}
                     alignCapitals={alignCapitals}
                   />
                 ) : (
-                  <Icon name="file-tree-icon-file" />
+                  <Icon {...remapIcon('file-tree-icon-file')} />
                 )}
               </div>
               <div data-item-section="content">
@@ -987,13 +1004,17 @@ export function Root({
               {statusLabel || showStatusDot ? (
                 <div data-item-section="status">
                   {statusLabel ?? (
-                    <Icon name="file-tree-icon-dot" width={6} height={6} />
+                    <Icon
+                      {...remapIcon('file-tree-icon-dot')}
+                      width={6}
+                      height={6}
+                    />
                   )}
                 </div>
               ) : null}
               {isLocked ? (
                 <div data-item-section="lock" style={{ marginLeft: 'auto' }}>
-                  <Icon name="file-tree-icon-lock" />
+                  <Icon {...remapIcon('file-tree-icon-lock')} />
                 </div>
               ) : null}
             </button>

@@ -23,7 +23,8 @@ export function preloadFileTree(
   stateConfig?: FileTreeStateConfig
 ): FileTreeSsrPayload {
   const id = fileTreeOptions.id ?? `ft_srv_${++ssrInstanceId}`;
-  const shadowHtml = `${SVGSpriteSheet}<style ${STYLE_MARKER_ATTR}>${fileTreeStyles}</style>
+  const customSpriteSheet = fileTreeOptions.icons?.spriteSheet?.trim() ?? '';
+  const shadowHtml = `${SVGSpriteSheet}${customSpriteSheet}<style ${STYLE_MARKER_ATTR}>${fileTreeStyles}</style>
 <div data-file-tree-id="${id}">
   ${renderToString(<Root fileTreeOptions={{ ...fileTreeOptions, id }} stateConfig={stateConfig} />)}
 </div>

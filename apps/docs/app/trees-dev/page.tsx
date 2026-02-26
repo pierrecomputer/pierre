@@ -10,6 +10,7 @@ import {
   FILE_TREE_COOKIE_VERSION_NAME,
 } from './cookies';
 import {
+  customSpriteSheet,
   GIT_STATUSES_A,
   sharedDemoFileTreeOptions,
   sharedDemoStateConfig,
@@ -52,6 +53,23 @@ export default async function FileTreePage() {
     { ...fileTreeOptions, gitStatus: GIT_STATUSES_A },
     sharedDemoStateConfig
   );
+  const customIconsSsr = preloadFileTree(
+    {
+      ...fileTreeOptions,
+      icons: {
+        spriteSheet: customSpriteSheet,
+        remap: {
+          'file-tree-icon-file': 'custom-hamburger-icon',
+          'file-tree-icon-chevron': {
+            name: 'custom-chevron-icon',
+            width: 16,
+            height: 16,
+          },
+        },
+      },
+    },
+    sharedDemoStateConfig
+  );
 
   return (
     <ClientPage
@@ -59,6 +77,7 @@ export default async function FileTreePage() {
       preloadedFileTreeContainerHtml={mainSsr.html}
       preloadedControlledFileTreeHtml={controlledSsr.shadowHtml}
       preloadedGitStatusFileTreeHtml={gitStatusSsr.shadowHtml}
+      preloadedCustomIconsFileTreeHtml={customIconsSsr.shadowHtml}
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
       initialUseLazyDataLoader={useLazyDataLoader}
     />

@@ -1,7 +1,5 @@
 import type { JSX } from 'preact';
 
-import type { SVGSpriteNames } from '../sprite';
-
 const DEFAULT_WIDTH = 16;
 const DEFAULT_HEIGHT = 16;
 
@@ -26,14 +24,18 @@ const ICON_SIZE_OVERRIDES: Record<
 
 export function Icon({
   name,
+  remappedFrom,
   width: propWidth,
   height: propHeight,
+  viewBox: propViewBox,
   label,
   alignCapitals = false,
 }: {
-  name: SVGSpriteNames;
+  name: string;
+  remappedFrom?: string;
   width?: number;
   height?: number;
+  viewBox?: string;
   label?: string;
   alignCapitals?: boolean;
 }): JSX.Element {
@@ -50,7 +52,8 @@ export function Icon({
   } = override;
   const width = propWidth ?? iconWidth;
   const height = propHeight ?? iconHeight;
-  const viewBox = overrideViewBox ?? `0 0 ${iconWidth} ${iconHeight}`;
+  const viewBox =
+    propViewBox ?? overrideViewBox ?? `0 0 ${iconWidth} ${iconHeight}`;
 
   const a11yProps =
     label != null
@@ -59,7 +62,7 @@ export function Icon({
 
   return (
     <svg
-      data-icon-name={name}
+      data-icon-name={remappedFrom ?? name}
       data-align-capitals={alignCapitals}
       {...a11yProps}
       viewBox={viewBox}
