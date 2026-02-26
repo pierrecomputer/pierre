@@ -139,14 +139,17 @@ interface DiffOptions {
   enableLineSelection: false,
 
   // Callbacks for selection events
-  onLineSelected(range: SelectedLineRange | null) {
-    // Fires continuously during drag
-  },
   onLineSelectionStart(range: SelectedLineRange | null) {
-    // Fires on mouse down
+    // Fires on pointer down
+  },
+  onLineSelectionChange(range: SelectedLineRange | null) {
+    // Fires while dragging when range grows/shrinks (not initial down)
   },
   onLineSelectionEnd(range: SelectedLineRange | null) {
-    // Fires on mouse up - good for saving selection
+    // Fires on pointer up
+  },
+  onLineSelected(range: SelectedLineRange | null) {
+    // Fires on pointer up with final range (or null)
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -181,15 +184,16 @@ interface DiffOptions {
   },
 
   // Preferred: built-in gutter utility button (+)
-  // No render callback needed; callback receives current hovered line context.
+  // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; options.enableGutterUtility does.
-  // If omitted, button clicks bubble to gutter selection interactions.
-  // With enableLineSelection, omit this handler when you want range-based
-  // annotation workflows (use line selection callbacks instead).
-  // Provide this only when button clicks should do something different than
-  // selection. This handler is click-only (no drag/select behavior).
-  onGutterUtilityClick({ lineNumber, side }) {
-    console.log(\`Clicked line \${lineNumber} on \${side}\`);
+  // Fires on pointer up only:
+  // - click => single-line range
+  // - drag => final range at release
+  // Selection callbacks can still fire when line selection is enabled.
+  // Can click a single line or apply to a drag interaction started pointer
+  // down on the button
+  onGutterUtilityClick(range: SelectedLineRange) {
+    console.log(range.start, range.end, range.side, range.endSide);
   },
 }`,
   },
@@ -253,15 +257,16 @@ interface ThreadMetadata {
   // ─────────────────────────────────────────────────────────────
 
   // Preferred: built-in + button (no custom render function).
-  // Callback receives the same hovered line payload shape.
+  // Callback receives a SelectedLineRange.
   // Visibility is still controlled by options.enableGutterUtility.
-  // If omitted, button clicks bubble to gutter selection interactions.
-  // With enableLineSelection, omit this handler for range workflows and use
-  // line selection callbacks instead.
-  // Provide this only when clicks should do something different than selection.
-  // This handler is click-only (no drag/select behavior).
-  onGutterUtilityClick={({ lineNumber, side }) => {
-    console.log(\`Clicked line \${lineNumber} on \${side}\`);
+  // Fires on pointer up only:
+  // - click => single-line range
+  // - drag => final range at release
+  // Selection callbacks can still fire when line selection is enabled.
+  // Can click a single line or apply to a drag interaction started pointer
+  // down on the button
+  onGutterUtilityClick={(range) => {
+    console.log(range.start, range.end, range.side, range.endSide);
   }}
 
   // Advanced: render your own UI in the line number column on hover.
@@ -564,14 +569,17 @@ interface FileOptions {
   enableLineSelection: false,
 
   // Callbacks for selection events
-  onLineSelected(range: SelectedLineRange | null) {
-    // Fires continuously during drag
-  },
   onLineSelectionStart(range: SelectedLineRange | null) {
-    // Fires on mouse down
+    // Fires on pointer down
+  },
+  onLineSelectionChange(range: SelectedLineRange | null) {
+    // Fires while dragging when range grows/shrinks (not initial down)
   },
   onLineSelectionEnd(range: SelectedLineRange | null) {
-    // Fires on mouse up - good for saving selection
+    // Fires on pointer up
+  },
+  onLineSelected(range: SelectedLineRange | null) {
+    // Fires on pointer up with final range (or null)
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -607,15 +615,16 @@ interface FileOptions {
   },
 
   // Preferred: built-in gutter utility button (+)
-  // No render callback needed; callback receives current hovered line context.
+  // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; options.enableGutterUtility does.
-  // If omitted, button clicks bubble to gutter selection interactions.
-  // With enableLineSelection, omit this handler when you want range-based
-  // annotation workflows (use line selection callbacks instead).
-  // Provide this only when button clicks should do something different than
-  // selection. This handler is click-only (no drag/select behavior).
-  onGutterUtilityClick({ lineNumber }) {
-    console.log(\`Clicked line \${lineNumber}\`);
+  // Fires on pointer up only:
+  // - click => single-line range
+  // - drag => final range at release
+  // Selection callbacks can still fire when line selection is enabled.
+  // Can click a single line or apply to a drag interaction started pointer
+  // down on the button
+  onGutterUtilityClick(range: SelectedLineRange) {
+    console.log(range.start, range.end);
   },
 }`,
   },
@@ -680,15 +689,16 @@ interface CommentMetadata {
   // ─────────────────────────────────────────────────────────────
 
   // Preferred: built-in + button (no custom render function).
-  // Callback receives the same hovered line payload shape.
+  // Callback receives a SelectedLineRange.
   // Visibility is still controlled by options.enableGutterUtility.
-  // If omitted, button clicks bubble to gutter interactions.
-  // With enableLineSelection, omit this handler for range workflows and use
-  // line selection callbacks instead.
-  // Provide this only when clicks should do something different than selection.
-  // This handler is click-only (no drag/select behavior).
-  onGutterUtilityClick={({ lineNumber }) => {
-    console.log(\`Clicked line \${lineNumber}\`);
+  // Fires on pointer up only:
+  // - click => single-line range
+  // - drag => final range at release
+  // Selection callbacks can still fire when line selection is enabled.
+  // Can click a single line or apply to a drag interaction started pointer
+  // down on the button
+  onGutterUtilityClick={(range) => {
+    console.log(range.start, range.end);
   }}
 
   // Advanced: render your own UI in the line number column on hover.

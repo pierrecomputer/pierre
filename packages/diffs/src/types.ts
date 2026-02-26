@@ -627,3 +627,8 @@ export interface VirtualFileMetrics {
   hunkSeparatorHeight: number;
   fileGap: number;
 }
+
+export interface SelectionPoint {
+  lineNumber: number;
+  side: SelectionSide | undefined;
+}

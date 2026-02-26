@@ -1,4 +1,5 @@
-import type { SelectionSide } from '../types';
+import type { SelectionPoint, SelectionSide } from '../types';
+import { areSelectionPointsEqual } from '../utils/areSelectionPointsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 
 export interface SelectedLineRange {
@@ -17,11 +18,12 @@ export interface LineSelectionOptions {
   enableLineSelection?: boolean;
   onLineSelected?: (range: SelectedLineRange | null) => void;
   onLineSelectionStart?: (range: SelectedLineRange | null) => void;
+  onLineSelectionChange?: (range: SelectedLineRange | null) => void;
   onLineSelectionEnd?: (range: SelectedLineRange | null) => void;
   getLineIndex?: GetLineIndexUtility;
 }
 
-interface MouseInfo {
+interface PointerInfo {
   lineNumber: number;
   eventSide: SelectionSide | undefined;
   lineIndex: number;
@@ -38,7 +40,8 @@ export class LineSelectionManager {
   private pre: HTMLPreElement | undefined;
   private selectedRange: SelectedLineRange | null = null;
   private renderedSelectionRange: SelectedLineRange | null | undefined;
-  private anchor: { line: number; side: SelectionSide | undefined } | undefined;
+  private anchor: SelectionPoint | undefined;
+  private pendingSingleLineUnselect: SelectionPoint | undefined;
   private _queuedRender: number | undefined;
 
   constructor(private options: LineSelectionOptions = {}) {}
@@ -58,6 +61,8 @@ export class LineSelectionManager {
       this._queuedRender = undefined;
     }
     this.pre?.removeAttribute('data-interactive-line-numbers');
+    this.anchor = undefined;
+    this.pendingSingleLineUnselect = undefined;
     this.pre = undefined;
   }
 
@@ -117,28 +122,31 @@ export class LineSelectionManager {
     // Lets run a cleanup, just in case
     this.removeEventListeners();
     this.pre.setAttribute('data-interactive-line-numbers', '');
-    this.pre.addEventListener('pointerdown', this.handleMouseDown);
+    this.pre.addEventListener('pointerdown', this.handlePointerDown);
   }
 
   private removeEventListeners(): void {
     if (this.pre == null) return;
-    this.pre.removeEventListener('pointerdown', this.handleMouseDown);
-    document.removeEventListener('pointermove', this.handleMouseMove);
-    document.removeEventListener('pointerup', this.handleMouseUp);
+    this.pre.removeEventListener('pointerdown', this.handlePointerDown);
+    document.removeEventListener('pointermove', this.handlePointerMove);
+    document.removeEventListener('pointerup', this.handlePointerUp);
+    document.removeEventListener('pointercancel', this.handlePointerCancel);
     this.pre.removeAttribute('data-interactive-line-numbers');
   }
 
-  private handleMouseDown = (event: PointerEvent): void => {
+  private handlePointerDown = (event: PointerEvent): void => {
+    const composedPath = event.composedPath();
     // Only handle left mouse button
     const mouseEventData =
-      event.button === 0
-        ? this.getMouseEventDataForPath(event.composedPath(), 'click')
+      event.pointerType !== 'mouse' || event.button === 0
+        ? this.getPointerEventDataForPath(composedPath, 'click')
         : undefined;
     if (mouseEventData == null || this.pre == null) {
       return;
     }
     event.preventDefault();
     const { lineNumber, eventSide, lineIndex } = mouseEventData;
+    this.pendingSingleLineUnselect = undefined;
     if (event.shiftKey && this.selectedRange != null) {
       const range = this.getIndexesFromSelection(
         this.selectedRange,
@@ -150,14 +158,16 @@ export class LineSelectionManager {
           ? lineIndex >= range.start
           : lineIndex <= range.end;
       this.anchor = {
-        line: useStart ? this.selectedRange.start : this.selectedRange.end,
+        lineNumber: useStart
+          ? this.selectedRange.start
+          : this.selectedRange.end,
         side:
           (useStart
             ? this.selectedRange.side
             : (this.selectedRange.endSide ?? this.selectedRange.side)) ??
           'additions',
       };
-      this.updateSelection(lineNumber, eventSide);
+      this.updateSelection(lineNumber, eventSide, false);
       this.notifySelectionStart(this.selectedRange);
     } else {
       // Check if clicking on already selected single line to unselect
@@ -165,56 +175,94 @@ export class LineSelectionManager {
         this.selectedRange?.start === lineNumber &&
         this.selectedRange?.end === lineNumber
       ) {
-        this.updateSelection(null);
-        this.notifySelectionEnd(null);
-        this.notifySelectionChange();
-        return;
+        this.anchor = { lineNumber, side: eventSide };
+        this.pendingSingleLineUnselect = { lineNumber, side: eventSide };
+      } else {
+        this.selectedRange = null;
+        this.anchor = { lineNumber, side: eventSide };
+        this.updateSelection(lineNumber, eventSide, false);
+        this.notifySelectionStart(this.selectedRange);
       }
-      this.selectedRange = null;
-      this.anchor = { line: lineNumber, side: eventSide };
-      this.updateSelection(lineNumber, eventSide);
-      this.notifySelectionStart(this.selectedRange);
     }
 
-    document.addEventListener('pointermove', this.handleMouseMove);
-    document.addEventListener('pointerup', this.handleMouseUp);
+    document.addEventListener('pointermove', this.handlePointerMove);
+    document.addEventListener('pointerup', this.handlePointerUp);
+    document.addEventListener('pointercancel', this.handlePointerCancel);
   };
 
-  private handleMouseMove = (event: PointerEvent): void => {
-    const mouseEventData = this.getMouseEventDataForPath(
+  private handlePointerMove = (event: PointerEvent): void => {
+    const mouseEventData = this.getPointerEventDataForPath(
       event.composedPath(),
       'move'
     );
     if (mouseEventData == null || this.anchor == null) return;
     const { lineNumber, eventSide } = mouseEventData;
+    if (this.pendingSingleLineUnselect != null) {
+      if (
+        areSelectionPointsEqual(this.pendingSingleLineUnselect, {
+          lineNumber,
+          side: eventSide,
+        })
+      ) {
+        return;
+      }
+      this.pendingSingleLineUnselect = undefined;
+      this.updateSelection(lineNumber, eventSide, false);
+      this.notifySelectionStart(this.selectedRange);
+      this.notifySelectionChangeDelta();
+      return;
+    }
     this.updateSelection(lineNumber, eventSide);
   };
 
-  private handleMouseUp = (): void => {
+  private handlePointerUp = (): void => {
+    if (this.pendingSingleLineUnselect != null) {
+      this.pendingSingleLineUnselect = undefined;
+      this.updateSelection(null, undefined, false);
+    }
     this.anchor = undefined;
-    document.removeEventListener('pointermove', this.handleMouseMove);
-    document.removeEventListener('pointerup', this.handleMouseUp);
+    document.removeEventListener('pointermove', this.handlePointerMove);
+    document.removeEventListener('pointerup', this.handlePointerUp);
+    document.removeEventListener('pointercancel', this.handlePointerCancel);
     this.notifySelectionEnd(this.selectedRange);
     this.notifySelectionChange();
   };
 
-  private updateSelection(currentLine: null): void;
-  private updateSelection(currentLine: number, side?: SelectionSide): void;
+  private handlePointerCancel = (): void => {
+    this.anchor = undefined;
+    this.pendingSingleLineUnselect = undefined;
+    document.removeEventListener('pointermove', this.handlePointerMove);
+    document.removeEventListener('pointerup', this.handlePointerUp);
+    document.removeEventListener('pointercancel', this.handlePointerCancel);
+  };
+
   private updateSelection(
     currentLine: number | null,
-    side?: SelectionSide
+    side?: SelectionSide,
+    emitChange = true
   ): void {
+    const { selectedRange: previousRange } = this;
+    let nextRange: SelectedLineRange | null;
     if (currentLine == null) {
-      this.selectedRange = null;
+      nextRange = null;
     } else {
       const anchorSide = this.anchor?.side ?? side;
-      const anchorLine = this.anchor?.line ?? currentLine;
-      this.selectedRange = {
+      const anchorLine = this.anchor?.lineNumber ?? currentLine;
+      nextRange = {
         start: anchorLine,
         end: currentLine,
         side: anchorSide,
         endSide: anchorSide !== side ? side : undefined,
       };
+    }
+    if (
+      areSelectionsEqual(previousRange ?? undefined, nextRange ?? undefined)
+    ) {
+      return;
+    }
+    this.selectedRange = nextRange;
+    if (emitChange) {
+      this.notifySelectionChangeDelta();
     }
     this._queuedRender ??= requestAnimationFrame(this.renderSelection);
   }
@@ -357,22 +405,25 @@ export class LineSelectionManager {
     onLineSelected(this.selectedRange ?? null);
   }
 
+  private notifySelectionChangeDelta(): void {
+    const { onLineSelectionChange } = this.options;
+    onLineSelectionChange?.(this.selectedRange ?? null);
+  }
+
   private notifySelectionStart(range: SelectedLineRange | null): void {
     const { onLineSelectionStart } = this.options;
-    if (onLineSelectionStart == null) return;
-    onLineSelectionStart(range);
+    onLineSelectionStart?.(range);
   }
 
   private notifySelectionEnd(range: SelectedLineRange | null): void {
     const { onLineSelectionEnd } = this.options;
-    if (onLineSelectionEnd == null) return;
-    onLineSelectionEnd(range);
+    onLineSelectionEnd?.(range);
   }
 
-  private getMouseEventDataForPath(
+  private getPointerEventDataForPath(
     path: (EventTarget | undefined)[],
     eventType: 'click' | 'move'
-  ): MouseInfo | undefined {
+  ): PointerInfo | undefined {
     if (this.pre == null) {
       return undefined;
     }
@@ -464,6 +515,7 @@ export function pluckLineSelectionOptions(
     enableLineSelection,
     onLineSelected,
     onLineSelectionStart,
+    onLineSelectionChange,
     onLineSelectionEnd,
   }: LineSelectionOptions,
   getLineIndex?: GetLineIndexUtility
@@ -472,6 +524,7 @@ export function pluckLineSelectionOptions(
     enableLineSelection,
     onLineSelected,
     onLineSelectionStart,
+    onLineSelectionChange,
     onLineSelectionEnd,
     getLineIndex,
   };

@@ -6,8 +6,11 @@ import type {
   ExpansionDirections,
   LineEventBaseProps,
   LineTypes,
+  SelectionPoint,
+  SelectionSide,
 } from '../types';
 import { createGutterUtilityElement } from '../utils/createGutterUtilityElement';
+import type { SelectedLineRange } from './LineSelectionManager';
 
 export type LogTypes = 'click' | 'move' | 'both' | 'none';
 
@@ -91,7 +94,7 @@ export interface MouseEventManagerBaseOptions<
 > {
   lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
   enableGutterUtility?: boolean;
-  onGutterUtilityClick?(props: GetHoveredLineResult<TMode>): unknown;
+  onGutterUtilityClick?(range: SelectedLineRange): unknown;
   onLineClick?(props: EventClickProps<TMode>): unknown;
   onLineNumberClick?(props: EventClickProps<TMode>): unknown;
   onLineEnter?(props: MouseEventEnterLeaveProps<TMode>): unknown;
@@ -110,12 +113,19 @@ export interface MouseEventManagerOptions<
   ): unknown;
 }
 
+interface GutterUtilityPointerState {
+  pointerId: number;
+  anchor: SelectionPoint;
+  current: SelectionPoint;
+}
+
 export class MouseEventManager<TMode extends MouseEventManagerMode> {
   private hoveredLine: EventBaseProps<TMode> | undefined;
   private pre: HTMLPreElement | undefined;
   private gutterUtilityContainer: HTMLDivElement | undefined;
   private gutterUtilityButton: HTMLButtonElement | undefined;
   private gutterUtilitySlot: HTMLSlotElement | undefined;
+  private gutterUtilityPointerState: GutterUtilityPointerState | undefined;
   private interactiveLinesAttr = false;
   private interactiveLineNumbersAttr = false;
   private hasEventListeners = false;
@@ -143,6 +153,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
     );
     this.gutterUtilityButton = undefined;
     this.gutterUtilitySlot = undefined;
+    this.clearGutterUtilityPointerState();
     this.clearHoveredLine();
     this.interactiveLinesAttr = false;
     this.interactiveLineNumbersAttr = false;
@@ -181,6 +192,7 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       );
       this.gutterUtilityButton = undefined;
       this.gutterUtilitySlot = undefined;
+      this.clearGutterUtilityPointerState();
     }
 
     const requiresEventListeners =
@@ -293,14 +305,8 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   };
 
   handleMouseClick = (event: MouseEvent): void => {
-    const {
-      onGutterUtilityClick,
-      onHunkExpand,
-      onLineClick,
-      onLineNumberClick,
-    } = this.options;
+    const { onHunkExpand, onLineClick, onLineNumberClick } = this.options;
     if (
-      onGutterUtilityClick == null &&
       onHunkExpand == null &&
       onLineClick == null &&
       onLineNumberClick == null
@@ -384,7 +390,6 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
       onLineNumberClick,
       onLineEnter,
       onLineLeave,
-      onGutterUtilityClick,
       onHunkExpand,
     } = this.options;
     switch (eventType) {
@@ -437,18 +442,6 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
           "FileDiff.DEBUG.handleMouseEvent: switch, 'click', with data:",
           data
         );
-        if (
-          onGutterUtilityClick != null &&
-          this.gutterUtilityButton != null &&
-          composedPathIncludesElement(composedPath, this.gutterUtilityButton)
-        ) {
-          event.stopPropagation();
-          const hoveredLine = this.getHoveredLine();
-          if (hoveredLine != null) {
-            onGutterUtilityClick(hoveredLine);
-          }
-          break;
-        }
         if (data == null) break;
         if (isExpandoEventData(data) && onHunkExpand != null) {
           debugLogIfEnabled(
@@ -558,10 +551,117 @@ export class MouseEventManager<TMode extends MouseEventManagerMode> {
   }
 
   private handleGutterUtilityPointerDown = (event: PointerEvent): void => {
-    if (this.options.onGutterUtilityClick != null) {
-      event.stopPropagation();
+    if (this.options.onGutterUtilityClick == null) {
+      return;
     }
+    const point = this.getGutterSelectionPoint(event.composedPath());
+    if (point == null) {
+      return;
+    }
+    this.gutterUtilityPointerState = {
+      pointerId: event.pointerId,
+      anchor: point,
+      current: point,
+    };
+    document.addEventListener(
+      'pointermove',
+      this.handleGutterUtilityPointerMove
+    );
+    document.addEventListener('pointerup', this.handleGutterUtilityPointerUp);
+    document.addEventListener(
+      'pointercancel',
+      this.handleGutterUtilityPointerCancel
+    );
   };
+
+  private handleGutterUtilityPointerMove = (event: PointerEvent): void => {
+    const state = this.gutterUtilityPointerState;
+    if (state == null || event.pointerId !== state.pointerId) {
+      return;
+    }
+    const point = this.getGutterSelectionPoint(event.composedPath());
+    if (point == null) {
+      return;
+    }
+    state.current = point;
+  };
+
+  private handleGutterUtilityPointerUp = (event: PointerEvent): void => {
+    const state = this.gutterUtilityPointerState;
+    if (state == null || state.pointerId !== event.pointerId) {
+      return;
+    }
+    const point = this.getGutterSelectionPoint(event.composedPath());
+    if (point != null) {
+      state.current = point;
+    }
+    if (this.options.onGutterUtilityClick != null) {
+      this.options.onGutterUtilityClick(
+        this.buildSelectedLineRange(state.anchor, state.current)
+      );
+    }
+    this.clearGutterUtilityPointerState();
+  };
+
+  private handleGutterUtilityPointerCancel = (event: PointerEvent): void => {
+    if (
+      this.gutterUtilityPointerState == null ||
+      this.gutterUtilityPointerState.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+    this.clearGutterUtilityPointerState();
+  };
+
+  private clearGutterUtilityPointerState(): void {
+    this.gutterUtilityPointerState = undefined;
+    document.removeEventListener(
+      'pointermove',
+      this.handleGutterUtilityPointerMove
+    );
+    document.removeEventListener(
+      'pointerup',
+      this.handleGutterUtilityPointerUp
+    );
+    document.removeEventListener(
+      'pointercancel',
+      this.handleGutterUtilityPointerCancel
+    );
+  }
+
+  private getGutterSelectionPoint(
+    path: (EventTarget | undefined)[]
+  ): SelectionPoint | undefined {
+    const data = this.getLineData(path);
+    if (!isLineEventData(data, this.mode)) {
+      return undefined;
+    }
+    if (typeof data.lineNumber !== 'number' || Number.isNaN(data.lineNumber)) {
+      return undefined;
+    }
+    if ('annotationSide' in data) {
+      return {
+        lineNumber: data.lineNumber,
+        side: data.annotationSide as SelectionSide,
+      };
+    }
+    return {
+      lineNumber: data.lineNumber,
+      side: undefined,
+    };
+  }
+
+  private buildSelectedLineRange(
+    anchor: SelectionPoint,
+    current: SelectionPoint
+  ): SelectedLineRange {
+    return {
+      start: anchor.lineNumber,
+      end: current.lineNumber,
+      side: anchor.side,
+      endSide: anchor.side !== current.side ? current.side : undefined,
+    };
+  }
 
   private getLineData(
     path: (EventTarget | undefined)[]
@@ -830,18 +930,6 @@ function queryHTMLElement(
 ): HTMLElement | undefined {
   const element = parent?.querySelector(query);
   return element instanceof HTMLElement ? element : undefined;
-}
-
-function composedPathIncludesElement(
-  path: (EventTarget | undefined)[],
-  element: Element
-): boolean {
-  for (const pathElement of path) {
-    if (pathElement === element) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {

@@ -193,7 +193,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         //   return el;
         // },
         // onGutterUtilityClick(event) {
-        //   console.log('ZZZZ - clicked', event);
+        //   console.log('onGutterUtilityClick', event);
         // },
 
         // Custom Hunk Separators Tests with expansion properties
@@ -267,12 +267,24 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         //   return wrapper;
         // },
 
-        onLineClick(props) {
-          console.log('onLineClick', props);
-        },
-        onLineNumberClick(props) {
-          console.info('onLineNumberClick', props);
-        },
+        // onLineClick(props) {
+        //   console.log('onLineClick', props);
+        // },
+        // onLineNumberClick(props) {
+        //   console.info('onLineNumberClick', props);
+        // },
+        // onLineSelected() {
+        //   console.log('onLineSelected');
+        // },
+        // onLineSelectionStart() {
+        //   console.log('onLineSelectionStart');
+        // },
+        // onLineSelectionChange() {
+        //   console.log('onLineSelectionChange');
+        // },
+        // onLineSelectionEnd() {
+        //   console.log('onLineSelectionEnd');
+        // },
 
         // Super noisy, but for debuggin
         // onLineEnter(props) {
@@ -598,12 +610,24 @@ if (renderFileButton != null) {
           }
         );
       },
-      onLineClick(props) {
-        console.log('onLineClick', props);
-      },
-      onLineNumberClick(props) {
-        console.info('onLineNumberClick', props);
-      },
+      // onLineClick(props) {
+      //   console.log('onLineClick', props);
+      // },
+      // onLineNumberClick(props) {
+      //   console.info('onLineNumberClick', props);
+      // },
+      // onLineSelected() {
+      //   console.log('onLineSelected');
+      // },
+      // onLineSelectionStart() {
+      //   console.log('onLineSelectionStart');
+      // },
+      // onLineSelectionChange() {
+      //   console.log('onLineSelectionChange');
+      // },
+      // onLineSelectionEnd() {
+      //   console.log('onLineSelectionEnd');
+      // },
 
       enableLineSelection: true,
 
@@ -629,7 +653,7 @@ if (renderFileButton != null) {
       //   return el;
       // },
       // onGutterUtilityClick(event) {
-      //   console.log('ZZZZ - clicked', event);
+      //   console.log('onGutterUtilityClick', event);
       // },
     };
 

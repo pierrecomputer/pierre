@@ -210,14 +210,17 @@ const instance = new FileDiff({
   enableLineSelection: false,
 
   // Callbacks for selection events
-  onLineSelected(range) {
-    // Fires continuously during drag
-  },
   onLineSelectionStart(range) {
-    // Fires on mouse down
+    // Fires on pointer down
+  },
+  onLineSelectionChange(range) {
+    // Fires while dragging when range grows/shrinks (not initial down)
   },
   onLineSelectionEnd(range) {
-    // Fires on mouse up - good for saving selection
+    // Fires on pointer up
+  },
+  onLineSelected(range) {
+    // Fires on pointer up with final range (or null)
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -251,15 +254,16 @@ const instance = new FileDiff({
   onLineLeave({ lineNumber, side }) {},
 
   // Preferred: built-in gutter utility button (+)
-  // No render callback needed; callback receives current hovered line context.
+  // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; enableGutterUtility does.
-  // If omitted, button clicks bubble to gutter selection interactions.
-  // With enableLineSelection, omit this handler when you want range-based
-  // annotation workflows (use line selection callbacks instead).
-  // Provide this only when button clicks should do something different than
-  // selection. This handler is click-only (no drag/select behavior).
-  onGutterUtilityClick({ lineNumber, side }) {
-    console.log('Clicked line', lineNumber, 'on', side);
+  // Fires on pointer up only:
+  // - click => single-line range
+  // - drag => final range at release
+  // Selection callbacks can still fire when line selection is enabled.
+  // Can click a single line or apply to a drag interaction started pointer
+  // down on the button
+  onGutterUtilityClick(range) {
+    console.log(range.start, range.end, range.side, range.endSide);
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -406,14 +410,17 @@ const instance = new File({
   enableLineSelection: false,
 
   // Callbacks for selection events
-  onLineSelected(range) {
-    // Fires continuously during drag
-  },
   onLineSelectionStart(range) {
-    // Fires on mouse down
+    // Fires on pointer down
+  },
+  onLineSelectionChange(range) {
+    // Fires while dragging when range grows/shrinks (not initial down)
   },
   onLineSelectionEnd(range) {
-    // Fires on mouse up - good for saving selection
+    // Fires on pointer up
+  },
+  onLineSelected(range) {
+    // Fires on pointer up with final range (or null)
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -447,15 +454,16 @@ const instance = new File({
   onLineLeave({ lineNumber }) {},
 
   // Preferred: built-in gutter utility button (+)
-  // No render callback needed; callback receives current hovered line context.
+  // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; enableGutterUtility does.
-  // If omitted, button clicks bubble to gutter selection interactions.
-  // With enableLineSelection, omit this handler when you want range-based
-  // annotation workflows (use line selection callbacks instead).
-  // Provide this only when button clicks should do something different than
-  // selection. This handler is click-only (no drag/select behavior).
-  onGutterUtilityClick({ lineNumber }) {
-    console.log('Clicked line', lineNumber);
+  // Fires on pointer up only:
+  // - click => single-line range
+  // - drag => final range at release
+  // Selection callbacks can still fire when line selection is enabled.
+  // Can click a single line or apply to a drag interaction started pointer
+  // down on the button
+  onGutterUtilityClick(range) {
+    console.log(range.start, range.end);
   },
 
   // ─────────────────────────────────────────────────────────────
