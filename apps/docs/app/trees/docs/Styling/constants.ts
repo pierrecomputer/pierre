@@ -19,6 +19,10 @@ file-tree-container,
   --ft-border-radius: 8px;
   --ft-selected-background-color: oklch(0.92 0.02 250);
   --ft-selected-border-color: oklch(0.7 0.15 250);
+  /* Optional. Used for gitStatus. */
+  --ft-git-added-color: #0dbe4e;
+  --ft-git-modified-color: #009fff;
+  --ft-git-deleted-color: #ff2e3f;
 }`,
   },
   options,

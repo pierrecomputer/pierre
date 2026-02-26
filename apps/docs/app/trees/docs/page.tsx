@@ -6,7 +6,6 @@ import { DocsLayout } from '../../docs/DocsLayout';
 import { HeadingAnchors } from '../../docs/HeadingAnchors';
 import { ProseWrapper } from '../../docs/ProseWrapper';
 import {
-  FILE_TREE_ICON_CONFIG_TYPE,
   FILE_TREE_OPTIONS_TYPE,
   FILE_TREE_SEARCH_MODE_TYPE,
   FILE_TREE_SELECTION_ITEM_TYPE,
@@ -37,6 +36,7 @@ import {
   HELPER_SORT_CHILDREN,
 } from './Utilities/constants';
 import {
+  VANILLA_API_CUSTOM_ICONS_EXAMPLE,
   VANILLA_API_FILE_TREE_EXAMPLE,
   VANILLA_API_FILE_TREE_OPTIONS,
   VANILLA_API_GIT_STATUS_EXAMPLE,
@@ -61,6 +61,8 @@ export default function TreesDocsPage() {
           <CoreTypesSection />
           <ReactAPISection />
           <VanillaAPISection />
+          <GitStatusSection />
+          <CustomIconsSection />
           <UtilitiesSection />
           <StylingSection />
           <SSRSection />
@@ -108,7 +110,6 @@ async function CoreTypesSection() {
     fileTreeOptionsType,
     fileTreeSelectionItemType,
     fileTreeSearchModeType,
-    fileTreeIconConfigType,
     fileTreeStateConfigType,
     filesOptionExample,
     onSelectionExample,
@@ -116,7 +117,6 @@ async function CoreTypesSection() {
     preloadFile(FILE_TREE_OPTIONS_TYPE),
     preloadFile(FILE_TREE_SELECTION_ITEM_TYPE),
     preloadFile(FILE_TREE_SEARCH_MODE_TYPE),
-    preloadFile(FILE_TREE_ICON_CONFIG_TYPE),
     preloadFile(FILE_TREE_STATE_CONFIG_TYPE),
     preloadFile(FILES_OPTION_EXAMPLE),
     preloadFile(ON_SELECTION_EXAMPLE),
@@ -127,7 +127,6 @@ async function CoreTypesSection() {
       fileTreeOptionsType,
       fileTreeSelectionItemType,
       fileTreeSearchModeType,
-      fileTreeIconConfigType,
       fileTreeStateConfigType,
       filesOptionExample,
       onSelectionExample,
@@ -137,46 +136,56 @@ async function CoreTypesSection() {
 }
 
 async function ReactAPISection() {
-  const [
-    reactAPIFileTree,
-    reactAPIFileTreeProps,
-    reactAPIGitStatusExample,
-    reactAPICustomIconsExample,
-  ] = await Promise.all([
+  const [reactAPIFileTree, reactAPIFileTreeProps] = await Promise.all([
     preloadFile(REACT_API_FILE_TREE),
     preloadFile(REACT_API_FILE_TREE_PROPS),
-    preloadFile(REACT_API_GIT_STATUS_EXAMPLE),
-    preloadFile(REACT_API_CUSTOM_ICONS_EXAMPLE),
   ]);
   const content = await renderMDX({
     filePath: 'trees/docs/ReactAPI/content.mdx',
     scope: {
       reactAPIFileTree,
       reactAPIFileTreeProps,
-      reactAPIGitStatusExample,
-      reactAPICustomIconsExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 async function VanillaAPISection() {
-  const [
-    vanillaAPIFileTreeExample,
-    vanillaAPIFileTreeOptions,
-    vanillaAPIGitStatusExample,
-  ] = await Promise.all([
-    preloadFile(VANILLA_API_FILE_TREE_EXAMPLE),
-    preloadFile(VANILLA_API_FILE_TREE_OPTIONS),
-    preloadFile(VANILLA_API_GIT_STATUS_EXAMPLE),
-  ]);
+  const [vanillaAPIFileTreeExample, vanillaAPIFileTreeOptions] =
+    await Promise.all([
+      preloadFile(VANILLA_API_FILE_TREE_EXAMPLE),
+      preloadFile(VANILLA_API_FILE_TREE_OPTIONS),
+    ]);
   const content = await renderMDX({
     filePath: 'trees/docs/VanillaAPI/content.mdx',
     scope: {
       vanillaAPIFileTreeExample,
       vanillaAPIFileTreeOptions,
-      vanillaAPIGitStatusExample,
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function GitStatusSection() {
+  const [reactGitStatus, vanillaGitStatus] = await Promise.all([
+    preloadFile(REACT_API_GIT_STATUS_EXAMPLE),
+    preloadFile(VANILLA_API_GIT_STATUS_EXAMPLE),
+  ]);
+  const content = await renderMDX({
+    filePath: 'trees/docs/GitStatus/content.mdx',
+    scope: { reactGitStatus, vanillaGitStatus },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function CustomIconsSection() {
+  const [reactIcons, vanillaIcons] = await Promise.all([
+    preloadFile(REACT_API_CUSTOM_ICONS_EXAMPLE),
+    preloadFile(VANILLA_API_CUSTOM_ICONS_EXAMPLE),
+  ]);
+  const content = await renderMDX({
+    filePath: 'trees/docs/Icons/content.mdx',
+    scope: { reactIcons, vanillaIcons },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

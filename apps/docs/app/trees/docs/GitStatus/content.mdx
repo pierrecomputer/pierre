@@ -1,0 +1,26 @@
+## Git Status
+
+Use the `gitStatus` option to show file-level status indicators for added,
+modified, and deleted files. Folders that contain changed descendants
+automatically receive a change hint. [Try the live demo](/trees#path-colors) on
+the homepage.
+
+`GitStatusEntry` pairs a file `path` with a status value:
+`{ path: string; status: 'added' | 'modified' | 'deleted' }`.
+
+Import `GitStatusEntry` from `@pierre/trees` and pass an array via `gitStatus`
+in constructor options (vanilla) or as a top-level prop (React). `path` should
+match your tree file paths (for example, `src/index.ts`).
+
+In vanilla JS you can also update status imperatively:
+
+- `fileTree.setGitStatus(entries | undefined)` updates statuses and re-renders.
+- `fileTree.getGitStatus()` returns the current `GitStatusEntry[] | undefined`.
+
+When `gitStatus` is provided, tree rows include status-aware attributes you can
+target:
+
+- `data-item-git-status="added" | "modified" | "deleted"` on changed files
+- `data-item-contains-git-change="true"` on folders that contain changed files
+
+<TreesCodeToggle vanilla={vanillaGitStatus} react={reactGitStatus} />

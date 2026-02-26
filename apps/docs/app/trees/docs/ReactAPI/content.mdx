@@ -20,23 +20,3 @@ styling and SSR props. `initialFiles`/state callbacks are top-level props on the
 React component:
 
 <DocsCodeExample {...reactAPIFileTreeProps} />
-
-### With `gitStatus`
-
-Use the optional `gitStatus` prop to pass a controlled array of `GitStatusEntry`
-items. Updating `gitStatus` updates file status indicators (`added`, `modified`,
-`deleted`) and folder change hints for descendants. Try the live demo at
-[/trees#path-colors](/trees#path-colors).
-
-<DocsCodeExample {...reactAPIGitStatusExample} />
-
-### With `icons`
-
-Use the `icons` option inside `options` to provide a custom SVG sprite sheet and
-remap built-in icon names to your own symbols. The `spriteSheet` string is
-injected into the shadow DOM, and `remap` maps built-in names
-(`file-tree-icon-chevron`, `file-tree-icon-file`, `file-tree-icon-dot`,
-`file-tree-icon-lock`) to your custom symbol ids. Try the live demo at
-[/trees#custom-icons](/trees#custom-icons).
-
-<DocsCodeExample {...reactAPICustomIconsExample} />

@@ -22,7 +22,7 @@ const customSpriteSheet = `
     <path d="M12.5 5a.5.5 0 0 1 .372.835l-4.5 5a.5.5 0 0 1-.744 0l-4.5-5A.501.501 0 0 1 3.5 5z" fill="currentcolor"/>
   </symbol>
   <symbol id="custom-lock-icon" viewBox="0 0 16 16" fill="none">
-    <path fill-rule="evenodd" clip-rule="evenodd" d="M4.5 4C6.0606 4 7.43269 4.79591 8.23926 6H14.25L14.335 6.00488C14.5307 6.02719 14.7114 6.12564 14.8359 6.28125L15.8359 7.53125C16.0349 7.77995 16.0545 8.12738 15.8857 8.39746L14.6357 10.3975C14.4309 10.7252 14.0108 10.8435 13.665 10.6709L12.6035 10.1396L11.4805 11.0762C11.2023 11.308 10.7977 11.308 10.5195 11.0762L9.22852 10H8.74316C8.12526 11.7476 6.45979 13 4.5 13C2.01472 13 0 10.9853 0 8.5C0 6.01472 2.01472 4 4.5 4ZM3.5 7.5C2.94772 7.5 2.5 7.94772 2.5 8.5C2.5 9.05228 2.94772 9.5 3.5 9.5C4.05228 9.5 4.5 9.05228 4.5 8.5C4.5 7.94772 4.05228 7.5 3.5 7.5Z" fill="currentcolor" />
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M4.5 4C6.0606 4 7.43269 4.79591 8.23926 6H14.25L14.335 6.00488C14.5307 6.02719 14.7114 6.12564 14.8359 6.28125L15.8359 7.53125C16.0349 7.77995 16.0545 8.12738 15.8857 8.39746L14.6357 10.3975C14.4309 10.7252 14.0108 10.8435 13.665 10.6709L12.6035 10.1396L11.4805 11.0762C11.2023 11.308 10.7977 11.308 10.5195 11.0762L9.22852 10H8.74316C8.12526 11.7476 6.45979 13 4.5 13C2.01472 13 0 10.9853 0 8.5C0 6.01472 2.01472 4 4.5 4ZM3.5 7.5C2.94772 7.5 2.5 7.94772 2.5 8.5C2.5 9.05228 2.94772 9.5 3.5 9.5C4.05228 9.5 4.5 9.05228 4.5 8.5C4.5 7.94772 4.05228 7.5 3.5 7.5Z" fill="#ffca00" />
   </symbol>
 </svg>
 `;
@@ -41,10 +41,7 @@ export function CustomIconsSection() {
           <>
             Swap out our default icons by using a custom SVG sprite that remaps
             the built-in icon names to your custom symbols. See the{' '}
-            <a
-              href="/trees/docs#core-types-filetreeiconconfig"
-              className="inline-link"
-            >
+            <a href="/trees/docs#custom-icons" className="inline-link">
               FileTreeIconConfig docs
             </a>{' '}
             for the full API.

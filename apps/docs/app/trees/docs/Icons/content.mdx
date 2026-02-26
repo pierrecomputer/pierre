@@ -1,0 +1,22 @@
+## Custom Icons
+
+Use the `icons` option inside `FileTreeOptions` to swap built-in icons with
+your own SVG symbols. Try the live demo at
+[/trees#custom-icons](/trees#custom-icons).
+
+- `spriteSheet` — an SVG string containing `<symbol>` definitions. It is
+  injected into the shadow DOM alongside the default sprite sheet.
+- `remap` — a map from a built-in icon name to either a replacement symbol id
+  (string) or an object with `name`, optional `width`, `height`, and `viewBox`.
+
+You can re-map any of the existing, default icons (listed below) by creating new
+SVG symbols that use the same IDs.
+
+| Icon ID                  | Description                                                         |
+| ------------------------ | ------------------------------------------------------------------- |
+| `file-tree-icon-chevron` | Indicates a directory can be opened. Automatically rotates on open. |
+| `file-tree-icon-file`    | Default icon for all files, regardless of extension.                |
+| `file-tree-icon-dot`     | Identifies modified files when using Git status                     |
+| `file-tree-icon-lock`    | Signals a file cannot be moved or modified                          |
+
+<TreesCodeToggle vanilla={vanillaIcons} react={reactIcons} />

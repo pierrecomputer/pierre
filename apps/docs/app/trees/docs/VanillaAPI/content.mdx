@@ -40,16 +40,3 @@ tree state programmatically:
 | `getSelectedItems()`                | Return the currently selected item paths                  |
 | `setCallbacks(callbacks)`           | Update callbacks (`onSelection`, etc.) after construction |
 | `setOptions(options, stateConfig?)` | Merge new options (and optionally state config)           |
-
-### With `gitStatus`
-
-For VCS integrations, pass `gitStatus` in constructor options and update it
-imperatively as changes arrive:
-
-- `fileTree.setGitStatus(entries | undefined)` updates the current git statuses
-  and re-renders.
-- `fileTree.getGitStatus()` returns the current `GitStatusEntry[] | undefined`.
-
-Try the live behavior at [/trees#path-colors](/trees#path-colors).
-
-<DocsCodeExample {...vanillaAPIGitStatusExample} />
