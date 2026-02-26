@@ -235,10 +235,7 @@ export function ShikiThemes({
         <IconArrowDownRight className="text-muted-foreground my-[2px] opacity-50" />
         <p className="text-muted-foreground text-sm">
           Love the Pierre themes?{' '}
-          <Link
-            href="/theme"
-            className="text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-colors"
-          >
+          <Link href="/theme" className="inline-link">
             Install our Pierre Theme pack
           </Link>{' '}
           with light and dark flavors.

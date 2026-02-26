@@ -44,6 +44,7 @@ folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
 | `lockedPaths`             | Optional list of file/folder paths that cannot be dragged when drag and drop is enabled.                                                                                                            |
 | `onCollision`             | Optional callback for drag collisions. Return `true` to overwrite destination.                                                                                                                      |
 | `gitStatus`               | Optional `GitStatusEntry[]` used to show Git-style file status (`added`, `modified`, `deleted`). Folders with changed descendants also receive a change indicator. [Live demo](/trees#path-colors). |
+| `icons`                   | Optional `FileTreeIconConfig` to provide a custom SVG sprite sheet and remap built-in icon names to your own symbols. [Live demo](/trees#custom-icons).                                             |
 
 `onSelection` is configured in React as a top-level prop
 (`\<FileTree onSelection={...} />`) and in vanilla via `FileTreeStateConfig`
@@ -83,6 +84,21 @@ should match your tree file paths (for example, `src/index.ts`).
 - `'hide-non-matches'`: keep branch structure but hide non-matching rows.
 
 <DocsCodeExample {...fileTreeSearchModeType} />
+
+### FileTreeIconConfig
+
+`FileTreeIconConfig` lets you swap built-in icons with your own SVG symbols.
+Pass it via the `icons` option in `FileTreeOptions`.
+
+- `spriteSheet` — an SVG string containing `<symbol>` definitions. It is
+  injected into the shadow DOM alongside the default sprite sheet.
+- `remap` — a map from a built-in icon name to either a replacement symbol id
+  (string) or an object with `name`, optional `width`, `height`, and `viewBox`.
+
+Built-in icon names you can remap: `file-tree-icon-chevron`,
+`file-tree-icon-file`, `file-tree-icon-dot`, `file-tree-icon-lock`.
+
+<DocsCodeExample {...fileTreeIconConfigType} />
 
 ### FileTreeStateConfig
 

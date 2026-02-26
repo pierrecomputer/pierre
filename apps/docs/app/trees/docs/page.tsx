@@ -6,6 +6,7 @@ import { DocsLayout } from '../../docs/DocsLayout';
 import { HeadingAnchors } from '../../docs/HeadingAnchors';
 import { ProseWrapper } from '../../docs/ProseWrapper';
 import {
+  FILE_TREE_ICON_CONFIG_TYPE,
   FILE_TREE_OPTIONS_TYPE,
   FILE_TREE_SEARCH_MODE_TYPE,
   FILE_TREE_SELECTION_ITEM_TYPE,
@@ -23,6 +24,7 @@ import {
   TREES_VANILLA_BASIC_USAGE,
 } from './Overview/constants';
 import {
+  REACT_API_CUSTOM_ICONS_EXAMPLE,
   REACT_API_FILE_TREE,
   REACT_API_FILE_TREE_PROPS,
   REACT_API_GIT_STATUS_EXAMPLE,
@@ -106,6 +108,7 @@ async function CoreTypesSection() {
     fileTreeOptionsType,
     fileTreeSelectionItemType,
     fileTreeSearchModeType,
+    fileTreeIconConfigType,
     fileTreeStateConfigType,
     filesOptionExample,
     onSelectionExample,
@@ -113,6 +116,7 @@ async function CoreTypesSection() {
     preloadFile(FILE_TREE_OPTIONS_TYPE),
     preloadFile(FILE_TREE_SELECTION_ITEM_TYPE),
     preloadFile(FILE_TREE_SEARCH_MODE_TYPE),
+    preloadFile(FILE_TREE_ICON_CONFIG_TYPE),
     preloadFile(FILE_TREE_STATE_CONFIG_TYPE),
     preloadFile(FILES_OPTION_EXAMPLE),
     preloadFile(ON_SELECTION_EXAMPLE),
@@ -123,6 +127,7 @@ async function CoreTypesSection() {
       fileTreeOptionsType,
       fileTreeSelectionItemType,
       fileTreeSearchModeType,
+      fileTreeIconConfigType,
       fileTreeStateConfigType,
       filesOptionExample,
       onSelectionExample,
@@ -132,18 +137,24 @@ async function CoreTypesSection() {
 }
 
 async function ReactAPISection() {
-  const [reactAPIFileTree, reactAPIFileTreeProps, reactAPIGitStatusExample] =
-    await Promise.all([
-      preloadFile(REACT_API_FILE_TREE),
-      preloadFile(REACT_API_FILE_TREE_PROPS),
-      preloadFile(REACT_API_GIT_STATUS_EXAMPLE),
-    ]);
+  const [
+    reactAPIFileTree,
+    reactAPIFileTreeProps,
+    reactAPIGitStatusExample,
+    reactAPICustomIconsExample,
+  ] = await Promise.all([
+    preloadFile(REACT_API_FILE_TREE),
+    preloadFile(REACT_API_FILE_TREE_PROPS),
+    preloadFile(REACT_API_GIT_STATUS_EXAMPLE),
+    preloadFile(REACT_API_CUSTOM_ICONS_EXAMPLE),
+  ]);
   const content = await renderMDX({
     filePath: 'trees/docs/ReactAPI/content.mdx',
     scope: {
       reactAPIFileTree,
       reactAPIFileTreeProps,
       reactAPIGitStatusExample,
+      reactAPICustomIconsExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

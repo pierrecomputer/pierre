@@ -177,6 +177,10 @@
     color: color-mix(in lab, var(--color-primary), currentcolor) !important;
   }
 
+  .inline-link {
+    @apply text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-colors;
+  }
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }

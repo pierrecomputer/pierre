@@ -13,6 +13,7 @@ export const FILE_TREE_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
     name: 'FileTreeOptions.ts',
     contents: `import type {
   FileTreeOptions,
+  FileTreeIconConfig,
   FileTreeStateConfig,
   FileTreeSearchMode,
   FileTreeCollision,
@@ -42,6 +43,9 @@ interface FileTreeOptions {
 
   // Optional: Git status entries for file status indicators.
   gitStatus?: GitStatusEntry[];
+
+  // Optional: custom SVG sprite sheet and icon remapping.
+  icons?: FileTreeIconConfig;
 
   // Optional: paths that cannot be dragged when drag and drop is enabled.
   lockedPaths?: string[];
@@ -131,6 +135,51 @@ export const FILE_TREE_SEARCH_MODE_TYPE: PreloadFileOptions<undefined> = {
 const options = {
   initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
   fileTreeSearchMode: 'collapse-non-matches' as FileTreeSearchMode,
+};`,
+  },
+  options,
+};
+
+export const FILE_TREE_ICON_CONFIG_TYPE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'FileTreeIconConfig.ts',
+    contents: `import type { FileTreeIconConfig } from '@pierre/trees';
+
+// FileTreeIconConfig lets you replace built-in icons with custom SVG symbols.
+interface FileTreeIconConfig {
+  // An SVG string with <symbol> definitions injected into the shadow DOM.
+  spriteSheet?: string;
+
+  // Map built-in icon names to custom symbol ids or objects with sizing info.
+  remap?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
+}
+
+// Example: replace the file and chevron icons with custom symbols.
+const options = {
+  initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
+  icons: {
+    spriteSheet: \`
+      <svg data-icon-sprite aria-hidden="true" width="0" height="0">
+        <symbol id="my-file" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2">
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+          <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+        </symbol>
+        <symbol id="my-folder" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2">
+          <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
+        </symbol>
+      </svg>
+    \`,
+    remap: {
+      'file-tree-icon-file': 'my-file',
+      'file-tree-icon-chevron': { name: 'my-folder', width: 16, height: 16 },
+    },
+  },
 };`,
   },
   options,

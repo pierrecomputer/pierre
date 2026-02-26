@@ -72,6 +72,46 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
   options,
 };
 
+export const REACT_API_CUSTOM_ICONS_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'custom_icons_file_tree.tsx',
+    contents: `import { FileTree } from '@pierre/trees/react';
+
+const customSpriteSheet = \`
+  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
+    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+    </symbol>
+  </svg>
+\`;
+
+export function CustomIconsTree() {
+  return (
+    <FileTree
+      options={{
+        id: 'custom-icons-tree',
+        icons: {
+          spriteSheet: customSpriteSheet,
+          remap: {
+            'file-tree-icon-file': 'my-file',
+          },
+        },
+      }}
+      initialFiles={[
+        'src/index.ts',
+        'src/components/Button.tsx',
+        'package.json',
+      ]}
+      initialExpandedItems={['src', 'src/components']}
+    />
+  );
+}`,
+  },
+  options,
+};
+
 export const REACT_API_GIT_STATUS_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'git_status_file_tree.tsx',

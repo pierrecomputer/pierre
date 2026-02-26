@@ -4,6 +4,7 @@ import { Hero } from '../Hero';
 import type { ProductId } from '../product-config';
 import {
   A11ySection,
+  CustomIconsSection,
   DragDropSection,
   FlatteningSection,
   GitStatusSection,
@@ -36,6 +37,7 @@ export default function TreesHome() {
         <DragDropSection />
         <SearchSection />
         <A11ySection />
+        <CustomIconsSection />
         <ShikiThemesSection />
         <ThemingSection />
       </section>
