@@ -8,12 +8,14 @@ const ICON_SIZE_OVERRIDES: Record<
   { width: number; height: number; viewBox?: string } | undefined
 > = {
   'file-tree-icon-chevron': {
-    width: 10,
-    height: 6,
+    width: 12,
+    height: 12,
+    viewBox: '0 0 16 16',
   },
   'file-tree-icon-file': {
     width: 12,
     height: 12,
+    viewBox: '0 0 16 16',
   },
   'file-tree-icon-lock': {
     width: 12,

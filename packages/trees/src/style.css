@@ -98,7 +98,7 @@
     --ft-internal-item-padding-x: var(--ft-item-padding-x, 8px);
     --ft-internal-item-margin-x: var(--ft-item-margin-x, 2px);
     --ft-internal-item-row-gap: var(--ft-item-row-gap, 6px);
-    --ft-internal-icon-width: var(--ft-icon-width, 12px);
+    --ft-internal-icon-width: var(--ft-icon-width, 16px);
     --ft-internal-icon-nudge: var(--ft-icon-nudge, 1px);
     --ft-internal-row-height: var(--ft-row-height, 30px);
 
