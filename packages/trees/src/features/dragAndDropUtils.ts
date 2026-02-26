@@ -181,11 +181,7 @@ export const getDragCode = (
   ].join('__');
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getNthParent = (
-  item: ItemInstance<any>,
-  n: number
-): ItemInstance<any> => {
+const getNthParent = <T>(item: ItemInstance<T>, n: number): ItemInstance<T> => {
   if (n === item.getItemMeta().level) {
     return item;
   }
@@ -198,11 +194,8 @@ export const getReparentTarget = <T>(
   draggedItems: ItemInstance<T>[] | undefined
 ): DragTarget<T> => {
   const itemMeta = item.getItemMeta();
-  const reparentedTarget = getNthParent(
-    item,
-    reparentLevel - 1
-  ) as ItemInstance<T>;
-  const targetItemAbove = getNthParent(item, reparentLevel) as ItemInstance<T>;
+  const reparentedTarget = getNthParent(item, reparentLevel - 1);
+  const targetItemAbove = getNthParent(item, reparentLevel);
   const targetIndex = targetItemAbove.getIndexInParent() + 1;
 
   return {

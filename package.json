@@ -57,6 +57,7 @@
       "hast-util-to-html": "9.0.5",
       "hast-util-to-string": "3.0.1",
       "husky": "^9.1.7",
+      "lint-staged": "16.2.7",
       "jsdom": "26.1.0",
       "lru_map": "0.4.1",
       "lucide-react": "0.545.0",
@@ -104,6 +105,7 @@
     "lint:css:fix": "stylelint \"**/*.css\" --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
+    "lint-staged": "lint-staged",
     "prepare": "husky",
     "demo:build": "(cd apps/demo && bun run build)",
     "docs:build": "(cd apps/docs && bun run build)"
@@ -113,6 +115,7 @@
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "husky": "catalog:",
+    "lint-staged": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
@@ -136,12 +139,10 @@
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": [
       "oxfmt --write",
-      "git update-index --again",
       "oxlint --type-aware --tsconfig tsconfig.oxlint.json --fix"
     ],
     "**/*.{css,pcss,postcss}": [
-      "stylelint --fix",
-      "git update-index --again"
+      "stylelint --fix"
     ]
   }
 }

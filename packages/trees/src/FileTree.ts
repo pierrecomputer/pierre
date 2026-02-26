@@ -494,8 +494,8 @@ export class FileTree {
         : undefined;
 
     defaultSprite ??= this.getTopLevelSpriteSheets(shadowRoot).find((sprite) =>
-        this.isDefaultSpriteSheet(sprite)
-      );
+      this.isDefaultSpriteSheet(sprite)
+    );
 
     if (defaultSprite == null) {
       const builtInSprite = this.parseSpriteSheet(SVGSpriteSheet);
