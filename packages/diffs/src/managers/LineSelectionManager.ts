@@ -35,11 +35,16 @@ interface MouseInfo {
  * - DOM attribute updates (data-selected-line)
  */
 export class LineSelectionManager {
+  private static readonly EDGE_SCROLL_ZONE = 80; // px from viewport edge
+  private static readonly MAX_SCROLL_SPEED = 20; // px per rAF tick
+
   private pre: HTMLPreElement | undefined;
   private selectedRange: SelectedLineRange | null = null;
   private renderedSelectionRange: SelectedLineRange | null | undefined;
   private anchor: { line: number; side: SelectionSide | undefined } | undefined;
   private _queuedRender: number | undefined;
+  private lastPointerPosition: { clientX: number; clientY: number } | undefined;
+  private scrollRafId: number | undefined;
 
   constructor(private options: LineSelectionOptions = {}) {}
 
@@ -57,6 +62,8 @@ export class LineSelectionManager {
       cancelAnimationFrame(this._queuedRender);
       this._queuedRender = undefined;
     }
+    this.stopAutoScroll();
+    this.lastPointerPosition = undefined;
     this.pre?.removeAttribute('data-interactive-line-numbers');
     this.pre = undefined;
   }
@@ -181,17 +188,29 @@ export class LineSelectionManager {
   };
 
   private handleMouseMove = (event: PointerEvent): void => {
-    const mouseEventData = this.getMouseEventDataForPath(
-      event.composedPath(),
-      'move'
-    );
-    if (mouseEventData == null || this.anchor == null) return;
-    const { lineNumber, eventSide } = mouseEventData;
-    this.updateSelection(lineNumber, eventSide);
+    this.lastPointerPosition = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+    if (this.anchor == null) return;
+
+    const data = this.getMouseEventDataForPath(event.composedPath(), 'move');
+    if (data != null) {
+      this.updateSelection(data.lineNumber, data.eventSide);
+    }
+
+    const speed = this.getEdgeScrollSpeed(event.clientY);
+    if (speed !== 0 && this.scrollRafId == null) {
+      this.scrollRafId = requestAnimationFrame(this.runAutoScroll);
+    } else if (speed === 0) {
+      this.stopAutoScroll();
+    }
   };
 
   private handleMouseUp = (): void => {
     this.anchor = undefined;
+    this.lastPointerPosition = undefined;
+    this.stopAutoScroll();
     document.removeEventListener('pointermove', this.handleMouseMove);
     document.removeEventListener('pointerup', this.handleMouseUp);
     this.notifySelectionEnd(this.selectedRange);
@@ -368,6 +387,55 @@ export class LineSelectionManager {
     if (onLineSelectionEnd == null) return;
     onLineSelectionEnd(range);
   }
+
+  private getMouseEventDataForPoint(
+    x: number,
+    y: number
+  ): MouseInfo | undefined {
+    const path: Element[] = [];
+    let el = document.elementFromPoint(x, y);
+    while (el != null) {
+      path.push(el);
+      if (el === this.pre) break;
+      el = el.parentElement;
+    }
+    return this.getMouseEventDataForPath(path, 'move');
+  }
+
+  private getEdgeScrollSpeed(clientY: number): number {
+    const zone = LineSelectionManager.EDGE_SCROLL_ZONE;
+    const max = LineSelectionManager.MAX_SCROLL_SPEED;
+    if (clientY < zone) {
+      return -Math.round(((zone - clientY) / zone) * max);
+    }
+    const distFromBottom = window.innerHeight - clientY;
+    if (distFromBottom < zone) {
+      return Math.round(((zone - distFromBottom) / zone) * max);
+    }
+    return 0;
+  }
+
+  private stopAutoScroll(): void {
+    if (this.scrollRafId != null) {
+      cancelAnimationFrame(this.scrollRafId);
+      this.scrollRafId = undefined;
+    }
+  }
+
+  private runAutoScroll = (): void => {
+    this.scrollRafId = undefined;
+    if (this.lastPointerPosition == null || this.anchor == null) return;
+    const { clientX, clientY } = this.lastPointerPosition;
+    const speed = this.getEdgeScrollSpeed(clientY);
+    if (speed === 0) return;
+    window.scrollBy(0, speed);
+    // After scrolling, update selection at same screen coords (elements have moved).
+    const data = this.getMouseEventDataForPoint(clientX, clientY);
+    if (data != null) {
+      this.updateSelection(data.lineNumber, data.eventSide);
+    }
+    this.scrollRafId = requestAnimationFrame(this.runAutoScroll);
+  };
 
   private getMouseEventDataForPath(
     path: (EventTarget | undefined)[],
