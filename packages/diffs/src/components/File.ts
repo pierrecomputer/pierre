@@ -153,6 +153,7 @@ export class File<LAnnotation = undefined> {
 
   protected file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
+  protected enabled = true;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -177,7 +178,7 @@ export class File<LAnnotation = undefined> {
   };
 
   public rerender(): void {
-    if (this.file == null) return;
+    if (!this.enabled || this.file == null) return;
     this.render({
       file: this.file,
       forceRender: true,
@@ -229,16 +230,11 @@ export class File<LAnnotation = undefined> {
     this.interactionManager.setSelection(range);
   }
 
-  public cleanUp(): void {
-    this.fileRenderer.cleanUp();
+  public cleanUp(recycle = false): void {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.workerManager?.unsubscribeToThemeChanges(this);
-    this.workerManager = undefined;
     this.renderRange = undefined;
-
-    // Clean up the data
-    this.file = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
@@ -264,6 +260,19 @@ export class File<LAnnotation = undefined> {
     this.unsafeCSSStyle = undefined;
     this.appliedUnsafeCSS = undefined;
     this.placeHolder = undefined;
+
+    if (!recycle) {
+      this.fileRenderer.cleanUp();
+      this.workerManager = undefined;
+      this.file = undefined;
+    }
+
+    this.enabled = false;
+  }
+
+  public virtualizedSetup(): void {
+    this.enabled = true;
+    this.workerManager?.subscribeToThemeChanges(this);
   }
 
   public hydrate(props: FileHydrateProps<LAnnotation>): void {
@@ -380,6 +389,11 @@ export class File<LAnnotation = undefined> {
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
     const { collapsed = false, themeType = 'system' } = this.options;
+    if (!this.enabled) {
+      throw new Error(
+        'File.render: attempting to call render after cleaned up'
+      );
+    }
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const annotationsChanged =
@@ -961,8 +975,7 @@ export class File<LAnnotation = undefined> {
     pre: HTMLPreElement,
     renderRange: RenderRange | undefined
   ) {
-    const { disableVirtualizationBuffers = false } = this.options;
-    if (disableVirtualizationBuffers || renderRange == null) {
+    if (renderRange == null || this.shouldDisableVirtualizationBuffers()) {
       if (this.bufferBefore != null) {
         this.bufferBefore.remove();
         this.bufferBefore = undefined;
@@ -1005,6 +1018,10 @@ export class File<LAnnotation = undefined> {
       this.bufferAfter.remove();
       this.bufferAfter = undefined;
     }
+  }
+
+  protected shouldDisableVirtualizationBuffers(): boolean {
+    return this.options.disableVirtualizationBuffers ?? false;
   }
 
   private applyHeaderToDOM(

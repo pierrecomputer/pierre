@@ -4,12 +4,16 @@ import {
   DIFFS_TAG_NAME,
 } from '../constants';
 import { queueRender } from '../managers/UniversalRenderingManager';
-import type { VirtualFileMetrics } from '../types';
-import type { ParsedPatch } from '../types';
+import type {
+  ParsedPatch,
+  VirtualFileMetrics,
+  VirtualWindowSpecs,
+} from '../types';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import type { WorkerPoolManager } from '../worker';
 import { AdvancedVirtualizedFileDiff } from './AdvancedVirtualizedFileDiff';
 import type { FileDiffOptions } from './FileDiff';
+import type { VirtualizerConfig } from './Virtualizer';
 
 const ENABLE_RENDERING = true;
 const OVERSCROLL_SIZE = 500;
@@ -23,7 +27,12 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
 
-  public type = 'advanced';
+  public type = 'advanced' as const;
+  public readonly config: VirtualizerConfig = {
+    overscrollSize: OVERSCROLL_SIZE,
+    intersectionObserverMargin: 0,
+    resizeDebugging: false,
+  };
   private files: AdvancedVirtualizedFileDiff<LAnnotations>[] = [];
   private totalHeightUnified = 0;
   private totalHeightSplit = 0;
@@ -129,6 +138,29 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
     this.setupContainer();
     if (!ENABLE_RENDERING) return;
     queueRender(this._render);
+  }
+
+  instanceChanged(_instance: unknown): void {
+    if (!ENABLE_RENDERING || this.files.length === 0) {
+      return;
+    }
+    queueRender(this._render);
+  }
+
+  getWindowSpecs(): VirtualWindowSpecs {
+    return createWindowFromScrollPosition({
+      scrollTop: this.scrollTop,
+      height: this.height,
+      scrollHeight: this.scrollHeight,
+      containerOffset: this.containerOffset,
+      fitPerfectly: false,
+      overscrollSize: OVERSCROLL_SIZE,
+    });
+  }
+
+  getTopForInstance(_instance: unknown): number {
+    // FIXME: Implement this...
+    return 0;
   }
 
   _render = (): void => {

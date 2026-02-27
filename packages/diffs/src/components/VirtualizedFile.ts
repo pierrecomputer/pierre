@@ -7,6 +7,7 @@ import type {
 } from '../types';
 import { iterateOverFile } from '../utils/iterateOverFile';
 import type { WorkerPoolManager } from '../worker';
+import type { AdvancedVirtualizer } from './AdvancedVirtualizer';
 import { File, type FileOptions, type FileRenderProps } from './File';
 import type { Virtualizer } from './Virtualizer';
 
@@ -27,7 +28,7 @@ export class VirtualizedFile<
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
-    private virtualizer: Virtualizer,
+    private virtualizer: Virtualizer | AdvancedVirtualizer<LAnnotation>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -74,14 +75,14 @@ export class VirtualizedFile<
       return;
     }
     const { overflow = 'scroll' } = this.options;
-    this.top = this.virtualizer.getOffsetInScrollContainer(this.fileContainer);
+    this.top = this.getVirtualizedTop();
 
     // If the file has no annotations and we are using the scroll variant, then
     // we can probably skip everything
     if (
       overflow === 'scroll' &&
       this.lineAnnotations.length === 0 &&
-      !this.virtualizer.config.resizeDebugging
+      !this.isResizeDebuggingEnabled()
     ) {
       return;
     }
@@ -134,7 +135,7 @@ export class VirtualizedFile<
       }
     }
 
-    if (hasLineHeightChange || this.virtualizer.config.resizeDebugging) {
+    if (hasLineHeightChange || this.isResizeDebuggingEnabled()) {
       this.computeApproximateSize();
     }
   }
@@ -144,18 +145,16 @@ export class VirtualizedFile<
       return false;
     }
     if (dirty) {
-      this.top = this.virtualizer.getOffsetInScrollContainer(
-        this.fileContainer
-      );
+      this.top = this.getVirtualizedTop();
     }
     return this.render({ file: this.file });
   };
 
-  override cleanUp(): void {
-    if (this.fileContainer != null) {
-      this.virtualizer.disconnect(this.fileContainer);
+  override cleanUp(recycle = false): void {
+    if (this.fileContainer != null && this.isSimpleMode()) {
+      this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
-    super.cleanUp();
+    super.cleanUp(recycle);
   }
 
   // Compute the approximate size of the file using cached line heights.
@@ -203,7 +202,7 @@ export class VirtualizedFile<
 
     if (
       this.fileContainer != null &&
-      this.virtualizer.config.resizeDebugging &&
+      this.isResizeDebuggingEnabled() &&
       !isFirstCompute
     ) {
       const rect = this.fileContainer.getBoundingClientRect();
@@ -225,13 +224,11 @@ export class VirtualizedFile<
   }
 
   public setVisibility(visible: boolean): void {
-    if (this.fileContainer == null) {
+    if (this.isAdvancedMode() || this.fileContainer == null) {
       return;
     }
     if (visible && !this.isVisible) {
-      this.top = this.virtualizer.getOffsetInScrollContainer(
-        this.fileContainer
-      );
+      this.top = this.getVirtualizedTop();
       this.isVisible = true;
     } else if (!visible && this.isVisible) {
       this.isVisible = false;
@@ -259,24 +256,35 @@ export class VirtualizedFile<
 
     if (isFirstRender) {
       this.computeApproximateSize();
-      this.virtualizer.connect(fileContainer, this);
-      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
-      this.isVisible = this.virtualizer.isInstanceVisible(
-        this.top,
-        this.height
-      );
+      const virtualizer = this.getSimpleVirtualizer();
+      this.top ??= this.getVirtualizedTop();
+      if (this.isAdvancedMode()) {
+        this.isVisible = true;
+      } else {
+        if (virtualizer == null) {
+          throw new Error(
+            'VirtualizedFile.render: simple virtualizer is not available'
+          );
+        }
+        virtualizer.connect(fileContainer, this);
+        this.isVisible = virtualizer.isInstanceVisible(
+          this.top ?? 0,
+          this.height
+        );
+      }
     } else {
-      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
+      this.top ??= this.getVirtualizedTop();
     }
 
-    if (!this.isVisible) {
+    if (!this.isVisible && this.isSimpleMode()) {
       return this.renderPlaceholder(this.height);
     }
 
     const windowSpecs = this.virtualizer.getWindowSpecs();
+    const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(
       this.file,
-      this.top,
+      fileTop,
       windowSpecs
     );
     return super.render({
@@ -285,6 +293,35 @@ export class VirtualizedFile<
       renderRange,
       ...props,
     });
+  }
+
+  protected override shouldDisableVirtualizationBuffers(): boolean {
+    return this.isAdvancedMode() || super.shouldDisableVirtualizationBuffers();
+  }
+
+  private isSimpleMode(): boolean {
+    return this.virtualizer.type === 'simple';
+  }
+
+  private isAdvancedMode(): boolean {
+    return this.virtualizer.type === 'advanced';
+  }
+
+  private getVirtualizedTop(): number {
+    if (this.virtualizer.type === 'advanced') {
+      return this.virtualizer.getTopForInstance(this);
+    }
+    return this.fileContainer != null
+      ? this.virtualizer.getOffsetInScrollContainer(this.fileContainer)
+      : 0;
+  }
+
+  private getSimpleVirtualizer(): Virtualizer | undefined {
+    return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
+  }
+
+  private isResizeDebuggingEnabled(): boolean {
+    return this.getSimpleVirtualizer()?.config.resizeDebugging ?? false;
   }
 
   private computeRenderRangeFromWindow(

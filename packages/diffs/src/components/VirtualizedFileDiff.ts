@@ -10,6 +10,7 @@ import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { resolveVirtualFileMetrics } from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
+import type { AdvancedVirtualizer } from './AdvancedVirtualizer';
 import {
   FileDiff,
   type FileDiffOptions,
@@ -38,11 +39,11 @@ export class VirtualizedFileDiff<
   // Only stores lines that differ what is returned from `getLineHeight`
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
-  private virtualizer: Virtualizer;
+  private virtualizer: Virtualizer | AdvancedVirtualizer<LAnnotation>;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
-    virtualizer: Virtualizer,
+    virtualizer: Virtualizer | AdvancedVirtualizer<LAnnotation>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -94,15 +95,11 @@ export class VirtualizedFileDiff<
   // line heights or in cases of extremely large files...
   public reconcileHeights(): void {
     const { overflow = 'scroll' } = this.options;
-    if (this.fileContainer != null) {
-      this.top = this.virtualizer.getOffsetInScrollContainer(
-        this.fileContainer
-      );
-    }
     if (this.fileContainer == null || this.fileDiff == null) {
       this.height = 0;
       return;
     }
+    this.top = this.getVirtualizedTop();
     // NOTE(amadeus): We can probably be a lot smarter about this, and we
     // should be thinking about ways to improve this
     // If the file has no annotations and we are using the scroll variant, then
@@ -110,7 +107,7 @@ export class VirtualizedFileDiff<
     if (
       overflow === 'scroll' &&
       this.lineAnnotations.length === 0 &&
-      !this.virtualizer.config.resizeDebugging
+      !this.isResizeDebuggingEnabled()
     ) {
       return;
     }
@@ -169,7 +166,7 @@ export class VirtualizedFileDiff<
       }
     }
 
-    if (hasLineHeightChange || this.virtualizer.config.resizeDebugging) {
+    if (hasLineHeightChange || this.isResizeDebuggingEnabled()) {
       this.computeApproximateSize();
     }
   }
@@ -179,18 +176,16 @@ export class VirtualizedFileDiff<
       return false;
     }
     if (dirty) {
-      this.top = this.virtualizer.getOffsetInScrollContainer(
-        this.fileContainer
-      );
+      this.top = this.getVirtualizedTop();
     }
     return this.render();
   };
 
-  override cleanUp(): void {
-    if (this.fileContainer != null) {
-      this.virtualizer.disconnect(this.fileContainer);
+  override cleanUp(recycle = false): void {
+    if (this.fileContainer != null && this.isSimpleMode()) {
+      this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
-    super.cleanUp();
+    super.cleanUp(recycle);
   }
 
   override expandHunk = (
@@ -209,14 +204,12 @@ export class VirtualizedFileDiff<
   };
 
   public setVisibility(visible: boolean): void {
-    if (this.fileContainer == null) {
+    if (this.isAdvancedMode() || this.fileContainer == null) {
       return;
     }
     this.renderRange = undefined;
     if (visible && !this.isVisible) {
-      this.top = this.virtualizer.getOffsetInScrollContainer(
-        this.fileContainer
-      );
+      this.top = this.getVirtualizedTop();
       this.isVisible = true;
     } else if (!visible && this.isVisible) {
       this.isVisible = false;
@@ -312,7 +305,7 @@ export class VirtualizedFileDiff<
 
     if (
       this.fileContainer != null &&
-      this.virtualizer.config.resizeDebugging &&
+      this.isResizeDebuggingEnabled() &&
       !isFirstCompute
     ) {
       const rect = this.fileContainer.getBoundingClientRect();
@@ -365,24 +358,35 @@ export class VirtualizedFileDiff<
 
     if (isFirstRender) {
       this.computeApproximateSize();
-      this.virtualizer.connect(fileContainer, this);
-      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
-      this.isVisible = this.virtualizer.isInstanceVisible(
-        this.top,
-        this.height
-      );
+      const virtualizer = this.getSimpleVirtualizer();
+      this.top ??= this.getVirtualizedTop();
+      if (this.isAdvancedMode()) {
+        this.isVisible = true;
+      } else {
+        if (virtualizer == null) {
+          throw new Error(
+            'VirtualizedFileDiff.render: simple virtualizer is not available'
+          );
+        }
+        virtualizer.connect(fileContainer, this);
+        this.isVisible = virtualizer.isInstanceVisible(
+          this.top ?? 0,
+          this.height
+        );
+      }
     } else {
-      this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
+      this.top ??= this.getVirtualizedTop();
     }
 
-    if (!this.isVisible) {
+    if (!this.isVisible && this.isSimpleMode()) {
       return this.renderPlaceholder(this.height);
     }
 
     const windowSpecs = this.virtualizer.getWindowSpecs();
+    const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(
       this.fileDiff,
-      this.top,
+      fileTop,
       windowSpecs
     );
     return super.render({
@@ -393,6 +397,35 @@ export class VirtualizedFileDiff<
       newFile,
       ...props,
     });
+  }
+
+  protected override shouldDisableVirtualizationBuffers(): boolean {
+    return this.isAdvancedMode() || super.shouldDisableVirtualizationBuffers();
+  }
+
+  private isSimpleMode(): boolean {
+    return this.virtualizer.type === 'simple';
+  }
+
+  private isAdvancedMode(): boolean {
+    return this.virtualizer.type === 'advanced';
+  }
+
+  private getVirtualizedTop(): number | undefined {
+    if (this.virtualizer.type === 'advanced') {
+      return this.virtualizer.getTopForInstance(this);
+    }
+    return this.fileContainer != null
+      ? this.virtualizer.getOffsetInScrollContainer(this.fileContainer)
+      : 0;
+  }
+
+  private getSimpleVirtualizer(): Virtualizer | undefined {
+    return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
+  }
+
+  private isResizeDebuggingEnabled(): boolean {
+    return this.getSimpleVirtualizer()?.config.resizeDebugging ?? false;
   }
 
   private getDiffStyle(): 'split' | 'unified' {
