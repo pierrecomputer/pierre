@@ -103,7 +103,7 @@
       var(--ft-internal-status-deleted)
     );
 
-    --ft-internal-level-gap: var(--ft-level-gap, 16px);
+    --ft-internal-level-gap: var(--ft-level-gap, 8px);
     --ft-internal-item-padding-x: var(--ft-item-padding-x, 8px);
     --ft-internal-item-margin-x: var(--ft-item-margin-x, 2px);
     --ft-internal-item-row-gap: var(--ft-item-row-gap, 6px);
