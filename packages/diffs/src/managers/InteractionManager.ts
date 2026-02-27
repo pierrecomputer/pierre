@@ -190,6 +190,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.pre?.removeEventListener('pointerleave', this.handlePointerLeave);
     this.pre?.removeAttribute('data-interactive-lines');
     this.pre?.removeAttribute('data-interactive-line-numbers');
+    this.pre = undefined;
     this.gutterUtilityContainer?.remove();
     this.gutterUtilityContainer = undefined;
     this.gutterUtilityButton = undefined;
@@ -201,11 +202,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       cancelAnimationFrame(this.queuedSelectionRender);
       this.queuedSelectionRender = undefined;
     }
-    this.pre?.removeAttribute('data-interactive-line-numbers');
     this.interactiveLinesAttr = false;
     this.interactiveLineNumbersAttr = false;
     this.hasPointerListeners = false;
-    this.pre = undefined;
   }
 
   setup(pre: HTMLPreElement): void {
