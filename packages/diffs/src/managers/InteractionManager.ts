@@ -290,6 +290,12 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
+    if (
+      this.options.onGutterUtilityClick != null &&
+      isGutterUtilityPointerPath(event.composedPath())
+    ) {
+      return;
+    }
     debugLogIfEnabled(
       this.options.__debugPointerEvents,
       'click',
