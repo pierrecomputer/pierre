@@ -66,16 +66,9 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         title="Merge conflict resolution UI"
         description={
           <>
-<<<<<<< HEAD
             Render inline merge actions for each conflict block much like VS
             Code. Resolve by choosing current, incoming, or both changes and
             preview the updated file instantly.
-=======
-            VS Code-style merge actions are rendered inline for each conflict
-            block. Resolve by choosing current, incoming, or both changes and
-            preview the updated file instantly. This example shows controlled
-            state with `onMergeConflictAction` and `resolveMergeConflict`.
->>>>>>> 76b9995 (better api)
           </>
         }
       />
