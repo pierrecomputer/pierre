@@ -49,6 +49,7 @@ import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
+import { resolveMergeConflict } from '../utils/resolveMergeConflict';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
@@ -94,6 +95,11 @@ export interface FileOptions<LAnnotation>
     | 'none'
     | 'default'
     | MergeConflictActionsRenderer<LAnnotation>;
+  /**
+   * Optional callback for merge conflict actions.
+   * If omitted and `mergeConflictActions` is `'default'`, the File instance
+   * applies conflict resolution internally for immediate UI updates.
+   */
   onMergeConflictAction?(
     payload: MergeConflictActionPayload,
     instance: File<LAnnotation>
@@ -171,6 +177,8 @@ export class File<LAnnotation = undefined> {
 
   protected file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
+  protected internalMergeConflictSourceContents: string | undefined;
+  protected internalMergeConflictResolvedFile: FileContents | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -299,7 +307,13 @@ export class File<LAnnotation = undefined> {
     }
 
     event.preventDefault();
-    this.options.onMergeConflictAction?.({ resolution, conflict }, this);
+
+    const payload = { resolution, conflict };
+    if (this.options.onMergeConflictAction != null) {
+      this.options.onMergeConflictAction(payload, this);
+      return;
+    }
+    this.resolveMergeConflictInternally(payload);
   };
 
   public setLineAnnotations(
@@ -324,6 +338,8 @@ export class File<LAnnotation = undefined> {
 
     // Clean up the data
     this.file = undefined;
+    this.internalMergeConflictSourceContents = undefined;
+    this.internalMergeConflictResolvedFile = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
@@ -419,6 +435,7 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
+    file = this.getEffectiveFile(file);
     const { collapsed = false } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
@@ -539,6 +556,74 @@ export class File<LAnnotation = undefined> {
       }
     }
     return true;
+  }
+
+  private getEffectiveFile(file: FileContents): FileContents {
+    if (this.options.onMergeConflictAction != null) {
+      this.internalMergeConflictSourceContents = undefined;
+      this.internalMergeConflictResolvedFile = undefined;
+      return file;
+    }
+
+    const sourceContents = this.internalMergeConflictSourceContents;
+    const resolvedFile = this.internalMergeConflictResolvedFile;
+    if (sourceContents == null || resolvedFile == null) {
+      return file;
+    }
+
+    // If the external caller has adopted the resolved content, we can stop
+    // carrying internal override state.
+    if (file.contents === resolvedFile.contents) {
+      this.internalMergeConflictSourceContents = undefined;
+      this.internalMergeConflictResolvedFile = undefined;
+      return file;
+    }
+
+    // If the caller changed contents independently, prefer external state.
+    if (file.contents !== sourceContents) {
+      this.internalMergeConflictSourceContents = undefined;
+      this.internalMergeConflictResolvedFile = undefined;
+      return file;
+    }
+
+    return {
+      ...file,
+      contents: resolvedFile.contents,
+      cacheKey: resolvedFile.cacheKey,
+    };
+  }
+
+  private resolveMergeConflictInternally(
+    payload: MergeConflictActionPayload
+  ): void {
+    const file = this.file;
+    if (file == null) {
+      return;
+    }
+
+    const contents = resolveMergeConflict(file.contents, payload);
+    if (contents === file.contents) {
+      return;
+    }
+
+    this.internalMergeConflictSourceContents ??= file.contents;
+    const cacheKey =
+      file.cacheKey != null
+        ? `${file.cacheKey}:mc-${payload.conflict.conflictIndex}-${payload.resolution}`
+        : undefined;
+    const resolvedFile = { ...file, contents, cacheKey };
+    this.internalMergeConflictResolvedFile = resolvedFile;
+
+    const renderFile = {
+      ...file,
+      contents: this.internalMergeConflictSourceContents ?? file.contents,
+      cacheKey: file.cacheKey,
+    };
+    this.render({
+      file: renderFile,
+      forceRender: true,
+      renderRange: this.renderRange,
+    });
   }
 
   private removeRenderedCode(): void {

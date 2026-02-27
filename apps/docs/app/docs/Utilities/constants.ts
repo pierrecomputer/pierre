@@ -420,3 +420,35 @@ export function AcceptRejectExample() {
   },
   options,
 };
+
+export const HELPER_RESOLVE_MERGE_CONFLICT: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'resolveMergeConflict.ts',
+    contents: `import {
+  resolveMergeConflict,
+  type MergeConflictActionPayload,
+} from '@pierre/diffs';
+import { File } from '@pierre/diffs/react';
+
+import { useCallback, useState } from 'react';
+
+function MergeConflictExample({ initialContents }: { initialContents: string }) {
+  const [contents, setContents] = useState(initialContents);
+
+  const onMergeConflictAction = useCallback(
+    (payload: MergeConflictActionPayload) => {
+      setContents((previous) => resolveMergeConflict(previous, payload));
+    },
+    []
+  );
+
+  return (
+    <File
+      file={{ name: 'App.tsx', contents }}
+      options={{ onMergeConflictAction }}
+    />
+  );
+}`,
+  },
+  options,
+};

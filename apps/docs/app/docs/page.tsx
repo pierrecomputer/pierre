@@ -61,6 +61,7 @@ import {
   HELPER_PRELOAD_HIGHLIGHTER,
   HELPER_REGISTER_CUSTOM_LANGUAGE,
   HELPER_REGISTER_CUSTOM_THEME,
+  HELPER_RESOLVE_MERGE_CONFLICT,
   HELPER_SET_LANGUAGE_OVERRIDE,
   HELPER_TRIM_PATCH_CONTEXT,
 } from './Utilities/constants';
@@ -307,6 +308,7 @@ async function UtilitiesSection() {
     preloadHighlighter,
     registerCustomLanguage,
     registerCustomTheme,
+    resolveMergeConflictExample,
     setLanguageOverride,
     trimPatchContext,
   ] = await Promise.all([
@@ -319,6 +321,7 @@ async function UtilitiesSection() {
     preloadFile(HELPER_PRELOAD_HIGHLIGHTER),
     preloadFile(HELPER_REGISTER_CUSTOM_LANGUAGE),
     preloadFile(HELPER_REGISTER_CUSTOM_THEME),
+    preloadFile(HELPER_RESOLVE_MERGE_CONFLICT),
     preloadFile(HELPER_SET_LANGUAGE_OVERRIDE),
     preloadFile(HELPER_TRIM_PATCH_CONTEXT),
   ]);
@@ -334,6 +337,7 @@ async function UtilitiesSection() {
       preloadHighlighter,
       registerCustomLanguage,
       registerCustomTheme,
+      resolveMergeConflictExample,
       setLanguageOverride,
       trimPatchContext,
     },
