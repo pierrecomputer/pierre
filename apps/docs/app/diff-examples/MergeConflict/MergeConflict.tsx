@@ -1,6 +1,10 @@
 'use client';
 
-import { File, type MergeConflictActionPayload } from '@pierre/diffs/react';
+import {
+  File,
+  type MergeConflictActionPayload,
+  type MergeConflictRegion,
+} from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -13,24 +17,9 @@ interface MergeConflictProps {
 
 type ResolutionMode = 'current' | 'incoming' | 'both';
 
-const START_MARKER = /^<{7,}(?:\s.*)?$/;
-const BASE_MARKER = /^\|{7,}(?:\s.*)?$/;
-const SEPARATOR_MARKER = /^={7,}(?:\s.*)?$/;
-const END_MARKER = /^>{7,}(?:\s.*)?$/;
-
-interface ConflictRegion {
-  startIndex: number;
-  baseMarkerIndex?: number;
-  separatorIndex: number;
-  endIndex: number;
-}
-
 export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const initialContents = prerenderedFile.file.contents;
   const [contents, setContents] = useState(initialContents);
-  const lines = useMemo(() => contents.split('\n'), [contents]);
-  const conflictRegions = useMemo(() => findConflictRegions(lines), [lines]);
-  const hasConflict = conflictRegions.length > 0;
 
   const file = useMemo(
     () => ({ ...prerenderedFile.file, contents }),
@@ -42,7 +31,7 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const onMergeConflictAction = useCallback(
     ({ conflict, resolution }: MergeConflictActionPayload) => {
       setContents((previous) =>
-        applyConflictResolution(previous, conflict.conflictIndex, resolution)
+        applyConflictResolution(previous, conflict, resolution)
       );
     },
     []
@@ -78,11 +67,6 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         >
           Reset
         </Button>
-        <p className="text-muted-foreground ml-1 text-sm">
-          {hasConflict
-            ? `${conflictRegions.length} unresolved conflict${conflictRegions.length === 1 ? '' : 's'}.`
-            : 'No conflicts detected.'}
-        </p>
       </div>
 
       <File
@@ -97,18 +81,26 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
 
 function applyConflictResolution(
   contents: string,
-  regionIndex: number,
+  conflict: MergeConflictRegion,
   mode: ResolutionMode
 ): string {
   const lines = contents.split('\n');
-  const region = findConflictRegions(lines)[regionIndex];
-  if (region == null) {
+  if (
+    conflict.startLineIndex < 0 ||
+    conflict.separatorLineIndex <= conflict.startLineIndex ||
+    conflict.endLineIndex <= conflict.separatorLineIndex ||
+    conflict.endLineIndex >= lines.length
+  ) {
     return contents;
   }
 
-  const currentEnd = region.baseMarkerIndex ?? region.separatorIndex;
-  const currentLines = lines.slice(region.startIndex + 1, currentEnd);
-  const incomingLines = lines.slice(region.separatorIndex + 1, region.endIndex);
+  const currentEnd =
+    conflict.baseMarkerLineIndex ?? conflict.separatorLineIndex;
+  const currentLines = lines.slice(conflict.startLineIndex + 1, currentEnd);
+  const incomingLines = lines.slice(
+    conflict.separatorLineIndex + 1,
+    conflict.endLineIndex
+  );
 
   const mergedLines =
     mode === 'current'
@@ -118,54 +110,8 @@ function applyConflictResolution(
         : [...currentLines, ...incomingLines];
 
   return [
-    ...lines.slice(0, region.startIndex),
+    ...lines.slice(0, conflict.startLineIndex),
     ...mergedLines,
-    ...lines.slice(region.endIndex + 1),
+    ...lines.slice(conflict.endLineIndex + 1),
   ].join('\n');
-}
-
-function findConflictRegions(lines: string[]): ConflictRegion[] {
-  const regions: ConflictRegion[] = [];
-  let startIndex = -1;
-  let baseMarkerIndex: number | undefined;
-  let separatorIndex = -1;
-
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
-
-    if (startIndex < 0) {
-      if (START_MARKER.test(line)) {
-        startIndex = index;
-      }
-      continue;
-    }
-
-    if (
-      separatorIndex < 0 &&
-      baseMarkerIndex == null &&
-      BASE_MARKER.test(line)
-    ) {
-      baseMarkerIndex = index;
-      continue;
-    }
-
-    if (separatorIndex < 0 && SEPARATOR_MARKER.test(line)) {
-      separatorIndex = index;
-      continue;
-    }
-
-    if (separatorIndex >= 0 && END_MARKER.test(line)) {
-      regions.push({
-        startIndex,
-        baseMarkerIndex,
-        separatorIndex,
-        endIndex: index,
-      });
-      startIndex = -1;
-      baseMarkerIndex = undefined;
-      separatorIndex = -1;
-    }
-  }
-
-  return regions;
 }
