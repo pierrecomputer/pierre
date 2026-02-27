@@ -242,7 +242,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   }
 
   isSelectionDirty(): boolean {
-    return this.renderedSelectionRange == null;
+    return this.renderedSelectionRange === null;
   }
 
   setSelection(range: SelectedLineRange | null): void {
