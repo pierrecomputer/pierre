@@ -45,7 +45,7 @@ export class Virtualizer {
 
   public readonly __id: string = `virtualizer-${++instance}`;
   public readonly config: VirtualizerConfig;
-  public type = 'basic';
+  public type = 'simple' as const;
   private intersectionObserver: IntersectionObserver | undefined;
   private scrollTop: number = 0;
   private height: number = 0;
