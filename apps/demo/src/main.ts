@@ -166,13 +166,15 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
           );
         },
         themeType,
-        enableLineSelection: true,
         lineHoverHighlight: 'both',
         expansionLineCount: 10,
         // expandUnchanged: true,
 
         // Hover Decoration Snippets
         enableGutterUtility: true,
+        // onGutterUtilityClick(event) {
+        //   console.log('onGutterUtilityClick', event);
+        // },
         // renderGutterUtility(getHoveredLine) {
         //   const el = document.createElement('div');
         //   el.style.width = '20px';
@@ -191,9 +193,6 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         //     event.stopPropagation();
         //   });
         //   return el;
-        // },
-        // onGutterUtilityClick(event) {
-        //   console.log('onGutterUtilityClick', event);
         // },
 
         // Custom Hunk Separators Tests with expansion properties
@@ -267,31 +266,32 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         //   return wrapper;
         // },
 
+        // Line selection stuff
+        enableLineSelection: true,
         // onLineClick(props) {
         //   console.log('onLineClick', props);
         // },
         // onLineNumberClick(props) {
         //   console.info('onLineNumberClick', props);
         // },
-        // onLineSelected() {
-        //   console.log('onLineSelected');
+        // onLineSelected(props) {
+        //   console.log('onLineSelected', props);
         // },
-        // onLineSelectionStart() {
-        //   console.log('onLineSelectionStart');
+        // onLineSelectionStart(props) {
+        //   console.log('onLineSelectionStart', props);
         // },
-        // onLineSelectionChange() {
-        //   console.log('onLineSelectionChange');
+        // onLineSelectionChange(props) {
+        //   console.log('onLineSelectionChange', props);
         // },
-        // onLineSelectionEnd() {
-        //   console.log('onLineSelectionEnd');
+        // onLineSelectionEnd(props) {
+        //   console.log('onLineSelectionEnd', props);
         // },
-
         // Super noisy, but for debuggin
         // onLineEnter(props) {
-        //   console.log('onLineEnter', props.annotationSide, props.lineNumber);
+        //   console.log('onLineEnter', props);
         // },
         // onLineLeave(props) {
-        //   console.log('onLineLeave', props.annotationSide, props.lineNumber);
+        //   console.log('onLineLeave', props);
         // },
         // __debugMouseEvents: 'click',
       };
@@ -610,29 +610,40 @@ if (renderFileButton != null) {
           }
         );
       },
+
+      // Line selection stuff
+      enableLineSelection: true,
       // onLineClick(props) {
       //   console.log('onLineClick', props);
       // },
       // onLineNumberClick(props) {
       //   console.info('onLineNumberClick', props);
       // },
-      // onLineSelected() {
-      //   console.log('onLineSelected');
+      // onLineSelected(props) {
+      //   console.log('onLineSelected', props);
       // },
-      // onLineSelectionStart() {
-      //   console.log('onLineSelectionStart');
+      // onLineSelectionStart(props) {
+      //   console.log('onLineSelectionStart', props);
       // },
-      // onLineSelectionChange() {
-      //   console.log('onLineSelectionChange');
+      // onLineSelectionChange(props) {
+      //   console.log('onLineSelectionChange', props);
       // },
-      // onLineSelectionEnd() {
-      //   console.log('onLineSelectionEnd');
+      // onLineSelectionEnd(props) {
+      //   console.log('onLineSelectionEnd', props);
       // },
-
-      enableLineSelection: true,
+      // Super noisy, but for debuggin
+      // onLineEnter(props) {
+      //   console.log('onLineEnter', props);
+      // },
+      // onLineLeave(props) {
+      //   console.log('onLineLeave', props);
+      // },
 
       // Hover Decoration Snippets
       enableGutterUtility: true,
+      // onGutterUtilityClick(event) {
+      //   console.log('onGutterUtilityClick', event);
+      // },
       // renderGutterUtility(getHoveredLine) {
       //   const el = document.createElement('div');
       //   el.style.width = '20px';
@@ -651,9 +662,6 @@ if (renderFileButton != null) {
       //     event.stopPropagation();
       //   });
       //   return el;
-      // },
-      // onGutterUtilityClick(event) {
-      //   console.log('onGutterUtilityClick', event);
       // },
     };
 

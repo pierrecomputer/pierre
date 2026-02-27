@@ -10,18 +10,13 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import {
-  type GetLineIndexUtility,
-  LineSelectionManager,
-  type LineSelectionOptions,
-  pluckLineSelectionOptions,
-  type SelectedLineRange,
-} from '../managers/LineSelectionManager';
-import {
   type GetHoveredLineResult,
-  MouseEventManager,
-  type MouseEventManagerBaseOptions,
-  pluckMouseEventOptions,
-} from '../managers/MouseEventManager';
+  type GetLineIndexUtility,
+  InteractionManager,
+  type InteractionManagerBaseOptions,
+  pluckInteractionOptions,
+  type SelectedLineRange,
+} from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
 import {
@@ -83,8 +78,7 @@ export interface FileDiffHydrationProps<LAnnotation> extends Omit<
 export interface FileDiffOptions<LAnnotation>
   extends
     Omit<BaseDiffOptions, 'hunkSeparators'>,
-    MouseEventManagerBaseOptions<'diff'>,
-    LineSelectionOptions {
+    InteractionManagerBaseOptions<'diff'> {
   hunkSeparators?:
     | Exclude<HunkSeparators, 'custom'> /**
        * @deprecated Custom hunk separator functions are deprecated and will be
@@ -183,8 +177,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected hunksRenderer: DiffHunksRenderer<LAnnotation>;
   protected resizeManager: ResizeManager;
   protected scrollSyncManager: ScrollSyncManager;
-  protected mouseEventManager: MouseEventManager<'diff'>;
-  protected lineSelectionManager: LineSelectionManager;
+  protected interactionManager: InteractionManager<'diff'>;
 
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
@@ -218,19 +211,17 @@ export class FileDiff<LAnnotation = undefined> {
     );
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
-    this.mouseEventManager = new MouseEventManager(
+    this.interactionManager = new InteractionManager(
       'diff',
-      pluckMouseEventOptions(
+      pluckInteractionOptions(
         options,
         typeof options.hunkSeparators === 'function' ||
           (options.hunkSeparators ?? 'line-info') === 'line-info' ||
           options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
-          : undefined
+          : undefined,
+        this.getLineIndex
       )
-    );
-    this.lineSelectionManager = new LineSelectionManager(
-      pluckLineSelectionOptions(options, this.getLineIndex)
     );
     this.workerManager?.subscribeToThemeChanges(this);
     this.enabled = true;
@@ -339,18 +330,16 @@ export class FileDiff<LAnnotation = undefined> {
           ? 'custom'
           : options.hunkSeparators,
     });
-    this.mouseEventManager.setOptions(
-      pluckMouseEventOptions(
+    this.interactionManager.setOptions(
+      pluckInteractionOptions(
         options,
         typeof options.hunkSeparators === 'function' ||
           (options.hunkSeparators ?? 'line-info') === 'line-info' ||
           options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
-          : undefined
+          : undefined,
+        this.getLineIndex
       )
-    );
-    this.lineSelectionManager.setOptions(
-      pluckLineSelectionOptions(options, this.getLineIndex)
     );
   }
 
@@ -388,7 +377,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public getHoveredLine = (): GetHoveredLineResult<'diff'> | undefined => {
-    return this.mouseEventManager.getHoveredLine();
+    return this.interactionManager.getHoveredLine();
   };
 
   public setLineAnnotations(
@@ -414,14 +403,13 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public setSelectedLines(range: SelectedLineRange | null): void {
-    this.lineSelectionManager.setSelection(range);
+    this.interactionManager.setSelection(range);
   }
 
   public cleanUp(recycle: boolean = false): void {
     this.resizeManager.cleanUp();
-    this.mouseEventManager.cleanUp();
+    this.interactionManager.cleanUp();
     this.scrollSyncManager.cleanUp();
-    this.lineSelectionManager.cleanUp();
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
 
@@ -545,8 +533,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderAnnotations();
       this.renderGutterUtility();
       this.injectUnsafeCSS();
-      this.mouseEventManager.setup(this.pre);
-      this.lineSelectionManager.setup(this.pre);
+      this.interactionManager.setup(this.pre);
       this.resizeManager.setup(this.pre, overflow === 'wrap');
       if (overflow === 'scroll' && diffStyle === 'split') {
         this.scrollSyncManager.setup(
@@ -777,8 +764,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderAnnotations();
       this.renderGutterUtility();
 
-      this.mouseEventManager.setup(pre);
-      this.lineSelectionManager.setup(pre);
+      this.interactionManager.setup(pre);
       this.resizeManager.setup(pre, overflow === 'wrap');
       if (overflow === 'scroll' && diffStyle === 'split') {
         this.scrollSyncManager.setup(
@@ -804,8 +790,7 @@ export class FileDiff<LAnnotation = undefined> {
   private removeRenderedCode(): void {
     this.resizeManager.cleanUp();
     this.scrollSyncManager.cleanUp();
-    this.mouseEventManager.cleanUp();
-    this.lineSelectionManager.cleanUp();
+    this.interactionManager.cleanUp();
 
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
@@ -862,8 +847,7 @@ export class FileDiff<LAnnotation = undefined> {
   private cleanChildNodes() {
     this.resizeManager.cleanUp();
     this.scrollSyncManager.cleanUp();
-    this.mouseEventManager.cleanUp();
-    this.lineSelectionManager.cleanUp();
+    this.interactionManager.cleanUp();
 
     this.bufferAfter?.remove();
     this.bufferBefore?.remove();
@@ -984,7 +968,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.gutterUtilityContent = undefined;
       return;
     }
-    const element = renderGutterUtility(this.mouseEventManager.getHoveredLine);
+    const element = renderGutterUtility(this.interactionManager.getHoveredLine);
     if (element != null && this.gutterUtilityContent != null) {
       return;
     } else if (element == null) {

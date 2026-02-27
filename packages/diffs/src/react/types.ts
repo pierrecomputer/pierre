@@ -2,8 +2,10 @@ import { type CSSProperties, type ReactNode } from 'react';
 
 import type { FileOptions } from '../components/File';
 import type { FileDiffOptions } from '../components/FileDiff';
-import type { SelectedLineRange } from '../managers/LineSelectionManager';
-import type { GetHoveredLineResult } from '../managers/MouseEventManager';
+import type {
+  GetHoveredLineResult,
+  SelectedLineRange,
+} from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
   FileContents,

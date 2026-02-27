@@ -10,17 +10,12 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import {
-  LineSelectionManager,
-  type LineSelectionOptions,
-  pluckLineSelectionOptions,
-  type SelectedLineRange,
-} from '../managers/LineSelectionManager';
-import {
   type GetHoveredLineResult,
-  MouseEventManager,
-  type MouseEventManagerBaseOptions,
-  pluckMouseEventOptions,
-} from '../managers/MouseEventManager';
+  InteractionManager,
+  type InteractionManagerBaseOptions,
+  pluckInteractionOptions,
+  type SelectedLineRange,
+} from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
@@ -68,10 +63,7 @@ export interface FileHyrdateProps<LAnnotation> extends Omit<
 }
 
 export interface FileOptions<LAnnotation>
-  extends
-    BaseCodeOptions,
-    MouseEventManagerBaseOptions<'file'>,
-    LineSelectionOptions {
+  extends BaseCodeOptions, InteractionManagerBaseOptions<'file'> {
   disableFileHeader?: boolean;
   /**
    * @deprecated Use `enableGutterUtility` instead.
@@ -136,8 +128,7 @@ export class File<LAnnotation = undefined> {
 
   protected fileRenderer: FileRenderer<LAnnotation>;
   protected resizeManager: ResizeManager;
-  protected mouseEventManager: MouseEventManager<'file'>;
-  protected lineSelectionManager: LineSelectionManager;
+  protected interactionManager: InteractionManager<'file'>;
 
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
@@ -157,12 +148,9 @@ export class File<LAnnotation = undefined> {
       this.workerManager
     );
     this.resizeManager = new ResizeManager();
-    this.mouseEventManager = new MouseEventManager(
+    this.interactionManager = new InteractionManager(
       'file',
-      pluckMouseEventOptions(options)
-    );
-    this.lineSelectionManager = new LineSelectionManager(
-      pluckLineSelectionOptions(options)
+      pluckInteractionOptions(options)
     );
     this.workerManager?.subscribeToThemeChanges(this);
   }
@@ -183,8 +171,7 @@ export class File<LAnnotation = undefined> {
   public setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
-    this.mouseEventManager.setOptions(pluckMouseEventOptions(options));
-    this.lineSelectionManager.setOptions(pluckLineSelectionOptions(options));
+    this.interactionManager.setOptions(pluckInteractionOptions(options));
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
@@ -222,7 +209,7 @@ export class File<LAnnotation = undefined> {
   }
 
   public getHoveredLine = (): GetHoveredLineResult<'file'> | undefined => {
-    return this.mouseEventManager.getHoveredLine();
+    return this.interactionManager.getHoveredLine();
   };
 
   public setLineAnnotations(
@@ -232,14 +219,13 @@ export class File<LAnnotation = undefined> {
   }
 
   public setSelectedLines(range: SelectedLineRange | null): void {
-    this.lineSelectionManager.setSelection(range);
+    this.interactionManager.setSelection(range);
   }
 
   public cleanUp(): void {
     this.fileRenderer.cleanUp();
     this.resizeManager.cleanUp();
-    this.mouseEventManager.cleanUp();
-    this.lineSelectionManager.cleanUp();
+    this.interactionManager.cleanUp();
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
     this.renderRange = undefined;
@@ -317,8 +303,7 @@ export class File<LAnnotation = undefined> {
       this.renderAnnotations();
       this.renderGutterUtility();
       this.injectUnsafeCSS();
-      this.mouseEventManager.setup(this.pre);
-      this.lineSelectionManager.setup(this.pre);
+      this.interactionManager.setup(this.pre);
       this.resizeManager.setup(this.pre, overflow === 'wrap');
     }
   }
@@ -443,8 +428,7 @@ export class File<LAnnotation = undefined> {
 
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
-      this.mouseEventManager.setup(pre);
-      this.lineSelectionManager.setup(pre);
+      this.interactionManager.setup(pre);
       this.resizeManager.setup(pre, overflow === 'wrap');
       this.renderAnnotations();
       this.renderGutterUtility();
@@ -462,8 +446,7 @@ export class File<LAnnotation = undefined> {
 
   private removeRenderedCode(): void {
     this.resizeManager.cleanUp();
-    this.mouseEventManager.cleanUp();
-    this.lineSelectionManager.cleanUp();
+    this.interactionManager.cleanUp();
 
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
@@ -521,8 +504,7 @@ export class File<LAnnotation = undefined> {
 
   private cleanChildNodes() {
     this.resizeManager.cleanUp();
-    this.mouseEventManager.cleanUp();
-    this.lineSelectionManager.cleanUp();
+    this.interactionManager.cleanUp();
 
     this.bufferAfter?.remove();
     this.bufferBefore?.remove();
@@ -604,7 +586,7 @@ export class File<LAnnotation = undefined> {
       this.gutterUtilityContent = undefined;
       return;
     }
-    const element = renderGutterUtility(this.mouseEventManager.getHoveredLine);
+    const element = renderGutterUtility(this.interactionManager.getHoveredLine);
     if (element != null && this.gutterUtilityContent != null) {
       return;
     } else if (element == null) {

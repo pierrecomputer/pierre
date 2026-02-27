@@ -4,7 +4,7 @@ import {
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
-import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
+import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type { FileContents } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { GutterUtilitySlotStyles } from '../constants';

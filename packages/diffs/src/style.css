@@ -1352,6 +1352,7 @@
     border-radius: 4px;
     background-color: var(--diffs-modified-base);
     color: var(--diffs-bg);
+    fill: currentColor;
     position: relative;
     z-index: 4;
   }

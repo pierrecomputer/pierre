@@ -8,8 +8,10 @@ import {
 
 import { FileDiff, type FileDiffOptions } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
-import type { SelectedLineRange } from '../../managers/LineSelectionManager';
-import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
+import type {
+  GetHoveredLineResult,
+  SelectedLineRange,
+} from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
   FileContents,

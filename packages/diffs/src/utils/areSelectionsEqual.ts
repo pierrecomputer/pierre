@@ -1,4 +1,4 @@
-import type { SelectedLineRange } from '../managers/LineSelectionManager';
+import type { SelectedLineRange } from '../managers/InteractionManager';
 
 export function areSelectionsEqual(
   selectionA: SelectedLineRange | undefined,

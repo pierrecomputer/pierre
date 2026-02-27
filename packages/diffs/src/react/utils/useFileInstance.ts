@@ -8,8 +8,10 @@ import {
 
 import { File, type FileOptions } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
-import type { SelectedLineRange } from '../../managers/LineSelectionManager';
-import type { GetHoveredLineResult } from '../../managers/MouseEventManager';
+import type {
+  GetHoveredLineResult,
+  SelectedLineRange,
+} from '../../managers/InteractionManager';
 import type {
   FileContents,
   LineAnnotation,
