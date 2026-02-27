@@ -40,3 +40,13 @@ tree state programmatically:
 | `getSelectedItems()`                | Return the currently selected item paths                  |
 | `setCallbacks(callbacks)`           | Update callbacks (`onSelection`, etc.) after construction |
 | `setOptions(options, stateConfig?)` | Merge new options (and optionally state config)           |
+
+### FileTreeStateConfig
+
+`FileTreeStateConfig` is the state/callback config for the `FileTree`
+constructor's second argument. Use it for defaults (`initialExpandedItems`,
+`initialSelectedItems`, `initialSearchQuery`) and callbacks/controlled values
+(`onSelection`, `onExpandedItemsChange`, `onSelectedItemsChange`,
+`onFilesChange`, plus `expandedItems`/`selectedItems`/`files` when controlled).
+
+<DocsCodeExample {...fileTreeStateConfigType} />

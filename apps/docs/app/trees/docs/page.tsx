@@ -110,14 +110,12 @@ async function CoreTypesSection() {
     fileTreeOptionsType,
     fileTreeSelectionItemType,
     fileTreeSearchModeType,
-    fileTreeStateConfigType,
     filesOptionExample,
     onSelectionExample,
   ] = await Promise.all([
     preloadFile(FILE_TREE_OPTIONS_TYPE),
     preloadFile(FILE_TREE_SELECTION_ITEM_TYPE),
     preloadFile(FILE_TREE_SEARCH_MODE_TYPE),
-    preloadFile(FILE_TREE_STATE_CONFIG_TYPE),
     preloadFile(FILES_OPTION_EXAMPLE),
     preloadFile(ON_SELECTION_EXAMPLE),
   ]);
@@ -127,7 +125,6 @@ async function CoreTypesSection() {
       fileTreeOptionsType,
       fileTreeSelectionItemType,
       fileTreeSearchModeType,
-      fileTreeStateConfigType,
       filesOptionExample,
       onSelectionExample,
     },
@@ -151,16 +148,21 @@ async function ReactAPISection() {
 }
 
 async function VanillaAPISection() {
-  const [vanillaAPIFileTreeExample, vanillaAPIFileTreeOptions] =
-    await Promise.all([
-      preloadFile(VANILLA_API_FILE_TREE_EXAMPLE),
-      preloadFile(VANILLA_API_FILE_TREE_OPTIONS),
-    ]);
+  const [
+    vanillaAPIFileTreeExample,
+    vanillaAPIFileTreeOptions,
+    fileTreeStateConfigType,
+  ] = await Promise.all([
+    preloadFile(VANILLA_API_FILE_TREE_EXAMPLE),
+    preloadFile(VANILLA_API_FILE_TREE_OPTIONS),
+    preloadFile(FILE_TREE_STATE_CONFIG_TYPE),
+  ]);
   const content = await renderMDX({
     filePath: 'trees/docs/VanillaAPI/content.mdx',
     scope: {
       vanillaAPIFileTreeExample,
       vanillaAPIFileTreeOptions,
+      fileTreeStateConfigType,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
