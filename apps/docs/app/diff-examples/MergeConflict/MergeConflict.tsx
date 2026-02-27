@@ -1,10 +1,10 @@
 'use client';
 
 import {
-  File,
   type MergeConflictActionPayload,
-  type MergeConflictRegion,
-} from '@pierre/diffs/react';
+  resolveMergeConflict,
+} from '@pierre/diffs';
+import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -14,8 +14,6 @@ import { Button } from '@/components/ui/button';
 interface MergeConflictProps {
   prerenderedFile: PreloadedFileResult<undefined>;
 }
-
-type ResolutionMode = 'current' | 'incoming' | 'both';
 
 export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const initialContents = prerenderedFile.file.contents;
@@ -29,10 +27,8 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
     contents === initialContents ? prerenderedFile.prerenderedHTML : undefined;
 
   const onMergeConflictAction = useCallback(
-    ({ conflict, resolution }: MergeConflictActionPayload) => {
-      setContents((previous) =>
-        applyConflictResolution(previous, conflict, resolution)
-      );
+    (payload: MergeConflictActionPayload) => {
+      setContents((previous) => resolveMergeConflict(previous, payload));
     },
     []
   );
@@ -77,41 +73,4 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
       />
     </div>
   );
-}
-
-function applyConflictResolution(
-  contents: string,
-  conflict: MergeConflictRegion,
-  mode: ResolutionMode
-): string {
-  const lines = contents.split('\n');
-  if (
-    conflict.startLineIndex < 0 ||
-    conflict.separatorLineIndex <= conflict.startLineIndex ||
-    conflict.endLineIndex <= conflict.separatorLineIndex ||
-    conflict.endLineIndex >= lines.length
-  ) {
-    return contents;
-  }
-
-  const currentEnd =
-    conflict.baseMarkerLineIndex ?? conflict.separatorLineIndex;
-  const currentLines = lines.slice(conflict.startLineIndex + 1, currentEnd);
-  const incomingLines = lines.slice(
-    conflict.separatorLineIndex + 1,
-    conflict.endLineIndex
-  );
-
-  const mergedLines =
-    mode === 'current'
-      ? currentLines
-      : mode === 'incoming'
-        ? incomingLines
-        : [...currentLines, ...incomingLines];
-
-  return [
-    ...lines.slice(0, conflict.startLineIndex),
-    ...mergedLines,
-    ...lines.slice(conflict.endLineIndex + 1),
-  ].join('\n');
 }
