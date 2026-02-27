@@ -80,8 +80,7 @@
       --ft-status-modified,
       var(
         --ft-theme-git-decoration-modified-resource-foreground,
-        /* light-dark(#ffca00, #ffd452) */
-        light-dark(#009fff, #69b1ff)
+        /* light-dark(#ffca00, #ffd452) */ light-dark(#009fff, #69b1ff)
       )
     );
     --ft-internal-status-deleted: var(
@@ -91,9 +90,18 @@
         light-dark(#ff2e3f, #ff6762)
       )
     );
-    --ft-internal-git-modified-color: var(--ft-git-modified-color, var(--ft-internal-status-modified));
-    --ft-internal-git-added-color: var(--ft-git-added-color, var(--ft-internal-status-added));
-    --ft-internal-git-deleted-color: var(--ft-git-added-color, var(--ft-internal-status-deleted));
+    --ft-internal-git-modified-color: var(
+      --ft-git-modified-color,
+      var(--ft-internal-status-modified)
+    );
+    --ft-internal-git-added-color: var(
+      --ft-git-added-color,
+      var(--ft-internal-status-added)
+    );
+    --ft-internal-git-deleted-color: var(
+      --ft-git-added-color,
+      var(--ft-internal-status-deleted)
+    );
 
     --ft-internal-level-gap: var(--ft-level-gap, 16px);
     --ft-internal-item-padding-x: var(--ft-item-padding-x, 8px);
