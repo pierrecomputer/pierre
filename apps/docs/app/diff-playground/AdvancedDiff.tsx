@@ -1,6 +1,10 @@
 'use client';
 
-import { AdvancedVirtualizer, parsePatchFiles } from '@pierre/diffs';
+import {
+  AdvancedVirtualizer,
+  DEFAULT_THEMES,
+  parsePatchFiles,
+} from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
 
@@ -29,6 +33,11 @@ function SubmitButton({ children, disabled = false }: SubmitButtonProps) {
     </button>
   );
 }
+
+const unsafeCSS = `[data-diffs-header] {
+  position: sticky;
+  top: 0;
+}`;
 
 export function AdvancedDiff() {
   const workerPool = useWorkerPool();
@@ -63,11 +72,16 @@ export function AdvancedDiff() {
           return;
         }
         bigBoiRef.current ??= new AdvancedVirtualizer(
-          ref.current,
-          undefined,
+          {
+            theme: DEFAULT_THEMES,
+            diffStyle: 'split',
+            enableLineSelection: true,
+            unsafeCSS,
+          },
           undefined,
           workerPool
         );
+        bigBoiRef.current.setup(document, ref.current);
         bigBoiRef.current.reset();
         console.time('--     request time');
         const response = await fetch(

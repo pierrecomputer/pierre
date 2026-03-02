@@ -50,6 +50,11 @@ export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   fileGap: 8,
 };
 
+export const DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
+  ...DEFAULT_VIRTUAL_FILE_METRICS,
+  hunkLineCount: 1,
+};
+
 export const DEFAULT_EXPANDED_REGION: HunkExpansionRegion = Object.freeze({
   fromStart: 0,
   fromEnd: 0,

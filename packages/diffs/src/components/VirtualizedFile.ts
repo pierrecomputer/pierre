@@ -3,6 +3,7 @@ import type {
   FileContents,
   RenderRange,
   RenderWindow,
+  StickySpecs,
   VirtualFileMetrics,
 } from '../types';
 import { iterateOverFile } from '../utils/iterateOverFile';
@@ -161,9 +162,7 @@ export class VirtualizedFile<
     return this.height;
   }
 
-  public getAdvancedStickySpecs():
-    | { topOffset: number; height: number }
-    | undefined {
+  public getAdvancedStickySpecs(): StickySpecs | undefined {
     if (this.renderRange == null || this.top == null) {
       return undefined;
     }
