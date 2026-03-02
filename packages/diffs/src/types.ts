@@ -740,3 +740,8 @@ export interface AppliedThemeStyleCache {
   themeType: ThemeTypes;
   baseThemeType: 'light' | 'dark' | undefined;
 }
+
+export interface StickySpecs {
+  topOffset: number;
+  height: number;
+}

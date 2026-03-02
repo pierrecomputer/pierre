@@ -4,6 +4,7 @@ import type {
   FileDiffMetadata,
   RenderRange,
   RenderWindow,
+  StickySpecs,
   VirtualFileMetrics,
 } from '../types';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
@@ -193,9 +194,7 @@ export class VirtualizedFileDiff<
     return this.height;
   }
 
-  public getAdvancedStickySpecs():
-    | { topOffset: number; height: number }
-    | undefined {
+  public getAdvancedStickySpecs(): StickySpecs | undefined {
     if (this.renderRange == null || this.top == null) {
       return undefined;
     }
