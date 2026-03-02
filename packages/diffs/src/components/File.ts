@@ -260,6 +260,7 @@ export class File<LAnnotation = undefined> {
     this.unsafeCSSStyle = undefined;
     this.appliedUnsafeCSS = undefined;
     this.placeHolder = undefined;
+    this.unsafeCSSStyle = undefined;
 
     if (!recycle) {
       this.fileRenderer.cleanUp();
