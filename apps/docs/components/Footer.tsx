@@ -26,6 +26,12 @@ export default function Footer() {
               Docs
             </Link>
             <Link
+              href="/playground"
+              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+            >
+              Playground
+            </Link>
+            <Link
               href="/theme"
               className="text-muted-foreground hover:text-foreground text-sm transition-colors"
             >

@@ -833,8 +833,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           enableGutterUtility: canUseHoverComments,
           onLineSelectionEnd: handleLineSelectionEnd,
           onGutterUtilityClick: canUseHoverComments
-            ? ({ lineNumber, side }) => {
-                addCommentAtLine(side, lineNumber);
+            ? (range) => {
+                if (range.side != null) {
+                  addCommentAtLine(range.side, range.start);
+                }
               }
             : undefined,
         }}
