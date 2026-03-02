@@ -5,23 +5,54 @@ import {
 } from '../constants';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import type {
-  ParsedPatch,
+  FileContents,
+  FileDiffMetadata,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import type { WorkerPoolManager } from '../worker';
-import { AdvancedVirtualizedFileDiff } from './AdvancedVirtualizedFileDiff';
+import type { FileOptions } from './File';
 import type { FileDiffOptions } from './FileDiff';
+import { VirtualizedFile } from './VirtualizedFile';
+import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 import type { VirtualizerConfig } from './Virtualizer';
 
 const ENABLE_RENDERING = true;
-const OVERSCROLL_SIZE = 500;
 
 interface RenderedItems<LAnnotations> {
-  instance: AdvancedVirtualizedFileDiff<LAnnotations>;
+  instance: AdvancedVirtualizedInstance<LAnnotations>;
   element: HTMLElement;
 }
+
+type AdvancedVirtualizedInstance<LAnnotations> =
+  | VirtualizedFile<LAnnotations>
+  | VirtualizedFileDiff<LAnnotations>;
+
+interface AdvancedVirtualizedBaseItem {
+  top: number;
+  height: number;
+}
+
+interface AdvancedVirtualizedDiffItem<
+  LAnnotations,
+> extends AdvancedVirtualizedBaseItem {
+  kind: 'diff';
+  instance: VirtualizedFileDiff<LAnnotations>;
+  fileDiff: FileDiffMetadata;
+}
+
+interface AdvancedVirtualizedFileItem<
+  LAnnotations,
+> extends AdvancedVirtualizedBaseItem {
+  kind: 'file';
+  instance: VirtualizedFile<LAnnotations>;
+  file: FileContents;
+}
+
+type AdvancedVirtualizedItem<LAnnotations> =
+  | AdvancedVirtualizedDiffItem<LAnnotations>
+  | AdvancedVirtualizedFileItem<LAnnotations>;
 
 export class AdvancedVirtualizer<LAnnotations = undefined> {
   static __STOP = false;
@@ -29,15 +60,16 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
 
   public type = 'advanced' as const;
   public readonly config: VirtualizerConfig = {
-    overscrollSize: OVERSCROLL_SIZE,
+    overscrollSize: 200,
     intersectionObserverMargin: 0,
     resizeDebugging: false,
   };
-  private files: AdvancedVirtualizedFileDiff<LAnnotations>[] = [];
-  private totalHeightUnified = 0;
-  private totalHeightSplit = 0;
+  private items: AdvancedVirtualizedItem<LAnnotations>[] = [];
+  private instanceToItem: Map<object, AdvancedVirtualizedItem<LAnnotations>> =
+    new Map();
+  private totalHeight = 0;
   private rendered: Map<
-    AdvancedVirtualizedFileDiff<LAnnotations>,
+    AdvancedVirtualizedInstance<LAnnotations>,
     RenderedItems<LAnnotations>
   > = new Map();
 
@@ -53,20 +85,24 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
 
   constructor(
     private container: HTMLElement,
-    private fileOptions: FileDiffOptions<LAnnotations> = {
+    private options: FileDiffOptions<LAnnotations> = {
       theme: DEFAULT_THEMES,
-      // FIXME(amadeus): Fix selected lines crashing when scroll out of the window
-      enableLineSelection: true,
-      disableVirtualizationBuffers: true,
+      // enableLineSelection: true,
       diffStyle: 'split',
+      unsafeCSS: `[data-diffs-header] {
+  position: sticky;
+  top: 0;
+}`,
     },
-    private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
+    private metrics: VirtualFileMetrics = {
+      ...DEFAULT_VIRTUAL_FILE_METRICS,
+      hunkLineCount: 1,
+    },
     private workerManager?: WorkerPoolManager | undefined
   ) {
     this.stickyOffset = document.createElement('div');
     this.stickyOffset.style.contain = 'layout size';
     this.stickyContainer = document.createElement('div');
-    this.stickyContainer.style.contain = 'strict';
     this.stickyContainer.style.position = 'sticky';
     this.stickyContainer.style.width = '100%';
     this.stickyContainer.style.contain = 'strict';
@@ -93,9 +129,9 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
   }
 
   reset(): void {
-    this.files.length = 0;
-    this.totalHeightSplit = 0;
-    this.totalHeightUnified = 0;
+    this.items.length = 0;
+    this.instanceToItem.clear();
+    this.totalHeight = 0;
     for (const [, item] of Array.from(this.rendered)) {
       cleanupRenderedItem(item);
     }
@@ -109,29 +145,41 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
     window.removeEventListener('resize', this.handleResize);
   }
 
-  addFiles(parsedPatches: ParsedPatch[]): void {
-    for (const patch of parsedPatches) {
-      for (const fileDiff of patch.files) {
-        const vFileDiff = new AdvancedVirtualizedFileDiff<LAnnotations>(
-          {
-            unifiedTop: this.totalHeightUnified,
-            splitTop: this.totalHeightSplit,
-            fileDiff,
-          },
-          this.fileOptions,
-          this.metrics,
-          this.workerManager
-        );
-
-        // NOTE(amadeus): I hate this, lol... probably should figure out a way
-        // to not immediately subscribe
-        vFileDiff.cleanUp(true);
-        this.files.push(vFileDiff);
-        this.totalHeightUnified +=
-          vFileDiff.unifiedHeight + this.metrics.fileGap;
-        this.totalHeightSplit += vFileDiff.splitHeight + this.metrics.fileGap;
+  addFileOrDiff(fileOrDiff: FileContents | FileDiffMetadata): void {
+    const item: AdvancedVirtualizedItem<LAnnotations> = (() => {
+      if (isFileDiffMetadata(fileOrDiff)) {
+        return {
+          kind: 'diff',
+          instance: new VirtualizedFileDiff<LAnnotations>(
+            this.options,
+            this,
+            this.metrics,
+            this.workerManager,
+            true
+          ),
+          fileDiff: fileOrDiff,
+          top: this.totalHeight,
+          height: 0,
+        };
       }
-    }
+      return {
+        kind: 'file',
+        instance: new VirtualizedFile<LAnnotations>(
+          this.options as unknown as FileOptions<LAnnotations>,
+          this,
+          this.metrics,
+          this.workerManager,
+          true
+        ),
+        file: fileOrDiff,
+        top: this.totalHeight,
+        height: 0,
+      };
+    })();
+    this.items.push(item);
+    this.instanceToItem.set(item.instance, item);
+    item.height = prepareItemInstance(item);
+    this.totalHeight += item.height + this.metrics.fileGap;
   }
 
   render(): void {
@@ -140,80 +188,93 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
     queueRender(this._render);
   }
 
-  instanceChanged(_instance: unknown): void {
-    if (!ENABLE_RENDERING || this.files.length === 0) {
+  instanceChanged(
+    instance: VirtualizedFile<LAnnotations> | VirtualizedFileDiff<LAnnotations>
+  ): void {
+    if (!ENABLE_RENDERING || this.items.length === 0) {
       return;
+    }
+    // NOTE(amadeus): This is technically broken at the moment. What we
+    // probably SHOULD do to fix is, it push the instance to some sort of
+    // instance changed set, then iterate through all items and re-compute
+    // everything to get new tops?
+    const item = this.instanceToItem.get(instance);
+    if (item != null) {
+      item.height = item.instance.getVirtualizedHeight();
+      this.recomputeLayout();
     }
     queueRender(this._render);
   }
 
   getWindowSpecs(): VirtualWindowSpecs {
-    return createWindowFromScrollPosition({
-      scrollTop: this.scrollTop,
-      height: this.height,
-      scrollHeight: this.scrollHeight,
-      containerOffset: this.containerOffset,
-      fitPerfectly: false,
-      overscrollSize: OVERSCROLL_SIZE,
-    });
+    return this.windowSpecs;
   }
 
-  getTopForInstance(_instance: unknown): number {
-    // FIXME: Implement this...
-    return 0;
+  getTopForInstance(instance: object): number {
+    const item = this.instanceToItem.get(instance);
+    if (item == null) {
+      throw new Error(
+        'AdvancedVirtualizer.getTopForInstance: unknown virtualized instance'
+      );
+    }
+    return item.top;
   }
+
+  windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
 
   _render = (): void => {
-    if (this.files.length === 0 || AdvancedVirtualizer.__STOP) {
+    if (this.items.length === 0 || AdvancedVirtualizer.__STOP) {
       return;
     }
-    const { diffStyle = 'split' } = this.fileOptions;
     const { scrollTop, height, scrollHeight, containerOffset } = this;
     const fitPerfectly =
       this.lastRenderedScrollY === -1 ||
       Math.abs(scrollTop - this.lastRenderedScrollY) >
-        height + OVERSCROLL_SIZE * 2;
-    const { top, bottom } = createWindowFromScrollPosition({
+        height + this.config.overscrollSize * 2;
+    this.windowSpecs = createWindowFromScrollPosition({
       scrollTop,
       height,
       scrollHeight,
       containerOffset,
       fitPerfectly,
-      overscrollSize: OVERSCROLL_SIZE,
+      overscrollSize: this.config.overscrollSize,
     });
+    const { top, bottom } = this.windowSpecs;
     this.lastRenderedScrollY = scrollTop;
     for (const [renderedInstance, item] of Array.from(this.rendered)) {
+      const renderedSpecs = this.instanceToItem.get(renderedInstance);
+      if (renderedSpecs == null) {
+        cleanupRenderedItem(item);
+        this.rendered.delete(renderedInstance);
+        continue;
+      }
+      const renderedTop = renderedSpecs.top;
+      const renderedHeight = renderedSpecs.height;
       // If not visible, we should unmount it
-      if (
-        !(
-          getInstanceSpecs(renderedInstance, diffStyle).top >
-            top - getInstanceSpecs(renderedInstance, diffStyle).height &&
-          getInstanceSpecs(renderedInstance, diffStyle).top <= bottom
-        )
-      ) {
+      if (!(renderedTop > top - renderedHeight && renderedTop <= bottom)) {
         cleanupRenderedItem(item);
         this.rendered.delete(renderedInstance);
       }
     }
     let prevElement: HTMLElement | undefined;
-    let firstInstance: AdvancedVirtualizedFileDiff<LAnnotations> | undefined;
-    let lastInstance: AdvancedVirtualizedFileDiff<LAnnotations> | undefined;
-    for (const instance of this.files) {
+    let firstItem: AdvancedVirtualizedItem<LAnnotations> | undefined;
+    let lastItem: AdvancedVirtualizedItem<LAnnotations> | undefined;
+    // NOTE(amadeus): We'll probably want to figure out how to not have to
+    // iterate through this entire array if not necessary? Maybe by hunking
+    // into positional groups at some point
+    for (const item of this.items) {
+      const { instance } = item;
+      const specs = item;
       // We can stop iterating when we get to elements after the window
-      if (getInstanceSpecs(instance, diffStyle).top > bottom) {
+      if (specs.top > bottom) {
         break;
       }
-      if (
-        getInstanceSpecs(instance, diffStyle).top <
-        top - getInstanceSpecs(instance, diffStyle).height
-      ) {
+      if (specs.top < top - specs.height) {
         continue;
       }
       const rendered = this.rendered.get(instance);
       if (rendered == null) {
         const fileContainer = document.createElement(DIFFS_TAG_NAME);
-        // NOTE(amadeus): We gotta append first to ensure file ordering is
-        // correct... but i guess maybe doesn't matter because we are positioning shit
         if (prevElement == null) {
           this.stickyContainer.prepend(fileContainer);
         } else if (prevElement.nextSibling !== fileContainer) {
@@ -225,43 +286,38 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
           element: fileContainer,
           instance: instance,
         });
-        instance.virtualizedRender({
-          fileContainer,
-          renderWindow: { top, bottom },
-        });
+        renderItem(item, fileContainer);
         prevElement = fileContainer;
       } else {
         prevElement = rendered.element;
-        rendered.instance.virtualizedRender({
-          renderWindow: { top, bottom },
-        });
+        renderItem(item);
       }
-      firstInstance ??= instance;
-      lastInstance = instance;
+      firstItem ??= item;
+      lastItem = item;
     }
 
-    if (
-      firstInstance?.renderedRange != null &&
-      lastInstance?.renderedRange != null
-    ) {
-      const firstSpecs = getInstanceSpecs(firstInstance, diffStyle);
-      const lastSpecs = getInstanceSpecs(lastInstance, diffStyle);
-      const stickyTop = Math.max(
-        Math.min(firstSpecs.top + firstInstance.renderedRange.bufferBefore),
-        0
-      );
-      const lastBuffer =
-        lastInstance.renderedRange.totalLines === 0
-          ? lastInstance.renderedRange.bufferBefore
-          : lastInstance.renderedRange.bufferAfter;
-      const stickyBottom = Math.max(
-        0,
-        lastSpecs.top + lastSpecs.height - lastBuffer
-      );
+    if (firstItem != null && lastItem != null) {
+      const firstStickySpecs = firstItem.instance.getAdvancedStickySpecs();
+      const lastStickySpecs = lastItem.instance.getAdvancedStickySpecs();
+      if (firstStickySpecs == null || lastStickySpecs == null) {
+        if (fitPerfectly) {
+          queueRender(this._render);
+        }
+        return;
+      }
+      const stickyTop = Math.max(firstStickySpecs.topOffset, 0);
+      const stickyBottom = lastStickySpecs.topOffset + lastStickySpecs.height;
       const totalHeight = stickyBottom - stickyTop;
       this.stickyOffset.style.height = `${stickyTop}px`;
-      this.stickyContainer.style.top = `${-totalHeight + height + this.metrics.fileGap}px`;
-      this.stickyContainer.style.bottom = `${-totalHeight + height}px`;
+      // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
+      // down quickly, this prevents the laggy scroll view from lining up with
+      // the numbers exactly
+      const randomOffset =
+        ((Math.random() * this.metrics.lineHeight) >> 0) * -1;
+      const stickyHeightJitter =
+        -Math.max(totalHeight + randomOffset, 0) + height;
+      this.stickyContainer.style.top = `${stickyHeightJitter + this.metrics.fileGap}px`;
+      this.stickyContainer.style.bottom = `${stickyHeightJitter}px`;
       this.stickyContainer.style.height = `${totalHeight}px`;
     }
 
@@ -271,8 +327,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
   };
 
   private setupContainer() {
-    const { diffStyle = 'split' } = this.fileOptions;
-    this.container.style.height = `${diffStyle === 'split' ? this.totalHeightSplit : this.totalHeightUnified}px`;
+    this.container.style.height = `${this.totalHeight}px`;
     this.scrollHeight = document.documentElement.scrollHeight;
     if (!this.initialized) {
       window.addEventListener('scroll', this.handleScroll, { passive: true });
@@ -286,7 +341,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
     scrollTop = Math.max(scrollTop, 0);
     if (this.scrollTop === scrollTop) return;
     this.scrollTop = scrollTop;
-    if (this.files.length === 0) return;
+    if (this.items.length === 0) return;
     queueRender(this._render);
   };
 
@@ -298,10 +353,24 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
     }
     this.height = height;
     this.scrollHeight = scrollHeight;
-    if (this.files.length > 0) {
+    if (this.items.length > 0) {
       queueRender(this._render);
     }
   };
+
+  private recomputeLayout(): void {
+    let runningTop = 0;
+    for (const item of this.items) {
+      item.top = runningTop;
+      if (item.kind === 'diff') {
+        item.height = item.instance.prepareVirtualizedItem(item.fileDiff);
+      } else {
+        item.height = item.instance.prepareVirtualizedItem(item.file);
+      }
+      runningTop += item.height + this.metrics.fileGap;
+    }
+    this.totalHeight = runningTop;
+  }
 }
 
 function cleanupRenderedItem<LAnnotations>(item: RenderedItems<LAnnotations>) {
@@ -313,18 +382,36 @@ function cleanupRenderedItem<LAnnotations>(item: RenderedItems<LAnnotations>) {
   }
 }
 
-function getInstanceSpecs<LAnnotations>(
-  instance: AdvancedVirtualizedFileDiff<LAnnotations>,
-  diffStyle: 'split' | 'unified' = 'split'
-) {
-  if (diffStyle === 'split') {
-    return {
-      top: instance.splitTop,
-      height: instance.splitHeight,
-    };
+function isFileDiffMetadata(
+  value: FileContents | FileDiffMetadata
+): value is FileDiffMetadata {
+  return 'hunks' in value;
+}
+
+function prepareItemInstance<LAnnotations>(
+  item: AdvancedVirtualizedItem<LAnnotations>
+): number {
+  item.instance.cleanUp(true);
+  if (item.kind === 'diff') {
+    return item.instance.prepareVirtualizedItem(item.fileDiff);
+  } else {
+    return item.instance.prepareVirtualizedItem(item.file);
   }
-  return {
-    top: instance.unifiedTop,
-    height: instance.unifiedHeight,
-  };
+}
+
+function renderItem<LAnnotations>(
+  item: AdvancedVirtualizedItem<LAnnotations>,
+  fileContainer?: HTMLElement
+): void {
+  if (item.kind === 'diff') {
+    item.instance.render({
+      fileContainer,
+      fileDiff: item.fileDiff,
+    });
+  } else {
+    item.instance.render({
+      fileContainer,
+      file: item.file,
+    });
+  }
 }

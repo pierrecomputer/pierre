@@ -34,6 +34,7 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
     'typescript',
     'zig',
   ],
+  preferredHighlighter: 'shiki-wasm',
 };
 
 interface WorkerPoolProps {
