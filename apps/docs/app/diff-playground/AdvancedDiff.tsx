@@ -94,9 +94,15 @@ export function AdvancedDiff() {
         console.timeEnd('--  parsing patches');
 
         console.time('-- computing layout');
-        bigBoiRef.current.addFiles(parsedPatches);
+        for (const patch of parsedPatches) {
+          for (const fileDiff of patch.files) {
+            bigBoiRef.current.addFileOrDiff(fileDiff);
+          }
+        }
         console.timeEnd('-- computing layout');
         bigBoiRef.current.render();
+        // DEBUG AREA
+        // window.scrollTo({ top: 4762353 });
       } catch (error) {
         console.error('Error fetching or processing patch:', error);
       }

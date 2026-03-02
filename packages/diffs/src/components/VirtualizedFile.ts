@@ -150,6 +150,30 @@ export class VirtualizedFile<
     return this.render({ file: this.file });
   };
 
+  public prepareVirtualizedItem(file: FileContents): number {
+    this.file = file;
+    this.top = this.getVirtualizedTop();
+    this.computeApproximateSize();
+    return this.height;
+  }
+
+  public getVirtualizedHeight(): number {
+    return this.height;
+  }
+
+  public getAdvancedStickySpecs():
+    | { topOffset: number; height: number }
+    | undefined {
+    if (this.renderRange == null || this.top == null) {
+      return undefined;
+    }
+    const { bufferBefore, bufferAfter, totalLines } = this.renderRange;
+    return {
+      topOffset: this.top + bufferBefore + (totalLines === 0 ? bufferAfter : 0),
+      height: this.height - (bufferBefore + bufferAfter),
+    };
+  }
+
   override cleanUp(recycle = false): void {
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);

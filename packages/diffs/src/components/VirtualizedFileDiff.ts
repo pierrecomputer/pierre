@@ -181,6 +181,30 @@ export class VirtualizedFileDiff<
     return this.render();
   };
 
+  public prepareVirtualizedItem(fileDiff: FileDiffMetadata): number {
+    this.fileDiff = fileDiff;
+    this.top = this.getVirtualizedTop();
+    this.computeApproximateSize();
+    return this.height;
+  }
+
+  public getVirtualizedHeight(): number {
+    return this.height;
+  }
+
+  public getAdvancedStickySpecs():
+    | { topOffset: number; height: number }
+    | undefined {
+    if (this.renderRange == null || this.top == null) {
+      return undefined;
+    }
+    const { bufferBefore, bufferAfter, totalLines } = this.renderRange;
+    return {
+      topOffset: this.top + bufferBefore + (totalLines === 0 ? bufferAfter : 0),
+      height: this.height - (bufferBefore + bufferAfter),
+    };
+  }
+
   override cleanUp(recycle = false): void {
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
