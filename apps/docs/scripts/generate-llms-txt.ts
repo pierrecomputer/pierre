@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, extname, join } from 'path';
+import { pathToFileURL } from 'url';
 
 import { PRODUCTS } from '../app/product-config';
 import type { ProductId } from '../app/product-config';
@@ -241,7 +242,7 @@ function stripJsx(mdx: string): string {
       }
       result.push(line);
     } else {
-      if (trimmed === '/>' || trimmed.endsWith('/>')) {
+      if (trimmed === '/>') {
         inJsx = false;
         continue;
       }
@@ -262,8 +263,7 @@ function cleanMarkdown(md: string): string {
     .trim();
 }
 
-function processMdx(filePath: string): string {
-  const raw = readFileSync(join(ROOT, 'app', filePath), 'utf-8');
+function processMdx(raw: string): string {
   const withNotices = processNotices(raw);
   const stripped = stripJsx(withNotices);
   return cleanMarkdown(stripped);
@@ -367,7 +367,7 @@ async function discoverCodeExamples(
 ): Promise<CodeExample[]> {
   if (!existsSync(constantsPath)) return [];
 
-  const mod = await import(constantsPath);
+  const mod = await import(pathToFileURL(constantsPath).href);
   const examples: CodeExample[] = [];
 
   for (const [name, value] of Object.entries(mod)) {
@@ -396,11 +396,10 @@ async function buildSection(
   const mdxPath = `${docsPrefix}/${dirName}/${mdxFilename}`;
 
   const rawMdx = readFileSync(join(ROOT, 'app', mdxPath), 'utf-8');
-  const anchor = extractAnchor(rawMdx);
+  const prose = processMdx(rawMdx);
+  const anchor = extractAnchor(prose);
 
-  const heading = rawMdx.match(/^##\s+(.+)/m)?.[1]?.trim() ?? dirName;
-
-  const prose = processMdx(mdxPath);
+  const heading = prose.match(/^##\s+(.+)/m)?.[1]?.trim() ?? dirName;
 
   const constantsPath = join(ROOT, 'app', docsPrefix, dirName, 'constants.ts');
   const codeExamples = await discoverCodeExamples(constantsPath);

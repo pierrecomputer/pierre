@@ -3027,9 +3027,6 @@ with Shiki and Visual Studio Code. We recommend using our themes as a starting
 point for your own custom themes—head to our [themes documentation](/theme) to
 get started.
 
-  </Link>
-</Button>
-
 **Package JSON Example** (`package.json`):
 
 ```json
