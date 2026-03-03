@@ -428,7 +428,7 @@ export const HELPER_RESOLVE_MERGE_CONFLICT: PreloadFileOptions<undefined> = {
   resolveMergeConflict,
   type MergeConflictActionPayload,
 } from '@pierre/diffs';
-import { File } from '@pierre/diffs/react';
+import { UnresolvedFile } from '@pierre/diffs/react';
 
 import { useCallback, useState } from 'react';
 
@@ -443,7 +443,7 @@ function MergeConflictExample({ initialContents }: { initialContents: string }) 
   );
 
   return (
-    <File
+    <UnresolvedFile
       file={{ name: 'App.tsx', contents }}
       options={{ onMergeConflictAction }}
     />

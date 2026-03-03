@@ -26,8 +26,8 @@ all line numbers properly adjusted for subsequent hunks.
 Apply a merge conflict action payload to a file string and return the next
 contents.
 
-Default merge-conflict buttons work even without `onMergeConflictAction`: `File`
-applies the resolution internally.
+Default merge-conflict buttons work even without `onMergeConflictAction`:
+`UnresolvedFile` applies the resolution internally.
 
 Provide `onMergeConflictAction` when you want controlled app state (for example,
 to persist resolved contents, sync external stores, or trigger side effects). In
