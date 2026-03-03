@@ -1,8 +1,8 @@
 import '@/app/prose.css';
 import {
   preloadFile,
-  preloadMergeConflictDiff,
   preloadMultiFileDiff,
+  preloadUnresolvedFile,
 } from '@pierre/diffs/ssr';
 
 import { MERGE_CONFLICT_EXAMPLE } from '../diff-examples/MergeConflict/constants';
@@ -136,7 +136,7 @@ export default function DocsPage() {
 async function MergeConflictDemoSection() {
   return (
     <MergeConflict
-      prerenderedFile={await preloadMergeConflictDiff(MERGE_CONFLICT_EXAMPLE)}
+      prerenderedFile={await preloadUnresolvedFile(MERGE_CONFLICT_EXAMPLE)}
     />
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { MergeConflictDiff } from '@pierre/diffs/react';
-import type { PreloadMergeConflictDiffResult } from '@pierre/diffs/ssr';
+import { UnresolvedFile } from '@pierre/diffs/react';
+import type { PreloadUnresolvedFileResult } from '@pierre/diffs/ssr';
 import { IconColorDark, IconColorLight } from '@pierre/icons';
 import { useMemo, useState } from 'react';
 
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface MergeConflictProps {
-  prerenderedFile: PreloadMergeConflictDiffResult<undefined>;
+  prerenderedFile: PreloadUnresolvedFileResult<undefined>;
 }
 
 export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
@@ -59,7 +59,7 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         </ButtonGroup>
       </div>
 
-      <MergeConflictDiff
+      <UnresolvedFile
         key={instanceKey}
         file={prerenderedFile.file}
         options={options}

@@ -139,7 +139,7 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   };
 }
 
-export interface PreloadMergeConflictDiffOptions<LAnnotation> {
+export interface PreloadUnresolvedFileOptions<LAnnotation> {
   file: FileContents;
   options?: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
@@ -149,7 +149,7 @@ export interface PreloadMergeConflictDiffOptions<LAnnotation> {
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
-export interface PreloadMergeConflictDiffResult<LAnnotation> {
+export interface PreloadUnresolvedFileResult<LAnnotation> {
   file: FileContents;
   options?: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
@@ -162,12 +162,12 @@ export interface PreloadMergeConflictDiffResult<LAnnotation> {
   prerenderedHTML: string;
 }
 
-export async function preloadMergeConflictDiff<LAnnotation = undefined>({
+export async function preloadUnresolvedFile<LAnnotation = undefined>({
   file,
   options,
   annotations,
-}: PreloadMergeConflictDiffOptions<LAnnotation>): Promise<
-  PreloadMergeConflictDiffResult<LAnnotation>
+}: PreloadUnresolvedFileOptions<LAnnotation>): Promise<
+  PreloadUnresolvedFileResult<LAnnotation>
 > {
   const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
   const includeDefaultActions = options?.mergeConflictActions !== 'none';
@@ -195,6 +195,12 @@ export async function preloadMergeConflictDiff<LAnnotation = undefined>({
     }),
   };
 }
+
+export type PreloadMergeConflictDiffOptions<LAnnotation> =
+  PreloadUnresolvedFileOptions<LAnnotation>;
+export type PreloadMergeConflictDiffResult<LAnnotation> =
+  PreloadUnresolvedFileResult<LAnnotation>;
+export const preloadMergeConflictDiff = preloadUnresolvedFile;
 
 export interface PreloadPatchDiffOptions<LAnnotation> {
   patch: string;
