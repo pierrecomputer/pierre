@@ -8,9 +8,8 @@ import {
   syncDataLoaderFeature,
   type TreeInstance,
 } from '@headless-tree/core';
-import { Fragment } from 'preact';
-import type { JSX } from 'preact';
-import { memo } from 'preact/compat';
+import { Component, createElement, Fragment } from 'preact';
+import type { FunctionComponent, JSX } from 'preact';
 import {
   useCallback,
   useEffect,
@@ -60,6 +59,28 @@ export interface FileTreeRootProps {
   stateConfig?: FileTreeStateConfig;
   handleRef?: { current: FileTreeHandle | null };
   callbacksRef?: { current: FileTreeCallbacks };
+}
+
+// Local memo implementation to avoid importing from preact/compat, which
+// declares `export as namespace React` and pollutes the global type namespace,
+// breaking the React wrapper's JSX types.
+function memo<P>(
+  c: FunctionComponent<P>,
+  comparer: (prev: P, next: P) => boolean
+): FunctionComponent<P> {
+  class Memoed extends Component<P> {
+    override shouldComponentUpdate(nextProps: P) {
+      return !comparer(this.props as P, nextProps);
+    }
+    override render() {
+      return createElement(
+        c as FunctionComponent,
+        this.props as Record<string, unknown>
+      );
+    }
+  }
+  Memoed.displayName = `Memo(${c.displayName ?? c.name ?? 'Component'})`;
+  return Memoed as unknown as FunctionComponent<P>;
 }
 
 const getSelectionPath = (path: string): string =>
