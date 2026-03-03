@@ -13,16 +13,11 @@ import {
   type GetHoveredLineResult,
   InteractionManager,
   type InteractionManagerBaseOptions,
-  type InteractionManagerOptions,
   pluckInteractionOptions,
   type SelectedLineRange,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
-import {
-  FileRenderer,
-  type FileRendererOptions,
-  type FileRenderResult,
-} from '../renderers/FileRenderer';
+import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseCodeOptions,
@@ -148,14 +143,14 @@ export class File<LAnnotation = undefined> {
     private isContainerManaged = false
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(
-      this.getFileRendererOptions(options),
+      options,
       this.handleHighlightRender,
       this.workerManager
     );
     this.resizeManager = new ResizeManager();
     this.interactionManager = new InteractionManager(
       'file',
-      this.getInteractionManagerOptions(options)
+      pluckInteractionOptions(options)
     );
     this.workerManager?.subscribeToThemeChanges(this);
   }
@@ -176,25 +171,11 @@ export class File<LAnnotation = undefined> {
   public setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
-    this.interactionManager.setOptions(
-      this.getInteractionManagerOptions(options)
-    );
+    this.interactionManager.setOptions(pluckInteractionOptions(options));
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
     this.options = { ...this.options, ...options };
-  }
-
-  private getInteractionManagerOptions(
-    options: FileOptions<LAnnotation>
-  ): InteractionManagerOptions<'file'> {
-    return pluckInteractionOptions<'file'>(options);
-  }
-
-  private getFileRendererOptions(
-    options: FileOptions<LAnnotation> = this.options
-  ): FileRendererOptions {
-    return options;
   }
 
   public setThemeType(themeType: ThemeTypes): void {
@@ -245,7 +226,6 @@ export class File<LAnnotation = undefined> {
     this.fileRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
-
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
     this.renderRange = undefined;
@@ -365,7 +345,7 @@ export class File<LAnnotation = undefined> {
 
     this.renderRange = nextRenderRange;
     this.file = file;
-    this.fileRenderer.setOptions(this.getFileRendererOptions());
+    this.fileRenderer.setOptions(this.options);
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
@@ -1043,7 +1023,6 @@ export class File<LAnnotation = undefined> {
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
-    this.interactionManager.cleanUp();
     const pre = this.getOrCreatePreNode(container);
     pre.innerHTML = '';
     pre.parentNode?.removeChild(pre);
