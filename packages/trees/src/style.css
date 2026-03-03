@@ -3,146 +3,219 @@
 @layer base {
   :host {
     /*
-     * Fallback order: --ft-* (explicit) → --ft-theme-* (e.g. Shiki/VS Code tokens) → default.
-     * Set --ft-theme-side-bar-background etc. when applying a theme; or set --ft-color-foreground
-     * etc. directly. Theme token names mirror Shiki/VS Code in kebab-case.
-     */
-    --ft-internal-color-foreground: var(
-      --ft-color-foreground,
+      CSS variables use a fallback stack to ensure user and theme colors slot
+      in with ease. User colors take precedence over theme colors, which take
+      precedence over defaults.
+
+      Fallback order:
+
+      1. --trees-*-override (explicit)
+      2. --trees-theme-* (e.g. Shiki/VS Code tokens)
+      3. defaults
+
+      Theme variable names mirror Shiki/VS Code theme file JSON tokens.
+
+      // Available CSS Color Overrides
+      --trees-fg-override
+      --trees-fg-muted-override
+      --trees-bg-override
+      --trees-bg-muted-override
+      --trees-accent-override
+      --trees-border-color-override
+
+      --trees-focus-ring-color-override
+      --trees-focus-ring-width-override
+      --trees-focus-ring-offset-override
+
+      --trees-search-fg-override
+      --trees-search-font-weight-override
+      --trees-search-bg-override
+
+      --trees-selected-fg-override
+      --trees-selected-bg-override
+      --trees-selected-border-color-override
+      --trees-selected-focused-border-color-override
+
+      // Git Status Color Overrides
+      --trees-status-added-override
+      --trees-status-modified-override
+      --trees-status-deleted-override
+      --trees-git-added-color-override
+      --trees-git-modified-color-override
+      --trees-git-deleted-color-override
+
+      // Available CSS Layout Overrides
+      --trees-border-radius-override
+      --trees-font-family-override
+      --trees-font-size-override
+      --trees-font-weight-regular-override
+      --trees-font-weight-semibold-override
+      --trees-row-height-override
+      --trees-level-gap-override
+      --trees-item-padding-x-override
+      --trees-item-margin-x-override
+      --trees-item-row-gap-override
+      --trees-icon-width-override
+      --trees-icon-nudge-override
+    */
+
+    --trees-fg: var(
+      --trees-fg-override,
       var(
-        --ft-theme-side-bar-foreground,
+        --trees-theme-sidebar-fg,
         light-dark(oklch(14.5% 0 0), oklch(98.5% 0 0))
       )
     );
-    --ft-internal-color-background: var(
-      --ft-color-background,
-      var(--ft-theme-side-bar-background, transparent)
-    );
-    --ft-internal-background-color-muted: var(
-      --ft-background-color-muted,
+    --trees-fg-muted: var(
+      --trees-fg-muted-override,
       var(
-        --ft-theme-list-hover-background,
+        --trees-theme-sidebar-header-fg,
+        light-dark(oklch(45% 0 0), oklch(75% 0 0))
+      )
+    );
+    --trees-bg: var(
+      --trees-bg-override,
+      var(--trees-theme-sidebar-bg, light-dark(oklch(100% 0 0), oklch(0% 0 0)))
+    );
+    --trees-bg-muted: var(
+      --trees-bg-muted-override,
+      var(
+        --trees-theme-list-hover-bg,
         light-dark(oklch(97% 0 0), oklch(26.9% 0 0))
       )
     );
-    --ft-internal-font-family: var(--ft-font-family);
-    --ft-internal-font-size: var(--ft-font-size, 13px);
-    --ft-internal-font-weight-regular: var(--ft-font-weight-regular, 400);
-    --ft-internal-font-weight-semibold: var(--ft-font-weight-semibold, 600);
-    --ft-internal-search-font-weight: var(--ft-search-font-weight, 600);
-    --ft-internal-search-background: var(
-      --ft-search-background,
-      var(--ft-theme-input-background, var(--ft-internal-color-background))
-    );
-    --ft-internal-color-border: var(
-      --ft-color-border,
+    --trees-accent: var(--trees-accent-override, #009fff);
+    --trees-border-color: var(
+      --trees-border-color-override,
       var(
-        --ft-theme-side-bar-border,
-        light-dark(oklch(92.2% 0 0), oklch(100% 0 0 / 0.1))
+        --trees-theme-sidebar-border,
+        light-dark(oklch(0% 0 0 / 0.15), oklch(100% 0 0 / 0.1))
       )
     );
-    --ft-internal-border-radius: var(--ft-border-radius, 6px);
-    --ft-internal-focus-ring-color: var(
-      --ft-focus-ring-color,
-      var(--ft-theme-list-focus-outline, oklch(87% 0 0))
-    );
-    --ft-internal-selected-background-color: var(
-      --ft-selected-background-color,
-      var(--ft-theme-list-active-selection-background, #008cff1a)
-    );
-    --ft-internal-selected-border-color: var(
-      --ft-selected-border-color,
-      var(--ft-theme-list-focus-outline, #008cff26)
-    );
-    --ft-internal-selected-focused-border-color: var(
-      --ft-selected-focused-border-color,
-      var(--ft-theme-list-focus-outline, #008cff50)
+    --trees-border-radius: var(--trees-border-radius-override, 6px);
+
+    --trees-font-family: var(--trees-font-family-override, system-ui);
+    --trees-font-size: var(--trees-font-size-override, 13px);
+    --trees-font-weight-regular: var(--trees-font-weight-regular-override, 400);
+    --trees-font-weight-semibold: var(
+      --trees-font-weight-semibold-override,
+      600
     );
 
-    /* Muted text (e.g. section headers, icons). */
-    --ft-internal-color-muted-foreground: var(
-      --color-muted-foreground,
+    --trees-focus-ring-color: color-mix(
+      in lab,
       var(
-        --ft-theme-side-bar-section-header-foreground,
-        var(--ft-internal-color-foreground)
-      )
+          --trees-focus-ring-color-override,
+          var(--trees-theme-focus-ring, var(--trees-accent))
+        )
+        65%,
+      var(--trees-bg)
+    );
+    --trees-focus-ring-width: var(--trees-focus-ring-width-override, 1px);
+    --trees-focus-ring-offset: var(--trees-focus-ring-offset-override, -1px);
+
+    --trees-search-fg: var(
+      --trees-search-fg-override,
+      var(--trees-theme-input-fg, var(--trees-fg))
+    );
+    --trees-search-font-weight: var(--trees-search-font-weight-override, 600);
+    --trees-search-bg: var(
+      --trees-search-bg-override,
+      var(--trees-theme-input-bg, var(--trees-bg))
     );
 
-    /* Git / status colors (e.g. from Shiki theme gitDecoration.*). Optional. */
-    --ft-internal-status-added: var(
-      --ft-status-added,
-      var(
-        --ft-theme-git-decoration-added-resource-foreground,
-        light-dark(#0dbe4e, #5ecc71)
-      )
+    --trees-selected-fg: var(
+      --trees-selected-fg-override,
+      var(--trees-theme-list-active-selection-fg, var(--trees-fg))
     );
-    --ft-internal-status-modified: var(
-      --ft-status-modified,
-      var(
-        --ft-theme-git-decoration-modified-resource-foreground,
-        /* light-dark(#ffca00, #ffd452) */ light-dark(#009fff, #69b1ff)
-      )
+    --trees-selected-bg: var(
+      --trees-selected-bg-override,
+      var(--trees-theme-list-active-selection-bg, #008cff1a)
     );
-    --ft-internal-status-deleted: var(
-      --ft-status-deleted,
-      var(
-        --ft-theme-git-decoration-deleted-resource-foreground,
-        light-dark(#ff2e3f, #ff6762)
-      )
+    --trees-selected-border-color: var(
+      --trees-selected-border-color-override,
+      var(--trees-theme-focus-ring, #008cff26)
     );
-    --ft-internal-git-modified-color: var(
-      --ft-git-modified-color,
-      var(--ft-internal-status-modified)
-    );
-    --ft-internal-git-added-color: var(
-      --ft-git-added-color,
-      var(--ft-internal-status-added)
-    );
-    --ft-internal-git-deleted-color: var(
-      --ft-git-added-color,
-      var(--ft-internal-status-deleted)
+    --trees-selected-focused-border-color: var(
+      --trees-selected-focused-border-color-override,
+      var(--trees-theme-focus-ring, #008cff50)
     );
 
-    --ft-internal-level-gap: var(--ft-level-gap, 8px);
-    --ft-internal-item-padding-x: var(--ft-item-padding-x, 8px);
-    --ft-internal-item-margin-x: var(--ft-item-margin-x, 2px);
-    --ft-internal-item-row-gap: var(--ft-item-row-gap, 6px);
-    --ft-internal-icon-width: var(--ft-icon-width, 16px);
-    --ft-internal-icon-nudge: var(--ft-icon-nudge, 1px);
-    --ft-internal-row-height: var(--ft-row-height, 30px);
+    /* Git status (e.g. from Shiki theme gitDecoration.*) */
+    --trees-status-added: var(
+      --trees-status-added-override,
+      var(--trees-theme-git-added-fg, light-dark(#0dbe4e, #5ecc71))
+    );
+    --trees-status-modified: var(
+      --trees-status-modified-override,
+      var(--trees-theme-git-modified-fg, light-dark(#009fff, #69b1ff))
+    );
+    --trees-status-deleted: var(
+      --trees-status-deleted-override,
+      var(--trees-theme-git-deleted-fg, light-dark(#ff2e3f, #ff6762))
+    );
+    --trees-git-modified-color: var(
+      --trees-git-modified-color-override,
+      var(--trees-status-modified)
+    );
+    --trees-git-added-color: var(
+      --trees-git-added-color-override,
+      var(--trees-status-added)
+    );
+    --trees-git-deleted-color: var(
+      --trees-git-deleted-color-override,
+      var(--trees-status-deleted)
+    );
+
+    --trees-level-gap: var(--trees-level-gap-override, 8px);
+    --trees-item-padding-x: var(--trees-item-padding-x-override, 8px);
+    --trees-item-margin-x: var(--trees-item-margin-x-override, 2px);
+    --trees-item-row-gap: var(--trees-item-row-gap-override, 6px);
+    --trees-icon-width: var(--trees-icon-width-override, 16px);
+    --trees-icon-nudge: var(--trees-icon-nudge-override, 1px);
+    --trees-row-height: var(--trees-row-height-override, 30px);
 
     color-scheme: light dark;
     display: flex;
     flex-direction: column;
-    font-size: var(--ft-internal-font-size);
-    color: var(--ft-internal-color-foreground);
-    background-color: var(--ft-internal-color-background);
-    font-family: var(--ft-internal-font-family);
-    font-weight: var(--ft-internal-font-weight-regular);
+    font-size: var(--trees-font-size);
+    color: var(--trees-fg);
+    background-color: var(--trees-bg);
+    font-family: var(--trees-font-family);
+    font-weight: var(--trees-font-weight-regular);
   }
 
   [data-file-tree-search-container] {
     display: flex;
     padding: 0;
-    margin: 0 var(--ft-internal-item-margin-x) var(--ft-internal-item-row-gap);
+    margin: 0 var(--trees-item-margin-x) var(--trees-item-row-gap);
   }
 
   [data-file-tree-search-input] {
-    font-family: var(--ft-internal-font-family);
-    font-size: var(--ft-internal-font-size);
+    --trees-focus-ring-width: 2px;
+    font-family: var(--trees-font-family);
+    font-size: var(--trees-font-size);
     flex: 1;
-    height: var(--ft-internal-row-height);
-    padding-inline: var(--ft-internal-item-padding-x);
-    line-height: var(--ft-internal-row-height);
-    color: var(--ft-internal-color-foreground);
-    background-color: var(--ft-internal-search-background);
-    border: 1px solid var(--ft-internal-color-border);
-    border-radius: var(--ft-internal-border-radius);
+    height: var(--trees-row-height);
+    padding-inline: var(--trees-item-padding-x);
+    line-height: var(--trees-row-height);
+    color: var(--trees-search-fg);
+    background-color: var(--trees-search-bg);
+    border: 1px solid var(--trees-border-color);
+    border-radius: var(--trees-border-radius);
     outline: none;
 
+    &::placeholder {
+      color: color-mix(
+        in lab,
+        var(--trees-search-fg) 65%,
+        var(--trees-search-bg)
+      );
+    }
+
     &:focus-visible {
-      outline: none;
-      box-shadow: inset 0 0 0 1px var(--ft-internal-focus-ring-color);
+      outline: var(--trees-focus-ring-width) solid var(--trees-focus-ring-color);
+      outline-offset: var(--trees-focus-ring-offset);
     }
   }
 
@@ -156,50 +229,56 @@
   /* LIST ITEM */
   [data-type='item'] {
     color: inherit;
-    font-family: var(--ft-internal-font-family);
-    font-size: var(--ft-internal-font-size);
+    font-family: var(--trees-font-family);
+    font-size: var(--trees-font-size);
     outline: none;
     background: transparent;
     border: none;
     position: relative;
 
-    padding: 0 var(--ft-internal-item-padding-x);
-    margin: 0 var(--ft-internal-item-margin-x);
+    padding: 0 var(--trees-item-padding-x);
+    margin: 0 var(--trees-item-margin-x);
     cursor: pointer;
     user-select: none;
     -webkit-touch-callout: none;
     touch-action: manipulation;
     display: flex;
     align-items: center;
-    line-height: var(--ft-internal-row-height);
-    gap: var(--ft-internal-item-row-gap);
-    border-radius: var(--ft-internal-border-radius);
+    line-height: var(--trees-row-height);
+    gap: var(--trees-item-row-gap);
+    border-radius: var(--trees-border-radius);
 
     &:hover {
-      background-color: var(--ft-internal-background-color-muted);
+      background-color: var(--trees-bg-muted);
     }
 
     &[data-item-focused='true'],
     &:focus-visible {
-      outline: none;
-      background-color: var(--ft-internal-background-color-muted);
-      box-shadow: inset 0 0 0 1px var(--ft-internal-focus-ring-color);
+      /* background-color: var(--trees-bg-muted); */
+      outline: var(--trees-focus-ring-width) solid var(--trees-focus-ring-color);
+      outline-offset: var(--trees-focus-ring-offset);
       z-index: 2;
 
       &[data-item-selected='true'] {
-        box-shadow: inset 0 0 0 1px
-          var(--ft-internal-selected-focused-border-color);
+        --trees-focus-ring-color: var(--trees-selected-focused-border-color);
       }
     }
 
     &[data-item-selected='true'] {
-      background-color: var(--ft-internal-selected-background-color);
-      box-shadow: inset 0 0 0 1px var(--ft-internal-selected-border-color);
+      color: var(--trees-selected-fg);
+      background-color: var(--trees-selected-bg);
+      outline: var(--trees-focus-ring-width) solid
+        var(--trees-selected-border-color);
+      outline-offset: var(--trees-focus-ring-offset);
       z-index: 3;
+
+      [data-item-section='icon'] {
+        color: var(--trees-selected-fg);
+      }
     }
 
     &[data-item-search-match='true'] {
-      font-weight: var(--ft-internal-search-font-weight);
+      font-weight: var(--trees-search-font-weight);
     }
   }
 
@@ -220,16 +299,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--ft-internal-color-muted-foreground);
+    color: var(--trees-fg-muted);
     fill: currentColor;
-    width: var(--ft-internal-icon-width);
+    width: var(--trees-icon-width);
   }
 
   /* Chevron rotation and visual alignment */
   /* Chevron pointing down */
   [data-icon-name='file-tree-icon-chevron'] {
     &[data-align-capitals='false'] {
-      transform: translate(0, var(--ft-internal-icon-nudge));
+      transform: translate(0, var(--trees-icon-nudge));
     }
     &[data-align-capitals='true'] {
       transform: translate(0, 0);
@@ -259,15 +338,15 @@
     &[data-align-capitals='true'] {
       transform: rotate(-90deg)
         translate(
-          calc(var(--ft-internal-icon-nudge) / 2),
-          calc(var(--ft-internal-icon-nudge) / 2)
+          calc(var(--trees-icon-nudge) / 2),
+          calc(var(--trees-icon-nudge) / 2)
         );
     }
     &[data-align-capitals='false'] {
       transform: rotate(-90deg)
         translate(
-          calc(var(--ft-internal-icon-nudge) / 2 * -1),
-          calc(var(--ft-internal-icon-nudge) / 2)
+          calc(var(--trees-icon-nudge) / 2 * -1),
+          calc(var(--trees-icon-nudge) / 2)
         );
     }
   }
@@ -279,8 +358,8 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    height: var(--ft-internal-row-height);
-    padding-left: calc(calc(var(--ft-internal-icon-width) / 2) - 0.5px);
+    height: var(--trees-row-height);
+    padding-left: calc(calc(var(--trees-icon-width) / 2) - 0.5px);
 
     &:empty {
       padding-left: 0;
@@ -291,16 +370,15 @@
   [data-item-section='spacing-item'] {
     transform: translateX(-0.25px);
     display: inline-block;
-    border-left: 1px solid var(--ft-internal-color-border);
+    border-left: 1px solid var(--trees-border-color);
     height: 100%;
-    margin-right: calc(var(--ft-internal-level-gap) - 1px);
+    margin-right: calc(var(--trees-level-gap) - 1px);
     opacity: 0;
     transition: opacity 150ms ease;
 
     & + & {
       margin-left: calc(
-        var(--ft-internal-item-row-gap) +
-          calc(var(--ft-internal-icon-width) / 2) - 0.5px
+        var(--trees-item-row-gap) + calc(var(--trees-icon-width) / 2) - 0.5px
       );
     }
   }
@@ -319,10 +397,10 @@
 
   /* This is a folder that contains a git change */
   [data-item-contains-git-change='true'] {
-    color: var(--ft-internal-git-modified-color);
+    color: var(--trees-git-modified-color);
 
     & > [data-item-section='status'] {
-      color: var(--ft-internal-git-modified-color);
+      color: var(--trees-git-modified-color);
       opacity: 0.5;
       fill: currentColor;
     }
@@ -330,20 +408,20 @@
 
   /* These are files that have a git change */
   [data-item-git-status] > [data-item-section='status'] {
-    font-weight: var(--ft-internal-font-weight-semibold);
+    font-weight: var(--trees-font-weight-semibold);
   }
 
   [data-item-git-status='added'] {
     &
       > [data-item-section='icon']
       > :not([data-icon-name='file-tree-icon-chevron']) {
-      color: var(--ft-internal-git-added-color);
+      color: var(--trees-git-added-color);
     }
     & > [data-item-section='content'] {
-      color: var(--ft-internal-git-added-color);
+      color: var(--trees-git-added-color);
     }
     & > [data-item-section='status'] {
-      color: var(--ft-internal-git-added-color);
+      color: var(--trees-git-added-color);
     }
   }
 
@@ -351,13 +429,13 @@
     &
       > [data-item-section='icon']
       > :not([data-icon-name='file-tree-icon-chevron']) {
-      color: var(--ft-internal-git-deleted-color);
+      color: var(--trees-git-deleted-color);
     }
     & > [data-item-section='content'] {
-      color: var(--ft-internal-git-deleted-color);
+      color: var(--trees-git-deleted-color);
     }
     & > [data-item-section='status'] {
-      color: var(--ft-internal-git-deleted-color);
+      color: var(--trees-git-deleted-color);
     }
   }
 
@@ -365,19 +443,19 @@
     &
       > [data-item-section='icon']
       > :not([data-icon-name='file-tree-icon-chevron']) {
-      color: var(--ft-internal-git-modified-color);
+      color: var(--trees-git-modified-color);
     }
     & > [data-item-section='content'] {
-      color: var(--ft-internal-git-modified-color);
+      color: var(--trees-git-modified-color);
     }
     & > [data-item-section='status'] {
-      color: var(--ft-internal-git-modified-color);
+      color: var(--trees-git-modified-color);
     }
   }
 
   /* Drag and drop */
   [data-item-drag-target='true'] {
-    background-color: var(--ft-internal-selected-background-color);
+    background-color: var(--trees-selected-bg);
   }
 
   [data-item-dragging='true'] {
@@ -389,7 +467,7 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    color: var(--ft-internal-color-muted-foreground);
+    color: var(--trees-fg-muted);
   }
   [data-item-section='lock'] svg {
     display: block;

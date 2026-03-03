@@ -12,7 +12,9 @@ customizable styling.
 <FileTree
   options={overviewFileTreeOptions}
   className="overflow-hidden rounded-lg border-1 contain-layout contain-paint p-3 bg-neutral-50 dark:bg-neutral-900 max-w-[400px]"
-  style={{ '--ft-search-background': 'light-dark(#fff, oklch(14.5% 0 0)' }}
+  style={{
+    '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0)',
+  }}
 />
 
 We have an opinionated stance in our architecture: **file trees benefit from

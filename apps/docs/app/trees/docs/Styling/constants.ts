@@ -11,18 +11,18 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
     contents: `/* Target the file tree host (custom element or React root) */
 file-tree-container,
 .my-file-tree {
-  --ft-font-size: 14px;
-  --ft-row-height: 32px;
-  --ft-color-foreground: oklch(0.25 0 0);
-  --ft-color-background: oklch(0.98 0 0);
-  --ft-color-border: oklch(0.9 0 0);
-  --ft-border-radius: 8px;
-  --ft-selected-background-color: oklch(0.92 0.02 250);
-  --ft-selected-border-color: oklch(0.7 0.15 250);
+  --trees-font-size-override: 14px;
+  --trees-row-height-override: 32px;
+  --trees-fg-override: oklch(0.25 0 0);
+  --trees-bg-override: oklch(0.98 0 0);
+  --trees-border-color-override: oklch(0.9 0 0);
+  --trees-border-radius-override: 8px;
+  --trees-selected-bg-override: oklch(0.92 0.02 250);
+  --trees-selected-border-color-override: oklch(0.7 0.15 250);
   /* Optional. Used for gitStatus. */
-  --ft-git-added-color: #0dbe4e;
-  --ft-git-modified-color: #009fff;
-  --ft-git-deleted-color: #ff2e3f;
+  --trees-git-added-color-override: #0dbe4e;
+  --trees-git-modified-color-override: #009fff;
+  --trees-git-deleted-color-override: #ff2e3f;
 }`,
   },
   options,
@@ -38,8 +38,8 @@ export const STYLING_CODE_INLINE: PreloadFileOptions<undefined> = {
   className="rounded-lg border p-3"
   style={{
     maxHeight: 400,
-    '--ft-font-size': '13px',
-    '--ft-row-height': '28px',
+    '--trees-font-size-override': '13px',
+    '--trees-row-height-override': '28px',
   } as React.CSSProperties}
 />`,
   },

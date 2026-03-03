@@ -132,8 +132,8 @@ ft.hydrate({ fileTreeContainer: document.getElementById(id)! });
 
 ## Styling
 
-The custom element exposes CSS variables (e.g. `--ft-font-family`,
-`--ft-color-border`) that are read inside the shadow root.
+The custom element exposes CSS variables (e.g. `--trees-font-family-override`,
+`--trees-border-color-override`) that are read inside the shadow root.
 
 ## Development
 

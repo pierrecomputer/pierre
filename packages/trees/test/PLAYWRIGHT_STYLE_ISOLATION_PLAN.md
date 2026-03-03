@@ -59,7 +59,7 @@ Checks:
 
 Setup:
 
-- Set a host-level custom property such as `--ft-selected-background-color`.
+- Set a host-level custom property such as `--trees-selected-bg-override`.
 - Select an item inside FileTree.
 
 Checks:

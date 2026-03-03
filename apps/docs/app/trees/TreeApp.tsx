@@ -64,9 +64,9 @@ export function TreeApp({
   return (
     <div className="dark rounded-lg" style={{ colorScheme: 'dark' }}>
       <div className="border-border grid min-h-[420px] grid-cols-1 gap-0 overflow-hidden rounded-lg border md:aspect-[16/9] md:grid-cols-[minmax(200px,280px)_1fr]">
-        <div className="border-border dark:border-border min-h-[200px] overflow-auto border-b bg-neutral-900 p-3 [--ft-search-background:theme(colors.neutral.800)] md:min-h-0 md:border-r md:border-b-0">
+        <div className="border-border dark:border-border min-h-[200px] overflow-auto border-b bg-neutral-900 p-3 [--trees-search-bg-override:theme(colors.neutral.800)] md:min-h-0 md:border-r md:border-b-0">
           <FileTreeReact
-            className="[--ft-search-background:theme(colors.neutral.800)]"
+            className="[--trees-search-bg-override:theme(colors.neutral.800)]"
             options={treeOptions}
             initialFiles={initialFiles}
             initialSelectedItems={initialSelectedItems}
@@ -75,7 +75,8 @@ export function TreeApp({
             style={
               {
                 colorScheme: 'dark',
-                '--ft-search-background': 'light-dark(#fff, oklch(14.5% 0 0))',
+                '--trees-search-bg-override':
+                  'light-dark(#fff, oklch(14.5% 0 0))',
               } as CSSProperties
             }
           />

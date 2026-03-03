@@ -14,7 +14,7 @@ import { Switch } from '@/components/ui/switch';
 
 const dragDropStyle = {
   colorScheme: 'dark',
-  '--ft-search-background': 'light-dark(#fff, oklch(14.5% 0 0))',
+  '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
 const defaultOptions = {

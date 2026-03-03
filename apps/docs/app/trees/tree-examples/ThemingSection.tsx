@@ -14,45 +14,53 @@ import { TreeExampleSection } from './TreeExampleSection';
 function lightTheme(): CSSProperties {
   return {
     colorScheme: 'light',
-    ['--ft-color-foreground' as string]: 'oklch(14.5% 0 0)',
-    ['--ft-background-color-muted' as string]: 'oklch(96% 0 0)',
-    ['--ft-search-background' as string]: 'oklch(100% 0 0)',
-    ['--ft-color-border' as string]: 'oklch(92% 0 0)',
-    ['--ft-selected-background-color' as string]: 'oklch(92% 0.06 250)',
-    ['--ft-selected-border-color' as string]: 'oklch(65% 0.15 250)',
-    ['--ft-selected-focused-border-color' as string]: 'oklch(55% 0.2 250)',
-    ['--ft-focus-ring-color' as string]: 'oklch(50% 0.15 250)',
-    ['--color-muted-foreground' as string]: 'oklch(45% 0 0)',
+    ['--trees-fg-override' as string]: 'oklch(14.5% 0 0)',
+    ['--trees-fg-muted-override' as string]: 'oklch(45% 0 0)',
+    ['--trees-bg-muted-override' as string]: 'oklch(96% 0 0)',
+    ['--trees-search-fg-override' as string]: 'oklch(30% 0 0)',
+    ['--trees-search-bg-override' as string]: 'oklch(100% 0 0)',
+    ['--trees-color-border-override' as string]: 'oklch(92% 0 0)',
+    ['--trees-selected-fg-override' as string]: 'oklch(20% 0.08 250)',
+    ['--trees-selected-bg-override' as string]: 'oklch(92% 0.06 250)',
+    ['--trees-selected-border-color-override' as string]: 'oklch(65% 0.15 250)',
+    ['--trees-selected-focused-border-color-override' as string]:
+      'oklch(55% 0.2 250)',
+    ['--trees-focus-ring-color-override' as string]: 'oklch(50% 0.15 250)',
   };
 }
 
 function darkTheme(): CSSProperties {
   return {
     colorScheme: 'dark',
-    ['--ft-color-foreground' as string]: 'oklch(98.5% 0 0)',
-    ['--ft-background-color-muted' as string]: 'oklch(26.9% 0 0)',
-    ['--ft-search-background' as string]: 'oklch(20% 0 0)',
-    ['--ft-color-border' as string]: 'oklch(100% 0 0 / 0.12)',
-    ['--ft-selected-background-color' as string]: 'oklch(35% 0.08 250)',
-    ['--ft-selected-border-color' as string]: 'oklch(65% 0.2 250)',
-    ['--ft-selected-focused-border-color' as string]: 'oklch(75% 0.2 250)',
-    ['--ft-focus-ring-color' as string]: 'oklch(70% 0.15 250)',
-    ['--color-muted-foreground' as string]: 'oklch(75% 0 0)',
+    ['--trees-fg-override' as string]: 'oklch(98.5% 0 0)',
+    ['--trees-fg-muted-override' as string]: 'oklch(75% 0 0)',
+    ['--trees-bg-muted-override' as string]: 'oklch(26.9% 0 0)',
+    ['--trees-search-fg-override' as string]: 'oklch(85% 0 0)',
+    ['--trees-search-bg-override' as string]: 'oklch(20% 0 0)',
+    ['--trees-color-border-override' as string]: 'oklch(100% 0 0 / 0.12)',
+    ['--trees-selected-fg-override' as string]: 'oklch(97% 0.04 250)',
+    ['--trees-selected-bg-override' as string]: 'oklch(35% 0.08 250)',
+    ['--trees-selected-border-color-override' as string]: 'oklch(65% 0.2 250)',
+    ['--trees-selected-focused-border-color-override' as string]:
+      'oklch(75% 0.2 250)',
+    ['--trees-focus-ring-color-override' as string]: 'oklch(70% 0.15 250)',
   };
 }
 
 function synthwaveTheme(): CSSProperties {
   return {
     colorScheme: 'dark',
-    ['--ft-color-foreground' as string]: '#e2e0ec',
-    ['--ft-background-color-muted' as string]: 'rgba(255, 126, 219, 0.12)',
-    ['--ft-search-background' as string]: '#2b213a',
-    ['--ft-color-border' as string]: 'rgba(255, 126, 219, 0.35)',
-    ['--ft-selected-background-color' as string]: 'rgba(249, 42, 173, 0.25)',
-    ['--ft-selected-border-color' as string]: '#f92aad',
-    ['--ft-selected-focused-border-color' as string]: '#ff7edb',
-    ['--ft-focus-ring-color' as string]: '#36f9f6',
-    ['--color-muted-foreground' as string]: '#b8a9c4',
+    ['--trees-fg-override' as string]: '#e2e0ec',
+    ['--trees-fg-muted-override' as string]: '#b8a9c4',
+    ['--trees-bg-muted-override' as string]: 'rgba(255, 126, 219, 0.12)',
+    ['--trees-search-fg-override' as string]: '#d4c5e0',
+    ['--trees-search-bg-override' as string]: '#2b213a',
+    ['--trees-color-border-override' as string]: 'rgba(255, 126, 219, 0.35)',
+    ['--trees-selected-fg-override' as string]: '#ff7edb',
+    ['--trees-selected-bg-override' as string]: 'rgba(249, 42, 173, 0.25)',
+    ['--trees-selected-border-color-override' as string]: '#f92aad',
+    ['--trees-selected-focused-border-color-override' as string]: '#ff7edb',
+    ['--trees-focus-ring-color-override' as string]: '#36f9f6',
   };
 }
 

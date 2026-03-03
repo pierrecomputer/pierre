@@ -29,7 +29,7 @@ const customSpriteSheet = `
 
 const panelStyle = {
   ...DEFAULT_FILE_TREE_PANEL_STYLE,
-  '--ft-search-background': 'light-dark(#fff, oklch(14.5% 0 0))',
+  '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
 export function CustomIconsSection() {

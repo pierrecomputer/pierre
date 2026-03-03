@@ -6,8 +6,9 @@ custom element), so its styles are isolated from your page.
 Customize it by passing **class and style** on the host: use `className` and
 `style` on the React `FileTree` component, or set them on the host element after
 `render()` in vanilla JS. That lets you control layout (e.g. `maxHeight`,
-`width`) and override the tree’s CSS variables (e.g. `--ft-font-size`,
-`--ft-row-height`) in global CSS, on a wrapper, or via the `style` prop.
+`width`) and override the tree’s CSS variables (e.g.
+`--trees-font-size-override`, `--trees-row-height-override`) in global CSS, on a
+wrapper, or via the `style` prop.
 
 For the full list of CSS variables, review `style.css` in the `@pierre/trees`
 package.

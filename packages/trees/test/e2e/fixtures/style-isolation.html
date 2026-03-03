@@ -28,8 +28,8 @@
       import { FileTree } from '/dist/index.js';
 
       const host = document.getElementById('test-tree-host');
-      host.style.setProperty('--ft-selected-background-color', 'rgb(1, 2, 3)');
-      host.style.setProperty('--ft-color-foreground', 'rgb(40, 40, 40)');
+      host.style.setProperty('--trees-selected-bg-override', 'rgb(1, 2, 3)');
+      host.style.setProperty('--trees-fg-override', 'rgb(40, 40, 40)');
 
       const fileTree = new FileTree(
         {

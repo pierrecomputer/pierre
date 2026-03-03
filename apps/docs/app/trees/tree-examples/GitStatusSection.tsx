@@ -48,7 +48,7 @@ export function GitStatusSection() {
 
   const panelStyle = {
     colorScheme: colorMode,
-    '--ft-search-background': isDark ? 'oklch(14.5% 0 0)' : '#fff',
+    '--trees-search-bg-override': isDark ? 'oklch(14.5% 0 0)' : '#fff',
   } as CSSProperties;
 
   return (

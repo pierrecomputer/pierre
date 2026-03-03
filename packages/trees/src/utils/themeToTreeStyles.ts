@@ -12,7 +12,7 @@ export interface TreeThemeInput {
 }
 
 /**
- * CSS custom properties (--ft-theme-*) and layout styles for the tree host/panel.
+ * CSS custom properties (--trees-theme-*) and layout styles for the tree host/panel.
  * Compatible with React inline style and the trees stylesheet fallback chain.
  */
 export type TreeThemeStyles = Record<string, string>;
@@ -21,8 +21,8 @@ export type TreeThemeStyles = Record<string, string>;
  * Maps a Shiki/VS Code–style theme to CSS for FileTree. Uses the same token
  * semantics as @pierre/diffs getHighlighterThemeStyles (theme.fg/bg,
  * theme.colors with gitDecoration.* and terminal.ansi* fallback). The trees
- * stylesheet uses --ft-theme-* in its fallback chain
- * (--ft-* → --ft-theme-* → default).
+ * stylesheet uses --trees-theme-* in its fallback chain
+ * (--trees-*-override → --trees-theme-* → default).
  *
  * Use with a resolved theme from shiki or @pierre/diffs:
  *
@@ -37,10 +37,12 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
   const sideBarFg =
     c['sideBar.foreground'] ?? c['editor.foreground'] ?? theme.fg;
   const sideBarBorder = c['sideBar.border'] ?? c['editor.background'];
+  const listActiveSelectionFg =
+    c['list.activeSelectionForeground'] ?? c['sideBar.foreground'];
   const listSelectionBg =
     c['list.activeSelectionBackground'] ?? c['editor.selectionBackground'];
   const listHoverBg = c['list.hoverBackground'];
-  const focusOutline = c['list.focusOutline'] ?? c['focusBorder'];
+  const focusRing = c['list.focusOutline'] ?? c['focusBorder'];
   const inputBg = c['input.background'] ?? sideBarBg;
   const inputBorder = c['input.border'] ?? sideBarBorder;
   const sectionHeaderFg = c['sideBarSectionHeader.foreground'] ?? sideBarFg;
@@ -58,29 +60,28 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     backgroundColor: sideBarBg ?? '',
     color: sideBarFg ?? '',
     borderColor: sideBarBorder ?? '',
-    '--ft-theme-side-bar-background': sideBarBg ?? '',
-    '--ft-theme-side-bar-foreground': sideBarFg ?? '',
-    '--ft-theme-side-bar-border': sideBarBorder ?? sideBarBg ?? '',
-    '--ft-theme-side-bar-section-header-foreground': sectionHeaderFg ?? '',
-    '--ft-theme-list-hover-background':
+    '--trees-theme-sidebar-bg': sideBarBg ?? '',
+    '--trees-theme-sidebar-fg': sideBarFg ?? '',
+    '--trees-theme-sidebar-border': sideBarBorder ?? sideBarBg ?? '',
+    '--trees-theme-sidebar-header-fg': sectionHeaderFg ?? '',
+    '--trees-theme-list-active-selection-fg':
+      listActiveSelectionFg ?? sideBarFg ?? '',
+    '--trees-theme-list-hover-bg':
       listHoverBg ?? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
-    '--ft-theme-list-active-selection-background':
-      listSelectionBg ?? 'transparent',
-    '--ft-theme-list-focus-outline': focusOutline ?? sideBarFg ?? '',
-    '--ft-theme-input-background': inputBg ?? '',
-    '--ft-theme-input-border': inputBorder ?? sideBarBorder ?? '',
+    '--trees-theme-list-active-selection-bg': listSelectionBg ?? 'transparent',
+    '--trees-theme-focus-ring': focusRing ?? sideBarFg ?? '',
+    '--trees-theme-input-bg': inputBg ?? '',
+    '--trees-theme-input-border': inputBorder ?? sideBarBorder ?? '',
   };
 
   if (gitAdded != null && gitAdded !== '') {
-    result['--ft-theme-git-decoration-added-resource-foreground'] = gitAdded;
+    result['--trees-theme-git-added-fg'] = gitAdded;
   }
   if (gitModified != null && gitModified !== '') {
-    result['--ft-theme-git-decoration-modified-resource-foreground'] =
-      gitModified;
+    result['--trees-theme-git-modified-fg'] = gitModified;
   }
   if (gitDeleted != null && gitDeleted !== '') {
-    result['--ft-theme-git-decoration-deleted-resource-foreground'] =
-      gitDeleted;
+    result['--trees-theme-git-deleted-fg'] = gitDeleted;
   }
 
   return result;
