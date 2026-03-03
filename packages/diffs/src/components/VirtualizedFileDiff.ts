@@ -95,11 +95,15 @@ export class VirtualizedFileDiff<
   // Called after render to reconcile estimated vs actual heights.
   // Definitely need to optimize this in cases where there aren't any custom
   // line heights or in cases of extremely large files...
-  public reconcileHeights(): void {
+  public reconcileHeights(): boolean {
+    let hasHeightChange = false;
     const { overflow = 'scroll' } = this.options;
     if (this.fileContainer == null || this.fileDiff == null) {
+      if (this.height !== 0) {
+        hasHeightChange = true;
+      }
       this.height = 0;
-      return;
+      return hasHeightChange;
     }
     this.top = this.getVirtualizedTop();
     // NOTE(amadeus): We can probably be a lot smarter about this, and we
@@ -111,10 +115,9 @@ export class VirtualizedFileDiff<
       this.lineAnnotations.length === 0 &&
       !this.isResizeDebuggingEnabled()
     ) {
-      return;
+      return hasHeightChange;
     }
     const diffStyle = this.getDiffStyle();
-    let hasLineHeightChange = false;
     const codeGroups =
       diffStyle === 'split'
         ? [this.codeDeletions, this.codeAdditions]
@@ -152,7 +155,7 @@ export class VirtualizedFileDiff<
           continue;
         }
 
-        hasLineHeightChange = true;
+        hasHeightChange = true;
         // Line is back to standard height (e.g., after window resize)
         // Remove from cache
         if (
@@ -168,9 +171,10 @@ export class VirtualizedFileDiff<
       }
     }
 
-    if (hasLineHeightChange || this.isResizeDebuggingEnabled()) {
+    if (hasHeightChange || this.isResizeDebuggingEnabled()) {
       this.computeApproximateSize();
     }
+    return hasHeightChange;
   }
 
   public onRender = (dirty: boolean): boolean => {
@@ -421,6 +425,10 @@ export class VirtualizedFileDiff<
       newFile,
       ...props,
     });
+  }
+
+  public syncVirtualizedTop(): void {
+    this.top = this.getVirtualizedTop();
   }
 
   protected override shouldDisableVirtualizationBuffers(): boolean {

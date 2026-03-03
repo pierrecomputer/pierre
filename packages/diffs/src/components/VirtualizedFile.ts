@@ -71,10 +71,14 @@ export class VirtualizedFile<
 
   // Measure rendered lines and update height cache.
   // Called after render to reconcile estimated vs actual heights.
-  public reconcileHeights(): void {
+  public reconcileHeights(): boolean {
+    let hasHeightChange = false;
     if (this.fileContainer == null || this.file == null) {
+      if (this.height !== 0) {
+        hasHeightChange = true;
+      }
       this.height = 0;
-      return;
+      return hasHeightChange;
     }
     const { overflow = 'scroll' } = this.options;
     this.top = this.getVirtualizedTop();
@@ -86,15 +90,17 @@ export class VirtualizedFile<
       this.lineAnnotations.length === 0 &&
       !this.isResizeDebuggingEnabled()
     ) {
-      return;
+      return hasHeightChange;
     }
 
-    let hasLineHeightChange = false;
-
     // Single code element (no split mode)
-    if (this.code == null) return;
+    if (this.code == null) {
+      return hasHeightChange;
+    }
     const content = this.code.children[1]; // Content column (gutter is [0])
-    if (!(content instanceof HTMLElement)) return;
+    if (!(content instanceof HTMLElement)) {
+      return hasHeightChange;
+    }
 
     for (const line of content.children) {
       if (!(line instanceof HTMLElement)) continue;
@@ -125,7 +131,7 @@ export class VirtualizedFile<
         continue;
       }
 
-      hasLineHeightChange = true;
+      hasHeightChange = true;
       // Line is back to standard height (e.g., after window resize)
       // Remove from cache
       if (measuredHeight === this.metrics.lineHeight * (hasMetadata ? 2 : 1)) {
@@ -137,9 +143,10 @@ export class VirtualizedFile<
       }
     }
 
-    if (hasLineHeightChange || this.isResizeDebuggingEnabled()) {
+    if (hasHeightChange || this.isResizeDebuggingEnabled()) {
       this.computeApproximateSize();
     }
+    return hasHeightChange;
   }
 
   public onRender = (dirty: boolean): boolean => {
@@ -319,6 +326,10 @@ export class VirtualizedFile<
       renderRange,
       ...props,
     });
+  }
+
+  public syncVirtualizedTop(): void {
+    this.top = this.getVirtualizedTop();
   }
 
   protected override shouldDisableVirtualizationBuffers(): boolean {

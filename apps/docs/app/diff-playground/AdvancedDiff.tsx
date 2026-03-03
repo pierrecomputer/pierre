@@ -75,6 +75,7 @@ export function AdvancedDiff() {
           {
             theme: DEFAULT_THEMES,
             diffStyle: 'split',
+            overflow: 'wrap',
             enableLineSelection: true,
             unsafeCSS,
           },

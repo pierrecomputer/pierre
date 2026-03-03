@@ -5,7 +5,7 @@ import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollP
 
 interface SubscribedInstance {
   onRender(dirty: boolean): boolean;
-  reconcileHeights(): void;
+  reconcileHeights(): boolean;
   setVisibility(visible: boolean): void;
 }
 

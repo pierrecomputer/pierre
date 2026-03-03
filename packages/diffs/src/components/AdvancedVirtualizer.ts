@@ -103,7 +103,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.stickyOffset.style.contain = 'layout size';
     this.stickyContainer.style.position = 'sticky';
     this.stickyContainer.style.width = '100%';
-    this.stickyContainer.style.contain = 'strict';
+    this.stickyContainer.style.contain = 'layout style contents';
     this.stickyContainer.style.isolation = 'isolate';
 
     // FIXME(amadeus): Remove me before release
@@ -293,6 +293,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     ) {
       return;
     }
+    const start = Date.now();
     const scrollTop = this.getScrollTop();
     const height = this.getHeight();
     const scrollHeight = this.getScrollHeight();
@@ -337,13 +338,13 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     }
 
     let prevElement: HTMLElement | undefined;
-    let firstStickySpecs: StickySpecs | undefined;
-    let lastStickySpecs: StickySpecs | undefined;
     // NOTE(amadeus): We'll probably want to figure out how to not have to
     // iterate through this entire array if not necessary? Maybe by hunking
     // into positional groups at some point
     const updatedInstances = new Set<AdvancedVirtualizedItem<LAnnotation>>();
-    for (const item of this.items) {
+    let startingIndex: number | undefined;
+    let lastRenderedIndex = -1;
+    for (const [itemIndex, item] of this.items.entries()) {
       const { instance } = item;
       const specs = item;
       // We can stop iterating when we get to elements after the window
@@ -353,6 +354,8 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       if (specs.top < top - specs.height) {
         continue;
       }
+      startingIndex ??= itemIndex;
+      lastRenderedIndex = itemIndex;
       const rendered = this.renderedInstances.get(instance);
       if (rendered == null) {
         const fileContainer = document.createElement(DIFFS_TAG_NAME);
@@ -377,24 +380,52 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
           updatedInstances.add(item);
         }
       }
-      firstStickySpecs ??= item.instance.getAdvancedStickySpecs();
-      lastStickySpecs = item.instance.getAdvancedStickySpecs();
     }
 
-    // DYNAMIC_PLAN: This is where we need to reconcile the rendered heights,
-    // however there are a few pieces we have to account for.
-    // 1. We can assume that updatedInstances will always be properly sorted,
-    //    although it could have gaps
-    // 2. We probably need to get some return a value from `reconcileHeights` to
-    //    report whether it had to dynamically recompute something, and then
-    //    use that to pull out the new height
-    // 3. If we recompute something, we'll have to re-adjust tops going forward
-    // 4. So I think we should ACTUALLY iterate over the `renderedInstances`,
-    //    and then use our updatedInstances set to reconcile height.
-    // 5. We are probably going to need to run a tally of currentTop (we can
-    //    start with firstStickySpecs) to get that.
-    for (const { instance } of updatedInstances) {
-      instance.reconcileHeights();
+    let firstStickySpecs: StickySpecs | undefined;
+    let lastStickySpecs: StickySpecs | undefined;
+    if (startingIndex != null) {
+      let currentTop = -1;
+      let heightChanged = false;
+      // Iterate through the rendered items to reconcile height. If a height
+      // has changed, we'll have to iterate all the way till the end to update
+      // all appropriate heights
+      for (; startingIndex < this.items.length; startingIndex++) {
+        // If we've incurred no height changes and ended, we can abort
+        if (!heightChanged && startingIndex > lastRenderedIndex) {
+          break;
+        }
+        const item = this.items[startingIndex];
+        if (item == null) {
+          throw new Error(
+            'AdvancedVirtualizer.computeRenderRangeAndEmit: Invalid item'
+          );
+        }
+        if (currentTop === -1) {
+          currentTop = item.top;
+        } else if (item.top !== currentTop) {
+          item.top = currentTop;
+          item.instance.syncVirtualizedTop();
+          heightChanged = true;
+        }
+        if (updatedInstances.has(item)) {
+          if (item.instance.reconcileHeights()) {
+            heightChanged = true;
+            item.height = item.instance.getVirtualizedHeight();
+          }
+        }
+        currentTop +=
+          item.instance.getVirtualizedHeight() + this.metrics.fileGap;
+        firstStickySpecs ??= item.instance.getAdvancedStickySpecs();
+        if (startingIndex === lastRenderedIndex) {
+          lastStickySpecs = item.instance.getAdvancedStickySpecs();
+        }
+      }
+
+      if (heightChanged && currentTop != null) {
+        this.scrollDirty = true;
+        this.scrollHeight = currentTop;
+      }
     }
 
     if (firstStickySpecs != null && lastStickySpecs != null) {
@@ -411,7 +442,6 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
         -Math.max(totalHeight + randomOffset, 0) + height;
       this.stickyContainer.style.top = `${stickyHeightJitter + this.metrics.fileGap}px`;
       this.stickyContainer.style.bottom = `${stickyHeightJitter}px`;
-      this.stickyContainer.style.height = `${totalHeight}px`;
     }
 
     if (this.lastContainerHeight !== this.scrollHeight) {
@@ -422,6 +452,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     if (fitPerfectly) {
       this.render();
     }
+    console.log('time to render', Date.now() - start);
   };
 
   private handleScroll = (): void => {
