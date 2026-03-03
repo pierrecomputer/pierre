@@ -2,6 +2,7 @@
 
 import { IconCollapsedRow, IconEyeSlash, IconFolderOpen } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
@@ -24,9 +25,14 @@ export function SearchSection() {
         description={
           <>
             Filter the tree by typing in the search field. Trees includes three{' '}
-            <code>fileTreeSearchMode</code> options to control how non-matching
-            items are shown. All three demos below start with search
-            prepopulated to show the different modes.
+            <Link
+              href="/trees/docs#core-types-filetreesearchmode"
+              className="inline-link"
+            >
+              <code>fileTreeSearchMode</code>
+            </Link>{' '}
+            options to control how non-matching items are shown. All three demos
+            below start with search prepopulated to show the different modes.
           </>
         }
       />

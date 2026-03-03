@@ -153,7 +153,7 @@ export function ShikiThemesSection() {
         description={
           <>
             The same Shiki themes used by{' '}
-            <Link href="../">
+            <Link href="../" className="inline-link">
               <code>@pierre/diffs</code>
             </Link>{' '}
             can style the <code>FileTree</code>. Sidebar and Git decoration

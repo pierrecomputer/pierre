@@ -7,6 +7,7 @@ import {
 } from '@pierre/icons';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree } from '@pierre/trees/react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 
@@ -51,15 +52,19 @@ export function GitStatusSection() {
   } as CSSProperties;
 
   return (
-    <TreeExampleSection id="path-colors">
+    <TreeExampleSection id="git-status">
       <FeatureHeader
         title="Show Git status on files"
         description={
           <>
-            Use the <code>gitStatus</code> prop to show indicators on files for
-            added, modified, and deleted files. Folders that contain changes get
-            their own styling as a hint of nested changes. Toggle between two
-            datasets to simulate status updates from your VCS.
+            Use the{' '}
+            <Link href="/trees/docs#git-status" className="inline-link">
+              <code>gitStatus</code>
+            </Link>{' '}
+            prop to show indicators on files for added, modified, and deleted
+            files. Folders that contain changed descendants automatically
+            receive a change hint. Toggle between two datasets to simulate
+            different Git statuses.{' '}
           </>
         }
       />

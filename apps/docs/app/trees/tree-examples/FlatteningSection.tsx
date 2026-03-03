@@ -2,6 +2,7 @@
 
 import { IconFileTreeFill, IconFolders } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
@@ -19,7 +20,19 @@ export function FlatteningSection() {
     <TreeExampleSection id="flatten">
       <FeatureHeader
         title="Flatten empty directories"
-        description="Collapse single-child folder chains into a single item to save clicks and improve user experience. Compare the two views below: hierarchical (nested folders) vs flattened (single-child chains collapsed into one row)."
+        description={
+          <>
+            Enable the <code>flattenEmptyDirectories</code> boolean option in{' '}
+            <code>FileTreeOptions</code> to collapse single-child folder chains
+            into one row for a more compact tree.{' '}
+            <Link
+              href="/trees/docs#core-types-filetreeoptions"
+              className="inline-link"
+            >
+              More about FileTreeOptions…
+            </Link>
+          </>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
