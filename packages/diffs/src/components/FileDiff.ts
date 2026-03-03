@@ -198,17 +198,7 @@ export class FileDiff<LAnnotation = undefined> {
     protected workerManager?: WorkerPoolManager | undefined,
     protected isContainerManaged = false
   ) {
-    this.hunksRenderer = new DiffHunksRenderer(
-      {
-        ...options,
-        hunkSeparators:
-          typeof options.hunkSeparators === 'function'
-            ? 'custom'
-            : options.hunkSeparators,
-      },
-      this.handleHighlightRender,
-      this.workerManager
-    );
+    this.hunksRenderer = this.createHunksRenderer(options);
     this.resizeManager = new ResizeManager();
     this.scrollSyncManager = new ScrollSyncManager();
     this.interactionManager = new InteractionManager(
@@ -227,9 +217,31 @@ export class FileDiff<LAnnotation = undefined> {
     this.enabled = true;
   }
 
-  private handleHighlightRender = (): void => {
+  protected handleHighlightRender = (): void => {
     this.rerender();
   };
+
+  protected getHunksRendererOptions(
+    options: FileDiffOptions<LAnnotation>
+  ): BaseDiffOptions {
+    return {
+      ...options,
+      hunkSeparators:
+        typeof options.hunkSeparators === 'function'
+          ? 'custom'
+          : options.hunkSeparators,
+    };
+  }
+
+  protected createHunksRenderer(
+    options: FileDiffOptions<LAnnotation>
+  ): DiffHunksRenderer<LAnnotation> {
+    return new DiffHunksRenderer(
+      this.getHunksRendererOptions(options),
+      this.handleHighlightRender,
+      this.workerManager
+    );
+  }
 
   public getLineIndex: GetLineIndexUtility = (
     lineNumber: number,
@@ -323,13 +335,7 @@ export class FileDiff<LAnnotation = undefined> {
   public setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
-    this.hunksRenderer.setOptions({
-      ...this.options,
-      hunkSeparators:
-        typeof options.hunkSeparators === 'function'
-          ? 'custom'
-          : options.hunkSeparators,
-    });
+    this.hunksRenderer.setOptions(this.getHunksRendererOptions(options));
     this.interactionManager.setOptions(
       pluckInteractionOptions(
         options,

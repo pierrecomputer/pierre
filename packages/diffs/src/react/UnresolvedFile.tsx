@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
-import type { FileDiffOptions } from '../components/FileDiff';
+import {
+  FileDiff as FileDiffClass,
+  type FileDiffOptions,
+} from '../components/FileDiff';
+import { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
+import { DIFFS_TAG_NAME } from '../constants';
+import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type {
   DiffLineAnnotation,
   FileContents,
@@ -17,7 +23,10 @@ import {
   parseMergeConflictDiffFromFile,
 } from '../utils/parseMergeConflictDiffFromFile';
 import { resolveMergeConflict } from '../utils/resolveMergeConflict';
-import { FileDiff, type FileDiffProps } from './FileDiff';
+import type { FileDiffProps } from './FileDiff';
+import { renderDiffChildren } from './utils/renderDiffChildren';
+import { templateRender } from './utils/templateRender';
+import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 const MergeConflictActionsContainerStyle: CSSProperties = {
   minHeight: '1.75rem',
@@ -218,21 +227,84 @@ export function UnresolvedFile<LAnnotation = undefined>({
       ? mergedRenderAnnotation
       : undefined;
 
-  return (
-    <FileDiff<MergeConflictAnnotation>
-      {...props}
-      fileDiff={parsed.fileDiff}
-      lineAnnotations={combinedLineAnnotations}
-      renderAnnotation={finalRenderAnnotation}
-      options={{
-        ...fileDiffOptions,
-        diffStyle: 'unified',
-        mergeConflictStyling: true,
-        lineDiffType: fileDiffOptions.lineDiffType ?? 'none',
-        unsafeCSS: getMergeConflictActionsUnsafeCSS(fileDiffOptions.unsafeCSS),
-      }}
-    />
+  const unresolvedOptions = useMemo(
+    () => ({
+      ...fileDiffOptions,
+      diffStyle: 'unified' as const,
+      lineDiffType: fileDiffOptions.lineDiffType ?? 'none',
+      unsafeCSS: getMergeConflictActionsUnsafeCSS(fileDiffOptions.unsafeCSS),
+    }),
+    [fileDiffOptions]
   );
+
+  const { ref, getHoveredLine } = useFileDiffInstance({
+    fileDiff: parsed.fileDiff,
+    options: unresolvedOptions,
+    metrics: props.metrics,
+    lineAnnotations: combinedLineAnnotations,
+    selectedLines: props.selectedLines,
+    prerenderedHTML: props.prerenderedHTML,
+    createFileDiffInstance: (instanceOptions, poolManager) =>
+      new ReactUnresolvedFileDiff(instanceOptions, poolManager, true),
+    createVirtualizedFileDiffInstance: (
+      instanceOptions,
+      virtualizer,
+      metrics,
+      poolManager
+    ) =>
+      new ReactVirtualizedUnresolvedFileDiff(
+        instanceOptions,
+        virtualizer,
+        metrics,
+        poolManager,
+        true
+      ),
+  });
+
+  const children = renderDiffChildren({
+    fileDiff: parsed.fileDiff,
+    renderHeaderPrefix: props.renderHeaderPrefix,
+    renderHeaderMetadata: props.renderHeaderMetadata,
+    renderAnnotation: finalRenderAnnotation,
+    renderGutterUtility: props.renderGutterUtility,
+    lineAnnotations: combinedLineAnnotations,
+    renderHoverUtility: props.renderHoverUtility,
+    getHoveredLine,
+  });
+
+  return (
+    <DIFFS_TAG_NAME ref={ref} className={props.className} style={props.style}>
+      {templateRender(children, props.prerenderedHTML)}
+    </DIFFS_TAG_NAME>
+  );
+}
+
+class ReactUnresolvedFileDiff<
+  LAnnotation = undefined,
+> extends FileDiffClass<LAnnotation> {
+  protected override createHunksRenderer(
+    options: FileDiffOptions<LAnnotation>
+  ): UnresolvedFileHunksRenderer<LAnnotation> {
+    return new UnresolvedFileHunksRenderer(
+      this.getHunksRendererOptions(options),
+      this.handleHighlightRender,
+      this.workerManager
+    );
+  }
+}
+
+class ReactVirtualizedUnresolvedFileDiff<
+  LAnnotation = undefined,
+> extends VirtualizedFileDiff<LAnnotation> {
+  protected override createHunksRenderer(
+    options: FileDiffOptions<LAnnotation>
+  ): UnresolvedFileHunksRenderer<LAnnotation> {
+    return new UnresolvedFileHunksRenderer(
+      this.getHunksRendererOptions(options),
+      this.handleHighlightRender,
+      this.workerManager
+    );
+  }
 }
 
 function isMergeConflictActionMetadata(
