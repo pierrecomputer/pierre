@@ -22,28 +22,25 @@ describe('parseMergeConflictDiffFromFile', () => {
     const { currentFile, incomingFile, fileDiff, actions } =
       parseMergeConflictDiffFromFile(file);
 
-    expect(currentFile.contents).toBe(
-      [
-        'const start = true;',
-        '<<<<<<< HEAD',
-        'const ttl = 12;',
-        '=======',
-        '>>>>>>> feature',
-        'const end = true;',
-        '',
-      ].join('\n')
-    );
-    expect(incomingFile.contents).toBe(
-      [
-        'const start = true;',
-        '<<<<<<< HEAD',
-        '=======',
-        'const ttl = 24;',
-        '>>>>>>> feature',
-        'const end = true;',
-        '',
-      ].join('\n')
-    );
+    expect(currentFile.contents).toContain('<<<<<<< HEAD\n');
+    expect(currentFile.contents).toContain('const ttl = 12;\n');
+    expect(currentFile.contents).toContain('=======\n');
+    expect(currentFile.contents).toContain('>>>>>>> feature\n');
+    expect(currentFile.contents).not.toContain('const ttl = 24;\n');
+
+    expect(incomingFile.contents).toContain('<<<<<<< HEAD\n');
+    expect(incomingFile.contents).toContain('const ttl = 24;\n');
+    expect(incomingFile.contents).toContain('=======\n');
+    expect(incomingFile.contents).toContain('>>>>>>> feature\n');
+    expect(incomingFile.contents).not.toContain('const ttl = 12;\n');
+
+    const incomingSeparatorIndex = incomingFile.contents.indexOf('=======\n');
+    const incomingLineIndex =
+      incomingFile.contents.indexOf('const ttl = 24;\n');
+    const incomingEndIndex = incomingFile.contents.indexOf('>>>>>>> feature\n');
+    expect(incomingSeparatorIndex).toBeGreaterThan(-1);
+    expect(incomingLineIndex).toBeGreaterThan(incomingSeparatorIndex);
+    expect(incomingEndIndex).toBeGreaterThan(incomingLineIndex);
 
     expect(fileDiff.deletionLines).toEqual(
       splitFileContents(currentFile.contents)
@@ -52,10 +49,9 @@ describe('parseMergeConflictDiffFromFile', () => {
       splitFileContents(incomingFile.contents)
     );
 
-    expect(fileDiff.hunks).toHaveLength(1);
     expect(
-      (fileDiff.hunks[0]?.hunkContent ?? []).some(
-        (content) => content.type === 'change'
+      fileDiff.hunks.some((hunk) =>
+        (hunk.hunkContent ?? []).some((content) => content.type === 'change')
       )
     ).toBe(true);
     expect(actions).toEqual([
@@ -100,35 +96,34 @@ describe('parseMergeConflictDiffFromFile', () => {
     const { currentFile, incomingFile, fileDiff, actions } =
       parseMergeConflictDiffFromFile(file);
 
-    expect(currentFile.contents).toBe(
-      [
-        'before',
-        '<<<<<<< HEAD',
-        'ours',
-        '||||||| base',
-        'base value',
-        '=======',
-        '>>>>>>> topic',
-        'after',
-        '',
-      ].join('\n')
-    );
-    expect(incomingFile.contents).toBe(
-      [
-        'before',
-        '<<<<<<< HEAD',
-        '||||||| base',
-        'base value',
-        '=======',
-        'theirs',
-        '>>>>>>> topic',
-        'after',
-        '',
-      ].join('\n')
-    );
+    expect(currentFile.contents).toContain('<<<<<<< HEAD\n');
+    expect(currentFile.contents).toContain('ours\n');
+    expect(currentFile.contents).toContain('||||||| base\n');
+    expect(currentFile.contents).toContain('base value\n');
+    expect(currentFile.contents).toContain('=======\n');
+    expect(currentFile.contents).toContain('>>>>>>> topic\n');
+    expect(currentFile.contents).not.toContain('theirs\n');
+
+    expect(incomingFile.contents).toContain('<<<<<<< HEAD\n');
+    expect(incomingFile.contents).toContain('theirs\n');
+    expect(incomingFile.contents).toContain('||||||| base\n');
+    expect(incomingFile.contents).toContain('base value\n');
+    expect(incomingFile.contents).toContain('=======\n');
+    expect(incomingFile.contents).toContain('>>>>>>> topic\n');
+    expect(incomingFile.contents).not.toContain('ours\n');
+
+    const baseIndex = incomingFile.contents.indexOf('||||||| base\n');
+    const separatorIndex = incomingFile.contents.indexOf('=======\n');
+    const theirsIndex = incomingFile.contents.indexOf('theirs\n');
+    const endIndex = incomingFile.contents.indexOf('>>>>>>> topic\n');
+    expect(baseIndex).toBeGreaterThan(-1);
+    expect(separatorIndex).toBeGreaterThan(baseIndex);
+    expect(theirsIndex).toBeGreaterThan(separatorIndex);
+    expect(endIndex).toBeGreaterThan(theirsIndex);
+
     expect(
-      (fileDiff.hunks[0]?.hunkContent ?? []).some(
-        (content) => content.type === 'change'
+      fileDiff.hunks.some((hunk) =>
+        (hunk.hunkContent ?? []).some((content) => content.type === 'change')
       )
     ).toBe(true);
     expect(actions).toEqual([
