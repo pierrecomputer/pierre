@@ -2,12 +2,6 @@ import type { PreloadMergeConflictDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-const MERGE_CONFLICT_NO_SIDEBAR_CSS = `
-[data-merge-conflict][data-column-number]::before {
-  display: none !important;
-}
-`;
-
 export const MERGE_CONFLICT_EXAMPLE: PreloadMergeConflictDiffOptions<undefined> =
   {
     file: {
@@ -38,6 +32,6 @@ export async function createSession(userId: string) {
       theme: 'pierre-dark',
       overflow: 'wrap',
       diffIndicators: 'none',
-      unsafeCSS: `${CustomScrollbarCSS}\n${MERGE_CONFLICT_NO_SIDEBAR_CSS}`,
+      unsafeCSS: CustomScrollbarCSS,
     },
   };

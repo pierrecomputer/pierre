@@ -1280,43 +1280,6 @@
 
   :is([data-file], [data-diff]) {
     [data-merge-conflict='marker-start'],
-    [data-merge-conflict='current'],
-    [data-merge-conflict='incoming'],
-    [data-merge-conflict='marker-end'] {
-      &[data-column-number] {
-        &::before {
-          content: '';
-          display: block;
-          width: 4px;
-          height: 100%;
-          position: absolute;
-          top: 0;
-          left: 0;
-          user-select: none;
-          contain: strict;
-        }
-      }
-    }
-
-    [data-merge-conflict='marker-start'],
-    [data-merge-conflict='current'] {
-      &[data-column-number] {
-        &::before {
-          background-color: var(--diffs-addition-base);
-        }
-      }
-    }
-
-    [data-merge-conflict='incoming'],
-    [data-merge-conflict='marker-end'] {
-      &[data-column-number] {
-        &::before {
-          background-color: var(--diffs-modified-base);
-        }
-      }
-    }
-
-    [data-merge-conflict='marker-start'],
     [data-merge-conflict='marker-base'],
     [data-merge-conflict='marker-separator'],
     [data-merge-conflict='marker-end'] {
