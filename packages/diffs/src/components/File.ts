@@ -137,6 +137,11 @@ interface MergeConflictActionElementCache {
   conflict: MergeConflictRegion;
 }
 
+interface InternalMergeConflictState {
+  sourceContents: string;
+  resolvedFile: FileContents;
+}
+
 let instanceId = -1;
 
 export class File<LAnnotation = undefined> {
@@ -177,8 +182,7 @@ export class File<LAnnotation = undefined> {
 
   protected file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
-  protected internalMergeConflictSourceContents: string | undefined;
-  protected internalMergeConflictResolvedFile: FileContents | undefined;
+  protected internalMergeConflictState: InternalMergeConflictState | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -347,8 +351,7 @@ export class File<LAnnotation = undefined> {
 
     // Clean up the data
     this.file = undefined;
-    this.internalMergeConflictSourceContents = undefined;
-    this.internalMergeConflictResolvedFile = undefined;
+    this.internalMergeConflictState = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
@@ -567,36 +570,29 @@ export class File<LAnnotation = undefined> {
 
   private getEffectiveFile(file: FileContents): FileContents {
     if (this.options.onMergeConflictAction != null) {
-      this.internalMergeConflictSourceContents = undefined;
-      this.internalMergeConflictResolvedFile = undefined;
+      this.internalMergeConflictState = undefined;
       return file;
     }
 
-    const sourceContents = this.internalMergeConflictSourceContents;
-    const resolvedFile = this.internalMergeConflictResolvedFile;
-    if (sourceContents == null || resolvedFile == null) {
+    const state = this.internalMergeConflictState;
+    if (state == null) {
       return file;
     }
 
-    // If the external caller has adopted the resolved content, we can stop
-    // carrying internal override state.
-    if (file.contents === resolvedFile.contents) {
-      this.internalMergeConflictSourceContents = undefined;
-      this.internalMergeConflictResolvedFile = undefined;
-      return file;
-    }
-
-    // If the caller changed contents independently, prefer external state.
-    if (file.contents !== sourceContents) {
-      this.internalMergeConflictSourceContents = undefined;
-      this.internalMergeConflictResolvedFile = undefined;
+    // If the external caller has adopted the resolved content, or changed
+    // contents independently, stop carrying internal override state.
+    if (
+      file.contents === state.resolvedFile.contents ||
+      file.contents !== state.sourceContents
+    ) {
+      this.internalMergeConflictState = undefined;
       return file;
     }
 
     return {
       ...file,
-      contents: resolvedFile.contents,
-      cacheKey: resolvedFile.cacheKey,
+      contents: state.resolvedFile.contents,
+      cacheKey: state.resolvedFile.cacheKey,
     };
   }
 
@@ -613,17 +609,18 @@ export class File<LAnnotation = undefined> {
       return;
     }
 
-    this.internalMergeConflictSourceContents ??= file.contents;
     const cacheKey =
       file.cacheKey != null
         ? `${file.cacheKey}:mc-${payload.conflict.conflictIndex}-${payload.resolution}`
         : undefined;
     const resolvedFile = { ...file, contents, cacheKey };
-    this.internalMergeConflictResolvedFile = resolvedFile;
+    const sourceContents =
+      this.internalMergeConflictState?.sourceContents ?? file.contents;
+    this.internalMergeConflictState = { sourceContents, resolvedFile };
 
     const renderFile = {
       ...file,
-      contents: this.internalMergeConflictSourceContents ?? file.contents,
+      contents: sourceContents,
       cacheKey: file.cacheKey,
     };
     this.render({
