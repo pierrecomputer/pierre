@@ -72,6 +72,7 @@ interface LineCache {
   lines: string[];
 }
 
+// oxlint-disable-next-line typescript/no-empty-object-type
 export interface FileRendererOptions extends BaseCodeOptions {}
 
 let instanceId = -1;
@@ -366,13 +367,9 @@ export class FileRenderer<LAnnotation = undefined> {
 
         if (line != null) {
           // Add gutter line number
-          const gutterItem = createGutterItem(
-            'context',
-            lineNumber,
-            `${lineIndex}`
+          gutter.children.push(
+            createGutterItem('context', lineNumber, `${lineIndex}`)
           );
-          gutter.children.push(gutterItem);
-
           contentArray.push(line);
           rowCount++;
 

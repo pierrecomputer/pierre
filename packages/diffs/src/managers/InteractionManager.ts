@@ -142,8 +142,6 @@ export interface InteractionManagerOptions<
   TMode extends InteractionManagerMode,
 > extends InteractionManagerBaseOptions<TMode> {
   usesCustomGutterUtility?: boolean;
-  onSetup?(pre: HTMLPreElement): void;
-  onCleanUp?(): void;
   onHunkExpand?(
     hunkIndex: number,
     direction: ExpansionDirections,
@@ -186,7 +184,6 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   }
 
   cleanUp(): void {
-    this.options.onCleanUp?.();
     this.pre?.removeEventListener('click', this.handlePointerClick);
     this.pre?.removeEventListener('pointerdown', this.handlePointerDown);
     this.pre?.removeEventListener('pointermove', this.handlePointerMove);
@@ -237,7 +234,6 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.syncPointerListeners(pre);
     this.updateInteractiveLineAttributes();
     this.renderSelection();
-    this.options.onSetup?.(pre);
   }
 
   setSelectionDirty(): void {
