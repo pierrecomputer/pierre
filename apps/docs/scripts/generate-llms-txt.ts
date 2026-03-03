@@ -1,26 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, extname, join } from 'path';
-// ── Diffs constants ─────────────────────────────────────────────────────────
 
-import * as DiffsCoreTypes from '../app/docs/CoreTypes/constants';
-import * as DiffsCustomHunk from '../app/docs/CustomHunkSeparators/constants';
-import * as DiffsOverview from '../app/docs/Overview/constants';
-import * as DiffsReactAPI from '../app/docs/ReactAPI/constants';
-import * as DiffsSSR from '../app/docs/SSR/constants';
-import * as DiffsStyling from '../app/docs/Styling/constants';
-import * as DiffsTheming from '../app/docs/Theming/constants';
-import * as DiffsUtilities from '../app/docs/Utilities/constants';
-import * as DiffsVanillaAPI from '../app/docs/VanillaAPI/constants';
-import * as DiffsVirtualization from '../app/docs/Virtualization/constants';
-import * as DiffsWorkerPool from '../app/docs/WorkerPool/constants';
-// ── Trees constants ─────────────────────────────────────────────────────────
-import * as TreesCoreTypes from '../app/trees/docs/CoreTypes/constants';
-import * as TreesOverview from '../app/trees/docs/Overview/constants';
-import * as TreesReactAPI from '../app/trees/docs/ReactAPI/constants';
-import * as TreesSSR from '../app/trees/docs/SSR/constants';
-import * as TreesStyling from '../app/trees/docs/Styling/constants';
-import * as TreesUtilities from '../app/trees/docs/Utilities/constants';
-import * as TreesVanillaAPI from '../app/trees/docs/VanillaAPI/constants';
+import { PRODUCTS } from '../app/product-config';
+import type { ProductId } from '../app/product-config';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,9 +13,10 @@ interface CodeExample {
 }
 
 interface Section {
-  mdxPath: string;
   anchor: string;
+  heading: string;
   description: string;
+  prose: string;
   codeExamples: CodeExample[];
 }
 
@@ -48,20 +31,116 @@ interface Product {
   seeAlso: Array<{ label: string; url: string; description: string }>;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Config ──────────────────────────────────────────────────────────────────
 
 const ROOT = join(import.meta.dir, '..');
 
-function ex(
-  label: string,
-  constant: { file: { name: string; contents: string } }
-): CodeExample {
-  return {
-    label,
-    filename: constant.file.name,
-    contents: constant.file.contents,
-  };
-}
+const DIFFS_SECTIONS = [
+  'Overview',
+  'Installation',
+  'CoreTypes',
+  'ReactAPI',
+  'VanillaAPI',
+  'Virtualization',
+  'CustomHunkSeparators',
+  'Utilities',
+  'Styling',
+  'Theming',
+  'WorkerPool',
+  'SSR',
+] as const;
+
+const TREES_SECTIONS = [
+  'Overview',
+  'Installation',
+  'CoreTypes',
+  'ReactAPI',
+  'VanillaAPI',
+  'GitStatus',
+  'Icons',
+  'Utilities',
+  'Styling',
+  'SSR',
+] as const;
+
+const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
+  diffs: {
+    Overview: 'What diffs is, architecture, and getting started',
+    Installation: 'Package installation and entry points',
+    CoreTypes:
+      'FileContents, FileDiffMetadata, and creating diffs from files or patches',
+    ReactAPI:
+      'MultiFileDiff, PatchDiff, FileDiff, File components and shared props',
+    VanillaAPI:
+      'FileDiff and File classes, props, custom hunk separators, and low-level renderers',
+    Virtualization: 'Virtual scrolling for large diffs and files',
+    CustomHunkSeparators: 'Built-in separator presets and custom separator UI',
+    Utilities:
+      'parseDiffFromFile, parsePatchFiles, highlighter management, accept/reject hunks',
+    Styling: 'CSS variables, inline styles, and unsafe CSS injection',
+    Theming:
+      'Pierre Light/Dark themes, custom theme creation, and registration',
+    WorkerPool:
+      'Off-main-thread syntax highlighting with configurable worker pools',
+    SSR: 'Server-side rendering with preload functions for instant first paint',
+  },
+  trees: {
+    Overview: 'What file tree is, architecture, and getting started',
+    Installation: 'Package installation and entry points',
+    CoreTypes:
+      'FileTreeOptions, FileTreeSelectionItem, FileTreeSearchMode, and configuration',
+    ReactAPI: 'FileTree React component and props',
+    VanillaAPI:
+      'FileTree class, constructor options, instance methods, and FileTreeStateConfig',
+    GitStatus: 'Git-style file status indicators',
+    Icons: 'Custom SVG sprite sheets and icon remapping',
+    Utilities: 'sortChildren, generateSyncDataLoader, generateLazyDataLoader',
+    Styling: 'CSS variables and inline style overrides',
+    SSR: 'preloadFileTree for server-side rendering and vanilla hydration',
+  },
+};
+
+const MDX_FILENAME_OVERRIDES: Record<string, string> = {
+  'docs/Theming': 'docs-content.mdx',
+};
+
+const EXCLUDED_CONSTANTS = new Set([
+  'WORKER_POOL_ARCHITECTURE_ASCII',
+  'THEMING_PROJECT_STRUCTURE',
+  'THEMING_PALETTE_COLORS',
+  'THEMING_PALETTE_ROLES',
+  'THEMING_PALETTE_LIGHT',
+  'THEMING_PALETTE_DARK',
+]);
+
+const SEE_ALSO: Record<ProductId, Product['seeAlso']> = {
+  diffs: [
+    {
+      label: '@pierre/trees',
+      url: 'https://diffs.com/trees/llms.txt',
+      description: 'File tree rendering library',
+    },
+    {
+      label: 'Full documentation',
+      url: 'https://diffs.com/llms-full.txt',
+      description: 'Complete @pierre/diffs docs in a single file',
+    },
+  ],
+  trees: [
+    {
+      label: '@pierre/diffs',
+      url: 'https://diffs.com/llms.txt',
+      description: 'Diff and code rendering library',
+    },
+    {
+      label: 'Full documentation',
+      url: 'https://diffs.com/trees/llms-full.txt',
+      description: 'Complete @pierre/trees docs in a single file',
+    },
+  ],
+};
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function extToLang(filename: string): string {
   const ext = extname(filename).toLowerCase();
@@ -177,14 +256,10 @@ function stripJsx(mdx: string): string {
 }
 
 function cleanMarkdown(md: string): string {
-  return (
-    md
-      // Strip [toc-ignore] markers
-      .replace(/\s*\[toc-ignore\]/g, '')
-      // Collapse 3+ blank lines into 2
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-  );
+  return md
+    .replace(/\s*\[toc-ignore\]/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function processMdx(filePath: string): string {
@@ -192,6 +267,16 @@ function processMdx(filePath: string): string {
   const withNotices = processNotices(raw);
   const stripped = stripJsx(withNotices);
   return cleanMarkdown(stripped);
+}
+
+function extractAnchor(mdxContent: string): string {
+  const match = mdxContent.match(/^##\s+(.+)/m);
+  if (match === null) return '';
+  return match[1]
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-');
 }
 
 function formatCodeExamples(examples: CodeExample[]): string {
@@ -203,380 +288,128 @@ function formatCodeExamples(examples: CodeExample[]): string {
   return '\n\n' + blocks.join('\n\n');
 }
 
-// ── Product definitions ─────────────────────────────────────────────────────
+// ── Code example auto-discovery ─────────────────────────────────────────────
 
-const diffs: Product = {
-  packageName: '@pierre/diffs',
-  description:
-    'An open source diff and code rendering library for the web. Built on Shiki for syntax highlighting, with React and vanilla JS APIs, virtualization, SSR support, and extensive theming.',
-  docsUrl: 'https://diffs.com/docs',
-  githubUrl: 'https://github.com/pierrecomputer/pierre',
-  llmsTxtPath: join(ROOT, 'public', 'llms.txt'),
-  llmsFullTxtPath: join(ROOT, 'public', 'llms-full.txt'),
-  seeAlso: [
-    {
-      label: '@pierre/trees',
-      url: 'https://diffs.com/trees/llms.txt',
-      description: 'File tree rendering library',
-    },
-    {
-      label: 'Full documentation',
-      url: 'https://diffs.com/llms-full.txt',
-      description: 'Complete @pierre/diffs docs in a single file',
-    },
-  ],
-  sections: [
-    {
-      mdxPath: 'docs/Overview/content.mdx',
-      anchor: 'overview',
-      description: 'What diffs is, architecture, and getting started',
-      codeExamples: [
-        ex(
-          'React — Single File Diff',
-          DiffsOverview.OVERVIEW_REACT_SINGLE_FILE
-        ),
-        ex('React — Patch File', DiffsOverview.OVERVIEW_REACT_PATCH_FILE),
-        ex(
-          'Vanilla JS — Single File Diff',
-          DiffsOverview.OVERVIEW_VANILLA_SINGLE_FILE
-        ),
-        ex(
-          'Vanilla JS — Patch File',
-          DiffsOverview.OVERVIEW_VANILLA_PATCH_FILE
-        ),
-      ],
-    },
-    {
-      mdxPath: 'docs/Installation/content.mdx',
-      anchor: 'installation',
-      description: 'Package installation and entry points',
-      codeExamples: [],
-    },
-    {
-      mdxPath: 'docs/CoreTypes/content.mdx',
-      anchor: 'core-types',
-      description:
-        'FileContents, FileDiffMetadata, and creating diffs from files or patches',
-      codeExamples: [
-        ex('FileContents Type', DiffsCoreTypes.FILE_CONTENTS_TYPE),
-        ex('FileDiffMetadata Type', DiffsCoreTypes.FILE_DIFF_METADATA_TYPE),
-        ex(
-          'parseDiffFromFile Example',
-          DiffsCoreTypes.PARSE_DIFF_FROM_FILE_EXAMPLE
-        ),
-        ex('parsePatchFiles Example', DiffsCoreTypes.PARSE_PATCH_FILES_EXAMPLE),
-      ],
-    },
-    {
-      mdxPath: 'docs/ReactAPI/content.mdx',
-      anchor: 'react-api',
-      description:
-        'MultiFileDiff, PatchDiff, FileDiff, File components and shared props',
-      codeExamples: [
-        ex('MultiFileDiff Component', DiffsReactAPI.REACT_API_MULTI_FILE_DIFF),
-        ex('PatchDiff Component', DiffsReactAPI.REACT_API_PATCH_DIFF),
-        ex('FileDiff Component', DiffsReactAPI.REACT_API_FILE_DIFF),
-        ex('File Component', DiffsReactAPI.REACT_API_FILE),
-        ex('Shared Diff Options', DiffsReactAPI.REACT_API_SHARED_DIFF_OPTIONS),
-        ex(
-          'Shared Diff Render Props',
-          DiffsReactAPI.REACT_API_SHARED_DIFF_RENDER_PROPS
-        ),
-        ex('File Options', DiffsReactAPI.REACT_API_SHARED_FILE_OPTIONS),
-        ex(
-          'File Render Props',
-          DiffsReactAPI.REACT_API_SHARED_FILE_RENDER_PROPS
-        ),
-      ],
-    },
-    {
-      mdxPath: 'docs/VanillaAPI/content.mdx',
-      anchor: 'vanilla-js-api',
-      description:
-        'FileDiff and File classes, props, custom hunk separators, and low-level renderers',
-      codeExamples: [
-        ex('FileDiff Example', DiffsVanillaAPI.VANILLA_API_FILE_DIFF_EXAMPLE),
-        ex('File Example', DiffsVanillaAPI.VANILLA_API_FILE_EXAMPLE),
-        ex('FileDiff Options', DiffsVanillaAPI.VANILLA_API_FILE_DIFF_PROPS),
-        ex('File Options', DiffsVanillaAPI.VANILLA_API_FILE_PROPS),
-        ex(
-          'Custom Hunk Separators',
-          DiffsVanillaAPI.VANILLA_API_CUSTOM_HUNK_FILE
-        ),
-        ex(
-          'DiffHunksRenderer — From File',
-          DiffsVanillaAPI.VANILLA_API_HUNKS_RENDERER_FILE
-        ),
-        ex(
-          'DiffHunksRenderer — From Patch',
-          DiffsVanillaAPI.VANILLA_API_HUNKS_RENDERER_PATCH_FILE
-        ),
-        ex('FileRenderer', DiffsVanillaAPI.VANILLA_API_FILE_RENDERER),
-      ],
-    },
-    {
-      mdxPath: 'docs/Virtualization/content.mdx',
-      anchor: 'virtualization',
-      description: 'Virtual scrolling for large diffs and files',
-      codeExamples: [
-        ex('React Virtualizer', DiffsVirtualization.VIRTUALIZATION_REACT_BASIC),
-        ex(
-          'React Virtualizer Config',
-          DiffsVirtualization.VIRTUALIZATION_REACT_CONFIG
-        ),
-        ex(
-          'Vanilla JS Virtualization',
-          DiffsVirtualization.VIRTUALIZATION_VANILLA_DIFF
-        ),
-      ],
-    },
-    {
-      mdxPath: 'docs/CustomHunkSeparators/content.mdx',
-      anchor: 'custom-hunk-separators',
-      description: 'Built-in separator presets and custom separator UI',
-      codeExamples: [
-        ex('React Example', DiffsCustomHunk.CUSTOM_HUNK_SEPARATORS_SWITCHER),
-      ],
-    },
-    {
-      mdxPath: 'docs/Utilities/content.mdx',
-      anchor: 'utilities',
-      description:
-        'parseDiffFromFile, parsePatchFiles, highlighter management, accept/reject hunks',
-      codeExamples: [
-        ex('diffAcceptRejectHunk', DiffsUtilities.HELPER_DIFF_ACCEPT_REJECT),
-        ex(
-          'diffAcceptRejectHunk (React)',
-          DiffsUtilities.HELPER_DIFF_ACCEPT_REJECT_REACT
-        ),
-        ex('disposeHighlighter', DiffsUtilities.HELPER_DISPOSE_HIGHLIGHTER),
-        ex(
-          'getSharedHighlighter',
-          DiffsUtilities.HELPER_GET_SHARED_HIGHLIGHTER
-        ),
-        ex('parseDiffFromFile', DiffsUtilities.HELPER_PARSE_DIFF_FROM_FILE),
-        ex('parsePatchFiles', DiffsUtilities.HELPER_PARSE_PATCH_FILES),
-        ex('trimPatchContext', DiffsUtilities.HELPER_TRIM_PATCH_CONTEXT),
-        ex('preloadHighlighter', DiffsUtilities.HELPER_PRELOAD_HIGHLIGHTER),
-        ex('registerCustomTheme', DiffsUtilities.HELPER_REGISTER_CUSTOM_THEME),
-        ex(
-          'registerCustomLanguage',
-          DiffsUtilities.HELPER_REGISTER_CUSTOM_LANGUAGE
-        ),
-        ex('setLanguageOverride', DiffsUtilities.HELPER_SET_LANGUAGE_OVERRIDE),
-      ],
-    },
-    {
-      mdxPath: 'docs/Styling/content.mdx',
-      anchor: 'styling',
-      description: 'CSS variables, inline styles, and unsafe CSS injection',
-      codeExamples: [
-        ex('Global CSS Variables', DiffsStyling.STYLING_CODE_GLOBAL),
-        ex('Inline Styles', DiffsStyling.STYLING_CODE_INLINE),
-        ex('Unsafe CSS', DiffsStyling.STYLING_CODE_UNSAFE),
-      ],
-    },
-    {
-      mdxPath: 'docs/Theming/docs-content.mdx',
-      anchor: 'themes',
-      description:
-        'Pierre Light/Dark themes, custom theme creation, and registration',
-      codeExamples: [
-        ex('Registering Custom Themes', DiffsTheming.THEMING_REGISTER_THEME),
-        ex(
-          'Using Custom Themes in Components',
-          DiffsTheming.THEMING_USE_IN_COMPONENT
-        ),
-      ],
-    },
-    {
-      mdxPath: 'docs/WorkerPool/content.mdx',
-      anchor: 'worker-pool',
-      description:
-        'Off-main-thread syntax highlighting with configurable worker pools',
-      codeExamples: [
-        ex('Worker Factory — Vite', DiffsWorkerPool.WORKER_POOL_HELPER_VITE),
-        ex(
-          'Worker Factory — Next.js',
-          DiffsWorkerPool.WORKER_POOL_HELPER_NEXTJS
-        ),
-        ex(
-          'Worker Factory — Webpack',
-          DiffsWorkerPool.WORKER_POOL_HELPER_WEBPACK
-        ),
-        ex(
-          'Worker Factory — esbuild',
-          DiffsWorkerPool.WORKER_POOL_HELPER_ESBUILD
-        ),
-        ex(
-          'Worker Factory — Static Files',
-          DiffsWorkerPool.WORKER_POOL_HELPER_STATIC
-        ),
-        ex(
-          'Worker Factory — No Bundler',
-          DiffsWorkerPool.WORKER_POOL_HELPER_VANILLA
-        ),
-        ex('React Usage', DiffsWorkerPool.WORKER_POOL_REACT_USAGE),
-        ex('Vanilla JS Usage', DiffsWorkerPool.WORKER_POOL_VANILLA_USAGE),
-        ex('Render Cache', DiffsWorkerPool.WORKER_POOL_CACHING),
-        ex('API Reference', DiffsWorkerPool.WORKER_POOL_API_REFERENCE),
-      ],
-    },
-    {
-      mdxPath: 'docs/SSR/content.mdx',
-      anchor: 'ssr',
-      description:
-        'Server-side rendering with preload functions for instant first paint',
-      codeExamples: [
-        ex('Server Component', DiffsSSR.SSR_USAGE_SERVER),
-        ex('Client Component', DiffsSSR.SSR_USAGE_CLIENT),
-        ex('preloadFile', DiffsSSR.SSR_PRELOAD_FILE),
-        ex('preloadFileDiff', DiffsSSR.SSR_PRELOAD_FILE_DIFF),
-        ex('preloadMultiFileDiff', DiffsSSR.SSR_PRELOAD_MULTI_FILE_DIFF),
-        ex('preloadPatchDiff', DiffsSSR.SSR_PRELOAD_PATCH_DIFF),
-        ex('preloadPatchFile', DiffsSSR.SSR_PRELOAD_PATCH_FILE),
-      ],
-    },
-  ],
+function hasFileContents(
+  value: unknown
+): value is { file: { name: string; contents: string } } {
+  if (typeof value !== 'object' || value === null || !('file' in value)) {
+    return false;
+  }
+  const file = (value as { file: unknown }).file;
+  if (typeof file !== 'object' || file === null) return false;
+  const f = file as { name?: unknown; contents?: unknown };
+  return typeof f.contents === 'string' && typeof f.name === 'string';
+}
+
+const LABEL_OVERRIDES: Record<string, string> = {
+  STYLING_CODE_GLOBAL: 'Global CSS Variables',
+  STYLING_CODE_INLINE: 'Inline Styles',
+  STYLING_CODE_UNSAFE: 'Unsafe CSS',
+  CUSTOM_HUNK_SEPARATORS_SWITCHER: 'React Example',
+  SSR_USAGE_SERVER: 'Server Component',
+  SSR_USAGE_CLIENT: 'Client Component',
+  THEMING_REGISTER_THEME: 'Registering Custom Themes',
+  THEMING_USE_IN_COMPONENT: 'Using Custom Themes in Components',
+  WORKER_POOL_USAGE: 'Basic Usage',
 };
 
-const trees: Product = {
-  packageName: '@pierre/trees',
-  description:
-    'An open source file tree rendering library for the web. Built on @headless-tree/core for state management, with React and vanilla JS APIs, SSR support, and customizable styling.',
-  docsUrl: 'https://diffs.com/trees/docs',
-  githubUrl: 'https://github.com/pierrecomputer/pierre',
-  llmsTxtPath: join(ROOT, 'public', 'trees', 'llms.txt'),
-  llmsFullTxtPath: join(ROOT, 'public', 'trees', 'llms-full.txt'),
-  seeAlso: [
-    {
-      label: '@pierre/diffs',
-      url: 'https://diffs.com/llms.txt',
-      description: 'Diff and code rendering library',
-    },
-    {
-      label: 'Full documentation',
-      url: 'https://diffs.com/trees/llms-full.txt',
-      description: 'Complete @pierre/trees docs in a single file',
-    },
-  ],
-  sections: [
-    {
-      mdxPath: 'trees/docs/Overview/content.mdx',
-      anchor: 'overview',
-      description: 'What file tree is, architecture, and getting started',
-      codeExamples: [
-        ex('React Basic Usage', TreesOverview.TREES_REACT_BASIC_USAGE),
-        ex('Vanilla JS Basic Usage', TreesOverview.TREES_VANILLA_BASIC_USAGE),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/Installation/content.mdx',
-      anchor: 'installation',
-      description: 'Package installation and entry points',
-      codeExamples: [],
-    },
-    {
-      mdxPath: 'trees/docs/CoreTypes/content.mdx',
-      anchor: 'core-types',
-      description:
-        'FileTreeOptions, FileTreeSelectionItem, FileTreeSearchMode, and configuration',
-      codeExamples: [
-        ex('FileTreeOptions', TreesCoreTypes.FILE_TREE_OPTIONS_TYPE),
-        ex('File Paths Example', TreesCoreTypes.FILES_OPTION_EXAMPLE),
-        ex('onSelection Callback', TreesCoreTypes.ON_SELECTION_EXAMPLE),
-        ex(
-          'FileTreeSelectionItem',
-          TreesCoreTypes.FILE_TREE_SELECTION_ITEM_TYPE
-        ),
-        ex('FileTreeSearchMode', TreesCoreTypes.FILE_TREE_SEARCH_MODE_TYPE),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/ReactAPI/content.mdx',
-      anchor: 'react-api',
-      description: 'FileTree React component and props',
-      codeExamples: [
-        ex('FileTree Component', TreesReactAPI.REACT_API_FILE_TREE),
-        ex('FileTree Props', TreesReactAPI.REACT_API_FILE_TREE_PROPS),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/VanillaAPI/content.mdx',
-      anchor: 'vanilla-js-api',
-      description:
-        'FileTree class, constructor options, instance methods, and FileTreeStateConfig',
-      codeExamples: [
-        ex('FileTree Example', TreesVanillaAPI.VANILLA_API_FILE_TREE_EXAMPLE),
-        ex(
-          'Constructor Options and Methods',
-          TreesVanillaAPI.VANILLA_API_FILE_TREE_OPTIONS
-        ),
-        ex('FileTreeStateConfig', TreesCoreTypes.FILE_TREE_STATE_CONFIG_TYPE),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/GitStatus/content.mdx',
-      anchor: 'git-status',
-      description: 'Git-style file status indicators',
-      codeExamples: [
-        ex('React Git Status', TreesReactAPI.REACT_API_GIT_STATUS_EXAMPLE),
-        ex(
-          'Vanilla JS Git Status',
-          TreesVanillaAPI.VANILLA_API_GIT_STATUS_EXAMPLE
-        ),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/Icons/content.mdx',
-      anchor: 'custom-icons',
-      description: 'Custom SVG sprite sheets and icon remapping',
-      codeExamples: [
-        ex('React Custom Icons', TreesReactAPI.REACT_API_CUSTOM_ICONS_EXAMPLE),
-        ex(
-          'Vanilla JS Custom Icons',
-          TreesVanillaAPI.VANILLA_API_CUSTOM_ICONS_EXAMPLE
-        ),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/Utilities/content.mdx',
-      anchor: 'utilities',
-      description:
-        'sortChildren, generateSyncDataLoader, generateLazyDataLoader',
-      codeExamples: [
-        ex('sortChildren', TreesUtilities.HELPER_SORT_CHILDREN),
-        ex(
-          'generateSyncDataLoader',
-          TreesUtilities.HELPER_GENERATE_SYNC_DATA_LOADER
-        ),
-        ex(
-          'generateLazyDataLoader',
-          TreesUtilities.HELPER_GENERATE_LAZY_DATA_LOADER
-        ),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/Styling/content.mdx',
-      anchor: 'styling',
-      description: 'CSS variables and inline style overrides',
-      codeExamples: [
-        ex('Global CSS Variables', TreesStyling.STYLING_CODE_GLOBAL),
-        ex('Inline Styles', TreesStyling.STYLING_CODE_INLINE),
-      ],
-    },
-    {
-      mdxPath: 'trees/docs/SSR/content.mdx',
-      anchor: 'ssr',
-      description:
-        'preloadFileTree for server-side rendering and vanilla hydration',
-      codeExamples: [
-        ex('preloadFileTree', TreesSSR.SSR_PRELOAD_FILE_TREE),
-        ex('Vanilla Hydration', TreesSSR.SSR_HYDRATION_EXAMPLE),
-      ],
-    },
-  ],
+const LABEL_PREFIXES_TO_STRIP = [
+  'HELPER_',
+  'REACT_API_',
+  'VANILLA_API_',
+  'WORKER_POOL_',
+  'SSR_',
+  'STYLING_CODE_',
+  'THEMING_',
+  'VIRTUALIZATION_',
+  'OVERVIEW_',
+  'TREES_',
+  'CUSTOM_HUNK_SEPARATORS_',
+];
+
+const WORD_REPLACEMENTS: Record<string, string> = {
+  Api: 'API',
+  Ssr: 'SSR',
+  Css: 'CSS',
+  Url: 'URL',
+  Csp: 'CSP',
+  Js: 'JS',
+  Jsx: 'JSX',
+  Tsx: 'TSX',
+  Json: 'JSON',
+  Html: 'HTML',
+  Uri: 'URI',
+  Nextjs: 'Next.js',
+  Vscode: 'VSCode',
+  Esbuild: 'esbuild',
 };
+
+function formatConstantName(name: string): string {
+  let label = name;
+  for (const prefix of LABEL_PREFIXES_TO_STRIP) {
+    if (label.startsWith(prefix)) {
+      label = label.slice(prefix.length);
+      break;
+    }
+  }
+  return label
+    .split('_')
+    .map((w) => {
+      const titleCased = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      return WORD_REPLACEMENTS[titleCased] ?? titleCased;
+    })
+    .join(' ');
+}
+
+async function discoverCodeExamples(
+  constantsPath: string
+): Promise<CodeExample[]> {
+  if (!existsSync(constantsPath)) return [];
+
+  const mod = await import(constantsPath);
+  const examples: CodeExample[] = [];
+
+  for (const [name, value] of Object.entries(mod)) {
+    if (EXCLUDED_CONSTANTS.has(name)) continue;
+    if (hasFileContents(value)) {
+      examples.push({
+        label: LABEL_OVERRIDES[name] ?? formatConstantName(name),
+        filename: value.file.name,
+        contents: value.file.contents,
+      });
+    }
+  }
+
+  return examples;
+}
+
+// ── Section building ────────────────────────────────────────────────────────
+
+async function buildSection(
+  productId: ProductId,
+  docsPrefix: string,
+  dirName: string
+): Promise<Section> {
+  const mdxFilename =
+    MDX_FILENAME_OVERRIDES[`${docsPrefix}/${dirName}`] ?? 'content.mdx';
+  const mdxPath = `${docsPrefix}/${dirName}/${mdxFilename}`;
+
+  const rawMdx = readFileSync(join(ROOT, 'app', mdxPath), 'utf-8');
+  const anchor = extractAnchor(rawMdx);
+
+  const heading = rawMdx.match(/^##\s+(.+)/m)?.[1]?.trim() ?? dirName;
+
+  const prose = processMdx(mdxPath);
+
+  const constantsPath = join(ROOT, 'app', docsPrefix, dirName, 'constants.ts');
+  const codeExamples = await discoverCodeExamples(constantsPath);
+
+  const descriptions = SECTION_DESCRIPTIONS[productId];
+  const description = descriptions?.[dirName] ?? '';
+
+  return { anchor, heading, description, prose, codeExamples };
+}
 
 // ── Generators ──────────────────────────────────────────────────────────────
 
@@ -594,18 +427,9 @@ function generateLlmsTxt(product: Product): string {
     '',
   ];
 
-  const acronyms = new Set(['api', 'js', 'ssr', 'css']);
   for (const section of product.sections) {
-    const heading = section.anchor
-      .split('-')
-      .map((w) =>
-        acronyms.has(w)
-          ? w.toUpperCase()
-          : w.charAt(0).toUpperCase() + w.slice(1)
-      )
-      .join(' ');
     lines.push(
-      `- [${heading}](${product.docsUrl}#${section.anchor}): ${section.description}`
+      `- [${section.heading}](${product.docsUrl}#${section.anchor}): ${section.description}`
     );
   }
 
@@ -629,9 +453,8 @@ function generateLlmsFullTxt(product: Product): string {
   ];
 
   for (const section of product.sections) {
-    const prose = processMdx(section.mdxPath);
     const examples = formatCodeExamples(section.codeExamples);
-    parts.push('', prose + examples);
+    parts.push('', section.prose + examples);
   }
 
   return parts.join('\n') + '\n';
@@ -639,16 +462,59 @@ function generateLlmsFullTxt(product: Product): string {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
-for (const product of [diffs, trees]) {
-  const llmsTxt = generateLlmsTxt(product);
-  const llmsFullTxt = generateLlmsFullTxt(product);
+const PRODUCT_SECTIONS: Record<ProductId, readonly string[]> = {
+  diffs: DIFFS_SECTIONS,
+  trees: TREES_SECTIONS,
+};
 
-  const dir = dirname(product.llmsTxtPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+const DOCS_PREFIX: Record<ProductId, string> = {
+  diffs: 'docs',
+  trees: 'trees/docs',
+};
 
-  writeFileSync(product.llmsTxtPath, llmsTxt);
-  writeFileSync(product.llmsFullTxtPath, llmsFullTxt);
+async function main() {
+  for (const productId of ['diffs', 'trees'] as const) {
+    const config = PRODUCTS[productId];
+    const docsPrefix = DOCS_PREFIX[productId];
+    const sectionDirs = PRODUCT_SECTIONS[productId];
 
-  console.log(`wrote ${product.llmsTxtPath}`);
-  console.log(`wrote ${product.llmsFullTxtPath}`);
+    const sections = await Promise.all(
+      sectionDirs.map((dir) => buildSection(productId, docsPrefix, dir))
+    );
+
+    const docsUrl = `https://diffs.com${config.docsPath}`;
+    const llmsTxtPath =
+      productId === 'diffs'
+        ? join(ROOT, 'public', 'llms.txt')
+        : join(ROOT, 'public', productId, 'llms.txt');
+    const llmsFullTxtPath =
+      productId === 'diffs'
+        ? join(ROOT, 'public', 'llms-full.txt')
+        : join(ROOT, 'public', productId, 'llms-full.txt');
+
+    const product: Product = {
+      packageName: config.packageName,
+      description: config.llmsDescription,
+      docsUrl,
+      githubUrl: config.githubUrl,
+      sections,
+      llmsTxtPath,
+      llmsFullTxtPath,
+      seeAlso: SEE_ALSO[productId],
+    };
+
+    const llmsTxt = generateLlmsTxt(product);
+    const llmsFullTxt = generateLlmsFullTxt(product);
+
+    const dir = dirname(product.llmsTxtPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    writeFileSync(product.llmsTxtPath, llmsTxt);
+    writeFileSync(product.llmsFullTxtPath, llmsFullTxt);
+
+    console.log(`wrote ${product.llmsTxtPath}`);
+    console.log(`wrote ${product.llmsFullTxtPath}`);
+  }
 }
+
+void main();

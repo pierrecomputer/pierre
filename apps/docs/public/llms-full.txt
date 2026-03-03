@@ -45,53 +45,7 @@ There are two ways to render diffs with `FileDiff`:
 
 You can see examples of these approaches below, in both JavaScript and React.
 
-**React — Single File Diff** (`react_single_file.tsx`):
-
-```tsx
-import {
-  type FileContents,
-  MultiFileDiff,
-} from '@pierre/diffs/react';
-
-// Store file objects in variables rather than inlining them.
-// The React components use reference equality to detect changes
-// and skip unnecessary re-renders, so keep these references stable
-// (e.g., with useState or useMemo).
-const oldFile: FileContents = {
-  name: 'main.zig',
-  contents: `const std = @import("std");
-
-pub fn main() !void {
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("Hi you, {s}!\\\\n", .{"world"});
-}
-`,
-};
-
-const newFile: FileContents = {
-  name: 'main.zig',
-  contents: `const std = @import("std");
-
-pub fn main() !void {
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("Hello there, {s}!\\\\n", .{"zig"});
-}
-`,
-};
-
-function SingleDiff() {
-  return (
-    <MultiFileDiff
-      // We automatically detect the language based on filename
-      oldFile={oldFile}
-      newFile={newFile}
-      options={{ theme: 'pierre-dark' }}
-    />
-  );
-}
-```
-
-**React — Patch File** (`react_patch_file.tsx`):
+**React Patch File** (`react_patch_file.tsx`):
 
 ```tsx
 import {
@@ -146,7 +100,90 @@ function Patches() {
 }
 ```
 
-**Vanilla JS — Single File Diff** (`vanilla_single_file.ts`):
+**React Single File** (`react_single_file.tsx`):
+
+```tsx
+import {
+  type FileContents,
+  MultiFileDiff,
+} from '@pierre/diffs/react';
+
+// Store file objects in variables rather than inlining them.
+// The React components use reference equality to detect changes
+// and skip unnecessary re-renders, so keep these references stable
+// (e.g., with useState or useMemo).
+const oldFile: FileContents = {
+  name: 'main.zig',
+  contents: `const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hi you, {s}!\\\\n", .{"world"});
+}
+`,
+};
+
+const newFile: FileContents = {
+  name: 'main.zig',
+  contents: `const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hello there, {s}!\\\\n", .{"zig"});
+}
+`,
+};
+
+function SingleDiff() {
+  return (
+    <MultiFileDiff
+      // We automatically detect the language based on filename
+      oldFile={oldFile}
+      newFile={newFile}
+      options={{ theme: 'pierre-dark' }}
+    />
+  );
+}
+```
+
+**Vanilla Patch File** (`vanilla_patch_file.ts`):
+
+```typescript
+import {
+  FileDiff,
+  ParsedPatch,
+  parsePatchFiles,
+} from '@pierre/diffs';
+
+// This is a fake function to fetch a GitHub PR patch file,
+// not an actual api
+const patchFileContent: string = await fetchGithubPatch(
+  'https://github.com/twbs/bootstrap/pull/41766.patch'
+);
+
+// Github can return multiple patches in 1 file, we handle all of this
+// automatically for you. Just give us a single patch or any number
+const parsedPatches: ParsedPatch[] = parsePatchFiles(patchFileContent);
+for (const patch of parsedPatches) {
+  for (const fileDiff of patch.files) {
+    // 'fileDiff' is a data structure that includes all hunks for a
+    // specific file from a patch
+    const instance = new FileDiff({
+      // Automatically theme based on users os settings
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    });
+    // Under the hood, all instances of FileDiff will use a shared
+    // Shiki highlighter and manage loading languages and themes for
+    // you automatically
+    instance.render({
+      fileDiff,
+      containerWrapper: document.body,
+    });
+  }
+}
+```
+
+**Vanilla Single File** (`vanilla_single_file.ts`):
 
 ```typescript
 import {
@@ -191,43 +228,6 @@ fileDiffInstance.render({
   // where to render the diff into
   containerWrapper: document.body,
 });
-```
-
-**Vanilla JS — Patch File** (`vanilla_patch_file.ts`):
-
-```typescript
-import {
-  FileDiff,
-  ParsedPatch,
-  parsePatchFiles,
-} from '@pierre/diffs';
-
-// This is a fake function to fetch a GitHub PR patch file,
-// not an actual api
-const patchFileContent: string = await fetchGithubPatch(
-  'https://github.com/twbs/bootstrap/pull/41766.patch'
-);
-
-// Github can return multiple patches in 1 file, we handle all of this
-// automatically for you. Just give us a single patch or any number
-const parsedPatches: ParsedPatch[] = parsePatchFiles(patchFileContent);
-for (const patch of parsedPatches) {
-  for (const fileDiff of patch.files) {
-    // 'fileDiff' is a data structure that includes all hunks for a
-    // specific file from a patch
-    const instance = new FileDiff({
-      // Automatically theme based on users os settings
-      theme: { dark: 'pierre-dark', light: 'pierre-light' },
-    });
-    // Under the hood, all instances of FileDiff will use a shared
-    // Shiki highlighter and manage loading languages and themes for
-    // you automatically
-    instance.render({
-      fileDiff,
-      containerWrapper: document.body,
-    });
-  }
-}
 ```
 
 ## Installation
@@ -286,7 +286,7 @@ when working with git output or patch files from APIs.
 `FileDiffMetadata`, use the
 [`setLanguageOverride`](#utilities-setlanguageoverride) utility function.
 
-**FileContents Type** (`FileContents.ts`):
+**File Contents Type** (`FileContents.ts`):
 
 ```typescript
 import type { FileContents } from '@pierre/diffs';
@@ -328,7 +328,7 @@ const jsonFile: FileContents = {
 };
 ```
 
-**FileDiffMetadata Type** (`FileDiffMetadata.ts`):
+**File Diff Metadata Type** (`FileDiffMetadata.ts`):
 
 ```typescript
 import type { FileDiffMetadata, Hunk } from '@pierre/diffs';
@@ -412,7 +412,7 @@ interface ChangeContent {
 }
 ```
 
-**parseDiffFromFile Example** (`parseDiffFromFile.ts`):
+**Parse Diff From File Example** (`parseDiffFromFile.ts`):
 
 ```typescript
 import {
@@ -443,7 +443,7 @@ const diff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile);
 // cacheKey of "greeting-old:greeting-new" for AST caching.
 ```
 
-**parsePatchFiles Example** (`parsePatchFiles.ts`):
+**Parse Patch Files Example** (`parsePatchFiles.ts`):
 
 ```typescript
 import {
@@ -509,125 +509,7 @@ Header customization and collapsing behavior:
 - Use `options.collapsed` to hide file body content while keeping the file
   header visible.
 
-**MultiFileDiff Component** (`multi_file_diff.tsx`):
-
-```tsx
-import {
-  type FileContents,
-  MultiFileDiff,
-} from '@pierre/diffs/react';
-
-// MultiFileDiff compares two file versions directly.
-// Use this when you have the old and new file contents.
-
-// Keep file objects stable (useState/useMemo) to avoid re-renders.
-// The component uses reference equality for change detection.
-const oldFile: FileContents = {
-  name: 'example.ts',
-  contents: 'console.log("Hello world")',
-};
-
-const newFile: FileContents = {
-  name: 'example.ts',
-  contents: 'console.warn("Updated message")',
-};
-
-export function MyDiff() {
-  return (
-    <MultiFileDiff
-      // Required: the two file versions to compare
-      oldFile={oldFile}
-      newFile={newFile}
-
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        diffStyle: 'split',
-      }}
-
-      // See "Shared Props" tabs for all available props:
-      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
-      // renderGutterUtility, selectedLines, className, style, etc.
-    />
-  );
-}
-```
-
-**PatchDiff Component** (`patch_diff.tsx`):
-
-```tsx
-import { PatchDiff } from '@pierre/diffs/react';
-
-// PatchDiff renders from a unified diff/patch string.
-// Use this when you have patch content (e.g., from git or GitHub).
-
-const patch = `diff --git a/example.ts b/example.ts
---- a/example.ts
-+++ b/example.ts
-@@ -1,3 +1,3 @@
--console.log("Hello world");
-+console.warn("Updated message");
-`;
-
-export function MyPatchDiff() {
-  return (
-    <PatchDiff
-      // Required: the patch/diff string
-      patch={patch}
-
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        diffStyle: 'unified', // patches often look better unified
-      }}
-
-      // See "Shared Props" tabs for all available props:
-      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
-      // renderGutterUtility, selectedLines, className, style, etc.
-    />
-  );
-}
-```
-
-**FileDiff Component** (`file_diff.tsx`):
-
-```tsx
-import {
-  type FileDiffMetadata,
-  FileDiff,
-  parseDiffFromFile,
-} from '@pierre/diffs/react';
-
-// FileDiff takes a pre-parsed FileDiffMetadata object.
-// Use this when:
-// - You've already parsed the diff (e.g., from parsePatchFiles)
-// - You want to manipulate the diff before rendering
-// - You're using diffAcceptRejectHunk for interactive accept/reject
-
-// Parse the diff yourself
-const fileDiff: FileDiffMetadata = parseDiffFromFile(
-  { name: 'example.ts', contents: 'console.log("Hello world")' },
-  { name: 'example.ts', contents: 'console.warn("Updated message")' }
-);
-
-export function MyFileDiff() {
-  return (
-    <FileDiff
-      // Required: pre-parsed FileDiffMetadata
-      fileDiff={fileDiff}
-
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        diffStyle: 'split',
-      }}
-
-      // See "Shared Props" tabs for all available props:
-      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
-      // renderGutterUtility, selectedLines, className, style, etc.
-    />
-  );
-}
-```
-
-**File Component** (`file.tsx`):
+**File** (`file.tsx`):
 
 ```tsx
 import {
@@ -671,6 +553,124 @@ export function CodeFile() {
       // See "Shared Props" section above for details on these props.
       // File-specific options exclude diff-only settings like diffStyle,
       // diffIndicators, hunkSeparators, lineDiffType, etc.
+    />
+  );
+}
+```
+
+**File Diff** (`file_diff.tsx`):
+
+```tsx
+import {
+  type FileDiffMetadata,
+  FileDiff,
+  parseDiffFromFile,
+} from '@pierre/diffs/react';
+
+// FileDiff takes a pre-parsed FileDiffMetadata object.
+// Use this when:
+// - You've already parsed the diff (e.g., from parsePatchFiles)
+// - You want to manipulate the diff before rendering
+// - You're using diffAcceptRejectHunk for interactive accept/reject
+
+// Parse the diff yourself
+const fileDiff: FileDiffMetadata = parseDiffFromFile(
+  { name: 'example.ts', contents: 'console.log("Hello world")' },
+  { name: 'example.ts', contents: 'console.warn("Updated message")' }
+);
+
+export function MyFileDiff() {
+  return (
+    <FileDiff
+      // Required: pre-parsed FileDiffMetadata
+      fileDiff={fileDiff}
+
+      options={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        diffStyle: 'split',
+      }}
+
+      // See "Shared Props" tabs for all available props:
+      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
+      // renderGutterUtility, selectedLines, className, style, etc.
+    />
+  );
+}
+```
+
+**Multi File Diff** (`multi_file_diff.tsx`):
+
+```tsx
+import {
+  type FileContents,
+  MultiFileDiff,
+} from '@pierre/diffs/react';
+
+// MultiFileDiff compares two file versions directly.
+// Use this when you have the old and new file contents.
+
+// Keep file objects stable (useState/useMemo) to avoid re-renders.
+// The component uses reference equality for change detection.
+const oldFile: FileContents = {
+  name: 'example.ts',
+  contents: 'console.log("Hello world")',
+};
+
+const newFile: FileContents = {
+  name: 'example.ts',
+  contents: 'console.warn("Updated message")',
+};
+
+export function MyDiff() {
+  return (
+    <MultiFileDiff
+      // Required: the two file versions to compare
+      oldFile={oldFile}
+      newFile={newFile}
+
+      options={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        diffStyle: 'split',
+      }}
+
+      // See "Shared Props" tabs for all available props:
+      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
+      // renderGutterUtility, selectedLines, className, style, etc.
+    />
+  );
+}
+```
+
+**Patch Diff** (`patch_diff.tsx`):
+
+```tsx
+import { PatchDiff } from '@pierre/diffs/react';
+
+// PatchDiff renders from a unified diff/patch string.
+// Use this when you have patch content (e.g., from git or GitHub).
+
+const patch = `diff --git a/example.ts b/example.ts
+--- a/example.ts
++++ b/example.ts
+@@ -1,3 +1,3 @@
+-console.log("Hello world");
++console.warn("Updated message");
+`;
+
+export function MyPatchDiff() {
+  return (
+    <PatchDiff
+      // Required: the patch/diff string
+      patch={patch}
+
+      options={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        diffStyle: 'unified', // patches often look better unified
+      }}
+
+      // See "Shared Props" tabs for all available props:
+      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
+      // renderGutterUtility, selectedLines, className, style, etc.
     />
   );
 }
@@ -989,7 +989,7 @@ interface ThreadMetadata {
 />
 ```
 
-**File Options** (`shared_file_options.tsx`):
+**Shared File Options** (`shared_file_options.tsx`):
 
 ```tsx
 // ============================================================
@@ -1117,7 +1117,7 @@ interface FileOptions {
 }
 ```
 
-**File Render Props** (`shared_file_render_props.tsx`):
+**Shared File Render Props** (`shared_file_render_props.tsx`):
 
 ```tsx
 // ============================================================
@@ -1292,7 +1292,67 @@ Takes a `FileContents` object (just a filename and contents string) and renders
 syntax-highlighted code as HAST elements. Useful for rendering single files
 without any diff context.
 
-**FileDiff Example** (`file_diff_example.ts`):
+**Custom Hunk File** (`hunks_example.ts`):
+
+```typescript
+import { FileDiff } from '@pierre/diffs';
+
+// A hunk separator that utilizes the existing grid to have
+// a number column and a content column where neither will
+// scroll with the code
+const instance = new FileDiff({
+  hunkSeparators(hunkData: HunkData) {
+    const fragment = document.createDocumentFragment();
+    const numCol = document.createElement('div');
+    numCol.textContent = `${hunkData.lines}`;
+    numCol.style.position = 'sticky';
+    numCol.style.left = '0';
+    numCol.style.backgroundColor = 'var(--diffs-bg)';
+    numCol.style.zIndex = '2';
+    fragment.appendChild(numCol);
+    const contentCol = document.createElement('div');
+    contentCol.textContent = 'unmodified lines';
+    contentCol.style.position = 'sticky';
+    contentCol.style.width = 'var(--diffs-column-content-width)';
+    contentCol.style.left = 'var(--diffs-column-number-width)';
+    fragment.appendChild(contentCol);
+    return fragment;
+  },
+})
+
+// If you want to create a single column that spans both colums
+// and doesn't scroll, you can do something like this:
+const instance2 = new FileDiff({
+  hunkSeparators(hunkData: HunkData) {
+    const wrapper = document.createElement('div');
+    wrapper.style.gridColumn = 'span 2';
+    const contentCol = document.createElement('div');
+    contentCol.textContent = `${hunkData.lines} unmodified lines`;
+    contentCol.style.position = 'sticky';
+    contentCol.style.width = 'var(--diffs-column-width)';
+    contentCol.style.left = '0';
+    wrapper.appendChild(contentCol);
+    return wrapper;
+  },
+})
+
+// If you want to create a single column that's aligned with the content
+// column and doesn't scroll, you can do something like this:
+const instance3 = new FileDiff({
+  hunkSeparators(hunkData: HunkData) {
+    const wrapper = document.createElement('div');
+    wrapper.style.gridColumn = '2 / 3';
+    wrapper.textContent = `${hunkData.lines} unmodified lines`;
+    wrapper.style.position = 'sticky';
+    wrapper.style.width = 'var(--diffs-column-content-width)';
+    wrapper.style.left = 'var(--diffs-column-number-width)';
+    return wrapper;
+  },
+})
+
+```
+
+**File Diff Example** (`file_diff_example.ts`):
 
 ```typescript
 import { FileDiff, type FileContents } from '@pierre/diffs';
@@ -1329,42 +1389,7 @@ instance.rerender(); // Must call rerender() after updating options
 instance.cleanUp();
 ```
 
-**File Example** (`file_example.ts`):
-
-```typescript
-import { File, type FileContents } from '@pierre/diffs';
-
-// Create the instance with options
-const instance = new File({
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  overflow: 'scroll',
-});
-
-// Define your file (keep reference stable to avoid re-renders)
-const file: FileContents = {
-  name: 'example.ts',
-  contents: `function greet(name: string) {
-  console.log(\`Hello, \${name}!\`);
-}
-
-export { greet };`,
-};
-
-// Render the file into a container
-instance.render({
-  file,
-  containerWrapper: document.getElementById('file-container'),
-});
-
-// Update options later if needed (full replacement, not merge)
-instance.setOptions({ ...instance.options, overflow: 'wrap' });
-instance.rerender(); // Must call rerender() after updating options
-
-// Clean up when done
-instance.cleanUp();
-```
-
-**FileDiff Options** (`file_diff_props.ts`):
+**File Diff Props** (`file_diff_props.ts`):
 
 ```typescript
 import { FileDiff } from '@pierre/diffs';
@@ -1619,7 +1644,42 @@ instance.setThemeType('dark'); // 'dark' | 'light' | 'system'
 instance.cleanUp();
 ```
 
-**File Options** (`file_props.ts`):
+**File Example** (`file_example.ts`):
+
+```typescript
+import { File, type FileContents } from '@pierre/diffs';
+
+// Create the instance with options
+const instance = new File({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  overflow: 'scroll',
+});
+
+// Define your file (keep reference stable to avoid re-renders)
+const file: FileContents = {
+  name: 'example.ts',
+  contents: `function greet(name: string) {
+  console.log(\`Hello, \${name}!\`);
+}
+
+export { greet };`,
+};
+
+// Render the file into a container
+instance.render({
+  file,
+  containerWrapper: document.getElementById('file-container'),
+});
+
+// Update options later if needed (full replacement, not merge)
+instance.setOptions({ ...instance.options, overflow: 'wrap' });
+instance.rerender(); // Must call rerender() after updating options
+
+// Clean up when done
+instance.cleanUp();
+```
+
+**File Props** (`file_props.ts`):
 
 ```typescript
 import { File } from '@pierre/diffs';
@@ -1803,67 +1863,61 @@ instance.setThemeType('dark'); // 'dark' | 'light' | 'system'
 instance.cleanUp();
 ```
 
-**Custom Hunk Separators** (`hunks_example.ts`):
+**File Renderer** (`file_renderer.ts`):
 
 ```typescript
-import { FileDiff } from '@pierre/diffs';
+import {
+  FileRenderer,
+  type FileContents,
+  type FileRenderResult,
+} from '@pierre/diffs';
 
-// A hunk separator that utilizes the existing grid to have
-// a number column and a content column where neither will
-// scroll with the code
-const instance = new FileDiff({
-  hunkSeparators(hunkData: HunkData) {
-    const fragment = document.createDocumentFragment();
-    const numCol = document.createElement('div');
-    numCol.textContent = `${hunkData.lines}`;
-    numCol.style.position = 'sticky';
-    numCol.style.left = '0';
-    numCol.style.backgroundColor = 'var(--diffs-bg)';
-    numCol.style.zIndex = '2';
-    fragment.appendChild(numCol);
-    const contentCol = document.createElement('div');
-    contentCol.textContent = 'unmodified lines';
-    contentCol.style.position = 'sticky';
-    contentCol.style.width = 'var(--diffs-column-content-width)';
-    contentCol.style.left = 'var(--diffs-column-number-width)';
-    fragment.appendChild(contentCol);
-    return fragment;
-  },
-})
+const instance = new FileRenderer();
 
-// If you want to create a single column that spans both colums
-// and doesn't scroll, you can do something like this:
-const instance2 = new FileDiff({
-  hunkSeparators(hunkData: HunkData) {
-    const wrapper = document.createElement('div');
-    wrapper.style.gridColumn = 'span 2';
-    const contentCol = document.createElement('div');
-    contentCol.textContent = `${hunkData.lines} unmodified lines`;
-    contentCol.style.position = 'sticky';
-    contentCol.style.width = 'var(--diffs-column-width)';
-    contentCol.style.left = '0';
-    wrapper.appendChild(contentCol);
-    return wrapper;
-  },
-})
+// Set options (this is a full replacement, not a merge)
+instance.setOptions({
+  theme: 'pierre-dark',
+  overflow: 'scroll',
+  disableLineNumbers: false,
+  disableFileHeader: false,
+  // Starting line number (useful for showing snippets)
+  startingLineNumber: 1,
+  // Skip syntax highlighting for very long lines
+  tokenizeMaxLineLength: 1000,
+});
 
-// If you want to create a single column that's aligned with the content
-// column and doesn't scroll, you can do something like this:
-const instance3 = new FileDiff({
-  hunkSeparators(hunkData: HunkData) {
-    const wrapper = document.createElement('div');
-    wrapper.style.gridColumn = '2 / 3';
-    wrapper.textContent = `${hunkData.lines} unmodified lines`;
-    wrapper.style.position = 'sticky';
-    wrapper.style.width = 'var(--diffs-column-content-width)';
-    wrapper.style.left = 'var(--diffs-column-number-width)';
-    return wrapper;
-  },
-})
+const file: FileContents = {
+  name: 'example.ts',
+  contents: `function greet(name: string) {
+  console.log(\`Hello, \${name}!\`);
+}
 
+export { greet };`,
+};
+
+// Render file (async - waits for highlighter initialization)
+const result: FileRenderResult = await instance.asyncRender(file);
+
+// result contains:
+// - gutterAST/contentAST: arrays of hast ElementContent nodes for each line
+// - preAST: the wrapper <pre> element as a hast node
+// - headerAST: the file header element (if not disabled)
+// - totalLines: number of lines in the file
+// - themeStyles: CSS custom properties for theming
+
+// Render to a complete HTML string (includes <pre> wrapper)
+const fullHTML: string = instance.renderFullHTML(result);
+
+// Or render just the code lines to HTML
+const partialHTML: string = instance.renderPartialHTML(
+  instance.renderCodeAST(result)
+);
+
+// Or get the full AST for further transformation
+const fullAST = instance.renderFullAST(result);
 ```
 
-**DiffHunksRenderer — From File** (`hunks_renderer_file.ts`):
+**Hunks Renderer File** (`hunks_renderer_file.ts`):
 
 ```typescript
 import {
@@ -1912,7 +1966,7 @@ const rawHTML: string = instance.renderPartialHTML(
 const fullAST = instance.renderFullAST(result);
 ```
 
-**DiffHunksRenderer — From Patch** (`hunks_renderer_patch.ts`):
+**Hunks Renderer Patch File** (`hunks_renderer_patch.ts`):
 
 ```typescript
 import {
@@ -1989,60 +2043,6 @@ for (const patch of patches) {
 }
 ```
 
-**FileRenderer** (`file_renderer.ts`):
-
-```typescript
-import {
-  FileRenderer,
-  type FileContents,
-  type FileRenderResult,
-} from '@pierre/diffs';
-
-const instance = new FileRenderer();
-
-// Set options (this is a full replacement, not a merge)
-instance.setOptions({
-  theme: 'pierre-dark',
-  overflow: 'scroll',
-  disableLineNumbers: false,
-  disableFileHeader: false,
-  // Starting line number (useful for showing snippets)
-  startingLineNumber: 1,
-  // Skip syntax highlighting for very long lines
-  tokenizeMaxLineLength: 1000,
-});
-
-const file: FileContents = {
-  name: 'example.ts',
-  contents: `function greet(name: string) {
-  console.log(\`Hello, \${name}!\`);
-}
-
-export { greet };`,
-};
-
-// Render file (async - waits for highlighter initialization)
-const result: FileRenderResult = await instance.asyncRender(file);
-
-// result contains:
-// - gutterAST/contentAST: arrays of hast ElementContent nodes for each line
-// - preAST: the wrapper <pre> element as a hast node
-// - headerAST: the file header element (if not disabled)
-// - totalLines: number of lines in the file
-// - themeStyles: CSS custom properties for theming
-
-// Render to a complete HTML string (includes <pre> wrapper)
-const fullHTML: string = instance.renderFullHTML(result);
-
-// Or render just the code lines to HTML
-const partialHTML: string = instance.renderPartialHTML(
-  instance.renderCodeAST(result)
-);
-
-// Or get the full AST for further transformation
-const fullAST = instance.renderFullAST(result);
-```
-
 ## Virtualization
 
 > **Warning:** Virtualization is in beta and subject to change. It is opt-in and best used
@@ -2113,7 +2113,7 @@ In vanilla JS, create a `Virtualizer` instance and pass it into
   and to confirm everything is working properly. Don't forget to disable it in
   production.
 
-**React Virtualizer** (`react_virtualizer_basic.tsx`):
+**React Basic** (`react_virtualizer_basic.tsx`):
 
 ```tsx
 import {
@@ -2157,7 +2157,7 @@ function Example({ oldFile, newFile }) {
 // - <File />
 ```
 
-**React Virtualizer Config** (`react_virtualizer_config.tsx`):
+**React Config** (`react_virtualizer_config.tsx`):
 
 ```tsx
 import { MultiFileDiff, Virtualizer } from '@pierre/diffs/react';
@@ -2188,7 +2188,7 @@ function Example({ oldFile, newFile }) {
 }
 ```
 
-**Vanilla JS Virtualization** (`vanilla_virtualized_file_diff.ts`):
+**Vanilla Diff** (`vanilla_virtualized_file_diff.ts`):
 
 ```typescript
 import {
@@ -2510,7 +2510,7 @@ Override the syntax highlighting language for a `FileContents` or
 `FileDiffMetadata` object. This is useful when the filename doesn't have an
 extension or doesn't match the actual language.
 
-**diffAcceptRejectHunk** (`diffAcceptRejectHunk.ts`):
+**Diff Accept Reject** (`diffAcceptRejectHunk.ts`):
 
 ```typescript
 import {
@@ -2552,7 +2552,7 @@ instance.render({
 });
 ```
 
-**diffAcceptRejectHunk (React)** (`AcceptRejectExample.tsx`):
+**Diff Accept Reject React** (`AcceptRejectExample.tsx`):
 
 ```tsx
 import {
@@ -2620,7 +2620,7 @@ export function AcceptRejectExample() {
 }
 ```
 
-**disposeHighlighter** (`disposeHighlighter.ts`):
+**Dispose Highlighter** (`disposeHighlighter.ts`):
 
 ```typescript
 import { disposeHighlighter } from '@pierre/diffs';
@@ -2635,7 +2635,7 @@ import { disposeHighlighter } from '@pierre/diffs';
 disposeHighlighter();
 ```
 
-**getSharedHighlighter** (`getSharedHighlighter.ts`):
+**Get Shared Highlighter** (`getSharedHighlighter.ts`):
 
 ```typescript
 import { getSharedHighlighter, DiffsHighlighter } from '@pierre/diffs';
@@ -2654,7 +2654,7 @@ const highlighter: DiffsHighlighter = await getSharedHighlighter();
 const tokens = highlighter.codeToTokens('const x = 1;'); 
 ```
 
-**parseDiffFromFile** (`parseDiffFromFile.ts`):
+**Parse Diff From File** (`parseDiffFromFile.ts`):
 
 ```typescript
 import {
@@ -2693,7 +2693,7 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile);
 // - Various line counts for rendering
 ```
 
-**parsePatchFiles** (`parsePatchFiles.ts`):
+**Parse Patch Files** (`parsePatchFiles.ts`):
 
 ```typescript
 import {
@@ -2741,7 +2741,118 @@ for (const patch of patches) {
 }
 ```
 
-**trimPatchContext** (`trimPatchContext.ts`):
+**Preload Highlighter** (`preloadHighlighter.ts`):
+
+```typescript
+import { preloadHighlighter } from '@pierre/diffs';
+
+// Preload specific themes and languages before rendering.
+// This ensures the highlighter is ready with the assets you
+// need, avoiding any flash of unstyled content on first render.
+//
+// By default, themes and languages are loaded on demand,
+// but preloading is useful when you know which languages
+// you'll be rendering ahead of time.
+await preloadHighlighter({
+  // Themes to preload
+  themes: ['pierre-dark', 'pierre-light', 'github-dark'],
+  // Languages to preload
+  langs: ['typescript', 'javascript', 'python', 'rust', 'go'],
+});
+
+// After preloading, rendering diffs in these languages
+// will be instant with no async loading delay.
+```
+
+**Register Custom Language** (`registerCustomLanguage.ts`):
+
+```typescript
+import { registerCustomLanguage } from '@pierre/diffs';
+
+// Register a custom Shiki language loader before rendering.
+// The language name you register becomes available to Shiki.
+
+// Option 1: Dynamic import (recommended for code splitting)
+registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'), [
+  // File names (exact match)
+  'MySpecialFile',
+  // Extensions (without leading dot)
+  'mylang',
+  // Compound extensions
+  'spec.mylang',
+]);
+
+// Option 2: No extension mapping (use setLanguageOverride instead)
+registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));
+```
+
+**Register Custom Theme** (`registerCustomTheme.ts`):
+
+```typescript
+import { registerCustomTheme } from '@pierre/diffs';
+
+// Register a custom Shiki theme before using it.
+// The theme name you register must match the 'name' field
+// inside your theme JSON file.
+
+// Option 1: Dynamic import (recommended for code splitting)
+registerCustomTheme('my-custom-theme', () => import('./my-theme.json'));
+
+// Option 2: Inline theme object
+registerCustomTheme('inline-theme', async () => ({
+  name: 'inline-theme',
+  type: 'dark',
+  colors: {
+    'editor.background': '#1a1a2e',
+    'editor.foreground': '#eaeaea',
+    // ... other VS Code theme colors
+  },
+  tokenColors: [
+    {
+      scope: ['comment'],
+      settings: { foreground: '#6a6a8a' },
+    },
+    // ... other token rules
+  ],
+}));
+
+// Once registered, use the theme name in your components:
+// <FileDiff options={{ theme: 'my-custom-theme' }} ... />
+```
+
+**Set Language Override** (`setLanguageOverride.ts`):
+
+```typescript
+import {
+  setLanguageOverride,
+  parsePatchFiles,
+  type FileContents,
+  type FileDiffMetadata,
+} from '@pierre/diffs';
+
+// setLanguageOverride creates a new FileContents or FileDiffMetadata
+// with the language explicitly set. This is useful when:
+// - The filename doesn't have an extension
+// - The extension doesn't match the actual language
+// - You're parsing patches and need to override the detected language
+
+// Example 1: Override language on a FileContents
+const file: FileContents = {
+  name: 'Dockerfile',  // No extension, would default to 'text'
+  contents: 'FROM node:20\nRUN npm install',
+};
+const dockerFile = setLanguageOverride(file, 'dockerfile');
+
+// Example 2: Override language on a FileDiffMetadata
+const patches = parsePatchFiles(patchString);
+const diff: FileDiffMetadata = patches[0].files[0];
+const typescriptDiff = setLanguageOverride(diff, 'typescript');
+
+// The function returns a new object with the lang property set,
+// leaving the original unchanged (immutable operation).
+```
+
+**Trim Patch Context** (`trimPatchContext.ts`):
 
 ```typescript
 import { trimPatchContext } from '@pierre/diffs';
@@ -2788,117 +2899,6 @@ index abc123..def456 100644
  export { greet };
 
 */
-```
-
-**preloadHighlighter** (`preloadHighlighter.ts`):
-
-```typescript
-import { preloadHighlighter } from '@pierre/diffs';
-
-// Preload specific themes and languages before rendering.
-// This ensures the highlighter is ready with the assets you
-// need, avoiding any flash of unstyled content on first render.
-//
-// By default, themes and languages are loaded on demand,
-// but preloading is useful when you know which languages
-// you'll be rendering ahead of time.
-await preloadHighlighter({
-  // Themes to preload
-  themes: ['pierre-dark', 'pierre-light', 'github-dark'],
-  // Languages to preload
-  langs: ['typescript', 'javascript', 'python', 'rust', 'go'],
-});
-
-// After preloading, rendering diffs in these languages
-// will be instant with no async loading delay.
-```
-
-**registerCustomTheme** (`registerCustomTheme.ts`):
-
-```typescript
-import { registerCustomTheme } from '@pierre/diffs';
-
-// Register a custom Shiki theme before using it.
-// The theme name you register must match the 'name' field
-// inside your theme JSON file.
-
-// Option 1: Dynamic import (recommended for code splitting)
-registerCustomTheme('my-custom-theme', () => import('./my-theme.json'));
-
-// Option 2: Inline theme object
-registerCustomTheme('inline-theme', async () => ({
-  name: 'inline-theme',
-  type: 'dark',
-  colors: {
-    'editor.background': '#1a1a2e',
-    'editor.foreground': '#eaeaea',
-    // ... other VS Code theme colors
-  },
-  tokenColors: [
-    {
-      scope: ['comment'],
-      settings: { foreground: '#6a6a8a' },
-    },
-    // ... other token rules
-  ],
-}));
-
-// Once registered, use the theme name in your components:
-// <FileDiff options={{ theme: 'my-custom-theme' }} ... />
-```
-
-**registerCustomLanguage** (`registerCustomLanguage.ts`):
-
-```typescript
-import { registerCustomLanguage } from '@pierre/diffs';
-
-// Register a custom Shiki language loader before rendering.
-// The language name you register becomes available to Shiki.
-
-// Option 1: Dynamic import (recommended for code splitting)
-registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'), [
-  // File names (exact match)
-  'MySpecialFile',
-  // Extensions (without leading dot)
-  'mylang',
-  // Compound extensions
-  'spec.mylang',
-]);
-
-// Option 2: No extension mapping (use setLanguageOverride instead)
-registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));
-```
-
-**setLanguageOverride** (`setLanguageOverride.ts`):
-
-```typescript
-import {
-  setLanguageOverride,
-  parsePatchFiles,
-  type FileContents,
-  type FileDiffMetadata,
-} from '@pierre/diffs';
-
-// setLanguageOverride creates a new FileContents or FileDiffMetadata
-// with the language explicitly set. This is useful when:
-// - The filename doesn't have an extension
-// - The extension doesn't match the actual language
-// - You're parsing patches and need to override the detected language
-
-// Example 1: Override language on a FileContents
-const file: FileContents = {
-  name: 'Dockerfile',  // No extension, would default to 'text'
-  contents: 'FROM node:20\nRUN npm install',
-};
-const dockerFile = setLanguageOverride(file, 'dockerfile');
-
-// Example 2: Override language on a FileDiffMetadata
-const patches = parsePatchFiles(patchString);
-const diff: FileDiffMetadata = patches[0].files[0];
-const typescriptDiff = setLanguageOverride(diff, 'typescript');
-
-// The function returns a new object with the lang property set,
-// leaving the original unchanged (immutable operation).
 ```
 
 ## Styling
@@ -3030,6 +3030,52 @@ get started.
   </Link>
 </Button>
 
+**Package JSON Example** (`package.json`):
+
+```json
+{
+  "name": "my-custom-theme",
+  "displayName": "My Custom Theme",
+  "description": "A beautiful theme for VS Code and Shiki",
+  "version": "1.0.0",
+  "publisher": "your-publisher-id",
+  "author": "Your Name",
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1F1F21",
+    "theme": "dark"
+  },
+  "keywords": ["theme", "color-theme", "dark", "light"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/my-custom-theme"
+  },
+  "homepage": "https://github.com/YOUR_USERNAME/my-custom-theme#readme",
+  "bugs": {
+    "url": "https://github.com/YOUR_USERNAME/my-custom-theme/issues"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": ["Themes"],
+  "contributes": {
+    "themes": [
+      {
+        "label": "My Theme Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/my-theme-dark.json"
+      },
+      {
+        "label": "My Theme Light",
+        "uiTheme": "vs",
+        "path": "./themes/my-theme-light.json"
+      }
+    ]
+  }
+}
+```
+
 **Registering Custom Themes** (`register-theme.ts`):
 
 ```typescript
@@ -3047,6 +3093,108 @@ registerCustomTheme('my-theme-dark', async () => {
   const response = await fetch('/themes/my-theme-dark.json');
   return response.json();
 });
+```
+
+**Token Colors Example** (`src/theme.ts`):
+
+```typescript
+import type { Roles } from "./palette";
+
+type VSCodeTheme = {
+  name: string;
+  type: "light" | "dark";
+  colors: Record<string, string>;
+  tokenColors: any[];
+  semanticTokenColors: Record<string, string | { foreground: string; fontStyle?: string }>;
+};
+
+export function makeTheme(name: string, kind: "light" | "dark", c: Roles): VSCodeTheme {
+  return {
+    name,
+    type: kind,
+    colors: {
+      // Core editor & text
+      "editor.background": c.bg.editor,
+      "editor.foreground": c.fg.base,
+      "foreground": c.fg.base,
+      "focusBorder": c.accent.primary,
+      "selection.background": c.accent.subtle,
+
+      // Editor chrome
+      "editor.selectionBackground": alpha(c.accent.primary, kind === "dark" ? 0.30 : 0.18),
+      "editor.lineHighlightBackground": alpha(c.accent.subtle, 0.55),
+      "editorCursor.foreground": c.accent.primary,
+      "editorLineNumber.foreground": c.fg.fg3,
+      "editorLineNumber.activeForeground": c.fg.fg2,
+      "editorIndentGuide.background": c.border.indentGuide,
+      "editorIndentGuide.activeBackground": c.border.indentGuideActive,
+
+      "diffEditor.insertedTextBackground": alpha(c.states.success, kind === "dark" ? 0.1 : 0.2),
+      "diffEditor.deletedTextBackground": alpha(c.states.danger, kind === "dark" ? 0.1 : 0.2),
+
+      // Sidebar
+      "sideBar.background": c.bg.window,
+      "sideBar.foreground": c.fg.fg2,
+      "sideBar.border": c.border.window,
+      "sideBarTitle.foreground": c.fg.base,
+      "sideBarSectionHeader.background": c.bg.window,
+      "sideBarSectionHeader.foreground": c.fg.fg2,
+      "sideBarSectionHeader.border": c.border.window,
+
+      // Activity bar
+      "activityBar.background": c.bg.window,
+      "activityBar.foreground": c.fg.base,
+      "activityBar.border": c.border.window,
+      "activityBar.activeBorder": c.accent.primary,
+      "activityBarBadge.background": c.accent.primary,
+      "activityBarBadge.foreground": c.accent.contrastOnAccent,
+
+      // ... tabs, panels, status bar, inputs, buttons, git, terminal
+
+    },
+
+    tokenColors: [
+      // COMMENTS
+      { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: c.syntax.comment } },
+
+      // STRINGS
+      { scope: ["string", "constant.other.symbol"], settings: { foreground: c.syntax.string } },
+
+      // NUMBERS & CONSTANTS
+      { scope: ["constant.numeric", "constant.language.boolean"], settings: { foreground: c.syntax.number } },
+
+      // KEYWORDS & STORAGE
+      { scope: "keyword", settings: { foreground: c.syntax.keyword } },
+      { scope: ["storage", "storage.type", "storage.modifier"], settings: { foreground: c.syntax.keyword } },
+
+      // VARIABLES & IDENTIFIERS
+      { scope: ["variable", "identifier", "meta.definition.variable"], settings: { foreground: c.syntax.variable } },
+      { scope: "variable.parameter", settings: { foreground: c.syntax.parameter } },
+
+      // FUNCTIONS & METHODS
+      { scope: ["support.function", "entity.name.function"], settings: { foreground: c.syntax.func } },
+
+      // TYPES & CLASSES
+      { scope: ["support.type", "entity.name.type", "entity.name.class"], settings: { foreground: c.syntax.type } },
+
+      // ... operators, punctuation, language-specific rules, CSS, HTML, Markdown, etc.
+    ],
+
+    semanticTokenColors: {
+      comment: c.syntax.comment,
+      string: c.syntax.string,
+      number: c.syntax.number,
+      keyword: c.syntax.keyword,
+      variable: c.syntax.variable,
+      parameter: c.syntax.parameter,
+      function: c.syntax.func,
+      type: c.syntax.type,
+      class: c.syntax.type,
+      namespace: c.syntax.namespace,
+      // ...
+    }
+  };
+}
 ```
 
 **Using Custom Themes in Components** (`DiffWithCustomTheme.tsx`):
@@ -3223,17 +3371,158 @@ The worker pool manages a configurable number of worker threads that each
 initialize their own Shiki highlighter instance. Tasks are distributed across
 available workers, with queuing when all workers are busy.
 
-**Worker Factory — Vite** (`utils/workerFactory.ts`):
+**API Reference** (`api-reference.ts`):
 
 ```typescript
-import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';
+// WorkerPoolManager constructor
+new WorkerPoolManager(poolOptions, highlighterOptions)
 
+// Parameters:
+// - poolOptions: WorkerPoolOptions
+//   - workerFactory: () => Worker - Function that creates a Worker instance
+//   - poolSize?: number (default: 8) - Number of workers
+//   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
+//     (Two separate LRU caches are maintained: one for files, one for diffs.
+//      Each cache has this limit, so total cached items can be 2x this value.)
+// - highlighterOptions: WorkerInitializationRenderOptions
+//   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
+//   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
+//   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
+//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
+//   - langs?: SupportedLanguages[] - Array of languages to preload
+
+// Methods:
+poolManager.initialize()
+// Returns: Promise<void> - Initializes workers (auto-called on first render)
+
+poolManager.isInitialized()
+// Returns: boolean
+
+poolManager.setRenderOptions(options)
+// Returns: Promise<void> - Changes render options dynamically
+// Accepts: Partial<WorkerRenderingOptions>
+//   - theme?: DiffsThemeNames | ThemesType
+//   - lineDiffType?: 'word' | 'word-alt' | 'char'
+//   - tokenizeMaxLineLength?: number
+// Omitted options will use defaults. WARNING: This forces all mounted
+// components to re-render and clears the render cache.
+
+poolManager.getRenderOptions()
+// Returns: WorkerRenderingOptions - Current render options (copy)
+
+poolManager.highlightFileAST(fileInstance, file, options)
+// Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
+
+poolManager.getPlainFileAST(file, startingLineNumber?)
+// Returns: ThemedFileResult | undefined - Sync render with 'text' lang
+
+poolManager.highlightDiffAST(fileDiffInstance, diff, options)
+// Queues highlighted diff render, calls fileDiffInstance.onHighlightSuccess when done
+
+poolManager.getPlainDiffAST(diff, lineDiffType)
+// Returns: ThemedDiffResult | undefined - Sync render with 'text' lang
+
+poolManager.terminate()
+// Terminates all workers and resets state
+
+poolManager.getStats()
+// Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }
+
+poolManager.inspectCaches()
+// Returns: { fileCache, diffCache } - LRU cache instances for debugging
+
+poolManager.evictFileFromCache(cacheKey)
+// Returns: boolean - Evicts a file from the cache by its cacheKey
+// Returns true if the item was evicted, false if it wasn't in the cache
+
+poolManager.evictDiffFromCache(cacheKey)
+// Returns: boolean - Evicts a diff from the cache by its cacheKey
+// Returns true if the item was evicted, false if it wasn't in the cache
+```
+
+**Caching** (`caching-example.ts`):
+
+```typescript
+import {
+  getOrCreateWorkerPoolSingleton,
+} from '@pierre/diffs/worker';
+import { workerFactory } from './utils/workerFactory';
+
+const workerPool = getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    workerFactory,
+    // Optional: configure cache size per cache (default: 100)
+    // Two separate LRU caches are maintained: one for files,
+    // one for diffs, so combined cache size will be double
+    totalASTLRUCacheSize: 200,
+  },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+});
+
+// Caching is enabled automatically when files/diffs have a cacheKey.
+// Files and diffs without cacheKey will not be cached.
+
+const fileWithCaching = {
+  name: 'example.ts',
+  contents: 'const x = 42;',
+  cacheKey: 'file-abc123', // <-- Enables caching for this file
+};
+
+const fileWithoutCaching = {
+  name: 'other.ts',
+  contents: 'const y = 1;',
+  // No cacheKey - will not be cached
+};
+
+// IMPORTANT: The cacheKey must change whenever the content changes!
+// If content changes but the key stays the same, stale cached results
+// will be returned. Use content hashes or version numbers in your keys.
+const fileV1 = { name: 'file.ts', contents: 'v1', cacheKey: 'file-v1' };
+const fileV2 = { name: 'file.ts', contents: 'v2', cacheKey: 'file-v2' };
+
+// Cache key best practices:
+// - DON'T use file contents as the key - large strings potentially
+//   waste memory
+// - DON'T rely solely on filenames - they may not be unique or stable
+// - DO use stable identifiers like commit SHAs, file IDs, or version numbers
+// - DO combine identifiers when needed: `${fileId}-${version}`
+
+// How caching works:
+// - Files/diffs with cacheKey are stored in an LRU cache after rendering
+// - Subsequent renders with the same cacheKey return cached results instantly
+// - No worker processing required for cache hits
+// - Cache is validated against render options (e.g., theme, lineDiffType)
+// - If options changed, cached result is skipped and re-rendered
+// - Cache is cleared when the pool is terminated
+
+// Inspect cache contents (for debugging)
+const { fileCache, diffCache } = workerPool.inspectCaches();
+console.log('Cached files:', fileCache.size);
+console.log('Cached diffs:', diffCache.size);
+
+// Evict specific items from the cache when content is invalidated
+// (e.g., user edits a file, new commit is pushed)
+workerPool.evictFileFromCache('file-abc123');
+workerPool.evictDiffFromCache('diff-xyz789');
+```
+
+**Helper esbuild** (`utils/workerFactory.ts`):
+
+```typescript
 export function workerFactory(): Worker {
-  return new Worker(WorkerUrl, { type: 'module' });
+  return new Worker(
+    new URL(
+      '@pierre/diffs/worker/worker.js',
+      import.meta.url
+    ),
+    { type: 'module' }
+  );
 }
 ```
 
-**Worker Factory — Next.js** (`utils/workerFactory.ts`):
+**Helper Next.js** (`utils/workerFactory.ts`):
 
 ```typescript
 'use client';
@@ -3248,35 +3537,7 @@ export function workerFactory(): Worker {
 }
 ```
 
-**Worker Factory — Webpack** (`utils/workerFactory.ts`):
-
-```typescript
-export function workerFactory(): Worker {
-  return new Worker(
-    new URL(
-      '@pierre/diffs/worker/worker.js',
-      import.meta.url
-    ),
-    { type: 'module' }
-  );
-}
-```
-
-**Worker Factory — esbuild** (`utils/workerFactory.ts`):
-
-```typescript
-export function workerFactory(): Worker {
-  return new Worker(
-    new URL(
-      '@pierre/diffs/worker/worker.js',
-      import.meta.url
-    ),
-    { type: 'module' }
-  );
-}
-```
-
-**Worker Factory — Static Files** (`utils/workerFactory.ts`):
+**Helper Static** (`utils/workerFactory.ts`):
 
 ```typescript
 // For Rollup or bundlers without special worker support:
@@ -3288,7 +3549,7 @@ export function workerFactory(): Worker {
 }
 ```
 
-**Worker Factory — No Bundler** (`utils/workerFactory.js`):
+**Helper Vanilla** (`utils/workerFactory.js`):
 
 ```javascript
 // No bundler / Vanilla JS
@@ -3296,6 +3557,56 @@ export function workerFactory(): Worker {
 
 export function workerFactory() {
   return new Worker('/path/to/worker.js', { type: 'module' });
+}
+```
+
+**Helper Vite** (`utils/workerFactory.ts`):
+
+```typescript
+import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';
+
+export function workerFactory(): Worker {
+  return new Worker(WorkerUrl, { type: 'module' });
+}
+```
+
+**Helper Webpack** (`utils/workerFactory.ts`):
+
+```typescript
+export function workerFactory(): Worker {
+  return new Worker(
+    new URL(
+      '@pierre/diffs/worker/worker.js',
+      import.meta.url
+    ),
+    { type: 'module' }
+  );
+}
+```
+
+**React Component** (`CodeViewer.tsx`):
+
+```tsx
+'use client';
+
+import { createWorkerAPI } from '@/utils/createWorkerAPI';
+import { useEffect, useState } from 'react';
+
+export function CodeViewer() {
+  const [workerAPI] = useState(() =>
+    createWorkerAPI({
+      poolSize: 8,
+      initOptions: {
+        themes: ['pierre-dark', 'pierre-light'],
+      },
+    })
+  );
+
+  useEffect(() => {
+    return () => workerAPI.terminate();
+  }, [workerAPI]);
+
+  // Use workerAPI.renderFileToHast() etc.
 }
 ```
 
@@ -3375,7 +3686,53 @@ function ThemeSwitcher() {
 // to re-render and will clear the render cache.
 ```
 
-**Vanilla JS Usage** (`vanilla-worker-usage.ts`):
+**Basic Usage** (`example.ts`):
+
+```typescript
+import { createWorkerAPI } from './utils/createWorkerAPI';
+
+// Create worker pool with 8 workers
+const workerAPI = createWorkerAPI({
+  poolSize: 8,
+  initOptions: {
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript', 'javascript'],
+  },
+});
+
+// Initialize the pool (optional - auto-initializes on first use)
+await workerAPI.ensureInitialized();
+
+// Render a single file
+const file = {
+  name: 'example.ts',
+  contents: 'const x = 42;',
+};
+
+const result = await workerAPI.renderFileToHast(file, {
+  theme: 'pierre-dark',
+});
+
+console.log(result.lines); // Array of ElementContent
+
+// Render a diff from two files
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
+
+const diffResult = await workerAPI.renderDiffToHast(oldFile, newFile, {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+});
+console.log(diffResult.oldLines, diffResult.newLines);
+
+// Check pool status
+console.log(workerAPI.getStats());
+// { totalWorkers: 8, busyWorkers: 0, queuedTasks: 0, pendingTasks: 0 }
+
+// Clean up when done
+workerAPI.terminate();
+```
+
+**Vanilla Usage** (`vanilla-worker-usage.ts`):
 
 ```typescript
 import { FileDiff } from '@pierre/diffs';
@@ -3434,141 +3791,84 @@ await workerPool.setRenderOptions({
 // terminateWorkerPoolSingleton();
 ```
 
-**Render Cache** (`caching-example.ts`):
+**VSCode Blob URL** (`webview-ui/index.ts`):
 
 ```typescript
-import {
-  getOrCreateWorkerPoolSingleton,
-} from '@pierre/diffs/worker';
-import { workerFactory } from './utils/workerFactory';
-
-const workerPool = getOrCreateWorkerPoolSingleton({
-  poolOptions: {
-    workerFactory,
-    // Optional: configure cache size per cache (default: 100)
-    // Two separate LRU caches are maintained: one for files,
-    // one for diffs, so combined cache size will be double
-    totalASTLRUCacheSize: 200,
-  },
-  highlighterOptions: {
-    theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  },
-});
-
-// Caching is enabled automatically when files/diffs have a cacheKey.
-// Files and diffs without cacheKey will not be cached.
-
-const fileWithCaching = {
-  name: 'example.ts',
-  contents: 'const x = 42;',
-  cacheKey: 'file-abc123', // <-- Enables caching for this file
-};
-
-const fileWithoutCaching = {
-  name: 'other.ts',
-  contents: 'const y = 1;',
-  // No cacheKey - will not be cached
-};
-
-// IMPORTANT: The cacheKey must change whenever the content changes!
-// If content changes but the key stays the same, stale cached results
-// will be returned. Use content hashes or version numbers in your keys.
-const fileV1 = { name: 'file.ts', contents: 'v1', cacheKey: 'file-v1' };
-const fileV2 = { name: 'file.ts', contents: 'v2', cacheKey: 'file-v2' };
-
-// Cache key best practices:
-// - DON'T use file contents as the key - large strings potentially
-//   waste memory
-// - DON'T rely solely on filenames - they may not be unique or stable
-// - DO use stable identifiers like commit SHAs, file IDs, or version numbers
-// - DO combine identifiers when needed: `${fileId}-${version}`
-
-// How caching works:
-// - Files/diffs with cacheKey are stored in an LRU cache after rendering
-// - Subsequent renders with the same cacheKey return cached results instantly
-// - No worker processing required for cache hits
-// - Cache is validated against render options (e.g., theme, lineDiffType)
-// - If options changed, cached result is skipped and re-rendered
-// - Cache is cleared when the pool is terminated
-
-// Inspect cache contents (for debugging)
-const { fileCache, diffCache } = workerPool.inspectCaches();
-console.log('Cached files:', fileCache.size);
-console.log('Cached diffs:', diffCache.size);
-
-// Evict specific items from the cache when content is invalidated
-// (e.g., user edits a file, new commit is pushed)
-workerPool.evictFileFromCache('file-abc123');
-workerPool.evictDiffFromCache('diff-xyz789');
+async function createWorkerBlobUrl(): Promise<string> {
+  const response = await fetch(window.WORKER_URI);
+  const workerCode = await response.text();
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  return URL.createObjectURL(blob);
+}
 ```
 
-**API Reference** (`api-reference.ts`):
+**VSCode CSP** (`extension.ts`):
 
 ```typescript
-// WorkerPoolManager constructor
-new WorkerPoolManager(poolOptions, highlighterOptions)
+worker-src ${webview.cspSource} blob:;
+connect-src ${webview.cspSource};
+```
 
-// Parameters:
-// - poolOptions: WorkerPoolOptions
-//   - workerFactory: () => Worker - Function that creates a Worker instance
-//   - poolSize?: number (default: 8) - Number of workers
-//   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
-//     (Two separate LRU caches are maintained: one for files, one for diffs.
-//      Each cache has this limit, so total cached items can be 2x this value.)
-// - highlighterOptions: WorkerInitializationRenderOptions
-//   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
-//   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
-//   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
-//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
-//   - langs?: SupportedLanguages[] - Array of languages to preload
+**VSCode Factory** (`webview-ui/index.ts`):
 
-// Methods:
-poolManager.initialize()
-// Returns: Promise<void> - Initializes workers (auto-called on first render)
+```typescript
+const workerBlobUrl = await createWorkerBlobUrl();
 
-poolManager.isInitialized()
-// Returns: boolean
+function workerFactory() {
+  return new Worker(workerBlobUrl);
+}
+```
 
-poolManager.setRenderOptions(options)
-// Returns: Promise<void> - Changes render options dynamically
-// Accepts: Partial<WorkerRenderingOptions>
-//   - theme?: DiffsThemeNames | ThemesType
-//   - lineDiffType?: 'word' | 'word-alt' | 'char'
-//   - tokenizeMaxLineLength?: number
-// Omitted options will use defaults. WARNING: This forces all mounted
-// components to re-render and clears the render cache.
+**VSCode Global** (`webview-ui/index.ts`):
 
-poolManager.getRenderOptions()
-// Returns: WorkerRenderingOptions - Current render options (copy)
+```typescript
+declare global {
+  interface Window {
+    WORKER_URI: string;
+  }
+}
+```
 
-poolManager.highlightFileAST(fileInstance, file, options)
-// Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
+**VSCode Inline Script** (`extension.ts`):
 
-poolManager.getPlainFileAST(file, startingLineNumber?)
-// Returns: ThemedFileResult | undefined - Sync render with 'text' lang
+```typescript
+<script nonce="${nonce}">window.WORKER_URI = "${workerScriptUri}";</script>
+```
 
-poolManager.highlightDiffAST(fileDiffInstance, diff, options)
-// Queues highlighted diff render, calls fileDiffInstance.onHighlightSuccess when done
+**VSCode Local Roots** (`extension.ts`):
 
-poolManager.getPlainDiffAST(diff, lineDiffType)
-// Returns: ThemedDiffResult | undefined - Sync render with 'text' lang
+```typescript
+function getWebviewOptions(extensionUri: vscode.Uri): vscode.WebviewOptions {
+  return {
+    enableScripts: true,
+    localResourceRoots: [
+      // ... your other roots
+      vscode.Uri.joinPath(
+        extensionUri,
+        'node_modules',
+        '@pierre',
+        'diffs',
+        'dist',
+        'worker'
+      ),
+    ],
+  };
+}
+```
 
-poolManager.terminate()
-// Terminates all workers and resets state
+**VSCode Worker URI** (`extension.ts`):
 
-poolManager.getStats()
-// Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }
-
-poolManager.inspectCaches()
-// Returns: { fileCache, diffCache } - LRU cache instances for debugging
-
-poolManager.evictFileFromCache(cacheKey)
-// Returns: boolean - Evicts a file from the cache by its cacheKey
-// Returns true if the item was evicted, false if it wasn't in the cache
-
-poolManager.evictDiffFromCache(cacheKey)
-// Returns: boolean - Evicts a diff from the cache by its cacheKey
-// Returns true if the item was evicted, false if it wasn't in the cache
+```typescript
+const workerScriptPath = vscode.Uri.joinPath(
+  this._extensionUri,
+  'node_modules',
+  '@pierre',
+  'diffs',
+  'dist',
+  'worker',
+  'worker-portable.js'
+);
+const workerScriptUri = webview.asWebviewUri(workerScriptPath);
 ```
 
 ## SSR
@@ -3627,6 +3927,127 @@ Preloads multiple diffs from a multi-file patch string. Returns an array of
 results, one for each file in the patch. Each result can be spread into a
 `FileDiff` component.
 
+**Preload File** (`example.tsx`):
+
+```tsx
+import { preloadFile } from '@pierre/diffs/ssr';
+
+const file = {
+  name: 'example.ts',
+  contents: 'export function hello() { return "world"; }',
+};
+
+const result = await preloadFile({
+  file,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <File {...result} />
+```
+
+**Preload File Diff** (`example.tsx`):
+
+```tsx
+import { preloadFileDiff } from '@pierre/diffs/ssr';
+import { parseDiffFromFile } from '@pierre/diffs';
+
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
+
+// First parse the diff to get FileDiffMetadata
+const fileDiff = parseDiffFromFile(oldFile, newFile);
+
+// Then preload for SSR
+const result = await preloadFileDiff({
+  fileDiff,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <FileDiff {...result} />
+```
+
+**Preload Multi File Diff** (`example.tsx`):
+
+```tsx
+import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
+
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
+
+const result = await preloadMultiFileDiff({
+  oldFile,
+  newFile,
+  options: { theme: 'pierre-dark', diffStyle: 'split' },
+});
+
+// Spread result into <MultiFileDiff {...result} />
+```
+
+**Preload Patch Diff** (`example.tsx`):
+
+```tsx
+import { preloadPatchDiff } from '@pierre/diffs/ssr';
+
+const patch = `--- a/example.ts
++++ b/example.ts
+@@ -1 +1 @@
+-const x = 1;
++const x = 2;`;
+
+const result = await preloadPatchDiff({
+  patch,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <PatchDiff {...result} />
+```
+
+**Preload Patch File** (`example.tsx`):
+
+```tsx
+import { preloadPatchFile } from '@pierre/diffs/ssr';
+
+// A patch containing multiple file changes
+const patch = `diff --git a/foo.ts b/foo.ts
+--- a/foo.ts
++++ b/foo.ts
+@@ -1 +1 @@
+-const a = 1;
++const a = 2;
+diff --git a/bar.ts b/bar.ts
+--- a/bar.ts
++++ b/bar.ts
+@@ -1 +1 @@
+-const b = 1;
++const b = 2;`;
+
+const results = await preloadPatchFile({
+  patch,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread each result into <FileDiff {...results[i]} />
+```
+
+**Client Component** (`DiffViewer.tsx`):
+
+```tsx
+// app/diff/DiffViewer.tsx (Client Component)
+'use client';
+
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+
+interface Props {
+  preloaded: PreloadMultiFileDiffResult;
+}
+
+export function DiffViewer({ preloaded }: Props) {
+  // Spread the entire result to ensure inputs match what was pre-rendered
+  return <MultiFileDiff {...preloaded} />;
+}
+```
+
 **Server Component** (`page.tsx`):
 
 ```tsx
@@ -3657,125 +4078,4 @@ export default async function DiffPage() {
 
   return <DiffViewer preloaded={preloaded} />;
 }
-```
-
-**Client Component** (`DiffViewer.tsx`):
-
-```tsx
-// app/diff/DiffViewer.tsx (Client Component)
-'use client';
-
-import { MultiFileDiff } from '@pierre/diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
-
-interface Props {
-  preloaded: PreloadMultiFileDiffResult;
-}
-
-export function DiffViewer({ preloaded }: Props) {
-  // Spread the entire result to ensure inputs match what was pre-rendered
-  return <MultiFileDiff {...preloaded} />;
-}
-```
-
-**preloadFile** (`example.tsx`):
-
-```tsx
-import { preloadFile } from '@pierre/diffs/ssr';
-
-const file = {
-  name: 'example.ts',
-  contents: 'export function hello() { return "world"; }',
-};
-
-const result = await preloadFile({
-  file,
-  options: { theme: 'pierre-dark' },
-});
-
-// Spread result into <File {...result} />
-```
-
-**preloadFileDiff** (`example.tsx`):
-
-```tsx
-import { preloadFileDiff } from '@pierre/diffs/ssr';
-import { parseDiffFromFile } from '@pierre/diffs';
-
-const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
-const newFile = { name: 'example.ts', contents: 'const x = 2;' };
-
-// First parse the diff to get FileDiffMetadata
-const fileDiff = parseDiffFromFile(oldFile, newFile);
-
-// Then preload for SSR
-const result = await preloadFileDiff({
-  fileDiff,
-  options: { theme: 'pierre-dark' },
-});
-
-// Spread result into <FileDiff {...result} />
-```
-
-**preloadMultiFileDiff** (`example.tsx`):
-
-```tsx
-import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
-
-const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
-const newFile = { name: 'example.ts', contents: 'const x = 2;' };
-
-const result = await preloadMultiFileDiff({
-  oldFile,
-  newFile,
-  options: { theme: 'pierre-dark', diffStyle: 'split' },
-});
-
-// Spread result into <MultiFileDiff {...result} />
-```
-
-**preloadPatchDiff** (`example.tsx`):
-
-```tsx
-import { preloadPatchDiff } from '@pierre/diffs/ssr';
-
-const patch = `--- a/example.ts
-+++ b/example.ts
-@@ -1 +1 @@
--const x = 1;
-+const x = 2;`;
-
-const result = await preloadPatchDiff({
-  patch,
-  options: { theme: 'pierre-dark' },
-});
-
-// Spread result into <PatchDiff {...result} />
-```
-
-**preloadPatchFile** (`example.tsx`):
-
-```tsx
-import { preloadPatchFile } from '@pierre/diffs/ssr';
-
-// A patch containing multiple file changes
-const patch = `diff --git a/foo.ts b/foo.ts
---- a/foo.ts
-+++ b/foo.ts
-@@ -1 +1 @@
--const a = 1;
-+const a = 2;
-diff --git a/bar.ts b/bar.ts
---- a/bar.ts
-+++ b/bar.ts
-@@ -1 +1 @@
--const b = 1;
-+const b = 2;`;
-
-const results = await preloadPatchFile({
-  patch,
-  options: { theme: 'pierre-dark' },
-});
-
-// Spread each result into <FileDiff {...results[i]} />
 ```

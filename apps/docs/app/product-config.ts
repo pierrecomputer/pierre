@@ -5,6 +5,7 @@ export interface ProductConfig {
   name: string;
   tagline: string;
   description: string;
+  llmsDescription: string;
   basePath: string;
   docsPath: string;
   themePath?: string;
@@ -20,6 +21,8 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     tagline: 'A diff rendering library',
     description:
       "@pierre/diffs is an open source diff and code rendering library. It's built on Shiki for syntax highlighting and theming, is super customizable, and comes packed with features.",
+    llmsDescription:
+      'An open source diff and code rendering library for the web. Built on Shiki for syntax highlighting, with React and vanilla JS APIs, virtualization, SSR support, and extensive theming.',
     basePath: '',
     docsPath: '/docs',
     themePath: '/theme',
@@ -33,6 +36,8 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     tagline: 'A file tree rendering library',
     description:
       "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
+    llmsDescription:
+      'An open source file tree rendering library for the web. Built on @headless-tree/core for state management, with React and vanilla JS APIs, SSR support, and customizable styling.',
     basePath: '/trees',
     docsPath: '/trees/docs',
     packageName: '@pierre/trees',

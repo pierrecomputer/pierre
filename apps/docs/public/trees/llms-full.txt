@@ -50,7 +50,7 @@ export function FileExplorer() {
 }
 ```
 
-**Vanilla JS Basic Usage** (`file-explorer.ts`):
+**Vanilla Basic Usage** (`file-explorer.ts`):
 
 ```typescript
 import { FileTree } from '@pierre/trees';
@@ -150,7 +150,65 @@ React top-level props). Each item has a `path` (the file or folder path) and
   and their parents stay visible.
 - `'hide-non-matches'`: keep branch structure but hide non-matching rows.
 
-**FileTreeOptions** (`FileTreeOptions.ts`):
+**Files Option Example** (`fileTreeOptions.ts`):
+
+```typescript
+const fileTreeOptions = {
+  initialFiles: [
+    'README.md',
+    'package.json',
+    'src/index.ts',
+    'src/components/Button.tsx',
+    'src/utils/helpers.ts',
+  ],
+  // …
+};
+```
+
+**File Tree Icon Config Type** (`FileTreeIconConfig.ts`):
+
+```typescript
+import type { FileTreeIconConfig } from '@pierre/trees';
+
+// FileTreeIconConfig lets you replace built-in icons with custom SVG symbols.
+interface FileTreeIconConfig {
+  // An SVG string with <symbol> definitions injected into the shadow DOM.
+  spriteSheet?: string;
+
+  // Map built-in icon names to custom symbol ids or objects with sizing info.
+  remap?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
+}
+
+// Example: replace the file and chevron icons with custom symbols.
+const options = {
+  initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
+  icons: {
+    spriteSheet: `
+      <svg data-icon-sprite aria-hidden="true" width="0" height="0">
+        <symbol id="my-file" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2">
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+          <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+        </symbol>
+        <symbol id="my-folder" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2">
+          <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
+        </symbol>
+      </svg>
+    `,
+    remap: {
+      'file-tree-icon-file': 'my-file',
+      'file-tree-icon-chevron': { name: 'my-folder', width: 16, height: 16 },
+    },
+  },
+};
+```
+
+**File Tree Options Type** (`FileTreeOptions.ts`):
 
 ```typescript
 import type {
@@ -220,43 +278,29 @@ const stateConfig: FileTreeStateConfig = {
 };
 ```
 
-**File Paths Example** (`fileTreeOptions.ts`):
+**File Tree Search Mode Type** (`FileTreeSearchMode.ts`):
 
 ```typescript
-const fileTreeOptions = {
-  initialFiles: [
-    'README.md',
-    'package.json',
-    'src/index.ts',
-    'src/components/Button.tsx',
-    'src/utils/helpers.ts',
-  ],
-  // …
+import type { FileTreeSearchMode } from '@pierre/trees';
+
+// FileTreeSearchMode is:
+// - 'expand-matches' (default)
+// - 'collapse-non-matches'
+// - 'hide-non-matches'
+// Pass it via fileTreeSearchMode in FileTreeOptions.
+//
+// 'expand-matches' (default): expand nodes that match the search.
+// 'collapse-non-matches': hide non-matching branches; only matching
+// paths and their parents stay visible.
+// 'hide-non-matches': keep branch structure, but hide non-matching rows.
+
+const options = {
+  initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
+  fileTreeSearchMode: 'collapse-non-matches' as FileTreeSearchMode,
 };
 ```
 
-**onSelection Callback** (`onSelection.ts`):
-
-```typescript
-// React: top-level prop
-<FileTree
-  options={{ initialFiles: ['src/index.ts', 'src/components/Button.tsx'] }}
-  onSelection={(items: FileTreeSelectionItem[]) => {
-    const file = items.find((i) => !i.isFolder);
-    if (file) setSelectedPath(file.path);
-  }}
-/>;
-
-// Vanilla: FileTreeStateConfig (second constructor argument)
-const stateConfig = {
-  onSelection: (items: FileTreeSelectionItem[]) => {
-  const file = items.find((i) => !i.isFolder);
-  if (file) setSelectedPath(file.path);
-  },
-};
-```
-
-**FileTreeSelectionItem** (`FileTreeSelectionItem.ts`):
+**File Tree Selection Item Type** (`FileTreeSelectionItem.ts`):
 
 ```typescript
 import type { FileTreeSelectionItem } from '@pierre/trees';
@@ -290,25 +334,50 @@ const options = {
 };
 ```
 
-**FileTreeSearchMode** (`FileTreeSearchMode.ts`):
+**File Tree State Config Type** (`FileTreeStateConfig.ts`):
 
 ```typescript
-import type { FileTreeSearchMode } from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
+import type { FileTreeStateConfig } from '@pierre/trees';
 
-// FileTreeSearchMode is:
-// - 'expand-matches' (default)
-// - 'collapse-non-matches'
-// - 'hide-non-matches'
-// Pass it via fileTreeSearchMode in FileTreeOptions.
-//
-// 'expand-matches' (default): expand nodes that match the search.
-// 'collapse-non-matches': hide non-matching branches; only matching
-// paths and their parents stay visible.
-// 'hide-non-matches': keep branch structure, but hide non-matching rows.
+// FileTreeStateConfig controls default/controlled tree state and callbacks.
+const stateConfig: FileTreeStateConfig = {
+  initialExpandedItems: ['src', 'src/components'],
+  initialSelectedItems: ['src/index.ts'],
+  onSelection: (items) => {
+    console.log(items);
+  },
+  onExpandedItemsChange: (items) => {
+    console.log('expanded', items);
+  },
+};
 
-const options = {
-  initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
-  fileTreeSearchMode: 'collapse-non-matches' as FileTreeSearchMode,
+const fileTree = new FileTree(
+  {
+    initialFiles: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+  },
+  stateConfig
+);
+```
+
+**On Selection Example** (`onSelection.ts`):
+
+```typescript
+// React: top-level prop
+<FileTree
+  options={{ initialFiles: ['src/index.ts', 'src/components/Button.tsx'] }}
+  onSelection={(items: FileTreeSelectionItem[]) => {
+    const file = items.find((i) => !i.isFolder);
+    if (file) setSelectedPath(file.path);
+  }}
+/>;
+
+// Vanilla: FileTreeStateConfig (second constructor argument)
+const stateConfig = {
+  onSelection: (items: FileTreeSelectionItem[]) => {
+  const file = items.find((i) => !i.isFolder);
+  if (file) setSelectedPath(file.path);
+  },
 };
 ```
 
@@ -329,7 +398,45 @@ via options.
 styling and SSR props. `initialFiles`/state callbacks are top-level props on the
 React component:
 
-**FileTree Component** (`FileExplorer.tsx`):
+**Custom Icons Example** (`custom_icons_file_tree.tsx`):
+
+```tsx
+import { FileTree } from '@pierre/trees/react';
+
+const customSpriteSheet = `
+  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
+    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+    </symbol>
+  </svg>
+`;
+
+export function CustomIconsTree() {
+  return (
+    <FileTree
+      options={{
+        id: 'custom-icons-tree',
+        icons: {
+          spriteSheet: customSpriteSheet,
+          remap: {
+            'file-tree-icon-file': 'my-file',
+          },
+        },
+      }}
+      initialFiles={[
+        'src/index.ts',
+        'src/components/Button.tsx',
+        'package.json',
+      ]}
+      initialExpandedItems={['src', 'src/components']}
+    />
+  );
+}
+```
+
+**File Tree** (`FileExplorer.tsx`):
 
 ```tsx
 import { FileTree } from '@pierre/trees/react';
@@ -346,7 +453,7 @@ export function FileExplorer() {
 }
 ```
 
-**FileTree Props** (`file_tree_props.tsx`):
+**File Tree Props** (`file_tree_props.tsx`):
 
 ```tsx
 import { FileTree } from '@pierre/trees/react';
@@ -387,6 +494,44 @@ import { FileTree } from '@pierre/trees/react';
   // Optional: pre-rendered HTML for SSR hydration
   prerenderedHTML={htmlFromServer}
 />
+```
+
+**Git Status Example** (`git_status_file_tree.tsx`):
+
+```tsx
+import { useEffect, useState } from 'react';
+import type { GitStatusEntry } from '@pierre/trees';
+import { FileTree } from '@pierre/trees/react';
+
+const files = [
+  'README.md',
+  'package.json',
+  'src/index.ts',
+  'src/components/Button.tsx',
+  'src/lib/utils.ts',
+];
+
+export function GitAwareTree() {
+  const [gitStatus, setGitStatus] = useState<GitStatusEntry[] | undefined>();
+
+  useEffect(() => {
+    // Replace this with your VCS/remote status source.
+    setGitStatus([
+      { path: 'src/index.ts', status: 'modified' },
+      { path: 'src/components/Button.tsx', status: 'added' },
+      { path: 'README.md', status: 'deleted' },
+    ]);
+  }, []);
+
+  return (
+    <FileTree
+      options={{ id: 'git-aware-tree' }}
+      initialFiles={files}
+      initialExpandedItems={['src', 'src/components']}
+      gitStatus={gitStatus}
+    />
+  );
+}
 ```
 
 ## Vanilla JS API
@@ -434,7 +579,41 @@ constructor's second argument. Use it for defaults (`initialExpandedItems`,
 (`onSelection`, `onExpandedItemsChange`, `onSelectedItemsChange`,
 `onFilesChange`, plus `expandedItems`/`selectedItems`/`files` when controlled).
 
-**FileTree Example** (`file_tree_example.ts`):
+**Custom Icons Example** (`custom_icons_file_tree.ts`):
+
+```typescript
+import { FileTree } from '@pierre/trees';
+
+const customSpriteSheet = `
+  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
+    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+    </symbol>
+  </svg>
+`;
+
+const fileTree = new FileTree({
+  initialFiles: [
+    'src/index.ts',
+    'src/components/Button.tsx',
+    'package.json',
+  ],
+  icons: {
+    spriteSheet: customSpriteSheet,
+    remap: {
+      'file-tree-icon-file': 'my-file',
+    },
+  },
+});
+
+fileTree.render({
+  containerWrapper: document.getElementById('tree-container') ?? undefined,
+});
+```
+
+**File Tree Example** (`file_tree_example.ts`):
 
 ```typescript
 import { FileTree } from '@pierre/trees';
@@ -453,7 +632,7 @@ fileTree.render({ containerWrapper: document.getElementById('tree-container') })
 // fileTree.cleanUp();
 ```
 
-**Constructor Options and Methods** (`file_tree_options.ts`):
+**File Tree Options** (`file_tree_options.ts`):
 
 ```typescript
 import { FileTree } from '@pierre/trees';
@@ -496,96 +675,7 @@ console.log(fileTree.getFiles(), fileTree.getExpandedItems());
 fileTree.cleanUp();               // unmount and clear references
 ```
 
-**FileTreeStateConfig** (`FileTreeStateConfig.ts`):
-
-```typescript
-import { FileTree } from '@pierre/trees';
-import type { FileTreeStateConfig } from '@pierre/trees';
-
-// FileTreeStateConfig controls default/controlled tree state and callbacks.
-const stateConfig: FileTreeStateConfig = {
-  initialExpandedItems: ['src', 'src/components'],
-  initialSelectedItems: ['src/index.ts'],
-  onSelection: (items) => {
-    console.log(items);
-  },
-  onExpandedItemsChange: (items) => {
-    console.log('expanded', items);
-  },
-};
-
-const fileTree = new FileTree(
-  {
-    initialFiles: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-  },
-  stateConfig
-);
-```
-
-## Git Status
-
-Use the `gitStatus` option to show file-level status indicators for added,
-modified, and deleted files. Folders that contain changed descendants
-automatically receive a change hint. [Try the live demo](/trees#path-colors) on
-the homepage.
-
-`GitStatusEntry` pairs a file `path` with a status value:
-`{ path: string; status: 'added' | 'modified' | 'deleted' }`.
-
-Import `GitStatusEntry` from `@pierre/trees` and pass an array via `gitStatus`
-in constructor options (vanilla) or as a top-level prop (React). `path` should
-match your tree file paths (for example, `src/index.ts`).
-
-In vanilla JS you can also update status imperatively:
-
-- `fileTree.setGitStatus(entries | undefined)` updates statuses and re-renders.
-- `fileTree.getGitStatus()` returns the current `GitStatusEntry[] | undefined`.
-
-When `gitStatus` is provided, tree rows include status-aware attributes you can
-target:
-
-- `data-item-git-status="added" | "modified" | "deleted"` on changed files
-- `data-item-contains-git-change="true"` on folders that contain changed files
-
-**React Git Status** (`git_status_file_tree.tsx`):
-
-```tsx
-import { useEffect, useState } from 'react';
-import type { GitStatusEntry } from '@pierre/trees';
-import { FileTree } from '@pierre/trees/react';
-
-const files = [
-  'README.md',
-  'package.json',
-  'src/index.ts',
-  'src/components/Button.tsx',
-  'src/lib/utils.ts',
-];
-
-export function GitAwareTree() {
-  const [gitStatus, setGitStatus] = useState<GitStatusEntry[] | undefined>();
-
-  useEffect(() => {
-    // Replace this with your VCS/remote status source.
-    setGitStatus([
-      { path: 'src/index.ts', status: 'modified' },
-      { path: 'src/components/Button.tsx', status: 'added' },
-      { path: 'README.md', status: 'deleted' },
-    ]);
-  }, []);
-
-  return (
-    <FileTree
-      options={{ id: 'git-aware-tree' }}
-      initialFiles={files}
-      initialExpandedItems={['src', 'src/components']}
-      gitStatus={gitStatus}
-    />
-  );
-}
-```
-
-**Vanilla JS Git Status** (`git_status_file_tree.ts`):
+**Git Status Example** (`git_status_file_tree.ts`):
 
 ```typescript
 import type { GitStatusEntry } from '@pierre/trees';
@@ -628,6 +718,31 @@ async function refreshGitStatus() {
 void refreshGitStatus();
 ```
 
+## Git Status
+
+Use the `gitStatus` option to show file-level status indicators for added,
+modified, and deleted files. Folders that contain changed descendants
+automatically receive a change hint. [Try the live demo](/trees#path-colors) on
+the homepage.
+
+`GitStatusEntry` pairs a file `path` with a status value:
+`{ path: string; status: 'added' | 'modified' | 'deleted' }`.
+
+Import `GitStatusEntry` from `@pierre/trees` and pass an array via `gitStatus`
+in constructor options (vanilla) or as a top-level prop (React). `path` should
+match your tree file paths (for example, `src/index.ts`).
+
+In vanilla JS you can also update status imperatively:
+
+- `fileTree.setGitStatus(entries | undefined)` updates statuses and re-renders.
+- `fileTree.getGitStatus()` returns the current `GitStatusEntry[] | undefined`.
+
+When `gitStatus` is provided, tree rows include status-aware attributes you can
+target:
+
+- `data-item-git-status="added" | "modified" | "deleted"` on changed files
+- `data-item-contains-git-change="true"` on folders that contain changed files
+
 ## Custom Icons
 
 Use the `icons` option inside `FileTreeOptions` to swap built-in icons with your
@@ -648,78 +763,6 @@ SVG symbols that use the same IDs.
 | `file-tree-icon-file`    | Default icon for all files, regardless of extension.                |
 | `file-tree-icon-dot`     | Identifies modified files when using Git status                     |
 | `file-tree-icon-lock`    | Signals a file cannot be moved or modified                          |
-
-**React Custom Icons** (`custom_icons_file_tree.tsx`):
-
-```tsx
-import { FileTree } from '@pierre/trees/react';
-
-const customSpriteSheet = `
-  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
-    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2">
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-    </symbol>
-  </svg>
-`;
-
-export function CustomIconsTree() {
-  return (
-    <FileTree
-      options={{
-        id: 'custom-icons-tree',
-        icons: {
-          spriteSheet: customSpriteSheet,
-          remap: {
-            'file-tree-icon-file': 'my-file',
-          },
-        },
-      }}
-      initialFiles={[
-        'src/index.ts',
-        'src/components/Button.tsx',
-        'package.json',
-      ]}
-      initialExpandedItems={['src', 'src/components']}
-    />
-  );
-}
-```
-
-**Vanilla JS Custom Icons** (`custom_icons_file_tree.ts`):
-
-```typescript
-import { FileTree } from '@pierre/trees';
-
-const customSpriteSheet = `
-  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
-    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2">
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-    </symbol>
-  </svg>
-`;
-
-const fileTree = new FileTree({
-  initialFiles: [
-    'src/index.ts',
-    'src/components/Button.tsx',
-    'package.json',
-  ],
-  icons: {
-    spriteSheet: customSpriteSheet,
-    remap: {
-      'file-tree-icon-file': 'my-file',
-    },
-  },
-});
-
-fileTree.render({
-  containerWrapper: document.getElementById('tree-container') ?? undefined,
-});
-```
 
 ## Utilities
 
@@ -748,45 +791,46 @@ expanded. FileTree uses this internally when you pass `initialFiles` and
 `useLazyDataLoader: true`. Best for large trees where most folders stay
 collapsed.
 
-**sortChildren** (`sortChildren.ts`):
+**Generate Lazy Data Loader** (`generateLazyDataLoader.ts`):
 
 ```typescript
 import {
-  sortChildren,
-  defaultChildrenComparator,
-  alphabeticalChildrenComparator,
-  type ChildrenComparator,
+  generateLazyDataLoader,
+  type FileTreeOptions,
 } from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
 
-// Sort an array of child paths for display in a file tree.
-// Use this when building custom loaders or when you need a specific order.
+// FileTree uses generateLazyDataLoader internally when you pass
+// `initialFiles` and `useLazyDataLoader: true`. Use it directly for custom integrations.
 
-const childPaths = ['src/utils/helper.ts', 'src/index.ts', 'src/components'];
-const isFolder = (path: string) =>
-  path === 'src' || path === 'src/utils' || path === 'src/components';
+const filePaths = [
+  'README.md',
+  'src/index.ts',
+  'src/utils/helper.ts',
+  'src/utils/format.ts',
+  'src/components/Button.tsx',
+  'src/components/Input.tsx',
+];
 
-// Default: folders first, then dot-prefixed, then case-insensitive alphabetical
-const defaultOrder = sortChildren(childPaths, isFolder);
+// Nodes are computed on demand when folders are expanded.
+// Best for large trees where most folders stay collapsed.
+const dataLoader = generateLazyDataLoader(filePaths, {
+  rootId: 'root',
+  rootName: 'root',
+  flattenEmptyDirectories: true,
+});
 
-// Or use the built-in alphabetical comparator (no folders-first)
-const alphabeticalOrder = sortChildren(
-  childPaths,
-  isFolder,
-  alphabeticalChildrenComparator
-);
-
-// Custom comparator: e.g. put 'README' first
-const customComparator: ChildrenComparator = (a, b, isFolder) => {
-  const aName = a.split('/').pop() ?? '';
-  const bName = b.split('/').pop() ?? '';
-  if (aName === 'README.md') return -1;
-  if (bName === 'README.md') return 1;
-  return defaultChildrenComparator(a, b, isFolder);
+const options: FileTreeOptions = {
+  initialFiles: filePaths,
+  useLazyDataLoader: true,
+  flattenEmptyDirectories: true,
 };
-const customOrder = sortChildren(childPaths, isFolder, customComparator);
+
+const tree = new FileTree(options);
+tree.render({ containerWrapper: document.getElementById('tree')! });
 ```
 
-**generateSyncDataLoader** (`generateSyncDataLoader.ts`):
+**Generate Sync Data Loader** (`generateSyncDataLoader.ts`):
 
 ```typescript
 import {
@@ -825,43 +869,42 @@ const tree = new FileTree(options);
 tree.render({ containerWrapper: document.getElementById('tree')! });
 ```
 
-**generateLazyDataLoader** (`generateLazyDataLoader.ts`):
+**Sort Children** (`sortChildren.ts`):
 
 ```typescript
 import {
-  generateLazyDataLoader,
-  type FileTreeOptions,
+  sortChildren,
+  defaultChildrenComparator,
+  alphabeticalChildrenComparator,
+  type ChildrenComparator,
 } from '@pierre/trees';
-import { FileTree } from '@pierre/trees';
 
-// FileTree uses generateLazyDataLoader internally when you pass
-// `initialFiles` and `useLazyDataLoader: true`. Use it directly for custom integrations.
+// Sort an array of child paths for display in a file tree.
+// Use this when building custom loaders or when you need a specific order.
 
-const filePaths = [
-  'README.md',
-  'src/index.ts',
-  'src/utils/helper.ts',
-  'src/utils/format.ts',
-  'src/components/Button.tsx',
-  'src/components/Input.tsx',
-];
+const childPaths = ['src/utils/helper.ts', 'src/index.ts', 'src/components'];
+const isFolder = (path: string) =>
+  path === 'src' || path === 'src/utils' || path === 'src/components';
 
-// Nodes are computed on demand when folders are expanded.
-// Best for large trees where most folders stay collapsed.
-const dataLoader = generateLazyDataLoader(filePaths, {
-  rootId: 'root',
-  rootName: 'root',
-  flattenEmptyDirectories: true,
-});
+// Default: folders first, then dot-prefixed, then case-insensitive alphabetical
+const defaultOrder = sortChildren(childPaths, isFolder);
 
-const options: FileTreeOptions = {
-  initialFiles: filePaths,
-  useLazyDataLoader: true,
-  flattenEmptyDirectories: true,
+// Or use the built-in alphabetical comparator (no folders-first)
+const alphabeticalOrder = sortChildren(
+  childPaths,
+  isFolder,
+  alphabeticalChildrenComparator
+);
+
+// Custom comparator: e.g. put 'README' first
+const customComparator: ChildrenComparator = (a, b, isFolder) => {
+  const aName = a.split('/').pop() ?? '';
+  const bName = b.split('/').pop() ?? '';
+  if (aName === 'README.md') return -1;
+  if (bName === 'README.md') return 1;
+  return defaultChildrenComparator(a, b, isFolder);
 };
-
-const tree = new FileTree(options);
-tree.render({ containerWrapper: document.getElementById('tree')! });
+const customOrder = sortChildren(childPaths, isFolder, customComparator);
 ```
 
 ## Styling
@@ -950,7 +993,22 @@ server-rendered container.
 When using the vanilla `FileTree` class with SSR, call `hydrate()` instead of
 `render()` and pass the server-rendered container:
 
-**preloadFileTree** (`preloadFileTree.ts`):
+**Hydration Example** (`hydrate_file_tree.ts`):
+
+```typescript
+import { FileTree } from '@pierre/trees';
+
+const files = ['src/index.ts', 'src/components/Button.tsx', 'package.json'];
+
+const fileTree = new FileTree({ initialFiles: files });
+
+const container = document.querySelector('file-tree-container');
+if (container instanceof HTMLElement) {
+  fileTree.hydrate({ fileTreeContainer: container });
+}
+```
+
+**Preload File Tree** (`preloadFileTree.ts`):
 
 ```typescript
 import { preloadFileTree } from '@pierre/trees/ssr';
@@ -984,19 +1042,4 @@ export default async function Page() {
 // Client: use the React component with prerenderedHTML to hydrate,
 // or use vanilla FileTree and pass the same options + container that
 // holds the prerendered markup.
-```
-
-**Vanilla Hydration** (`hydrate_file_tree.ts`):
-
-```typescript
-import { FileTree } from '@pierre/trees';
-
-const files = ['src/index.ts', 'src/components/Button.tsx', 'package.json'];
-
-const fileTree = new FileTree({ initialFiles: files });
-
-const container = document.querySelector('file-tree-container');
-if (container instanceof HTMLElement) {
-  fileTree.hydrate({ fileTreeContainer: container });
-}
 ```
