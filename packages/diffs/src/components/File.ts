@@ -193,7 +193,7 @@ export class File<LAnnotation = undefined> {
     this.resizeManager = new ResizeManager();
     this.interactionManager = new InteractionManager(
       'file',
-      pluckInteractionOptions(options)
+      this.getInteractionManagerOptions(options)
     );
     this.workerManager?.subscribeToThemeChanges(this);
   }
@@ -214,11 +214,21 @@ export class File<LAnnotation = undefined> {
   public setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
-    this.interactionManager.setOptions(pluckInteractionOptions(options));
+    this.interactionManager.setOptions(
+      this.getInteractionManagerOptions(options)
+    );
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
     this.options = { ...this.options, ...options };
+  }
+
+  private getInteractionManagerOptions(options: FileOptions<LAnnotation>) {
+    return {
+      ...pluckInteractionOptions(options),
+      onSetup: this.setupMergeConflictActionListeners,
+      onCleanUp: this.cleanupMergeConflictActionListeners,
+    };
   }
 
   private getFileRendererOptions(
@@ -330,7 +340,6 @@ export class File<LAnnotation = undefined> {
     this.fileRenderer.cleanUp();
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
-    this.cleanupMergeConflictActionListeners();
 
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.workerManager = undefined;
@@ -414,7 +423,6 @@ export class File<LAnnotation = undefined> {
       this.renderGutterUtility();
       this.injectUnsafeCSS();
       this.interactionManager.setup(this.pre);
-      this.setupMergeConflictActionListeners(this.pre);
       this.resizeManager.setup(this.pre, overflow === 'wrap');
     }
   }
@@ -545,7 +553,6 @@ export class File<LAnnotation = undefined> {
       this.renderAnnotations();
       this.renderMergeConflictActions();
       this.renderGutterUtility();
-      this.setupMergeConflictActionListeners(pre);
     } catch (error: unknown) {
       if (disableErrorHandling) {
         throw error;
@@ -629,7 +636,6 @@ export class File<LAnnotation = undefined> {
   private removeRenderedCode(): void {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
-    this.cleanupMergeConflictActionListeners();
 
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
@@ -693,7 +699,6 @@ export class File<LAnnotation = undefined> {
   private cleanChildNodes() {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
-    this.cleanupMergeConflictActionListeners();
 
     this.bufferAfter?.remove();
     this.bufferBefore?.remove();
@@ -821,7 +826,7 @@ export class File<LAnnotation = undefined> {
     }
   }
 
-  private setupMergeConflictActionListeners(pre: HTMLPreElement): void {
+  private setupMergeConflictActionListeners = (pre: HTMLPreElement): void => {
     const mergeConflictActions = this.options.mergeConflictActions ?? 'default';
     if (mergeConflictActions !== 'default') {
       this.cleanupMergeConflictActionListeners();
@@ -833,15 +838,15 @@ export class File<LAnnotation = undefined> {
     this.cleanupMergeConflictActionListeners();
     pre.addEventListener('click', this.handleMergeConflictActionClick);
     this.mergeConflictListenerPre = pre;
-  }
+  };
 
-  private cleanupMergeConflictActionListeners(): void {
+  private cleanupMergeConflictActionListeners = (): void => {
     this.mergeConflictListenerPre?.removeEventListener(
       'click',
       this.handleMergeConflictActionClick
     );
     this.mergeConflictListenerPre = undefined;
-  }
+  };
 
   private renderGutterUtility() {
     const renderGutterUtility =
@@ -1288,7 +1293,7 @@ export class File<LAnnotation = undefined> {
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
-    this.cleanupMergeConflictActionListeners();
+    this.interactionManager.cleanUp();
     const pre = this.getOrCreatePreNode(container);
     pre.innerHTML = '';
     pre.parentNode?.removeChild(pre);
