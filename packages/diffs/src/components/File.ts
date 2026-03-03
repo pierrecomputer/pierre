@@ -2,7 +2,6 @@ import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
-  DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
@@ -14,6 +13,7 @@ import {
   type GetHoveredLineResult,
   InteractionManager,
   type InteractionManagerBaseOptions,
+  type InteractionManagerOptions,
   pluckInteractionOptions,
   type SelectedLineRange,
 } from '../managers/InteractionManager';
@@ -28,9 +28,6 @@ import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
-  MergeConflictActionPayload,
-  MergeConflictRegion,
-  MergeConflictResolution,
   PrePropertiesConfig,
   RenderFileMetadata,
   RenderRange,
@@ -38,7 +35,6 @@ import type {
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
-import { areMergeConflictRegionsEqual } from '../utils/areMergeConflictRegionsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
@@ -46,10 +42,8 @@ import { createGutterUtilityContentNode } from '../utils/createGutterUtilityCont
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
-import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
-import { resolveMergeConflict } from '../utils/resolveMergeConflict';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
@@ -91,19 +85,6 @@ export interface FileOptions<LAnnotation>
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
-  mergeConflictActions?:
-    | 'none'
-    | 'default'
-    | MergeConflictActionsRenderer<LAnnotation>;
-  /**
-   * Optional callback for merge conflict actions.
-   * If omitted and `mergeConflictActions` is `'default'`, the File instance
-   * applies conflict resolution internally for immediate UI updates.
-   */
-  onMergeConflictAction?(
-    payload: MergeConflictActionPayload,
-    instance: File<LAnnotation>
-  ): unknown;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null;
@@ -120,26 +101,9 @@ interface AnnotationElementCache<LAnnotation> {
   annotation: LineAnnotation<LAnnotation>;
 }
 
-type MergeConflictActionsRenderer<LAnnotation> = {
-  bivarianceHack(
-    conflict: MergeConflictRegion,
-    instance: File<LAnnotation>
-  ): HTMLElement | DocumentFragment;
-}['bivarianceHack'];
-
 interface ColumnElements {
   gutter: HTMLElement;
   content: HTMLElement;
-}
-
-interface MergeConflictActionElementCache {
-  element: HTMLElement;
-  conflict: MergeConflictRegion;
-}
-
-interface InternalMergeConflictState {
-  sourceContents: string;
-  resolvedFile: FileContents;
 }
 
 let instanceId = -1;
@@ -173,16 +137,10 @@ export class File<LAnnotation = undefined> {
 
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
-  protected mergeConflictActionCache: Map<
-    string,
-    MergeConflictActionElementCache
-  > = new Map();
   protected lineAnnotations: LineAnnotation<LAnnotation>[] = [];
-  protected mergeConflictListenerPre: HTMLPreElement | undefined;
 
   protected file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
-  protected internalMergeConflictState: InternalMergeConflictState | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -227,26 +185,16 @@ export class File<LAnnotation = undefined> {
     this.options = { ...this.options, ...options };
   }
 
-  private getInteractionManagerOptions(options: FileOptions<LAnnotation>) {
-    return {
-      ...pluckInteractionOptions(options),
-      onSetup: this.setupMergeConflictActionListeners,
-      onCleanUp: this.cleanupMergeConflictActionListeners,
-    };
+  private getInteractionManagerOptions(
+    options: FileOptions<LAnnotation>
+  ): InteractionManagerOptions<'file'> {
+    return pluckInteractionOptions<'file'>(options);
   }
 
   private getFileRendererOptions(
     options: FileOptions<LAnnotation> = this.options
   ): FileRendererOptions {
-    const mergeConflictActions =
-      typeof options.mergeConflictActions === 'function'
-        ? 'custom'
-        : (options.mergeConflictActions ?? 'default');
-
-    return {
-      ...options,
-      mergeConflictActions,
-    };
+    return options;
   }
 
   public setThemeType(themeType: ThemeTypes): void {
@@ -283,53 +231,6 @@ export class File<LAnnotation = undefined> {
     return this.interactionManager.getHoveredLine();
   };
 
-  private handleMergeConflictActionClick = (event: Event): void => {
-    const target = event.target;
-    if (!(target instanceof Element) || this.file == null) {
-      return;
-    }
-
-    const actionButton = target.closest('[data-merge-conflict-action]');
-    if (!(actionButton instanceof HTMLElement)) {
-      return;
-    }
-
-    if (this.pre == null || !this.pre.contains(actionButton)) {
-      return;
-    }
-
-    const resolution = actionButton.dataset
-      .mergeConflictAction as MergeConflictResolution;
-    if (!isMergeConflictResolution(resolution)) {
-      return;
-    }
-
-    const conflictIndex = Number.parseInt(
-      actionButton.dataset.mergeConflictIndex ?? '',
-      10
-    );
-    if (Number.isNaN(conflictIndex)) {
-      return;
-    }
-
-    const conflict = this.fileRenderer.getMergeConflictRegionByIndex(
-      this.file,
-      conflictIndex
-    );
-    if (conflict == null) {
-      return;
-    }
-
-    event.preventDefault();
-
-    const payload = { resolution, conflict };
-    if (this.options.onMergeConflictAction != null) {
-      this.options.onMergeConflictAction(payload, this);
-      return;
-    }
-    this.resolveMergeConflictInternally(payload);
-  };
-
   public setLineAnnotations(
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): void {
@@ -351,7 +252,6 @@ export class File<LAnnotation = undefined> {
 
     // Clean up the data
     this.file = undefined;
-    this.internalMergeConflictState = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
@@ -373,7 +273,6 @@ export class File<LAnnotation = undefined> {
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
     this.placeHolder = undefined;
-    this.mergeConflictActionCache.clear();
   }
 
   public hydrate(props: FileHyrdateProps<LAnnotation>): void {
@@ -422,7 +321,6 @@ export class File<LAnnotation = undefined> {
       this.file = file;
       this.fileRenderer.hydrate(file);
       this.renderAnnotations();
-      this.renderMergeConflictActions();
       this.renderGutterUtility();
       this.injectUnsafeCSS();
       this.interactionManager.setup(this.pre);
@@ -446,7 +344,6 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    file = this.getEffectiveFile(file);
     const { collapsed = false } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
@@ -554,7 +451,6 @@ export class File<LAnnotation = undefined> {
       this.interactionManager.setup(pre);
       this.resizeManager.setup(pre, overflow === 'wrap');
       this.renderAnnotations();
-      this.renderMergeConflictActions();
       this.renderGutterUtility();
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -566,68 +462,6 @@ export class File<LAnnotation = undefined> {
       }
     }
     return true;
-  }
-
-  private getEffectiveFile(file: FileContents): FileContents {
-    if (this.options.onMergeConflictAction != null) {
-      this.internalMergeConflictState = undefined;
-      return file;
-    }
-
-    const state = this.internalMergeConflictState;
-    if (state == null) {
-      return file;
-    }
-
-    // If the external caller has adopted the resolved content, or changed
-    // contents independently, stop carrying internal override state.
-    if (
-      file.contents === state.resolvedFile.contents ||
-      file.contents !== state.sourceContents
-    ) {
-      this.internalMergeConflictState = undefined;
-      return file;
-    }
-
-    return {
-      ...file,
-      contents: state.resolvedFile.contents,
-      cacheKey: state.resolvedFile.cacheKey,
-    };
-  }
-
-  private resolveMergeConflictInternally(
-    payload: MergeConflictActionPayload
-  ): void {
-    const file = this.file;
-    if (file == null) {
-      return;
-    }
-
-    const contents = resolveMergeConflict(file.contents, payload);
-    if (contents === file.contents) {
-      return;
-    }
-
-    const cacheKey =
-      file.cacheKey != null
-        ? `${file.cacheKey}:mc-${payload.conflict.conflictIndex}-${payload.resolution}`
-        : undefined;
-    const resolvedFile = { ...file, contents, cacheKey };
-    const sourceContents =
-      this.internalMergeConflictState?.sourceContents ?? file.contents;
-    this.internalMergeConflictState = { sourceContents, resolvedFile };
-
-    const renderFile = {
-      ...file,
-      contents: sourceContents,
-      cacheKey: file.cacheKey,
-    };
-    this.render({
-      file: renderFile,
-      forceRender: true,
-      renderRange: this.renderRange,
-    });
   }
 
   private removeRenderedCode(): void {
@@ -654,11 +488,6 @@ export class File<LAnnotation = undefined> {
       element.parentNode?.removeChild(element);
     }
     this.annotationCache.clear();
-
-    for (const { element } of this.mergeConflictActionCache.values()) {
-      element.parentNode?.removeChild(element);
-    }
-    this.mergeConflictActionCache.clear();
 
     this.gutterUtilityContent?.remove();
     this.gutterUtilityContent = undefined;
@@ -723,7 +552,6 @@ export class File<LAnnotation = undefined> {
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
-    this.mergeConflictActionCache.clear();
   }
 
   private renderAnnotations(): void {
@@ -769,81 +597,6 @@ export class File<LAnnotation = undefined> {
       element.parentNode?.removeChild(element);
     }
   }
-
-  private renderMergeConflictActions(): void {
-    if (
-      this.isContainerManaged ||
-      this.fileContainer == null ||
-      this.file == null
-    ) {
-      for (const { element } of this.mergeConflictActionCache.values()) {
-        element.parentNode?.removeChild(element);
-      }
-      this.mergeConflictActionCache.clear();
-      return;
-    }
-
-    const { mergeConflictActions } = this.options;
-    if (typeof mergeConflictActions !== 'function') {
-      for (const { element } of this.mergeConflictActionCache.values()) {
-        element.parentNode?.removeChild(element);
-      }
-      this.mergeConflictActionCache.clear();
-      return;
-    }
-
-    const staleActions = new Map(this.mergeConflictActionCache);
-    const renderRange = this.renderRange ?? DEFAULT_RENDER_RANGE;
-    const conflicts = this.fileRenderer.getMergeConflictRegions(
-      this.file,
-      renderRange
-    );
-    for (const conflict of conflicts) {
-      const slotName = getMergeConflictActionSlotName(conflict);
-      let cache = this.mergeConflictActionCache.get(slotName);
-      if (
-        cache == null ||
-        !areMergeConflictRegionsEqual(conflict, cache.conflict)
-      ) {
-        cache?.element.parentNode?.removeChild(cache.element);
-        const element = document.createElement('div');
-        element.style.display = 'contents';
-        element.slot = slotName;
-        element.appendChild(mergeConflictActions(conflict, this));
-        this.fileContainer.appendChild(element);
-        cache = { element, conflict };
-        this.mergeConflictActionCache.set(slotName, cache);
-      }
-      staleActions.delete(slotName);
-    }
-
-    for (const [slotName, { element }] of staleActions.entries()) {
-      this.mergeConflictActionCache.delete(slotName);
-      element.parentNode?.removeChild(element);
-    }
-  }
-
-  private setupMergeConflictActionListeners = (pre: HTMLPreElement): void => {
-    const mergeConflictActions = this.options.mergeConflictActions ?? 'default';
-    if (mergeConflictActions !== 'default') {
-      this.cleanupMergeConflictActionListeners();
-      return;
-    }
-    if (this.mergeConflictListenerPre === pre) {
-      return;
-    }
-    this.cleanupMergeConflictActionListeners();
-    pre.addEventListener('click', this.handleMergeConflictActionClick);
-    this.mergeConflictListenerPre = pre;
-  };
-
-  private cleanupMergeConflictActionListeners = (): void => {
-    this.mergeConflictListenerPre?.removeEventListener(
-      'click',
-      this.handleMergeConflictActionClick
-    );
-    this.mergeConflictListenerPre = undefined;
-  };
 
   private renderGutterUtility() {
     const renderGutterUtility =
@@ -1316,10 +1069,4 @@ export class File<LAnnotation = undefined> {
     this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
     this.errorWrapper = undefined;
   }
-}
-
-function isMergeConflictResolution(
-  value: string
-): value is MergeConflictResolution {
-  return value === 'current' || value === 'incoming' || value === 'both';
 }
