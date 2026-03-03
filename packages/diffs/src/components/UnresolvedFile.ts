@@ -1,5 +1,6 @@
 import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type { FileContents, FileDiffMetadata } from '../types';
+import { areFilesEqual } from '../utils/areFilesEqual';
 import { normalizeUnresolvedFileOptions } from '../utils/normalizeUnresolvedFileOptions';
 import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
 import type { WorkerPoolManager } from '../worker';
@@ -92,7 +93,7 @@ export class UnresolvedFile<
 
   private getOrCreateUnresolvedFileDiff(file: FileContents): FileDiffMetadata {
     const cache = this.unresolvedFileDiffCache;
-    if (cache != null && cache.file === file) {
+    if (cache != null && areFilesEqual(cache.file, file)) {
       return cache.fileDiff;
     }
     const { fileDiff } = parseMergeConflictDiffFromFile(file);
