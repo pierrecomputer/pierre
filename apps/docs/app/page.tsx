@@ -1,6 +1,6 @@
 import {
-  preloadFile,
   preloadFileDiff,
+  preloadMergeConflictDiff,
   preloadMultiFileDiff,
 } from '@pierre/diffs/ssr';
 
@@ -119,7 +119,7 @@ async function CustomHunkSeparatorsSection() {
 async function MergeConflictSection() {
   return (
     <MergeConflict
-      prerenderedFile={await preloadFile(MERGE_CONFLICT_EXAMPLE)}
+      prerenderedFile={await preloadMergeConflictDiff(MERGE_CONFLICT_EXAMPLE)}
     />
   );
 }

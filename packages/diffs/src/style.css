@@ -1241,47 +1241,51 @@
     }
   }
 
-  [data-file] [data-merge-conflict^='marker-'][data-line] {
-    color: var(--diffs-fg-conflict-marker);
-  }
-
-  [data-file] [data-merge-conflict^='marker-'][data-line] span {
-    color: var(--diffs-fg-conflict-marker) !important;
-  }
-
-  [data-file] [data-merge-conflict='marker-start'][data-line]::after {
-    content: '  (Current Change)';
-    color: var(--diffs-fg);
-    opacity: 0.5;
-    font-style: normal;
-    font-family: var(
-      --diffs-header-font-family,
-      var(--diffs-header-font-fallback)
-    );
-  }
-
-  [data-file] [data-merge-conflict='marker-end'][data-line]::after {
-    content: '  (Incoming Change)';
-    color: var(--diffs-fg);
-    opacity: 0.5;
-    font-style: normal;
-    font-family: var(
-      --diffs-header-font-family,
-      var(--diffs-header-font-fallback)
-    );
-  }
-
-  [data-file] [data-merge-conflict='marker-start'][data-line],
-  [data-file] [data-merge-conflict='marker-end'][data-line] {
+  :is([data-file], [data-diff])
+    [data-merge-conflict^='marker-'][data-line][data-line-type='context'],
+  :is([data-file], [data-diff])
+    [data-merge-conflict^='marker-'][data-line][data-line-type='context-expanded'] {
     color: var(--diffs-fg);
   }
 
-  [data-file] [data-merge-conflict='marker-start'][data-line] span,
-  [data-file] [data-merge-conflict='marker-end'][data-line] span {
+  :is([data-file], [data-diff])
+    [data-merge-conflict^='marker-'][data-line][data-line-type='context']
+    span,
+  :is([data-file], [data-diff])
+    [data-merge-conflict^='marker-'][data-line][data-line-type='context-expanded']
+    span {
     color: var(--diffs-fg) !important;
   }
 
-  [data-file] {
+  :is([data-file], [data-diff])
+    [data-merge-conflict='marker-start'][data-line][data-line-type='context']::after,
+  :is([data-file], [data-diff])
+    [data-merge-conflict='marker-start'][data-line][data-line-type='context-expanded']::after {
+    content: '  (Current Change)';
+    color: var(--diffs-fg-conflict-marker);
+    opacity: 1;
+    font-style: normal;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
+  }
+
+  :is([data-file], [data-diff])
+    [data-merge-conflict='marker-end'][data-line][data-line-type='context']::after,
+  :is([data-file], [data-diff])
+    [data-merge-conflict='marker-end'][data-line][data-line-type='context-expanded']::after {
+    content: '  (Incoming Change)';
+    color: var(--diffs-fg-conflict-marker);
+    opacity: 1;
+    font-style: normal;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
+  }
+
+  :is([data-file], [data-diff]) {
     [data-merge-conflict='marker-start'],
     [data-merge-conflict='current'],
     [data-merge-conflict='incoming'],
@@ -1331,6 +1335,10 @@
       &[data-column-number] {
         background-color: var(--diffs-bg-conflict-marker-number);
         color: var(--diffs-fg-conflict-marker);
+
+        [data-line-number-content] {
+          color: var(--diffs-fg-conflict-marker);
+        }
       }
     }
 
@@ -1355,6 +1363,10 @@
       &[data-column-number] {
         background-color: var(--conflict-bg-current-header-number);
         color: var(--diffs-addition-base);
+
+        [data-line-number-content] {
+          color: var(--diffs-addition-base);
+        }
       }
     }
 
@@ -1367,6 +1379,10 @@
       &[data-column-number] {
         background-color: var(--conflict-bg-incoming-header-number);
         color: var(--diffs-modified-base);
+
+        [data-line-number-content] {
+          color: var(--diffs-modified-base);
+        }
       }
     }
 

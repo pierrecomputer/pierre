@@ -251,6 +251,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const {
       diffIndicators = 'bars',
       diffStyle = 'split',
+      mergeConflictStyling = false,
       disableBackground = false,
       disableFileHeader = false,
       disableLineNumbers = false,
@@ -271,6 +272,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return {
       diffIndicators,
       diffStyle,
+      mergeConflictStyling,
       disableBackground,
       disableFileHeader,
       disableLineNumbers,
@@ -561,6 +563,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   ): HunksRenderResult {
     const {
       diffStyle,
+      mergeConflictStyling,
       disableFileHeader,
       expandUnchanged,
       expansionLineCount,
@@ -616,12 +619,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       type: CodeColumnType,
       lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
       lineNumber: number,
-      lineIndex: string
+      lineIndex: string,
+      mergeConflictType?: MergeConflictMarkerType
     ) {
-      context.pushToGutter(
-        type,
-        createGutterItem(lineType, lineNumber, lineIndex)
-      );
+      const item = createGutterItem(lineType, lineNumber, lineIndex);
+      if (mergeConflictType != null) {
+        item.properties['data-merge-conflict'] = mergeConflictType;
+      }
+      context.pushToGutter(type, item);
     }
 
     function flushSplitSpan() {
@@ -713,7 +718,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
-
+          const deletionLineRaw =
+            deletionLine != null
+              ? fileDiff.deletionLines[deletionLine.lineIndex]
+              : undefined;
+          const additionLineRaw =
+            additionLine != null
+              ? fileDiff.additionLines[additionLine.lineIndex]
+              : undefined;
           if (deletionLineContent == null && additionLineContent == null) {
             const errorMessage =
               'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
@@ -726,13 +738,29 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 ? 'change-addition'
                 : 'change-deletion'
               : type;
+          const renderedLineType =
+            mergeConflictStyling && type === 'change' ? 'context' : lineType;
+          const mergeConflictType = !mergeConflictStyling
+            ? undefined
+            : type === 'change'
+              ? lineType === 'change-deletion'
+                ? 'current'
+                : 'incoming'
+              : (getMergeConflictMarkerType(additionLineRaw) ??
+                getMergeConflictMarkerType(deletionLineRaw));
           pushGutterLineNumber(
             'unified',
-            lineType,
+            renderedLineType,
             additionLine != null
               ? additionLine.lineNumber
               : deletionLine.lineNumber,
-            `${unifiedLineIndex},${splitLineIndex}`
+            `${unifiedLineIndex},${splitLineIndex}`,
+            mergeConflictType
+          );
+          setMergeConflictAttribute(
+            additionLineContent ?? deletionLineContent,
+            type,
+            mergeConflictType
           );
           pushLineWithAnnotation({
             diffStyle: 'unified',
@@ -757,6 +785,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
+          const deletionLineRaw =
+            deletionLine != null
+              ? fileDiff.deletionLines[deletionLine.lineIndex]
+              : undefined;
+          const additionLineRaw =
+            additionLine != null
+              ? fileDiff.additionLines[additionLine.lineIndex]
+              : undefined;
+          const deletionMergeConflictType = !mergeConflictStyling
+            ? undefined
+            : type === 'change'
+              ? 'current'
+              : getMergeConflictMarkerType(deletionLineRaw);
+          const additionMergeConflictType = !mergeConflictStyling
+            ? undefined
+            : type === 'change'
+              ? 'incoming'
+              : getMergeConflictMarkerType(additionLineRaw);
 
           if (deletionLineContent == null && additionLineContent == null) {
             const errorMessage =
@@ -803,17 +849,37 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (deletionLine != null) {
             pushGutterLineNumber(
               'deletions',
-              type === 'change' ? 'change-deletion' : type,
+              mergeConflictStyling && type === 'change'
+                ? 'context'
+                : type === 'change'
+                  ? 'change-deletion'
+                  : type,
               deletionLine.lineNumber,
-              `${deletionLine.unifiedLineIndex},${splitLineIndex}`
+              `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
+              deletionMergeConflictType
+            );
+            setMergeConflictAttribute(
+              deletionLineContent,
+              type,
+              deletionMergeConflictType
             );
           }
           if (additionLine != null) {
             pushGutterLineNumber(
               'additions',
-              type === 'change' ? 'change-addition' : type,
+              mergeConflictStyling && type === 'change'
+                ? 'context'
+                : type === 'change'
+                  ? 'change-addition'
+                  : type,
               additionLine.lineNumber,
-              `${additionLine.unifiedLineIndex},${splitLineIndex}`
+              `${additionLine.unifiedLineIndex},${splitLineIndex}`,
+              additionMergeConflictType
+            );
+            setMergeConflictAttribute(
+              additionLineContent,
+              type,
+              additionMergeConflictType
             );
           }
           pushLineWithAnnotation({
@@ -1164,6 +1230,69 @@ function areRenderOptionsEqual(
 
 function getModifiedLinesString(lines: number) {
   return `${lines} unmodified line${lines > 1 ? 's' : ''}`;
+}
+
+type MergeConflictMarkerType =
+  | 'marker-start'
+  | 'marker-base'
+  | 'marker-separator'
+  | 'marker-end'
+  | 'current'
+  | 'incoming';
+
+const START_MARKER = /^<{7,}(?:\s.*)?$/;
+const BASE_MARKER = /^\|{7,}(?:\s.*)?$/;
+const SEPARATOR_MARKER = /^={7,}(?:\s.*)?$/;
+const END_MARKER = /^>{7,}(?:\s.*)?$/;
+
+function getMergeConflictMarkerType(
+  line: string | undefined
+): MergeConflictMarkerType | undefined {
+  if (line == null) {
+    return undefined;
+  }
+  const trimmed = line.replace(/(?:\r\n|\n|\r)$/, '');
+  if (START_MARKER.test(trimmed)) return 'marker-start';
+  if (BASE_MARKER.test(trimmed)) return 'marker-base';
+  if (SEPARATOR_MARKER.test(trimmed)) return 'marker-separator';
+  if (END_MARKER.test(trimmed)) return 'marker-end';
+  return undefined;
+}
+
+function setMergeConflictAttribute(
+  node: ElementContent | undefined,
+  lineType: 'change' | 'context' | 'context-expanded',
+  mergeConflictType: MergeConflictMarkerType | undefined
+): void {
+  if (node == null || node.type !== 'element') {
+    return;
+  }
+  if (mergeConflictType == null) {
+    delete node.properties['data-merge-conflict'];
+    return;
+  }
+
+  const isMarkerLine =
+    mergeConflictType === 'marker-start' ||
+    mergeConflictType === 'marker-base' ||
+    mergeConflictType === 'marker-separator' ||
+    mergeConflictType === 'marker-end';
+  const isChangeLine =
+    mergeConflictType === 'current' || mergeConflictType === 'incoming';
+
+  if (
+    (isMarkerLine &&
+      lineType !== 'context' &&
+      lineType !== 'context-expanded') ||
+    (isChangeLine && lineType !== 'change')
+  ) {
+    delete node.properties['data-merge-conflict'];
+    return;
+  }
+  if (isChangeLine) {
+    node.properties['data-line-type'] = 'context';
+  }
+  node.properties['data-merge-conflict'] = mergeConflictType;
 }
 
 function pushLineWithAnnotation({

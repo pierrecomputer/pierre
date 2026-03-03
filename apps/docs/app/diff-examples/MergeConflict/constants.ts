@@ -1,11 +1,18 @@
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import type { PreloadMergeConflictDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const MERGE_CONFLICT_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'auth-session.ts',
-    contents: `import { db } from './db';
+const MERGE_CONFLICT_NO_SIDEBAR_CSS = `
+[data-merge-conflict][data-column-number]::before {
+  display: none !important;
+}
+`;
+
+export const MERGE_CONFLICT_EXAMPLE: PreloadMergeConflictDiffOptions<undefined> =
+  {
+    file: {
+      name: 'auth-session.ts',
+      contents: `import { db } from './db';
 
 export async function createSession(userId: string) {
 <<<<<<< HEAD
@@ -26,10 +33,11 @@ export async function createSession(userId: string) {
   return session;
 }
 `,
-  },
-  options: {
-    theme: 'pierre-dark',
-    overflow: 'wrap',
-    unsafeCSS: CustomScrollbarCSS,
-  },
-};
+    },
+    options: {
+      theme: 'pierre-dark',
+      overflow: 'wrap',
+      diffIndicators: 'none',
+      unsafeCSS: `${CustomScrollbarCSS}\n${MERGE_CONFLICT_NO_SIDEBAR_CSS}`,
+    },
+  };
