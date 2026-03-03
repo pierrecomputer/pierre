@@ -191,7 +191,7 @@ function processNotices(mdx: string): string {
 
     const noticeEnd = mdx.indexOf('</Notice>', noticeStart);
     if (noticeEnd === -1) {
-      result.push(mdx.slice(pos));
+      result.push(mdx.slice(noticeStart));
       break;
     }
 
