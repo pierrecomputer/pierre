@@ -1,3 +1,4 @@
+import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type { FileContents, FileDiffMetadata } from '../types';
 import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
 import type { WorkerPoolManager } from '../worker';
@@ -45,7 +46,6 @@ export class UnresolvedFile<
       {
         ...options,
         diffStyle: 'unified',
-        mergeConflictStyling: true,
         lineDiffType: options.lineDiffType ?? 'none',
       },
       workerManager,
@@ -60,9 +60,18 @@ export class UnresolvedFile<
     super.setOptions({
       ...options,
       diffStyle: 'unified',
-      mergeConflictStyling: true,
       lineDiffType: options.lineDiffType ?? 'none',
     });
+  }
+
+  protected override createHunksRenderer(
+    options: FileDiffOptions<LAnnotation>
+  ): UnresolvedFileHunksRenderer<LAnnotation> {
+    return new UnresolvedFileHunksRenderer(
+      this.getHunksRendererOptions(options),
+      this.handleHighlightRender,
+      this.workerManager
+    );
   }
 
   override cleanUp(): void {

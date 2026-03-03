@@ -364,11 +364,6 @@ export interface BaseCodeOptions {
 export interface BaseDiffOptions extends BaseCodeOptions {
   diffStyle?: 'unified' | 'split'; // split is default
   diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
-  /**
-   * Internal toggle for merge-conflict-aware row semantics in diff renderers.
-   * Defaults to false and should only be enabled by merge-conflict primitives.
-   */
-  mergeConflictStyling?: boolean;
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
   expandUnchanged?: boolean; // false is default

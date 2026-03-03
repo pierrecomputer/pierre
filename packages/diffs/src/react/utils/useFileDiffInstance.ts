@@ -8,6 +8,7 @@ import {
 
 import { FileDiff, type FileDiffOptions } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
+import type { Virtualizer } from '../../components/Virtualizer';
 import type {
   GetHoveredLineResult,
   SelectedLineRange,
@@ -19,6 +20,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
+import type { WorkerPoolManager } from '../../worker';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -35,6 +37,16 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
+  createFileDiffInstance?(
+    options: FileDiffOptions<LAnnotation> | undefined,
+    poolManager: WorkerPoolManager | undefined
+  ): FileDiff<LAnnotation>;
+  createVirtualizedFileDiffInstance?(
+    options: FileDiffOptions<LAnnotation> | undefined,
+    virtualizer: Virtualizer,
+    metrics: VirtualFileMetrics | undefined,
+    poolManager: WorkerPoolManager | undefined
+  ): VirtualizedFileDiff<LAnnotation>;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -51,6 +63,8 @@ export function useFileDiffInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
   metrics,
+  createFileDiffInstance,
+  createVirtualizedFileDiffInstance,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -65,15 +79,24 @@ export function useFileDiffInstance<LAnnotation>({
         );
       }
       if (simpleVirtualizer != null) {
-        instanceRef.current = new VirtualizedFileDiff(
-          options,
-          simpleVirtualizer,
-          metrics,
-          poolManager,
-          true
-        );
+        instanceRef.current =
+          createVirtualizedFileDiffInstance?.(
+            options,
+            simpleVirtualizer,
+            metrics,
+            poolManager
+          ) ??
+          new VirtualizedFileDiff(
+            options,
+            simpleVirtualizer,
+            metrics,
+            poolManager,
+            true
+          );
       } else {
-        instanceRef.current = new FileDiff(options, poolManager, true);
+        instanceRef.current =
+          createFileDiffInstance?.(options, poolManager) ??
+          new FileDiff(options, poolManager, true);
       }
       void instanceRef.current.hydrate({
         fileDiff,

@@ -1,5 +1,6 @@
 import type { FileDiffOptions } from '../components/FileDiff';
 import { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
+import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type {
   DiffLineAnnotation,
   FileContents,
@@ -180,19 +181,37 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   const mergeConflictOptions = {
     ...options,
     diffStyle: 'unified' as const,
-    mergeConflictStyling: true,
     lineDiffType: options?.lineDiffType ?? 'none',
     unsafeCSS: getMergeConflictActionsUnsafeCSS(options?.unsafeCSS),
   };
+  const diffHunksRenderer = new UnresolvedFileHunksRenderer<
+    LAnnotation | MergeConflictActionAnnotationMetadata
+  >({
+    ...mergeConflictOptions,
+    hunkSeparators:
+      typeof mergeConflictOptions.hunkSeparators === 'function'
+        ? 'custom'
+        : mergeConflictOptions.hunkSeparators,
+  });
+  if (mergedAnnotations.length > 0) {
+    diffHunksRenderer.setLineAnnotations(mergedAnnotations);
+  }
+  const hunkResult = await diffHunksRenderer.asyncRender(fileDiff);
+  const children = [createStyleElement(hunkResult.css, true)];
+  if (mergeConflictOptions.unsafeCSS != null) {
+    children.push(createStyleElement(mergeConflictOptions.unsafeCSS));
+  }
+  if (hunkResult.headerElement != null) {
+    children.push(hunkResult.headerElement);
+  }
+  const code = diffHunksRenderer.renderFullAST(hunkResult);
+  code.properties['data-dehydrated'] = '';
+  children.push(code);
   return {
     file,
     options: mergeConflictOptions,
     annotations: mergedAnnotations,
-    prerenderedHTML: await preloadDiffHTML({
-      fileDiff,
-      options: mergeConflictOptions,
-      annotations: mergedAnnotations,
-    }),
+    prerenderedHTML: renderHTML(children),
   };
 }
 
