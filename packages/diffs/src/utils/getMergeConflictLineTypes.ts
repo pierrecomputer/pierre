@@ -52,7 +52,7 @@ export function getMergeConflictActionLineNumber(
 }
 
 function parseMergeConflicts(lines: string[]): MergeConflictParseResult {
-  const lineTypes = new Array<MergeConflictLineType>(lines.length).fill('none');
+  const lineTypes = new Array<MergeConflictLineType>(lines.length);
   const stack: MergeConflictFrame[] = [];
   const regions: MergeConflictRegion[] = [];
 
@@ -67,6 +67,7 @@ function parseMergeConflicts(lines: string[]): MergeConflictParseResult {
 
     const frame = stack.at(-1);
     if (frame == null) {
+      lineTypes[index] = 'none';
       continue;
     }
 
