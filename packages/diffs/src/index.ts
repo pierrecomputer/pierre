@@ -7,7 +7,6 @@ export * from './components/File';
 export * from './components/FileDiff';
 export * from './components/FileStream';
 export * from './components/UnresolvedFile';
-export * from './components/MergeConflictDiff';
 export * from './components/VirtualizedFile';
 export * from './components/VirtualizedFileDiff';
 export * from './components/Virtualizer';

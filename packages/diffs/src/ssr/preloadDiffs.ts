@@ -196,12 +196,6 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   };
 }
 
-export type PreloadMergeConflictDiffOptions<LAnnotation> =
-  PreloadUnresolvedFileOptions<LAnnotation>;
-export type PreloadMergeConflictDiffResult<LAnnotation> =
-  PreloadUnresolvedFileResult<LAnnotation>;
-export const preloadMergeConflictDiff = preloadUnresolvedFile;
-
 export interface PreloadPatchDiffOptions<LAnnotation> {
   patch: string;
   options?: FileDiffOptions<LAnnotation>;
