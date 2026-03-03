@@ -1,0 +1,25 @@
+# @pierre/trees
+
+> An open source file tree rendering library for the web. Built on @headless-tree/core for state management, with React and vanilla JS APIs, SSR support, and customizable styling.
+
+- Package: `@pierre/trees` on [npm](https://www.npmjs.com/package/@pierre/trees)
+- GitHub: https://github.com/pierrecomputer/pierre
+- Install: `npm install @pierre/trees`
+
+## Docs
+
+- [Overview](https://diffs.com/trees/docs#overview): What file tree is, architecture, and getting started
+- [Installation](https://diffs.com/trees/docs#installation): Package installation and entry points
+- [Core Types](https://diffs.com/trees/docs#core-types): FileTreeOptions, FileTreeSelectionItem, FileTreeSearchMode, and configuration
+- [React API](https://diffs.com/trees/docs#react-api): FileTree React component and props
+- [Vanilla JS API](https://diffs.com/trees/docs#vanilla-js-api): FileTree class, constructor options, instance methods, and FileTreeStateConfig
+- [Git Status](https://diffs.com/trees/docs#git-status): Git-style file status indicators
+- [Custom Icons](https://diffs.com/trees/docs#custom-icons): Custom SVG sprite sheets and icon remapping
+- [Utilities](https://diffs.com/trees/docs#utilities): sortChildren, generateSyncDataLoader, generateLazyDataLoader
+- [Styling](https://diffs.com/trees/docs#styling): CSS variables and inline style overrides
+- [SSR](https://diffs.com/trees/docs#ssr): preloadFileTree for server-side rendering and vanilla hydration
+
+## See also
+
+- [@pierre/diffs](https://diffs.com/llms.txt): Diff and code rendering library
+- [Full documentation](https://diffs.com/trees/llms-full.txt): Complete @pierre/trees docs in a single file

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "bun run build:deps && bun run build:next",
+    "build": "bun run build:deps && bun run generate-llms-txt && bun run build:next",
     "build:next": "next build --turbopack",
     "build:deps": "bun run build:deps:diffs && bun run build:deps:tree",
     "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
@@ -14,6 +14,7 @@
     "dev:deps:tree": "(cd ../../packages/trees && bun run dev)",
     "prod": "bun run build && next start",
     "start": "next start",
+    "generate-llms-txt": "bun scripts/generate-llms-txt.ts",
     "tsc": "bun run build:deps && tsgo --noEmit --pretty"
   },
   "dependencies": {

@@ -1,0 +1,27 @@
+# @pierre/diffs
+
+> An open source diff and code rendering library for the web. Built on Shiki for syntax highlighting, with React and vanilla JS APIs, virtualization, SSR support, and extensive theming.
+
+- Package: `@pierre/diffs` on [npm](https://www.npmjs.com/package/@pierre/diffs)
+- GitHub: https://github.com/pierrecomputer/pierre
+- Install: `npm install @pierre/diffs`
+
+## Docs
+
+- [Overview](https://diffs.com/docs#overview): What diffs is, architecture, and getting started
+- [Installation](https://diffs.com/docs#installation): Package installation and entry points
+- [Core Types](https://diffs.com/docs#core-types): FileContents, FileDiffMetadata, and creating diffs from files or patches
+- [React API](https://diffs.com/docs#react-api): MultiFileDiff, PatchDiff, FileDiff, File components and shared props
+- [Vanilla JS API](https://diffs.com/docs#vanilla-js-api): FileDiff and File classes, props, custom hunk separators, and low-level renderers
+- [Virtualization](https://diffs.com/docs#virtualization): Virtual scrolling for large diffs and files
+- [Custom Hunk Separators](https://diffs.com/docs#custom-hunk-separators): Built-in separator presets and custom separator UI
+- [Utilities](https://diffs.com/docs#utilities): parseDiffFromFile, parsePatchFiles, highlighter management, accept/reject hunks
+- [Styling](https://diffs.com/docs#styling): CSS variables, inline styles, and unsafe CSS injection
+- [Themes](https://diffs.com/docs#themes): Pierre Light/Dark themes, custom theme creation, and registration
+- [Worker Pool](https://diffs.com/docs#worker-pool): Off-main-thread syntax highlighting with configurable worker pools
+- [SSR](https://diffs.com/docs#ssr): Server-side rendering with preload functions for instant first paint
+
+## See also
+
+- [@pierre/trees](https://diffs.com/trees/llms.txt): File tree rendering library
+- [Full documentation](https://diffs.com/llms-full.txt): Complete @pierre/diffs docs in a single file
