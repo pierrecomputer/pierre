@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import {
   getMergeConflictActionLineNumber,
+  getMergeConflictLineTypes,
   getMergeConflictRegions,
 } from './getMergeConflictLineTypes';
 import { processFile } from './parsePatchFiles';
@@ -68,9 +69,7 @@ export function parseMergeConflictDiffFromFile(
   file: FileContents
 ): ParseMergeConflictDiffFromFileResult {
   const lines = splitFileContents(file.contents);
-  const conflicts = getMergeConflictRegions(lines)
-    .slice()
-    .sort((a, b) => a.startLineIndex - b.startLineIndex);
+  const lineTypes = getMergeConflictLineTypes(lines);
   const currentLines: string[] = [];
   const incomingLines: string[] = [];
   const patchLines: string[] = [];
@@ -82,89 +81,52 @@ export function parseMergeConflictDiffFromFile(
   );
   let currentLineNumber = 0;
   let incomingLineNumber = 0;
-  let cursor = 0;
-  const parsedConflicts: MergeConflictRegion[] = [];
-
-  const appendContextLine = (index: number): void => {
+  for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    currentLines.push(line);
-    incomingLines.push(line);
-    patchLines.push(` ${line}`);
-    currentLineNumber++;
-    incomingLineNumber++;
-    currentLineNumbersByOriginalIndex[index] = currentLineNumber;
-    incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
-  };
-
-  const appendCurrentOnlyLine = (index: number): void => {
-    const line = lines[index];
-    currentLines.push(line);
-    patchLines.push(`-${line}`);
-    currentLineNumber++;
-    currentLineNumbersByOriginalIndex[index] = currentLineNumber;
-  };
-
-  const appendIncomingOnlyLine = (index: number): void => {
-    const line = lines[index];
-    incomingLines.push(line);
-    patchLines.push(`+${line}`);
-    incomingLineNumber++;
-    incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
-  };
-
-  for (const conflict of conflicts) {
-    if (conflict.startLineIndex < cursor) {
-      continue;
-    }
-    parsedConflicts.push(conflict);
-
-    for (let index = cursor; index < conflict.startLineIndex; index++) {
-      appendContextLine(index);
-    }
-
-    appendContextLine(conflict.startLineIndex);
-
-    const currentStart = conflict.startLineIndex + 1;
-    const currentEnd =
-      conflict.baseMarkerLineIndex ?? conflict.separatorLineIndex;
-    const incomingStart = conflict.separatorLineIndex + 1;
-    const incomingEnd = conflict.endLineIndex;
-    const sectionLength = Math.max(
-      currentEnd - currentStart,
-      incomingEnd - incomingStart
-    );
-
-    for (let offset = 0; offset < sectionLength; offset++) {
-      const currentIndex = currentStart + offset;
-      const incomingIndex = incomingStart + offset;
-
-      if (currentIndex < currentEnd) {
-        appendCurrentOnlyLine(currentIndex);
+    const lineType = lineTypes[index] ?? 'none';
+    switch (lineType) {
+      case 'none': {
+        currentLines.push(line);
+        incomingLines.push(line);
+        patchLines.push(` ${line}`);
+        currentLineNumber++;
+        incomingLineNumber++;
+        currentLineNumbersByOriginalIndex[index] = currentLineNumber;
+        incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
+        break;
       }
-      if (incomingIndex < incomingEnd) {
-        appendIncomingOnlyLine(incomingIndex);
+      case 'current': {
+        currentLines.push(line);
+        patchLines.push(`-${line}`);
+        currentLineNumber++;
+        currentLineNumbersByOriginalIndex[index] = currentLineNumber;
+        break;
+      }
+      case 'incoming': {
+        incomingLines.push(line);
+        patchLines.push(`+${line}`);
+        incomingLineNumber++;
+        incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
+        break;
+      }
+      case 'base':
+      case 'marker-start':
+      case 'marker-base':
+      case 'marker-separator':
+      case 'marker-end': {
+        currentLines.push(line);
+        incomingLines.push(line);
+        patchLines.push(` ${line}`);
+        currentLineNumber++;
+        incomingLineNumber++;
+        currentLineNumbersByOriginalIndex[index] = currentLineNumber;
+        incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
+        break;
+      }
+      default: {
+        assertNever(lineType);
       }
     }
-
-    if (conflict.baseMarkerLineIndex != null) {
-      appendContextLine(conflict.baseMarkerLineIndex);
-      for (
-        let index = conflict.baseMarkerLineIndex + 1;
-        index < conflict.separatorLineIndex;
-        index++
-      ) {
-        appendContextLine(index);
-      }
-    }
-
-    appendContextLine(conflict.separatorLineIndex);
-    appendContextLine(conflict.endLineIndex);
-
-    cursor = conflict.endLineIndex + 1;
-  }
-
-  for (let index = cursor; index < lines.length; index++) {
-    appendContextLine(index);
   }
 
   const currentFile = createResolvedConflictFile(file, 'current', currentLines);
@@ -196,7 +158,7 @@ export function parseMergeConflictDiffFromFile(
     );
   }
 
-  const actions = parsedConflicts.map((conflict) => {
+  const actions = getMergeConflictRegions(lines).map((conflict) => {
     const actionOriginalLineNumber = getMergeConflictActionLineNumber(conflict);
     const actionOriginalLineIndex = actionOriginalLineNumber - 1;
     return {
@@ -255,4 +217,10 @@ function createResolvedConflictFile(
         ? `${file.cacheKey}:merge-conflict-${side}`
         : undefined,
   };
+}
+
+function assertNever(value: never): never {
+  throw new Error(
+    `parseMergeConflictDiffFromFile: unknown merge conflict line type ${String(value)}`
+  );
 }
