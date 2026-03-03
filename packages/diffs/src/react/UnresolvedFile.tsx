@@ -16,7 +16,7 @@ import type {
   MergeConflictActionPayload,
   MergeConflictResolution,
 } from '../types';
-import { getMergeConflictActionsUnsafeCSS } from '../utils/getMergeConflictActionsUnsafeCSS';
+import { normalizeUnresolvedFileOptions } from '../utils/normalizeUnresolvedFileOptions';
 import {
   getMergeConflictActionAnnotations,
   type MergeConflictActionAnnotationMetadata,
@@ -228,12 +228,10 @@ export function UnresolvedFile<LAnnotation = undefined>({
       : undefined;
 
   const unresolvedOptions = useMemo(
-    () => ({
-      ...fileDiffOptions,
-      diffStyle: 'unified' as const,
-      lineDiffType: fileDiffOptions.lineDiffType ?? 'none',
-      unsafeCSS: getMergeConflictActionsUnsafeCSS(fileDiffOptions.unsafeCSS),
-    }),
+    () =>
+      normalizeUnresolvedFileOptions(fileDiffOptions, {
+        includeActionsUnsafeCSS: true,
+      }),
     [fileDiffOptions]
   );
 
