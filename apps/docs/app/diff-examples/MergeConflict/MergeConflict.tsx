@@ -1,7 +1,7 @@
 'use client';
 
-import { File } from '@pierre/diffs/react';
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
+import { MergeConflictDiff } from '@pierre/diffs/react';
+import type { PreloadMergeConflictDiffResult } from '@pierre/diffs/ssr';
 import { IconColorDark, IconColorLight } from '@pierre/icons';
 import { useMemo, useState } from 'react';
 
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface MergeConflictProps {
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadMergeConflictDiffResult<undefined>;
 }
 
 export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
@@ -32,9 +32,10 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         title="Merge conflict resolution UI"
         description={
           <>
-            Render inline merge actions for each conflict block much like VS
-            Code. Resolve by choosing current, incoming, or both changes and
-            preview the updated file instantly using default behavior.
+            Render conflicts through a dedicated diff primitive that treats
+            current and incoming sections as structured additions/deletions
+            without running text diffing. Resolve by choosing current, incoming,
+            or both changes and preview the updated file instantly.
           </>
         }
       />
@@ -58,7 +59,7 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         </ButtonGroup>
       </div>
 
-      <File
+      <MergeConflictDiff
         key={instanceKey}
         file={prerenderedFile.file}
         options={options}

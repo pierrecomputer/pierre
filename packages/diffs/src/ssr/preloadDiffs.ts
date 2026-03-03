@@ -6,8 +6,14 @@ import type {
   FileDiffMetadata,
 } from '../types';
 import { createStyleElement } from '../utils/createStyleElement';
+import { getMergeConflictActionsUnsafeCSS } from '../utils/getMergeConflictActionsUnsafeCSS';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+import {
+  getMergeConflictActionAnnotations,
+  type MergeConflictActionAnnotationMetadata,
+  parseMergeConflictDiffFromFile,
+} from '../utils/parseMergeConflictDiffFromFile';
 import { renderHTML } from './renderHTML';
 
 export interface PreloadDiffOptions<LAnnotation> {
@@ -129,6 +135,63 @@ export async function preloadFileDiff<LAnnotation = undefined>({
       fileDiff,
       options,
       annotations,
+    }),
+  };
+}
+
+export interface PreloadMergeConflictDiffOptions<LAnnotation> {
+  file: FileContents;
+  options?: FileDiffOptions<
+    LAnnotation | MergeConflictActionAnnotationMetadata
+  > & {
+    mergeConflictActions?: 'none' | 'default';
+  };
+  annotations?: DiffLineAnnotation<LAnnotation>[];
+}
+
+export interface PreloadMergeConflictDiffResult<LAnnotation> {
+  file: FileContents;
+  options?: FileDiffOptions<
+    LAnnotation | MergeConflictActionAnnotationMetadata
+  > & {
+    mergeConflictActions?: 'none' | 'default';
+  };
+  annotations?: DiffLineAnnotation<
+    LAnnotation | MergeConflictActionAnnotationMetadata
+  >[];
+  prerenderedHTML: string;
+}
+
+export async function preloadMergeConflictDiff<LAnnotation = undefined>({
+  file,
+  options,
+  annotations,
+}: PreloadMergeConflictDiffOptions<LAnnotation>): Promise<
+  PreloadMergeConflictDiffResult<LAnnotation>
+> {
+  const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
+  const includeDefaultActions = options?.mergeConflictActions !== 'none';
+  const mergeConflictAnnotations = includeDefaultActions
+    ? getMergeConflictActionAnnotations(actions)
+    : [];
+  const mergedAnnotations: DiffLineAnnotation<
+    LAnnotation | MergeConflictActionAnnotationMetadata
+  >[] = [...(annotations ?? []), ...mergeConflictAnnotations];
+  const mergeConflictOptions = {
+    ...options,
+    diffStyle: 'unified' as const,
+    mergeConflictStyling: true,
+    lineDiffType: options?.lineDiffType ?? 'none',
+    unsafeCSS: getMergeConflictActionsUnsafeCSS(options?.unsafeCSS),
+  };
+  return {
+    file,
+    options: mergeConflictOptions,
+    annotations: mergedAnnotations,
+    prerenderedHTML: await preloadDiffHTML({
+      fileDiff,
+      options: mergeConflictOptions,
+      annotations: mergedAnnotations,
     }),
   };
 }
