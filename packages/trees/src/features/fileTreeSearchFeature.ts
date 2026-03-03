@@ -325,22 +325,26 @@ export const fileTreeSearchFeature: FeatureImplementation = {
             onClick?: (e: MouseEvent) => void;
           })
         | undefined;
-      if (!tree.isSearchOpen()) return props;
 
       return {
         ...props,
         onMouseDown: (e: MouseEvent) => {
-          // Prevent the default focus-transfer so the search input keeps
-          // focus and no blur event fires before the click handler runs.
-          e.preventDefault();
+          if (tree.isSearchOpen()) {
+            // Prevent the default focus-transfer so the search input keeps
+            // focus and no blur event fires before the click handler runs.
+            e.preventDefault();
+          }
           props?.onMouseDown?.(e);
         },
         onClick: (e: MouseEvent) => {
+          const shouldCloseSearch = tree.isSearchOpen();
           // Let the selection feature handle the click first (sets
           // selectedItems), then close search. restoreExpandedItems
           // will now see the correct selection and expand ancestors.
           props?.onClick?.(e);
-          tree.closeSearch();
+          if (shouldCloseSearch) {
+            tree.closeSearch();
+          }
         },
       };
     },
