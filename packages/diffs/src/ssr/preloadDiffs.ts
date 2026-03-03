@@ -2,13 +2,14 @@ import type { FileDiffOptions } from '../components/FileDiff';
 import { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
 import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type {
+  BaseDiffOptions,
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
 } from '../types';
 import { createStyleElement } from '../utils/createStyleElement';
-import { getMergeConflictActionsUnsafeCSS } from '../utils/getMergeConflictActionsUnsafeCSS';
 import { getSingularPatch } from '../utils/getSingularPatch';
+import { normalizeUnresolvedFileOptions } from '../utils/normalizeUnresolvedFileOptions';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
   getMergeConflictActionAnnotations,
@@ -23,6 +24,49 @@ export interface PreloadDiffOptions<LAnnotation> {
   newFile?: FileContents;
   options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
+}
+
+function getHunksRendererOptions<LAnnotation>(
+  options: FileDiffOptions<LAnnotation> | undefined
+): BaseDiffOptions {
+  return {
+    ...options,
+    hunkSeparators:
+      typeof options?.hunkSeparators === 'function'
+        ? 'custom'
+        : options?.hunkSeparators,
+  };
+}
+
+async function preloadDiffHTMLWithRenderer<LAnnotation>({
+  fileDiff,
+  options,
+  annotations,
+  renderer,
+}: {
+  fileDiff: FileDiffMetadata;
+  options: FileDiffOptions<LAnnotation> | undefined;
+  annotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  renderer: DiffHunksRenderer<LAnnotation>;
+}): Promise<string> {
+  if (annotations != null && annotations.length > 0) {
+    renderer.setLineAnnotations(annotations);
+  }
+
+  const hunkResult = await renderer.asyncRender(fileDiff);
+  const children = [createStyleElement(hunkResult.css, true)];
+
+  if (options?.unsafeCSS != null) {
+    children.push(createStyleElement(options.unsafeCSS));
+  }
+  if (hunkResult.headerElement != null) {
+    children.push(hunkResult.headerElement);
+  }
+
+  const code = renderer.renderFullAST(hunkResult);
+  code.properties['data-dehydrated'] = '';
+  children.push(code);
+  return renderHTML(children);
 }
 
 export async function preloadDiffHTML<LAnnotation = undefined>({
@@ -40,35 +84,14 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
       'preloadFileDiff: You must pass at least a fileDiff prop or oldFile/newFile props'
     );
   }
-  const diffHunksRenderer = new DiffHunksRenderer<LAnnotation>({
-    ...options,
-    hunkSeparators:
-      typeof options?.hunkSeparators === 'function'
-        ? 'custom'
-        : options?.hunkSeparators,
+  return preloadDiffHTMLWithRenderer({
+    fileDiff,
+    options,
+    annotations,
+    renderer: new DiffHunksRenderer<LAnnotation>(
+      getHunksRendererOptions(options)
+    ),
   });
-
-  // Set line annotations if provided
-  if (annotations !== undefined && annotations.length > 0) {
-    diffHunksRenderer.setLineAnnotations(annotations);
-  }
-
-  const hunkResult = await diffHunksRenderer.asyncRender(fileDiff);
-
-  const children = [createStyleElement(hunkResult.css, true)];
-
-  if (options?.unsafeCSS != null) {
-    children.push(createStyleElement(options.unsafeCSS));
-  }
-
-  if (hunkResult.headerElement != null) {
-    children.push(hunkResult.headerElement);
-  }
-  const code = diffHunksRenderer.renderFullAST(hunkResult);
-  code.properties['data-dehydrated'] = '';
-  children.push(code);
-
-  return renderHTML(children);
 }
 
 export interface PreloadMultiFileDiffOptions<LAnnotation> {
@@ -178,40 +201,29 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   const mergedAnnotations: DiffLineAnnotation<
     LAnnotation | MergeConflictActionAnnotationMetadata
   >[] = [...(annotations ?? []), ...mergeConflictAnnotations];
-  const mergeConflictOptions = {
-    ...options,
-    diffStyle: 'unified' as const,
-    lineDiffType: options?.lineDiffType ?? 'none',
-    unsafeCSS: getMergeConflictActionsUnsafeCSS(options?.unsafeCSS),
-  };
-  const diffHunksRenderer = new UnresolvedFileHunksRenderer<
+  const mergeConflictOptions: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
-  >({
-    ...mergeConflictOptions,
-    hunkSeparators:
-      typeof mergeConflictOptions.hunkSeparators === 'function'
-        ? 'custom'
-        : mergeConflictOptions.hunkSeparators,
-  });
-  if (mergedAnnotations.length > 0) {
-    diffHunksRenderer.setLineAnnotations(mergedAnnotations);
-  }
-  const hunkResult = await diffHunksRenderer.asyncRender(fileDiff);
-  const children = [createStyleElement(hunkResult.css, true)];
-  if (mergeConflictOptions.unsafeCSS != null) {
-    children.push(createStyleElement(mergeConflictOptions.unsafeCSS));
-  }
-  if (hunkResult.headerElement != null) {
-    children.push(hunkResult.headerElement);
-  }
-  const code = diffHunksRenderer.renderFullAST(hunkResult);
-  code.properties['data-dehydrated'] = '';
-  children.push(code);
+  > & {
+    mergeConflictActions?: 'none' | 'default';
+  } = {
+    ...options,
+    ...normalizeUnresolvedFileOptions(options, {
+      includeActionsUnsafeCSS: true,
+    }),
+  };
+
   return {
     file,
     options: mergeConflictOptions,
     annotations: mergedAnnotations,
-    prerenderedHTML: renderHTML(children),
+    prerenderedHTML: await preloadDiffHTMLWithRenderer({
+      fileDiff,
+      options: mergeConflictOptions,
+      annotations: mergedAnnotations,
+      renderer: new UnresolvedFileHunksRenderer<
+        LAnnotation | MergeConflictActionAnnotationMetadata
+      >(getHunksRendererOptions(mergeConflictOptions)),
+    }),
   };
 }
 
