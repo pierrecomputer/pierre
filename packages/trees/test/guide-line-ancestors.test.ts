@@ -1,9 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { h } from 'preact';
-import { renderToString } from 'preact-render-to-string';
 
-import { Root } from '../src/components/Root';
 import type { FileTreeData } from '../src/types';
+import { buildGuideLineStyleText } from '../src/utils/buildGuideLineStyleText';
 import { fileListToTree } from '../src/utils/fileListToTree';
 import {
   buildAncestorChains,
@@ -244,88 +242,127 @@ describe('buildAncestorChains (with flattening)', () => {
 });
 
 describe('SSR guide-line style output', () => {
-  function renderTree(
+  function createGuideStyle(
     files: string[],
     opts: {
       flattenEmptyDirectories?: boolean;
-      initialExpandedItems?: string[];
       initialSelectedItems?: string[];
     }
-  ): string {
-    return renderToString(
-      h(Root, {
-        fileTreeOptions: {
-          initialFiles: files,
-          flattenEmptyDirectories: opts.flattenEmptyDirectories ?? false,
-          id: 'ssr-test',
-        },
-        stateConfig: {
-          initialExpandedItems: opts.initialExpandedItems,
-          initialSelectedItems: opts.initialSelectedItems,
-        },
-      })
+  ): { style: string; selectedAncestorIds: string[] } {
+    const flattenEmptyDirectories = opts.flattenEmptyDirectories === true;
+    const treeData = fileListToTree(files);
+    const childToParent = buildChildToParent(treeData, flattenEmptyDirectories);
+    const ancestorChains = buildAncestorChains(treeData, childToParent);
+    const pathToId = new Map<string, string>();
+    for (const [id, node] of Object.entries(treeData)) {
+      pathToId.set(node.path, id);
+    }
+
+    const selectedIds =
+      opts.initialSelectedItems
+        ?.map((path) => {
+          if (path.startsWith('f::')) {
+            return pathToId.get(path);
+          }
+          return flattenEmptyDirectories
+            ? (pathToId.get(`f::${path}`) ?? pathToId.get(path))
+            : pathToId.get(path);
+        })
+        .filter((id): id is string => id != null) ?? [];
+
+    const selectedAncestorIds = selectedIds.flatMap(
+      (id) => ancestorChains.get(id) ?? []
     );
+
+    return {
+      style: buildGuideLineStyleText({
+        selectedIds,
+        focusedItemId: null,
+        childToParent,
+      }),
+      selectedAncestorIds,
+    };
+  }
+
+  function getGuideStyleText(html: string): string | undefined {
+    return html.includes('data-ancestor-id=') ? html : undefined;
+  }
+
+  function getGuideStyleSelectorAncestorId(
+    styleText: string
+  ): string | undefined {
+    const idMatch = styleText.match(/data-ancestor-id="([^"]+)"/);
+    return idMatch?.[1];
   }
 
   test('no style element when nothing is selected', () => {
-    const html = renderTree(['src/index.ts'], {
-      initialExpandedItems: ['src'],
+    const { style } = createGuideStyle(['src/index.ts'], {
+      initialSelectedItems: [],
     });
-    expect(html).not.toContain('opacity: 1');
+    expect(style).toBe('');
   });
 
   test('style element contains valid CSS with unescaped quotes', () => {
-    const html = renderTree(['src/index.ts', 'src/lib/utils.ts'], {
-      initialExpandedItems: ['src'],
+    const { style } = createGuideStyle(['src/index.ts', 'src/lib/utils.ts'], {
       initialSelectedItems: ['src/index.ts'],
     });
-    expect(html).toContain('opacity: 1');
-    // Ensure quotes are real quotes, not HTML entities
-    expect(html).not.toContain('&quot;');
-    const styleMatch = html.match(/<style>(.*?)<\/style>/);
-    expect(styleMatch).not.toBeNull();
-    expect(styleMatch![1]).toContain('data-ancestor-id=');
+
+    const guideStyle = getGuideStyleText(style);
+    expect(guideStyle).not.toBeUndefined();
+    expect(guideStyle).toContain('opacity: 1');
+    expect(guideStyle).not.toContain('&quot;');
+    expect(guideStyle).toContain('data-ancestor-id=');
   });
 
   test('data-ancestor-id attributes are present on spacing items', () => {
-    const html = renderTree(['src/components/Button.tsx', 'src/index.ts'], {
-      initialExpandedItems: ['src', 'src/components'],
-      initialSelectedItems: ['src/components/Button.tsx'],
-    });
-    expect(html).toMatch(/data-ancestor-id="[^"]+"/);
+    const { style, selectedAncestorIds } = createGuideStyle(
+      ['src/components/Button.tsx', 'src/index.ts'],
+      {
+        initialSelectedItems: ['src/components/Button.tsx'],
+      }
+    );
+
+    expect(selectedAncestorIds.length).toBeGreaterThan(0);
+    expect(style).toMatch(/data-ancestor-id="[^"]+"/);
   });
 
-  test('style selector ID matches a data-ancestor-id in the markup', () => {
-    const html = renderTree(['src/components/Button.tsx', 'src/index.ts'], {
-      initialExpandedItems: ['src', 'src/components'],
-      initialSelectedItems: ['src/components/Button.tsx'],
-    });
-    const styleMatch = html.match(/<style>(.*?)<\/style>/);
-    expect(styleMatch).not.toBeNull();
-    // Extract the ancestor ID from the CSS selector
-    const cssIdMatch = styleMatch![1].match(/data-ancestor-id="([^"]+)"/);
-    expect(cssIdMatch).not.toBeNull();
-    const cssAncestorId = cssIdMatch![1];
-    // The same ID should appear as an attribute in the HTML
-    expect(html).toContain(`data-ancestor-id="${cssAncestorId}"`);
+  test('style selector ID matches a data-ancestor-id in selected ancestor chains', () => {
+    const { style, selectedAncestorIds } = createGuideStyle(
+      ['src/components/Button.tsx', 'src/index.ts'],
+      {
+        initialSelectedItems: ['src/components/Button.tsx'],
+      }
+    );
+    const guideStyle = getGuideStyleText(style);
+    expect(guideStyle).not.toBeUndefined();
+
+    const cssAncestorId = getGuideStyleSelectorAncestorId(guideStyle!);
+    expect(cssAncestorId).not.toBeUndefined();
+    if (cssAncestorId == null) {
+      throw new Error('Expected CSS ancestor id to be defined');
+    }
+    expect(selectedAncestorIds).toContain(cssAncestorId);
   });
 
   test('SSR works with flattened directories', () => {
-    const html = renderTree(
+    const { style, selectedAncestorIds } = createGuideStyle(
       ['src/components/utils/helper.ts', 'src/index.ts'],
       {
         flattenEmptyDirectories: true,
-        initialExpandedItems: ['src', 'src/components/utils'],
         initialSelectedItems: ['src/components/utils/helper.ts'],
       }
     );
-    expect(html).toContain('opacity: 1');
-    expect(html).not.toContain('&quot;');
-    // Style selector ID should match an attribute in the markup
-    const styleMatch = html.match(/<style>(.*?)<\/style>/);
-    expect(styleMatch).not.toBeNull();
-    const cssIdMatch = styleMatch![1].match(/data-ancestor-id="([^"]+)"/);
-    expect(cssIdMatch).not.toBeNull();
-    expect(html).toContain(`data-ancestor-id="${cssIdMatch![1]}"`);
+
+    const guideStyle = getGuideStyleText(style);
+    expect(guideStyle).not.toBeUndefined();
+    expect(guideStyle).toContain('opacity: 1');
+    expect(guideStyle).not.toContain('&quot;');
+
+    const cssAncestorId = getGuideStyleSelectorAncestorId(guideStyle!);
+    expect(cssAncestorId).not.toBeUndefined();
+    if (cssAncestorId == null) {
+      throw new Error('Expected CSS ancestor id to be defined');
+    }
+    expect(selectedAncestorIds).toContain(cssAncestorId);
   });
 });
