@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import {
   FileDiff as FileDiffClass,
@@ -27,42 +27,6 @@ import type { FileDiffProps } from './FileDiff';
 import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
-
-const MergeConflictActionsContainerStyle: CSSProperties = {
-  minHeight: '1.75rem',
-  zIndex: 2,
-};
-
-const MergeConflictActionsContentStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.25rem',
-  paddingInline: '0.5rem',
-  minHeight: '1.75rem',
-  fontFamily:
-    'var(--diffs-header-font-family, var(--diffs-header-font-fallback))',
-  fontSize: '0.75rem',
-  lineHeight: 1.2,
-  color: 'var(--diffs-fg)',
-  position: 'sticky',
-  width: 'var(--diffs-column-content-width, auto)',
-  left: 'var(--diffs-column-number-width, 0)',
-};
-
-const MergeConflictActionButtonStyle: CSSProperties = {
-  appearance: 'none',
-  border: 0,
-  background: 'transparent',
-  font: 'inherit',
-  fontStyle: 'normal',
-  cursor: 'pointer',
-  padding: 0,
-};
-
-const MergeConflictActionSeparatorStyle: CSSProperties = {
-  color: 'var(--diffs-fg-number)',
-  opacity: 0.65,
-};
 
 export interface UnresolvedFileOptions<LAnnotation> extends FileDiffOptions<
   LAnnotation | MergeConflictActionAnnotationMetadata
@@ -173,12 +137,8 @@ export function UnresolvedFile<LAnnotation = undefined>({
             data-line-index={`${lineIndex}`}
             data-merge-conflict-actions=""
             data-merge-conflict-index={`${conflict.conflictIndex}`}
-            style={MergeConflictActionsContainerStyle}
           >
-            <div
-              data-merge-conflict-actions-content=""
-              style={MergeConflictActionsContentStyle}
-            >
+            <div data-merge-conflict-actions-content="">
               <MergeConflictActionButton
                 resolution="current"
                 conflictIndex={conflict.conflictIndex}
@@ -186,10 +146,7 @@ export function UnresolvedFile<LAnnotation = undefined>({
               >
                 Accept current change
               </MergeConflictActionButton>
-              <span
-                data-merge-conflict-action-separator=""
-                style={MergeConflictActionSeparatorStyle}
-              >
+              <span data-merge-conflict-action-separator="">
                 {'\u2009|\u2009'}
               </span>
               <MergeConflictActionButton
@@ -199,10 +156,7 @@ export function UnresolvedFile<LAnnotation = undefined>({
               >
                 Accept incoming change
               </MergeConflictActionButton>
-              <span
-                data-merge-conflict-action-separator=""
-                style={MergeConflictActionSeparatorStyle}
-              >
+              <span data-merge-conflict-action-separator="">
                 {'\u2009|\u2009'}
               </span>
               <MergeConflictActionButton
@@ -329,19 +283,12 @@ function MergeConflictActionButton({
   onClick,
   children,
 }: MergeConflictActionButtonProps): React.JSX.Element {
-  const [isHovering, setIsHovering] = useState(false);
   return (
     <button
       type="button"
       data-merge-conflict-action={resolution}
       data-merge-conflict-index={`${conflictIndex}`}
       onClick={onClick}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
-      style={{
-        ...MergeConflictActionButtonStyle,
-        color: isHovering ? 'var(--diffs-fg)' : 'var(--diffs-fg-number)',
-      }}
     >
       {children}
     </button>
