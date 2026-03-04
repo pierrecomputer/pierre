@@ -37,19 +37,25 @@ export interface UnresolvedFileOptions<
   mergeConflictActions?: MergeConflictActionsOption<LAnnotation>;
 }
 
-export interface UnresolvedFileRenderProps<LAnnotation> extends Omit<
-  FileDiffRenderProps<LAnnotation>,
-  'fileDiff' | 'oldFile' | 'newFile'
-> {
+interface UnresolvedFileBaseProps {
   file: FileContents;
 }
 
-export interface UnresolvedFileHydrationProps<LAnnotation> extends Omit<
-  FileDiffHydrationProps<LAnnotation>,
-  'fileDiff' | 'oldFile' | 'newFile'
-> {
-  file: FileContents;
-}
+export interface UnresolvedFileRenderProps<LAnnotation>
+  extends
+    UnresolvedFileBaseProps,
+    Omit<
+      FileDiffRenderProps<LAnnotation>,
+      'fileDiff' | 'oldFile' | 'newFile'
+    > {}
+
+export interface UnresolvedFileHydrationProps<LAnnotation>
+  extends
+    UnresolvedFileBaseProps,
+    Omit<
+      FileDiffHydrationProps<LAnnotation>,
+      'fileDiff' | 'oldFile' | 'newFile'
+    > {}
 
 let instanceId = -1;
 
