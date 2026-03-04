@@ -79,13 +79,13 @@ export class UnresolvedFile<
     isContainerManaged = false
   ) {
     super(
-      normalizeUnresolvedFileOptions(
-        options as FileDiffOptions<LAnnotation>
-      ),
+      normalizeUnresolvedFileOptions(options as FileDiffOptions<LAnnotation>),
       workerManager,
       isContainerManaged
     );
-    this.applyUnresolvedOptions(options);
+    this.setUserRenderAnnotation(options.renderAnnotation);
+    this.setMergeConflictActionsOption(options.mergeConflictActions);
+    this.installRenderAnnotationProxy();
   }
 
   override setOptions(
@@ -95,11 +95,11 @@ export class UnresolvedFile<
       return;
     }
     super.setOptions(
-      normalizeUnresolvedFileOptions(
-        options as FileDiffOptions<LAnnotation>
-      )
+      normalizeUnresolvedFileOptions(options as FileDiffOptions<LAnnotation>)
     );
-    this.applyUnresolvedOptions(options);
+    this.setUserRenderAnnotation(options.renderAnnotation);
+    this.setMergeConflictActionsOption(options.mergeConflictActions);
+    this.installRenderAnnotationProxy();
   }
 
   protected override createHunksRenderer(
@@ -185,20 +185,28 @@ export class UnresolvedFile<
     return { fileDiff, actions };
   }
 
-  private applyUnresolvedOptions(
-    options: UnresolvedFileOptions<LAnnotation>
+  private setUserRenderAnnotation(
+    renderAnnotation: UnresolvedFileOptions<LAnnotation>['renderAnnotation']
   ): void {
-    this.mergeConflictActions = options.mergeConflictActions ?? 'default';
-    this.userRenderAnnotation = options.renderAnnotation as
+    this.userRenderAnnotation = renderAnnotation as
       | ((
           annotation: DiffLineAnnotation<LAnnotation>
         ) => HTMLElement | undefined)
       | undefined;
+  }
+
+  private setMergeConflictActionsOption(
+    mergeConflictActions: MergeConflictActionsOption<LAnnotation> | undefined
+  ): void {
+    this.mergeConflictActions = mergeConflictActions ?? 'default';
+    this.syncMergeConflictActionRendererMode();
+  }
+
+  private installRenderAnnotationProxy(): void {
     this.options = {
       ...this.options,
       renderAnnotation: this.renderAnnotationProxy,
     };
-    this.syncMergeConflictActionRendererMode();
   }
 
   private shouldRenderDefaultMergeConflictActions(): boolean {
