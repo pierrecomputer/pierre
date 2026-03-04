@@ -131,24 +131,33 @@
     );
     --trees-selected-bg: var(
       --trees-selected-bg-override,
-      var(--trees-theme-list-active-selection-bg, light-dark(
-        color-mix(in lab, var(--trees-accent) 12%, var(--trees-bg)),
-        color-mix(in lab, var(--trees-accent) 15%, var(--trees-bg))
-      ))
+      var(
+        --trees-theme-list-active-selection-bg,
+        light-dark(
+          color-mix(in lab, var(--trees-accent) 12%, var(--trees-bg)),
+          color-mix(in lab, var(--trees-accent) 15%, var(--trees-bg))
+        )
+      )
     );
     --trees-selected-border-color: var(
       --trees-selected-border-color-override,
-      var(--trees-theme-focus-ring, light-dark(
-        color-mix(in lab, var(--trees-accent) 25%, var(--trees-bg)),
-        color-mix(in lab, var(--trees-accent) 30%, var(--trees-bg))
-      ))
+      var(
+        --trees-theme-focus-ring,
+        light-dark(
+          color-mix(in lab, var(--trees-accent) 25%, var(--trees-bg)),
+          color-mix(in lab, var(--trees-accent) 30%, var(--trees-bg))
+        )
+      )
     );
     --trees-selected-focused-border-color: var(
       --trees-selected-focused-border-color-override,
-      var(--trees-theme-focus-ring, light-dark(
-        color-mix(in lab, var(--trees-accent) 40%, var(--trees-bg)),
-        color-mix(in lab, var(--trees-accent) 60%, var(--trees-bg))
-      ))
+      var(
+        --trees-theme-focus-ring,
+        light-dark(
+          color-mix(in lab, var(--trees-accent) 40%, var(--trees-bg)),
+          color-mix(in lab, var(--trees-accent) 60%, var(--trees-bg))
+        )
+      )
     );
 
     /* Git status (e.g. from Shiki theme gitDecoration.*) */
