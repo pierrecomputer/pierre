@@ -1510,6 +1510,7 @@
   [data-merge-conflict-action-separator] {
     color: var(--diffs-fg-number);
     opacity: 0.65;
+    user-select: none;
   }
 
   /* Sticky positioning has a composite costs, so we should _only_ pay it if we
