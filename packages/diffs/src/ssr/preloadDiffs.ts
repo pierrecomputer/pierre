@@ -207,9 +207,7 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
     mergeConflictActions?: 'none' | 'default';
   } = {
     ...options,
-    ...normalizeUnresolvedFileOptions(options, {
-      includeActionsUnsafeCSS: true,
-    }),
+    ...normalizeUnresolvedFileOptions(options),
   };
 
   return {

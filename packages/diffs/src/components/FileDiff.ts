@@ -1863,7 +1863,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private applyPreNodeAttributes(
+  protected applyPreNodeAttributes(
     pre: HTMLPreElement,
     {
       themeStyles,

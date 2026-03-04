@@ -1,4 +1,4 @@
-import type { ElementContent } from 'hast';
+import type { ElementContent, Element as HASTElement } from 'hast';
 
 import {
   type ContentDecorationProps,
@@ -29,6 +29,22 @@ const END_MARKER = /^>{7,}(?:\s.*)?$/;
 export class UnresolvedFileHunksRenderer<
   LAnnotation = undefined,
 > extends DiffHunksRenderer<LAnnotation> {
+  protected override createPreElement(
+    split: boolean,
+    totalLines: number,
+    themeStyles: string,
+    baseThemeType: 'light' | 'dark' | undefined
+  ): HASTElement {
+    const pre = super.createPreElement(
+      split,
+      totalLines,
+      themeStyles,
+      baseThemeType
+    );
+    pre.properties['data-merge-conflict-action-style-override'] = '';
+    return pre;
+  }
+
   protected override getUnifiedLineDecoration({
     type,
     lineType,

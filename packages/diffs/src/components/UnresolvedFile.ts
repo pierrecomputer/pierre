@@ -1,3 +1,4 @@
+import type { HunksRenderResult } from '../renderers/DiffHunksRenderer';
 import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type { FileContents, FileDiffMetadata } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
@@ -66,6 +67,14 @@ export class UnresolvedFile<
       this.handleHighlightRender,
       this.workerManager
     );
+  }
+
+  protected override applyPreNodeAttributes(
+    pre: HTMLPreElement,
+    result: HunksRenderResult
+  ): void {
+    super.applyPreNodeAttributes(pre, result);
+    pre.setAttribute('data-merge-conflict-action-style-override', '');
   }
 
   override cleanUp(): void {

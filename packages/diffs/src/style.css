@@ -1016,6 +1016,12 @@
     --diffs-line-bg: var(--diffs-bg-context);
   }
 
+  [data-merge-conflict-action-style-override] [data-line-annotation],
+  [data-merge-conflict-action-style-override]
+    [data-gutter-buffer='annotation'] {
+    --diffs-line-bg: var(--diffs-bg);
+  }
+
   [data-line-annotation] {
     min-height: var(--diffs-annotation-min-height, 0);
     z-index: 2;
