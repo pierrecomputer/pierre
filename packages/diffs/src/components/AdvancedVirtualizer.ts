@@ -10,7 +10,6 @@ import {
 import type {
   FileContents,
   FileDiffMetadata,
-  StickySpecs,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
@@ -88,6 +87,11 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
   private height: number = 0;
   private heightDirty = true;
   private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
+  private renderState = {
+    firstIndex: -1,
+    lastIndex: -1,
+    height: 0,
+  };
 
   private root: Document | HTMLElement | undefined;
   private resizeObserver: ResizeObserver | undefined;
@@ -130,18 +134,19 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.scrollDirty = true;
     this.heightDirty = true;
     this.lastRenderedScrollY = -1;
+    this.resizeObserver = new ResizeObserver(this.handleResize);
+    this.resizeObserver.observe(this.stickyContainer);
     if (this.root instanceof Document) {
       window.addEventListener('scroll', this.handleScroll, {
         passive: true,
       });
-      window.addEventListener('resize', this.handleResize, {
+      window.addEventListener('resize', this.handleWindowResize, {
         passive: true,
       });
     } else {
       this.root.addEventListener('scroll', this.handleScroll, {
         passive: true,
       });
-      this.resizeObserver = new ResizeObserver(this.handleResize);
       this.resizeObserver.observe(this.root);
     }
     this.render(true);
@@ -152,7 +157,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.resizeObserver = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
     window.removeEventListener('scroll', this.handleScroll);
-    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('resize', this.handleWindowResize);
     this.container?.style.removeProperty('height');
     this.stickyOffset.remove();
     this.stickyContainer.remove();
@@ -165,6 +170,11 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.lastRenderedScrollY = -1;
     this.scrollDirty = true;
     this.heightDirty = true;
+    this.renderState = {
+      firstIndex: -1,
+      lastIndex: -1,
+      height: 0,
+    };
   }
 
   public setContainerOffset(offset: number): void {
@@ -204,6 +214,11 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.lastRenderedScrollY = -1;
     this.scrollDirty = true;
     this.heightDirty = true;
+    this.renderState = {
+      firstIndex: -1,
+      lastIndex: -1,
+      height: 0,
+    };
   }
 
   public addFileOrDiff(fileOrDiff: FileContents | FileDiffMetadata): void {
@@ -382,68 +397,11 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       }
     }
 
-    let firstStickySpecs: StickySpecs | undefined;
-    let lastStickySpecs: StickySpecs | undefined;
-    if (startingIndex != null) {
-      let currentTop = -1;
-      let heightChanged = false;
-      // Iterate through the rendered items to reconcile height. If a height
-      // has changed, we'll have to iterate all the way till the end to update
-      // all appropriate heights
-      for (; startingIndex < this.items.length; startingIndex++) {
-        // If we've incurred no height changes and ended, we can abort
-        if (!heightChanged && startingIndex > lastRenderedIndex) {
-          break;
-        }
-        const item = this.items[startingIndex];
-        if (item == null) {
-          throw new Error(
-            'AdvancedVirtualizer.computeRenderRangeAndEmit: Invalid item'
-          );
-        }
-        if (currentTop === -1) {
-          currentTop = item.top;
-        } else if (item.top !== currentTop) {
-          item.top = currentTop;
-          item.instance.syncVirtualizedTop();
-          heightChanged = true;
-        }
-        if (updatedInstances.has(item)) {
-          if (item.instance.reconcileHeights()) {
-            heightChanged = true;
-            item.height = item.instance.getVirtualizedHeight();
-          }
-        }
-        currentTop +=
-          item.instance.getVirtualizedHeight() + this.metrics.fileGap;
-        firstStickySpecs ??= item.instance.getAdvancedStickySpecs();
-        if (startingIndex === lastRenderedIndex) {
-          lastStickySpecs = item.instance.getAdvancedStickySpecs();
-        }
-      }
+    this.renderState.firstIndex = startingIndex ?? -1;
+    this.renderState.lastIndex = lastRenderedIndex;
 
-      if (heightChanged && currentTop != null) {
-        this.scrollDirty = true;
-        this.scrollHeight = currentTop;
-      }
-    }
-
-    if (firstStickySpecs != null && lastStickySpecs != null) {
-      const stickyTop = Math.max(firstStickySpecs.topOffset, 0);
-      const stickyBottom = lastStickySpecs.topOffset + lastStickySpecs.height;
-      const stickyContainerHeight = stickyBottom - stickyTop;
-      this.stickyOffset.style.height = `${stickyTop}px`;
-      // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
-      // down quickly, this prevents the laggy scroll view from lining up with
-      // the numbers exactly
-      const randomOffset =
-        ((Math.random() * this.metrics.lineHeight) >> 0) * -1;
-      const stickyHeightJitter =
-        -Math.max(stickyContainerHeight + randomOffset, 0) + height;
-      this.stickyContainer.style.top = `${stickyHeightJitter + this.metrics.fileGap}px`;
-      this.stickyContainer.style.bottom = `${stickyHeightJitter}px`;
-      // this.stickyContainer.style.height = `${totalHeight}px`;
-    }
+    this.reconcileRenderedItems(updatedInstances);
+    this.updateStickyPositioning();
 
     if (this.lastContainerHeight !== this.scrollHeight) {
       this.container.style.height = `${this.scrollHeight}px`;
@@ -455,12 +413,115 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     }
   };
 
+  private reconcileRenderedItems(
+    updatedInstances?: Set<AdvancedVirtualizedItem<LAnnotation>>
+  ): void {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex === -1) {
+      return;
+    }
+
+    let currentTop = -1;
+    let heightChanged = false;
+    // Iterate through the rendered items to reconcile height. If a height
+    // has changed, we'll have to iterate all the way till the end to update
+    // all appropriate heights
+    for (let index = firstIndex; index < this.items.length; index++) {
+      // If we've incurred no height changes and ended, we can abort
+      if (!heightChanged && index > lastIndex) {
+        break;
+      }
+      const item = this.items[index];
+      if (item == null) {
+        throw new Error(
+          'AdvancedVirtualizer.reconcileRenderedItems: Invalid item'
+        );
+      }
+      if (currentTop === -1) {
+        currentTop = item.top;
+      } else if (item.top !== currentTop) {
+        item.top = currentTop;
+        item.instance.syncVirtualizedTop();
+        heightChanged = true;
+      }
+      // If updatedInstances provided, only reconcile those. If not provided
+      // (resize path), reconcile all rendered items.
+      if (
+        updatedInstances == null
+          ? index <= lastIndex
+          : updatedInstances.has(item)
+      ) {
+        if (item.instance.reconcileHeights()) {
+          heightChanged = true;
+          item.height = item.instance.getVirtualizedHeight();
+        }
+      }
+      currentTop += item.instance.getVirtualizedHeight() + this.metrics.fileGap;
+    }
+
+    if (heightChanged && currentTop != null) {
+      this.scrollDirty = true;
+      this.scrollHeight = currentTop;
+    }
+  }
+
+  private updateStickyPositioning(): void {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex === -1 || lastIndex === -1) {
+      return;
+    }
+
+    const firstStickySpecs =
+      this.items[firstIndex]?.instance.getAdvancedStickySpecs();
+    const lastStickySpecs =
+      this.items[lastIndex]?.instance.getAdvancedStickySpecs();
+    if (firstStickySpecs == null || lastStickySpecs == null) {
+      return;
+    }
+
+    const height = this.getHeight();
+    const stickyTop = Math.max(firstStickySpecs.topOffset, 0);
+    const stickyBottom = lastStickySpecs.topOffset + lastStickySpecs.height;
+    const stickyContainerHeight = stickyBottom - stickyTop;
+
+    this.renderState.height = stickyContainerHeight;
+    this.stickyOffset.style.height = `${stickyTop}px`;
+    // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
+    // down quickly, this prevents the laggy scroll view from lining up with
+    // the numbers exactly
+    const randomOffset = ((Math.random() * this.metrics.lineHeight) >> 0) * -1;
+    const stickyJitter =
+      -Math.max(stickyContainerHeight + randomOffset, 0) + height;
+    this.stickyContainer.style.top = `${stickyJitter + this.metrics.fileGap}px`;
+    this.stickyContainer.style.bottom = `${stickyJitter}px`;
+  }
+
   private handleScroll = (): void => {
     this.scrollDirty = true;
     this.render();
   };
 
-  private handleResize = (): void => {
+  private handleResize = (entries: ResizeObserverEntry[]) => {
+    for (const entry of entries) {
+      // If the sticky container resizes (could be from a render, which it will
+      // probably ignore) or if an annotation or line wrap triggers a resize
+      if (entry.target === this.stickyContainer) {
+        const blockSize = entry.borderBoxSize[0].blockSize;
+        if (blockSize !== this.renderState.height) {
+          this.reconcileRenderedItems();
+          this.updateStickyPositioning();
+        }
+      }
+      // Root element resize (element-mode only)
+      else {
+        this.scrollDirty = true;
+        this.heightDirty = true;
+        this.render();
+      }
+    }
+  };
+
+  private handleWindowResize = (): void => {
     this.scrollDirty = true;
     this.heightDirty = true;
     this.render();
