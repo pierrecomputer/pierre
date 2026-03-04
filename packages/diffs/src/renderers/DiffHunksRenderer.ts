@@ -125,15 +125,8 @@ export interface SplitLineDecorationProps {
 
 export interface LineDecoration {
   gutterLineType: LineTypes;
-  metadata?: unknown;
   gutterProperties?: Properties;
-}
-
-export interface ContentDecorationProps {
-  side: CodeColumnType;
-  lineNode: ElementContent | undefined;
-  type: 'context' | 'context-expanded' | 'change';
-  metadata: unknown;
+  contentProperties?: Properties;
 }
 
 export interface HunksRenderResult {
@@ -294,11 +287,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         side === 'deletions' ? 'change-deletion' : 'change-addition',
     };
   }
-
-  protected decorateContentLine({
-    lineNode: _lineNode,
-    metadata: _metadata,
-  }: ContentDecorationProps): void {}
 
   private getOptionsWithDefaults(): OptionsWithDefaults {
     const {
@@ -759,11 +747,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           diffStyle === 'unified' ? unifiedLineIndex : splitLineIndex;
 
         if (diffStyle === 'unified') {
-          const deletionLineContent =
+          let deletionLineContent =
             deletionLine != null
               ? deletionLines[deletionLine.lineIndex]
               : undefined;
-          const additionLineContent =
+          let additionLineContent =
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
@@ -804,12 +792,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             `${unifiedLineIndex},${splitLineIndex}`,
             lineDecoration.gutterProperties
           );
-          this.decorateContentLine({
-            side: 'unified',
-            lineNode: additionLineContent ?? deletionLineContent,
-            type,
-            metadata: lineDecoration.metadata,
-          });
+          if (additionLineContent != null) {
+            additionLineContent = withContentProperties(
+              additionLineContent,
+              lineDecoration.contentProperties
+            );
+          } else if (deletionLineContent != null) {
+            deletionLineContent = withContentProperties(
+              deletionLineContent,
+              lineDecoration.contentProperties
+            );
+          }
           pushLineWithAnnotation({
             diffStyle: 'unified',
             type: type,
@@ -825,11 +818,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             context,
           });
         } else {
-          const deletionLineContent =
+          let deletionLineContent =
             deletionLine != null
               ? deletionLines[deletionLine.lineIndex]
               : undefined;
-          const additionLineContent =
+          let additionLineContent =
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
@@ -897,6 +890,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
 
           if (deletionLine != null) {
+            const deletionLineDecorated = withContentProperties(
+              deletionLineContent,
+              deletionLineDecoration.contentProperties
+            );
             pushGutterLineNumber(
               'deletions',
               deletionLineDecoration.gutterLineType,
@@ -904,14 +901,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
               deletionLineDecoration.gutterProperties
             );
-            this.decorateContentLine({
-              side: 'deletions',
-              lineNode: deletionLineContent,
-              type,
-              metadata: deletionLineDecoration.metadata,
-            });
+            if (deletionLineDecorated != null) {
+              deletionLineContent = deletionLineDecorated;
+            }
           }
           if (additionLine != null) {
+            const additionLineDecorated = withContentProperties(
+              additionLineContent,
+              additionLineDecoration.contentProperties
+            );
             pushGutterLineNumber(
               'additions',
               additionLineDecoration.gutterLineType,
@@ -919,12 +917,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               `${additionLine.unifiedLineIndex},${splitLineIndex}`,
               additionLineDecoration.gutterProperties
             );
-            this.decorateContentLine({
-              side: 'additions',
-              lineNode: additionLineContent,
-              type,
-              metadata: additionLineDecoration.metadata,
-            });
+            if (additionLineDecorated != null) {
+              additionLineContent = additionLineDecorated;
+            }
           }
           pushLineWithAnnotation({
             diffStyle: 'split',
@@ -1449,6 +1444,26 @@ function pushSeparator(
       ? { up: !isFirstHunk, down: !isLastHunk, chunked }
       : undefined,
   });
+}
+
+function withContentProperties(
+  lineNode: ElementContent | undefined,
+  contentProperties: Properties | undefined
+): ElementContent | undefined {
+  if (
+    lineNode == null ||
+    lineNode.type !== 'element' ||
+    contentProperties == null
+  ) {
+    return lineNode;
+  }
+  return {
+    ...lineNode,
+    properties: {
+      ...lineNode.properties,
+      ...contentProperties,
+    },
+  };
 }
 
 function calculateTrailingRangeSize(fileDiff: FileDiffMetadata): number {

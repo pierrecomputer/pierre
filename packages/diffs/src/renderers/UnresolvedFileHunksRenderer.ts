@@ -1,9 +1,8 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
+import type { Element as HASTElement } from 'hast';
 
 import { DEFAULT_RENDER_RANGE } from '../constants';
 import type { FileDiffMetadata, RenderRange } from '../types';
 import {
-  type ContentDecorationProps,
   DiffHunksRenderer,
   type HunksRenderResult,
   type LineDecoration,
@@ -19,10 +18,6 @@ type MergeConflictMarkerType =
   | 'current'
   | 'incoming';
 type MergeConflictMarkerLookup = MergeConflictMarkerType | 'none';
-
-interface MergeConflictLineDecorationMetadata {
-  mergeConflictType: MergeConflictMarkerType | undefined;
-}
 
 const START_MARKER = /^<{7,}(?:\s.*)?$/;
 const BASE_MARKER = /^\|{7,}(?:\s.*)?$/;
@@ -97,9 +92,10 @@ export class UnresolvedFileHunksRenderer<
     return {
       gutterLineType: type === 'change' ? 'context' : lineType,
       gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
-      metadata: {
-        mergeConflictType,
-      } satisfies MergeConflictLineDecorationMetadata,
+      contentProperties: getMergeConflictContentProperties(
+        type,
+        mergeConflictType
+      ),
     };
   }
 
@@ -118,19 +114,11 @@ export class UnresolvedFileHunksRenderer<
     return {
       gutterLineType: type === 'change' ? 'context' : type,
       gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
-      metadata: {
-        mergeConflictType,
-      } satisfies MergeConflictLineDecorationMetadata,
+      contentProperties: getMergeConflictContentProperties(
+        type,
+        mergeConflictType
+      ),
     };
-  }
-
-  protected override decorateContentLine({
-    lineNode,
-    type,
-    metadata,
-  }: ContentDecorationProps): void {
-    const mergeConflictType = getMergeConflictType(metadata);
-    setMergeConflictAttribute(lineNode, type, mergeConflictType);
   }
 
   private prepareMarkerLookups(diff: FileDiffMetadata): void {
@@ -164,29 +152,6 @@ export class UnresolvedFileHunksRenderer<
   }
 }
 
-function getMergeConflictType(
-  metadata: unknown
-): MergeConflictMarkerType | undefined {
-  if (
-    typeof metadata === 'object' &&
-    metadata != null &&
-    'mergeConflictType' in metadata
-  ) {
-    const value = metadata.mergeConflictType;
-    if (
-      value === 'marker-start' ||
-      value === 'marker-base' ||
-      value === 'marker-separator' ||
-      value === 'marker-end' ||
-      value === 'current' ||
-      value === 'incoming'
-    ) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
 function getMergeConflictGutterProperties(
   mergeConflictType: MergeConflictMarkerType | undefined
 ): { 'data-merge-conflict': MergeConflictMarkerType } | undefined {
@@ -194,6 +159,38 @@ function getMergeConflictGutterProperties(
     return undefined;
   }
   return { 'data-merge-conflict': mergeConflictType };
+}
+
+function getMergeConflictContentProperties(
+  type: 'change' | 'context' | 'context-expanded',
+  mergeConflictType: MergeConflictMarkerType | undefined
+):
+  | {
+      'data-line-type'?: 'context';
+      'data-merge-conflict'?: MergeConflictMarkerType;
+    }
+  | undefined {
+  if (mergeConflictType == null) {
+    return undefined;
+  }
+  if (type === 'change') {
+    if (mergeConflictType === 'current' || mergeConflictType === 'incoming') {
+      return {
+        'data-line-type': 'context',
+        'data-merge-conflict': mergeConflictType,
+      };
+    }
+    return undefined;
+  }
+  if (
+    mergeConflictType === 'marker-start' ||
+    mergeConflictType === 'marker-base' ||
+    mergeConflictType === 'marker-separator' ||
+    mergeConflictType === 'marker-end'
+  ) {
+    return { 'data-merge-conflict': mergeConflictType };
+  }
+  return undefined;
 }
 
 function getMergeConflictMarkerType(
@@ -216,40 +213,4 @@ function buildMarkerLookup(lines: string[]): MergeConflictMarkerLookup[] {
     markerLookup[index] = getMergeConflictMarkerType(lines[index]) ?? 'none';
   }
   return markerLookup;
-}
-
-function setMergeConflictAttribute(
-  node: ElementContent | undefined,
-  lineType: 'change' | 'context' | 'context-expanded',
-  mergeConflictType: MergeConflictMarkerType | undefined
-): void {
-  if (node == null || node.type !== 'element') {
-    return;
-  }
-  if (mergeConflictType == null) {
-    delete node.properties['data-merge-conflict'];
-    return;
-  }
-
-  const isMarkerLine =
-    mergeConflictType === 'marker-start' ||
-    mergeConflictType === 'marker-base' ||
-    mergeConflictType === 'marker-separator' ||
-    mergeConflictType === 'marker-end';
-  const isChangeLine =
-    mergeConflictType === 'current' || mergeConflictType === 'incoming';
-
-  if (
-    (isMarkerLine &&
-      lineType !== 'context' &&
-      lineType !== 'context-expanded') ||
-    (isChangeLine && lineType !== 'change')
-  ) {
-    delete node.properties['data-merge-conflict'];
-    return;
-  }
-  if (isChangeLine) {
-    node.properties['data-line-type'] = 'context';
-  }
-  node.properties['data-merge-conflict'] = mergeConflictType;
 }
