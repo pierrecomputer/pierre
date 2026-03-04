@@ -4,6 +4,7 @@ import {
   AdvancedVirtualizer,
   DEFAULT_THEMES,
   parsePatchFiles,
+  queueRender,
 } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type ReactNode, type SyntheticEvent, useRef, useState } from 'react';
@@ -115,9 +116,11 @@ export function AdvancedDiff() {
           }
         }
         console.timeEnd('-- computing layout');
-        bigBoiRef.current.render();
         // DEBUG AREA
         // window.scrollTo({ top: 4762353 });
+        queueRender(() => {
+          window.scrollTo({ top: 3150238.5 });
+        });
       } catch (error) {
         console.error('Error fetching or processing patch:', error);
       }

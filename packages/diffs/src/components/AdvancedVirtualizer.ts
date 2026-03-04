@@ -242,6 +242,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     item.height = prepareItemInstance(item);
     this.scrollHeight += item.height + this.metrics.fileGap;
     this.scrollDirty = true;
+    this.render();
   }
 
   public render(immediate = false): void {
@@ -293,7 +294,6 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     ) {
       return;
     }
-    const start = Date.now();
     const scrollTop = this.getScrollTop();
     const height = this.getHeight();
     const scrollHeight = this.getScrollHeight();
@@ -431,7 +431,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     if (firstStickySpecs != null && lastStickySpecs != null) {
       const stickyTop = Math.max(firstStickySpecs.topOffset, 0);
       const stickyBottom = lastStickySpecs.topOffset + lastStickySpecs.height;
-      const totalHeight = stickyBottom - stickyTop;
+      const stickyContainerHeight = stickyBottom - stickyTop;
       this.stickyOffset.style.height = `${stickyTop}px`;
       // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
       // down quickly, this prevents the laggy scroll view from lining up with
@@ -439,9 +439,10 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       const randomOffset =
         ((Math.random() * this.metrics.lineHeight) >> 0) * -1;
       const stickyHeightJitter =
-        -Math.max(totalHeight + randomOffset, 0) + height;
+        -Math.max(stickyContainerHeight + randomOffset, 0) + height;
       this.stickyContainer.style.top = `${stickyHeightJitter + this.metrics.fileGap}px`;
       this.stickyContainer.style.bottom = `${stickyHeightJitter}px`;
+      // this.stickyContainer.style.height = `${totalHeight}px`;
     }
 
     if (this.lastContainerHeight !== this.scrollHeight) {
@@ -452,7 +453,6 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     if (fitPerfectly) {
       this.render();
     }
-    console.log('time to render', Date.now() - start);
   };
 
   private handleScroll = (): void => {
