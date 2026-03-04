@@ -19,6 +19,12 @@ import {
 } from '../utils/parseMergeConflictDiffFromFile';
 import { renderHTML } from './renderHTML';
 
+type PreloadMergeConflictActionsInput =
+  | 'none'
+  | 'default'
+  | ((action: MergeConflictDiffAction) => unknown);
+type PreloadMergeConflictActionsOutput = 'none' | 'default';
+
 export interface PreloadDiffOptions<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
@@ -169,10 +175,7 @@ export interface PreloadUnresolvedFileOptions<LAnnotation> {
   options?: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
   > & {
-    mergeConflictActions?:
-      | 'none'
-      | 'default'
-      | ((action: MergeConflictDiffAction) => unknown);
+    mergeConflictActions?: PreloadMergeConflictActionsInput;
   };
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
@@ -182,10 +185,7 @@ export interface PreloadUnresolvedFileResult<LAnnotation> {
   options?: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
   > & {
-    mergeConflictActions?:
-      | 'none'
-      | 'default'
-      | ((action: MergeConflictDiffAction) => unknown);
+    mergeConflictActions?: PreloadMergeConflictActionsOutput;
   };
   annotations?: DiffLineAnnotation<
     LAnnotation | MergeConflictActionAnnotationMetadata
@@ -200,8 +200,11 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
 }: PreloadUnresolvedFileOptions<LAnnotation>): Promise<
   PreloadUnresolvedFileResult<LAnnotation>
 > {
+  const inputMergeConflictActions = options?.mergeConflictActions;
+  const mergeConflictActionsMode: PreloadMergeConflictActionsOutput =
+    inputMergeConflictActions === 'none' ? 'none' : 'default';
   const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
-  const includeDefaultActions = options?.mergeConflictActions !== 'none';
+  const includeDefaultActions = mergeConflictActionsMode !== 'none';
   const mergeConflictAnnotations = includeDefaultActions
     ? getMergeConflictActionAnnotations(actions)
     : [];
@@ -211,19 +214,18 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   const mergeConflictOptions: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
   > & {
-    mergeConflictActions?:
-      | 'none'
-      | 'default'
-      | ((action: MergeConflictDiffAction) => unknown);
+    mergeConflictActions?: PreloadMergeConflictActionsOutput;
   } = {
     ...options,
     ...normalizeUnresolvedFileOptions(options),
+    mergeConflictActions: mergeConflictActionsMode,
   };
   const unresolvedRenderer = new UnresolvedFileHunksRenderer<
     LAnnotation | MergeConflictActionAnnotationMetadata
   >(getHunksRendererOptions(mergeConflictOptions));
   unresolvedRenderer.setRenderDefaultMergeConflictActions(
-    typeof options?.mergeConflictActions !== 'function'
+    inputMergeConflictActions !== 'none' &&
+      typeof inputMergeConflictActions !== 'function'
   );
 
   return {
