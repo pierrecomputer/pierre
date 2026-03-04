@@ -31,9 +31,20 @@ export type MergeConflictActionsOption<LAnnotation> =
   | 'default'
   | RenderMergeConflictActions<LAnnotation>;
 
-export interface UnresolvedFileOptions<
-  LAnnotation,
-> extends FileDiffOptions<LAnnotation> {
+type UnresolvedAnnotation<LAnnotation> =
+  | LAnnotation
+  | MergeConflictActionAnnotationMetadata;
+type UnresolvedFileInternalOptions<LAnnotation> = FileDiffOptions<
+  UnresolvedAnnotation<LAnnotation>
+>;
+
+export interface UnresolvedFileOptions<LAnnotation> extends Omit<
+  UnresolvedFileInternalOptions<LAnnotation>,
+  'renderAnnotation'
+> {
+  renderAnnotation?(
+    annotation: DiffLineAnnotation<LAnnotation>
+  ): HTMLElement | undefined;
   mergeConflictActions?: MergeConflictActionsOption<LAnnotation>;
 }
 
@@ -41,27 +52,26 @@ interface UnresolvedFileBaseProps {
   file: FileContents;
 }
 
-export interface UnresolvedFileRenderProps<LAnnotation>
-  extends
-    UnresolvedFileBaseProps,
-    Omit<
-      FileDiffRenderProps<LAnnotation>,
-      'fileDiff' | 'oldFile' | 'newFile'
-    > {}
+type UnresolvedPropsFrom<LAnnotation, TProps> = UnresolvedFileBaseProps &
+  Omit<TProps, 'fileDiff' | 'oldFile' | 'newFile' | 'lineAnnotations'> & {
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  };
 
-export interface UnresolvedFileHydrationProps<LAnnotation>
-  extends
-    UnresolvedFileBaseProps,
-    Omit<
-      FileDiffHydrationProps<LAnnotation>,
-      'fileDiff' | 'oldFile' | 'newFile'
-    > {}
+export type UnresolvedFileRenderProps<LAnnotation> = UnresolvedPropsFrom<
+  LAnnotation,
+  FileDiffRenderProps<UnresolvedAnnotation<LAnnotation>>
+>;
+
+export type UnresolvedFileHydrationProps<LAnnotation> = UnresolvedPropsFrom<
+  LAnnotation,
+  FileDiffHydrationProps<UnresolvedAnnotation<LAnnotation>>
+>;
 
 let instanceId = -1;
 
-export class UnresolvedFile<
-  LAnnotation = undefined,
-> extends FileDiff<LAnnotation> {
+export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
+  UnresolvedAnnotation<LAnnotation>
+> {
   override readonly __id: string = `unresolved-file:${++instanceId}`;
 
   protected unresolvedFileDiffCache:
@@ -74,7 +84,7 @@ export class UnresolvedFile<
   private mergeConflictActions: MergeConflictActionsOption<LAnnotation> =
     'default';
   private userRenderAnnotation:
-    | ((annotation: DiffLineAnnotation<LAnnotation>) => HTMLElement | undefined)
+    | UnresolvedFileOptions<LAnnotation>['renderAnnotation']
     | undefined;
   private activeActionsByConflictIndex: MergeConflictDiffAction[] = [];
   private userLineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
@@ -85,7 +95,7 @@ export class UnresolvedFile<
     isContainerManaged = false
   ) {
     super(
-      normalizeUnresolvedFileOptions(options as FileDiffOptions<LAnnotation>),
+      toInternalFileDiffOptions(options),
       workerManager,
       isContainerManaged
     );
@@ -100,18 +110,18 @@ export class UnresolvedFile<
     if (options == null) {
       return;
     }
-    super.setOptions(
-      normalizeUnresolvedFileOptions(options as FileDiffOptions<LAnnotation>)
-    );
+    super.setOptions(toInternalFileDiffOptions(options));
     this.setUserRenderAnnotation(options.renderAnnotation);
     this.setMergeConflictActionsOption(options.mergeConflictActions);
     this.installRenderAnnotationProxy();
   }
 
   protected override createHunksRenderer(
-    options: FileDiffOptions<LAnnotation>
-  ): UnresolvedFileHunksRenderer<LAnnotation> {
-    const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(
+    options: UnresolvedFileInternalOptions<LAnnotation>
+  ): UnresolvedFileHunksRenderer<UnresolvedAnnotation<LAnnotation>> {
+    const renderer = new UnresolvedFileHunksRenderer<
+      UnresolvedAnnotation<LAnnotation>
+    >(
       this.getHunksRendererOptions(options),
       this.handleHighlightRender,
       this.workerManager
@@ -150,7 +160,7 @@ export class UnresolvedFile<
       lineAnnotations: this.mergeLineAnnotations(
         lineAnnotations ?? this.userLineAnnotations,
         actions
-      ) as DiffLineAnnotation<LAnnotation>[] | undefined,
+      ),
     });
   }
 
@@ -167,7 +177,7 @@ export class UnresolvedFile<
       lineAnnotations: this.mergeLineAnnotations(
         lineAnnotations ?? this.userLineAnnotations,
         actions
-      ) as DiffLineAnnotation<LAnnotation>[] | undefined,
+      ),
     });
   }
 
@@ -194,11 +204,7 @@ export class UnresolvedFile<
   private setUserRenderAnnotation(
     renderAnnotation: UnresolvedFileOptions<LAnnotation>['renderAnnotation']
   ): void {
-    this.userRenderAnnotation = renderAnnotation as
-      | ((
-          annotation: DiffLineAnnotation<LAnnotation>
-        ) => HTMLElement | undefined)
-      | undefined;
+    this.userRenderAnnotation = renderAnnotation;
   }
 
   private setMergeConflictActionsOption(
@@ -232,15 +238,16 @@ export class UnresolvedFile<
   }
 
   private renderAnnotationProxy = (
-    annotation: DiffLineAnnotation<LAnnotation>
+    annotation: DiffLineAnnotation<UnresolvedAnnotation<LAnnotation>>
   ): HTMLElement | undefined => {
-    const metadata = (annotation as { metadata?: unknown }).metadata;
-    if (
-      typeof this.mergeConflictActions === 'function' &&
-      isMergeConflictActionMetadata(metadata)
-    ) {
+    if (isMergeConflictActionAnnotation(annotation)) {
+      if (typeof this.mergeConflictActions !== 'function') {
+        return undefined;
+      }
       const action =
-        this.activeActionsByConflictIndex[metadata.conflict.conflictIndex];
+        this.activeActionsByConflictIndex[
+          annotation.metadata.conflict.conflictIndex
+        ];
       if (action == null) {
         return undefined;
       }
@@ -262,18 +269,15 @@ export class UnresolvedFile<
       }
       return undefined;
     }
-    if (isMergeConflictActionMetadata(metadata)) {
-      return undefined;
-    }
-    return this.userRenderAnnotation?.(annotation);
+    return this.userRenderAnnotation?.(
+      annotation as DiffLineAnnotation<LAnnotation>
+    );
   };
 
   private mergeLineAnnotations(
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     actions: MergeConflictDiffAction[]
-  ):
-    | DiffLineAnnotation<LAnnotation | MergeConflictActionAnnotationMetadata>[]
-    | undefined {
+  ): DiffLineAnnotation<UnresolvedAnnotation<LAnnotation>>[] | undefined {
     const actionAnnotations =
       this.mergeConflictActions === 'none'
         ? []
@@ -302,4 +306,23 @@ function isMergeConflictActionMetadata(
     'conflictIndex' in metadata.conflict &&
     typeof metadata.conflict.conflictIndex === 'number'
   );
+}
+
+function isMergeConflictActionAnnotation<LAnnotation>(
+  annotation: DiffLineAnnotation<UnresolvedAnnotation<LAnnotation>>
+): annotation is DiffLineAnnotation<MergeConflictActionAnnotationMetadata> {
+  return isMergeConflictActionMetadata(
+    (annotation as { metadata?: unknown }).metadata
+  );
+}
+
+function toInternalFileDiffOptions<LAnnotation>(
+  options: UnresolvedFileOptions<LAnnotation> | undefined
+): UnresolvedFileInternalOptions<LAnnotation> {
+  const {
+    mergeConflictActions: _mergeConflictActions,
+    renderAnnotation: _renderAnnotation,
+    ...fileDiffOptions
+  } = options ?? {};
+  return normalizeUnresolvedFileOptions(fileDiffOptions);
 }
