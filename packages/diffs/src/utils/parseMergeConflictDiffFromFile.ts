@@ -69,50 +69,65 @@ export function parseMergeConflictDiffFromFile(
 ): ParseMergeConflictDiffFromFileResult {
   const lines = splitFileContents(file.contents);
   const { lineTypes, regions } = getMergeConflictParseResult(lines);
-  let currentContents = '';
-  let incomingContents = '';
-  let patchContents = '';
+  const currentContentChunks: string[] = [];
+  const incomingContentChunks: string[] = [];
+  const patchContentChunks: string[] = [];
   const actions: MergeConflictDiffAction[] = new Array(regions.length);
-  const currentLineNumbersByOriginalIndex: (number | undefined)[] = new Array(
-    lines.length
-  );
-  const incomingLineNumbersByOriginalIndex: (number | undefined)[] = new Array(
-    lines.length
-  );
+  const actionOriginalLineNumbersByRegion = new Array<number>(regions.length);
+  const actionOriginalLineIndexesByRegion = new Array<number>(regions.length);
+  const actionLineIndexSet = new Set<number>();
+  for (let regionIndex = 0; regionIndex < regions.length; regionIndex++) {
+    const actionOriginalLineNumber = getMergeConflictActionLineNumber(
+      regions[regionIndex]
+    );
+    const actionOriginalLineIndex = actionOriginalLineNumber - 1;
+    actionOriginalLineNumbersByRegion[regionIndex] = actionOriginalLineNumber;
+    actionOriginalLineIndexesByRegion[regionIndex] = actionOriginalLineIndex;
+    actionLineIndexSet.add(actionOriginalLineIndex);
+  }
+  const actionLineNumbersByOriginalIndex = new Map<
+    number,
+    {
+      currentLineNumber: number | undefined;
+      incomingLineNumber: number | undefined;
+    }
+  >();
   let currentLineNumber = 0;
   let incomingLineNumber = 0;
   let actionIndex = 0;
   let nextConflict = regions[actionIndex];
   let nextActionOriginalLineNumber =
-    nextConflict != null ? getMergeConflictActionLineNumber(nextConflict) : -1;
+    nextConflict != null ? actionOriginalLineNumbersByRegion[actionIndex] : -1;
   let nextActionOriginalLineIndex =
-    nextConflict != null ? nextActionOriginalLineNumber - 1 : -1;
+    nextConflict != null ? actionOriginalLineIndexesByRegion[actionIndex] : -1;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
     const lineType = lineTypes[index];
+    let currentLineNumberAtIndex: number | undefined;
+    let incomingLineNumberAtIndex: number | undefined;
     switch (lineType) {
       case 'none': {
-        currentContents += line;
-        incomingContents += line;
-        patchContents += ` ${line}`;
+        currentContentChunks.push(line);
+        incomingContentChunks.push(line);
+        patchContentChunks.push(` ${line}`);
         currentLineNumber++;
         incomingLineNumber++;
-        currentLineNumbersByOriginalIndex[index] = currentLineNumber;
-        incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
+        currentLineNumberAtIndex = currentLineNumber;
+        incomingLineNumberAtIndex = incomingLineNumber;
         break;
       }
       case 'current': {
-        currentContents += line;
-        patchContents += `-${line}`;
+        currentContentChunks.push(line);
+        patchContentChunks.push(`-${line}`);
         currentLineNumber++;
-        currentLineNumbersByOriginalIndex[index] = currentLineNumber;
+        currentLineNumberAtIndex = currentLineNumber;
         break;
       }
       case 'incoming': {
-        incomingContents += line;
-        patchContents += `+${line}`;
+        incomingContentChunks.push(line);
+        patchContentChunks.push(`+${line}`);
         incomingLineNumber++;
-        incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
+        incomingLineNumberAtIndex = incomingLineNumber;
         break;
       }
       case 'base':
@@ -120,13 +135,13 @@ export function parseMergeConflictDiffFromFile(
       case 'marker-base':
       case 'marker-separator':
       case 'marker-end': {
-        currentContents += line;
-        incomingContents += line;
-        patchContents += ` ${line}`;
+        currentContentChunks.push(line);
+        incomingContentChunks.push(line);
+        patchContentChunks.push(` ${line}`);
         currentLineNumber++;
         incomingLineNumber++;
-        currentLineNumbersByOriginalIndex[index] = currentLineNumber;
-        incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
+        currentLineNumberAtIndex = currentLineNumber;
+        incomingLineNumberAtIndex = incomingLineNumber;
         break;
       }
       default: {
@@ -134,16 +149,24 @@ export function parseMergeConflictDiffFromFile(
       }
     }
 
+    if (actionLineIndexSet.has(index)) {
+      actionLineNumbersByOriginalIndex.set(index, {
+        currentLineNumber: currentLineNumberAtIndex,
+        incomingLineNumber: incomingLineNumberAtIndex,
+      });
+    }
+
     // Regions are emitted in a stable order; resolve actions as soon as their
     // anchor original line has been processed.
     while (nextConflict != null && nextActionOriginalLineIndex <= index) {
+      const actionLineNumbers = actionLineNumbersByOriginalIndex.get(
+        nextActionOriginalLineIndex
+      );
       actions[actionIndex] = {
         actionOriginalLineIndex: nextActionOriginalLineIndex,
         actionOriginalLineNumber: nextActionOriginalLineNumber,
-        currentLineNumber:
-          currentLineNumbersByOriginalIndex[nextActionOriginalLineIndex],
-        incomingLineNumber:
-          incomingLineNumbersByOriginalIndex[nextActionOriginalLineIndex],
+        currentLineNumber: actionLineNumbers?.currentLineNumber,
+        incomingLineNumber: actionLineNumbers?.incomingLineNumber,
         conflict: nextConflict,
         conflictIndex: nextConflict.conflictIndex,
       };
@@ -153,10 +176,15 @@ export function parseMergeConflictDiffFromFile(
         break;
       }
       nextActionOriginalLineNumber =
-        getMergeConflictActionLineNumber(nextConflict);
-      nextActionOriginalLineIndex = nextActionOriginalLineNumber - 1;
+        actionOriginalLineNumbersByRegion[actionIndex];
+      nextActionOriginalLineIndex =
+        actionOriginalLineIndexesByRegion[actionIndex];
     }
   }
+
+  const currentContents = currentContentChunks.join('');
+  const incomingContents = incomingContentChunks.join('');
+  const patchContents = patchContentChunks.join('');
 
   const currentFile = createResolvedConflictFile(
     file,
