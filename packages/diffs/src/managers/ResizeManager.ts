@@ -74,7 +74,7 @@ export class ResizeManager {
 
     if (codeElements.length > 1 && !disableAnnotations) {
       const annotationElements = pre.querySelectorAll(
-        '[data-line-annotation*=","]'
+        '[data-line-annotation*=","], [data-merge-conflict-actions*=","]'
       );
 
       const elementMap = new Map<string, HTMLElement[]>();
@@ -82,18 +82,20 @@ export class ResizeManager {
         if (!(element instanceof HTMLElement)) {
           continue;
         }
-        const { lineAnnotation = '' } = element.dataset;
-        if (!/^\d+,\d+$/.test(lineAnnotation)) {
+        const annotationKey =
+          element.dataset.lineAnnotation ??
+          element.dataset.mergeConflictActions;
+        if (annotationKey == null || !/^\d+,\d+$/.test(annotationKey)) {
           console.error(
             'DiffFileRenderer.setupResizeObserver: Invalid element or annotation',
-            { lineAnnotation, element }
+            { annotationKey, element }
           );
           continue;
         }
-        let pairs = elementMap.get(lineAnnotation);
+        let pairs = elementMap.get(annotationKey);
         if (pairs == null) {
           pairs = [];
-          elementMap.set(lineAnnotation, pairs);
+          elementMap.set(annotationKey, pairs);
         }
         pairs.push(element);
       }

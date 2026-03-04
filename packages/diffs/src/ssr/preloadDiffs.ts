@@ -187,9 +187,7 @@ export interface PreloadUnresolvedFileResult<LAnnotation> {
   > & {
     mergeConflictActions?: PreloadMergeConflictActionsOutput;
   };
-  annotations?: DiffLineAnnotation<
-    LAnnotation | MergeConflictActionAnnotationMetadata
-  >[];
+  annotations?: DiffLineAnnotation<LAnnotation>[];
   prerenderedHTML: string;
 }
 
@@ -208,9 +206,6 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   const mergeConflictAnnotations = includeDefaultActions
     ? getMergeConflictActionAnnotations(actions)
     : [];
-  const mergedAnnotations: DiffLineAnnotation<
-    LAnnotation | MergeConflictActionAnnotationMetadata
-  >[] = [...(annotations ?? []), ...mergeConflictAnnotations];
   const mergeConflictOptions: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
   > & {
@@ -227,15 +222,18 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
     inputMergeConflictActions !== 'none' &&
       typeof inputMergeConflictActions !== 'function'
   );
+  unresolvedRenderer.setMergeConflictActionAnnotations(
+    mergeConflictAnnotations
+  );
 
   return {
     file,
     options: mergeConflictOptions,
-    annotations: mergedAnnotations,
+    annotations,
     prerenderedHTML: await preloadDiffHTMLWithRenderer({
       fileDiff,
       options: mergeConflictOptions,
-      annotations: mergedAnnotations,
+      annotations,
       renderer: unresolvedRenderer,
     }),
   };

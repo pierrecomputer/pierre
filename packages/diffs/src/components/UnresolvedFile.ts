@@ -5,7 +5,10 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../types';
+import { areDiffLineAnnotationsEqual } from '../utils/areDiffLineAnnotationsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
+import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import { normalizeUnresolvedFileOptions } from '../utils/normalizeUnresolvedFileOptions';
 import {
   getMergeConflictActionAnnotations,
@@ -70,6 +73,12 @@ export type UnresolvedFileHydrationProps<LAnnotation> = UnresolvedPropsFrom<
 export type UnresolvedFileProps<LAnnotation> =
   UnresolvedFileRenderProps<LAnnotation>;
 
+interface MergeConflictActionElementCache {
+  element: HTMLElement;
+  action: MergeConflictDiffAction;
+  annotation: DiffLineAnnotation<MergeConflictActionAnnotationMetadata>;
+}
+
 let instanceId = -1;
 
 export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
@@ -90,6 +99,12 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     | UnresolvedFileOptions<LAnnotation>['renderAnnotation']
     | undefined;
   private activeActionsByConflictIndex: MergeConflictDiffAction[] = [];
+  private activeActionAnnotations: DiffLineAnnotation<MergeConflictActionAnnotationMetadata>[] =
+    [];
+  private mergeConflictActionCache: Map<
+    string,
+    MergeConflictActionElementCache
+  > = new Map();
   private userLineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
 
   constructor(
@@ -140,8 +155,10 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
   }
 
   override cleanUp(): void {
+    this.clearMergeConflictActionCache();
     this.unresolvedFileDiffCache = undefined;
     this.activeActionsByConflictIndex = [];
+    this.activeActionAnnotations = [];
     this.userLineAnnotations = [];
     super.cleanUp();
   }
@@ -152,15 +169,13 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
       this.userLineAnnotations = lineAnnotations;
     }
     const { fileDiff, actions } = this.getOrCreateUnresolvedFileDiff(file);
-    this.activeActionsByConflictIndex = actions;
+    this.setActiveMergeConflictActions(actions);
     super.hydrate({
       ...rest,
       fileDiff,
-      lineAnnotations: this.mergeLineAnnotations(
-        lineAnnotations ?? this.userLineAnnotations,
-        actions
-      ),
+      lineAnnotations: lineAnnotations ?? this.userLineAnnotations,
     });
+    this.renderMergeConflictActionSlots();
   }
 
   override render(props: UnresolvedFileProps<LAnnotation>): boolean {
@@ -169,15 +184,14 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
       this.userLineAnnotations = lineAnnotations;
     }
     const { fileDiff, actions } = this.getOrCreateUnresolvedFileDiff(file);
-    this.activeActionsByConflictIndex = actions;
-    return super.render({
+    this.setActiveMergeConflictActions(actions);
+    const didRender = super.render({
       ...rest,
       fileDiff,
-      lineAnnotations: this.mergeLineAnnotations(
-        lineAnnotations ?? this.userLineAnnotations,
-        actions
-      ),
+      lineAnnotations: lineAnnotations ?? this.userLineAnnotations,
     });
+    this.renderMergeConflictActionSlots();
+    return didRender;
   }
 
   private getOrCreateUnresolvedFileDiff(file: FileContents): {
@@ -200,32 +214,24 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     return { fileDiff, actions };
   }
 
-  private setMergeConflictActionsOption(
-    mergeConflictActions: MergeConflictActionsOption<LAnnotation> | undefined
-  ): void {
-    this.mergeConflictActions = mergeConflictActions ?? 'default';
-    this.syncMergeConflictActionRendererMode();
-  }
-
   private setUnresolvedOptions(
     options: UnresolvedFileOptions<LAnnotation>
   ): void {
-    this.setUserRenderAnnotation(options.renderAnnotation);
-    this.setMergeConflictActionsOption(options.mergeConflictActions);
-    this.installRenderAnnotationProxy();
-  }
+    this.userRenderAnnotation = options.renderAnnotation;
+    this.mergeConflictActions = options.mergeConflictActions ?? 'default';
 
-  private setUserRenderAnnotation(
-    renderAnnotation: UnresolvedFileOptions<LAnnotation>['renderAnnotation']
-  ): void {
-    this.userRenderAnnotation = renderAnnotation;
-  }
+    if (this.hunksRenderer instanceof UnresolvedFileHunksRenderer) {
+      this.hunksRenderer.setRenderDefaultMergeConflictActions(
+        this.shouldRenderDefaultMergeConflictActions()
+      );
+    }
+    this.syncMergeConflictActionAnnotations();
 
-  private installRenderAnnotationProxy(): void {
     this.options = {
       ...this.options,
       renderAnnotation: this.renderAnnotationProxy,
     };
+    this.renderMergeConflictActionSlots();
   }
 
   private shouldRenderDefaultMergeConflictActions(): boolean {
@@ -235,92 +241,117 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     );
   }
 
-  private syncMergeConflictActionRendererMode(): void {
-    if (!(this.hunksRenderer instanceof UnresolvedFileHunksRenderer)) {
-      return;
-    }
-    this.hunksRenderer.setRenderDefaultMergeConflictActions(
-      this.shouldRenderDefaultMergeConflictActions()
-    );
-  }
-
   private renderAnnotationProxy = (
     annotation: DiffLineAnnotation<UnresolvedAnnotation<LAnnotation>>
   ): HTMLElement | undefined => {
-    if (isMergeConflictActionAnnotation(annotation)) {
-      if (typeof this.mergeConflictActions !== 'function') {
-        return undefined;
-      }
-      const action =
-        this.activeActionsByConflictIndex[
-          annotation.metadata.conflict.conflictIndex
-        ];
-      if (action == null) {
-        return undefined;
-      }
-      const rendered = this.mergeConflictActions(action, this);
-      if (rendered == null) {
-        return undefined;
-      }
-      if (rendered instanceof HTMLElement) {
-        return rendered;
-      }
-      if (
-        typeof DocumentFragment !== 'undefined' &&
-        rendered instanceof DocumentFragment
-      ) {
-        const wrapper = document.createElement('div');
-        wrapper.style.display = 'contents';
-        wrapper.appendChild(rendered);
-        return wrapper;
-      }
-      return undefined;
-    }
     return this.userRenderAnnotation?.(
       annotation as DiffLineAnnotation<LAnnotation>
     );
   };
 
-  private mergeLineAnnotations(
-    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
+  private setActiveMergeConflictActions(
     actions: MergeConflictDiffAction[]
-  ): DiffLineAnnotation<UnresolvedAnnotation<LAnnotation>>[] | undefined {
-    const actionAnnotations =
+  ): void {
+    this.activeActionsByConflictIndex = actions;
+    this.activeActionAnnotations =
       this.mergeConflictActions === 'none'
         ? []
         : getMergeConflictActionAnnotations(actions);
+    this.syncMergeConflictActionAnnotations();
+  }
+
+  private syncMergeConflictActionAnnotations(): void {
+    if (this.hunksRenderer instanceof UnresolvedFileHunksRenderer) {
+      this.hunksRenderer.setMergeConflictActionAnnotations(
+        this.activeActionAnnotations
+      );
+    }
+  }
+
+  private renderMergeConflictActionSlots(): void {
     if (
-      (lineAnnotations?.length ?? 0) === 0 &&
-      actionAnnotations.length === 0
+      this.isContainerManaged ||
+      this.fileContainer == null ||
+      typeof this.mergeConflictActions !== 'function' ||
+      this.activeActionAnnotations.length === 0
     ) {
+      this.clearMergeConflictActionCache();
+      return;
+    }
+    const staleActions = new Map(this.mergeConflictActionCache);
+    for (
+      let annotationIndex = 0;
+      annotationIndex < this.activeActionAnnotations.length;
+      annotationIndex++
+    ) {
+      const annotation = this.activeActionAnnotations[annotationIndex];
+      const conflictIndex = annotation.metadata.conflict.conflictIndex;
+      const action = this.activeActionsByConflictIndex[conflictIndex];
+      if (action == null) {
+        continue;
+      }
+      const slotName = getMergeConflictActionSlotName({
+        side: annotation.side,
+        lineNumber: annotation.lineNumber,
+        conflictIndex,
+      });
+      const id = `${annotationIndex}-${slotName}`;
+      let cache = this.mergeConflictActionCache.get(id);
+      if (
+        cache == null ||
+        cache.action !== action ||
+        !areDiffLineAnnotationsEqual(annotation, cache.annotation)
+      ) {
+        cache?.element.parentNode?.removeChild(cache.element);
+        const rendered = this.renderMergeConflictAction(action);
+        if (rendered == null) {
+          continue;
+        }
+        const element = createAnnotationWrapperNode(slotName);
+        element.appendChild(rendered);
+        this.fileContainer.appendChild(element);
+        cache = { element, action, annotation };
+        this.mergeConflictActionCache.set(id, cache);
+      }
+      staleActions.delete(id);
+    }
+    for (const [id, { element }] of staleActions.entries()) {
+      this.mergeConflictActionCache.delete(id);
+      element.parentNode?.removeChild(element);
+    }
+  }
+
+  private renderMergeConflictAction(
+    action: MergeConflictDiffAction
+  ): HTMLElement | undefined {
+    if (typeof this.mergeConflictActions !== 'function') {
       return undefined;
     }
-    return [...(lineAnnotations ?? []), ...actionAnnotations];
+    const rendered = this.mergeConflictActions(action, this);
+    if (rendered == null) {
+      return undefined;
+    }
+    if (rendered instanceof HTMLElement) {
+      return rendered;
+    }
+    if (
+      typeof DocumentFragment !== 'undefined' &&
+      rendered instanceof DocumentFragment
+    ) {
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'contents';
+      wrapper.appendChild(rendered);
+      return wrapper;
+    }
+    return undefined;
   }
-}
 
-function isMergeConflictActionMetadata(
-  metadata: unknown
-): metadata is MergeConflictActionAnnotationMetadata {
-  return (
-    typeof metadata === 'object' &&
-    metadata != null &&
-    'type' in metadata &&
-    metadata.type === 'merge-conflict-action' &&
-    'conflict' in metadata &&
-    typeof metadata.conflict === 'object' &&
-    metadata.conflict != null &&
-    'conflictIndex' in metadata.conflict &&
-    typeof metadata.conflict.conflictIndex === 'number'
-  );
-}
-
-function isMergeConflictActionAnnotation<LAnnotation>(
-  annotation: DiffLineAnnotation<UnresolvedAnnotation<LAnnotation>>
-): annotation is DiffLineAnnotation<MergeConflictActionAnnotationMetadata> {
-  return isMergeConflictActionMetadata(
-    (annotation as { metadata?: unknown }).metadata
-  );
+  private clearMergeConflictActionCache(): void {
+    for (const { element } of this.mergeConflictActionCache.values()) {
+      element.parentNode?.removeChild(element);
+    }
+    this.mergeConflictActionCache.clear();
+  }
 }
 
 function toInternalFileDiffOptions<LAnnotation>(

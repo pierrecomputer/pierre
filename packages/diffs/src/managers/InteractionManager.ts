@@ -1103,7 +1103,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         if (
           gutterElement.nextSibling instanceof HTMLElement &&
           contentElement.nextSibling instanceof HTMLElement &&
-          contentElement.nextSibling.hasAttribute('data-line-annotation')
+          (contentElement.nextSibling.hasAttribute('data-line-annotation') ||
+            contentElement.nextSibling.hasAttribute(
+              'data-merge-conflict-actions'
+            ))
         ) {
           if (isSingle) {
             attributeValue = 'last';

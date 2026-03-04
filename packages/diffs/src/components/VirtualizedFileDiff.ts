@@ -110,6 +110,7 @@ export class VirtualizedFileDiff<
     if (
       overflow === 'scroll' &&
       this.lineAnnotations.length === 0 &&
+      this.pre?.querySelector('[data-merge-conflict-actions]') == null &&
       !this.virtualizer.config.resizeDebugging
     ) {
       return;
@@ -139,6 +140,7 @@ export class VirtualizedFileDiff<
         if (
           line.nextElementSibling instanceof HTMLElement &&
           ('lineAnnotation' in line.nextElementSibling.dataset ||
+            'mergeConflictActions' in line.nextElementSibling.dataset ||
             'noNewline' in line.nextElementSibling.dataset)
         ) {
           if ('noNewline' in line.nextElementSibling.dataset) {
