@@ -67,6 +67,9 @@ export type UnresolvedFileHydrationProps<LAnnotation> = UnresolvedPropsFrom<
   FileDiffHydrationProps<UnresolvedAnnotation<LAnnotation>>
 >;
 
+export type UnresolvedFileProps<LAnnotation> =
+  UnresolvedFileRenderProps<LAnnotation>;
+
 let instanceId = -1;
 
 export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
@@ -99,9 +102,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
       workerManager,
       isContainerManaged
     );
-    this.setUserRenderAnnotation(options.renderAnnotation);
-    this.setMergeConflictActionsOption(options.mergeConflictActions);
-    this.installRenderAnnotationProxy();
+    this.setUnresolvedOptions(options);
   }
 
   override setOptions(
@@ -111,9 +112,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
       return;
     }
     super.setOptions(toInternalFileDiffOptions(options));
-    this.setUserRenderAnnotation(options.renderAnnotation);
-    this.setMergeConflictActionsOption(options.mergeConflictActions);
-    this.installRenderAnnotationProxy();
+    this.setUnresolvedOptions(options);
   }
 
   protected override createHunksRenderer(
@@ -164,7 +163,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     });
   }
 
-  override render(props: UnresolvedFileRenderProps<LAnnotation>): boolean {
+  override render(props: UnresolvedFileProps<LAnnotation>): boolean {
     const { file, lineAnnotations, ...rest } = props;
     if (lineAnnotations != null) {
       this.userLineAnnotations = lineAnnotations;
@@ -201,17 +200,25 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     return { fileDiff, actions };
   }
 
-  private setUserRenderAnnotation(
-    renderAnnotation: UnresolvedFileOptions<LAnnotation>['renderAnnotation']
-  ): void {
-    this.userRenderAnnotation = renderAnnotation;
-  }
-
   private setMergeConflictActionsOption(
     mergeConflictActions: MergeConflictActionsOption<LAnnotation> | undefined
   ): void {
     this.mergeConflictActions = mergeConflictActions ?? 'default';
     this.syncMergeConflictActionRendererMode();
+  }
+
+  private setUnresolvedOptions(
+    options: UnresolvedFileOptions<LAnnotation>
+  ): void {
+    this.setUserRenderAnnotation(options.renderAnnotation);
+    this.setMergeConflictActionsOption(options.mergeConflictActions);
+    this.installRenderAnnotationProxy();
+  }
+
+  private setUserRenderAnnotation(
+    renderAnnotation: UnresolvedFileOptions<LAnnotation>['renderAnnotation']
+  ): void {
+    this.userRenderAnnotation = renderAnnotation;
   }
 
   private installRenderAnnotationProxy(): void {

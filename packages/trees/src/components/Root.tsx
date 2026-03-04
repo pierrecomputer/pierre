@@ -38,7 +38,6 @@ import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoader } from '../loader/sync';
 import type { SVGSpriteNames } from '../sprite';
 import type { FileTreeNode } from '../types';
-import { buildGuideLineStyleText } from '../utils/buildGuideLineStyleText';
 import { computeNewFilesAfterDrop } from '../utils/computeNewFilesAfterDrop';
 import { controlledExpandedPathsToExpandedIds } from '../utils/controlledExpandedState';
 import {
@@ -806,11 +805,30 @@ export function Root({
   };
   // --- Dynamic guide-line highlighting for selected items ---
   const guideStyleText = useMemo(() => {
-    return buildGuideLineStyleText({
-      selectedIds: tree.getState().selectedItems ?? [],
-      focusedItemId,
-      childToParent,
-    });
+    const selectedIds = tree.getState().selectedItems ?? [];
+    if (selectedIds.length === 0 && focusedItemId == null) return '';
+    const parentIds = new Set<string>();
+    for (const id of selectedIds) {
+      const parentId = childToParent.get(id);
+      if (parentId != null && parentId !== 'root') {
+        parentIds.add(parentId);
+      }
+    }
+    if (focusedItemId != null) {
+      const focusedParentId = childToParent.get(focusedItemId);
+      if (focusedParentId != null && focusedParentId !== 'root') {
+        parentIds.add(focusedParentId);
+      }
+    }
+    if (parentIds.size === 0) return '';
+    const escape = (v: string) => v.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const selectors = Array.from(parentIds)
+      .map(
+        (id) =>
+          `[data-item-section="spacing-item"][data-ancestor-id="${escape(id)}"]`
+      )
+      .join(',\n');
+    return `:is(${selectors}) { opacity: 1; }`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionSnapshot, focusedItemId, childToParent]);
 
