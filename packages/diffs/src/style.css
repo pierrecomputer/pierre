@@ -633,6 +633,20 @@
     min-height: 1lh;
   }
 
+  [data-gutter-buffer] {
+    padding-left: 2ch;
+    padding-right: 1ch;
+
+    &::before {
+      content: '';
+      display: inline-block;
+      min-width: var(
+        --diffs-min-number-column-width,
+        var(--diffs-min-number-column-width-default, 3ch)
+      );
+    }
+  }
+
   [data-gutter-buffer='annotation'] {
     min-height: 0;
   }
