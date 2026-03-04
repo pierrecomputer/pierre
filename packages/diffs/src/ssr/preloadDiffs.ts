@@ -14,6 +14,7 @@ import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
   getMergeConflictActionAnnotations,
   type MergeConflictActionAnnotationMetadata,
+  type MergeConflictDiffAction,
   parseMergeConflictDiffFromFile,
 } from '../utils/parseMergeConflictDiffFromFile';
 import { renderHTML } from './renderHTML';
@@ -168,7 +169,10 @@ export interface PreloadUnresolvedFileOptions<LAnnotation> {
   options?: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
   > & {
-    mergeConflictActions?: 'none' | 'default';
+    mergeConflictActions?:
+      | 'none'
+      | 'default'
+      | ((action: MergeConflictDiffAction) => unknown);
   };
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
@@ -178,7 +182,10 @@ export interface PreloadUnresolvedFileResult<LAnnotation> {
   options?: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
   > & {
-    mergeConflictActions?: 'none' | 'default';
+    mergeConflictActions?:
+      | 'none'
+      | 'default'
+      | ((action: MergeConflictDiffAction) => unknown);
   };
   annotations?: DiffLineAnnotation<
     LAnnotation | MergeConflictActionAnnotationMetadata
@@ -204,11 +211,20 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   const mergeConflictOptions: FileDiffOptions<
     LAnnotation | MergeConflictActionAnnotationMetadata
   > & {
-    mergeConflictActions?: 'none' | 'default';
+    mergeConflictActions?:
+      | 'none'
+      | 'default'
+      | ((action: MergeConflictDiffAction) => unknown);
   } = {
     ...options,
     ...normalizeUnresolvedFileOptions(options),
   };
+  const unresolvedRenderer = new UnresolvedFileHunksRenderer<
+    LAnnotation | MergeConflictActionAnnotationMetadata
+  >(getHunksRendererOptions(mergeConflictOptions));
+  unresolvedRenderer.setRenderDefaultMergeConflictActions(
+    typeof options?.mergeConflictActions !== 'function'
+  );
 
   return {
     file,
@@ -218,9 +234,7 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
       fileDiff,
       options: mergeConflictOptions,
       annotations: mergedAnnotations,
-      renderer: new UnresolvedFileHunksRenderer<
-        LAnnotation | MergeConflictActionAnnotationMetadata
-      >(getHunksRendererOptions(mergeConflictOptions)),
+      renderer: unresolvedRenderer,
     }),
   };
 }

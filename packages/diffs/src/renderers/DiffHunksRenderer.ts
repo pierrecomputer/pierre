@@ -36,7 +36,7 @@ import type {
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
-import { createAnnotationElement } from '../utils/createAnnotationElement';
+import { createAnnotationElement as createDefaultAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
@@ -70,6 +70,7 @@ interface PushLineWithAnnotation {
   deletionSpan?: AnnotationSpan;
   additionSpan?: AnnotationSpan;
 
+  createAnnotationElement(span: AnnotationSpan): HASTElement;
   context: ProcessContext;
 }
 
@@ -286,6 +287,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       gutterLineType:
         side === 'deletions' ? 'change-deletion' : 'change-addition',
     };
+  }
+
+  protected createAnnotationElement(span: AnnotationSpan): HASTElement {
+    return createDefaultAnnotationElement(span);
   }
 
   private getOptionsWithDefaults(): OptionsWithDefaults {
@@ -815,6 +820,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               hunkIndex,
               lineIndex
             ),
+            createAnnotationElement: (span) =>
+              this.createAnnotationElement(span),
             context,
           });
         } else {
@@ -927,6 +934,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine: additionLineContent,
             deletionLine: deletionLineContent,
             ...annotationSpans,
+            createAnnotationElement: (span) =>
+              this.createAnnotationElement(span),
             context,
           });
         }
@@ -1279,6 +1288,7 @@ function pushLineWithAnnotation({
   unifiedSpan,
   deletionSpan,
   additionSpan,
+  createAnnotationElement,
   context,
 }: PushLineWithAnnotation) {
   let hasAnnotationRow = false;
