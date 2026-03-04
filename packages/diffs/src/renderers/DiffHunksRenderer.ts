@@ -1,4 +1,4 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
+import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -123,13 +123,7 @@ export interface SplitLineDecorationProps {
 export interface LineDecoration {
   gutterLineType: LineTypes;
   metadata?: unknown;
-}
-
-export interface GutterDecorationProps {
-  side: CodeColumnType;
-  gutterItem: HASTElement;
-  type: 'context' | 'context-expanded' | 'change';
-  metadata: unknown;
+  gutterProperties?: Properties;
 }
 
 export interface ContentDecorationProps {
@@ -297,11 +291,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         side === 'deletions' ? 'change-deletion' : 'change-addition',
     };
   }
-
-  protected decorateGutterItem({
-    gutterItem: _gutterItem,
-    metadata: _metadata,
-  }: GutterDecorationProps): void {}
 
   protected decorateContentLine({
     lineNode: _lineNode,
@@ -678,17 +667,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
       lineNumber: number,
       lineIndex: string,
-      sourceType: 'context' | 'context-expanded' | 'change' = 'context',
-      metadata: unknown = undefined
+      gutterProperties: Properties | undefined = undefined
     ) => {
-      const item = createGutterItem(lineType, lineNumber, lineIndex);
-      this.decorateGutterItem({
-        side: type,
-        gutterItem: item,
-        type: sourceType,
-        metadata,
-      });
-      context.pushToGutter(type, item);
+      context.pushToGutter(
+        type,
+        createGutterItem(lineType, lineNumber, lineIndex, gutterProperties)
+      );
     };
 
     function flushSplitSpan() {
@@ -813,8 +797,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               ? additionLine.lineNumber
               : deletionLine.lineNumber,
             `${unifiedLineIndex},${splitLineIndex}`,
-            type,
-            lineDecoration.metadata
+            lineDecoration.gutterProperties
           );
           this.decorateContentLine({
             side: 'unified',
@@ -912,8 +895,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               deletionLineDecoration.gutterLineType,
               deletionLine.lineNumber,
               `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-              type,
-              deletionLineDecoration.metadata
+              deletionLineDecoration.gutterProperties
             );
             this.decorateContentLine({
               side: 'deletions',
@@ -928,8 +910,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               additionLineDecoration.gutterLineType,
               additionLine.lineNumber,
               `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-              type,
-              additionLineDecoration.metadata
+              additionLineDecoration.gutterProperties
             );
             this.decorateContentLine({
               side: 'additions',
