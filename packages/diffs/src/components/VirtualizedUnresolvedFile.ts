@@ -148,8 +148,18 @@ export class VirtualizedUnresolvedFile<
 
   override hydrate(
     props: VirtualizedUnresolvedFileHydrationProps<LAnnotation>
+  ): void;
+  override hydrate(
+    props: FileDiffHydrationProps<UnresolvedAnnotation<LAnnotation>>
   ): void {
-    const { file, lineAnnotations, ...rest } = props;
+    const maybeFile = (props as Partial<VirtualizedUnresolvedFileBaseProps>)
+      .file;
+    if (maybeFile == null) {
+      super.hydrate(props);
+      return;
+    }
+    const { file, lineAnnotations, ...rest } =
+      props as VirtualizedUnresolvedFileHydrationProps<LAnnotation>;
     if (lineAnnotations != null) {
       this.userLineAnnotations = lineAnnotations;
     }
@@ -167,8 +177,17 @@ export class VirtualizedUnresolvedFile<
 
   override render(
     props: VirtualizedUnresolvedFileRenderProps<LAnnotation>
+  ): boolean;
+  override render(
+    props: FileDiffRenderProps<UnresolvedAnnotation<LAnnotation>>
   ): boolean {
-    const { file, lineAnnotations, ...rest } = props;
+    const maybeFile = (props as Partial<VirtualizedUnresolvedFileBaseProps>)
+      .file;
+    if (maybeFile == null) {
+      return super.render(props);
+    }
+    const { file, lineAnnotations, ...rest } =
+      props as VirtualizedUnresolvedFileRenderProps<LAnnotation>;
     if (lineAnnotations != null) {
       this.userLineAnnotations = lineAnnotations;
     }

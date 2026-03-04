@@ -146,8 +146,17 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     super.cleanUp();
   }
 
-  override hydrate(props: UnresolvedFileHydrationProps<LAnnotation>): void {
-    const { file, lineAnnotations, ...rest } = props;
+  override hydrate(props: UnresolvedFileHydrationProps<LAnnotation>): void;
+  override hydrate(
+    props: FileDiffHydrationProps<UnresolvedAnnotation<LAnnotation>>
+  ): void {
+    const maybeFile = (props as Partial<UnresolvedFileBaseProps>).file;
+    if (maybeFile == null) {
+      super.hydrate(props);
+      return;
+    }
+    const { file, lineAnnotations, ...rest } =
+      props as UnresolvedFileHydrationProps<LAnnotation>;
     if (lineAnnotations != null) {
       this.userLineAnnotations = lineAnnotations;
     }
@@ -163,8 +172,16 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     });
   }
 
-  override render(props: UnresolvedFileProps<LAnnotation>): boolean {
-    const { file, lineAnnotations, ...rest } = props;
+  override render(props: UnresolvedFileProps<LAnnotation>): boolean;
+  override render(
+    props: FileDiffRenderProps<UnresolvedAnnotation<LAnnotation>>
+  ): boolean {
+    const maybeFile = (props as Partial<UnresolvedFileBaseProps>).file;
+    if (maybeFile == null) {
+      return super.render(props);
+    }
+    const { file, lineAnnotations, ...rest } =
+      props as UnresolvedFileProps<LAnnotation>;
     if (lineAnnotations != null) {
       this.userLineAnnotations = lineAnnotations;
     }
