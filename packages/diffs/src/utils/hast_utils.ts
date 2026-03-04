@@ -96,7 +96,8 @@ export function createGutterWrapper(children?: ElementContent[]): HASTElement {
 export function createGutterItem(
   lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
   lineNumber: number,
-  lineIndex: string
+  lineIndex: string,
+  properties: Properties = {}
 ): HASTElement {
   return createHastElement({
     tagName: 'div',
@@ -104,6 +105,7 @@ export function createGutterItem(
       'data-line-type': lineType,
       'data-column-number': lineNumber,
       'data-line-index': lineIndex,
+      ...properties,
     },
     children:
       lineNumber != null

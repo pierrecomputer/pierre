@@ -3,7 +3,6 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import {
   type ContentDecorationProps,
   DiffHunksRenderer,
-  type GutterDecorationProps,
   type LineDecoration,
   type SplitLineDecorationProps,
   type UnifiedLineDecorationProps,
@@ -60,6 +59,7 @@ export class UnresolvedFileHunksRenderer<
           getMergeConflictMarkerType(deletionLineRaw));
     return {
       gutterLineType: type === 'change' ? 'context' : lineType,
+      gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
       metadata: {
         mergeConflictType,
       } satisfies MergeConflictLineDecorationMetadata,
@@ -79,21 +79,11 @@ export class UnresolvedFileHunksRenderer<
         : getMergeConflictMarkerType(lineRaw);
     return {
       gutterLineType: type === 'change' ? 'context' : type,
+      gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
       metadata: {
         mergeConflictType,
       } satisfies MergeConflictLineDecorationMetadata,
     };
-  }
-
-  protected override decorateGutterItem({
-    gutterItem,
-    metadata,
-  }: GutterDecorationProps): void {
-    const mergeConflictType = getMergeConflictType(metadata);
-    if (mergeConflictType == null) {
-      return;
-    }
-    gutterItem.properties['data-merge-conflict'] = mergeConflictType;
   }
 
   protected override decorateContentLine({
@@ -127,6 +117,15 @@ function getMergeConflictType(
     }
   }
   return undefined;
+}
+
+function getMergeConflictGutterProperties(
+  mergeConflictType: MergeConflictMarkerType | undefined
+): { 'data-merge-conflict': MergeConflictMarkerType } | undefined {
+  if (mergeConflictType == null) {
+    return undefined;
+  }
+  return { 'data-merge-conflict': mergeConflictType };
 }
 
 function getMergeConflictMarkerType(
