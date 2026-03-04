@@ -21,14 +21,12 @@ import { VirtualizedFile } from './VirtualizedFile';
 import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 import type { VirtualizerConfig } from './Virtualizer';
 
-interface RenderedItems<LAnnotation> {
-  instance: AdvancedVirtualizedInstance<LAnnotation>;
-  element: HTMLElement;
+interface ScrollAnchor {
+  fileElement: HTMLElement;
+  fileOffset: number;
+  lineIndex: string | undefined;
+  lineOffset: number | undefined;
 }
-
-type AdvancedVirtualizedInstance<LAnnotation> =
-  | VirtualizedFile<LAnnotation>
-  | VirtualizedFileDiff<LAnnotation>;
 
 interface AdvancedVirtualizedBaseItem {
   top: number;
@@ -41,6 +39,7 @@ interface AdvancedVirtualizedDiffItem<
   kind: 'diff';
   instance: VirtualizedFileDiff<LAnnotation>;
   fileDiff: FileDiffMetadata;
+  element: HTMLElement | undefined;
 }
 
 interface AdvancedVirtualizedFileItem<
@@ -49,6 +48,7 @@ interface AdvancedVirtualizedFileItem<
   kind: 'file';
   instance: VirtualizedFile<LAnnotation>;
   file: FileContents;
+  element: HTMLElement | undefined;
 }
 
 type AdvancedVirtualizedItem<LAnnotation> =
@@ -72,10 +72,6 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     VirtualizedFileDiff<LAnnotation> | VirtualizedFile<LAnnotation>
   > = new Set();
   private scrollHeight = 0;
-  private renderedInstances: Map<
-    AdvancedVirtualizedInstance<LAnnotation>,
-    RenderedItems<LAnnotation>
-  > = new Map();
 
   private containerOffset = 0;
   private lastContainerHeight = -1;
@@ -152,21 +148,17 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.render(true);
   }
 
-  public cleanUp(): void {
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = undefined;
-    this.root?.removeEventListener('scroll', this.handleScroll);
-    window.removeEventListener('scroll', this.handleScroll);
-    window.removeEventListener('resize', this.handleWindowResize);
-    this.container?.style.removeProperty('height');
-    this.stickyOffset.remove();
-    this.stickyContainer.remove();
+  public reset(): void {
+    this.cleanAllRenderedItems();
+    this.items.length = 0;
+    this.instanceToItem.clear();
     this.stickyContainer.textContent = '';
-    this.root = undefined;
-    this.container = undefined;
+    this.stickyOffset.style.height = '';
+    this.container?.style.removeProperty('height');
     this.windowSpecs = { top: 0, bottom: 0 };
-    this.scrollTop = 0;
     this.height = 0;
+    this.scrollTop = 0;
+    this.scrollHeight = 0;
     this.lastRenderedScrollY = -1;
     this.scrollDirty = true;
     this.heightDirty = true;
@@ -175,6 +167,39 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       lastIndex: -1,
       height: 0,
     };
+  }
+
+  public cleanUp(): void {
+    this.reset();
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = undefined;
+    this.root?.removeEventListener('scroll', this.handleScroll);
+    window.removeEventListener('scroll', this.handleScroll);
+    window.removeEventListener('resize', this.handleWindowResize);
+    this.stickyOffset.remove();
+    this.stickyContainer.remove();
+    this.stickyContainer.textContent = '';
+    this.root = undefined;
+    this.container = undefined;
+  }
+
+  private cleanAllRenderedItems() {
+    if (this.renderState.firstIndex === -1) {
+      return;
+    }
+    for (
+      let index = this.renderState.firstIndex;
+      index <= this.renderState.lastIndex;
+      index++
+    ) {
+      const item = this.items[index];
+      if (item == null) {
+        throw new Error(
+          `AdvancedVirtualizer.cleanAllRenderedItems: Item does not exist at index: ${index}`
+        );
+      }
+      cleanRenderedItem(item);
+    }
   }
 
   public setContainerOffset(offset: number): void {
@@ -197,30 +222,6 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     }
   }
 
-  public reset(): void {
-    this.items.length = 0;
-    this.instanceToItem.clear();
-    for (const [, item] of Array.from(this.renderedInstances)) {
-      cleanupRenderedItem(item);
-    }
-    this.renderedInstances.clear();
-    this.stickyContainer.textContent = '';
-    this.stickyOffset.style.height = '';
-    this.container?.style.removeProperty('height');
-    this.windowSpecs = { top: 0, bottom: 0 };
-    this.height = 0;
-    this.scrollTop = 0;
-    this.scrollHeight = 0;
-    this.lastRenderedScrollY = -1;
-    this.scrollDirty = true;
-    this.heightDirty = true;
-    this.renderState = {
-      firstIndex: -1,
-      lastIndex: -1,
-      height: 0,
-    };
-  }
-
   public addFileOrDiff(fileOrDiff: FileContents | FileDiffMetadata): void {
     const item: AdvancedVirtualizedItem<LAnnotation> = (() => {
       if (isFileDiffMetadata(fileOrDiff)) {
@@ -236,6 +237,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
           fileDiff: fileOrDiff,
           top: this.scrollHeight,
           height: 0,
+          element: undefined,
         };
       }
       return {
@@ -250,6 +252,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
         file: fileOrDiff,
         top: this.scrollHeight,
         height: 0,
+        element: undefined,
       };
     })();
     this.items.push(item);
@@ -336,19 +339,23 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
 
     const { top, bottom } = this.windowSpecs;
     this.lastRenderedScrollY = scrollTop;
-    for (const [renderedInstance, item] of Array.from(this.renderedInstances)) {
-      const renderedSpecs = this.instanceToItem.get(renderedInstance);
-      if (renderedSpecs == null) {
-        cleanupRenderedItem(item);
-        this.renderedInstances.delete(renderedInstance);
-        continue;
-      }
-      const renderedTop = renderedSpecs.top;
-      const renderedHeight = renderedSpecs.height;
-      // If not visible, we should unmount it
-      if (!(renderedTop > top - renderedHeight && renderedTop <= bottom)) {
-        cleanupRenderedItem(item);
-        this.renderedInstances.delete(renderedInstance);
+    const anchor = this.getScrollAnchor();
+    if (this.renderState.firstIndex >= 0) {
+      for (
+        let index = this.renderState.firstIndex;
+        index <= this.renderState.lastIndex;
+        index++
+      ) {
+        const item = this.items[index];
+        if (item == null) {
+          throw new Error(`no item`);
+        }
+        const renderedTop = item.top;
+        const renderedHeight = item.height;
+        // If not visible, we should unmount it
+        if (!(renderedTop > top - renderedHeight && renderedTop <= bottom)) {
+          cleanRenderedItem(item);
+        }
       }
     }
 
@@ -371,29 +378,27 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       }
       startingIndex ??= itemIndex;
       lastRenderedIndex = itemIndex;
-      const rendered = this.renderedInstances.get(instance);
-      if (rendered == null) {
-        const fileContainer = document.createElement(DIFFS_TAG_NAME);
+      // If the item isn't rendered yet, we need to create a wrapper element
+      // for it and render it
+      if (item.element == null) {
+        item.element = document.createElement(DIFFS_TAG_NAME);
         if (prevElement == null) {
-          this.stickyContainer.prepend(fileContainer);
-        } else if (prevElement.nextSibling !== fileContainer) {
-          prevElement.after(fileContainer);
+          this.stickyContainer.prepend(item.element);
+        } else if (prevElement.nextSibling !== item.element) {
+          prevElement.after(item.element);
         }
         instance.virtualizedSetup();
-
-        this.renderedInstances.set(instance, {
-          element: fileContainer,
-          instance: instance,
-        });
-        if (onRender(item, fileContainer)) {
+        if (onRender(item, item.element)) {
           updatedInstances.add(item);
         }
-        prevElement = fileContainer;
-      } else {
-        prevElement = rendered.element;
+        prevElement = item.element;
+      }
+      // Otherwise kick off a render as necessary
+      else {
         if (onRender(item)) {
           updatedInstances.add(item);
         }
+        prevElement = item.element;
       }
     }
 
@@ -402,6 +407,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
 
     this.reconcileRenderedItems(updatedInstances);
     this.updateStickyPositioning();
+    this.scrollFix(anchor);
 
     if (this.lastContainerHeight !== this.scrollHeight) {
       this.container.style.height = `${this.scrollHeight}px`;
@@ -508,8 +514,10 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       if (entry.target === this.stickyContainer) {
         const blockSize = entry.borderBoxSize[0].blockSize;
         if (blockSize !== this.renderState.height) {
+          const anchor = this.getScrollAnchor();
           this.reconcileRenderedItems();
           this.updateStickyPositioning();
+          this.scrollFix(anchor);
         }
       }
       // Root element resize (element-mode only)
@@ -526,6 +534,144 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.heightDirty = true;
     this.render();
   };
+
+  private getScrollContainerElement(): HTMLElement | undefined {
+    return this.root == null || this.root instanceof Document
+      ? undefined
+      : this.root;
+  }
+
+  private getScrollAnchor(): ScrollAnchor | undefined {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex === -1 || lastIndex === -1) {
+      return undefined;
+    }
+
+    const viewportHeight = this.getHeight();
+    const scrollContainer = this.getScrollContainerElement();
+    let bestAnchor: ScrollAnchor | undefined;
+
+    for (let index = firstIndex; index <= lastIndex; index++) {
+      const item = this.items[index];
+      // If we have no item, the item didn't render anything, or we already
+      // found a line offset, we can/should abort
+      if (
+        item == null ||
+        item.element == null ||
+        bestAnchor?.lineOffset != null
+      ) {
+        break;
+      }
+
+      const relativeFileOffset = getRelativeBoundingTop(
+        item.element,
+        scrollContainer
+      );
+      const relativeFileBottom = relativeFileOffset + item.element.offsetHeight;
+
+      // Find the best line (first fully visible) within this file
+      let bestLineIndex: string | undefined;
+      let bestLineOffset: number | undefined;
+
+      // Only search for lines if file potentially intersects relative viewport
+      if (relativeFileBottom > 0 && relativeFileOffset < viewportHeight) {
+        for (const line of item.element.shadowRoot?.querySelectorAll(
+          '[data-line][data-line-index]'
+        ) ?? []) {
+          if (!(line instanceof HTMLElement)) {
+            continue;
+          }
+          const lineIndex = line.getAttribute('data-line-index');
+          if (lineIndex == null) {
+            continue;
+          }
+
+          const lineOffset = getRelativeBoundingTop(line, scrollContainer);
+
+          // Ignore lines with negative offsets (above viewport top)
+          if (lineOffset < 0) continue;
+
+          // First visible line in DOM order is the best one
+          bestLineIndex = lineIndex;
+          bestLineOffset = lineOffset;
+          break;
+        }
+      }
+
+      // Decide if this file should become the new best anchor
+      let shouldReplace = false;
+      if (bestAnchor == null) {
+        shouldReplace = true;
+      } else if (bestLineOffset != null) {
+        shouldReplace = true;
+      } else if (bestLineOffset == null && bestAnchor.lineOffset == null) {
+        if (
+          relativeFileOffset >= 0 &&
+          (bestAnchor.fileOffset < 0 ||
+            relativeFileOffset < bestAnchor.fileOffset)
+        ) {
+          shouldReplace = true;
+        } else if (
+          relativeFileOffset < 0 &&
+          bestAnchor.fileOffset < 0 &&
+          relativeFileOffset > bestAnchor.fileOffset
+        ) {
+          shouldReplace = true;
+        }
+      }
+
+      if (shouldReplace) {
+        bestAnchor = {
+          fileElement: item.element,
+          fileOffset: relativeFileOffset,
+          lineIndex: bestLineIndex,
+          lineOffset: bestLineOffset,
+        };
+      }
+    }
+
+    return bestAnchor;
+  }
+
+  private scrollFix(anchor: ScrollAnchor | undefined): void {
+    if (anchor == null) {
+      return;
+    }
+    const scrollContainer = this.getScrollContainerElement();
+    const { lineIndex, lineOffset, fileElement, fileOffset } = anchor;
+    if (lineIndex != null && lineOffset != null) {
+      const element = fileElement.shadowRoot?.querySelector(
+        `[data-line][data-line-index="${lineIndex}"]`
+      );
+      if (element instanceof HTMLElement) {
+        const top = getRelativeBoundingTop(element, scrollContainer);
+        if (top !== lineOffset) {
+          this.applyScrollFix(top - lineOffset);
+        }
+        return;
+      }
+    }
+    const top = getRelativeBoundingTop(fileElement, scrollContainer);
+    if (top !== fileOffset) {
+      this.applyScrollFix(top - fileOffset);
+    }
+  }
+
+  private applyScrollFix(scrollOffset: number): void {
+    if (this.root == null || this.root instanceof Document) {
+      window.scrollTo({
+        top: window.scrollY + scrollOffset,
+        behavior: 'instant',
+      });
+    } else {
+      this.root.scrollTo({
+        top: this.root.scrollTop + scrollOffset,
+        behavior: 'instant',
+      });
+    }
+    this.scrollDirty = true;
+    this.heightDirty = true;
+  }
 
   private getScrollTop(): number {
     if (!this.scrollDirty) {
@@ -585,13 +731,18 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
   }
 }
 
-function cleanupRenderedItem<LAnnotation>(item: RenderedItems<LAnnotation>) {
+function cleanRenderedItem<LAnnotation>(
+  item: AdvancedVirtualizedItem<LAnnotation>
+) {
   item.instance.cleanUp(true);
-  item.element.remove();
-  item.element.innerHTML = '';
-  if (item.element.shadowRoot != null) {
-    item.element.shadowRoot.innerHTML = '';
+  item.element?.remove();
+  if (item.element != null) {
+    item.element.innerHTML = '';
+    if (item.element.shadowRoot != null) {
+      item.element.shadowRoot.innerHTML = '';
+    }
   }
+  item.element = undefined;
 }
 
 function isFileDiffMetadata(
@@ -620,4 +771,13 @@ function onRender<LAnnotation>(
   } else {
     return item.instance.render({ fileContainer, file: item.file });
   }
+}
+
+function getRelativeBoundingTop(
+  element: HTMLElement,
+  scrollContainer: HTMLElement | undefined
+) {
+  const rect = element.getBoundingClientRect();
+  const scrollContainerTop = scrollContainer?.getBoundingClientRect().top ?? 0;
+  return rect.top - scrollContainerTop;
 }
