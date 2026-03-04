@@ -110,6 +110,8 @@ type OptionsWithDefaults = Required<
 export interface UnifiedLineDecorationProps {
   type: 'context' | 'context-expanded' | 'change';
   lineType: LineTypes;
+  additionLineIndex: number | undefined;
+  deletionLineIndex: number | undefined;
   additionLineRaw: string | undefined;
   deletionLineRaw: string | undefined;
 }
@@ -117,6 +119,7 @@ export interface UnifiedLineDecorationProps {
 export interface SplitLineDecorationProps {
   side: 'deletions' | 'additions';
   type: 'context' | 'context-expanded' | 'change';
+  lineIndex: number | undefined;
   lineRaw: string | undefined;
 }
 
@@ -787,6 +790,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           const lineDecoration = this.getUnifiedLineDecoration({
             type,
             lineType,
+            additionLineIndex: additionLine?.lineIndex,
+            deletionLineIndex: deletionLine?.lineIndex,
             additionLineRaw,
             deletionLineRaw,
           });
@@ -839,11 +844,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           const deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
+            lineIndex: deletionLine?.lineIndex,
             lineRaw: deletionLineRaw,
           });
           const additionLineDecoration = this.getSplitLineDecoration({
             side: 'additions',
             type,
+            lineIndex: additionLine?.lineIndex,
             lineRaw: additionLineRaw,
           });
 

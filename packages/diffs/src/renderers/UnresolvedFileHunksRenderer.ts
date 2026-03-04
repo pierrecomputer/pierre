@@ -1,8 +1,11 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
+import { DEFAULT_RENDER_RANGE } from '../constants';
+import type { FileDiffMetadata, RenderRange } from '../types';
 import {
   type ContentDecorationProps,
   DiffHunksRenderer,
+  type HunksRenderResult,
   type LineDecoration,
   type SplitLineDecorationProps,
   type UnifiedLineDecorationProps,
@@ -15,6 +18,7 @@ type MergeConflictMarkerType =
   | 'marker-end'
   | 'current'
   | 'incoming';
+type MergeConflictMarkerLookup = MergeConflictMarkerType | 'none';
 
 interface MergeConflictLineDecorationMetadata {
   mergeConflictType: MergeConflictMarkerType | undefined;
@@ -28,6 +32,29 @@ const END_MARKER = /^>{7,}(?:\s.*)?$/;
 export class UnresolvedFileHunksRenderer<
   LAnnotation = undefined,
 > extends DiffHunksRenderer<LAnnotation> {
+  private cachedAdditionLines: string[] | undefined;
+  private cachedDeletionLines: string[] | undefined;
+  private additionMarkerLookup: MergeConflictMarkerLookup[] = [];
+  private deletionMarkerLookup: MergeConflictMarkerLookup[] = [];
+
+  public override renderDiff(
+    diff: FileDiffMetadata | undefined = undefined,
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE
+  ): HunksRenderResult | undefined {
+    if (diff != null) {
+      this.prepareMarkerLookups(diff);
+    }
+    return super.renderDiff(diff, renderRange);
+  }
+
+  public override async asyncRender(
+    diff: FileDiffMetadata,
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE
+  ): Promise<HunksRenderResult> {
+    this.prepareMarkerLookups(diff);
+    return super.asyncRender(diff, renderRange);
+  }
+
   protected override createPreElement(
     split: boolean,
     totalLines: number,
@@ -47,6 +74,8 @@ export class UnresolvedFileHunksRenderer<
   protected override getUnifiedLineDecoration({
     type,
     lineType,
+    additionLineIndex,
+    deletionLineIndex,
     additionLineRaw,
     deletionLineRaw,
   }: UnifiedLineDecorationProps): LineDecoration {
@@ -55,8 +84,16 @@ export class UnresolvedFileHunksRenderer<
         ? lineType === 'change-deletion'
           ? 'current'
           : 'incoming'
-        : (getMergeConflictMarkerType(additionLineRaw) ??
-          getMergeConflictMarkerType(deletionLineRaw));
+        : (this.getMergeConflictMarkerTypeAtIndex(
+            'additions',
+            additionLineIndex,
+            additionLineRaw
+          ) ??
+          this.getMergeConflictMarkerTypeAtIndex(
+            'deletions',
+            deletionLineIndex,
+            deletionLineRaw
+          ));
     return {
       gutterLineType: type === 'change' ? 'context' : lineType,
       gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
@@ -69,6 +106,7 @@ export class UnresolvedFileHunksRenderer<
   protected override getSplitLineDecoration({
     side,
     type,
+    lineIndex,
     lineRaw,
   }: SplitLineDecorationProps): LineDecoration {
     const mergeConflictType =
@@ -76,7 +114,7 @@ export class UnresolvedFileHunksRenderer<
         ? side === 'deletions'
           ? 'current'
           : 'incoming'
-        : getMergeConflictMarkerType(lineRaw);
+        : this.getMergeConflictMarkerTypeAtIndex(side, lineIndex, lineRaw);
     return {
       gutterLineType: type === 'change' ? 'context' : type,
       gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
@@ -93,6 +131,36 @@ export class UnresolvedFileHunksRenderer<
   }: ContentDecorationProps): void {
     const mergeConflictType = getMergeConflictType(metadata);
     setMergeConflictAttribute(lineNode, type, mergeConflictType);
+  }
+
+  private prepareMarkerLookups(diff: FileDiffMetadata): void {
+    if (this.cachedAdditionLines !== diff.additionLines) {
+      this.cachedAdditionLines = diff.additionLines;
+      this.additionMarkerLookup = buildMarkerLookup(diff.additionLines);
+    }
+    if (this.cachedDeletionLines !== diff.deletionLines) {
+      this.cachedDeletionLines = diff.deletionLines;
+      this.deletionMarkerLookup = buildMarkerLookup(diff.deletionLines);
+    }
+  }
+
+  private getMergeConflictMarkerTypeAtIndex(
+    side: 'additions' | 'deletions',
+    lineIndex: number | undefined,
+    lineRaw: string | undefined
+  ): MergeConflictMarkerType | undefined {
+    if (lineIndex == null) {
+      return getMergeConflictMarkerType(lineRaw);
+    }
+    const lookup =
+      side === 'additions'
+        ? this.additionMarkerLookup
+        : this.deletionMarkerLookup;
+    const value = lookup[lineIndex];
+    if (value == null) {
+      return getMergeConflictMarkerType(lineRaw);
+    }
+    return value === 'none' ? undefined : value;
   }
 }
 
@@ -140,6 +208,14 @@ function getMergeConflictMarkerType(
   if (SEPARATOR_MARKER.test(trimmed)) return 'marker-separator';
   if (END_MARKER.test(trimmed)) return 'marker-end';
   return undefined;
+}
+
+function buildMarkerLookup(lines: string[]): MergeConflictMarkerLookup[] {
+  const markerLookup: MergeConflictMarkerLookup[] = new Array(lines.length);
+  for (let index = 0; index < lines.length; index++) {
+    markerLookup[index] = getMergeConflictMarkerType(lines[index]) ?? 'none';
+  }
+  return markerLookup;
 }
 
 function setMergeConflictAttribute(
