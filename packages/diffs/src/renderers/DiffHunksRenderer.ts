@@ -525,7 +525,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.processDiffResult(diff, renderRange, result);
   }
 
-  private createPreElement(
+  protected createPreElement(
     split: boolean,
     totalLines: number,
     themeStyles: string,

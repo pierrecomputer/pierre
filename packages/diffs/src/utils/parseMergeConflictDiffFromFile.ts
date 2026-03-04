@@ -72,6 +72,7 @@ export function parseMergeConflictDiffFromFile(
   let currentContents = '';
   let incomingContents = '';
   let patchContents = '';
+  const actions: MergeConflictDiffAction[] = new Array(regions.length);
   const currentLineNumbersByOriginalIndex: (number | undefined)[] = new Array(
     lines.length
   );
@@ -80,6 +81,12 @@ export function parseMergeConflictDiffFromFile(
   );
   let currentLineNumber = 0;
   let incomingLineNumber = 0;
+  let actionIndex = 0;
+  let nextConflict = regions[actionIndex];
+  let nextActionOriginalLineNumber =
+    nextConflict != null ? getMergeConflictActionLineNumber(nextConflict) : -1;
+  let nextActionOriginalLineIndex =
+    nextConflict != null ? nextActionOriginalLineNumber - 1 : -1;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
     const lineType = lineTypes[index];
@@ -126,6 +133,29 @@ export function parseMergeConflictDiffFromFile(
         assertNever(lineType);
       }
     }
+
+    // Regions are emitted in a stable order; resolve actions as soon as their
+    // anchor original line has been processed.
+    while (nextConflict != null && nextActionOriginalLineIndex <= index) {
+      actions[actionIndex] = {
+        actionOriginalLineIndex: nextActionOriginalLineIndex,
+        actionOriginalLineNumber: nextActionOriginalLineNumber,
+        currentLineNumber:
+          currentLineNumbersByOriginalIndex[nextActionOriginalLineIndex],
+        incomingLineNumber:
+          incomingLineNumbersByOriginalIndex[nextActionOriginalLineIndex],
+        conflict: nextConflict,
+        conflictIndex: nextConflict.conflictIndex,
+      };
+      actionIndex++;
+      nextConflict = regions[actionIndex];
+      if (nextConflict == null) {
+        break;
+      }
+      nextActionOriginalLineNumber =
+        getMergeConflictActionLineNumber(nextConflict);
+      nextActionOriginalLineIndex = nextActionOriginalLineNumber - 1;
+    }
   }
 
   const currentFile = createResolvedConflictFile(
@@ -159,23 +189,6 @@ export function parseMergeConflictDiffFromFile(
     throw new Error(
       'parseMergeConflictDiffFromFile: failed to build merge conflict diff metadata'
     );
-  }
-
-  const actions: MergeConflictDiffAction[] = new Array(regions.length);
-  for (let index = 0; index < regions.length; index++) {
-    const conflict = regions[index];
-    const actionOriginalLineNumber = getMergeConflictActionLineNumber(conflict);
-    const actionOriginalLineIndex = actionOriginalLineNumber - 1;
-    actions[index] = {
-      actionOriginalLineIndex,
-      actionOriginalLineNumber,
-      currentLineNumber:
-        currentLineNumbersByOriginalIndex[actionOriginalLineIndex],
-      incomingLineNumber:
-        incomingLineNumbersByOriginalIndex[actionOriginalLineIndex],
-      conflict,
-      conflictIndex: conflict.conflictIndex,
-    };
   }
 
   return {

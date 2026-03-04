@@ -19,7 +19,7 @@ interface MergeConflictFrame {
   separatorLineIndex?: number;
 }
 
-interface MergeConflictParseResult {
+export interface MergeConflictParseResult {
   lineTypes: MergeConflictLineType[];
   regions: MergeConflictRegion[];
 }

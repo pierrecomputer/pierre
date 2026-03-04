@@ -228,10 +228,7 @@ export function UnresolvedFile<LAnnotation = undefined>({
       : undefined;
 
   const unresolvedOptions = useMemo(
-    () =>
-      normalizeUnresolvedFileOptions(fileDiffOptions, {
-        includeActionsUnsafeCSS: true,
-      }),
+    () => normalizeUnresolvedFileOptions(fileDiffOptions),
     [fileDiffOptions]
   );
 
