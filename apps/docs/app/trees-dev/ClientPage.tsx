@@ -23,6 +23,8 @@ import {
   customSpriteSheet,
   GIT_STATUSES_A,
   GIT_STATUSES_B,
+  linuxKernelAllFolders,
+  linuxKernelFiles,
   sharedDemoFileTreeOptions,
   sharedDemoStateConfig,
 } from './demo-data';
@@ -112,52 +114,52 @@ export function ClientPage({
 
   return (
     <div className="m-4 pb-[800px]">
-      <h1 className="mb-4 text-2xl font-bold">File Tree Examples</h1>
+      <h1 className="mb-4 scroll-mt-[6rem] text-2xl font-bold">
+        File Tree Examples
+      </h1>
 
       {/* Item State Preview */}
       <ItemStatePreview />
 
       {/* Controls */}
-      <div
-        className="mb-6 rounded-sm border p-4"
-        style={{ borderColor: 'var(--color-border)' }}
-      >
-        <h4 className="text-lg font-bold">Controls</h4>
-        <div className="flex flex-row gap-2">
-          <label
-            htmlFor="flatten-empty-directories"
-            className="flex cursor-pointer items-center gap-2 select-none"
-          >
-            <input
-              type="checkbox"
-              id="flatten-empty-directories"
-              checked={flattenEmptyDirectories}
-              className="cursor-pointer"
-              onChange={handleToggleFlatten}
-            />
-            Flatten Empty Directories
-          </label>
-          <label
-            htmlFor="lazy-data-loader"
-            className="flex cursor-pointer items-center gap-2 select-none"
-          >
-            <input
-              type="checkbox"
-              id="lazy-data-loader"
-              checked={useLazyDataLoader}
-              className="cursor-pointer"
-              onChange={handleToggleLazyLoader}
-            />
-            Lazy Loader
-          </label>
-          <button
-            type="button"
-            className="ml-auto rounded-sm border px-2 py-1 text-xs"
-            style={{ borderColor: 'var(--color-border)' }}
-            onClick={handleResetControls}
-          >
-            Reset to Defaults
-          </button>
+      <div className="bg-background sticky top-0 z-50 -mx-4 mb-6">
+        <div className="bg-muted p-4">
+          <div className="flex flex-row gap-2">
+            <label
+              htmlFor="flatten-empty-directories"
+              className="flex cursor-pointer items-center gap-2 select-none"
+            >
+              <input
+                type="checkbox"
+                id="flatten-empty-directories"
+                checked={flattenEmptyDirectories}
+                className="cursor-pointer"
+                onChange={handleToggleFlatten}
+              />
+              Flatten Empty Directories
+            </label>
+            <label
+              htmlFor="lazy-data-loader"
+              className="flex cursor-pointer items-center gap-2 select-none"
+            >
+              <input
+                type="checkbox"
+                id="lazy-data-loader"
+                checked={useLazyDataLoader}
+                className="cursor-pointer"
+                onChange={handleToggleLazyLoader}
+              />
+              Lazy Loader
+            </label>
+            <button
+              type="button"
+              className="ml-auto rounded-sm border px-2 py-1 text-xs"
+              style={{ borderColor: 'var(--color-border)' }}
+              onClick={handleResetControls}
+            >
+              Reset to Defaults
+            </button>
+          </div>
         </div>
       </div>
 
@@ -212,7 +214,7 @@ export function ClientPage({
       <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
 
       {/* State Management Examples */}
-      <h2 id="state" className="mb-4 text-2xl font-bold">
+      <h2 id="state" className="mb-4 scroll-mt-[6rem] text-2xl font-bold">
         State
       </h2>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -242,7 +244,10 @@ export function ClientPage({
       <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
 
       {/* Dynamic Files Examples */}
-      <h2 id="dynamic-files" className="mb-4 text-2xl font-bold">
+      <h2
+        id="dynamic-files"
+        className="mb-4 scroll-mt-[6rem] text-2xl font-bold"
+      >
         Dynamic Files
       </h2>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -265,7 +270,10 @@ export function ClientPage({
       <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
 
       {/* Search Modes */}
-      <h2 id="search-modes" className="mb-4 text-2xl font-bold">
+      <h2
+        id="search-modes"
+        className="mb-4 scroll-mt-[6rem] text-2xl font-bold"
+      >
         Search Modes
       </h2>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -311,7 +319,10 @@ export function ClientPage({
       <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
 
       {/* Drag and Drop Examples */}
-      <h2 id="drag-and-drop" className="mb-4 text-2xl font-bold">
+      <h2
+        id="drag-and-drop"
+        className="mb-4 scroll-mt-[6rem] text-2xl font-bold"
+      >
         Drag and Drop
       </h2>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -334,7 +345,7 @@ export function ClientPage({
       <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
 
       {/* Git Status */}
-      <h2 id="git-status" className="mb-4 text-2xl font-bold">
+      <h2 id="git-status" className="mb-4 scroll-mt-[6rem] text-2xl font-bold">
         Git Status
       </h2>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -359,7 +370,10 @@ export function ClientPage({
       <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
 
       {/* Custom Icons */}
-      <h2 id="custom-icons" className="mb-4 text-2xl font-bold">
+      <h2
+        id="custom-icons"
+        className="mb-4 scroll-mt-[6rem] text-2xl font-bold"
+      >
         Custom Icons
       </h2>
       <div
@@ -385,6 +399,23 @@ export function ClientPage({
           stateConfig={sharedDemoStateConfig}
           prerenderedHTML={preloadedCustomIconsFileTreeHtml}
         />
+      </div>
+
+      {/* Divider */}
+      <hr className="my-8" style={{ borderColor: 'var(--color-border)' }} />
+
+      {/* Virtualized */}
+      <h2 id="virtualized" className="mb-4 scroll-mt-[6rem] text-2xl font-bold">
+        Virtualized ({linuxKernelFiles.length.toLocaleString()} files)
+      </h2>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <ExampleCard
+          title="Vanilla Virtualized (Linux Kernel)"
+          description={`${linuxKernelFiles.length.toLocaleString()} files with opt-in virtualization`}
+        >
+          <VirtualizedLinuxKernel />
+        </ExampleCard>
+        <UnvirtualizedLinuxKernelCard />
       </div>
     </div>
   );
@@ -1758,6 +1789,78 @@ function ReactSSRCustomIcons({
         initialExpandedItems={stateConfig?.initialExpandedItems}
         onSelection={stateConfig?.onSelection}
       />
+    </ExampleCard>
+  );
+}
+
+/**
+ * Virtualized vanilla FileTree with the full Linux kernel file list.
+ */
+function VirtualizedLinuxKernel() {
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (node == null) return;
+    const fileTree = new FileTree(
+      {
+        initialFiles: linuxKernelFiles,
+        virtualize: { threshold: 0 },
+        flattenEmptyDirectories: true,
+      },
+      { initialExpandedItems: linuxKernelAllFolders }
+    );
+    fileTree.render({ containerWrapper: node });
+    return () => fileTree.cleanUp();
+  }, []);
+
+  return <div ref={ref} style={{ height: '500px' }} />;
+}
+
+/**
+ * Unvirtualized vanilla FileTree with the full Linux kernel file list.
+ * Gated behind a button because rendering ~93k DOM nodes will freeze the page.
+ */
+function UnvirtualizedLinuxKernelCard() {
+  const [mounted, setMounted] = useState(false);
+
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (node == null) return;
+    const fileTree = new FileTree(
+      {
+        initialFiles: linuxKernelFiles,
+        virtualize: false,
+        flattenEmptyDirectories: true,
+      },
+      { initialExpandedItems: linuxKernelAllFolders }
+    );
+    fileTree.render({ containerWrapper: node });
+    return () => fileTree.cleanUp();
+  }, []);
+
+  return (
+    <ExampleCard
+      title="Vanilla Unvirtualized (Linux Kernel)"
+      description={`${linuxKernelFiles.length.toLocaleString()} files without virtualization`}
+    >
+      {mounted ? (
+        <div ref={ref} style={{ height: '500px', overflowY: 'auto' }} />
+      ) : (
+        <div
+          style={{
+            height: '500px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <button
+            type="button"
+            className="rounded-sm border px-4 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => setMounted(true)}
+          >
+            Render (will freeze page)
+          </button>
+        </div>
+      )}
     </ExampleCard>
   );
 }

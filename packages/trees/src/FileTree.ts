@@ -85,6 +85,9 @@ export interface FileTreeOptions {
   /** Return true to overwrite the destination file when a DnD move collides. */
   onCollision?: (collision: FileTreeCollision) => boolean;
   useLazyDataLoader?: boolean;
+  /** Enable virtualized rendering. Items are only rendered when visible.
+   *  `threshold` is the minimum item count to activate virtualization. */
+  virtualize?: { threshold: number } | false;
   icons?: FileTreeIconConfig;
 }
 
@@ -406,6 +409,7 @@ export class FileTree {
       'lockedPaths',
       'onCollision',
       'useLazyDataLoader',
+      'virtualize',
     ] as const;
     let needsRerender = false;
     for (const key of structuralKeys) {
@@ -624,6 +628,18 @@ export class FileTree {
       containerWrapper
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
+
+    // When virtualizing, propagate height through the DOM chain so the inner
+    // scroll container can fill the consumer-provided fixed-height wrapper.
+    if (this.options.virtualize != null && this.options.virtualize !== false) {
+      fileTreeContainer.style.height = '100%';
+      fileTreeContainer.style.overflow = 'hidden';
+      divWrapper.style.height = '100%';
+      divWrapper.style.overflow = 'hidden';
+      divWrapper.style.display = 'flex';
+      divWrapper.style.flexDirection = 'column';
+    }
+
     preactRenderRoot(divWrapper, this.buildRootProps());
   }
 

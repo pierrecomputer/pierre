@@ -262,6 +262,7 @@
     -webkit-touch-callout: none;
     touch-action: manipulation;
     display: flex;
+    flex: 1;
     align-items: center;
     line-height: var(--trees-row-height);
     gap: var(--trees-item-row-gap);

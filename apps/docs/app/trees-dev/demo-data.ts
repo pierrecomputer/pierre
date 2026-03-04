@@ -5,6 +5,23 @@ import type {
   GitStatusEntry,
 } from '@pierre/trees';
 
+import linuxFiles from './linux-files.json';
+
+export const linuxKernelFiles: string[] = linuxFiles;
+
+/** All unique folder paths derived from the linux file list. */
+export const linuxKernelAllFolders: string[] = (() => {
+  const folders = new Set<string>();
+  for (const file of linuxFiles) {
+    let slash = file.indexOf('/');
+    while (slash !== -1) {
+      folders.add(file.slice(0, slash));
+      slash = file.indexOf('/', slash + 1);
+    }
+  }
+  return Array.from(folders);
+})();
+
 const sampleFileList: string[] = [
   'README.md',
   'package.json',

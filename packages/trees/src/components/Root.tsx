@@ -53,6 +53,7 @@ import {
 } from '../utils/guideLineAncestors';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
+import { VirtualizedList } from './VirtualizedList';
 
 export interface FileTreeRootProps {
   fileTreeOptions: FileTreeOptions;
@@ -367,6 +368,7 @@ export function Root({
     lockedPaths,
     onCollision,
     useLazyDataLoader,
+    virtualize,
   } = fileTreeOptions;
 
   const iconRemap = fileTreeOptions.icons?.remap;
@@ -1070,8 +1072,18 @@ export function Root({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionSnapshot, focusedItemId, childToParent]);
 
+  const shouldVirtualize = virtualize != null && virtualize !== false;
+
   return (
-    <div {...tree.getContainerProps()} id={treeDomId}>
+    <div
+      {...tree.getContainerProps()}
+      id={treeDomId}
+      style={
+        shouldVirtualize
+          ? 'height:100%;display:flex;flex-direction:column;overflow:hidden'
+          : undefined
+      }
+    >
       <style dangerouslySetInnerHTML={{ __html: guideStyleText }} />
       <div data-file-tree-search-container>
         <input
@@ -1092,7 +1104,9 @@ export function Root({
           lockedPaths != null && lockedPaths.length > 0
             ? new Set(lockedPaths)
             : null;
-        return items.map((item) => {
+
+        const renderItemAtIndex = (index: number) => {
+          const item = items[index];
           const itemData = item.getItemData();
           const itemMeta = item.getItemMeta();
           const hasChildren = itemData?.children?.direct != null;
@@ -1150,7 +1164,33 @@ export function Root({
               clearFlattenedSubfolder={clearFlattenedSubfolder}
             />
           );
-        });
+        };
+
+        if (
+          shouldVirtualize &&
+          items.length >= (virtualize as { threshold: number }).threshold
+        ) {
+          const focusedIndex =
+            focusedItemId != null
+              ? items.findIndex((item) => item.getId() === focusedItemId)
+              : null;
+          return (
+            <div style="overflow-y:auto;flex:1 1 0;min-height:0">
+              <VirtualizedList
+                itemCount={items.length}
+                itemHeight={30}
+                renderItem={renderItemAtIndex}
+                scrollToIndex={
+                  focusedIndex != null && focusedIndex >= 0
+                    ? focusedIndex
+                    : null
+                }
+              />
+            </div>
+          );
+        }
+
+        return items.map((_, i) => renderItemAtIndex(i));
       })()}
     </div>
   );
