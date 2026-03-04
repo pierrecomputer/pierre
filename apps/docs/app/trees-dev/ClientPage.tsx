@@ -432,17 +432,28 @@ const PREVIEW_SPRITE = `<svg data-icon-sprite aria-hidden="true" width="0" heigh
   </symbol>
 </svg>`;
 
-function ItemStatePreview() {
-  const ref = useCallback((node: HTMLDivElement | null) => {
-    if (node == null) return;
-    const container = node.querySelector('file-tree-container');
-    if (!(container instanceof HTMLElement)) return;
-    const shadowRoot =
-      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+function useItemStatePreviewRef(colorScheme: 'light' | 'dark') {
+  return useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node == null) return;
+      const container = node.querySelector('file-tree-container');
+      if (!(container instanceof HTMLElement)) return;
+      container.style.colorScheme = colorScheme;
+      const shadowRoot =
+        container.shadowRoot ?? container.attachShadow({ mode: 'open' });
 
-    const itemsHtml = ITEM_STATES.map((s) => buildPreviewItemHtml(s)).join('');
-    shadowRoot.innerHTML = `${PREVIEW_SPRITE}<div role="tree">${itemsHtml}</div>`;
-  }, []);
+      const itemsHtml = ITEM_STATES.map((s) => buildPreviewItemHtml(s)).join(
+        ''
+      );
+      shadowRoot.innerHTML = `${PREVIEW_SPRITE}<div role="tree">${itemsHtml}</div>`;
+    },
+    [colorScheme]
+  );
+}
+
+function ItemStatePreview() {
+  const lightRef = useItemStatePreviewRef('light');
+  const darkRef = useItemStatePreviewRef('dark');
 
   return (
     <div
@@ -451,16 +462,19 @@ function ItemStatePreview() {
     >
       <h4 className="text-lg font-bold">Item States</h4>
       <p className="text-muted-foreground mb-3 text-xs">
-        Static preview of every tree item visual state
+        Static preview of every tree item visual state in light and dark mode
       </p>
-      <div
-        ref={ref}
-        className="overflow-hidden rounded-md p-5"
-        style={{
-          boxShadow: '0 0 0 1px var(--color-border), 0 1px 3px #0000000d',
-        }}
-      >
-        <file-tree-container />
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div ref={lightRef}>
+          <p className="text-muted-foreground mb-1 text-xs font-medium">
+            Light
+          </p>
+          <file-tree-container className="rounded-lg border p-3" />
+        </div>
+        <div ref={darkRef}>
+          <p className="text-muted-foreground mb-1 text-xs font-medium">Dark</p>
+          <file-tree-container className="rounded-lg border p-3" />
+        </div>
       </div>
     </div>
   );
