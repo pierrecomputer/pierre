@@ -103,14 +103,12 @@
       600
     );
 
-    --trees-focus-ring-color: color-mix(
-      in lab,
+    --trees-focus-ring-color: var(
+      --trees-focus-ring-color-override,
       var(
-          --trees-focus-ring-color-override,
-          var(--trees-theme-focus-ring, var(--trees-accent))
-        )
-        65%,
-      var(--trees-bg)
+        --trees-theme-focus-ring,
+        color-mix(in lab, var(--trees-accent) 65%, var(--trees-bg))
+      )
     );
     --trees-focus-ring-width: var(--trees-focus-ring-width-override, 1px);
     --trees-focus-ring-offset: var(--trees-focus-ring-offset-override, -1px);
@@ -285,9 +283,6 @@
     &[data-item-selected='true'] {
       color: var(--trees-selected-fg);
       background-color: var(--trees-selected-bg);
-      outline: var(--trees-focus-ring-width) solid
-        var(--trees-selected-border-color);
-      outline-offset: var(--trees-focus-ring-offset);
       z-index: 3;
 
       [data-item-section='icon'] {

@@ -30,39 +30,108 @@ export type TreeThemeStyles = Record<string, string>;
  *   const styles = themeToTreeStyles(theme);
  *   <FileTree style={styles} options={...} />
  */
+const HEX_TRANSPARENT_RE = /^#(?:[0-9a-f]{3}0|[0-9a-f]{6}00)$/i;
+const ALPHA_ZERO_RE = /^0(?:\.0+)?%?$/;
+
+function getFunctionalAlpha(color: string): string | undefined {
+  const openParen = color.indexOf('(');
+  if (openParen <= 0 || !color.endsWith(')')) {
+    return undefined;
+  }
+
+  const fn = color.slice(0, openParen).trim();
+  if (!/^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)$/i.test(fn)) {
+    return undefined;
+  }
+
+  const inner = color.slice(openParen + 1, -1).trim();
+  if (inner.length === 0) {
+    return undefined;
+  }
+
+  // Modern functional syntax: rgb(0 0 0 / 0), color(... / 0%), etc.
+  const slashIndex = inner.lastIndexOf('/');
+  if (slashIndex !== -1) {
+    return inner.slice(slashIndex + 1).trim();
+  }
+
+  // Legacy syntax: rgba(0, 0, 0, 0), hsla(210, 40%, 50%, 0.0)
+  if (/^(?:rgba|hsla)$/i.test(fn)) {
+    const parts = inner.split(',');
+    if (parts.length === 4) {
+      return parts[3]?.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function isFullyTransparent(color: string | undefined): boolean {
+  if (color == null) return false;
+  const normalized = color.trim().toLowerCase();
+  if (normalized === 'transparent') return true;
+  if (HEX_TRANSPARENT_RE.test(normalized)) return true;
+
+  const alpha = getFunctionalAlpha(normalized);
+  return alpha != null && ALPHA_ZERO_RE.test(alpha);
+}
+function opaqueOrUndefined(color: string | undefined): string | undefined {
+  return isFullyTransparent(color) ? undefined : color;
+}
+
 export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
   const c = theme.colors ?? {};
   const sideBarBg =
     c['sideBar.background'] ?? c['editor.background'] ?? theme.bg;
   const sideBarFg =
     c['sideBar.foreground'] ?? c['editor.foreground'] ?? theme.fg;
-  const sideBarBorder = c['sideBar.border'] ?? c['editor.background'];
+  const sideBarBorder = c['sideBar.border'];
   const listActiveSelectionFg =
     c['list.activeSelectionForeground'] ?? c['sideBar.foreground'];
+
+  // Some themes (e.g. Material) set hover/selection bg to the same color as
+  // the sidebar bg, making the state invisible. Detect this and fall through
+  // so the computed defaults provide visible feedback.
+  const bgLower = sideBarBg?.toLowerCase();
+  const rawHoverBg = c['list.hoverBackground'];
+  const listHoverBg =
+    rawHoverBg?.toLowerCase() === bgLower ? undefined : rawHoverBg;
+  const rawSelectionBg = c['list.activeSelectionBackground'];
   const listSelectionBg =
-    c['list.activeSelectionBackground'] ?? c['editor.selectionBackground'];
-  const listHoverBg = c['list.hoverBackground'];
-  const focusRing = c['list.focusOutline'] ?? c['focusBorder'];
+    rawSelectionBg?.toLowerCase() === bgLower
+      ? (c['list.focusBackground'] ?? c['editor.selectionBackground'])
+      : (rawSelectionBg ?? c['editor.selectionBackground']);
+  // Many themes set focusOutline or focusBorder to fully transparent (#...00).
+  // Catppuccin sets list.focusOutline=#00000000 but has good focusBorder values.
+  // Material themes set focusBorder=#FFFFFF00 entirely. Skip transparent values
+  // so the fallback chain reaches a visible color.
+  const focusRing =
+    opaqueOrUndefined(c['list.focusOutline']) ??
+    opaqueOrUndefined(c['focusBorder']);
   const inputBg = c['input.background'] ?? sideBarBg;
-  const inputBorder = c['input.border'] ?? sideBarBorder;
+  const inputBorder = c['input.border'];
   const sectionHeaderFg = c['sideBarSectionHeader.foreground'] ?? sideBarFg;
-  // Same fallbacks as diffs getHighlighterThemeStyles (gitDecoration.* → terminal.ansi*)
+  // gitDecoration.* → terminal.ansi* → editorGutter.* (e.g. vesper only has gutter colors)
   const gitAdded =
-    c['gitDecoration.addedResourceForeground'] ?? c['terminal.ansiGreen'];
+    c['gitDecoration.addedResourceForeground'] ??
+    c['terminal.ansiGreen'] ??
+    c['editorGutter.addedBackground'];
   const gitModified =
-    c['gitDecoration.modifiedResourceForeground'] ?? c['terminal.ansiBlue'];
+    c['gitDecoration.modifiedResourceForeground'] ??
+    c['terminal.ansiBlue'] ??
+    c['editorGutter.modifiedBackground'];
   const gitDeleted =
-    c['gitDecoration.deletedResourceForeground'] ?? c['terminal.ansiRed'];
+    c['gitDecoration.deletedResourceForeground'] ??
+    c['terminal.ansiRed'] ??
+    c['editorGutter.deletedBackground'];
 
   const isDark = theme.type === 'dark';
   const result: TreeThemeStyles = {
     colorScheme: isDark ? 'dark' : 'light',
     backgroundColor: sideBarBg ?? '',
     color: sideBarFg ?? '',
-    borderColor: sideBarBorder ?? '',
     '--trees-theme-sidebar-bg': sideBarBg ?? '',
     '--trees-theme-sidebar-fg': sideBarFg ?? '',
-    '--trees-theme-sidebar-border': sideBarBorder ?? sideBarBg ?? '',
     '--trees-theme-sidebar-header-fg': sectionHeaderFg ?? '',
     '--trees-theme-list-active-selection-fg':
       listActiveSelectionFg ?? sideBarFg ?? '',
@@ -71,8 +140,18 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     '--trees-theme-list-active-selection-bg': listSelectionBg ?? 'transparent',
     '--trees-theme-focus-ring': focusRing ?? sideBarFg ?? '',
     '--trees-theme-input-bg': inputBg ?? '',
-    '--trees-theme-input-border': inputBorder ?? sideBarBorder ?? '',
   };
+
+  // Border tokens: only set when the theme provides explicit border values.
+  // When omitted, the CSS fallback chain uses sensible defaults
+  // (light-dark(oklch(0% 0 0 / 0.15), oklch(100% 0 0 / 0.15))).
+  if (sideBarBorder != null && sideBarBorder !== '') {
+    result.borderColor = sideBarBorder;
+    result['--trees-theme-sidebar-border'] = sideBarBorder;
+  }
+  if (inputBorder != null && inputBorder !== '') {
+    result['--trees-theme-input-border'] = inputBorder;
+  }
 
   if (gitAdded != null && gitAdded !== '') {
     result['--trees-theme-git-added-fg'] = gitAdded;
