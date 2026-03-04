@@ -6,8 +6,7 @@ import type {
 } from '../types';
 import {
   getMergeConflictActionLineNumber,
-  getMergeConflictLineTypes,
-  getMergeConflictRegions,
+  getMergeConflictParseResult,
 } from './getMergeConflictLineTypes';
 import { processFile } from './parsePatchFiles';
 import { splitFileContents } from './splitFileContents';
@@ -69,10 +68,10 @@ export function parseMergeConflictDiffFromFile(
   file: FileContents
 ): ParseMergeConflictDiffFromFileResult {
   const lines = splitFileContents(file.contents);
-  const lineTypes = getMergeConflictLineTypes(lines);
-  const currentLines: string[] = [];
-  const incomingLines: string[] = [];
-  const patchLines: string[] = [];
+  const { lineTypes, regions } = getMergeConflictParseResult(lines);
+  let currentContents = '';
+  let incomingContents = '';
+  let patchContents = '';
   const currentLineNumbersByOriginalIndex: (number | undefined)[] = new Array(
     lines.length
   );
@@ -83,12 +82,12 @@ export function parseMergeConflictDiffFromFile(
   let incomingLineNumber = 0;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    const lineType = lineTypes[index] ?? 'none';
+    const lineType = lineTypes[index];
     switch (lineType) {
       case 'none': {
-        currentLines.push(line);
-        incomingLines.push(line);
-        patchLines.push(` ${line}`);
+        currentContents += line;
+        incomingContents += line;
+        patchContents += ` ${line}`;
         currentLineNumber++;
         incomingLineNumber++;
         currentLineNumbersByOriginalIndex[index] = currentLineNumber;
@@ -96,15 +95,15 @@ export function parseMergeConflictDiffFromFile(
         break;
       }
       case 'current': {
-        currentLines.push(line);
-        patchLines.push(`-${line}`);
+        currentContents += line;
+        patchContents += `-${line}`;
         currentLineNumber++;
         currentLineNumbersByOriginalIndex[index] = currentLineNumber;
         break;
       }
       case 'incoming': {
-        incomingLines.push(line);
-        patchLines.push(`+${line}`);
+        incomingContents += line;
+        patchContents += `+${line}`;
         incomingLineNumber++;
         incomingLineNumbersByOriginalIndex[index] = incomingLineNumber;
         break;
@@ -114,9 +113,9 @@ export function parseMergeConflictDiffFromFile(
       case 'marker-base':
       case 'marker-separator':
       case 'marker-end': {
-        currentLines.push(line);
-        incomingLines.push(line);
-        patchLines.push(` ${line}`);
+        currentContents += line;
+        incomingContents += line;
+        patchContents += ` ${line}`;
         currentLineNumber++;
         incomingLineNumber++;
         currentLineNumbersByOriginalIndex[index] = currentLineNumber;
@@ -129,17 +128,21 @@ export function parseMergeConflictDiffFromFile(
     }
   }
 
-  const currentFile = createResolvedConflictFile(file, 'current', currentLines);
+  const currentFile = createResolvedConflictFile(
+    file,
+    'current',
+    currentContents
+  );
   const incomingFile = createResolvedConflictFile(
     file,
     'incoming',
-    incomingLines
+    incomingContents
   );
   const patch = createMergeConflictPatch({
     name: file.name,
-    patchLines,
-    currentLineCount: currentLines.length,
-    incomingLineCount: incomingLines.length,
+    patchContents,
+    currentLineCount: currentLineNumber,
+    incomingLineCount: incomingLineNumber,
   });
 
   const fileDiff = processFile(patch, {
@@ -158,10 +161,12 @@ export function parseMergeConflictDiffFromFile(
     );
   }
 
-  const actions = getMergeConflictRegions(lines).map((conflict) => {
+  const actions: MergeConflictDiffAction[] = new Array(regions.length);
+  for (let index = 0; index < regions.length; index++) {
+    const conflict = regions[index];
     const actionOriginalLineNumber = getMergeConflictActionLineNumber(conflict);
     const actionOriginalLineIndex = actionOriginalLineNumber - 1;
-    return {
+    actions[index] = {
       actionOriginalLineIndex,
       actionOriginalLineNumber,
       currentLineNumber:
@@ -171,7 +176,7 @@ export function parseMergeConflictDiffFromFile(
       conflict,
       conflictIndex: conflict.conflictIndex,
     };
-  });
+  }
 
   return {
     fileDiff,
@@ -183,14 +188,14 @@ export function parseMergeConflictDiffFromFile(
 
 interface CreateMergeConflictPatchProps {
   name: string;
-  patchLines: string[];
+  patchContents: string;
   currentLineCount: number;
   incomingLineCount: number;
 }
 
 function createMergeConflictPatch({
   name,
-  patchLines,
+  patchContents,
   currentLineCount,
   incomingLineCount,
 }: CreateMergeConflictPatchProps): string {
@@ -200,18 +205,18 @@ function createMergeConflictPatch({
     `--- ${name}\n` +
     `+++ ${name}\n` +
     `@@ -${currentStart},${currentLineCount} +${incomingStart},${incomingLineCount} @@\n` +
-    patchLines.join('')
+    patchContents
   );
 }
 
 function createResolvedConflictFile(
   file: FileContents,
   side: 'current' | 'incoming',
-  lines: string[]
+  contents: string
 ): FileContents {
   return {
     ...file,
-    contents: lines.join(''),
+    contents,
     cacheKey:
       file.cacheKey != null
         ? `${file.cacheKey}:merge-conflict-${side}`

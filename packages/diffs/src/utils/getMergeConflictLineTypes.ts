@@ -36,13 +36,19 @@ function trimLineEnding(line: string): string {
 export function getMergeConflictLineTypes(
   lines: string[]
 ): MergeConflictLineType[] {
-  return parseMergeConflicts(lines).lineTypes;
+  return getMergeConflictParseResult(lines).lineTypes;
 }
 
 export function getMergeConflictRegions(
   lines: string[]
 ): MergeConflictRegion[] {
-  return parseMergeConflicts(lines).regions;
+  return getMergeConflictParseResult(lines).regions;
+}
+
+export function getMergeConflictParseResult(
+  lines: string[]
+): MergeConflictParseResult {
+  return parseMergeConflicts(lines);
 }
 
 export function getMergeConflictActionLineNumber(
