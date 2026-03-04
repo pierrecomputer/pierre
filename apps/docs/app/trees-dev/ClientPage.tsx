@@ -469,11 +469,17 @@ function ItemStatePreview() {
           <p className="text-muted-foreground mb-1 text-xs font-medium">
             Light
           </p>
-          <file-tree-container className="rounded-lg border p-3" />
+          <file-tree-container
+            className="rounded-lg border p-3"
+            style={{ '--trees-gap-override': '2px' } as React.CSSProperties}
+          />
         </div>
         <div ref={darkRef}>
           <p className="text-muted-foreground mb-1 text-xs font-medium">Dark</p>
-          <file-tree-container className="rounded-lg border p-3" />
+          <file-tree-container
+            className="rounded-lg border p-3"
+            style={{ '--trees-gap-override': '2px' } as React.CSSProperties}
+          />
         </div>
       </div>
     </div>

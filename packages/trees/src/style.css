@@ -45,6 +45,7 @@
       --trees-git-deleted-color-override
 
       // Available CSS Layout Overrides
+      --trees-gap-override
       --trees-border-radius-override
       --trees-font-family-override
       --trees-font-size-override
@@ -89,7 +90,7 @@
       --trees-border-color-override,
       var(
         --trees-theme-sidebar-border,
-        light-dark(oklch(0% 0 0 / 0.15), oklch(100% 0 0 / 0.1))
+        light-dark(oklch(0% 0 0 / 0.15), oklch(100% 0 0 / 0.15))
       )
     );
     --trees-border-radius: var(--trees-border-radius-override, 6px);
@@ -130,15 +131,24 @@
     );
     --trees-selected-bg: var(
       --trees-selected-bg-override,
-      var(--trees-theme-list-active-selection-bg, #008cff1a)
+      var(--trees-theme-list-active-selection-bg, light-dark(
+        color-mix(in lab, var(--trees-accent) 12%, var(--trees-bg)),
+        color-mix(in lab, var(--trees-accent) 15%, var(--trees-bg))
+      ))
     );
     --trees-selected-border-color: var(
       --trees-selected-border-color-override,
-      var(--trees-theme-focus-ring, #008cff26)
+      var(--trees-theme-focus-ring, light-dark(
+        color-mix(in lab, var(--trees-accent) 25%, var(--trees-bg)),
+        color-mix(in lab, var(--trees-accent) 30%, var(--trees-bg))
+      ))
     );
     --trees-selected-focused-border-color: var(
       --trees-selected-focused-border-color-override,
-      var(--trees-theme-focus-ring, #008cff50)
+      var(--trees-theme-focus-ring, light-dark(
+        color-mix(in lab, var(--trees-accent) 40%, var(--trees-bg)),
+        color-mix(in lab, var(--trees-accent) 60%, var(--trees-bg))
+      ))
     );
 
     /* Git status (e.g. from Shiki theme gitDecoration.*) */
@@ -223,7 +233,7 @@
   [role='tree'] {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: var(--trees-gap-override, 0);
   }
 
   /* LIST ITEM */
@@ -254,13 +264,12 @@
 
     &[data-item-focused='true'],
     &:focus-visible {
-      /* background-color: var(--trees-bg-muted); */
       outline: var(--trees-focus-ring-width) solid var(--trees-focus-ring-color);
       outline-offset: var(--trees-focus-ring-offset);
       z-index: 2;
 
       &[data-item-selected='true'] {
-        --trees-focus-ring-color: var(--trees-selected-focused-border-color);
+        outline-color: var(--trees-selected-focused-border-color);
       }
     }
 
