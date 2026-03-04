@@ -3,24 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import {
-  FileDiff as FileDiffClass,
-  type FileDiffOptions,
-} from '../components/FileDiff';
-import { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
-import {
-  DIFFS_TAG_NAME,
-  HEADER_METADATA_SLOT_ID,
-  HEADER_PREFIX_SLOT_ID,
-} from '../constants';
-import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
+import type { UnresolvedFileOptions as UnresolvedFileComponentOptions } from '../components/UnresolvedFile';
+import type { VirtualizedUnresolvedFileOptions as VirtualizedUnresolvedFileComponentOptions } from '../components/VirtualizedUnresolvedFile';
+import { DIFFS_TAG_NAME } from '../constants';
 import type {
   DiffLineAnnotation,
   FileContents,
   MergeConflictActionPayload,
   MergeConflictResolution,
 } from '../types';
-import { normalizeUnresolvedFileOptions } from '../utils/normalizeUnresolvedFileOptions';
 import {
   getMergeConflictActionAnnotations,
   type MergeConflictActionAnnotationMetadata,
@@ -28,18 +19,10 @@ import {
   parseMergeConflictDiffFromFile,
 } from '../utils/parseMergeConflictDiffFromFile';
 import { resolveMergeConflict } from '../utils/resolveMergeConflict';
-import { GutterUtilitySlotStyles } from './constants';
 import type { FileDiffProps } from './FileDiff';
+import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
-import { useFileDiffInstance } from './utils/useFileDiffInstance';
-
-const MERGE_CONFLICT_ACTION_RENDER_MODE_OPTION =
-  '__mergeConflictActionRenderMode';
-type MergeConflictActionRenderMode = 'default' | 'slot';
-
-interface MergeConflictActionRenderModeOption {
-  [MERGE_CONFLICT_ACTION_RENDER_MODE_OPTION]?: MergeConflictActionRenderMode;
-}
+import { useUnresolvedFileInstance } from './utils/useUnresolvedFileInstance';
 
 export interface RenderMergeConflictActionContext {
   resolveConflict(resolution: MergeConflictResolution): void;
@@ -55,15 +38,28 @@ export type MergeConflictActionsOption =
   | 'default'
   | RenderMergeConflictActions;
 
-export interface UnresolvedFileOptions<LAnnotation> extends FileDiffOptions<
-  LAnnotation | MergeConflictActionAnnotationMetadata
-> {
+type MergeConflictAnnotation<LAnnotation> =
+  | LAnnotation
+  | MergeConflictActionAnnotationMetadata;
+
+type UnresolvedComponentOptionsBase<LAnnotation> = Omit<
+  UnresolvedFileComponentOptions<LAnnotation>,
+  'renderAnnotation' | 'mergeConflictActions'
+> &
+  Omit<
+    VirtualizedUnresolvedFileComponentOptions<LAnnotation>,
+    'renderAnnotation' | 'mergeConflictActions'
+  >;
+
+export interface UnresolvedFileOptions<
+  LAnnotation,
+> extends UnresolvedComponentOptionsBase<MergeConflictAnnotation<LAnnotation>> {
   mergeConflictActions?: MergeConflictActionsOption;
   onMergeConflictAction?(payload: MergeConflictActionPayload): unknown;
 }
 
 export interface UnresolvedFileProps<LAnnotation> extends Omit<
-  FileDiffProps<LAnnotation | MergeConflictActionAnnotationMetadata>,
+  FileDiffProps<MergeConflictAnnotation<LAnnotation>>,
   'fileDiff' | 'options' | 'lineAnnotations' | 'renderAnnotation'
 > {
   file: FileContents;
@@ -79,17 +75,15 @@ export function UnresolvedFile<LAnnotation = undefined>({
   renderAnnotation,
   ...props
 }: UnresolvedFileProps<LAnnotation>): React.JSX.Element {
-  type MergeConflictAnnotation =
-    | LAnnotation
-    | MergeConflictActionAnnotationMetadata;
+  type TMergeConflictAnnotation = MergeConflictAnnotation<LAnnotation>;
 
   const {
     mergeConflictActions = 'default',
     onMergeConflictAction,
     ...fileDiffOptions
   } = options ?? {};
-  const [internalFile, setInternalFile] = useState(file);
 
+  const [internalFile, setInternalFile] = useState(file);
   useEffect(() => {
     setInternalFile(file);
   }, [file]);
@@ -103,18 +97,21 @@ export function UnresolvedFile<LAnnotation = undefined>({
   const actionAnnotations = useMemo<
     DiffLineAnnotation<MergeConflictActionAnnotationMetadata>[]
   >(() => {
-    if (mergeConflictActions === 'none') {
+    if (typeof mergeConflictActions !== 'function') {
       return [];
     }
     return getMergeConflictActionAnnotations(parsed.actions);
   }, [mergeConflictActions, parsed.actions]);
 
-  const combinedLineAnnotations = useMemo<
-    DiffLineAnnotation<MergeConflictAnnotation>[] | undefined
+  const mergedLineAnnotations = useMemo<
+    DiffLineAnnotation<TMergeConflictAnnotation>[] | undefined
   >(() => {
     const userLineAnnotations = lineAnnotations as
-      | DiffLineAnnotation<MergeConflictAnnotation>[]
+      | DiffLineAnnotation<TMergeConflictAnnotation>[]
       | undefined;
+    if (typeof mergeConflictActions !== 'function') {
+      return userLineAnnotations;
+    }
     if (
       (userLineAnnotations?.length ?? 0) === 0 &&
       actionAnnotations.length === 0
@@ -122,7 +119,7 @@ export function UnresolvedFile<LAnnotation = undefined>({
       return undefined;
     }
     return [...(userLineAnnotations ?? []), ...actionAnnotations];
-  }, [lineAnnotations, actionAnnotations]);
+  }, [lineAnnotations, mergeConflictActions, actionAnnotations]);
 
   const resolveConflict = useCallback(
     (
@@ -154,86 +151,60 @@ export function UnresolvedFile<LAnnotation = undefined>({
     [onMergeConflictAction]
   );
 
-  const annotationChildren = useMemo((): ReactNode[] => {
-    const children: ReactNode[] = [];
-    const annotations = combinedLineAnnotations ?? [];
-    for (let index = 0; index < annotations.length; index++) {
-      const annotation = annotations[index];
-      const slotName = getAnnotationSlotName(annotation);
+  const instanceOptions = useMemo<
+    UnresolvedFileComponentOptions<TMergeConflictAnnotation>
+  >(() => {
+    return {
+      ...(fileDiffOptions as Omit<
+        UnresolvedFileComponentOptions<TMergeConflictAnnotation>,
+        'mergeConflictActions' | 'renderAnnotation'
+      >),
+      mergeConflictActions:
+        typeof mergeConflictActions === 'function'
+          ? 'none'
+          : mergeConflictActions,
+    };
+  }, [fileDiffOptions, mergeConflictActions]);
+
+  const { ref, getHoveredLine } = useUnresolvedFileInstance({
+    file: effectiveFile,
+    options: instanceOptions,
+    metrics: props.metrics,
+    lineAnnotations: mergedLineAnnotations,
+    selectedLines: props.selectedLines,
+    prerenderedHTML: props.prerenderedHTML,
+  });
+
+  const renderMergedAnnotation = useCallback(
+    (annotation: DiffLineAnnotation<TMergeConflictAnnotation>): ReactNode => {
       const metadata = annotation.metadata;
       if (isMergeConflictActionMetadata(metadata)) {
         if (typeof mergeConflictActions !== 'function') {
-          continue;
+          return undefined;
         }
         const action = parsed.actions[metadata.conflict.conflictIndex];
         if (action == null) {
-          continue;
+          return undefined;
         }
-        const rendered = mergeConflictActions(action, {
+        return mergeConflictActions(action, {
           resolveConflict: (resolution) =>
             resolveConflict(resolution, metadata.conflict, metadata.lineIndex),
         });
-        if (rendered != null) {
-          children.push(
-            <div key={index} slot={slotName}>
-              {rendered}
-            </div>
-          );
-        }
-        continue;
       }
-      const rendered = renderAnnotation?.(
-        annotation as DiffLineAnnotation<LAnnotation>
-      );
-      if (rendered != null) {
-        children.push(
-          <div key={index} slot={slotName}>
-            {rendered}
-          </div>
-        );
-      }
-    }
-    return children;
-  }, [
-    combinedLineAnnotations,
-    mergeConflictActions,
-    parsed.actions,
-    renderAnnotation,
-    resolveConflict,
-  ]);
+      return renderAnnotation?.(annotation as DiffLineAnnotation<LAnnotation>);
+    },
+    [mergeConflictActions, parsed.actions, renderAnnotation, resolveConflict]
+  );
 
-  const unresolvedOptions = useMemo(() => {
-    const mergeConflictActionRenderMode: MergeConflictActionRenderMode =
-      typeof mergeConflictActions === 'function' ? 'slot' : 'default';
-    return normalizeUnresolvedFileOptions({
-      ...fileDiffOptions,
-      [MERGE_CONFLICT_ACTION_RENDER_MODE_OPTION]: mergeConflictActionRenderMode,
-    } as FileDiffOptions<MergeConflictAnnotation> &
-      MergeConflictActionRenderModeOption);
-  }, [fileDiffOptions, mergeConflictActions]);
-
-  const { ref, getHoveredLine } = useFileDiffInstance({
+  const children = renderDiffChildren({
     fileDiff: parsed.fileDiff,
-    options: unresolvedOptions,
-    metrics: props.metrics,
-    lineAnnotations: combinedLineAnnotations,
-    selectedLines: props.selectedLines,
-    prerenderedHTML: props.prerenderedHTML,
-    createFileDiffInstance: (instanceOptions, poolManager) =>
-      new ReactUnresolvedFileDiff(instanceOptions, poolManager, true),
-    createVirtualizedFileDiffInstance: (
-      instanceOptions,
-      virtualizer,
-      metrics,
-      poolManager
-    ) =>
-      new ReactVirtualizedUnresolvedFileDiff(
-        instanceOptions,
-        virtualizer,
-        metrics,
-        poolManager,
-        true
-      ),
+    renderHeaderPrefix: props.renderHeaderPrefix,
+    renderHeaderMetadata: props.renderHeaderMetadata,
+    renderAnnotation: renderMergedAnnotation,
+    renderGutterUtility: props.renderGutterUtility,
+    renderHoverUtility: props.renderHoverUtility,
+    lineAnnotations: mergedLineAnnotations,
+    getHoveredLine,
   });
 
   const containerRef = useRef<HTMLElement | null>(null);
@@ -280,30 +251,6 @@ export function UnresolvedFile<LAnnotation = undefined>({
     };
   }, [parsed.actions, resolveConflict]);
 
-  const gutterUtility = props.renderGutterUtility ?? props.renderHoverUtility;
-  const headerPrefix = props.renderHeaderPrefix?.({
-    fileDiff: parsed.fileDiff,
-  });
-  const headerMetadata = props.renderHeaderMetadata?.({
-    fileDiff: parsed.fileDiff,
-  });
-  const children = (
-    <>
-      {headerPrefix != null && (
-        <div slot={HEADER_PREFIX_SLOT_ID}>{headerPrefix}</div>
-      )}
-      {headerMetadata != null && (
-        <div slot={HEADER_METADATA_SLOT_ID}>{headerMetadata}</div>
-      )}
-      {annotationChildren}
-      {gutterUtility != null && (
-        <div slot="gutter-utility-slot" style={GutterUtilitySlotStyles}>
-          {gutterUtility(getHoveredLine)}
-        </div>
-      )}
-    </>
-  );
-
   return (
     <DIFFS_TAG_NAME
       ref={setRef}
@@ -313,90 +260,6 @@ export function UnresolvedFile<LAnnotation = undefined>({
       {templateRender(children, props.prerenderedHTML)}
     </DIFFS_TAG_NAME>
   );
-}
-
-class ReactUnresolvedFileDiff<
-  LAnnotation = undefined,
-> extends FileDiffClass<LAnnotation> {
-  override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
-    super.setOptions(options);
-    this.syncMergeConflictActionRendererMode(options);
-  }
-
-  protected override createHunksRenderer(
-    options: FileDiffOptions<LAnnotation>
-  ): UnresolvedFileHunksRenderer<LAnnotation> {
-    const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(
-      this.getHunksRendererOptions(options),
-      this.handleHighlightRender,
-      this.workerManager
-    );
-    renderer.setRenderDefaultMergeConflictActions(
-      getMergeConflictActionRenderMode(options) === 'default'
-    );
-    return renderer;
-  }
-
-  private syncMergeConflictActionRendererMode(
-    options: FileDiffOptions<LAnnotation> | undefined
-  ): void {
-    if (!(this.hunksRenderer instanceof UnresolvedFileHunksRenderer)) {
-      return;
-    }
-    this.hunksRenderer.setRenderDefaultMergeConflictActions(
-      getMergeConflictActionRenderMode(options) === 'default'
-    );
-  }
-}
-
-class ReactVirtualizedUnresolvedFileDiff<
-  LAnnotation = undefined,
-> extends VirtualizedFileDiff<LAnnotation> {
-  override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
-    super.setOptions(options);
-    this.syncMergeConflictActionRendererMode(options);
-  }
-
-  protected override createHunksRenderer(
-    options: FileDiffOptions<LAnnotation>
-  ): UnresolvedFileHunksRenderer<LAnnotation> {
-    const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(
-      this.getHunksRendererOptions(options),
-      this.handleHighlightRender,
-      this.workerManager
-    );
-    renderer.setRenderDefaultMergeConflictActions(
-      getMergeConflictActionRenderMode(options) === 'default'
-    );
-    return renderer;
-  }
-
-  private syncMergeConflictActionRendererMode(
-    options: FileDiffOptions<LAnnotation> | undefined
-  ): void {
-    if (!(this.hunksRenderer instanceof UnresolvedFileHunksRenderer)) {
-      return;
-    }
-    this.hunksRenderer.setRenderDefaultMergeConflictActions(
-      getMergeConflictActionRenderMode(options) === 'default'
-    );
-  }
-}
-
-function getMergeConflictActionRenderMode<LAnnotation>(
-  options: FileDiffOptions<LAnnotation> | undefined
-): MergeConflictActionRenderMode {
-  const mode = (options as MergeConflictActionRenderModeOption | undefined)?.[
-    MERGE_CONFLICT_ACTION_RENDER_MODE_OPTION
-  ];
-  return mode === 'slot' ? 'slot' : 'default';
-}
-
-function getAnnotationSlotName(annotation: {
-  side: DiffLineAnnotation<undefined>['side'];
-  lineNumber: number;
-}): string {
-  return `annotation-${annotation.side}-${annotation.lineNumber}`;
 }
 
 function isMergeConflictActionMetadata(
@@ -409,7 +272,9 @@ function isMergeConflictActionMetadata(
     metadata.type === 'merge-conflict-action' &&
     'conflict' in metadata &&
     typeof metadata.conflict === 'object' &&
-    metadata.conflict != null
+    metadata.conflict != null &&
+    'lineIndex' in metadata &&
+    typeof metadata.lineIndex === 'number'
   );
 }
 

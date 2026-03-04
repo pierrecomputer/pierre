@@ -9,6 +9,7 @@ export * from './components/FileStream';
 export * from './components/UnresolvedFile';
 export * from './components/VirtualizedFile';
 export * from './components/VirtualizedFileDiff';
+export * from './components/VirtualizedUnresolvedFile';
 export * from './components/Virtualizer';
 export * from './constants';
 export * from './highlighter/languages/areLanguagesAttached';
