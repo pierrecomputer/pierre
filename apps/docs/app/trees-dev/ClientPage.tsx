@@ -409,12 +409,7 @@ export function ClientPage({
         Virtualized ({linuxKernelFiles.length.toLocaleString()} files)
       </h2>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ExampleCard
-          title="Vanilla Virtualized (Linux Kernel)"
-          description={`${linuxKernelFiles.length.toLocaleString()} files with opt-in virtualization`}
-        >
-          <VirtualizedLinuxKernel />
-        </ExampleCard>
+        <VirtualizedLinuxKernelCard />
         <UnvirtualizedLinuxKernelCard />
       </div>
     </div>
@@ -1795,8 +1790,11 @@ function ReactSSRCustomIcons({
 
 /**
  * Virtualized vanilla FileTree with the full Linux kernel file list.
+ * Gated behind a button so the page loads quickly.
  */
-function VirtualizedLinuxKernel() {
+function VirtualizedLinuxKernelCard() {
+  const [mounted, setMounted] = useState(false);
+
   const ref = useCallback((node: HTMLDivElement | null) => {
     if (node == null) return;
     const fileTree = new FileTree(
@@ -1804,6 +1802,7 @@ function VirtualizedLinuxKernel() {
         initialFiles: linuxKernelFiles,
         virtualize: { threshold: 0 },
         flattenEmptyDirectories: true,
+        sort: false,
       },
       { initialExpandedItems: linuxKernelAllFolders }
     );
@@ -1811,7 +1810,34 @@ function VirtualizedLinuxKernel() {
     return () => fileTree.cleanUp();
   }, []);
 
-  return <div ref={ref} style={{ height: '500px' }} />;
+  return (
+    <ExampleCard
+      title="Vanilla Virtualized (Linux Kernel)"
+      description={`${linuxKernelFiles.length.toLocaleString()} files with opt-in virtualization`}
+    >
+      {mounted ? (
+        <div ref={ref} style={{ height: '500px' }} />
+      ) : (
+        <div
+          style={{
+            height: '500px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <button
+            type="button"
+            className="rounded-sm border px-4 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)' }}
+            onClick={() => setMounted(true)}
+          >
+            Render
+          </button>
+        </div>
+      )}
+    </ExampleCard>
+  );
 }
 
 /**

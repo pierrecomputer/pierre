@@ -16,6 +16,7 @@ import {
   preactRenderRoot,
   preactUnmountRoot,
 } from './utils/preactRenderer';
+import type { ChildrenComparator } from './utils/sortChildren';
 
 export type { GitStatusEntry } from './types';
 
@@ -84,6 +85,10 @@ export interface FileTreeOptions {
   lockedPaths?: string[];
   /** Return true to overwrite the destination file when a DnD move collides. */
   onCollision?: (collision: FileTreeCollision) => boolean;
+  /** Sort children within each directory. Defaults to `true` (folders first,
+   *  dot-prefixed next, then case-insensitive alphabetical). Pass `false` to
+   *  preserve insertion order, or `{ comparator: fn }` for custom sorting. */
+  sort?: boolean | { comparator: ChildrenComparator };
   useLazyDataLoader?: boolean;
   /** Enable virtualized rendering. Items are only rendered when visible.
    *  `threshold` is the minimum item count to activate virtualization. */
@@ -408,6 +413,7 @@ export class FileTree {
       'flattenEmptyDirectories',
       'lockedPaths',
       'onCollision',
+      'sort',
       'useLazyDataLoader',
       'virtualize',
     ] as const;

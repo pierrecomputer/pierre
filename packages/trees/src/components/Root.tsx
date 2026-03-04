@@ -367,6 +367,7 @@ export function Root({
     gitStatus,
     lockedPaths,
     onCollision,
+    sort: sortOption,
     useLazyDataLoader,
     virtualize,
   } = fileTreeOptions;
@@ -397,7 +398,24 @@ export function Root({
   }, [fileTreeOptions.id]);
   const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
 
-  const treeData = useMemo(() => fileListToTree(files), [files]);
+  // Resolve sort option to a comparator (or undefined for default behavior).
+  // `false` → no-op comparator preserving insertion order.
+  // `{ comparator }` → custom comparator.
+  // `true` / `undefined` → undefined (use default).
+  const sortComparator = useMemo(
+    () =>
+      sortOption === false
+        ? () => 0
+        : sortOption != null && typeof sortOption === 'object'
+          ? sortOption.comparator
+          : undefined,
+    [sortOption]
+  );
+
+  const treeData = useMemo(
+    () => fileListToTree(files, { sortComparator }),
+    [files, sortComparator]
+  );
 
   // Build path↔id maps from treeData
   const { pathToId, idToPath } = useMemo(() => {
@@ -616,11 +634,13 @@ export function Root({
       useLazyDataLoader === true
         ? generateLazyDataLoader(files, {
             flattenEmptyDirectories,
+            sortComparator,
           })
         : generateSyncDataLoader(files, {
             flattenEmptyDirectories,
+            sortComparator,
           }),
-    [files, flattenEmptyDirectories, useLazyDataLoader]
+    [files, flattenEmptyDirectories, useLazyDataLoader, sortComparator]
   );
 
   const isDnD = fileTreeOptions.dragAndDrop === true;
