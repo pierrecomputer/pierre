@@ -6,6 +6,7 @@ import type {
   ExpansionDirections,
   LineEventBaseProps,
   LineTypes,
+  MergeConflictResolution,
   SelectionPoint,
   SelectionSide,
 } from '../types';
@@ -83,9 +84,17 @@ interface ResolvedLineTarget<TMode extends InteractionManagerMode> {
   splitLineIndex: number | undefined;
 }
 
+export interface MergeConflictActionTarget {
+  kind: 'merge-conflict-action';
+  resolution: MergeConflictResolution;
+  conflictIndex: number;
+  lineIndex: number | undefined;
+}
+
 type ResolvedPointerTarget<TMode extends InteractionManagerMode> =
   | ResolvedLineTarget<TMode>
-  | ExpandoEventProps;
+  | ExpandoEventProps
+  | MergeConflictActionTarget;
 
 type LinePointerTarget<TMode extends InteractionManagerMode> =
   ResolvedLineTarget<TMode>;
@@ -147,6 +156,7 @@ export interface InteractionManagerOptions<
     direction: ExpansionDirections,
     expandFully?: boolean
   ): unknown;
+  onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
 }
 
 interface HandlePointerEventProps {
@@ -281,11 +291,17 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   };
 
   handlePointerClick = (event: MouseEvent): void => {
-    const { onHunkExpand, onLineClick, onLineNumberClick } = this.options;
+    const {
+      onHunkExpand,
+      onLineClick,
+      onLineNumberClick,
+      onMergeConflictActionClick,
+    } = this.options;
     if (
       onHunkExpand == null &&
       onLineClick == null &&
-      onLineNumberClick == null
+      onLineNumberClick == null &&
+      onMergeConflictActionClick == null
     ) {
       return;
     }
@@ -376,6 +392,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineEnter,
       onLineLeave,
       onHunkExpand,
+      onMergeConflictActionClick,
     } = this.options;
 
     switch (eventType) {
@@ -408,6 +425,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       }
       case 'click': {
         if (target == null) {
+          break;
+        }
+        if (
+          isMergeConflictActionPointerTarget(target) &&
+          onMergeConflictActionClick != null
+        ) {
+          onMergeConflictActionClick(target);
           break;
         }
         if (isExpandoPointerTarget(target) && onHunkExpand != null) {
@@ -444,6 +468,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineEnter,
       onLineLeave,
       onHunkExpand,
+      onMergeConflictActionClick,
       enableGutterUtility = false,
       enableLineSelection = false,
       onGutterUtilityClick,
@@ -454,6 +479,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineClick != null ||
       onLineNumberClick != null ||
       onHunkExpand != null ||
+      onMergeConflictActionClick != null ||
       onLineEnter != null ||
       onLineLeave != null ||
       enableGutterUtility ||
@@ -485,6 +511,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             }
             if (onHunkExpand != null) {
               reasons.push('expandable hunk separators');
+            }
+            if (onMergeConflictActionClick != null) {
+              reasons.push('merge conflict actions');
             }
           }
           return reasons;
@@ -1211,10 +1240,41 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         }
       | undefined;
     let lineNumber: number | undefined;
+    let mergeConflictActionTarget: MergeConflictActionTarget | undefined;
 
     for (const element of path) {
       if (!(element instanceof HTMLElement)) {
         continue;
+      }
+
+      if (
+        mergeConflictActionTarget == null &&
+        element.hasAttribute('data-merge-conflict-action')
+      ) {
+        const resolutionValue =
+          element.getAttribute('data-merge-conflict-action') ?? undefined;
+        const conflictIndexValue =
+          element.getAttribute('data-merge-conflict-conflict-index') ??
+          undefined;
+        const lineIndexValue =
+          element.getAttribute('data-merge-conflict-line-index') ?? undefined;
+        const conflictIndex =
+          conflictIndexValue != null
+            ? Number.parseInt(conflictIndexValue, 10)
+            : Number.NaN;
+        const lineIndex =
+          lineIndexValue != null ? Number.parseInt(lineIndexValue, 10) : NaN;
+        if (
+          isMergeConflictResolution(resolutionValue) &&
+          Number.isFinite(conflictIndex)
+        ) {
+          mergeConflictActionTarget = {
+            kind: 'merge-conflict-action',
+            resolution: resolutionValue,
+            conflictIndex,
+            lineIndex: Number.isFinite(lineIndex) ? lineIndex : undefined,
+          };
+        }
       }
 
       const columnNumber =
@@ -1274,6 +1334,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         codeElement = element;
         break;
       }
+    }
+
+    if (mergeConflictActionTarget != null) {
+      return mergeConflictActionTarget as ResolvedPointerTarget<TMode>;
     }
 
     if (expandInfo?.hunkIndex != null) {
@@ -1408,7 +1472,8 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     direction: ExpansionDirections,
     expandFully?: boolean
   ) => unknown,
-  getLineIndex?: GetLineIndexUtility
+  getLineIndex?: GetLineIndexUtility,
+  onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void
 ): InteractionManagerOptions<TMode> {
   return {
     enableGutterUtility: resolveEnableGutterUtilityOption({
@@ -1424,6 +1489,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
 
     onGutterUtilityClick,
     onHunkExpand,
+    onMergeConflictActionClick,
     onLineClick,
     onLineEnter,
     onLineLeave,
@@ -1487,6 +1553,18 @@ function isExpandoPointerTarget<TMode extends InteractionManagerMode>(
   target: ResolvedPointerTarget<TMode>
 ): target is ExpandoEventProps {
   return 'type' in target && target.type === 'line-info';
+}
+
+function isMergeConflictActionPointerTarget<
+  TMode extends InteractionManagerMode,
+>(target: ResolvedPointerTarget<TMode>): target is MergeConflictActionTarget {
+  return 'kind' in target && target.kind === 'merge-conflict-action';
+}
+
+function isMergeConflictResolution(
+  value: string | undefined
+): value is MergeConflictResolution {
+  return value === 'current' || value === 'incoming' || value === 'both';
 }
 
 function queryHTMLElement(

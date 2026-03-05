@@ -378,6 +378,8 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expansionLineCount?: number; // 100 is default
 }
 
+export type CustomPreProperties = Record<string, string | number | undefined>;
+
 // NOTE(amadeus): This is the shared config that all `pre` nodes will need to
 // get setup properly. Whether it's via direct DOM manipulation or via HAST
 // html rendering, this interface can be shared across both of these areas.
@@ -395,6 +397,7 @@ export interface PrePropertiesConfig extends Required<
   split: boolean;
   themeStyles: string;
   totalLines: number;
+  customProperties?: CustomPreProperties;
 }
 
 export interface RenderHeaderMetadataProps {
@@ -650,4 +653,12 @@ export interface VirtualFileMetrics {
 export interface SelectionPoint {
   lineNumber: number;
   side: SelectionSide | undefined;
+}
+
+export interface MergeConflictMetadata {
+  side: AnnotationSide;
+  lineNumber: number;
+  type: 'merge-conflict-action';
+  conflict: MergeConflictRegion;
+  lineIndex: number;
 }

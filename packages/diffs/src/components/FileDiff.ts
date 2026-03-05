@@ -26,6 +26,7 @@ import {
 import { SVGSpriteSheet } from '../sprite';
 import type {
   BaseDiffOptions,
+  CustomPreProperties,
   DiffLineAnnotation,
   ExpansionDirections,
   FileContents,
@@ -1871,7 +1872,8 @@ export class FileDiff<LAnnotation = undefined> {
       additionsContentAST,
       deletionsContentAST,
       totalLines,
-    }: HunksRenderResult
+    }: HunksRenderResult,
+    customProperties?: CustomPreProperties
   ): void {
     const {
       diffIndicators = 'bars',
@@ -1894,6 +1896,7 @@ export class FileDiff<LAnnotation = undefined> {
       themeStyles,
       themeType: baseThemeType ?? themeType,
       totalLines,
+      customProperties,
     };
     if (arePrePropertiesEqual(preProperties, this.appliedPreAttributes)) {
       return;

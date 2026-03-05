@@ -14,7 +14,11 @@ import type {
   GetHoveredLineResult,
   SelectedLineRange,
 } from '../../managers/InteractionManager';
-import type { DiffLineAnnotation, FileContents } from '../../types';
+import type {
+  DiffLineAnnotation,
+  FileContents,
+  MergeConflictResolution,
+} from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -33,6 +37,10 @@ interface UseUnresolvedFileInstanceProps<LAnnotation> {
 interface UseUnresolvedFileInstanceReturn {
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
+  resolveMergeConflictAction(
+    conflictIndex: number,
+    resolution: MergeConflictResolution
+  ): void;
 }
 
 export function useUnresolvedFileInstance<LAnnotation>({
@@ -90,5 +98,12 @@ export function useUnresolvedFileInstance<LAnnotation>({
     return instanceRef.current?.getHoveredLine();
   }, []);
 
-  return { ref, getHoveredLine };
+  const resolveMergeConflictAction = useCallback(
+    (conflictIndex: number, resolution: MergeConflictResolution): void => {
+      instanceRef.current?.resolveConflictAndRender(conflictIndex, resolution);
+    },
+    []
+  );
+
+  return { ref, getHoveredLine, resolveMergeConflictAction };
 }

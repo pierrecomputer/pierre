@@ -427,6 +427,7 @@ export const HELPER_RESOLVE_MERGE_CONFLICT: PreloadFileOptions<undefined> = {
     contents: `import {
   resolveMergeConflict,
   type MergeConflictActionPayload,
+  type UnresolveFile as UnresolvedFileClass
 } from '@pierre/diffs';
 import { UnresolvedFile } from '@pierre/diffs/react';
 
@@ -436,7 +437,7 @@ function MergeConflictExample({ initialContents }: { initialContents: string }) 
   const [contents, setContents] = useState(initialContents);
 
   const onMergeConflictAction = useCallback(
-    (payload: MergeConflictActionPayload) => {
+    (payload: MergeConflictActionPayload, instance: UnresolvedFileClass) => {
       setContents((previous) => resolveMergeConflict(previous, payload));
     },
     []

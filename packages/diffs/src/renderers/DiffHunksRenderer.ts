@@ -18,6 +18,7 @@ import type {
   AnnotationSpan,
   BaseDiffOptions,
   CodeColumnType,
+  CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
   ExpansionDirections,
@@ -113,15 +114,12 @@ export interface UnifiedLineDecorationProps {
   lineType: LineTypes;
   additionLineIndex: number | undefined;
   deletionLineIndex: number | undefined;
-  additionLineRaw: string | undefined;
-  deletionLineRaw: string | undefined;
 }
 
 export interface SplitLineDecorationProps {
   side: 'deletions' | 'additions';
   type: 'context' | 'context-expanded' | 'change';
   lineIndex: number | undefined;
-  lineRaw: string | undefined;
 }
 
 export interface LineDecoration {
@@ -514,7 +512,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     split: boolean,
     totalLines: number,
     themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined
+    baseThemeType: 'light' | 'dark' | undefined,
+    customProperties?: CustomPreProperties
   ): HASTElement {
     const {
       diffIndicators,
@@ -533,6 +532,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       split,
       themeType: baseThemeType ?? themeType,
       totalLines,
+      customProperties,
     });
   }
 
@@ -760,14 +760,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
-          const deletionLineRaw =
-            deletionLine != null
-              ? fileDiff.deletionLines[deletionLine.lineIndex]
-              : undefined;
-          const additionLineRaw =
-            additionLine != null
-              ? fileDiff.additionLines[additionLine.lineIndex]
-              : undefined;
           if (deletionLineContent == null && additionLineContent == null) {
             const errorMessage =
               'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
@@ -781,12 +773,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 : 'change-deletion'
               : type;
           const lineDecoration = this.getUnifiedLineDecoration({
+            // NOTE: This function gets extended so don't remove
+            // these extra props
             type,
             lineType,
             additionLineIndex: additionLine?.lineIndex,
             deletionLineIndex: deletionLine?.lineIndex,
-            additionLineRaw,
-            deletionLineRaw,
           });
           pushGutterLineNumber(
             'unified',
@@ -833,25 +825,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
-          const deletionLineRaw =
-            deletionLine != null
-              ? fileDiff.deletionLines[deletionLine.lineIndex]
-              : undefined;
-          const additionLineRaw =
-            additionLine != null
-              ? fileDiff.additionLines[additionLine.lineIndex]
-              : undefined;
           const deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
             lineIndex: deletionLine?.lineIndex,
-            lineRaw: deletionLineRaw,
           });
           const additionLineDecoration = this.getSplitLineDecoration({
             side: 'additions',
             type,
             lineIndex: additionLine?.lineIndex,
-            lineRaw: additionLineRaw,
           });
 
           if (deletionLineContent == null && additionLineContent == null) {

@@ -12,8 +12,17 @@ export function setPreNodeProperties(
     themeStyles,
     themeType,
     totalLines,
+    customProperties,
   }: PrePropertiesConfig
 ): HTMLPreElement {
+  // NOTE: We always apply custom properties first so the important properties
+  // cannot be overriden.
+  for (const key in customProperties) {
+    const value = customProperties[key];
+    if (value != null) {
+      pre.setAttribute(key, `${value}`);
+    }
+  }
   if (type === 'diff') {
     pre.setAttribute('data-diff', '');
     pre.removeAttribute('data-file');

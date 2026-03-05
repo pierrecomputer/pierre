@@ -20,8 +20,12 @@ export function createPreWrapperProperties({
   themeStyles,
   totalLines,
   type,
+  customProperties,
 }: PrePropertiesConfig): Properties {
   const properties: Properties = {
+    // NOTE: We always apply custom properties first so the important
+    // properties cannot be overriden
+    ...customProperties,
     'data-diff': type === 'diff' ? '' : undefined,
     'data-file': type === 'file' ? '' : undefined,
     'data-diff-type':

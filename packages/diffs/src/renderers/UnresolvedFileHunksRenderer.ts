@@ -1,9 +1,11 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
+import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
-import { DEFAULT_RENDER_RANGE } from '../constants';
+import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
 import type {
+  BaseDiffOptions,
   DiffLineAnnotation,
   FileDiffMetadata,
+  MergeConflictMetadata,
   MergeConflictResolution,
   RenderRange,
 } from '../types';
@@ -13,7 +15,7 @@ import {
   createHastElement,
   createTextNodeElement,
 } from '../utils/hast_utils';
-import type { MergeConflictActionAnnotationMetadata } from '../utils/parseMergeConflictDiffFromFile';
+import type { WorkerPoolManager } from '../worker';
 import {
   DiffHunksRenderer,
   type HunksRenderResult,
@@ -41,6 +43,12 @@ interface MergeConflictActionRowData {
   sourceIndex: number;
 }
 
+type MergeConflictActionsType = 'none' | 'default' | 'custom';
+
+export interface UnresolvedFileHunksRendererOptions extends BaseDiffOptions {
+  mergeConflictActionsType?: MergeConflictActionsType;
+}
+
 const START_MARKER = /^<{7,}(?:\s.*)?$/;
 const BASE_MARKER = /^\|{7,}(?:\s.*)?$/;
 const SEPARATOR_MARKER = /^={7,}(?:\s.*)?$/;
@@ -51,20 +59,47 @@ export class UnresolvedFileHunksRenderer<
 > extends DiffHunksRenderer<LAnnotation> {
   private cachedAdditionLines: string[] | undefined;
   private cachedDeletionLines: string[] | undefined;
-  private mergeConflictActionAnnotations: DiffLineAnnotation<MergeConflictActionAnnotationMetadata>[] =
-    [];
+  private conflictAnnotations: MergeConflictActionRowData[] = [];
   private additionMarkerLookup: MergeConflictMarkerLookup[] = [];
   private deletionMarkerLookup: MergeConflictMarkerLookup[] = [];
-  private renderDefaultMergeConflictActions = true;
+  public override options: UnresolvedFileHunksRendererOptions;
 
-  public setRenderDefaultMergeConflictActions(enabled: boolean): void {
-    this.renderDefaultMergeConflictActions = enabled;
+  constructor(
+    options: UnresolvedFileHunksRendererOptions = {
+      theme: DEFAULT_THEMES,
+    },
+    onRenderUpdate?: () => unknown,
+    workerManager?: WorkerPoolManager | undefined
+  ) {
+    super(undefined, onRenderUpdate, workerManager);
+    this.options = options;
   }
 
-  public setMergeConflictActionAnnotations(
-    lineAnnotations: DiffLineAnnotation<MergeConflictActionAnnotationMetadata>[]
+  public setConflictAnnotations(
+    conflictAnnotations: MergeConflictMetadata[]
   ): void {
-    this.mergeConflictActionAnnotations = lineAnnotations;
+    this.conflictAnnotations.length = 0;
+    for (
+      let sourceIndex = 0;
+      sourceIndex < conflictAnnotations.length;
+      sourceIndex++
+    ) {
+      const annotation = conflictAnnotations[sourceIndex];
+      const conflictIndex = annotation.conflict.conflictIndex;
+      this.conflictAnnotations.push({
+        side: annotation.side,
+        lineNumber: annotation.lineNumber,
+        conflictIndex,
+        lineIndex: annotation.lineIndex,
+        rowKey: `${conflictIndex},${annotation.lineIndex}`,
+        slotName: getMergeConflictActionSlotName({
+          side: annotation.side,
+          lineNumber: annotation.lineNumber,
+          conflictIndex,
+        }),
+        sourceIndex,
+      });
+    }
   }
 
   public override renderDiff(
@@ -93,14 +128,13 @@ export class UnresolvedFileHunksRenderer<
     themeStyles: string,
     baseThemeType: 'light' | 'dark' | undefined
   ): HASTElement {
-    const pre = super.createPreElement(
+    return super.createPreElement(
       split,
       totalLines,
       themeStyles,
-      baseThemeType
+      baseThemeType,
+      { 'data-has-merge-conflict': '' }
     );
-    pre.properties['data-merge-conflict-action-style-override'] = '';
-    return pre;
   }
 
   protected override getUnifiedLineDecoration({
@@ -108,8 +142,6 @@ export class UnresolvedFileHunksRenderer<
     lineType,
     additionLineIndex,
     deletionLineIndex,
-    additionLineRaw,
-    deletionLineRaw,
   }: UnifiedLineDecorationProps): LineDecoration {
     const mergeConflictType =
       type === 'change'
@@ -118,13 +150,11 @@ export class UnresolvedFileHunksRenderer<
           : 'incoming'
         : (this.getMergeConflictMarkerTypeAtIndex(
             'additions',
-            additionLineIndex,
-            additionLineRaw
+            additionLineIndex
           ) ??
           this.getMergeConflictMarkerTypeAtIndex(
             'deletions',
-            deletionLineIndex,
-            deletionLineRaw
+            deletionLineIndex
           ));
     return {
       gutterLineType: type === 'change' ? 'context' : lineType,
@@ -140,14 +170,13 @@ export class UnresolvedFileHunksRenderer<
     side,
     type,
     lineIndex,
-    lineRaw,
   }: SplitLineDecorationProps): LineDecoration {
     const mergeConflictType =
       type === 'change'
         ? side === 'deletions'
           ? 'current'
           : 'incoming'
-        : this.getMergeConflictMarkerTypeAtIndex(side, lineIndex, lineRaw);
+        : this.getMergeConflictMarkerTypeAtIndex(side, lineIndex);
     return {
       gutterLineType: type === 'change' ? 'context' : type,
       gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
@@ -171,73 +200,53 @@ export class UnresolvedFileHunksRenderer<
 
   private getMergeConflictMarkerTypeAtIndex(
     side: 'additions' | 'deletions',
-    lineIndex: number | undefined,
-    lineRaw: string | undefined
+    lineIndex: number | undefined
   ): MergeConflictMarkerType | undefined {
     if (lineIndex == null) {
-      return getMergeConflictMarkerType(lineRaw);
+      return undefined;
     }
-    const lookup =
+    const value = (
       side === 'additions'
         ? this.additionMarkerLookup
-        : this.deletionMarkerLookup;
-    const value = lookup[lineIndex];
+        : this.deletionMarkerLookup
+    )[lineIndex];
     if (value == null) {
-      return getMergeConflictMarkerType(lineRaw);
+      return undefined;
     }
     return value === 'none' ? undefined : value;
   }
 
+  // REFACTOR OPPORTUNITY: Can we inject as we are building the dom :thonk:
   private injectMergeConflictActionRows(
     result: HunksRenderResult | undefined
   ): HunksRenderResult | undefined {
-    if (result == null || this.mergeConflictActionAnnotations.length === 0) {
+    if (result == null || this.conflictAnnotations.length === 0) {
       return result;
     }
-    const actionRows = this.buildActionRows();
-    if (actionRows.length === 0) {
+    if (this.conflictAnnotations.length === 0) {
       return result;
     }
     const insertedRows =
       result.unifiedContentAST != null
-        ? this.injectUnifiedMergeConflictActionRows(result, actionRows)
-        : this.injectSplitMergeConflictActionRows(result, actionRows);
+        ? this.injectUnifiedMergeConflictActionRows(
+            result,
+            this.conflictAnnotations
+          )
+        : this.injectSplitMergeConflictActionRows(
+            result,
+            this.conflictAnnotations
+          );
     if (insertedRows > 0) {
       result.rowCount += insertedRows;
     }
     return result;
   }
 
-  private buildActionRows(): MergeConflictActionRowData[] {
-    const rows: MergeConflictActionRowData[] = [];
-    for (
-      let sourceIndex = 0;
-      sourceIndex < this.mergeConflictActionAnnotations.length;
-      sourceIndex++
-    ) {
-      const annotation = this.mergeConflictActionAnnotations[sourceIndex];
-      const conflictIndex = annotation.metadata.conflict.conflictIndex;
-      rows.push({
-        side: annotation.side,
-        lineNumber: annotation.lineNumber,
-        conflictIndex,
-        lineIndex: annotation.metadata.lineIndex,
-        rowKey: `${conflictIndex},${annotation.metadata.lineIndex}`,
-        slotName: getMergeConflictActionSlotName({
-          side: annotation.side,
-          lineNumber: annotation.lineNumber,
-          conflictIndex,
-        }),
-        sourceIndex,
-      });
-    }
-    return rows;
-  }
-
   private injectUnifiedMergeConflictActionRows(
     result: HunksRenderResult,
     actionRows: MergeConflictActionRowData[]
   ): number {
+    const { mergeConflictActionsType = 'default' } = this.options;
     const { unifiedContentAST, unifiedGutterAST } = result;
     if (unifiedContentAST == null || unifiedGutterAST == null) {
       return 0;
@@ -266,7 +275,7 @@ export class UnresolvedFileHunksRenderer<
         0,
         createMergeConflictActionsRowElement({
           row,
-          includeDefaultActions: this.renderDefaultMergeConflictActions,
+          includeDefaultActions: mergeConflictActionsType === 'default',
           includeSlot: true,
         })
       );
@@ -283,6 +292,7 @@ export class UnresolvedFileHunksRenderer<
     result: HunksRenderResult,
     actionRows: MergeConflictActionRowData[]
   ): number {
+    const { mergeConflictActionsType = 'default' } = this.options;
     const {
       additionsContentAST,
       additionsGutterAST,
@@ -337,7 +347,7 @@ export class UnresolvedFileHunksRenderer<
         0,
         createMergeConflictActionsRowElement({
           row,
-          includeDefaultActions: this.renderDefaultMergeConflictActions,
+          includeDefaultActions: mergeConflictActionsType === 'default',
           includeSlot: true,
         })
       );
@@ -359,22 +369,16 @@ export class UnresolvedFileHunksRenderer<
 
 function getMergeConflictGutterProperties(
   mergeConflictType: MergeConflictMarkerType | undefined
-): { 'data-merge-conflict': MergeConflictMarkerType } | undefined {
-  if (mergeConflictType == null) {
-    return undefined;
-  }
-  return { 'data-merge-conflict': mergeConflictType };
+): Properties | undefined {
+  return mergeConflictType != null
+    ? { 'data-merge-conflict': mergeConflictType }
+    : undefined;
 }
 
 function getMergeConflictContentProperties(
   type: 'change' | 'context' | 'context-expanded',
   mergeConflictType: MergeConflictMarkerType | undefined
-):
-  | {
-      'data-line-type'?: 'context';
-      'data-merge-conflict'?: MergeConflictMarkerType;
-    }
-  | undefined {
+): Properties | undefined {
   if (mergeConflictType == null) {
     return undefined;
   }

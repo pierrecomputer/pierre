@@ -1,7 +1,7 @@
 import type {
-  DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
+  MergeConflictMetadata,
   MergeConflictRegion,
 } from '../types';
 import {
@@ -27,41 +27,30 @@ export interface MergeConflictDiffAction {
   conflictIndex: number;
 }
 
-export interface MergeConflictActionAnnotationMetadata {
-  type: 'merge-conflict-action';
-  conflict: MergeConflictRegion;
-  lineIndex: number;
-}
-
-export function getMergeConflictActionAnnotations(
+export function getMergeConflictActionMetadata(
   actions: MergeConflictDiffAction[]
-): DiffLineAnnotation<MergeConflictActionAnnotationMetadata>[] {
-  const annotations: DiffLineAnnotation<MergeConflictActionAnnotationMetadata>[] =
-    [];
+): MergeConflictMetadata[] {
+  const conflictMetadata: MergeConflictMetadata[] = [];
   for (const action of actions) {
     if (action.incomingLineNumber != null) {
-      annotations.push({
+      conflictMetadata.push({
+        type: 'merge-conflict-action',
         side: 'additions',
         lineNumber: action.incomingLineNumber,
-        metadata: {
-          type: 'merge-conflict-action',
-          conflict: action.conflict,
-          lineIndex: action.incomingLineNumber - 1,
-        },
+        conflict: action.conflict,
+        lineIndex: action.incomingLineNumber - 1,
       });
     } else if (action.currentLineNumber != null) {
-      annotations.push({
+      conflictMetadata.push({
+        type: 'merge-conflict-action',
         side: 'deletions',
         lineNumber: action.currentLineNumber,
-        metadata: {
-          type: 'merge-conflict-action',
-          conflict: action.conflict,
-          lineIndex: action.currentLineNumber - 1,
-        },
+        conflict: action.conflict,
+        lineIndex: action.currentLineNumber - 1,
       });
     }
   }
-  return annotations;
+  return conflictMetadata;
 }
 
 export function parseMergeConflictDiffFromFile(
