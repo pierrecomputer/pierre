@@ -17,6 +17,7 @@ export const FILE_TREE_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   FileTreeStateConfig,
   FileTreeSearchMode,
   FileTreeCollision,
+  ChildrenComparator,
   GitStatusEntry,
 } from '@pierre/trees';
 
@@ -52,6 +53,15 @@ interface FileTreeOptions {
 
   // Optional: return true to overwrite the destination on DnD collision.
   onCollision?: (collision: FileTreeCollision) => boolean;
+
+  // Optional: sort children within each directory. Default: true (folders first,
+  // dot-prefixed next, case-insensitive alphabetical). false preserves insertion
+  // order. { comparator: fn } for custom sorting.
+  sort?: boolean | { comparator: ChildrenComparator };
+
+  // Optional: enable virtualized rendering (only visible items are rendered).
+  // Pass { threshold: N } to activate when item count >= N. Default: undefined (off).
+  virtualize?: { threshold: number } | false;
 }
 
 // Example usage

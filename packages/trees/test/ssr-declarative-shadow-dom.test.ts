@@ -261,6 +261,69 @@ describe('SSR + declarative shadow DOM', () => {
     expect(rerenders).toBe(1);
   });
 
+  test('render + setOptions keep virtualized layout attributes in sync', () => {
+    const container = document.createElement('file-tree-container');
+    const ft = new FileTree({
+      initialFiles: ['README.md'],
+      virtualize: { threshold: 0 },
+    });
+
+    const origRender = preactRenderer.renderRoot;
+    preactRenderer.renderRoot = () => {};
+    try {
+      ft.render({ fileTreeContainer: container });
+
+      const wrapper = container.shadowRoot?.querySelector(
+        '[data-file-tree-id]'
+      ) as HTMLElement | null;
+      expect(wrapper).not.toBeNull();
+      if (wrapper == null) {
+        throw new Error('Expected file-tree wrapper in shadow DOM');
+      }
+      expect(container.dataset.fileTreeVirtualized).toBe('true');
+      expect(wrapper.dataset.fileTreeVirtualizedWrapper).toBe('true');
+
+      ft.setOptions({ virtualize: false });
+      expect(container.dataset.fileTreeVirtualized).toBeUndefined();
+      expect(wrapper.dataset.fileTreeVirtualizedWrapper).toBeUndefined();
+    } finally {
+      preactRenderer.renderRoot = origRender;
+    }
+  });
+
+  test('hydrate applies virtualized layout attributes when enabled client-side', () => {
+    const payload = preloadFileTree({
+      initialFiles: ['README.md'],
+    });
+    const container = document.createElement('file-tree-container');
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = payload.shadowHtml;
+
+    const origHydrate = preactRenderer.hydrateRoot;
+    preactRenderer.hydrateRoot = () => {};
+    try {
+      const ft = new FileTree({
+        id: payload.id,
+        initialFiles: ['README.md'],
+        virtualize: { threshold: 0 },
+      });
+      ft.hydrate({ fileTreeContainer: container });
+
+      const wrapper = container.shadowRoot?.querySelector(
+        '[data-file-tree-id]'
+      ) as HTMLElement | null;
+      expect(wrapper).not.toBeNull();
+      if (wrapper == null) {
+        throw new Error('Expected file-tree wrapper in shadow DOM');
+      }
+      expect(container.dataset.fileTreeVirtualized).toBe('true');
+      expect(wrapper.dataset.fileTreeVirtualizedWrapper).toBe('true');
+    } finally {
+      preactRenderer.hydrateRoot = origHydrate;
+    }
+  });
+
   test('setOptions swaps custom sprite sheets at runtime', () => {
     const container = document.createElement('file-tree-container');
     const ft = new FileTree({
@@ -359,6 +422,15 @@ describe('SSR + declarative shadow DOM', () => {
     );
     expect(shadowRoot.querySelector('#custom-a')).not.toBeNull();
     expect(payload.shadowHtml).toContain('<symbol id="custom-a"');
+  });
+
+  test('preloadFileTree supports virtualized empty trees', () => {
+    expect(() =>
+      preloadFileTree({
+        initialFiles: [],
+        virtualize: { threshold: 0 },
+      })
+    ).not.toThrow();
   });
 
   test('setFiles invokes onFilesChange callback', () => {

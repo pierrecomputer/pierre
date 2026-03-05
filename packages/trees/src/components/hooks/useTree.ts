@@ -34,9 +34,17 @@ export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
       ...state,
       ...config.state,
     },
-    setState: (state) => {
-      setState(state);
-      config.setState?.(state);
+    setState: (nextStateOrUpdater) => {
+      // headless-tree may emit partial state updates; merge to avoid dropping
+      // unchanged keys (e.g. large expandedItems arrays in virtualized trees).
+      setState((prev) => {
+        const nextState =
+          typeof nextStateOrUpdater === 'function'
+            ? nextStateOrUpdater(prev)
+            : nextStateOrUpdater;
+        return { ...prev, ...nextState };
+      });
+      config.setState?.(nextStateOrUpdater);
     },
   }));
 

@@ -2,13 +2,13 @@ import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
 import { createIdMaps } from './createIdMaps';
 import { createLoaderUtils } from './createLoaderUtils';
-import type { ChildrenComparator } from './sortChildren';
+import type { ChildrenSortOption } from './sortChildren';
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
 
 export interface FileListToTreeOptions {
   rootId?: string;
   rootName?: string;
-  sortComparator?: ChildrenComparator;
+  sortComparator?: ChildrenSortOption;
 }
 
 const ROOT_ID = 'root';

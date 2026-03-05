@@ -51,6 +51,7 @@ import {
   buildAncestorChains,
   buildChildToParent,
 } from '../utils/guideLineAncestors';
+import type { ChildrenSortOption } from '../utils/sortChildren';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
 import { VirtualizedList } from './VirtualizedList';
@@ -343,7 +344,7 @@ function TreeItemInner({
         </div>
       ) : null}
       {isLocked ? (
-        <div data-item-section="lock" style={{ marginLeft: 'auto' }}>
+        <div data-item-section="lock">
           <Icon {...remapIcon('file-tree-icon-lock')} />
         </div>
       ) : null}
@@ -399,13 +400,13 @@ export function Root({
   const getItemDomId = (itemId: string) => `${treeDomId}-${itemId}`;
 
   // Resolve sort option to a comparator (or undefined for default behavior).
-  // `false` → no-op comparator preserving insertion order.
+  // `false` → preserve insertion order and skip sort work.
   // `{ comparator }` → custom comparator.
   // `true` / `undefined` → undefined (use default).
-  const sortComparator = useMemo(
+  const sortComparator = useMemo<ChildrenSortOption | undefined>(
     () =>
       sortOption === false
-        ? () => 0
+        ? false
         : sortOption != null && typeof sortOption === 'object'
           ? sortOption.comparator
           : undefined,
@@ -1093,16 +1094,16 @@ export function Root({
   }, [selectionSnapshot, focusedItemId, childToParent]);
 
   const shouldVirtualize = virtualize != null && virtualize !== false;
+  const virtualizeThreshold = shouldVirtualize
+    ? Math.max(0, virtualize.threshold)
+    : Number.POSITIVE_INFINITY;
+  const containerProps = tree.getContainerProps();
 
   return (
     <div
-      {...tree.getContainerProps()}
+      {...containerProps}
       id={treeDomId}
-      style={
-        shouldVirtualize
-          ? 'height:100%;display:flex;flex-direction:column;overflow:hidden'
-          : undefined
-      }
+      data-file-tree-virtualized-root={shouldVirtualize ? 'true' : undefined}
     >
       <style dangerouslySetInnerHTML={{ __html: guideStyleText }} />
       <div data-file-tree-search-container>
@@ -1127,6 +1128,9 @@ export function Root({
 
         const renderItemAtIndex = (index: number) => {
           const item = items[index];
+          if (item == null) {
+            return null;
+          }
           const itemData = item.getItemData();
           const itemMeta = item.getItemMeta();
           const hasChildren = itemData?.children?.direct != null;
@@ -1188,17 +1192,17 @@ export function Root({
 
         if (
           shouldVirtualize &&
-          items.length >= (virtualize as { threshold: number }).threshold
+          items.length > 0 &&
+          items.length >= virtualizeThreshold
         ) {
           const focusedIndex =
             focusedItemId != null
               ? items.findIndex((item) => item.getId() === focusedItemId)
               : null;
           return (
-            <div style="overflow-y:auto;flex:1 1 0;min-height:0">
+            <div data-file-tree-virtualized-scroll="true">
               <VirtualizedList
                 itemCount={items.length}
-                itemHeight={30}
                 renderItem={renderItemAtIndex}
                 scrollToIndex={
                   focusedIndex != null && focusedIndex >= 0

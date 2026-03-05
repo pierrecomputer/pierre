@@ -11,6 +11,8 @@ export type ChildrenComparator = (
   isFolder: (path: string) => boolean
 ) => number;
 
+export type ChildrenSortOption = ChildrenComparator | false;
+
 function stripFlattenedPrefix(path: string): string {
   return path.startsWith(FLATTENED_PREFIX)
     ? path.slice(FLATTENED_PREFIX.length)
@@ -92,7 +94,11 @@ export const defaultChildrenComparator: ChildrenComparator = (
 export function sortChildren(
   children: string[],
   isFolder: (path: string) => boolean,
-  comparator: ChildrenComparator = defaultChildrenComparator
+  comparator: ChildrenSortOption = defaultChildrenComparator
 ): string[] {
+  if (comparator === false) {
+    // Preserve insertion order without paying Array.sort() cost.
+    return [...children];
+  }
   return [...children].sort((a, b) => comparator(a, b, isFolder));
 }

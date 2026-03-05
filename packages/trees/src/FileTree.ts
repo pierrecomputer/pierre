@@ -462,11 +462,40 @@ export class FileTree {
     };
   }
 
+  private isVirtualized(): boolean {
+    return this.options.virtualize != null && this.options.virtualize !== false;
+  }
+
+  private syncVirtualizedLayoutAttrs(
+    fileTreeContainer?: HTMLElement,
+    divWrapper?: HTMLElement
+  ): void {
+    const host = fileTreeContainer ?? this.fileTreeContainer;
+    const wrapper = divWrapper ?? this.divWrapper;
+    const isVirtualized = this.isVirtualized();
+
+    if (host != null) {
+      if (isVirtualized) {
+        host.dataset.fileTreeVirtualized = 'true';
+      } else {
+        delete host.dataset.fileTreeVirtualized;
+      }
+    }
+    if (wrapper != null) {
+      if (isVirtualized) {
+        wrapper.dataset.fileTreeVirtualizedWrapper = 'true';
+      } else {
+        delete wrapper.dataset.fileTreeVirtualizedWrapper;
+      }
+    }
+  }
+
   private rerender(): void {
     if (this.divWrapper == null) return;
     if (this.fileTreeContainer != null) {
       this.syncIconSpriteSheets(this.fileTreeContainer);
     }
+    this.syncVirtualizedLayoutAttrs(this.fileTreeContainer, this.divWrapper);
     preactRenderRoot(this.divWrapper, this.buildRootProps());
   }
 
@@ -634,18 +663,7 @@ export class FileTree {
       containerWrapper
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
-
-    // When virtualizing, propagate height through the DOM chain so the inner
-    // scroll container can fill the consumer-provided fixed-height wrapper.
-    if (this.options.virtualize != null && this.options.virtualize !== false) {
-      fileTreeContainer.style.height = '100%';
-      fileTreeContainer.style.overflow = 'hidden';
-      divWrapper.style.height = '100%';
-      divWrapper.style.overflow = 'hidden';
-      divWrapper.style.display = 'flex';
-      divWrapper.style.flexDirection = 'column';
-    }
-
+    this.syncVirtualizedLayoutAttrs(fileTreeContainer, divWrapper);
     preactRenderRoot(divWrapper, this.buildRootProps());
   }
 
@@ -684,6 +702,7 @@ export class FileTree {
 
     this.fileTreeContainer = fileTreeContainer;
     this.syncIconSpriteSheets(fileTreeContainer);
+    this.syncVirtualizedLayoutAttrs(fileTreeContainer, this.divWrapper);
 
     if (this.divWrapper == null) {
       console.warn('FileTree: expected html not found, rendering instead');
@@ -704,7 +723,11 @@ export class FileTree {
   }
 
   cleanUp(): void {
+    if (this.fileTreeContainer != null) {
+      delete this.fileTreeContainer.dataset.fileTreeVirtualized;
+    }
     if (this.divWrapper != null) {
+      delete this.divWrapper.dataset.fileTreeVirtualizedWrapper;
       preactUnmountRoot(this.divWrapper);
     }
     this.handleRef.current = null;

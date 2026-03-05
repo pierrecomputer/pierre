@@ -1,10 +1,10 @@
-import type { ChildrenComparator } from '../utils/sortChildren';
+import type { ChildrenSortOption } from '../utils/sortChildren';
 
 export interface DataLoaderOptions {
   flattenEmptyDirectories?: boolean;
   rootId?: string;
   rootName?: string;
-  sortComparator?: ChildrenComparator;
+  sortComparator?: ChildrenSortOption;
 }
 
 export { generateLazyDataLoader } from './lazy';

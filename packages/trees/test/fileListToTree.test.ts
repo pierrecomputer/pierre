@@ -531,4 +531,17 @@ describe('fileListToTree', () => {
 
     expect(tree['src/file.test.ts']).toEqual({ name: 'file.test.ts' });
   });
+
+  test('should preserve insertion order when sortComparator is false', () => {
+    const files = ['zeta.ts', 'alpha.ts', 'pkg/b.ts', 'beta.ts', 'pkg/a.ts'];
+    const tree = buildTree(files, { sortComparator: false });
+
+    expect(tree.root.children?.direct).toEqual([
+      'zeta.ts',
+      'alpha.ts',
+      'pkg',
+      'beta.ts',
+    ]);
+    expect(tree.pkg.children?.direct).toEqual(['pkg/b.ts', 'pkg/a.ts']);
+  });
 });
