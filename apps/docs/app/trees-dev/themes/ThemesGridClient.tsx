@@ -18,6 +18,8 @@ import {
 } from './constants';
 import { Swatches } from './Swatches';
 import { useTreeStatePreview } from './useTreeStatePreview';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 function ModeToggle({
   mode,
@@ -27,21 +29,17 @@ function ModeToggle({
   onChange: (m: ViewMode) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg bg-neutral-200/30 p-1 dark:bg-neutral-700/30">
+    <ButtonGroup
+      size="sm"
+      value={mode}
+      onValueChange={(value) => onChange(value as ViewMode)}
+    >
       {MODES.map(({ value, label }) => (
-        <button
-          key={value}
-          onClick={() => onChange(value)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            mode === value
-              ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-neutral-100'
-              : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200'
-          }`}
-        >
+        <ButtonGroupItem key={value} value={value}>
           {label}
-        </button>
+        </ButtonGroupItem>
       ))}
-    </div>
+    </ButtonGroup>
   );
 }
 
@@ -202,19 +200,17 @@ export function ThemesGridClient({
 
   return (
     <div>
-      <div className="sticky top-0 z-10 flex items-center gap-3 bg-white/80 px-4 py-3 backdrop-blur dark:bg-neutral-900/80">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 bg-white/80 px-4 py-3 backdrop-blur dark:bg-neutral-900/80">
         <ModeToggle mode={mode} onChange={setMode} />
         {hasTrees && (
-          <button
+          <Button
             onClick={() => setShowStates((s) => !s)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              showStates
-                ? 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900'
-                : 'bg-neutral-100 text-neutral-600 hover:text-neutral-900 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200'
-            }`}
+            aria-pressed={showStates}
+            size="sm"
+            variant={showStates ? 'outline' : 'ghost'}
           >
             Show states
-          </button>
+          </Button>
         )}
       </div>
       <div className={`grid gap-3 p-4 ${GRID_CLASSES[mode]}`}>
@@ -223,7 +219,7 @@ export function ThemesGridClient({
             case 'trees':
               return (
                 <TreeCard
-                  key={`${theme.name}-${showStates}`}
+                  key={theme.name}
                   theme={theme}
                   showStates={showStates}
                 />
@@ -235,7 +231,7 @@ export function ThemesGridClient({
             case 'both':
               return (
                 <CombinedCard
-                  key={`${theme.name}-${showStates}`}
+                  key={theme.name}
                   theme={theme}
                   fileDiff={fileDiff}
                   showStates={showStates}

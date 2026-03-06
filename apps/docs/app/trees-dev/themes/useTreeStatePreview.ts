@@ -71,6 +71,17 @@ function applyStatePreview(root: ShadowRoot): boolean {
   return true;
 }
 
+function clearStatePreview(root: ShadowRoot) {
+  const { hover, focus, selected, selectedFocused } =
+    findStatePreviewItems(root);
+
+  hover?.style.removeProperty('background-color');
+  focus?.removeAttribute('data-item-focused');
+  selected?.removeAttribute('data-item-selected');
+  selectedFocused?.removeAttribute('data-item-selected');
+  selectedFocused?.removeAttribute('data-item-focused');
+}
+
 /**
  * Applies forced hover/focus/selected states to specific file items inside a
  * FileTree's shadow DOM. Uses a MutationObserver to re-apply after the tree
@@ -81,10 +92,14 @@ export function useTreeStatePreview(
   enabled: boolean
 ) {
   useEffect(() => {
-    if (!enabled) return;
-
     const host = ref.current?.querySelector('file-tree-container');
     if (host == null) return;
+    if (!enabled) {
+      if (host.shadowRoot != null) {
+        clearStatePreview(host.shadowRoot);
+      }
+      return;
+    }
 
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
     let observer: MutationObserver | undefined;
@@ -119,6 +134,9 @@ export function useTreeStatePreview(
     return () => {
       if (pollTimer != null) clearTimeout(pollTimer);
       observer?.disconnect();
+      if (host.shadowRoot != null) {
+        clearStatePreview(host.shadowRoot);
+      }
     };
   }, [ref, enabled]);
 }
