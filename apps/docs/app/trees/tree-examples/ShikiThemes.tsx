@@ -14,7 +14,11 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { baseTreeOptions, DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
+import {
+  baseTreeOptions,
+  DEFAULT_FILE_TREE_PANEL_CLASS,
+  GIT_STATUSES_A,
+} from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -262,6 +266,8 @@ export function ShikiThemesSection() {
               ...baseTreeOptions,
               id: 'shiki-themes-tree',
             }}
+            gitStatus={GIT_STATUSES_A}
+            initialExpandedItems={['src', 'src/components']}
             initialSelectedItems={['package.json']}
             style={themeStyles}
           />

@@ -1,4 +1,8 @@
-import type { FileTreeOptions, FileTreeSearchMode } from '@pierre/trees';
+import type {
+  FileTreeOptions,
+  FileTreeSearchMode,
+  GitStatusEntry,
+} from '@pierre/trees';
 import type { CSSProperties } from 'react';
 
 import { sharedDemoFileTreeOptions } from '../../trees/demo-data';
@@ -10,6 +14,18 @@ export const DEFAULT_FILE_TREE_PANEL_CLASS =
 export const DEFAULT_FILE_TREE_PANEL_STYLE: CSSProperties = {
   colorScheme: 'dark',
 };
+
+export const GIT_STATUSES_A: GitStatusEntry[] = [
+  { path: 'src/index.ts', status: 'modified' },
+  { path: 'src/components/Button.tsx', status: 'added' },
+  { path: '.gitignore', status: 'deleted' },
+];
+
+export const GIT_STATUSES_B: GitStatusEntry[] = [
+  { path: 'README.md', status: 'modified' },
+  { path: 'src/lib/utils.ts', status: 'modified' },
+  { path: 'src/utils/worker.ts', status: 'added' },
+];
 
 /** Shared file content for tree example sections. */
 export const SHARED_FILE_CONTENT: Record<string, string> = {

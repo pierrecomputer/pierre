@@ -5,30 +5,22 @@ import {
   IconColorLight,
   IconSymbolDiffstat,
 } from '@pierre/icons';
-import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree } from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { baseTreeOptions, DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
+import {
+  baseTreeOptions,
+  DEFAULT_FILE_TREE_PANEL_CLASS,
+  GIT_STATUSES_A,
+  GIT_STATUSES_B,
+} from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
-
-const GIT_STATUSES_A: GitStatusEntry[] = [
-  { path: 'src/index.ts', status: 'modified' },
-  { path: 'src/components/Button.tsx', status: 'added' },
-  { path: '.gitignore', status: 'deleted' },
-];
-
-const GIT_STATUSES_B: GitStatusEntry[] = [
-  { path: 'README.md', status: 'modified' },
-  { path: 'src/lib/utils.ts', status: 'modified' },
-  { path: 'src/utils/worker.ts', status: 'added' },
-];
 
 export function GitStatusSection() {
   const [enabled, setEnabled] = useState(true);
