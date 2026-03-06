@@ -12,7 +12,7 @@ import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { baseTreeOptions } from './demo-data';
+import { baseTreeOptions, DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -41,10 +41,6 @@ export function GitStatusSection() {
     () => (enabled ? (useSetB ? GIT_STATUSES_B : GIT_STATUSES_A) : undefined),
     [enabled, useSetB]
   );
-
-  const panelClassName = isDark
-    ? 'min-h-0 flex-1 overflow-auto rounded-lg bg-neutral-900 p-2'
-    : 'min-h-0 flex-1 overflow-auto rounded-lg border border-neutral-200 bg-neutral-50 p-2';
 
   const panelStyle = {
     colorScheme: colorMode,
@@ -113,7 +109,7 @@ export function GitStatusSection() {
 
         <div className={isDark ? 'dark' : ''}>
           <FileTree
-            className={panelClassName}
+            className={DEFAULT_FILE_TREE_PANEL_CLASS}
             options={{
               ...baseTreeOptions,
               id: 'path-colors-git-status-demo',

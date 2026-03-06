@@ -5,7 +5,7 @@ import { sharedDemoFileTreeOptions } from '../../trees/demo-data';
 
 /** Default panel look for FileTree in docs examples. Apply via className + style on FileTree. */
 export const DEFAULT_FILE_TREE_PANEL_CLASS =
-  'dark min-h-0 flex-1 overflow-auto rounded-lg bg-neutral-900 p-2 [--trees-search-bg-override:theme(colors.neutral.800)]';
+  'dark min-h-0 flex-1 overflow-auto rounded-lg p-3 border border-[var(--trees-border-color)]';
 
 export const DEFAULT_FILE_TREE_PANEL_STYLE: CSSProperties = {
   colorScheme: 'dark',

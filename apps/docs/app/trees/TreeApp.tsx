@@ -4,7 +4,6 @@ import { File } from '@pierre/diffs/react';
 import { IconFile } from '@pierre/icons';
 import type { FileTreeOptions, FileTreeSelectionItem } from '@pierre/trees';
 import { FileTree as FileTreeReact } from '@pierre/trees/react';
-import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 
 export interface TreeAppProps {
@@ -64,23 +63,14 @@ export function TreeApp({
   return (
     <div className="dark rounded-lg" style={{ colorScheme: 'dark' }}>
       <div className="border-border grid min-h-[420px] grid-cols-1 gap-0 overflow-hidden rounded-lg border md:aspect-[16/9] md:grid-cols-[minmax(200px,280px)_1fr]">
-        <div className="border-border dark:border-border min-h-[200px] overflow-auto border-b bg-neutral-900 p-3 [--trees-search-bg-override:theme(colors.neutral.800)] md:min-h-0 md:border-r md:border-b-0">
-          <FileTreeReact
-            className="[--trees-search-bg-override:theme(colors.neutral.800)]"
-            options={treeOptions}
-            initialFiles={initialFiles}
-            initialSelectedItems={initialSelectedItems}
-            onSelection={onSelection}
-            prerenderedHTML={preloadedFileTreeHtml}
-            style={
-              {
-                colorScheme: 'dark',
-                '--trees-search-bg-override':
-                  'light-dark(#fff, oklch(14.5% 0 0))',
-              } as CSSProperties
-            }
-          />
-        </div>
+        <FileTreeReact
+          className="h-full border-r border-[var(--trees-border-color)] p-3"
+          options={treeOptions}
+          initialFiles={initialFiles}
+          initialSelectedItems={initialSelectedItems}
+          onSelection={onSelection}
+          prerenderedHTML={preloadedFileTreeHtml}
+        />
         <div className="min-h-[320px] overflow-auto bg-[#070707]">
           {content != null && selectedPath != null ? (
             <File

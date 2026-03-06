@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { baseTreeOptions } from './demo-data';
+import { baseTreeOptions, DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -257,7 +257,7 @@ export function ShikiThemesSection() {
         {error && <p className="text-destructive py-4 text-sm">{error}</p>}
         {themeStyles != null && (
           <FileTree
-            className="min-h-[320px] rounded-lg border p-2"
+            className={`${DEFAULT_FILE_TREE_PANEL_CLASS} min-h-[320px]`}
             options={{
               ...baseTreeOptions,
               id: 'shiki-themes-tree',
