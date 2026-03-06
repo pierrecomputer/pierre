@@ -36,8 +36,6 @@ import {
   renderDiffAnnotation,
 } from './utils/renderAnnotation';
 
-FAKE_DIFF_LINE_ANNOTATIONS.length = 0;
-FAKE_LINE_ANNOTATIONS.length = 0;
 const diffInstances: (
   | FileDiff<LineCommentMetadata>
   | VirtualizedFileDiff<LineCommentMetadata>

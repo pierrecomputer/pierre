@@ -135,6 +135,7 @@ code {
   align-items: center;
   justify-content: center;
   background-color: color-mix(in srgb, var(--bg) 90%, transparent);
+  min-width: 0;
 }
 
 .tools {
@@ -142,6 +143,8 @@ code {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .wrapper {
