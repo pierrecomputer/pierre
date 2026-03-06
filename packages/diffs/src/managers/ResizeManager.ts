@@ -13,6 +13,7 @@ export class ResizeManager {
     // Disconnect any existing observer
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
+    this.queuedUpdates.clear();
   }
 
   private resizeObserver: ResizeObserver | undefined;
@@ -250,10 +251,10 @@ export class ResizeManager {
             typeof item.codeWidth === 'number' &&
             item.numberWidth === 0
           ) {
-            const rect = item.numberElement.getBoundingClientRect();
-            if (rect != null) {
-              updates.push([item.numberElement, rect.width]);
-            }
+            updates.push([
+              item.numberElement,
+              item.numberElement.getBoundingClientRect().width,
+            ]);
           }
         } else if (target === item.numberElement) {
           const inlineSize = Math.max(Math.ceil(targetInlineSize), 0);
