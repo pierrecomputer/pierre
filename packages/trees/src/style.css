@@ -85,6 +85,14 @@
       )
     );
     --trees-accent: var(--trees-accent-override, #009fff);
+
+    --trees-added-light: #0dbe4e;
+    --trees-added-dark: #5ecc71;
+    --trees-modified-light: #009fff;
+    --trees-modified-dark: #69b1ff;
+    --trees-deleted-light: #ff2e3f;
+    --trees-deleted-dark: #ff6762;
+
     --trees-border-color: var(
       --trees-border-color-override,
       var(
@@ -150,15 +158,24 @@
     /* Git status (e.g. from Shiki theme gitDecoration.*) */
     --trees-status-added: var(
       --trees-status-added-override,
-      var(--trees-theme-git-added-fg, light-dark(#0dbe4e, #5ecc71))
+      var(
+        --trees-theme-git-added-fg,
+        light-dark(var(--trees-added-light), var(--trees-added-dark))
+      )
     );
     --trees-status-modified: var(
       --trees-status-modified-override,
-      var(--trees-theme-git-modified-fg, light-dark(#009fff, #69b1ff))
+      var(
+        --trees-theme-git-modified-fg,
+        light-dark(var(--trees-modified-light), var(--trees-modified-dark))
+      )
     );
     --trees-status-deleted: var(
       --trees-status-deleted-override,
-      var(--trees-theme-git-deleted-fg, light-dark(#ff2e3f, #ff6762))
+      var(
+        --trees-theme-git-deleted-fg,
+        light-dark(var(--trees-deleted-light), var(--trees-deleted-dark))
+      )
     );
     --trees-git-modified-color: var(
       --trees-git-modified-color-override,

@@ -14,6 +14,13 @@
     --diffs-mixer: light-dark(black, white);
     --diffs-gap-fallback: 8px;
 
+    --diffs-added-light: #0dbe4e;
+    --diffs-added-dark: #5ecc71;
+    --diffs-modified-light: #009fff;
+    --diffs-modified-dark: #69b1ff;
+    --diffs-deleted-light: #ff2e3f;
+    --diffs-deleted-dark: #ff6762;
+
     /*
     // Available CSS Color Overrides
     --diffs-bg-buffer-override
@@ -178,11 +185,11 @@
       light-dark(
         var(
           --diffs-light-deletion-color,
-          var(--diffs-deletion-color, rgb(255, 0, 0))
+          var(--diffs-deletion-color, var(--diffs-deleted-light))
         ),
         var(
           --diffs-dark-deletion-color,
-          var(--diffs-deletion-color, rgb(255, 0, 0))
+          var(--diffs-deletion-color, var(--diffs-deleted-dark))
         )
       )
     );
@@ -191,11 +198,11 @@
       light-dark(
         var(
           --diffs-light-addition-color,
-          var(--diffs-addition-color, rgb(0, 255, 0))
+          var(--diffs-addition-color, var(--diffs-added-light))
         ),
         var(
           --diffs-dark-addition-color,
-          var(--diffs-addition-color, rgb(0, 255, 0))
+          var(--diffs-addition-color, var(--diffs-added-dark))
         )
       )
     );
@@ -204,11 +211,11 @@
       light-dark(
         var(
           --diffs-light-modified-color,
-          var(--diffs-modified-color, rgb(0, 0, 255))
+          var(--diffs-modified-color, var(--diffs-modified-light))
         ),
         var(
           --diffs-dark-modified-color,
-          var(--diffs-modified-color, rgb(0, 0, 255))
+          var(--diffs-modified-color, var(--diffs-modified-dark))
         )
       )
     );
