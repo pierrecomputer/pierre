@@ -11,6 +11,7 @@ import { DEFAULT_FILE_TREE_PANEL_CLASS, searchOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
 
 const PREPOPULATED_SEARCH = 'tsx';
+const PRESELECTED_FILE = 'src/components/Button.tsx';
 
 const searchModeStyle = {
   colorScheme: 'dark',
@@ -52,6 +53,7 @@ export function SearchSection() {
                 id: 'search-demo-expand-matches',
               }}
               initialSearchQuery={PREPOPULATED_SEARCH}
+              initialSelectedItems={[PRESELECTED_FILE]}
               style={searchModeStyle}
             />
           </div>
@@ -69,6 +71,7 @@ export function SearchSection() {
                 id: 'search-demo-collapse-non-matches',
               }}
               initialSearchQuery={PREPOPULATED_SEARCH}
+              initialSelectedItems={[PRESELECTED_FILE]}
               style={searchModeStyle}
             />
           </div>
@@ -86,6 +89,7 @@ export function SearchSection() {
                 id: 'search-demo-hide-non-matches',
               }}
               initialSearchQuery={PREPOPULATED_SEARCH}
+              initialSelectedItems={[PRESELECTED_FILE]}
               style={searchModeStyle}
             />
           </div>
