@@ -1,15 +1,14 @@
 import type { ObservedAnnotationNodes, ObservedGridNodes } from '../types';
 
+type CodeColumnUpdate = [HTMLElement, number];
+
 export class ResizeManager {
   private observedNodes = new Map<
     HTMLElement,
     ObservedAnnotationNodes | ObservedGridNodes
   >();
   private timeoutID: NodeJS.Timeout | undefined;
-  private queuedUpdates: Map<
-    HTMLElement,
-    [ObservedGridNodes, ResizeObserverSize]
-  > = new Map();
+  private queuedUpdates: Map<ObservedGridNodes, CodeColumnUpdate[]> = new Map();
 
   cleanUp(): void {
     // Disconnect any existing observer
@@ -31,27 +30,44 @@ export class ResizeManager {
     for (const codeElement of codeElements) {
       let item: ObservedGridNodes | ObservedAnnotationNodes | undefined =
         observedNodes.get(codeElement);
-      if (item != null) {
-        this.observedNodes.set(codeElement, item);
-        observedNodes.delete(codeElement);
-        continue;
+      if (item != null && item.type !== 'code') {
+        throw new Error(
+          'ResizeManager.setup: somehow a code node is being used for an annotation, should be impossible'
+        );
       }
-      let numberElement = codeElement.querySelector('[data-gutter]');
+
+      let numberElement = codeElement.firstElementChild;
       if (!(numberElement instanceof HTMLElement)) {
         numberElement = null;
       }
-      item = {
-        type: 'code',
-        codeElement,
-        numberElement,
-        codeWidth: 'auto',
-        numberWidth: 0,
-      };
-      this.observedNodes.set(codeElement, item);
-      this.resizeObserver.observe(codeElement);
-      if (numberElement != null) {
-        this.observedNodes.set(numberElement, item);
-        this.resizeObserver.observe(numberElement);
+
+      if (item != null) {
+        this.observedNodes.set(codeElement, item);
+        observedNodes.delete(codeElement);
+        if (item.numberElement !== numberElement) {
+          if (item.numberElement != null) {
+            this.resizeObserver.unobserve(item.numberElement);
+          }
+          if (numberElement != null) {
+            this.resizeObserver.observe(numberElement);
+            this.observedNodes.set(numberElement, item);
+          }
+          item.numberElement = numberElement;
+        }
+      } else {
+        item = {
+          type: 'code',
+          codeElement,
+          numberElement,
+          codeWidth: 'auto',
+          numberWidth: 0,
+        };
+        this.observedNodes.set(codeElement, item);
+        this.resizeObserver.observe(codeElement);
+        if (numberElement != null) {
+          this.observedNodes.set(numberElement, item);
+          this.resizeObserver.observe(numberElement);
+        }
       }
     }
 
@@ -201,56 +217,65 @@ export class ResizeManager {
         );
         this.applyNewHeight(item, newHeight);
       } else if (item.type === 'code') {
-        // We debounce code column updates to help with resize performance (mb)
-        this.queuedUpdates.set(target, [item, specs]);
-        this.queueColumnUpdate();
+        const update: CodeColumnUpdate = [target, specs.inlineSize];
+        const updates = this.queuedUpdates.get(item) ?? [];
+        updates.push(update);
+        this.queuedUpdates.set(item, updates);
       }
     }
+    this.handleColumnChange();
   };
-
-  private queueColumnUpdate() {
-    if (this.timeoutID != null) {
-      clearTimeout(this.timeoutID);
-    }
-    // Attempt to debounce resize events to improve general performance... mb
-    this.timeoutID = setTimeout(this.handleColumnChange, 1000 / 30);
-  }
 
   private handleColumnChange = () => {
     this.timeoutID = undefined;
-    for (const [target, [item, specs]] of this.queuedUpdates) {
-      // FIXME(amadeus): This needs to be re-worked with display: contents,
-      // not sure setting to auto is a good assumption most of the time...
-      if (target === item.codeElement) {
-        const inlineSize = Math.max(Math.floor(specs.inlineSize), 0);
-        if (inlineSize !== item.codeWidth) {
-          item.codeWidth = inlineSize;
-          const targetWidth = Math.max(item.codeWidth - item.numberWidth, 0);
-          item.codeElement.style.setProperty(
-            '--diffs-column-content-width',
-            `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
-          );
-          item.codeElement.style.setProperty(
-            '--diffs-column-width',
-            `${item.codeWidth === 0 ? 'auto' : `${item.codeWidth}px`}`
-          );
-        }
-      } else if (target === item.numberElement) {
-        const inlineSize = Math.max(Math.ceil(specs.inlineSize), 0);
-        if (inlineSize !== item.numberWidth) {
-          item.numberWidth = inlineSize;
-          item.codeElement.style.setProperty(
-            '--diffs-column-number-width',
-            `${item.numberWidth === 0 ? 'auto' : `${item.numberWidth}px`}`
-          );
-          // We probably need to update code width variable if
-          // `numberWidth` changed
-          if (item.codeWidth !== 'auto') {
-            const targetWidth = Math.max(item.codeWidth - item.numberWidth, 0);
+    for (const [item, updates] of this.queuedUpdates) {
+      for (const [target, targetInlineSize] of updates) {
+        // FIXME(amadeus): This needs to be re-worked with display: contents,
+        // not sure setting to auto is a good assumption most of the time...
+        if (target === item.codeElement) {
+          const inlineSize = Math.max(Math.floor(targetInlineSize), 0);
+          if (inlineSize !== item.codeWidth) {
+            const targetWidth = Math.max(inlineSize - item.numberWidth, 0);
+            item.codeWidth = inlineSize === 0 ? 'auto' : inlineSize;
             item.codeElement.style.setProperty(
               '--diffs-column-content-width',
-              `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
+              `${targetWidth > 0 ? `${targetWidth}px` : 'auto'}`
             );
+            item.codeElement.style.setProperty(
+              '--diffs-column-width',
+              `${typeof item.codeWidth === 'number' ? `${item.codeWidth}px` : 'auto'}`
+            );
+          }
+          if (
+            item.numberElement != null &&
+            typeof item.codeWidth === 'number' &&
+            item.numberWidth === 0
+          ) {
+            const rect = item.numberElement.getBoundingClientRect();
+            if (rect != null) {
+              updates.push([item.numberElement, rect.width]);
+            }
+          }
+        } else if (target === item.numberElement) {
+          const inlineSize = Math.max(Math.ceil(targetInlineSize), 0);
+          if (inlineSize !== item.numberWidth) {
+            item.numberWidth = inlineSize;
+            item.codeElement.style.setProperty(
+              '--diffs-column-number-width',
+              `${item.numberWidth === 0 ? 'auto' : `${item.numberWidth}px`}`
+            );
+            // We probably need to update code width variable if
+            // `numberWidth` changed
+            if (item.codeWidth !== 'auto') {
+              const targetWidth = Math.max(
+                item.codeWidth - item.numberWidth,
+                0
+              );
+              item.codeElement.style.setProperty(
+                '--diffs-column-content-width',
+                `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
+              );
+            }
           }
         }
       }
