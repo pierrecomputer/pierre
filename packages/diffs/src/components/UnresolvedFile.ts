@@ -56,9 +56,10 @@ export interface UnresolvedFileOptions<
 
 export interface UnresolvedFileRenderProps<LAnnotation> extends Omit<
   FileDiffRenderProps<LAnnotation>,
-  'fileDiff' | 'oldFile' | 'newFile'
+  'oldFile' | 'newFile'
 > {
   file?: FileContents;
+  actions?: MergeConflictDiffAction[];
 }
 
 export interface UnresolvedFileHydrationProps<LAnnotation> extends Omit<
@@ -76,21 +77,30 @@ interface MergeConflictActionElementCache {
   metadata: MergeConflictMetadata;
 }
 
+interface GetOrComputeDiffProps {
+  file: FileContents | undefined;
+  fileDiff: FileDiffMetadata | undefined;
+  actions: MergeConflictDiffAction[] | undefined;
+}
+
+interface GetOrComputeDiffResult {
+  fileDiff: FileDiffMetadata;
+  actions: MergeConflictDiffAction[];
+}
+
+type UnresolvedFileDataCache = GetOrComputeDiffProps;
+
 let instanceId = -1;
 
 export class UnresolvedFile<
   LAnnotation = undefined,
 > extends FileDiff<LAnnotation> {
   override readonly __id: string = `unresolved-file:${++instanceId}`;
-
-  protected unresolvedFileDiffCache:
-    | {
-        file: FileContents;
-        fileDiff: FileDiffMetadata;
-        actions: MergeConflictDiffAction[];
-      }
-    | undefined;
-  private currentFile: FileContents | undefined;
+  protected computedCache: UnresolvedFileDataCache = {
+    file: undefined,
+    fileDiff: undefined,
+    actions: undefined,
+  };
   private actionsByConflictIndex: MergeConflictDiffAction[] = [];
   private conflictMetadata: MergeConflictMetadata[] = [];
   private conflictActionCache: Map<string, MergeConflictActionElementCache> =
@@ -179,82 +189,141 @@ export class UnresolvedFile<
 
   override cleanUp(): void {
     this.clearMergeConflictActionCache();
-    this.unresolvedFileDiffCache = undefined;
+    this.computedCache = {
+      file: undefined,
+      fileDiff: undefined,
+      actions: undefined,
+    };
     this.actionsByConflictIndex = [];
     this.conflictMetadata = [];
-    this.currentFile = undefined;
     super.cleanUp();
   }
 
+  private getOrComputeDiff({
+    file,
+    fileDiff,
+    actions,
+  }: GetOrComputeDiffProps): GetOrComputeDiffResult | undefined {
+    wrapper: {
+      // We are dealing with a controlled component
+      if (this.options.onMergeConflictAction != null) {
+        const hasFileDiff = fileDiff != null;
+        const hasActions = actions != null;
+        if (hasFileDiff !== hasActions) {
+          throw new Error(
+            'UnresolvedFile.getOrComputeDiff: fileDiff and actions must be passed together'
+          );
+        }
+        // If we were provided a new fileDiff and actions, we are a FULLY
+        // controlled component, which means we will not do any computation
+        if (fileDiff != null && actions != null) {
+          this.computedCache = {
+            file: file ?? this.computedCache.file,
+            fileDiff,
+            actions,
+          };
+          break wrapper;
+        }
+        // If we were provided a new file, we should attempt to parse out a new
+        // diff/actions if we haven't computed it before
+        else if (file != null || this.computedCache.file != null) {
+          file ??= this.computedCache.file;
+          if (file == null) {
+            throw new Error(
+              'UnresolvedFile.getOrComputeDiff: file is null, should be impossible'
+            );
+          }
+          if (
+            !areFilesEqual(file, this.computedCache.file) ||
+            this.computedCache.fileDiff == null ||
+            this.computedCache.actions == null
+          ) {
+            const computed = parseMergeConflictDiffFromFile(file);
+            this.computedCache = {
+              file,
+              fileDiff: computed.fileDiff,
+              actions: computed.actions,
+            };
+          }
+          fileDiff = this.computedCache.fileDiff;
+          actions = this.computedCache.actions;
+          break wrapper;
+        }
+        // Otherwise we should fall through and try to use the cache if it exists
+        else {
+          fileDiff = this.computedCache.fileDiff;
+          actions = this.computedCache.actions;
+          break wrapper;
+        }
+      }
+      // If we are uncontrolled we only rely on the file and only use the first
+      // version, otherwise utilize the cached version
+      else {
+        if (fileDiff != null || actions != null) {
+          throw new Error(
+            'UnresolvedFile.getOrComputeDiff: fileDiff and actions are only usable in controlled mode, you must pass in `onMergeConflictAction`'
+          );
+        }
+        this.computedCache.file ??= file;
+        if (
+          this.computedCache.fileDiff == null &&
+          this.computedCache.file != null
+        ) {
+          const computed = parseMergeConflictDiffFromFile(
+            this.computedCache.file
+          );
+          this.computedCache.fileDiff = computed.fileDiff;
+          this.computedCache.actions = computed.actions;
+        }
+        // Because we are uncontrolled, the source of truth is the
+        // computedCache
+        fileDiff = this.computedCache.fileDiff;
+        actions = this.computedCache.actions;
+        break wrapper;
+      }
+    }
+    if (fileDiff == null || actions == null) {
+      return undefined;
+    }
+    return { fileDiff, actions };
+  }
+
   override hydrate(props: UnresolvedFileHydrationProps<LAnnotation>): void {
-    const { file, lineAnnotations, ...rest } = props;
-    this.currentFile = file;
-    const { fileDiff, actions } = this.getOrCreateUnresolvedFileDiff(
-      this.currentFile
-    );
-    this.setActiveMergeConflictActions(actions);
+    const { file, fileDiff, actions, lineAnnotations, ...rest } = props;
+    const source = this.getOrComputeDiff({ file, fileDiff, actions });
+    if (source == null) {
+      return;
+    }
+    this.setActiveMergeConflictActions(source.actions);
     super.hydrate({
       ...rest,
-      fileDiff,
+      fileDiff: source.fileDiff,
       lineAnnotations,
     });
     this.renderMergeConflictActionSlots();
   }
 
   override render(props: UnresolvedFileRenderProps<LAnnotation> = {}): boolean {
-    const { file, lineAnnotations, ...rest } = props;
-    // If onMergeConflictAction is defined, we must assume controlled and
-    // always attempt to update currentFile from props on render
-    if (this.options.onMergeConflictAction != null && file != null) {
-      this.currentFile = file;
-    }
-    // Otherwise we assume that we are in an uncontrolled state, and internally
-    // we'll update currentFile on resolve actions manually
-    else {
-      this.currentFile ??= file;
-    }
-
-    if (this.currentFile == null) {
+    let { file, fileDiff, actions, lineAnnotations, ...rest } = props;
+    const source = this.getOrComputeDiff({ file, fileDiff, actions });
+    if (source == null) {
       return false;
     }
-    const { fileDiff, actions } = this.getOrCreateUnresolvedFileDiff(
-      this.currentFile
-    );
-    this.setActiveMergeConflictActions(actions);
+    this.setActiveMergeConflictActions(source.actions);
     const didRender = super.render({
       ...rest,
-      fileDiff,
+      fileDiff: source.fileDiff,
       lineAnnotations,
     });
     this.renderMergeConflictActionSlots();
     return didRender;
   }
 
-  private getOrCreateUnresolvedFileDiff(file: FileContents): {
-    fileDiff: FileDiffMetadata;
-    actions: MergeConflictDiffAction[];
-  } {
-    const cache = this.unresolvedFileDiffCache;
-    if (cache != null && areFilesEqual(cache.file, file)) {
-      return {
-        fileDiff: cache.fileDiff,
-        actions: cache.actions,
-      };
-    }
-    const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
-    this.unresolvedFileDiffCache = {
-      file,
-      fileDiff,
-      actions,
-    };
-    return { fileDiff, actions };
-  }
-
   public resolveConflict(
     conflictIndex: number,
     resolution: MergeConflictResolution
   ): FileContents | undefined {
-    const file = this.currentFile;
+    const file = this.computedCache.file;
     const action = this.actionsByConflictIndex[conflictIndex];
     if (file == null || action == null) {
       return undefined;
@@ -278,7 +347,7 @@ export class UnresolvedFile<
     };
   }
 
-  public resolveConflictAndRender(
+  private resolveConflictAndRender(
     conflictIndex: number,
     resolution: MergeConflictResolution
   ): FileContents | undefined {
@@ -294,8 +363,11 @@ export class UnresolvedFile<
     if (nextFile == null) {
       return undefined;
     }
-    this.currentFile = nextFile;
-    this.unresolvedFileDiffCache = undefined;
+
+    this.computedCache.file = nextFile;
+    // Clear out the diff cache to force a new compute next render
+    this.computedCache.fileDiff = undefined;
+    this.computedCache.actions = undefined;
     this.render();
     this.options.onMergeConflictResolve?.(nextFile, payload);
     return nextFile;
