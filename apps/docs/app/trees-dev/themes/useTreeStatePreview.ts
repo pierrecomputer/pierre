@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { type RefObject, useEffect } from 'react';
 
 import { STATE_FILE_NAMES } from './constants';
 
@@ -77,7 +77,7 @@ function applyStatePreview(root: ShadowRoot): boolean {
  * re-renders internally.
  */
 export function useTreeStatePreview(
-  ref: React.RefObject<HTMLDivElement | null>,
+  ref: RefObject<HTMLDivElement | null>,
   enabled: boolean
 ) {
   useEffect(() => {

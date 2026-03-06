@@ -130,6 +130,8 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     colorScheme: isDark ? 'dark' : 'light',
     backgroundColor: sideBarBg ?? '',
     color: sideBarFg ?? '',
+    borderColor:
+      'var(--trees-theme-sidebar-border, light-dark(oklch(0% 0 0 / 0.15), oklch(100% 0 0 / 0.15)))',
     '--trees-theme-sidebar-bg': sideBarBg ?? '',
     '--trees-theme-sidebar-fg': sideBarFg ?? '',
     '--trees-theme-sidebar-header-fg': sectionHeaderFg ?? '',
@@ -142,11 +144,9 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     '--trees-theme-input-bg': inputBg ?? '',
   };
 
-  // Border tokens: only set when the theme provides explicit border values.
-  // When omitted, the CSS fallback chain uses sensible defaults
-  // (light-dark(oklch(0% 0 0 / 0.15), oklch(100% 0 0 / 0.15))).
+  // Expose explicit sidebar border token when present.
+  // `borderColor` above always falls back to the default light/dark value.
   if (sideBarBorder != null && sideBarBorder !== '') {
-    result.borderColor = sideBarBorder;
     result['--trees-theme-sidebar-border'] = sideBarBorder;
   }
   if (inputBorder != null && inputBorder !== '') {

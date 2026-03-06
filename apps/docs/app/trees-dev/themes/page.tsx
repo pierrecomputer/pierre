@@ -1,8 +1,4 @@
-import {
-  isHighlighterLoaded,
-  parseDiffFromFile,
-  resolveTheme,
-} from '@pierre/diffs';
+import { parseDiffFromFile, resolveTheme } from '@pierre/diffs';
 import { themeToTreeStyles } from '@pierre/trees';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
@@ -172,8 +168,6 @@ export default async function TreesThemesPage() {
   if (process.env.NODE_ENV !== 'development') {
     return notFound();
   }
-
-  void isHighlighterLoaded();
 
   const resolvedThemes = await Promise.all(
     THEMES.map(async (themeName) => {
