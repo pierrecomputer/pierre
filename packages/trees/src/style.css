@@ -230,8 +230,7 @@
   }
 
   [data-file-tree-virtualized-list='true'] {
-    display: flex;
-    flex-direction: column;
+    position: relative;
     min-height: 100%;
     width: 100%;
     overflow-anchor: none;
@@ -241,8 +240,16 @@
     }
   }
 
-  [data-file-tree-virtualized-spacer] {
-    flex: 0 0 auto;
+  [data-file-tree-virtualized-sticky-offset='true'] {
+    contain: layout size;
+  }
+
+  [data-file-tree-virtualized-sticky='true'] {
+    position: sticky;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    isolation: isolate;
   }
 
   [data-file-tree-search-container] {
