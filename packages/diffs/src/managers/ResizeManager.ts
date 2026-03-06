@@ -7,16 +7,12 @@ export class ResizeManager {
     HTMLElement,
     ObservedAnnotationNodes | ObservedGridNodes
   >();
-  private timeoutID: NodeJS.Timeout | undefined;
   private queuedUpdates: Map<ObservedGridNodes, CodeColumnUpdate[]> = new Map();
 
   cleanUp(): void {
     // Disconnect any existing observer
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
-    if (this.timeoutID != null) {
-      clearTimeout(this.timeoutID);
-    }
   }
 
   private resizeObserver: ResizeObserver | undefined;
@@ -50,9 +46,13 @@ export class ResizeManager {
           }
           if (numberElement != null) {
             this.resizeObserver.observe(numberElement);
+            observedNodes.delete(numberElement);
             this.observedNodes.set(numberElement, item);
           }
           item.numberElement = numberElement;
+        } else if (item.numberElement != null) {
+          observedNodes.delete(item.numberElement);
+          this.observedNodes.set(item.numberElement, item);
         }
       } else {
         item = {
@@ -227,7 +227,6 @@ export class ResizeManager {
   };
 
   private handleColumnChange = () => {
-    this.timeoutID = undefined;
     for (const [item, updates] of this.queuedUpdates) {
       for (const [target, targetInlineSize] of updates) {
         // FIXME(amadeus): This needs to be re-worked with display: contents,
