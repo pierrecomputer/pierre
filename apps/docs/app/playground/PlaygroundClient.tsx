@@ -216,7 +216,7 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" scrollSelectedIntoView>
             {LIGHT_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
@@ -224,9 +224,7 @@ function PlaygroundControlsContent({
                   setSelectedLightTheme(theme);
                   setThemeType('light');
                 }}
-                className={
-                  selectedLightTheme === theme ? 'bg-accent' : undefined
-                }
+                selected={selectedLightTheme === theme}
               >
                 {theme}
                 {selectedLightTheme === theme && (
@@ -245,7 +243,7 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" scrollSelectedIntoView>
             {DARK_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
@@ -253,9 +251,7 @@ function PlaygroundControlsContent({
                   setSelectedDarkTheme(theme);
                   setThemeType('dark');
                 }}
-                className={
-                  selectedDarkTheme === theme ? 'bg-accent' : undefined
-                }
+                selected={selectedDarkTheme === theme}
               >
                 {theme}
                 {selectedDarkTheme === theme && (
@@ -313,14 +309,12 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" scrollSelectedIntoView>
             {LINE_DIFF_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.value}
                 onClick={() => setLineDiffType(option.value)}
-                className={
-                  lineDiffType === option.value ? 'bg-accent' : undefined
-                }
+                selected={lineDiffType === option.value}
               >
                 {option.label}
                 {lineDiffType === option.value && (
@@ -385,14 +379,12 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" scrollSelectedIntoView>
             {HUNK_SEPARATOR_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.value}
                 onClick={() => setHunkSeparators(option.value)}
-                className={
-                  hunkSeparators === option.value ? 'bg-accent' : undefined
-                }
+                selected={hunkSeparators === option.value}
               >
                 {option.label}
                 {hunkSeparators === option.value && (
@@ -415,14 +407,12 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" scrollSelectedIntoView>
             {interactionModeOptions.map((option) => (
               <DropdownMenuItem
                 key={option.value}
                 onClick={() => setInteractionMode(option.value)}
-                className={
-                  interactionMode === option.value ? 'bg-accent' : undefined
-                }
+                selected={interactionMode === option.value}
               >
                 {option.label}
                 {interactionMode === option.value && (

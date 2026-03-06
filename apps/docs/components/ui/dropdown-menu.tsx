@@ -56,37 +56,84 @@ const DropdownMenuSubContent = React.forwardRef<
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName;
 
+const DEFAULT_SELECTED_ITEM_SELECTOR =
+  '[data-selected="true"], [aria-current="true"], [aria-checked="true"], [data-state="checked"]';
+
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <DropdownMenuPrimitive.Portal>
-    <DropdownMenuPrimitive.Content
-      ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] space-y-[1px] overflow-hidden rounded-md border p-1 shadow-md',
-        className
-      )}
-      {...props}
-    />
-  </DropdownMenuPrimitive.Portal>
-));
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
+    scrollSelectedIntoView?: boolean;
+    selectedItemSelector?: string;
+  }
+>(
+  (
+    {
+      className,
+      sideOffset = 4,
+      scrollSelectedIntoView = false,
+      selectedItemSelector = DEFAULT_SELECTED_ITEM_SELECTOR,
+      ...props
+    },
+    ref
+  ) => {
+    const localRef = React.useRef<React.ElementRef<
+      typeof DropdownMenuPrimitive.Content
+    > | null>(null);
+
+    const setRefs = React.useCallback(
+      (node: React.ElementRef<typeof DropdownMenuPrimitive.Content> | null) => {
+        localRef.current = node;
+
+        if (node != null && scrollSelectedIntoView) {
+          requestAnimationFrame(() => {
+            node
+              .querySelector<HTMLElement>(selectedItemSelector)
+              ?.scrollIntoView({ block: 'nearest' });
+          });
+        }
+
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref != null) {
+          ref.current = node;
+        }
+      },
+      [ref, scrollSelectedIntoView, selectedItemSelector]
+    );
+
+    return (
+      <DropdownMenuPrimitive.Portal>
+        <DropdownMenuPrimitive.Content
+          ref={setRefs}
+          sideOffset={sideOffset}
+          className={cn(
+            'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] space-y-[1px] overflow-hidden rounded-md border p-1 shadow-md',
+            className
+          )}
+          {...props}
+        />
+      </DropdownMenuPrimitive.Portal>
+    );
+  }
+);
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean;
+    selected?: boolean;
   }
->(({ className, inset = false, ...props }, ref) => (
+>(({ className, inset = false, selected = false, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
       'focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center rounded-sm px-3 py-1.5 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      selected && 'bg-accent text-accent-foreground',
       inset && 'pl-8',
       className
     )}
+    data-selected={selected ? 'true' : undefined}
     {...props}
   />
 ));

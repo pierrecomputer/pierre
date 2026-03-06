@@ -115,11 +115,16 @@ export function DiffStyles({
                 <IconChevronSm className="text-muted-foreground ml-auto" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-82">
+            <DropdownMenuContent
+              align="start"
+              className="w-82"
+              scrollSelectedIntoView
+            >
               {diffStyleOptions.map((option) => (
                 <DropdownMenuItem
                   key={option.value}
                   onClick={() => setLineDiffStyle(option.value)}
+                  selected={lineDiffStyle === option.value}
                   className="flex items-start gap-2 py-2"
                 >
                   {lineDiffStyle === option.value ? (

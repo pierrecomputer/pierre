@@ -70,7 +70,11 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                   <IconChevronSm className="text-muted-foreground ml-auto" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-40">
+              <DropdownMenuContent
+                align="start"
+                className="w-40"
+                scrollSelectedIntoView
+              >
                 {Object.keys(fontMap).map((font) => (
                   <DropdownMenuItem
                     key={font}
@@ -82,6 +86,7 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                         setFontFeatureSettings('');
                       }
                     }}
+                    selected={selectedFont === font}
                   >
                     {font}
                     {selectedFont === font && <IconCheck className="ml-auto" />}
@@ -97,11 +102,12 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                   <IconChevronSm className="text-muted-foreground ml-auto" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent align="start" scrollSelectedIntoView>
                 {fontSizes.map((size) => (
                   <DropdownMenuItem
                     key={size}
                     onClick={() => setSelectedFontSize(size)}
+                    selected={selectedFontSize === size}
                   >
                     {size}
                     {selectedFontSize === size && (
@@ -119,11 +125,12 @@ export function FontStyles({ prerenderedDiff }: FontStylesProps) {
                   <IconChevronSm className="text-muted-foreground ml-auto" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent align="start" scrollSelectedIntoView>
                 {lineHeights.map((height) => (
                   <DropdownMenuItem
                     key={height}
                     onClick={() => setSelectedLineHeight(height)}
+                    selected={selectedLineHeight === height}
                   >
                     {height}
                     {selectedLineHeight === height && (

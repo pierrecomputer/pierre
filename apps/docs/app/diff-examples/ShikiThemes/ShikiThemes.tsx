@@ -145,7 +145,7 @@ export function ShikiThemes({
                 <IconChevronSm className="text-muted-foreground ml-auto" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" scrollSelectedIntoView>
               {LIGHT_THEMES.map((theme) => (
                 <DropdownMenuItem
                   key={theme}
@@ -153,9 +153,7 @@ export function ShikiThemes({
                     setSelectedLightTheme(theme);
                     setSelectedColorMode('light');
                   }}
-                  className={
-                    selectedLightTheme === theme ? 'bg-accent' : undefined
-                  }
+                  selected={selectedLightTheme === theme}
                 >
                   {theme}
                   {selectedLightTheme === theme && (
@@ -177,6 +175,7 @@ export function ShikiThemes({
             <DropdownMenuContent
               align="start"
               className="max-h-[550px] overflow-auto"
+              scrollSelectedIntoView
             >
               {DARK_THEMES.map((theme) => (
                 <DropdownMenuItem
@@ -185,9 +184,7 @@ export function ShikiThemes({
                     setSelectedDarkTheme(theme);
                     setSelectedColorMode('dark');
                   }}
-                  className={
-                    selectedDarkTheme === theme ? 'bg-accent' : undefined
-                  }
+                  selected={selectedDarkTheme === theme}
                 >
                   {theme}
                   {selectedDarkTheme === theme ? (
