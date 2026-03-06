@@ -65,6 +65,7 @@ export function TreeApp({
       <div className="border-border grid min-h-[420px] grid-cols-1 gap-0 overflow-hidden rounded-lg border md:aspect-[16/9] md:grid-cols-[minmax(200px,280px)_1fr]">
         <FileTreeReact
           className="h-full border-r border-[var(--trees-border-color)] p-3"
+          style={{ colorScheme: 'dark' }}
           options={treeOptions}
           initialFiles={initialFiles}
           initialSelectedItems={initialSelectedItems}
