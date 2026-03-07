@@ -17,6 +17,7 @@ import type {
   AnnotationLineMap,
   AnnotationSpan,
   BaseDiffOptions,
+  BaseDiffOptionsWithDefaults,
   CodeColumnType,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -104,10 +105,6 @@ interface ProcessContext {
   pushToGutter(type: CodeColumnType, element: HASTElement): void;
   incrementRowCount(count?: number): void;
 }
-
-type OptionsWithDefaults = Required<
-  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter'>
->;
 
 export interface UnifiedLineDecorationProps {
   type: 'context' | 'context-expanded' | 'change';
@@ -291,7 +288,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return createDefaultAnnotationElement(span);
   }
 
-  private getOptionsWithDefaults(): OptionsWithDefaults {
+  protected getOptionsWithDefaults(): BaseDiffOptionsWithDefaults {
     const {
       diffIndicators = 'bars',
       diffStyle = 'split',

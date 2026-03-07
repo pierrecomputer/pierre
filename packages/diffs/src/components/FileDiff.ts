@@ -88,7 +88,7 @@ export interface FileDiffOptions<LAnnotation>
     | ((
         hunk: HunkData,
         instance: FileDiff<LAnnotation>
-      ) => HTMLElement | DocumentFragment);
+      ) => HTMLElement | DocumentFragment | undefined);
   disableFileHeader?: boolean;
   /**
    * @deprecated Use `enableGutterUtility` instead.
@@ -910,7 +910,10 @@ export class FileDiff<LAnnotation = undefined> {
         const element = document.createElement('div');
         element.style.display = 'contents';
         element.slot = hunk.slotName;
-        element.appendChild(hunkSeparators(hunk, this));
+        const child = hunkSeparators(hunk, this);
+        if (child != null) {
+          element.appendChild(child);
+        }
         this.fileContainer.appendChild(element);
         cache = { element, hunkData: hunk };
         this.separatorCache.set(id, cache);

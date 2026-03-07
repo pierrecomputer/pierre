@@ -3,6 +3,7 @@ import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
 import type {
   BaseDiffOptions,
+  BaseDiffOptionsWithDefaults,
   DiffLineAnnotation,
   FileDiffMetadata,
   MergeConflictMetadata,
@@ -365,6 +366,13 @@ export class UnresolvedFileHunksRenderer<
     }
     return targets.length;
   }
+
+  protected override getOptionsWithDefaults(): BaseDiffOptionsWithDefaults {
+    const options = super.getOptionsWithDefaults();
+    options.diffStyle = 'unified';
+    options.lineDiffType = 'none';
+    return options;
+  }
 }
 
 function getMergeConflictGutterProperties(
@@ -555,15 +563,17 @@ function createMergeConflictActionsRowElement({
   includeDefaultActions,
   includeSlot,
 }: CreateMergeConflictActionsRowElementProps): HASTElement {
-  const contentChildren: HASTElement[] = [];
-  if (includeDefaultActions) {
-    contentChildren.push(createMergeConflictActionsContent(row));
-  }
+  const contentChildren: HASTElement[] = includeDefaultActions
+    ? createMergeConflictActionsContent(row)
+    : [];
   if (includeSlot) {
     contentChildren.push(
       createHastElement({
         tagName: 'slot',
-        properties: { name: row.slotName },
+        properties: {
+          name: row.slotName,
+          'data-merge-conflict-action-slot': '',
+        },
       })
     );
   }
@@ -586,33 +596,30 @@ function createMergeConflictActionsRowElement({
 
 function createMergeConflictActionsContent(
   row: Pick<MergeConflictActionRowData, 'conflictIndex' | 'lineIndex'>
-): HASTElement {
+): HASTElement[] {
   const { conflictIndex, lineIndex } = row;
-  return createHastElement({
-    tagName: 'div',
-    children: [
-      createMergeConflictActionButton({
-        resolution: 'current',
-        label: 'Accept current change',
-        conflictIndex,
-        lineIndex,
-      }),
-      createMergeConflictActionSeparator(),
-      createMergeConflictActionButton({
-        resolution: 'incoming',
-        label: 'Accept incoming change',
-        conflictIndex,
-        lineIndex,
-      }),
-      createMergeConflictActionSeparator(),
-      createMergeConflictActionButton({
-        resolution: 'both',
-        label: 'Accept both',
-        conflictIndex,
-        lineIndex,
-      }),
-    ],
-  });
+  return [
+    createMergeConflictActionButton({
+      resolution: 'current',
+      label: 'Accept current change',
+      conflictIndex,
+      lineIndex,
+    }),
+    createMergeConflictActionSeparator(),
+    createMergeConflictActionButton({
+      resolution: 'incoming',
+      label: 'Accept incoming change',
+      conflictIndex,
+      lineIndex,
+    }),
+    createMergeConflictActionSeparator(),
+    createMergeConflictActionButton({
+      resolution: 'both',
+      label: 'Accept both',
+      conflictIndex,
+      lineIndex,
+    }),
+  ];
 }
 
 interface CreateMergeConflictActionButtonProps {
@@ -644,6 +651,6 @@ function createMergeConflictActionSeparator(): HASTElement {
   return createHastElement({
     tagName: 'span',
     properties: { 'data-merge-conflict-action-separator': '' },
-    children: [createTextNodeElement('\u2009|\u2009')],
+    children: [createTextNodeElement('|')],
   });
 }

@@ -378,6 +378,10 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expansionLineCount?: number; // 100 is default
 }
 
+export type BaseDiffOptionsWithDefaults = Required<
+  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter'>
+>;
+
 export type CustomPreProperties = Record<string, string | number | undefined>;
 
 // NOTE(amadeus): This is the shared config that all `pre` nodes will need to

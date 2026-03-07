@@ -66,7 +66,9 @@ export interface UnresolvedFileHydrationProps<LAnnotation> extends Omit<
   UnresolvedFileRenderProps<LAnnotation>,
   'file'
 > {
-  file: FileContents;
+  file?: FileContents;
+  fileDiff?: FileDiffMetadata;
+  actions?: MergeConflictDiffAction[];
   fileContainer: HTMLElement;
   prerenderedHTML?: string;
 }
@@ -321,9 +323,9 @@ export class UnresolvedFile<
 
   public resolveConflict(
     conflictIndex: number,
-    resolution: MergeConflictResolution
+    resolution: MergeConflictResolution,
+    file: FileContents | undefined = this.computedCache.file
   ): FileContents | undefined {
-    const file = this.computedCache.file;
     const action = this.actionsByConflictIndex[conflictIndex];
     if (file == null || action == null) {
       return undefined;

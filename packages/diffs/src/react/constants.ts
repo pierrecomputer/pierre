@@ -6,3 +6,7 @@ export const GutterUtilitySlotStyles: CSSProperties = {
   bottom: 0,
   textAlign: 'center',
 };
+
+export const MergeConflictSlotStyles: CSSProperties = {
+  display: 'contents',
+};
