@@ -88,8 +88,25 @@ const PACKAGE_NAMES = [
 ];
 
 const APP_NAMES = ['web', 'admin', 'docs', 'mobile', 'storybook'];
+const FILE_COUNT_FORMATTER = new Intl.NumberFormat('en-US');
+const DEMO_EXPANDED_ITEMS = [
+  'packages',
+  'packages/ui',
+  'packages/ui/src',
+  'packages/ui/src/components',
+  'packages/core',
+  'packages/core/src',
+  'packages/core/src/utils',
+  'apps',
+  'apps/docs',
+  'apps/docs/src',
+  'apps/docs/src/components',
+  'apps/web',
+  'apps/web/src',
+  'apps/web/src/pages',
+] as const;
 
-function generateLargeTree(): { files: string[]; allDirs: string[] } {
+function generateLargeTree(): { files: string[]; expandedItems: string[] } {
   const files: string[] = [
     'README.md',
     'package.json',
@@ -182,7 +199,10 @@ function generateLargeTree(): { files: string[]; allDirs: string[] } {
     }
   }
 
-  return { files, allDirs: [...dirSet] };
+  return {
+    files,
+    expandedItems: DEMO_EXPANDED_ITEMS.filter((dir) => dirSet.has(dir)),
+  };
 }
 
 const panelStyle: CSSProperties = {
@@ -192,7 +212,7 @@ const panelStyle: CSSProperties = {
 };
 
 export function VirtualizationSection() {
-  const { files, allDirs } = useMemo(generateLargeTree, []);
+  const { files, expandedItems } = useMemo(generateLargeTree, []);
 
   return (
     <TreeExampleSection id="virtualization">
@@ -210,7 +230,8 @@ export function VirtualizationSection() {
               <code>FileTreeOptions</code>
             </Link>{' '}
             to enable it. As a demo, the tree below contains{' '}
-            <strong>{files.length.toLocaleString()} files</strong>.
+            <strong>{FILE_COUNT_FORMATTER.format(files.length)} files</strong>{' '}
+            with a representative subset expanded.
           </>
         }
       />
@@ -224,7 +245,7 @@ export function VirtualizationSection() {
             id: 'virtualization-demo',
           }}
           initialFiles={files}
-          initialExpandedItems={allDirs}
+          initialExpandedItems={expandedItems}
           style={panelStyle}
         />
       </div>
