@@ -24,16 +24,31 @@ import { Switch } from '@/components/ui/switch';
 
 export function GitStatusSection() {
   const [enabled, setEnabled] = useState(true);
+  const [showUnmodified, setShowUnmodified] = useState(true);
   const [useSetB, setUseSetB] = useState(false);
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
 
   const isDark = colorMode === 'dark';
 
-  const gitStatus = useMemo(
-    () => (enabled ? (useSetB ? GIT_STATUSES_B : GIT_STATUSES_A) : undefined),
-    [enabled, useSetB]
+  const activeGitStatus = useMemo(
+    () => (useSetB ? GIT_STATUSES_B : GIT_STATUSES_A),
+    [useSetB]
   );
 
+  const gitStatus = useMemo(
+    () => (enabled ? activeGitStatus : undefined),
+    [activeGitStatus, enabled]
+  );
+
+  const visibleFiles = useMemo(() => {
+    if (!enabled || showUnmodified) {
+      return baseTreeOptions.initialFiles;
+    }
+    const changedPaths = new Set(activeGitStatus.map((entry) => entry.path));
+    return baseTreeOptions.initialFiles.filter((path) =>
+      changedPaths.has(path)
+    );
+  }, [activeGitStatus, enabled, showUnmodified]);
   const panelStyle = {
     colorScheme: colorMode,
     '--trees-search-bg-override': isDark ? 'oklch(14.5% 0 0)' : '#fff',
@@ -76,6 +91,21 @@ export function GitStatusSection() {
               className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>
+          <div className="gridstack">
+            <Button
+              variant="outline"
+              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
+              onClick={() => setShowUnmodified((prev) => !prev)}
+            >
+              Show unmodified
+            </Button>
+            <Switch
+              checked={showUnmodified}
+              onCheckedChange={setShowUnmodified}
+              onClick={(e) => e.stopPropagation()}
+              className="pointer-events-none mr-3 place-self-center justify-self-end"
+            />
+          </div>
           <ButtonGroup
             value={useSetB ? 'set-b' : 'set-a'}
             onValueChange={(value) => setUseSetB(value === 'set-b')}
@@ -106,6 +136,7 @@ export function GitStatusSection() {
               ...baseTreeOptions,
               id: 'path-colors-git-status-demo',
             }}
+            files={visibleFiles}
             initialExpandedItems={['src', 'src/components']}
             gitStatus={gitStatus}
             style={panelStyle}
