@@ -27,33 +27,6 @@ export const GIT_STATUSES_B: GitStatusEntry[] = [
   { path: 'src/utils/worker.ts', status: 'added' },
 ];
 
-/** Shared file content for tree example sections. */
-export const SHARED_FILE_CONTENT: Record<string, string> = {
-  'README.md': `# Trees with Diffs Demo
-
-You're looking at a live demo of **Trees with Diffs**: our diff and file
-rendering library, wrapped in the \`TreeApp\` component.
-
-Select a file from the tree to view its content.`,
-  'package.json': `{
-  "name": "example",
-  "version": "0.0.0",
-  "private": true
-}`,
-  'build/index.mjs': `import { greet } from './scripts.js';
-const message = greet('Trees with Diffs');
-export function run() { return message; }
-`,
-  'build/scripts.js': `export function greet(name) {
-  return \`Hello from \${name}\`;
-}
-`,
-  'src/index.ts': `export function main() {
-  console.log('Hello from tree demo');
-}
-`,
-};
-
 /** Options with flatten empty directories enabled (nested folders collapsed). Pass initialExpandedItems on the component for initial open folders (e.g. ['build']). */
 export function flatteningOptions(flatten: boolean): FileTreeOptions {
   return {

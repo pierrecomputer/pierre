@@ -12,7 +12,6 @@ import {
   StylingSection,
   ThemingSection,
 } from './tree-examples';
-// import { TreeAppExample } from './TreeAppExample';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
