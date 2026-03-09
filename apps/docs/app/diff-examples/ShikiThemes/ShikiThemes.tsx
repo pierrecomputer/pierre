@@ -4,16 +4,15 @@ import { preloadHighlighter } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import {
-  IconArrowDownRight,
   IconCheck,
   IconChevronSm,
   IconColorAuto,
   IconColorDark,
   IconColorLight,
 } from '@pierre/icons';
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
+import { PierreThemeFootnote } from '../../components/PierreThemeFootnote';
 import { FeatureHeader } from '../FeatureHeader';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -228,16 +227,7 @@ export function ShikiThemes({
           theme: { dark: selectedDarkTheme, light: selectedLightTheme },
         }}
       />
-      <div className="flex gap-1">
-        <IconArrowDownRight className="text-muted-foreground my-[2px] opacity-50" />
-        <p className="text-muted-foreground text-sm">
-          Love the Pierre themes?{' '}
-          <Link href="/theme" className="inline-link">
-            Install our Pierre Theme pack
-          </Link>{' '}
-          with light and dark flavors.
-        </p>
-      </div>
+      <PierreThemeFootnote />
     </div>
   );
 }

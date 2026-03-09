@@ -4,5 +4,5 @@ export { DragDropSection } from './DragDropSection';
 export { FlatteningSection } from './FlatteningSection';
 export { GitStatusSection } from './GitStatusSection';
 export { SearchSection } from './SearchSection';
-export { ShikiThemesSection } from './ShikiThemes';
 export { ThemingSection } from './ThemingSection';
+export { StylingSection } from './StylingSection';

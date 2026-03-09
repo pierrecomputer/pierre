@@ -1,134 +1,304 @@
 'use client';
 
+import { resolveTheme } from '@pierre/diffs';
+import {
+  IconCheck,
+  IconChevronSm,
+  IconColorAuto,
+  IconColorDark,
+  IconColorLight,
+} from '@pierre/icons';
+import { themeToTreeStyles } from '@pierre/trees';
 import { FileTree } from '@pierre/trees/react';
-import type { CSSProperties } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
 
-import { TreeExampleHeading } from '../../components/TreeExampleHeading';
+import { PierreThemeFootnote } from '../../components/PierreThemeFootnote';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { baseTreeOptions } from './demo-data';
-import { styleObjectToCss } from './styleToCss';
-import { TreeCssViewer } from './TreeCssViewer';
+import {
+  baseTreeOptions,
+  DEFAULT_FILE_TREE_PANEL_CLASS,
+  GIT_STATUSES_A,
+} from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-/** Theme vars applied to the panel wrapper and to the FileTree host so shadow DOM sees them. */
-function lightTheme(): CSSProperties {
-  return {
-    colorScheme: 'light',
-    ['--trees-fg-override' as string]: 'oklch(14.5% 0 0)',
-    ['--trees-fg-muted-override' as string]: 'oklch(45% 0 0)',
-    ['--trees-bg-muted-override' as string]: 'oklch(96% 0 0)',
-    ['--trees-search-fg-override' as string]: 'oklch(30% 0 0)',
-    ['--trees-search-bg-override' as string]: 'oklch(100% 0 0)',
-    ['--trees-border-color-override' as string]: 'oklch(92% 0 0)',
-    ['--trees-selected-fg-override' as string]: 'oklch(20% 0.08 250)',
-    ['--trees-selected-bg-override' as string]: 'oklch(92% 0.06 250)',
-    ['--trees-selected-border-color-override' as string]: 'oklch(65% 0.15 250)',
-    ['--trees-selected-focused-border-color-override' as string]:
-      'oklch(55% 0.2 250)',
-    ['--trees-focus-ring-color-override' as string]: 'oklch(50% 0.15 250)',
-  };
+const DEFAULT_LIGHT = 'default-light' as const;
+const DEFAULT_DARK = 'default-dark' as const;
+
+const LIGHT_THEMES = [
+  DEFAULT_LIGHT,
+  'pierre-light',
+  'catppuccin-latte',
+  'everforest-light',
+  'github-light',
+  'github-light-default',
+  'github-light-high-contrast',
+  'gruvbox-light-hard',
+  'gruvbox-light-medium',
+  'gruvbox-light-soft',
+  'kanagawa-lotus',
+  'light-plus',
+  'material-theme-lighter',
+  'min-light',
+  'one-light',
+  'rose-pine-dawn',
+  'slack-ochin',
+  'snazzy-light',
+  'solarized-light',
+  'vitesse-light',
+] as const;
+
+const DARK_THEMES = [
+  DEFAULT_DARK,
+  'pierre-dark',
+  'andromeeda',
+  'aurora-x',
+  'ayu-dark',
+  'catppuccin-frappe',
+  'catppuccin-macchiato',
+  'catppuccin-mocha',
+  'dark-plus',
+  'dracula',
+  'dracula-soft',
+  'everforest-dark',
+  'github-dark',
+  'github-dark-default',
+  'github-dark-dimmed',
+  'github-dark-high-contrast',
+  'gruvbox-dark-hard',
+  'gruvbox-dark-medium',
+  'gruvbox-dark-soft',
+  'houston',
+  'kanagawa-dragon',
+  'kanagawa-wave',
+  'laserwave',
+  'material-theme',
+  'material-theme-darker',
+  'material-theme-ocean',
+  'material-theme-palenight',
+  'min-dark',
+  'monokai',
+  'night-owl',
+  'nord',
+  'one-dark-pro',
+  'plastic',
+  'poimandres',
+  'red',
+  'rose-pine',
+  'rose-pine-moon',
+  'slack-dark',
+  'solarized-dark',
+  'synthwave-84',
+  'tokyo-night',
+  'vesper',
+  'vitesse-black',
+  'vitesse-dark',
+] as const;
+
+type LightTheme = (typeof LIGHT_THEMES)[number];
+type DarkTheme = (typeof DARK_THEMES)[number];
+
+function themeDisplayName(theme: string): string {
+  if (theme === DEFAULT_LIGHT) return 'Default Light';
+  if (theme === DEFAULT_DARK) return 'Default Dark';
+  return theme;
 }
 
-function darkTheme(): CSSProperties {
-  return {
-    colorScheme: 'dark',
-    ['--trees-fg-override' as string]: 'oklch(98.5% 0 0)',
-    ['--trees-fg-muted-override' as string]: 'oklch(75% 0 0)',
-    ['--trees-bg-muted-override' as string]: 'oklch(26.9% 0 0)',
-    ['--trees-search-fg-override' as string]: 'oklch(85% 0 0)',
-    ['--trees-search-bg-override' as string]: 'oklch(20% 0 0)',
-    ['--trees-border-color-override' as string]: 'oklch(100% 0 0 / 0.12)',
-    ['--trees-selected-fg-override' as string]: 'oklch(97% 0.04 250)',
-    ['--trees-selected-bg-override' as string]: 'oklch(35% 0.08 250)',
-    ['--trees-selected-border-color-override' as string]: 'oklch(65% 0.2 250)',
-    ['--trees-selected-focused-border-color-override' as string]:
-      'oklch(75% 0.2 250)',
-    ['--trees-focus-ring-color-override' as string]: 'oklch(70% 0.15 250)',
-  };
-}
-
-function synthwaveTheme(): CSSProperties {
-  return {
-    colorScheme: 'dark',
-    ['--trees-fg-override' as string]: '#e2e0ec',
-    ['--trees-fg-muted-override' as string]: '#b8a9c4',
-    ['--trees-bg-muted-override' as string]: 'rgba(255, 126, 219, 0.12)',
-    ['--trees-search-fg-override' as string]: '#d4c5e0',
-    ['--trees-search-bg-override' as string]: '#2b213a',
-    ['--trees-border-color-override' as string]: 'rgba(255, 126, 219, 0.35)',
-    ['--trees-selected-fg-override' as string]: '#ff7edb',
-    ['--trees-selected-bg-override' as string]: 'rgba(249, 42, 173, 0.25)',
-    ['--trees-selected-border-color-override' as string]: '#f92aad',
-    ['--trees-selected-focused-border-color-override' as string]: '#ff7edb',
-    ['--trees-focus-ring-color-override' as string]: '#36f9f6',
-  };
+function isDefaultTheme(theme: string): boolean {
+  return theme === DEFAULT_LIGHT || theme === DEFAULT_DARK;
 }
 
 export function ThemingSection() {
+  const [selectedLightTheme, setSelectedLightTheme] =
+    useState<LightTheme>('pierre-light');
+  const [selectedDarkTheme, setSelectedDarkTheme] =
+    useState<DarkTheme>('pierre-dark');
+  const [colorMode, setColorMode] = useState<'system' | 'light' | 'dark'>(
+    'system'
+  );
+  const [themeStyles, setThemeStyles] = useState<ReturnType<
+    typeof themeToTreeStyles
+  > | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [prefersDark, setPrefersDark] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia('(prefers-color-scheme: dark)');
+    setPrefersDark(m.matches);
+    const listener = () => setPrefersDark(m.matches);
+    m.addEventListener('change', listener);
+    return () => m.removeEventListener('change', listener);
+  }, []);
+
+  const effectiveTheme =
+    colorMode === 'dark'
+      ? selectedDarkTheme
+      : colorMode === 'light'
+        ? selectedLightTheme
+        : prefersDark
+          ? selectedDarkTheme
+          : selectedLightTheme;
+
+  const loadTheme = useCallback(async (themeName: string) => {
+    setError(null);
+    if (isDefaultTheme(themeName)) {
+      setThemeStyles({
+        colorScheme: themeName === DEFAULT_LIGHT ? 'light' : 'dark',
+      } as ReturnType<typeof themeToTreeStyles>);
+      setLoading(false);
+      return;
+    }
+    try {
+      const theme = await resolveTheme(
+        themeName as Parameters<typeof resolveTheme>[0]
+      );
+      setThemeStyles(themeToTreeStyles(theme));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTheme(effectiveTheme);
+  }, [effectiveTheme, loadTheme]);
+
   return (
     <TreeExampleSection id="theming">
       <FeatureHeader
-        title="Style with CSS variables"
+        title="Use Shiki themes"
         description={
           <>
-            Modify CSS custom properties on <code>FileTree</code> via the{' '}
-            <code>style</code> prop to override our colors and even theme
-            colors. For example, below are three examples that override our
-            default values and the CSS we used to style the tree. Custom light,
-            dark, and Synthwave &apos;84.
+            The same Shiki themes used by{' '}
+            <Link href="../" className="inline-link">
+              <code>@pierre/diffs</code>
+            </Link>{' '}
+            can style the <code>FileTree</code>. Sidebar and Git decoration
+            colors come from your choice of themes. Pick a theme and switch
+            light/dark to see the tree update live. Compare against our default
+            themes in light and dark mode, too. See the{' '}
+            <Link href="/trees/docs#theming" className="inline-link">
+              Theming docs
+            </Link>{' '}
+            for more.
           </>
         }
       />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div>
-          <TreeExampleHeading>Light mode</TreeExampleHeading>
-          <FileTree
-            className="min-h-[320px] rounded-lg border border-neutral-200 bg-neutral-50 p-2"
-            options={{
-              ...baseTreeOptions,
-              id: 'theming-demo-light',
-            }}
-            initialSelectedItems={['package.json']}
-            style={lightTheme()}
-          />
-          <TreeCssViewer
-            contents={styleObjectToCss(lightTheme())}
-            filename="light-theme.css"
-          />
+      <div className="flex flex-wrap gap-3 md:items-center">
+        <div className="flex w-full gap-3 md:w-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex-1 justify-start">
+                <IconColorLight />
+                {themeDisplayName(selectedLightTheme)}
+                <IconChevronSm className="text-muted-foreground ml-auto" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" scrollSelectedIntoView>
+              {LIGHT_THEMES.map((theme) => (
+                <DropdownMenuItem
+                  key={theme}
+                  onClick={() => {
+                    setSelectedLightTheme(theme);
+                    setColorMode('light');
+                  }}
+                  selected={selectedLightTheme === theme}
+                >
+                  {themeDisplayName(theme)}
+                  {selectedLightTheme === theme && (
+                    <IconCheck className="ml-auto" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex-1 justify-start">
+                <IconColorDark />
+                {themeDisplayName(selectedDarkTheme)}
+                <IconChevronSm className="text-muted-foreground ml-auto" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="max-h-[550px] overflow-auto"
+              scrollSelectedIntoView
+            >
+              {DARK_THEMES.map((theme) => (
+                <DropdownMenuItem
+                  key={theme}
+                  onClick={() => {
+                    setSelectedDarkTheme(theme);
+                    setColorMode('dark');
+                  }}
+                  selected={selectedDarkTheme === theme}
+                >
+                  {themeDisplayName(theme)}
+                  {selectedDarkTheme === theme ? (
+                    <IconCheck className="ml-auto" />
+                  ) : (
+                    <div className="ml-2 h-4 w-4" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <div>
-          <TreeExampleHeading>Dark mode</TreeExampleHeading>
-          <FileTree
-            className="min-h-[320px] rounded-lg border border-neutral-700 bg-neutral-900 p-2"
-            options={{
-              ...baseTreeOptions,
-              id: 'theming-demo-dark',
-            }}
-            initialSelectedItems={['package.json']}
-            style={darkTheme()}
-          />
-          <TreeCssViewer
-            contents={styleObjectToCss(darkTheme())}
-            filename="dark-theme.css"
-          />
-        </div>
-        <div>
-          <TreeExampleHeading>Synthwave &apos;84</TreeExampleHeading>
-          <FileTree
-            className="min-h-[320px] rounded-lg border border-[#f92aad]/40 bg-[#1e1b2b] p-2 shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
-            options={{
-              ...baseTreeOptions,
-              id: 'theming-demo-synthwave',
-            }}
-            initialSelectedItems={['package.json']}
-            style={synthwaveTheme()}
-          />
-          <TreeCssViewer
-            contents={styleObjectToCss(synthwaveTheme())}
-            filename="synthwave-theme.css"
-          />
-        </div>
+
+        <ButtonGroup
+          className="w-full md:w-auto"
+          value={colorMode}
+          onValueChange={(value) =>
+            setColorMode(value as 'system' | 'light' | 'dark')
+          }
+        >
+          <ButtonGroupItem value="system" className="flex-1">
+            <IconColorAuto />
+            Auto
+          </ButtonGroupItem>
+          <ButtonGroupItem value="light" className="flex-1">
+            <IconColorLight />
+            Light
+          </ButtonGroupItem>
+          <ButtonGroupItem value="dark" className="flex-1">
+            <IconColorDark />
+            Dark
+          </ButtonGroupItem>
+        </ButtonGroup>
       </div>
+
+      <div>
+        {loading && themeStyles == null && (
+          <p className="text-muted-foreground py-4 text-sm">Loading theme…</p>
+        )}
+        {error && <p className="text-destructive py-4 text-sm">{error}</p>}
+        {themeStyles != null && (
+          <FileTree
+            className={`${DEFAULT_FILE_TREE_PANEL_CLASS} min-h-[320px]`}
+            options={{
+              ...baseTreeOptions,
+              id: 'shiki-themes-tree',
+            }}
+            gitStatus={GIT_STATUSES_A}
+            initialExpandedItems={['src', 'src/components']}
+            initialSelectedItems={['package.json']}
+            style={themeStyles}
+          />
+        )}
+      </div>
+      <PierreThemeFootnote />
     </TreeExampleSection>
   );
 }

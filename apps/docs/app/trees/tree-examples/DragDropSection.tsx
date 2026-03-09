@@ -1,15 +1,15 @@
 'use client';
 
-import { IconCursor, IconLock } from '@pierre/icons';
+import { IconLock, IconRefresh } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { DEFAULT_FILE_TREE_PANEL_CLASS, dragDropOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 
 const dragDropStyle = {
@@ -17,13 +17,11 @@ const dragDropStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const defaultOptions = {
-  ...dragDropOptions(),
-  id: 'drag-drop-demo-default',
-};
-
-function LockedFileExample() {
+export function DragDropSection() {
   const [lockPackageJson, setLockPackageJson] = useState(true);
+  const [hasDragged, setHasDragged] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
+
   const options = useMemo(
     () => ({
       ...dragDropOptions(lockPackageJson ? ['package.json'] : undefined),
@@ -31,73 +29,72 @@ function LockedFileExample() {
     }),
     [lockPackageJson]
   );
-  return (
-    <div className="flex flex-col-reverse gap-3">
-      <div className="text-muted-foreground flex items-center gap-1.5 text-sm">
-        <Switch
-          id="lock-package-json"
-          checked={lockPackageJson}
-          onCheckedChange={setLockPackageJson}
-        />
-        <Label htmlFor="lock-package-json" className="cursor-pointer">
-          Lock package.json
-        </Label>
-      </div>
-      <FileTree
-        className={DEFAULT_FILE_TREE_PANEL_CLASS}
-        options={options}
-        style={dragDropStyle}
-      />
-    </div>
-  );
-}
 
-export function DragDropSection() {
+  const handleFilesChange = useCallback(() => {
+    setHasDragged(true);
+  }, []);
+
+  const handleReset = useCallback(() => {
+    setResetKey((k) => k + 1);
+    setHasDragged(false);
+  }, []);
+
   return (
     <TreeExampleSection id="drag-drop">
       <FeatureHeader
         title="Drag and drop"
         description={
           <>
-            Move files and folders by dragging them onto other folders or the
-            root. Drop targets open automatically when you hover. Keyboard drag
-            and drop is supported; dragging is disabled while search is active.
+            Move files and folders by dragging them onto other folders,
+            flattened folders, or the root with <code>dragAndDrop: true</code>.
+            Drop targets open automatically when you hover. Keyboard drag and
+            drop is supported; dragging is disabled while search is active. Use{' '}
+            <code>lockedPaths</code> to prevent specific paths from being
+            dragged. Learn more in the{' '}
+            <Link href="/trees/docs#drag-and-drop" className="inline-link">
+              FileTreeOptions docs
+            </Link>
+            .
           </>
         }
       />
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="gridstack">
+            <Button
+              variant="outline"
+              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
+              onClick={() => setLockPackageJson((prev) => !prev)}
+            >
+              <div className="flex items-center gap-2">
+                <IconLock />
+                Lock package.json
+              </div>
+            </Button>
+            <Switch
+              checked={lockPackageJson}
+              onCheckedChange={setLockPackageJson}
+              onClick={(e) => e.stopPropagation()}
+              className="pointer-events-none mr-3 place-self-center justify-self-end"
+            />
+          </div>
+          <Button
+            variant="outline"
+            disabled={!hasDragged}
+            onClick={handleReset}
+          >
+            <IconRefresh />
+            Reset
+          </Button>
+        </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <TreeExampleHeading
-            icon={<IconCursor />}
-            description={
-              <>
-                Enable with <code>dragAndDrop: true</code>.
-              </>
-            }
-          >
-            Default
-          </TreeExampleHeading>
-          <FileTree
-            className={DEFAULT_FILE_TREE_PANEL_CLASS}
-            options={defaultOptions}
-            style={dragDropStyle}
-          />
-        </div>
-        <div>
-          <TreeExampleHeading
-            icon={<IconLock />}
-            description={
-              <>
-                Use <code>lockedPaths</code> to prevent specific paths from
-                being dragged.
-              </>
-            }
-          >
-            Control file updates
-          </TreeExampleHeading>
-          <LockedFileExample />
-        </div>
+        <FileTree
+          key={resetKey}
+          className={DEFAULT_FILE_TREE_PANEL_CLASS}
+          options={options}
+          onFilesChange={handleFilesChange}
+          style={dragDropStyle}
+        />
       </div>
     </TreeExampleSection>
   );

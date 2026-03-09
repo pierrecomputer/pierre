@@ -41,16 +41,16 @@ export function SearchSection() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <TreeExampleHeading
-              icon={<IconFolderOpen />}
-              description="Keeps all items visible and expand folders with matches"
+              icon={<IconEyeSlash />}
+              description="Hides files and folders without any matches"
             >
-              <code>expand-matches</code>
+              <code>hide-non-matches</code>
             </TreeExampleHeading>
             <FileTree
               className={DEFAULT_FILE_TREE_PANEL_CLASS}
               options={{
-                ...searchOptions('expand-matches'),
-                id: 'search-demo-expand-matches',
+                ...searchOptions('hide-non-matches'),
+                id: 'search-demo-hide-non-matches',
               }}
               initialSearchQuery={PREPOPULATED_SEARCH}
               initialSelectedItems={[PRESELECTED_FILE]}
@@ -77,16 +77,16 @@ export function SearchSection() {
           </div>
           <div>
             <TreeExampleHeading
-              icon={<IconEyeSlash />}
-              description="Hides files and folders without any matches"
+              icon={<IconFolderOpen />}
+              description="Keeps all items visible and expand folders with matches"
             >
-              <code>hide-non-matches</code>
+              <code>expand-matches</code>
             </TreeExampleHeading>
             <FileTree
               className={DEFAULT_FILE_TREE_PANEL_CLASS}
               options={{
-                ...searchOptions('hide-non-matches'),
-                id: 'search-demo-hide-non-matches',
+                ...searchOptions('expand-matches'),
+                id: 'search-demo-expand-matches',
               }}
               initialSearchQuery={PREPOPULATED_SEARCH}
               initialSelectedItems={[PRESELECTED_FILE]}
