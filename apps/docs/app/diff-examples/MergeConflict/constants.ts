@@ -32,5 +32,6 @@ export async function createSession(userId: string) {
     overflow: 'wrap',
     diffIndicators: 'none',
     unsafeCSS: CustomScrollbarCSS,
+    // mergeConflictActionsType: 'custom',
   },
 };

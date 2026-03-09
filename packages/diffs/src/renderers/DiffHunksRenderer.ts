@@ -660,7 +660,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
       lineNumber: number,
       lineIndex: string,
-      gutterProperties: Properties | undefined = undefined
+      gutterProperties: Properties | undefined
     ) => {
       context.pushToGutter(
         type,
