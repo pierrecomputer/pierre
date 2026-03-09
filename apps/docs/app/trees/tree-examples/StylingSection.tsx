@@ -53,17 +53,19 @@ function darkTheme(): CSSProperties {
 function synthwaveTheme(): CSSProperties {
   return {
     colorScheme: 'dark',
-    ['--trees-fg-override' as string]: '#e2e0ec',
-    ['--trees-fg-muted-override' as string]: '#b8a9c4',
-    ['--trees-bg-muted-override' as string]: 'rgba(255, 126, 219, 0.12)',
-    ['--trees-search-fg-override' as string]: '#d4c5e0',
-    ['--trees-search-bg-override' as string]: '#2b213a',
-    ['--trees-border-color-override' as string]: 'rgba(255, 126, 219, 0.35)',
-    ['--trees-selected-fg-override' as string]: '#ff7edb',
-    ['--trees-selected-bg-override' as string]: 'rgba(249, 42, 173, 0.25)',
-    ['--trees-selected-border-color-override' as string]: '#f92aad',
-    ['--trees-selected-focused-border-color-override' as string]: '#ff7edb',
-    ['--trees-focus-ring-color-override' as string]: '#36f9f6',
+    ['--trees-fg-override' as string]: 'oklch(91.2% 0.016 294)',
+    ['--trees-fg-muted-override' as string]: 'oklch(75.6% 0.04 310)',
+    ['--trees-bg-muted-override' as string]: 'oklch(76.9% 0.19 339 / 0.12)',
+    ['--trees-search-fg-override' as string]: 'oklch(84.4% 0.04 310)',
+    ['--trees-search-bg-override' as string]: 'oklch(27.2% 0.05 302)',
+    ['--trees-border-color-override' as string]: 'oklch(76.9% 0.19 339 / 0.35)',
+    ['--trees-selected-fg-override' as string]: 'oklch(76.9% 0.19 339)',
+    ['--trees-selected-bg-override' as string]: 'oklch(66.3% 0.26 348 / 0.25)',
+    ['--trees-selected-border-color-override' as string]:
+      'oklch(66.3% 0.26 348)',
+    ['--trees-selected-focused-border-color-override' as string]:
+      'oklch(76.9% 0.19 339)',
+    ['--trees-focus-ring-color-override' as string]: 'oklch(89.2% 0.14 193)',
   };
 }
 
