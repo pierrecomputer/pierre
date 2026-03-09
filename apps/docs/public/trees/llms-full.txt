@@ -114,18 +114,20 @@ folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
 
 `initialFiles` is the only required option, all others are optional.
 
-| Option                    | Description                                                                                                                                                                                         |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `initialFiles`            | **Required.** Array of file paths (strings). Defines the list and hierarchy.                                                                                                                        |
-| `id`                      | Unique identifier for this instance (DOM ids, SSR). Default: e.g. `ft_brw_1`.                                                                                                                       |
-| `flattenEmptyDirectories` | When `true`, single-child folder chains become one row (e.g. `build / assets / images` → `build · assets · images`). Default: `false`. [Live demo](/trees#flattening).                              |
-| `fileTreeSearchMode`      | Search behavior: `'expand-matches'` (default), `'collapse-non-matches'`, or `'hide-non-matches'`.                                                                                                   |
-| `useLazyDataLoader`       | When `true`, children load when a folder is expanded. Default: `false`.                                                                                                                             |
-| `dragAndDrop`             | Enables built-in drag and drop interactions. Default: `false`.                                                                                                                                      |
-| `lockedPaths`             | Optional list of file/folder paths that cannot be dragged when drag and drop is enabled.                                                                                                            |
-| `onCollision`             | Optional callback for drag collisions. Return `true` to overwrite destination.                                                                                                                      |
-| `gitStatus`               | Optional `GitStatusEntry[]` used to show Git-style file status (`added`, `modified`, `deleted`). Folders with changed descendants also receive a change indicator. [Live demo](/trees#path-colors). |
-| `icons`                   | Optional `FileTreeIconConfig` to provide a custom SVG sprite sheet and remap built-in icon names to your own symbols. [Live demo](/trees#custom-icons).                                             |
+| Option                    | Description                                                                                                                                                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `initialFiles`            | **Required.** Array of file paths (strings). Defines the list and hierarchy.                                                                                                                                                |
+| `id`                      | Unique identifier for this instance (DOM ids, SSR). Default: e.g. `ft_brw_1`.                                                                                                                                               |
+| `flattenEmptyDirectories` | When `true`, single-child folder chains become one row (e.g. `build / assets / images` → `build · assets · images`). Default: `false`. [Live demo](/trees#flattening).                                                      |
+| `fileTreeSearchMode`      | Search behavior: `'expand-matches'` (default), `'collapse-non-matches'`, or `'hide-non-matches'`.                                                                                                                           |
+| `useLazyDataLoader`       | When `true`, children load when a folder is expanded. Default: `false`.                                                                                                                                                     |
+| `dragAndDrop`             | Enables built-in drag and drop interactions. Default: `false`.                                                                                                                                                              |
+| `lockedPaths`             | Optional list of file/folder paths that cannot be dragged when drag and drop is enabled.                                                                                                                                    |
+| `onCollision`             | Optional callback for drag collisions. Return `true` to overwrite destination.                                                                                                                                              |
+| `gitStatus`               | Optional `GitStatusEntry[]` used to show Git-style file status (`added`, `modified`, `deleted`). Folders with changed descendants also receive a change indicator. [Live demo](/trees#path-colors).                         |
+| `icons`                   | Optional `FileTreeIconConfig` to provide a custom SVG sprite sheet and remap built-in icon names to your own symbols. [Live demo](/trees#custom-icons).                                                                     |
+| `sort`                    | Sort children within each directory. `true` (default) uses the standard sort (folders first, dot-prefixed next, case-insensitive alphabetical). `false` preserves insertion order. `{ comparator: fn }` for custom sorting. |
+| `virtualize`              | Enable virtualized rendering so only visible items are rendered. Pass `{ threshold: number }` to activate when item count exceeds the threshold, or `false` to disable. Default: `undefined` (off).                         |
 
 `onSelection` is configured in React as a top-level prop
 (`\<FileTree onSelection={...} />`) and in vanilla via `FileTreeStateConfig`
@@ -217,6 +219,7 @@ import type {
   FileTreeStateConfig,
   FileTreeSearchMode,
   FileTreeCollision,
+  ChildrenComparator,
   GitStatusEntry,
 } from '@pierre/trees';
 
@@ -252,6 +255,15 @@ interface FileTreeOptions {
 
   // Optional: return true to overwrite the destination on DnD collision.
   onCollision?: (collision: FileTreeCollision) => boolean;
+
+  // Optional: sort children within each directory. Default: true (folders first,
+  // dot-prefixed next, case-insensitive alphabetical). false preserves insertion
+  // order. { comparator: fn } for custom sorting.
+  sort?: boolean | { comparator: ChildrenComparator };
+
+  // Optional: enable virtualized rendering (only visible items are rendered).
+  // Pass { threshold: N } to activate when item count >= N. Default: undefined (off).
+  virtualize?: { threshold: number } | false;
 }
 
 // Example usage
@@ -912,50 +924,109 @@ const customOrder = sortChildren(childPaths, isFolder, customComparator);
 The file tree is rendered inside a shadow DOM host (the `file-tree-container`
 custom element), so its styles are isolated from your page.
 
-Customize it by passing **class and style** on the host: use `className` and
-`style` on the React `FileTree` component, or set them on the host element after
-`render()` in vanilla JS. That lets you control layout (e.g. `maxHeight`,
-`width`) and override the tree’s CSS variables (e.g. `--ft-font-size`,
-`--ft-row-height`) in global CSS, on a wrapper, or via the `style` prop.
+Customize it by passing `className` and `style` on the host: use those props on
+the React `FileTree` component, or style the host returned by
+`getFileTreeContainer()` after `render()` in vanilla JS. That lets you control
+layout (`width`, `maxHeight`, borders, overflow) and override the tree’s CSS
+variables from global CSS, a wrapper, or the host element directly.
 
-For the full list of CSS variables, review `style.css` in the `@pierre/trees`
-package.
+> Think of styling in two layers: host styles change the outer panel, and
+> `--trees-*` variables change the UI rendered inside the shadow DOM.
+
+### Fallback order
+
+Trees uses a consistent fallback chain for colors and theme tokens:
+
+1. `--trees-*-override`
+2. `--trees-theme-*`
+3. library defaults
+
+That means explicit overrides always win. Theme-derived values from
+`themeToTreeStyles()` sit in the middle, and the built-in defaults are only used
+when neither of those is present.
 
 **Global CSS Variables** (`global.css`):
 
 ```css
-/* Target the file tree host (custom element or React root) */
+/* Target the FileTree host (custom element or React root). */
 file-tree-container,
-.my-file-tree {
-  --ft-font-size: 14px;
-  --ft-row-height: 32px;
-  --ft-color-foreground: oklch(0.25 0 0);
-  --ft-color-background: oklch(0.98 0 0);
-  --ft-color-border: oklch(0.9 0 0);
-  --ft-border-radius: 8px;
-  --ft-selected-background-color: oklch(0.92 0.02 250);
-  --ft-selected-border-color: oklch(0.7 0.15 250);
-  /* Optional. Used for gitStatus. */
-  --ft-git-added-color: #0dbe4e;
-  --ft-git-modified-color: #009fff;
-  --ft-git-deleted-color: #ff2e3f;
+.project-sidebar {
+  width: 320px;
+  max-height: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+
+  --trees-font-family-override: 'Berkeley Mono', monospace;
+  --trees-font-size-override: 13px;
+  --trees-row-height-override: 28px;
+  --trees-item-padding-x-override: 10px;
+  --trees-border-radius-override: 10px;
+
+  --trees-fg-override: oklch(25% 0 0);
+  --trees-bg-override: oklch(98% 0 0);
+  --trees-bg-muted-override: oklch(95% 0 0);
+  --trees-border-color-override: oklch(90% 0 0);
+
+  --trees-selected-fg-override: oklch(29% 0.09 255);
+  --trees-selected-bg-override: oklch(92% 0.05 255);
+  --trees-selected-focused-border-color-override: oklch(67% 0.16 255);
+
+  --trees-search-bg-override: white;
+  --trees-search-fg-override: oklch(28% 0 0);
+
+  /* Optional: tune git decoration colors independently. */
+  --trees-git-added-color-override: #0dbe4e;
+  --trees-git-modified-color-override: #009fff;
+  --trees-git-deleted-color-override: #ff2e3f;
 }
 ```
 
-**Inline Styles** (`FileExplorer.tsx`):
+**Inline Styles** (`DenseTree.tsx`):
 
 ```tsx
 import { FileTree } from '@pierre/trees/react';
+import type { CSSProperties } from 'react';
 
 <FileTree
   options={{ initialFiles: ['src/index.ts', 'package.json'] }}
-  className="rounded-lg border p-3"
+  className="rounded-xl border p-2"
   style={{
-    maxHeight: 400,
-    '--ft-font-size': '13px',
-    '--ft-row-height': '28px',
-  } as React.CSSProperties}
+    maxHeight: 360,
+    width: 320,
+    '--trees-font-family-override': 'Berkeley Mono, monospace',
+    '--trees-font-size-override': '13px',
+    '--trees-row-height-override': '28px',
+    '--trees-level-gap-override': '6px',
+    '--trees-item-row-gap-override': '4px',
+    '--trees-icon-width-override': '14px',
+  } as CSSProperties}
 />
+```
+
+**Vanilla** (`file-tree.ts`):
+
+```typescript
+import { FileTree } from '@pierre/trees';
+
+const fileTree = new FileTree({
+  initialFiles: ['src/index.ts', 'src/lib/utils.ts', 'package.json'],
+});
+
+fileTree.render({
+  containerWrapper: document.getElementById('tree-root') ?? undefined,
+});
+
+const host = fileTree.getFileTreeContainer();
+
+Object.assign(host.style, {
+  width: '320px',
+  maxHeight: '420px',
+});
+
+host.style.setProperty('--trees-row-height-override', '30px');
+host.style.setProperty('--trees-font-size-override', '13px');
+host.style.setProperty('--trees-selected-bg-override', 'oklch(90% 0.05 255)');
+host.style.setProperty('--trees-git-modified-color-override', '#009fff');
 ```
 
 ## SSR

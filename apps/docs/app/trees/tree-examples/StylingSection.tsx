@@ -1,7 +1,6 @@
-'use client';
-
 import { IconBulbFill } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -67,6 +66,36 @@ function synthwaveTheme(): CSSProperties {
   };
 }
 
+const lightPrerenderedHTML = preloadFileTree(
+  {
+    ...baseTreeOptions,
+    id: 'theming-demo-light',
+  },
+  {
+    initialSelectedItems: ['package.json'],
+  }
+).shadowHtml;
+
+const darkPrerenderedHTML = preloadFileTree(
+  {
+    ...baseTreeOptions,
+    id: 'theming-demo-dark',
+  },
+  {
+    initialSelectedItems: ['package.json'],
+  }
+).shadowHtml;
+
+const synthwavePrerenderedHTML = preloadFileTree(
+  {
+    ...baseTreeOptions,
+    id: 'theming-demo-synthwave',
+  },
+  {
+    initialSelectedItems: ['package.json'],
+  }
+).shadowHtml;
+
 export function StylingSection() {
   return (
     <TreeExampleSection id="styling">
@@ -90,6 +119,7 @@ export function StylingSection() {
           <TreeExampleHeading>Light mode</TreeExampleHeading>
           <FileTree
             className="min-h-[320px] rounded-lg border border-neutral-200 bg-neutral-50 p-2"
+            prerenderedHTML={lightPrerenderedHTML}
             options={{
               ...baseTreeOptions,
               id: 'theming-demo-light',
@@ -106,6 +136,7 @@ export function StylingSection() {
           <TreeExampleHeading>Dark mode</TreeExampleHeading>
           <FileTree
             className="min-h-[320px] rounded-lg border border-neutral-700 bg-neutral-900 p-2"
+            prerenderedHTML={darkPrerenderedHTML}
             options={{
               ...baseTreeOptions,
               id: 'theming-demo-dark',
@@ -122,6 +153,7 @@ export function StylingSection() {
           <TreeExampleHeading>Synthwave &apos;84</TreeExampleHeading>
           <FileTree
             className="min-h-[320px] rounded-lg border border-[#f92aad]/40 bg-[#1e1b2b] p-2 shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
+            prerenderedHTML={synthwavePrerenderedHTML}
             options={{
               ...baseTreeOptions,
               id: 'theming-demo-synthwave',

@@ -1,7 +1,6 @@
-'use client';
-
 import { IconBrush, IconFire } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import type { CSSProperties } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
@@ -31,6 +30,48 @@ const panelStyle = {
   ...DEFAULT_FILE_TREE_PANEL_STYLE,
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
+
+const defaultPrerenderedHTML = preloadFileTree(
+  {
+    ...baseTreeOptions,
+    id: 'custom-icons-default',
+    lockedPaths: ['package.json'],
+  },
+  {
+    initialExpandedItems: ['src', 'src/components'],
+  }
+).shadowHtml;
+
+const remappedPrerenderedHTML = preloadFileTree(
+  {
+    ...baseTreeOptions,
+    id: 'custom-icons-remapped',
+    lockedPaths: ['package.json'],
+    icons: {
+      spriteSheet: customSpriteSheet,
+      remap: {
+        'file-tree-icon-file': {
+          name: 'custom-file-icon',
+          width: 12,
+          height: 12,
+        },
+        'file-tree-icon-chevron': {
+          name: 'custom-folder-icon',
+          width: 12,
+          height: 12,
+        },
+        'file-tree-icon-lock': {
+          name: 'custom-lock-icon',
+          width: 12,
+          height: 12,
+        },
+      },
+    },
+  },
+  {
+    initialExpandedItems: ['src', 'src/components'],
+  }
+).shadowHtml;
 
 export function CustomIconsSection() {
   return (
@@ -62,6 +103,7 @@ export function CustomIconsSection() {
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            prerenderedHTML={defaultPrerenderedHTML}
             options={{
               ...baseTreeOptions,
               id: 'custom-icons-default',
@@ -85,6 +127,7 @@ export function CustomIconsSection() {
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            prerenderedHTML={remappedPrerenderedHTML}
             options={{
               ...baseTreeOptions,
               id: 'custom-icons-remapped',

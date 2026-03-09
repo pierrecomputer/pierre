@@ -1,6 +1,5 @@
-'use client';
-
 import { FileTree } from '@pierre/trees/react';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import type { CSSProperties } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
@@ -10,6 +9,14 @@ import { TreeExampleSection } from './TreeExampleSection';
 const a11yStyle: CSSProperties = {
   colorScheme: 'dark',
 };
+
+const a11yPrerenderedHTML = preloadFileTree(
+  { ...baseTreeOptions, id: 'a11y-demo' },
+  {
+    initialSelectedItems: ['package.json'],
+    initialExpandedItems: ['src', 'src/components'],
+  }
+).shadowHtml;
 
 const KEYBOARD_SHORTCUTS: { key: string; description: string }[] = [
   { key: '↑ ↓', description: 'Move focus between items' },
@@ -34,6 +41,7 @@ export function A11ySection() {
       <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
         <FileTree
           className={DEFAULT_FILE_TREE_PANEL_CLASS}
+          prerenderedHTML={a11yPrerenderedHTML}
           options={{ ...baseTreeOptions, id: 'a11y-demo' }}
           initialSelectedItems={['package.json']}
           initialExpandedItems={['src', 'src/components']}

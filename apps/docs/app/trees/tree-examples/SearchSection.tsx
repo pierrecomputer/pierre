@@ -1,7 +1,6 @@
-'use client';
-
 import { IconCollapsedRow, IconEyeSlash, IconFolderOpen } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -17,6 +16,35 @@ const searchModeStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
+
+function createSearchPrerenderedHTML(
+  mode: 'hide-non-matches' | 'collapse-non-matches' | 'expand-matches',
+  id: string
+): string {
+  return preloadFileTree(
+    {
+      ...searchOptions(mode),
+      id,
+    },
+    {
+      initialSearchQuery: PREPOPULATED_SEARCH,
+      initialSelectedItems: [PRESELECTED_FILE],
+    }
+  ).shadowHtml;
+}
+
+const hideNonMatchesPrerenderedHTML = createSearchPrerenderedHTML(
+  'hide-non-matches',
+  'search-demo-hide-non-matches'
+);
+const collapseNonMatchesPrerenderedHTML = createSearchPrerenderedHTML(
+  'collapse-non-matches',
+  'search-demo-collapse-non-matches'
+);
+const expandMatchesPrerenderedHTML = createSearchPrerenderedHTML(
+  'expand-matches',
+  'search-demo-expand-matches'
+);
 
 export function SearchSection() {
   return (
@@ -48,6 +76,7 @@ export function SearchSection() {
             </TreeExampleHeading>
             <FileTree
               className={DEFAULT_FILE_TREE_PANEL_CLASS}
+              prerenderedHTML={hideNonMatchesPrerenderedHTML}
               options={{
                 ...searchOptions('hide-non-matches'),
                 id: 'search-demo-hide-non-matches',
@@ -66,6 +95,7 @@ export function SearchSection() {
             </TreeExampleHeading>
             <FileTree
               className={DEFAULT_FILE_TREE_PANEL_CLASS}
+              prerenderedHTML={collapseNonMatchesPrerenderedHTML}
               options={{
                 ...searchOptions('collapse-non-matches'),
                 id: 'search-demo-collapse-non-matches',
@@ -84,6 +114,7 @@ export function SearchSection() {
             </TreeExampleHeading>
             <FileTree
               className={DEFAULT_FILE_TREE_PANEL_CLASS}
+              prerenderedHTML={expandMatchesPrerenderedHTML}
               options={{
                 ...searchOptions('expand-matches'),
                 id: 'search-demo-expand-matches',

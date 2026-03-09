@@ -1,7 +1,6 @@
-'use client';
-
 import { IconFileTreeFill, IconFolders } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -14,6 +13,31 @@ const flattenStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
+
+const hierarchicalPrerenderedHTML = preloadFileTree(
+  {
+    ...flatteningOptions(false),
+    id: 'flatten-demo-hierarchical',
+  },
+  {
+    initialExpandedItems: [
+      'build',
+      'build/assets',
+      'build/assets/images',
+      'build/assets/images/social',
+    ],
+  }
+).shadowHtml;
+
+const flattenedPrerenderedHTML = preloadFileTree(
+  {
+    ...flatteningOptions(true),
+    id: 'flatten-demo-flattened',
+  },
+  {
+    initialExpandedItems: ['build', 'f::build/assets/images/social'],
+  }
+).shadowHtml;
 
 export function FlatteningSection() {
   return (
@@ -42,6 +66,7 @@ export function FlatteningSection() {
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            prerenderedHTML={hierarchicalPrerenderedHTML}
             options={{
               ...flatteningOptions(false),
               id: 'flatten-demo-hierarchical',
@@ -61,6 +86,7 @@ export function FlatteningSection() {
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            prerenderedHTML={flattenedPrerenderedHTML}
             options={{
               ...flatteningOptions(true),
               id: 'flatten-demo-flattened',

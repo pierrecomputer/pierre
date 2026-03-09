@@ -1,8 +1,7 @@
-'use client';
-
 import { FileTree } from '@pierre/trees/react';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import Link from 'next/link';
-import { type CSSProperties, useMemo } from 'react';
+import type { CSSProperties } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
@@ -211,8 +210,21 @@ const panelStyle: CSSProperties = {
   overflowX: 'visible',
 };
 
+const virtualizationDemoData = generateLargeTree();
+const virtualizationPrerenderedHTML = preloadFileTree(
+  {
+    virtualize: { threshold: 0 },
+    flattenEmptyDirectories: true,
+    id: 'virtualization-demo',
+    initialFiles: virtualizationDemoData.files,
+  },
+  {
+    initialExpandedItems: virtualizationDemoData.expandedItems,
+  }
+).shadowHtml;
+
 export function VirtualizationSection() {
-  const { files, expandedItems } = useMemo(generateLargeTree, []);
+  const { files, expandedItems } = virtualizationDemoData;
 
   return (
     <TreeExampleSection id="virtualization">
@@ -239,6 +251,7 @@ export function VirtualizationSection() {
       <div className="max-w-lg">
         <FileTree
           className={DEFAULT_FILE_TREE_PANEL_CLASS}
+          prerenderedHTML={virtualizationPrerenderedHTML}
           options={{
             virtualize: { threshold: 0 },
             flattenEmptyDirectories: true,
