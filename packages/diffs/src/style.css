@@ -1521,11 +1521,11 @@
   }
 
   [data-merge-conflict-action='current'] {
-    color: var(--diffs-addition-base);
+    color: color-mix(in lab, var(--diffs-addition-base) 65%, var(--diffs-fg));
   }
 
   [data-merge-conflict-action='incoming'] {
-    color: var(--diffs-modified-base);
+    color: color-mix(in lab, var(--diffs-modified-base) 65%, var(--diffs-fg));
   }
 
   [data-merge-conflict-action]:hover {
