@@ -29,7 +29,15 @@ import {
   REACT_API_GIT_STATUS_EXAMPLE,
 } from './ReactAPI/constants';
 import { SSR_HYDRATION_EXAMPLE, SSR_PRELOAD_FILE_TREE } from './SSR/constants';
-import { STYLING_CODE_GLOBAL, STYLING_CODE_INLINE } from './Styling/constants';
+import {
+  STYLING_CODE_GLOBAL,
+  STYLING_CODE_INLINE,
+  STYLING_CODE_VANILLA,
+} from './Styling/constants';
+import {
+  THEMING_CODE_CUSTOM_THEME,
+  THEMING_CODE_RESOLVE_THEME,
+} from './Theming/constants';
 import {
   HELPER_GENERATE_LAZY_DATA_LOADER,
   HELPER_GENERATE_SYNC_DATA_LOADER,
@@ -65,6 +73,7 @@ export default function TreesDocsPage() {
           <CustomIconsSection />
           <UtilitiesSection />
           <StylingSection />
+          <ThemingSection />
           <SSRSection />
         </div>
       </DocsLayout>
@@ -223,15 +232,32 @@ async function SSRSection() {
 }
 
 async function StylingSection() {
-  const [stylingGlobal, stylingInline] = await Promise.all([
+  const [stylingGlobal, stylingInline, stylingVanilla] = await Promise.all([
     preloadFile(STYLING_CODE_GLOBAL),
     preloadFile(STYLING_CODE_INLINE),
+    preloadFile(STYLING_CODE_VANILLA),
   ]);
   const content = await renderMDX({
     filePath: 'trees/docs/Styling/content.mdx',
     scope: {
       stylingGlobal,
       stylingInline,
+      stylingVanilla,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function ThemingSection() {
+  const [themingResolveTheme, themingCustomTheme] = await Promise.all([
+    preloadFile(THEMING_CODE_RESOLVE_THEME),
+    preloadFile(THEMING_CODE_CUSTOM_THEME),
+  ]);
+  const content = await renderMDX({
+    filePath: 'trees/docs/Theming/content.mdx',
+    scope: {
+      themingResolveTheme,
+      themingCustomTheme,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

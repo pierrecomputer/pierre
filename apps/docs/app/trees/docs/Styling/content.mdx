@@ -3,15 +3,29 @@
 The file tree is rendered inside a shadow DOM host (the `file-tree-container`
 custom element), so its styles are isolated from your page.
 
-Customize it by passing **class and style** on the host: use `className` and
-`style` on the React `FileTree` component, or set them on the host element after
-`render()` in vanilla JS. That lets you control layout (e.g. `maxHeight`,
-`width`) and override the tree’s CSS variables (e.g.
-`--trees-font-size-override`, `--trees-row-height-override`) in global CSS, on a
-wrapper, or via the `style` prop.
+Customize it by passing `className` and `style` on the host: use those props on
+the React `FileTree` component, or style the host returned by
+`getFileTreeContainer()` after `render()` in vanilla JS. That lets you control
+layout (`width`, `maxHeight`, borders, overflow) and override the tree’s CSS
+variables from global CSS, a wrapper, or the host element directly.
 
-For the full list of CSS variables, review `style.css` in the `@pierre/trees`
-package.
+<Notice icon={<IconBulbFill />}>
+  Think of styling in two layers: host styles change the outer panel, and
+  `--trees-*` variables change the UI rendered inside the shadow DOM.
+</Notice>
 
 <DocsCodeExample {...stylingGlobal} />
 <DocsCodeExample {...stylingInline} />
+<DocsCodeExample {...stylingVanilla} />
+
+### Fallback order
+
+Trees uses a consistent fallback chain for colors and theme tokens:
+
+1. `--trees-*-override`
+2. `--trees-theme-*`
+3. library defaults
+
+That means explicit overrides always win. Theme-derived values from
+`themeToTreeStyles()` sit in the middle, and the built-in defaults are only used
+when neither of those is present.
