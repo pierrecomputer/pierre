@@ -1,7 +1,7 @@
 .wrapper {
   overscroll-behavior-x: none;
   position: relative;
-  margin-inline: 8px;
+  margin-inline: 20px;
   margin-top: 8px;
   overflow-anchor: none;
 }
@@ -9,7 +9,8 @@
 .wrapper diffs-container {
   contain: layout paint style;
   overflow: clip;
-  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--color-border);
+  border-radius: 9px;
   /* box-shadow: 0 0 0 2px red; */
   margin-bottom: 8px;
   /* Need to percolate on this because
@@ -24,5 +25,4 @@
   contain: strict;
   position: sticky;
   width: 100%;
-  /* background-color: yellow; */
 }
