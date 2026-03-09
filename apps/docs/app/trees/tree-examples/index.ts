@@ -6,3 +6,4 @@ export { GitStatusSection } from './GitStatusSection';
 export { SearchSection } from './SearchSection';
 export { ThemingSection } from './ThemingSection';
 export { StylingSection } from './StylingSection';
+export { VirtualizationSection } from './VirtualizationSection';

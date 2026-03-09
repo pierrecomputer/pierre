@@ -11,6 +11,7 @@ import {
   SearchSection,
   StylingSection,
   ThemingSection,
+  VirtualizationSection,
 } from './tree-examples';
 // import { TreeAppExample } from './TreeAppExample';
 import Footer from '@/components/Footer';
@@ -36,6 +37,7 @@ export default function TreesHome() {
         <GitStatusSection />
         <DragDropSection />
         <SearchSection />
+        <VirtualizationSection />
         <A11ySection />
         <CustomIconsSection />
         <ThemingSection />
