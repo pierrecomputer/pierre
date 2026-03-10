@@ -139,7 +139,6 @@ export class VirtualizedFileDiff<
         if (
           line.nextElementSibling instanceof HTMLElement &&
           ('lineAnnotation' in line.nextElementSibling.dataset ||
-            'mergeConflictActions' in line.nextElementSibling.dataset ||
             'noNewline' in line.nextElementSibling.dataset)
         ) {
           if ('noNewline' in line.nextElementSibling.dataset) {
