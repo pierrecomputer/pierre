@@ -63,17 +63,23 @@ export function useUnresolvedFileInstance<LAnnotation>({
     const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
     return { fileDiff, actions };
   });
+  // UnresolvedFile is intentionally uncontrolled in React. Keep an internal
+  // source-of-truth file so sequential conflict actions apply to the latest
+  // resolved contents rather than the initial prop value.
+  const activeFileRef = useRef(file);
   const onMergeConflictAction = useStableCallback(
     (
       payload: MergeConflictActionPayload,
       instance: UnresolvedFile<LAnnotation>
     ) => {
+      const activeFile = activeFileRef.current;
       const newFile = instance.resolveConflict(
         payload.conflict.conflictIndex,
         payload.resolution,
-        file
+        activeFile
       );
       if (newFile == null) return;
+      activeFileRef.current = newFile;
       const { fileDiff, actions } = parseMergeConflictDiffFromFile(newFile);
       setState({ fileDiff, actions });
     }
