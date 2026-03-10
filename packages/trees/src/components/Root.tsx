@@ -84,7 +84,45 @@ export interface FileTreeRootProps {
   initialViewportHeight?: number | null;
 }
 
+type RemappedIconEntry =
+  | string
+  | {
+      name: string;
+      width?: number;
+      height?: number;
+      viewBox?: string;
+    };
+
+type RemappedIconProps = {
+  name: string;
+  remappedFrom?: string;
+  width?: number;
+  height?: number;
+  viewBox?: string;
+};
+
 const EMPTY_ANCESTORS: string[] = [];
+
+const normalizeIconRuleKey = (value: string): string =>
+  value.trim().replace(/^\./, '').toLowerCase();
+
+const getBaseFileName = (path: string): string => {
+  const slashIndex = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return slashIndex >= 0 ? path.slice(slashIndex + 1) : path;
+};
+
+const getExtensionCandidates = (fileName: string): string[] => {
+  const parts = fileName.toLowerCase().split('.');
+  if (parts.length <= 1) return [];
+  const extensions: string[] = [];
+  for (let index = 1; index < parts.length; index += 1) {
+    const extension = parts.slice(index).join('.');
+    if (extension.length > 0) {
+      extensions.push(extension);
+    }
+  }
+  return extensions;
+};
 
 // Reuses the last rebuild's visible ID list so virtualized rendering can size
 // and slice the tree without forcing core to instantiate every visible item.
@@ -124,22 +162,82 @@ export function Root({
       : undefined;
 
   const iconRemap = fileTreeOptions.icons?.remap;
-  const remapIcon = useCallback(
+  const iconByFileName = useMemo(() => {
+    const entries = fileTreeOptions.icons?.byFileName;
+    const map = new Map<string, RemappedIconEntry>();
+    if (entries == null) return map;
+    for (const [fileName, icon] of Object.entries(entries)) {
+      map.set(fileName.toLowerCase(), icon);
+    }
+    return map;
+  }, [fileTreeOptions.icons?.byFileName]);
+  const iconByFileExtension = useMemo(() => {
+    const entries = fileTreeOptions.icons?.byFileExtension;
+    const map = new Map<string, RemappedIconEntry>();
+    if (entries == null) return map;
+    for (const [extension, icon] of Object.entries(entries)) {
+      map.set(normalizeIconRuleKey(extension), icon);
+    }
+    return map;
+  }, [fileTreeOptions.icons?.byFileExtension]);
+  const iconByFileNameContains = useMemo(() => {
+    const entries = fileTreeOptions.icons?.byFileNameContains;
+    if (entries == null) return [] as [string, RemappedIconEntry][];
+    return Object.entries(entries).map(
+      ([needle, icon]): [string, RemappedIconEntry] => [
+        needle.toLowerCase(),
+        icon,
+      ]
+    );
+  }, [fileTreeOptions.icons?.byFileNameContains]);
+  const remapEntryToIcon = useCallback(
     (
-      name: SVGSpriteNames
-    ): {
-      name: string;
-      remappedFrom?: string;
-      width?: number;
-      height?: number;
-      viewBox?: string;
-    } => {
+      entry: RemappedIconEntry,
+      remappedFrom: SVGSpriteNames
+    ): RemappedIconProps => {
+      if (typeof entry === 'string') {
+        return { name: entry, remappedFrom };
+      }
+      return { ...entry, remappedFrom };
+    },
+    []
+  );
+  const remapIcon = useCallback(
+    (name: SVGSpriteNames, filePath?: string): RemappedIconProps => {
+      if (name === 'file-tree-icon-file' && filePath != null) {
+        const fileName = getBaseFileName(filePath);
+        const lowerFileName = fileName.toLowerCase();
+        const fileNameEntry = iconByFileName.get(lowerFileName);
+        if (fileNameEntry != null) {
+          return remapEntryToIcon(fileNameEntry, name);
+        }
+
+        for (const [needle, matchEntry] of iconByFileNameContains) {
+          if (lowerFileName.includes(needle)) {
+            return remapEntryToIcon(matchEntry, name);
+          }
+        }
+
+        const extensionCandidates = getExtensionCandidates(fileName);
+        for (const extension of extensionCandidates) {
+          const extensionEntry = iconByFileExtension.get(extension);
+          if (extensionEntry != null) {
+            return remapEntryToIcon(extensionEntry, name);
+          }
+        }
+      }
+
       const entry = iconRemap?.[name];
       if (entry == null) return { name };
-      if (typeof entry === 'string') return { name: entry, remappedFrom: name };
-      return { ...entry, remappedFrom: name };
+      return remapEntryToIcon(entry, name);
     },
-    [iconRemap]
+    [
+      iconByFileExtension,
+      iconByFileName,
+      iconByFileNameContains,
+      iconRemap,
+      remapEntryToIcon,
+    ]
   );
 
   const treeDomId = useMemo(() => {

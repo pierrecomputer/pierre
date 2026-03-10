@@ -148,8 +148,15 @@ const fileTree = new FileTree({
   ],
   icons: {
     spriteSheet: customSpriteSheet,
-    remap: {
-      'file-tree-icon-file': 'my-file',
+    byFileExtension: {
+      ts: 'my-file',
+      tsx: 'my-file',
+    },
+    byFileName: {
+      'package.json': 'my-file',
+    },
+    byFileNameContains: {
+      dockerfile: 'my-file',
     },
   },
 });

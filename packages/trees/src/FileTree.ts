@@ -118,7 +118,14 @@ type RemappedIcon =
     };
 export interface FileTreeIconConfig {
   spriteSheet?: string;
+  /** Remap built-in tree icon slots (file, chevron, dot, lock). */
   remap?: Record<string, RemappedIcon>;
+  /** Remap file icons by exact basename (e.g. "package.json", ".gitignore"). */
+  byFileName?: Record<string, RemappedIcon>;
+  /** Remap file icons by extension without a leading dot (e.g. "ts", "spec.ts"). */
+  byFileExtension?: Record<string, RemappedIcon>;
+  /** Remap file icons by basename substring (e.g. "dockerfile", "license"). */
+  byFileNameContains?: Record<string, RemappedIcon>;
 }
 
 export interface FileTreeOptions {
