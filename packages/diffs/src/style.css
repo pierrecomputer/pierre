@@ -1514,24 +1514,15 @@
     font-style: normal;
     cursor: pointer;
     padding: 0;
-    opacity: 0.9;
-  }
-
-  [data-merge-conflict-action='current'] {
-    color: color-mix(in lab, var(--diffs-addition-base) 65%, var(--diffs-fg));
-  }
-
-  [data-merge-conflict-action='incoming'] {
-    color: color-mix(in lab, var(--diffs-modified-base) 65%, var(--diffs-fg));
   }
 
   [data-merge-conflict-action]:hover {
-    opacity: 1;
+    color: var(--diffs-fg);
   }
 
   [data-merge-conflict-action-separator] {
     color: var(--diffs-fg-number);
-    opacity: 0.65;
+    opacity: 0.6;
     user-select: none;
   }
 
