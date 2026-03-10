@@ -47,7 +47,6 @@ import {
 } from '../utils/expandPaths';
 import { fileListToTree } from '../utils/fileListToTree';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
-import { now, reportDuration } from '../utils/perf';
 import type { ChildrenSortOption } from '../utils/sortChildren';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
@@ -411,30 +410,19 @@ export function Root({
     [sortOption]
   );
 
-  const onPerfEventRef = useRef(fileTreeOptions.onPerformanceEvent);
-  onPerfEventRef.current = fileTreeOptions.onPerformanceEvent;
-
-  const treeData = useMemo(() => {
-    const startTime = now();
-    const nextTreeData = fileListToTree(files, { sortComparator });
-    reportDuration(onPerfEventRef.current, 'tree-model-build', startTime, {
-      nodeCount: Object.keys(nextTreeData).length,
-    });
-    return nextTreeData;
-  }, [files, sortComparator]);
+  const treeData = useMemo(
+    () => fileListToTree(files, { sortComparator }),
+    [files, sortComparator]
+  );
 
   // Build path↔id maps from treeData
   const { pathToId, idToPath } = useMemo(() => {
-    const startTime = now();
     const p2i = new Map<string, string>();
     const i2p = new Map<string, string>();
     for (const [id, node] of Object.entries(treeData)) {
       p2i.set(node.path, id);
       i2p.set(id, node.path);
     }
-    reportDuration(onPerfEventRef.current, 'path-map-build', startTime, {
-      nodeCount: i2p.size,
-    });
     return { pathToId: p2i, idToPath: i2p };
   }, [treeData]);
 
@@ -636,9 +624,8 @@ export function Root({
       ...(state.state != null && { state: state.state }),
     };
   }, [treeData, pathToId, stateConfig, flattenEmptyDirectories]);
-  const dataLoader = useMemo(() => {
-    const startTime = now();
-    const nextDataLoader =
+  const dataLoader = useMemo(
+    () =>
       useLazyDataLoader === true
         ? generateLazyDataLoader(files, {
             flattenEmptyDirectories,
@@ -646,18 +633,15 @@ export function Root({
           })
         : generateSyncDataLoaderFromTreeData(treeData, {
             flattenEmptyDirectories,
-          });
-    reportDuration(onPerfEventRef.current, 'data-loader-build', startTime, {
-      loader: useLazyDataLoader === true ? 'lazy' : 'sync',
-    });
-    return nextDataLoader;
-  }, [
-    files,
-    flattenEmptyDirectories,
-    sortComparator,
-    treeData,
-    useLazyDataLoader,
-  ]);
+          }),
+    [
+      files,
+      flattenEmptyDirectories,
+      sortComparator,
+      treeData,
+      useLazyDataLoader,
+    ]
+  );
 
   const isDnD = fileTreeOptions.dragAndDrop === true;
 
@@ -827,59 +811,56 @@ export function Root({
     gitStatusSignature: getGitStatusSignature(gitStatus),
     gitStatusPathToId: pathToId,
   };
-  const tree = useTree<FileTreeNode>(
-    {
-      ...restTreeConfig,
-      ...searchModeConfig,
-      ...gitStatusConfig,
-      rootItemId: 'root',
-      dataLoader,
-      getItemName: (item) => item.getItemData().name,
-      isItemFolder: (item) => {
-        const children = item.getItemData()?.children?.direct;
-        return children != null;
-      },
-      hotkeys: {
-        // Begin the hotkey name with "custom" to satisfy the type checker
-        customExpandAll: {
-          hotkey: 'KeyQ',
-          handler: (_e, tree) => {
-            void tree.expandAll();
-          },
-        },
-        customCollapseAll: {
-          hotkey: 'KeyW',
-          handler: (_e, tree) => {
-            void tree.collapseAll();
-          },
-        },
-      },
-      features,
-      ...(isDnD && {
-        canReorder: false,
-        canDrag: (items: ItemInstance<FileTreeNode>[]) => {
-          if (searchActiveRef.current) return false;
-          if (lockedPaths == null || lockedPaths.length === 0) return true;
-          const lockedSet = new Set(lockedPaths);
-          for (const item of items) {
-            const path = item.getItemData().path;
-            if (path != null && lockedSet.has(getSelectionPath(path)))
-              return false;
-          }
-          return true;
-        },
-        onDrop: onDropHandler,
-        canDrop: (
-          _items: ItemInstance<FileTreeNode>[],
-          target: { item: ItemInstance<FileTreeNode> }
-        ) => target.item.isFolder(),
-        openOnDropDelay: 800,
-        _onTouchDragMove: detectFlattenedSubfolderFromPoint,
-        _onTouchDragEnd: clearFlattenedSubfolder,
-      }),
+  const tree = useTree<FileTreeNode>({
+    ...restTreeConfig,
+    ...searchModeConfig,
+    ...gitStatusConfig,
+    rootItemId: 'root',
+    dataLoader,
+    getItemName: (item) => item.getItemData().name,
+    isItemFolder: (item) => {
+      const children = item.getItemData()?.children?.direct;
+      return children != null;
     },
-    onPerfEventRef.current
-  );
+    hotkeys: {
+      // Begin the hotkey name with "custom" to satisfy the type checker
+      customExpandAll: {
+        hotkey: 'KeyQ',
+        handler: (_e, tree) => {
+          void tree.expandAll();
+        },
+      },
+      customCollapseAll: {
+        hotkey: 'KeyW',
+        handler: (_e, tree) => {
+          void tree.collapseAll();
+        },
+      },
+    },
+    features,
+    ...(isDnD && {
+      canReorder: false,
+      canDrag: (items: ItemInstance<FileTreeNode>[]) => {
+        if (searchActiveRef.current) return false;
+        if (lockedPaths == null || lockedPaths.length === 0) return true;
+        const lockedSet = new Set(lockedPaths);
+        for (const item of items) {
+          const path = item.getItemData().path;
+          if (path != null && lockedSet.has(getSelectionPath(path)))
+            return false;
+        }
+        return true;
+      },
+      onDrop: onDropHandler,
+      canDrop: (
+        _items: ItemInstance<FileTreeNode>[],
+        target: { item: ItemInstance<FileTreeNode> }
+      ) => target.item.isFolder(),
+      openOnDropDelay: 800,
+      _onTouchDragMove: detectFlattenedSubfolderFromPoint,
+      _onTouchDragEnd: clearFlattenedSubfolder,
+    }),
+  });
 
   const getAncestors = useCallback(
     (itemId: string): string[] => {
@@ -1248,15 +1229,6 @@ export function Root({
               <VirtualizedList
                 itemCount={items.length}
                 renderItem={renderItemAtIndex}
-                onFirstRender={(details) => {
-                  onPerfEventRef.current?.({
-                    phase: 'virtualized-first-render',
-                    durationMs: details.durationMs,
-                    details: {
-                      itemCount: items.length,
-                    },
-                  });
-                }}
                 scrollToIndex={
                   focusedIndex != null && focusedIndex >= 0
                     ? focusedIndex

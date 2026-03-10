@@ -7,13 +7,10 @@
 import type { JSX } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
-import { now } from '../utils/perf';
-
 export interface VirtualizedListProps {
   itemCount: number;
   renderItem: (index: number) => JSX.Element | null;
   scrollToIndex?: number | null;
-  onFirstRender?: (details: { durationMs: number }) => void;
   /**
    * Optional explicit row height in px. If omitted, resolves from
    * --ft-internal-row-height (fallback 30).
@@ -223,13 +220,10 @@ export function computeStickyWindowLayout({
 export function VirtualizedList({
   itemCount,
   renderItem,
-  onFirstRender,
   scrollToIndex,
   itemHeight,
 }: VirtualizedListProps): JSX.Element {
   'use no memo';
-  const renderStartRef = useRef<number>(now());
-  const hasReportedFirstRenderRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const stickyOffsetRef = useRef<HTMLDivElement>(null);
   const stickyWindowRef = useRef<HTMLDivElement>(null);
@@ -239,18 +233,6 @@ export function VirtualizedList({
     itemHeight != null && itemHeight > 0 ? itemHeight : DEFAULT_ITEM_HEIGHT
   );
   const [viewportHeight, setViewportHeight] = useState<number>(0);
-
-  useLayoutEffect(() => {
-    if (hasReportedFirstRenderRef.current) {
-      return;
-    }
-    hasReportedFirstRenderRef.current = true;
-    onFirstRender?.({
-      durationMs: now() - renderStartRef.current,
-    });
-    // Fire-once effect; the ref guard prevents re-invocation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Find viewport and set up scroll/resize listeners
   useLayoutEffect(() => {

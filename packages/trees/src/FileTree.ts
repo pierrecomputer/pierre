@@ -56,19 +56,6 @@ export type FileTreeCollision = {
   destination: string;
 };
 
-export type FileTreePerformancePhase =
-  | 'tree-model-build'
-  | 'path-map-build'
-  | 'data-loader-build'
-  | 'core-rebuild'
-  | 'virtualized-first-render';
-
-export interface FileTreePerformanceEvent {
-  phase: FileTreePerformancePhase;
-  durationMs: number;
-  details?: Record<string, string | number>;
-}
-
 export interface FileTreeHandle {
   tree: TreeInstance<FileTreeNode>;
   pathToId: Map<string, string>;
@@ -122,8 +109,6 @@ export interface FileTreeOptions {
    *  `threshold` is the minimum item count to activate virtualization. */
   virtualize?: { threshold: number } | false;
   icons?: FileTreeIconConfig;
-  /** Optional callback for internal performance instrumentation. */
-  onPerformanceEvent?: (event: FileTreePerformanceEvent) => void;
 }
 
 export interface FileTreeStateConfig {

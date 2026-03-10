@@ -1,11 +1,7 @@
 'use client';
 
 import { expandImplicitParentDirectories, FileTree } from '@pierre/trees';
-import type {
-  FileTreeOptions,
-  FileTreePerformanceEvent,
-  FileTreeStateConfig,
-} from '@pierre/trees';
+import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/trees';
 import { FileTree as FileTreeReact } from '@pierre/trees/react';
 import '@pierre/trees/web-components';
 import {
@@ -1798,41 +1794,21 @@ function ReactSSRCustomIcons({
  */
 function VirtualizedLinuxKernelCard() {
   const [mounted, setMounted] = useState(false);
-  const [perfLog, setPerfLog] = useState<string[]>([]);
 
-  const addPerfLog = useCallback((line: string) => {
-    setPerfLog((prev) => [...prev.slice(-19), line]);
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (node == null) return;
+    const fileTree = new FileTree(
+      {
+        initialFiles: linuxKernelFiles,
+        virtualize: { threshold: 0 },
+        flattenEmptyDirectories: true,
+        sort: false,
+      },
+      { initialExpandedItems: linuxKernelAllFolders }
+    );
+    fileTree.render({ containerWrapper: node });
+    return () => fileTree.cleanUp();
   }, []);
-
-  const ref = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (node == null) return;
-      const onPerformanceEvent = (event: FileTreePerformanceEvent) => {
-        const detailPairs = Object.entries(event.details ?? {});
-        const detailText =
-          detailPairs.length > 0
-            ? ` (${detailPairs.map(([k, v]) => `${k}=${v}`).join(', ')})`
-            : '';
-        addPerfLog(
-          `${event.phase}: ${event.durationMs.toFixed(1)}ms${detailText}`
-        );
-      };
-
-      const fileTree = new FileTree(
-        {
-          initialFiles: linuxKernelFiles,
-          virtualize: { threshold: 0 },
-          flattenEmptyDirectories: true,
-          sort: false,
-          onPerformanceEvent,
-        },
-        { initialExpandedItems: linuxKernelAllFolders }
-      );
-      fileTree.render({ containerWrapper: node });
-      return () => fileTree.cleanUp();
-    },
-    [addPerfLog]
-  );
 
   return (
     <ExampleCard
@@ -1840,10 +1816,7 @@ function VirtualizedLinuxKernelCard() {
       description={`${linuxKernelFiles.length.toLocaleString()} files with opt-in virtualization`}
     >
       {mounted ? (
-        <>
-          <div ref={ref} style={{ height: '500px' }} />
-          <StateLog entries={perfLog} />
-        </>
+        <div ref={ref} style={{ height: '500px' }} />
       ) : (
         <div
           style={{
@@ -1857,10 +1830,7 @@ function VirtualizedLinuxKernelCard() {
             type="button"
             className="rounded-sm border px-4 py-2 text-sm"
             style={{ borderColor: 'var(--color-border)' }}
-            onClick={() => {
-              setPerfLog([]);
-              setMounted(true);
-            }}
+            onClick={() => setMounted(true)}
           >
             Render
           </button>
