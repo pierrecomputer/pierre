@@ -1256,147 +1256,144 @@
     }
   }
 
-  :is([data-file], [data-diff])
-    [data-merge-conflict^='marker-'][data-line][data-line-type='context'],
-  :is([data-file], [data-diff])
-    [data-merge-conflict^='marker-'][data-line][data-line-type='context-expanded'] {
-    color: var(--diffs-fg);
-  }
+  [data-merge-conflict^='marker-'][data-line] {
+    &[data-line-type='context'],
+    &[data-line-type='context-expanded'] {
+      color: var(--diffs-fg);
 
-  :is([data-file], [data-diff])
-    [data-merge-conflict^='marker-'][data-line][data-line-type='context']
-    span,
-  :is([data-file], [data-diff])
-    [data-merge-conflict^='marker-'][data-line][data-line-type='context-expanded']
-    span {
-    color: var(--diffs-fg) !important;
-  }
-
-  :is([data-file], [data-diff])
-    [data-merge-conflict='marker-start'][data-line][data-line-type='context']::after,
-  :is([data-file], [data-diff])
-    [data-merge-conflict='marker-start'][data-line][data-line-type='context-expanded']::after {
-    content: '  (Current Change)';
-    color: var(--diffs-fg-conflict-marker);
-    opacity: 1;
-    font-style: normal;
-    font-family: var(
-      --diffs-header-font-family,
-      var(--diffs-header-font-fallback)
-    );
-  }
-
-  :is([data-file], [data-diff])
-    [data-merge-conflict='marker-end'][data-line][data-line-type='context']::after,
-  :is([data-file], [data-diff])
-    [data-merge-conflict='marker-end'][data-line][data-line-type='context-expanded']::after {
-    content: '  (Incoming Change)';
-    color: var(--diffs-fg-conflict-marker);
-    opacity: 1;
-    font-style: normal;
-    font-family: var(
-      --diffs-header-font-family,
-      var(--diffs-header-font-fallback)
-    );
-  }
-
-  :is([data-file], [data-diff]) {
-    [data-merge-conflict='marker-start'],
-    [data-merge-conflict='marker-base'],
-    [data-merge-conflict='marker-separator'],
-    [data-merge-conflict='marker-end'] {
-      &[data-line],
-      &[data-no-newline] {
-        background-color: var(--diffs-bg-conflict-marker);
+      span {
+        color: var(--diffs-fg) !important;
       }
+    }
+  }
 
-      &[data-column-number] {
-        background-color: var(--diffs-bg-conflict-marker-number);
+  [data-merge-conflict='marker-start'][data-line] {
+    &[data-line-type='context'],
+    &[data-line-type='context-expanded'] {
+      &::after {
+        content: '  (Current Change)';
         color: var(--diffs-fg-conflict-marker);
-
-        [data-line-number-content] {
-          color: var(--diffs-fg-conflict-marker);
-        }
+        opacity: 1;
+        font-style: normal;
+        font-family: var(
+          --diffs-header-font-family,
+          var(--diffs-header-font-fallback)
+        );
       }
     }
+  }
 
-    [data-merge-conflict='current'] {
-      &[data-line],
-      &[data-no-newline] {
-        background-color: var(--conflict-bg-current);
+  [data-merge-conflict='marker-end'][data-line] {
+    &[data-line-type='context'],
+    &[data-line-type='context-expanded'] {
+      &::after {
+        content: '  (Incoming Change)';
+        color: var(--diffs-fg-conflict-marker);
+        opacity: 1;
+        font-style: normal;
+        font-family: var(
+          --diffs-header-font-family,
+          var(--diffs-header-font-fallback)
+        );
       }
+    }
+  }
 
-      &[data-column-number] {
-        background-color: var(--conflict-bg-current-number);
+  [data-merge-conflict='marker-start'],
+  [data-merge-conflict='marker-base'],
+  [data-merge-conflict='marker-separator'],
+  [data-merge-conflict='marker-end'] {
+    &[data-line],
+    &[data-no-newline] {
+      background-color: var(--diffs-bg-conflict-marker);
+    }
+
+    &[data-column-number] {
+      background-color: var(--diffs-bg-conflict-marker-number);
+      color: var(--diffs-fg-conflict-marker);
+
+      [data-line-number-content] {
+        color: var(--diffs-fg-conflict-marker);
+      }
+    }
+  }
+
+  [data-merge-conflict='current'] {
+    &[data-line],
+    &[data-no-newline] {
+      background-color: var(--conflict-bg-current);
+    }
+
+    &[data-column-number] {
+      background-color: var(--conflict-bg-current-number);
+      color: var(--diffs-addition-base);
+    }
+  }
+
+  [data-merge-conflict='marker-start'] {
+    &[data-line],
+    &[data-no-newline] {
+      background-color: var(--conflict-bg-current-header);
+    }
+
+    &[data-column-number] {
+      background-color: var(--conflict-bg-current-header-number);
+      color: var(--diffs-addition-base);
+
+      [data-line-number-content] {
         color: var(--diffs-addition-base);
       }
     }
+  }
 
-    [data-merge-conflict='marker-start'] {
-      &[data-line],
-      &[data-no-newline] {
-        background-color: var(--conflict-bg-current-header);
-      }
-
-      &[data-column-number] {
-        background-color: var(--conflict-bg-current-header-number);
-        color: var(--diffs-addition-base);
-
-        [data-line-number-content] {
-          color: var(--diffs-addition-base);
-        }
-      }
+  [data-merge-conflict='marker-end'] {
+    &[data-line],
+    &[data-no-newline] {
+      background-color: var(--conflict-bg-incoming-header);
     }
 
-    [data-merge-conflict='marker-end'] {
-      &[data-line],
-      &[data-no-newline] {
-        background-color: var(--conflict-bg-incoming-header);
-      }
+    &[data-column-number] {
+      background-color: var(--conflict-bg-incoming-header-number);
+      color: var(--diffs-modified-base);
 
-      &[data-column-number] {
-        background-color: var(--conflict-bg-incoming-header-number);
-        color: var(--diffs-modified-base);
-
-        [data-line-number-content] {
-          color: var(--diffs-modified-base);
-        }
-      }
-    }
-
-    [data-merge-conflict='marker-separator'] {
-      &[data-line],
-      &[data-no-newline] {
-        background-color: var(--diffs-bg);
-      }
-
-      &[data-column-number] {
-        background-color: var(--diffs-bg);
-      }
-    }
-
-    [data-merge-conflict='base'] {
-      &[data-line],
-      &[data-no-newline] {
-        background-color: var(--diffs-bg-conflict-base);
-      }
-
-      &[data-column-number] {
-        background-color: var(--diffs-bg-conflict-base-number);
+      [data-line-number-content] {
         color: var(--diffs-modified-base);
       }
     }
+  }
 
-    [data-merge-conflict='incoming'] {
-      &[data-line],
-      &[data-no-newline] {
-        background-color: var(--conflict-bg-incoming);
-      }
+  [data-merge-conflict='marker-separator'] {
+    &[data-line],
+    &[data-no-newline] {
+      background-color: var(--diffs-bg);
+    }
 
-      &[data-column-number] {
-        background-color: var(--conflict-bg-incoming-number);
-        color: var(--diffs-modified-base);
-      }
+    &[data-column-number] {
+      background-color: var(--diffs-bg);
+    }
+  }
+
+  [data-merge-conflict='base'] {
+    &[data-line],
+    &[data-no-newline] {
+      background-color: var(--diffs-bg-conflict-base);
+    }
+
+    &[data-column-number] {
+      background-color: var(--diffs-bg-conflict-base-number);
+      color: var(--diffs-modified-base);
+    }
+  }
+
+  [data-merge-conflict='incoming'] {
+    &[data-line],
+    &[data-no-newline] {
+      background-color: var(--conflict-bg-incoming);
+    }
+
+    &[data-column-number] {
+      background-color: var(--conflict-bg-incoming-number);
+      color: var(--diffs-modified-base);
     }
   }
 
