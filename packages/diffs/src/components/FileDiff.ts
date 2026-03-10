@@ -561,13 +561,7 @@ export class FileDiff<LAnnotation = undefined> {
     ) {
       return;
     }
-    this.render({
-      oldFile: this.deletionFile,
-      newFile: this.additionFile,
-      fileDiff: this.fileDiff,
-      forceRender: true,
-      renderRange: this.renderRange,
-    });
+    this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
   public handleExpandHunk = (

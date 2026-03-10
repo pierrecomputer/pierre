@@ -305,6 +305,13 @@ export class UnresolvedFile<
     this.renderMergeConflictActionSlots();
   }
 
+  override rerender(): void {
+    if (!this.enabled || this.fileDiff == null) {
+      return;
+    }
+    this.render({ forceRender: true, renderRange: this.renderRange });
+  }
+
   override render(props: UnresolvedFileRenderProps<LAnnotation> = {}): boolean {
     let { file, fileDiff, actions, lineAnnotations, ...rest } = props;
     const source = this.getOrComputeDiff({ file, fileDiff, actions });
