@@ -207,7 +207,6 @@ function generateLargeTree(): { files: string[]; expandedItems: string[] } {
 const panelStyle: CSSProperties = {
   colorScheme: 'dark',
   height: 540,
-  overflowX: 'visible',
 };
 
 const virtualizationDemoData = generateLargeTree();
@@ -248,20 +247,18 @@ export function VirtualizationSection() {
         }
       />
 
-      <div className="max-w-lg">
-        <FileTree
-          className={DEFAULT_FILE_TREE_PANEL_CLASS}
-          prerenderedHTML={virtualizationPrerenderedHTML}
-          options={{
-            virtualize: { threshold: 0 },
-            flattenEmptyDirectories: true,
-            id: 'virtualization-demo',
-          }}
-          initialFiles={files}
-          initialExpandedItems={expandedItems}
-          style={panelStyle}
-        />
-      </div>
+      <FileTree
+        className={DEFAULT_FILE_TREE_PANEL_CLASS}
+        prerenderedHTML={virtualizationPrerenderedHTML}
+        options={{
+          virtualize: { threshold: 0 },
+          flattenEmptyDirectories: true,
+          id: 'virtualization-demo',
+        }}
+        initialFiles={files}
+        initialExpandedItems={expandedItems}
+        style={panelStyle}
+      />
     </TreeExampleSection>
   );
 }
