@@ -2,7 +2,7 @@
 
 import { UnresolvedFile } from '@pierre/diffs/react';
 import type { PreloadUnresolvedFileResult } from '@pierre/diffs/ssr';
-import { IconColorDark, IconColorLight } from '@pierre/icons';
+import { IconColorDark, IconColorLight, IconRefresh } from '@pierre/icons';
 import { useMemo, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -15,6 +15,7 @@ interface MergeConflictProps {
 
 export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const [instanceKey, setInstanceKey] = useState(0);
+  const [hasResolved, setHasResolved] = useState(false);
   const [themeType, setThemeType] = useState<'light' | 'dark'>('dark');
 
   const options = useMemo(
@@ -27,7 +28,7 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   );
 
   return (
-    <div className="scroll-mt-20 space-y-5">
+    <div className="scroll-mt-20 space-y-5" id="conflicts">
       <FeatureHeader
         title="Merge conflict resolution UI"
         description={
@@ -41,7 +42,15 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button variant="outline" onClick={() => setInstanceKey((v) => v + 1)}>
+        <Button
+          variant="outline"
+          disabled={!hasResolved}
+          onClick={() => {
+            setInstanceKey((v) => v + 1);
+            setHasResolved(false);
+          }}
+        >
+          <IconRefresh />
           Reset
         </Button>
         <ButtonGroup
@@ -59,28 +68,44 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         </ButtonGroup>
       </div>
 
-      <UnresolvedFile
-        key={instanceKey}
-        file={prerenderedFile.file}
-        options={options}
-        prerenderedHTML={prerenderedFile.prerenderedHTML}
-        className={`overflow-hidden rounded-lg border ${themeType === 'light' ? 'border-neutral-200' : 'border-neutral-800'}`}
-        // NOTE(amadeus): Test code, I need to better solve the whole server/vanilla/custom js thing with react
-        // renderMergeConflictUtility={(action, getInstance) => {
-        //   return (
-        //     <>
-        //       <button
-        //         className="cursor-pointer opacity-90 hover:opacity-100"
-        //         onClick={() => {
-        //           console.log('Clicked', action, getInstance());
-        //         }}
-        //       >
-        //         Resolve with AI
-        //       </button>
-        //     </>
-        //   );
-        // }}
-      />
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      <div
+        onClickCapture={(e) => {
+          if (hasResolved) return;
+          for (const el of e.nativeEvent.composedPath()) {
+            if (
+              el instanceof HTMLElement &&
+              el.hasAttribute('data-merge-conflict-action')
+            ) {
+              setHasResolved(true);
+              break;
+            }
+          }
+        }}
+      >
+        <UnresolvedFile
+          key={instanceKey}
+          file={prerenderedFile.file}
+          options={options}
+          prerenderedHTML={prerenderedFile.prerenderedHTML}
+          className={`overflow-hidden rounded-lg border ${themeType === 'light' ? 'border-neutral-200' : 'border-neutral-800'}`}
+          // NOTE(amadeus): Test code, I need to better solve the whole server/vanilla/custom js thing with react
+          // renderMergeConflictUtility={(action, getInstance) => {
+          //   return (
+          //     <>
+          //       <button
+          //         className="cursor-pointer opacity-90 hover:opacity-100"
+          //         onClick={() => {
+          //           console.log('Clicked', action, getInstance());
+          //         }}
+          //       >
+          //         Resolve with AI
+          //       </button>
+          //     </>
+          //   );
+          // }}
+        />
+      </div>
     </div>
   );
 }
