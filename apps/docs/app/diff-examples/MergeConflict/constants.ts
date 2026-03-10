@@ -9,17 +9,31 @@ export const MERGE_CONFLICT_EXAMPLE: PreloadUnresolvedFileOptions<undefined> = {
 
 export async function createSession(userId: string) {
 <<<<<<< HEAD
-  const ttlHours = 12;
-  const session = await db.session.create({
+  const sessionData = {
+=======
+  const sessionData = {
+    source: 'web',
+>>>>>>> feature/oauth-session-source
+    provider: 'password',
     userId,
-    expiresAt: Date.now() + ttlHours * 60 * 60 * 1000,
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+  };
+
+  const session = await db.session.create({ data: sessionData });
+
+<<<<<<< HEAD
+  await db.auditLog.create({
+    event: 'session.created',
+    userId,
   });
 =======
-  const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-  const session = await db.session.create({
-    userId,
-    expiresAt,
-    source: 'web',
+  await db.sessionEvent.create({
+    type: 'audit-log',
+    data: {
+      sessionId: session.id,
+      type: 'created',
+      source: sessionData.source ?? 'credentials',
+    },
   });
 >>>>>>> feature/oauth-session-source
 
