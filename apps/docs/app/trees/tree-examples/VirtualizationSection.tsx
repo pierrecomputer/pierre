@@ -88,23 +88,6 @@ const PACKAGE_NAMES = [
 
 const APP_NAMES = ['web', 'admin', 'docs', 'mobile', 'storybook'];
 const FILE_COUNT_FORMATTER = new Intl.NumberFormat('en-US');
-const DEMO_EXPANDED_ITEMS = [
-  'packages',
-  'packages/ui',
-  'packages/ui/src',
-  'packages/ui/src/components',
-  'packages/core',
-  'packages/core/src',
-  'packages/core/src/utils',
-  'apps',
-  'apps/docs',
-  'apps/docs/src',
-  'apps/docs/src/components',
-  'apps/web',
-  'apps/web/src',
-  'apps/web/src/pages',
-] as const;
-
 function generateLargeTree(): { files: string[]; expandedItems: string[] } {
   const files: string[] = [
     'README.md',
@@ -200,7 +183,7 @@ function generateLargeTree(): { files: string[]; expandedItems: string[] } {
 
   return {
     files,
-    expandedItems: DEMO_EXPANDED_ITEMS.filter((dir) => dirSet.has(dir)),
+    expandedItems: [...dirSet],
   };
 }
 
@@ -242,7 +225,7 @@ export function VirtualizationSection() {
             </Link>{' '}
             to enable it. As a demo, the tree below contains{' '}
             <strong>{FILE_COUNT_FORMATTER.format(files.length)} files</strong>{' '}
-            with a representative subset expanded.
+            with every folder expanded.
           </>
         }
       />
