@@ -179,6 +179,27 @@ interface FileTreeIconConfig {
     | string
     | { name: string; width?: number; height?: number; viewBox?: string }
   >;
+
+  // Remap file icons by exact basename (e.g. package.json, .gitignore).
+  byFileName?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
+
+  // Remap file icons by extension (e.g. ts, tsx, spec.ts).
+  byFileExtension?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
+
+  // Remap file icons when filename contains a substring (e.g. dockerfile).
+  byFileNameContains?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
 }
 
 // Example: replace the file and chevron icons with custom symbols.
@@ -201,6 +222,16 @@ const options = {
     remap: {
       'file-tree-icon-file': 'my-file',
       'file-tree-icon-chevron': { name: 'my-folder', width: 16, height: 16 },
+    },
+    byFileExtension: {
+      ts: 'my-file',
+      tsx: 'my-file',
+    },
+    byFileName: {
+      'package.json': 'my-file',
+    },
+    byFileNameContains: {
+      dockerfile: 'my-file',
     },
   },
 };`,

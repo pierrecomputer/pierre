@@ -149,7 +149,10 @@ export interface TreeItemProps {
   idToPath: IdToPathLookup;
   ancestors: string[];
   treeDomId: string;
-  remapIcon: (name: SVGSpriteNames) => {
+  remapIcon: (
+    name: SVGSpriteNames,
+    filePath?: string
+  ) => {
     name: string;
     remappedFrom?: string;
     width?: number;
@@ -183,7 +186,8 @@ function treeItemPropsAreEqual(
     prev.containsGitChange === next.containsGitChange &&
     prev.flattens === next.flattens &&
     prev.ancestors === next.ancestors &&
-    prev.treeDomId === next.treeDomId
+    prev.treeDomId === next.treeDomId &&
+    prev.remapIcon === next.remapIcon
   );
 }
 
@@ -308,7 +312,9 @@ function TreeItemInner({
             alignCapitals={alignCapitals}
           />
         ) : (
-          <Icon {...remapIcon('file-tree-icon-file')} />
+          <Icon
+            {...remapIcon('file-tree-icon-file', item.getItemData().path)}
+          />
         )}
       </div>
       <div data-item-section="content">
