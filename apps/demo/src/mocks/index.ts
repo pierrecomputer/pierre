@@ -8,6 +8,7 @@ import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import mdContent from './example_md.txt?raw';
 import tsContent from './example_ts.txt?raw';
 import fileAnsi from './fileAnsi.txt?raw';
+import fileConflict from './fileConflict.txt?raw';
 import fileNew from './fileNew.txt?raw';
 import fileOld from './fileOld.txt?raw';
 
@@ -37,6 +38,7 @@ export const CodeConfigs = [
 export const FILE_OLD = fileOld;
 export const FILE_NEW = fileNew;
 export const FILE_ANSI = fileAnsi;
+export const FILE_CONFLICT = fileConflict;
 
 export interface LineCommentMetadata {
   author: string;
