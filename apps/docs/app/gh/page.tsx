@@ -1,5 +1,3 @@
-'use client';
-
 import { AdvancedDiff } from './AdvancedDiff';
 import { Header } from '@/components/Header';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
