@@ -6,13 +6,25 @@ import {
 } from '@headless-tree/core';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
+import { now, type PerfCallback, reportDuration } from '../../utils/perf';
+
+export const useTree = <T>(
+  config: TreeConfig<T>,
+  onPerformanceEvent?: PerfCallback
+): TreeInstance<T> => {
   'use no memo';
+  const performanceEventRef = useRef(onPerformanceEvent);
+  performanceEventRef.current = onPerformanceEvent;
+
   const [tree] = useState(() => {
     const instance = createTree(config);
     // Initialize immediately for SSR support
     instance.setMounted(true);
+    const startTime = now();
     instance.rebuildTree();
+    reportDuration(performanceEventRef.current, 'core-rebuild', startTime, {
+      reason: 'initial',
+    });
     return { current: instance };
   });
 
@@ -53,7 +65,11 @@ export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
   const prevDataLoaderRef = useRef(config.dataLoader);
   if (prevDataLoaderRef.current !== config.dataLoader) {
     prevDataLoaderRef.current = config.dataLoader;
+    const startTime = now();
     tree.current.rebuildTree();
+    reportDuration(performanceEventRef.current, 'core-rebuild', startTime, {
+      reason: 'data-loader-change',
+    });
   }
 
   return tree.current;

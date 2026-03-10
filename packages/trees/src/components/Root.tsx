@@ -36,7 +36,7 @@ import type {
   FileTreeStateConfig,
 } from '../FileTree';
 import { generateLazyDataLoader } from '../loader/lazy';
-import { generateSyncDataLoader } from '../loader/sync';
+import { generateSyncDataLoaderFromTreeData } from '../loader/sync';
 import type { SVGSpriteNames } from '../sprite';
 import type { FileTreeNode } from '../types';
 import { computeNewFilesAfterDrop } from '../utils/computeNewFilesAfterDrop';
@@ -47,10 +47,7 @@ import {
 } from '../utils/expandPaths';
 import { fileListToTree } from '../utils/fileListToTree';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
-import {
-  buildAncestorChains,
-  buildChildToParent,
-} from '../utils/guideLineAncestors';
+import { now, reportDuration } from '../utils/perf';
 import type { ChildrenSortOption } from '../utils/sortChildren';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
@@ -414,31 +411,39 @@ export function Root({
     [sortOption]
   );
 
-  const treeData = useMemo(
-    () => fileListToTree(files, { sortComparator }),
-    [files, sortComparator]
-  );
+  const onPerfEventRef = useRef(fileTreeOptions.onPerformanceEvent);
+  onPerfEventRef.current = fileTreeOptions.onPerformanceEvent;
+
+  const treeData = useMemo(() => {
+    const startTime = now();
+    const nextTreeData = fileListToTree(files, { sortComparator });
+    reportDuration(onPerfEventRef.current, 'tree-model-build', startTime, {
+      nodeCount: Object.keys(nextTreeData).length,
+    });
+    return nextTreeData;
+  }, [files, sortComparator]);
 
   // Build path↔id maps from treeData
   const { pathToId, idToPath } = useMemo(() => {
+    const startTime = now();
     const p2i = new Map<string, string>();
     const i2p = new Map<string, string>();
     for (const [id, node] of Object.entries(treeData)) {
       p2i.set(node.path, id);
       i2p.set(id, node.path);
     }
+    reportDuration(onPerfEventRef.current, 'path-map-build', startTime, {
+      nodeCount: i2p.size,
+    });
     return { pathToId: p2i, idToPath: i2p };
   }, [treeData]);
 
-  const childToParent = useMemo(
-    () => buildChildToParent(treeData, flattenEmptyDirectories === true),
-    [treeData, flattenEmptyDirectories]
-  );
-
-  const ancestorChains = useMemo(
-    () => buildAncestorChains(treeData, childToParent),
-    [treeData, childToParent]
-  );
+  const ancestorChainsCacheRef = useRef<Map<string, string[]>>(new Map());
+  const prevIdToPathForCacheRef = useRef(idToPath);
+  if (prevIdToPathForCacheRef.current !== idToPath) {
+    prevIdToPathForCacheRef.current = idToPath;
+    ancestorChainsCacheRef.current.clear();
+  }
 
   const restTreeConfig = useMemo(() => {
     const mapId = (item: string): string => {
@@ -631,19 +636,28 @@ export function Root({
       ...(state.state != null && { state: state.state }),
     };
   }, [treeData, pathToId, stateConfig, flattenEmptyDirectories]);
-  const dataLoader = useMemo(
-    () =>
+  const dataLoader = useMemo(() => {
+    const startTime = now();
+    const nextDataLoader =
       useLazyDataLoader === true
         ? generateLazyDataLoader(files, {
             flattenEmptyDirectories,
             sortComparator,
           })
-        : generateSyncDataLoader(files, {
+        : generateSyncDataLoaderFromTreeData(treeData, {
             flattenEmptyDirectories,
-            sortComparator,
-          }),
-    [files, flattenEmptyDirectories, useLazyDataLoader, sortComparator]
-  );
+          });
+    reportDuration(onPerfEventRef.current, 'data-loader-build', startTime, {
+      loader: useLazyDataLoader === true ? 'lazy' : 'sync',
+    });
+    return nextDataLoader;
+  }, [
+    files,
+    flattenEmptyDirectories,
+    sortComparator,
+    treeData,
+    useLazyDataLoader,
+  ]);
 
   const isDnD = fileTreeOptions.dragAndDrop === true;
 
@@ -813,56 +827,81 @@ export function Root({
     gitStatusSignature: getGitStatusSignature(gitStatus),
     gitStatusPathToId: pathToId,
   };
-  const tree = useTree<FileTreeNode>({
-    ...restTreeConfig,
-    ...searchModeConfig,
-    ...gitStatusConfig,
-    rootItemId: 'root',
-    dataLoader,
-    getItemName: (item) => item.getItemData().name,
-    isItemFolder: (item) => {
-      const children = item.getItemData()?.children?.direct;
-      return children != null;
-    },
-    hotkeys: {
-      // Begin the hotkey name with "custom" to satisfy the type checker
-      customExpandAll: {
-        hotkey: 'KeyQ',
-        handler: (_e, tree) => {
-          void tree.expandAll();
+  const tree = useTree<FileTreeNode>(
+    {
+      ...restTreeConfig,
+      ...searchModeConfig,
+      ...gitStatusConfig,
+      rootItemId: 'root',
+      dataLoader,
+      getItemName: (item) => item.getItemData().name,
+      isItemFolder: (item) => {
+        const children = item.getItemData()?.children?.direct;
+        return children != null;
+      },
+      hotkeys: {
+        // Begin the hotkey name with "custom" to satisfy the type checker
+        customExpandAll: {
+          hotkey: 'KeyQ',
+          handler: (_e, tree) => {
+            void tree.expandAll();
+          },
+        },
+        customCollapseAll: {
+          hotkey: 'KeyW',
+          handler: (_e, tree) => {
+            void tree.collapseAll();
+          },
         },
       },
-      customCollapseAll: {
-        hotkey: 'KeyW',
-        handler: (_e, tree) => {
-          void tree.collapseAll();
+      features,
+      ...(isDnD && {
+        canReorder: false,
+        canDrag: (items: ItemInstance<FileTreeNode>[]) => {
+          if (searchActiveRef.current) return false;
+          if (lockedPaths == null || lockedPaths.length === 0) return true;
+          const lockedSet = new Set(lockedPaths);
+          for (const item of items) {
+            const path = item.getItemData().path;
+            if (path != null && lockedSet.has(getSelectionPath(path)))
+              return false;
+          }
+          return true;
         },
-      },
+        onDrop: onDropHandler,
+        canDrop: (
+          _items: ItemInstance<FileTreeNode>[],
+          target: { item: ItemInstance<FileTreeNode> }
+        ) => target.item.isFolder(),
+        openOnDropDelay: 800,
+        _onTouchDragMove: detectFlattenedSubfolderFromPoint,
+        _onTouchDragEnd: clearFlattenedSubfolder,
+      }),
     },
-    features,
-    ...(isDnD && {
-      canReorder: false,
-      canDrag: (items: ItemInstance<FileTreeNode>[]) => {
-        if (searchActiveRef.current) return false;
-        if (lockedPaths == null || lockedPaths.length === 0) return true;
-        const lockedSet = new Set(lockedPaths);
-        for (const item of items) {
-          const path = item.getItemData().path;
-          if (path != null && lockedSet.has(getSelectionPath(path)))
-            return false;
+    onPerfEventRef.current
+  );
+
+  const getAncestors = useCallback(
+    (itemId: string): string[] => {
+      const cache = ancestorChainsCacheRef.current;
+      const resolve = (id: string): string[] => {
+        const cached = cache.get(id);
+        if (cached != null) return cached;
+
+        const parentId = tree.getItemInstance(id).getItemMeta().parentId;
+        if (parentId == null || parentId === 'root') {
+          cache.set(id, EMPTY_ANCESTORS);
+          return EMPTY_ANCESTORS;
         }
-        return true;
-      },
-      onDrop: onDropHandler,
-      canDrop: (
-        _items: ItemInstance<FileTreeNode>[],
-        target: { item: ItemInstance<FileTreeNode> }
-      ) => target.item.isFolder(),
-      openOnDropDelay: 800,
-      _onTouchDragMove: detectFlattenedSubfolderFromPoint,
-      _onTouchDragEnd: clearFlattenedSubfolder,
-    }),
-  });
+
+        const chain = [...resolve(parentId), parentId];
+        cache.set(id, chain);
+        return chain;
+      };
+      return resolve(itemId);
+    },
+    [tree]
+  );
 
   searchActiveRef.current = (tree.getState().search?.length ?? 0) > 0;
 
@@ -1071,17 +1110,18 @@ export function Root({
     const selectedIds = tree.getState().selectedItems ?? [];
     if (selectedIds.length === 0 && focusedItemId == null) return '';
     const parentIds = new Set<string>();
-    for (const id of selectedIds) {
-      const parentId = childToParent.get(id);
+    const addParentId = (id: string) => {
+      const parentId = tree.getItemInstance(id).getItemMeta().parentId;
       if (parentId != null && parentId !== 'root') {
         parentIds.add(parentId);
       }
+    };
+
+    for (const id of selectedIds) {
+      addParentId(id);
     }
     if (focusedItemId != null) {
-      const focusedParentId = childToParent.get(focusedItemId);
-      if (focusedParentId != null && focusedParentId !== 'root') {
-        parentIds.add(focusedParentId);
-      }
+      addParentId(focusedItemId);
     }
     if (parentIds.size === 0) return '';
     const escape = (v: string) => v.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -1093,7 +1133,7 @@ export function Root({
       .join(',\n');
     return `:is(${selectors}) { opacity: 1; }`;
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectionSnapshot, focusedItemId, childToParent]);
+  }, [selectionSnapshot, focusedItemId, tree]);
 
   const shouldVirtualize = virtualize != null && virtualize !== false;
   const virtualizeThreshold = shouldVirtualize
@@ -1161,7 +1201,7 @@ export function Root({
           const itemContainsGitChange =
             hasChildren &&
             (gitStatusMap?.foldersWithChanges.has(item.getId()) ?? false);
-          const ancestors = ancestorChains.get(item.getId()) ?? EMPTY_ANCESTORS;
+          const ancestors = getAncestors(item.getId());
 
           return (
             <TreeItem
@@ -1208,6 +1248,15 @@ export function Root({
               <VirtualizedList
                 itemCount={items.length}
                 renderItem={renderItemAtIndex}
+                onFirstRender={(details) => {
+                  onPerfEventRef.current?.({
+                    phase: 'virtualized-first-render',
+                    durationMs: details.durationMs,
+                    details: {
+                      itemCount: items.length,
+                    },
+                  });
+                }}
                 scrollToIndex={
                   focusedIndex != null && focusedIndex >= 0
                     ? focusedIndex
