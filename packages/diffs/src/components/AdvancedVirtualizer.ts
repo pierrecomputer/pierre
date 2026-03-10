@@ -121,7 +121,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
 
   public setup(root: Document | HTMLElement, container: HTMLElement): void {
     if (this.root != null) {
-      throw new Error('AdvancedVirtualizer.setup: already setup');
+      return;
     }
     this.root = root;
     this.container = container;
@@ -223,42 +223,55 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
   }
 
   public addFileOrDiff(fileOrDiff: FileContents | FileDiffMetadata): void {
-    const item: AdvancedVirtualizedItem<LAnnotation> = (() => {
-      if (isFileDiffMetadata(fileOrDiff)) {
+    this.addFileOrDiffs([fileOrDiff]);
+  }
+
+  public addFileOrDiffs(
+    fileOrDiffs: readonly (FileContents | FileDiffMetadata)[]
+  ): void {
+    if (fileOrDiffs.length === 0) {
+      return;
+    }
+
+    for (const fileOrDiff of fileOrDiffs) {
+      const item: AdvancedVirtualizedItem<LAnnotation> = (() => {
+        if (isFileDiffMetadata(fileOrDiff)) {
+          return {
+            kind: 'diff',
+            instance: new VirtualizedFileDiff<LAnnotation>(
+              this.options,
+              this,
+              this.metrics,
+              this.workerManager,
+              true
+            ),
+            fileDiff: fileOrDiff,
+            top: this.scrollHeight,
+            height: 0,
+            element: undefined,
+          };
+        }
         return {
-          kind: 'diff',
-          instance: new VirtualizedFileDiff<LAnnotation>(
-            this.options,
+          kind: 'file',
+          instance: new VirtualizedFile<LAnnotation>(
+            this.options as unknown as FileOptions<LAnnotation>,
             this,
             this.metrics,
             this.workerManager,
             true
           ),
-          fileDiff: fileOrDiff,
+          file: fileOrDiff,
           top: this.scrollHeight,
           height: 0,
           element: undefined,
         };
-      }
-      return {
-        kind: 'file',
-        instance: new VirtualizedFile<LAnnotation>(
-          this.options as unknown as FileOptions<LAnnotation>,
-          this,
-          this.metrics,
-          this.workerManager,
-          true
-        ),
-        file: fileOrDiff,
-        top: this.scrollHeight,
-        height: 0,
-        element: undefined,
-      };
-    })();
-    this.items.push(item);
-    this.instanceToItem.set(item.instance, item);
-    item.height = prepareItemInstance(item);
-    this.scrollHeight += item.height + this.metrics.fileGap;
+      })();
+      this.items.push(item);
+      this.instanceToItem.set(item.instance, item);
+      item.height = prepareItemInstance(item);
+      this.scrollHeight += item.height + this.metrics.fileGap;
+    }
+
     this.scrollDirty = true;
     this.render();
   }
