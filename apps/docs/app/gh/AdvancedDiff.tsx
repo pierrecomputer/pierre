@@ -4,11 +4,9 @@ import {
   AdvancedVirtualizer,
   DEFAULT_THEMES,
   parsePatchFiles,
-  queueRender,
 } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
+import { type SyntheticEvent, useRef, useState } from 'react';
 
 import styles from './advanced-diff.module.css';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
@@ -56,15 +54,9 @@ function getPullRequestPath(input: string): string | undefined {
 }
 
 export function AdvancedDiff() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const workerPool = useWorkerPool();
   const [fetching, setFetching] = useState(false);
-  const queryURL = searchParams.get('pr')?.trim();
-  const initialURL =
-    queryURL != null && queryURL.length > 0 ? queryURL : DEFAULT_PR_URL;
-  // The BIG BOI
-  const [url, setURL] = useState(initialURL);
+  const [url, setURL] = useState(DEFAULT_PR_URL);
   const bigBoiRef = useRef<AdvancedVirtualizer>(null);
   const lastLoadedURLRef = useRef<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -130,9 +122,9 @@ export function AdvancedDiff() {
       console.timeEnd('-- computing layout');
       // DEBUG AREA
       // window.scrollTo({ top: 4762353 });
-      queueRender(() => {
-        window.scrollTo({ top: 3150238.5 });
-      });
+      // queueRender(() => {
+      //   window.scrollTo({ top: 3150238.5 });
+      // });
 
       return normalizedURL;
     } catch (error) {
@@ -143,17 +135,6 @@ export function AdvancedDiff() {
     }
   });
 
-  useEffect(() => {
-    if (queryURL == null || queryURL.length === 0) {
-      return;
-    }
-    setURL((currentURL) => (currentURL === queryURL ? currentURL : queryURL));
-    if (lastLoadedURLRef.current === queryURL) {
-      return;
-    }
-    void renderPullRequest(queryURL);
-  }, [queryURL, renderPullRequest]);
-
   const handleSubmit = useStableCallback(
     async (event: SyntheticEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -162,9 +143,6 @@ export function AdvancedDiff() {
         return;
       }
       setURL(normalizedURL);
-      const nextSearchParams = new URLSearchParams(searchParams.toString());
-      nextSearchParams.set('pr', normalizedURL);
-      router.replace(`?${nextSearchParams.toString()}`, { scroll: false });
     }
   );
   return (
