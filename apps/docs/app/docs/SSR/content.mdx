@@ -41,6 +41,14 @@ component.
 
 <DocsCodeExample {...preloadFileResult} />
 
+#### preloadUnresolvedFile
+
+Preloads a merge-conflict file for `UnresolvedFile` hydration. Use this when the
+file contains conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) and you want to
+preserve the unresolved conflict UI from SSR to client.
+
+<DocsCodeExample {...preloadUnresolvedFileResult} />
+
 #### preloadFileDiff
 
 Preloads a diff from a `FileDiffMetadata` object. Use this when you already have

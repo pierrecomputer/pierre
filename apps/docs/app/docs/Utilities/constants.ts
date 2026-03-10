@@ -425,31 +425,38 @@ export const HELPER_RESOLVE_MERGE_CONFLICT: PreloadFileOptions<undefined> = {
   file: {
     name: 'resolveMergeConflict.ts',
     contents: `import {
+  UnresolvedFile,
+  type FileContents,
   resolveMergeConflict,
   type MergeConflictActionPayload,
-  type UnresolveFile as UnresolvedFileClass
 } from '@pierre/diffs';
-import { UnresolvedFile } from '@pierre/diffs/react';
 
-import { useCallback, useState } from 'react';
+const container = document.getElementById('diff-container');
 
-function MergeConflictExample({ initialContents }: { initialContents: string }) {
-  const [contents, setContents] = useState(initialContents);
+let currentFile: FileContents = {
+  name: 'App.tsx',
+  contents: \`export function handler() {
+<<<<<<< HEAD
+  return 'current';
+=======
+  return 'incoming';
+>>>>>>> feature/new-handler
+}\`,
+};
 
-  const onMergeConflictAction = useCallback(
-    (payload: MergeConflictActionPayload, instance: UnresolvedFileClass) => {
-      setContents((previous) => resolveMergeConflict(previous, payload));
-    },
-    []
-  );
+const instance = new UnresolvedFile({
+  // Controlled mode: apply payloads yourself.
+  onMergeConflictAction(payload: MergeConflictActionPayload) {
+    currentFile = {
+      ...currentFile,
+      contents: resolveMergeConflict(currentFile.contents, payload),
+    };
 
-  return (
-    <UnresolvedFile
-      file={{ name: 'App.tsx', contents }}
-      options={{ onMergeConflictAction }}
-    />
-  );
-}`,
+    instance.render({ file: currentFile, containerWrapper: container });
+  },
+});
+
+instance.render({ file: currentFile, containerWrapper: container });`,
   },
   options,
 };

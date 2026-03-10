@@ -29,10 +29,11 @@ contents.
 Default merge-conflict buttons work even without callbacks: `UnresolvedFile`
 applies the resolution internally.
 
-Provide `onMergeConflictAction` for controlled state (for example, to persist
-resolved contents, sync external stores, or trigger side effects). Use
-`onMergeConflictResolve` when you want uncontrolled resolution plus a
-notification with the resolved file.
+In vanilla, provide `onMergeConflictAction` for controlled state (for example,
+to persist resolved contents, sync external stores, or trigger side effects).
+Use `onMergeConflictResolve` when you want uncontrolled resolution plus a
+notification with the resolved file. React `UnresolvedFile` is intentionally
+uncontrolled.
 
 <DocsCodeExample {...resolveMergeConflictExample} />
 

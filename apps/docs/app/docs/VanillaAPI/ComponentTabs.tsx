@@ -6,18 +6,20 @@ import { useState } from 'react';
 import { DocsCodeExample } from '../DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
-type ComponentType = 'file-diff' | 'file';
+type ComponentType = 'file-diff' | 'file' | 'unresolved-file';
 type PropsType = 'file-diff' | 'file';
 type DiffHunksType = 'from-file' | 'from-patch';
 
 interface VanillaComponentTabsProps {
   fileDiffExample: PreloadedFileResult<undefined>;
   fileExample: PreloadedFileResult<undefined>;
+  unresolvedFileExample: PreloadedFileResult<undefined>;
 }
 
 export function VanillaComponentTabs({
   fileDiffExample,
   fileExample,
+  unresolvedFileExample,
 }: VanillaComponentTabsProps) {
   const [componentType, setComponentType] =
     useState<ComponentType>('file-diff');
@@ -30,18 +32,35 @@ export function VanillaComponentTabs({
       >
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
         <ButtonGroupItem value="file">File</ButtonGroupItem>
+        <ButtonGroupItem value="unresolved-file">
+          UnresolvedFile
+        </ButtonGroupItem>
       </ButtonGroup>
-      {componentType === 'file-diff' ? (
-        <DocsCodeExample
-          {...fileDiffExample}
-          key={`component-type-${componentType}`}
-        />
-      ) : (
-        <DocsCodeExample
-          {...fileExample}
-          key={`component-type-${componentType}`}
-        />
-      )}
+      {(() => {
+        switch (componentType) {
+          case 'file-diff':
+            return (
+              <DocsCodeExample
+                {...fileDiffExample}
+                key={`component-type-${componentType}`}
+              />
+            );
+          case 'file':
+            return (
+              <DocsCodeExample
+                {...fileExample}
+                key={`component-type-${componentType}`}
+              />
+            );
+          case 'unresolved-file':
+            return (
+              <DocsCodeExample
+                {...unresolvedFileExample}
+                key={`component-type-${componentType}`}
+              />
+            );
+        }
+      })()}
     </>
   );
 }

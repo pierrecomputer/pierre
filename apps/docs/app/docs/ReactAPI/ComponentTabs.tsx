@@ -10,7 +10,12 @@ const NumberColumnWidthOverride = {
   '--diffs-min-number-column-width': '3ch',
 } as CSSProperties;
 
-type ExampleTypes = 'multi-file-diff' | 'patch-diff' | 'file-diff' | 'file';
+type ExampleTypes =
+  | 'multi-file-diff'
+  | 'patch-diff'
+  | 'file-diff'
+  | 'file'
+  | 'unresolved-file';
 type SharedPropsTypes =
   | 'diff-options'
   | 'diff-render-props'
@@ -22,6 +27,7 @@ interface ComponentTabsProps {
   reactAPIFileDiff: PreloadedFileResult<undefined>;
   reactAPIPatch: PreloadedFileResult<undefined>;
   reactAPIFile: PreloadedFileResult<undefined>;
+  reactAPIUnresolvedFile: PreloadedFileResult<undefined>;
 }
 
 export function ComponentTabs({
@@ -29,6 +35,7 @@ export function ComponentTabs({
   reactAPIFileDiff,
   reactAPIPatch,
   reactAPIFile,
+  reactAPIUnresolvedFile,
 }: ComponentTabsProps) {
   const [example, setExample] = useState<ExampleTypes>('multi-file-diff');
 
@@ -42,6 +49,9 @@ export function ComponentTabs({
         <ButtonGroupItem value="patch-diff">PatchDiff</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
         <ButtonGroupItem value="file">File</ButtonGroupItem>
+        <ButtonGroupItem value="unresolved-file">
+          UnresolvedFile
+        </ButtonGroupItem>
       </ButtonGroup>
       {(() => {
         switch (example) {
@@ -53,6 +63,10 @@ export function ComponentTabs({
             return <DocsCodeExample {...reactAPIPatch} key={example} />;
           case 'file':
             return <DocsCodeExample {...reactAPIFile} key={example} />;
+          case 'unresolved-file':
+            return (
+              <DocsCodeExample {...reactAPIUnresolvedFile} key={example} />
+            );
         }
       })()}
     </>

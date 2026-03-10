@@ -39,7 +39,7 @@ function areCustomPropertiesEqual(
     return false;
   }
   for (const key of keysA) {
-    if (customPropertiesB[key] !== customPropertiesB[key]) {
+    if (customPropertiesA[key] !== customPropertiesB[key]) {
       return false;
     }
   }

@@ -88,6 +88,52 @@ instance.cleanUp();`,
   options,
 };
 
+export const VANILLA_API_UNRESOLVED_FILE_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'unresolved_file_example.ts',
+      contents: `import {
+  UnresolvedFile,
+  resolveMergeConflict,
+  type FileContents,
+  type MergeConflictActionPayload,
+} from '@pierre/diffs';
+
+const container = document.getElementById('diff-container');
+if (container == null) {
+  throw new Error('Expected #diff-container to exist');
+}
+
+let file: FileContents = {
+  name: 'auth.ts',
+  contents: \`export function createSession() {
+<<<<<<< HEAD
+  return { source: 'server', ttl: 12 };
+=======
+  return { source: 'web', ttl: 24 };
+>>>>>>> feature/web-session
+}\`,
+};
+
+const instance = new UnresolvedFile({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+
+  // Controlled mode (optional): apply payloads yourself.
+  onMergeConflictAction(payload: MergeConflictActionPayload) {
+    file = {
+      ...file,
+      contents: resolveMergeConflict(file.contents, payload),
+    };
+
+    instance.render({ file, containerWrapper: container });
+  },
+});
+
+instance.render({ file, containerWrapper: container });`,
+    },
+    options,
+  };
+
 // =============================================================================
 // FILEDIFF PROPS
 // =============================================================================

@@ -146,6 +146,31 @@ const result = await preloadFile({
   options,
 };
 
+export const SSR_PRELOAD_UNRESOLVED_FILE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'example.tsx',
+    contents: `import { preloadUnresolvedFile } from '@pierre/diffs/ssr';
+
+const file = {
+  name: 'example.ts',
+  contents: \`<<<<<<< HEAD
+const source = "server";
+=======
+const source = "web";
+>>>>>>> feature/web-source
+\`,
+};
+
+const result = await preloadUnresolvedFile({
+  file,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <UnresolvedFile {...result} />`,
+  },
+  options,
+};
+
 export const SSR_PRELOAD_PATCH_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'example.tsx',

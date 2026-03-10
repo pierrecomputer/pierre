@@ -501,6 +501,50 @@ export function CodeFile() {
   options,
 };
 
+export const REACT_API_UNRESOLVED_FILE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'unresolved_file.tsx',
+    contents: `import { UnresolvedFile, type FileContents } from '@pierre/diffs/react';
+import { useState } from 'react';
+
+// UnresolvedFile renders Git-style merge conflict markers.
+// React UnresolvedFile is intentionally uncontrolled:
+// - The \`file\` prop is treated as the initial source
+// - Conflict buttons apply changes internally
+// - To reset, remount the component (shown with the key below)
+
+const initialFile: FileContents = {
+  name: 'auth.ts',
+  contents: \`export function createSession() {
+<<<<<<< HEAD
+  return { source: 'server', ttl: 12 };
+=======
+  return { source: 'web', ttl: 24 };
+>>>>>>> feature/web-session
+}\`,
+};
+
+export function MergeConflictPreview() {
+  const [instanceKey, setInstanceKey] = useState(0);
+
+  return (
+    <>
+      <button onClick={() => setInstanceKey((v) => v + 1)}>Reset</button>
+      <UnresolvedFile
+        key={instanceKey}
+        file={initialFile}
+        options={{
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          diffIndicators: 'none',
+        }}
+      />
+    </>
+  );
+}`,
+  },
+  options,
+};
+
 export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
   file: {
     name: 'shared_file_options.tsx',

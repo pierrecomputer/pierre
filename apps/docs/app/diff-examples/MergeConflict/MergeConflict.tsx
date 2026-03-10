@@ -27,7 +27,7 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   );
 
   return (
-    <div className="scroll-mt-20 space-y-5" id="merge-conflicts">
+    <div className="scroll-mt-20 space-y-5">
       <FeatureHeader
         title="Merge conflict resolution UI"
         description={

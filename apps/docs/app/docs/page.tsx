@@ -40,6 +40,7 @@ import {
   REACT_API_SHARED_DIFF_RENDER_PROPS,
   REACT_API_SHARED_FILE_OPTIONS,
   REACT_API_SHARED_FILE_RENDER_PROPS,
+  REACT_API_UNRESOLVED_FILE,
 } from './ReactAPI/constants';
 import {
   SSR_PRELOAD_FILE,
@@ -47,6 +48,7 @@ import {
   SSR_PRELOAD_MULTI_FILE_DIFF,
   SSR_PRELOAD_PATCH_DIFF,
   SSR_PRELOAD_PATCH_FILE,
+  SSR_PRELOAD_UNRESOLVED_FILE,
   SSR_USAGE_CLIENT,
   SSR_USAGE_SERVER,
 } from './SSR/constants';
@@ -78,6 +80,7 @@ import {
   VANILLA_API_FILE_RENDERER,
   VANILLA_API_HUNKS_RENDERER_FILE,
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
+  VANILLA_API_UNRESOLVED_FILE_EXAMPLE,
 } from './VanillaAPI/constants';
 import {
   VIRTUALIZATION_REACT_BASIC,
@@ -214,6 +217,7 @@ async function ReactAPISection() {
     reactAPIFile,
     reactAPIPatch,
     reactAPIFileDiff,
+    reactAPIUnresolvedFile,
     sharedDiffOptions,
     sharedDiffRenderProps,
     sharedFileOptions,
@@ -223,6 +227,7 @@ async function ReactAPISection() {
     preloadFile(REACT_API_FILE),
     preloadFile(REACT_API_PATCH_DIFF),
     preloadFile(REACT_API_FILE_DIFF),
+    preloadFile(REACT_API_UNRESOLVED_FILE),
     preloadFile(REACT_API_SHARED_DIFF_OPTIONS),
     preloadFile(REACT_API_SHARED_DIFF_RENDER_PROPS),
     preloadFile(REACT_API_SHARED_FILE_OPTIONS),
@@ -235,6 +240,7 @@ async function ReactAPISection() {
       reactAPIPatch,
       reactAPIFileDiff,
       reactAPIFile,
+      reactAPIUnresolvedFile,
       sharedDiffOptions,
       sharedDiffRenderProps,
       sharedFileOptions,
@@ -250,6 +256,7 @@ async function VanillaAPISection() {
     fileExample,
     fileDiffProps,
     fileProps,
+    unresolvedFileExample,
     customHunk,
     diffHunksRenderer,
     diffHunksRendererPatch,
@@ -259,6 +266,7 @@ async function VanillaAPISection() {
     preloadFile(VANILLA_API_FILE_EXAMPLE),
     preloadFile(VANILLA_API_FILE_DIFF_PROPS),
     preloadFile(VANILLA_API_FILE_PROPS),
+    preloadFile(VANILLA_API_UNRESOLVED_FILE_EXAMPLE),
     preloadFile(VANILLA_API_CUSTOM_HUNK_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
@@ -271,6 +279,7 @@ async function VanillaAPISection() {
       fileExample,
       fileDiffProps,
       fileProps,
+      unresolvedFileExample,
       customHunk,
       diffHunksRenderer,
       diffHunksRendererPatch,
@@ -397,6 +406,7 @@ async function SSRSection() {
     preloadMultiFileDiff,
     preloadPatchDiff,
     preloadFileResult,
+    preloadUnresolvedFileResult,
     preloadPatchFile,
   ] = await Promise.all([
     preloadFile(SSR_USAGE_SERVER),
@@ -405,6 +415,7 @@ async function SSRSection() {
     preloadFile(SSR_PRELOAD_MULTI_FILE_DIFF),
     preloadFile(SSR_PRELOAD_PATCH_DIFF),
     preloadFile(SSR_PRELOAD_FILE),
+    preloadFile(SSR_PRELOAD_UNRESOLVED_FILE),
     preloadFile(SSR_PRELOAD_PATCH_FILE),
   ]);
   const content = await renderMDX({
@@ -416,6 +427,7 @@ async function SSRSection() {
       preloadMultiFileDiff,
       preloadPatchDiff,
       preloadFileResult,
+      preloadUnresolvedFileResult,
       preloadPatchFile,
     },
   });

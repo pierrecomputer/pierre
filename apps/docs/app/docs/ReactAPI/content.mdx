@@ -10,19 +10,24 @@ similar types of props, which you can find documented in
 
 ### Components
 
-The React API exposes four main components:
+The React API exposes five main components:
 
 - `MultiFileDiff` compares two file versions
 - `PatchDiff` renders from a patch string
 - `FileDiff` renders a pre-parsed `FileDiffMetadata`
 - `File` renders a single code file without a diff
+- `UnresolvedFile` renders merge conflict markers with built-in resolution UI
 
 <ComponentTabs
   reactAPIMultiFileDiff={reactAPIMultiFileDiff}
   reactAPIFileDiff={reactAPIFileDiff}
   reactAPIPatch={reactAPIPatch}
   reactAPIFile={reactAPIFile}
+  reactAPIUnresolvedFile={reactAPIUnresolvedFile}
 />
+
+`UnresolvedFile` is intentionally uncontrolled in React. Treat `file` as initial
+input and remount (for example, with a changing `key`) when you want to reset.
 
 ### Shared Props
 
