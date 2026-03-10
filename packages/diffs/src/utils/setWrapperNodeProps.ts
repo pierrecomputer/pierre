@@ -16,7 +16,7 @@ export function setPreNodeProperties(
   }: PrePropertiesConfig
 ): HTMLPreElement {
   // NOTE: We always apply custom properties first so the important properties
-  // cannot be overriden.
+  // cannot be overridden.
   for (const key in customProperties) {
     const value = customProperties[key];
     if (value != null) {
