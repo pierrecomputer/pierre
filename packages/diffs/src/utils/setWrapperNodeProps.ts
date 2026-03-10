@@ -17,10 +17,12 @@ export function setPreNodeProperties(
 ): HTMLPreElement {
   // NOTE: We always apply custom properties first so the important properties
   // cannot be overridden.
-  for (const key in customProperties) {
-    const value = customProperties[key];
-    if (value != null) {
-      pre.setAttribute(key, `${value}`);
+  if (customProperties != null) {
+    for (const key in customProperties) {
+      const value = customProperties[key];
+      if (value != null) {
+        pre.setAttribute(key, `${value}`);
+      }
     }
   }
   if (type === 'diff') {
