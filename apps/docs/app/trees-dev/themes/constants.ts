@@ -25,7 +25,7 @@ export const GRID_CLASSES: Record<ViewMode, string> = {
   trees:
     'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6',
   diffs: 'grid-cols-1 md:grid-cols-2 3xl:grid-cols-3',
-  both: 'grid-cols-1 lg:grid-cols-2 3xl:grid-cols-3',
+  both: 'grid-cols-1 2xl:grid-cols-2 3xl:grid-cols-3',
 };
 
 export const TREE_OPTIONS = {

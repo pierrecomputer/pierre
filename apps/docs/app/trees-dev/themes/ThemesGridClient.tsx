@@ -135,7 +135,7 @@ function CombinedCard({
   return (
     <div>
       <div
-        className="flex overflow-hidden rounded-md border"
+        className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,3fr)] overflow-hidden rounded-md border lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,3fr)]"
         style={{
           colorScheme: theme.type as 'light' | 'dark',
           backgroundColor: theme.styles.backgroundColor,
