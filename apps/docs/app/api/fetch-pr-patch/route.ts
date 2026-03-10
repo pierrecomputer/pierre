@@ -1,46 +1,6 @@
-import { createReadStream } from 'fs';
+import { readFile } from 'fs/promises';
 import { type NextRequest, NextResponse } from 'next/server';
 import { join } from 'path';
-import { Readable } from 'stream';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-const STREAM_HEADERS = {
-  'cache-control': 'no-store, no-transform',
-  'content-type': 'text/plain; charset=utf-8',
-} as const;
-
-function createPatchStreamResponse(
-  stream: ReadableStream<Uint8Array>,
-  patchURL: string,
-  status = 200
-): Response {
-  const reader = stream.getReader();
-
-  return new Response(
-    new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-          return;
-        }
-        controller.enqueue(value);
-      },
-      async cancel(reason) {
-        await reader.cancel(reason);
-      },
-    }),
-    {
-      status,
-      headers: {
-        ...STREAM_HEADERS,
-        'x-patch-url': patchURL,
-      },
-    }
-  );
-}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -62,12 +22,11 @@ export async function GET(request: NextRequest) {
         'larg.patch'
         // 'smol.patch'
       );
-      return createPatchStreamResponse(
-        Readable.toWeb(
-          createReadStream(localPatchPath)
-        ) as unknown as ReadableStream<Uint8Array>,
-        'local'
-      );
+      const patchContent = await readFile(localPatchPath, 'utf-8');
+      return NextResponse.json({
+        content: patchContent,
+        url: 'local',
+      });
     } catch (error) {
       return NextResponse.json(
         {
@@ -111,14 +70,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (response.body == null) {
-      return NextResponse.json(
-        { error: 'GitHub patch response body was empty' },
-        { status: 502 }
-      );
-    }
+    const patchContent = await response.text();
 
-    return createPatchStreamResponse(response.body, patchURL, response.status);
+    return NextResponse.json({
+      content: patchContent,
+      url: patchURL,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },

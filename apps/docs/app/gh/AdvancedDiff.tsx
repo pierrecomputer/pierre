@@ -3,26 +3,18 @@
 import {
   AdvancedVirtualizer,
   DEFAULT_THEMES,
-  type FileDiffMetadata,
-  type FileDiffOptions,
   parsePatchFiles,
-  PatchFileStreamSplitter,
-  processFile,
-  UnsupportedPatchFormatError,
+  queueRender,
 } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
 
 import styles from './advanced-diff.module.css';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 
-const options: FileDiffOptions<undefined> = {
-  theme: DEFAULT_THEMES,
-  diffStyle: 'split',
-  overflow: 'wrap',
-  enableLineSelection: true,
-  unsafeCSS: `[data-diffs-header] {
+const unsafeCSS = `[data-diffs-header] {
   container-type: scroll-state;
   container-name: sticky-header;
   position: sticky;
@@ -38,11 +30,10 @@ const options: FileDiffOptions<undefined> = {
     content: '';
     background-color: var(--color-border);
   }
-}`,
-};
+}
+`;
 
 const DEFAULT_PR_URL = 'https://github.com/nodejs/node/pull/59805';
-const STREAM_RENDER_BATCH_SIZE = 32;
 
 function getPullRequestPath(input: string): string | undefined {
   try {
@@ -65,15 +56,18 @@ function getPullRequestPath(input: string): string | undefined {
 }
 
 export function AdvancedDiff() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const workerPool = useWorkerPool();
   const [fetching, setFetching] = useState(false);
-  const [url, setURL] = useState(DEFAULT_PR_URL);
+  const queryURL = searchParams.get('pr')?.trim();
+  const initialURL =
+    queryURL != null && queryURL.length > 0 ? queryURL : DEFAULT_PR_URL;
+  // The BIG BOI
+  const [url, setURL] = useState(initialURL);
   const bigBoiRef = useRef<AdvancedVirtualizer>(null);
   const lastLoadedURLRef = useRef<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController>(undefined);
-  useEffect(() => () => abortControllerRef.current?.abort(), []);
-
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
     const prPath = getPullRequestPath(normalizedURL);
@@ -84,35 +78,28 @@ export function AdvancedDiff() {
 
     setFetching(true);
     lastLoadedURLRef.current = normalizedURL;
-    abortControllerRef.current?.abort();
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
 
     try {
       if (ref.current == null) {
         console.error('No valid container to run the virtualizer with');
         return undefined;
       }
-      if (bigBoiRef.current == null) {
-        bigBoiRef.current = new AdvancedVirtualizer(
-          options,
-          undefined,
-          workerPool
-        );
-        bigBoiRef.current.setup(document, ref.current);
-      }
+      bigBoiRef.current ??= new AdvancedVirtualizer(
+        {
+          theme: DEFAULT_THEMES,
+          diffStyle: 'split',
+          overflow: 'wrap',
+          enableLineSelection: true,
+          unsafeCSS,
+        },
+        undefined,
+        workerPool
+      );
+      bigBoiRef.current.setup(document, ref.current);
       bigBoiRef.current.reset();
-      function appendFileDiffs(fileDiffs: readonly FileDiffMetadata[]) {
-        console.log('appendFileDiffs', fileDiffs.length, fileDiffs);
-        if (fileDiffs.length === 0) {
-          return;
-        }
-        bigBoiRef.current?.addFileOrDiffs(fileDiffs);
-      }
       console.time('--     request time');
       const response = await fetch(
-        `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`,
-        { signal: abortController.signal }
+        `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
       );
       console.timeEnd('--     request time');
 
@@ -122,98 +109,50 @@ export function AdvancedDiff() {
         return undefined;
       }
 
-      const cacheKeyPrefix = encodeURIComponent(prPath);
-      const stream = response.body;
+      console.time('--     parsing json');
+      const data = await response.json();
+      console.timeEnd('--     parsing json');
 
-      if (stream == null) {
-        const content = await response.text();
-        const parsedPatches = parsePatchFiles(content, cacheKeyPrefix);
-        for (const patch of parsedPatches) {
-          appendFileDiffs(patch.files);
+      console.time('--  parsing patches');
+      const parsedPatches = parsePatchFiles(
+        data.content,
+        // Use the url as a cache key
+        encodeURIComponent(prPath)
+      );
+      console.timeEnd('--  parsing patches');
+
+      console.time('-- computing layout');
+      for (const patch of parsedPatches) {
+        for (const fileDiff of patch.files) {
+          bigBoiRef.current.addFileOrDiff(fileDiff);
         }
-      } else {
-        const decoder = new TextDecoder();
-        const splitter = new PatchFileStreamSplitter();
-        const reader = stream.getReader();
-        const pendingDiffs: FileDiffMetadata[] = [];
-        let flushPromise: Promise<void> | undefined;
-
-        const flushPendingDiffs = async () => {
-          if (pendingDiffs.length === 0) {
-            return;
-          }
-          appendFileDiffs(pendingDiffs.splice(0));
-          await new Promise<void>((resolve) => {
-            requestAnimationFrame(() => {
-              resolve();
-            });
-          });
-        };
-
-        const scheduleFlush = async () => {
-          flushPromise ??= flushPendingDiffs().finally(() => {
-            flushPromise = undefined;
-          });
-          await flushPromise;
-        };
-
-        const queueCompletedFiles = (chunkText: string) => {
-          const completedFiles = splitter.write(chunkText);
-          for (const streamedFile of completedFiles) {
-            const fileDiff = processFile(streamedFile.content, {
-              cacheKey: `${cacheKeyPrefix}-${streamedFile.fileIndex}`,
-            });
-            if (fileDiff != null) {
-              pendingDiffs.push(fileDiff);
-            }
-          }
-        };
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
-          queueCompletedFiles(decoder.decode(value, { stream: true }));
-          if (pendingDiffs.length >= STREAM_RENDER_BATCH_SIZE) {
-            await scheduleFlush();
-          }
-        }
-
-        queueCompletedFiles(decoder.decode());
-        for (const streamedFile of splitter.flush()) {
-          const fileDiff = processFile(streamedFile.content, {
-            cacheKey: `${cacheKeyPrefix}-${streamedFile.fileIndex}`,
-          });
-          if (fileDiff != null) {
-            pendingDiffs.push(fileDiff);
-          }
-        }
-
-        await scheduleFlush();
       }
+      console.timeEnd('-- computing layout');
+      // DEBUG AREA
+      // window.scrollTo({ top: 4762353 });
+      queueRender(() => {
+        window.scrollTo({ top: 3150238.5 });
+      });
 
       return normalizedURL;
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        return undefined;
-      }
-      if (error instanceof UnsupportedPatchFormatError) {
-        console.error(
-          'Unsupported streamed patch format:',
-          error instanceof Error ? error.message : error
-        );
-        return undefined;
-      }
       console.error('Error fetching or processing patch:', error);
       return undefined;
     } finally {
-      if (abortControllerRef.current === abortController) {
-        abortControllerRef.current = undefined;
-      }
       setFetching(false);
     }
   });
+
+  useEffect(() => {
+    if (queryURL == null || queryURL.length === 0) {
+      return;
+    }
+    setURL((currentURL) => (currentURL === queryURL ? currentURL : queryURL));
+    if (lastLoadedURLRef.current === queryURL) {
+      return;
+    }
+    void renderPullRequest(queryURL);
+  }, [queryURL, renderPullRequest]);
 
   const handleSubmit = useStableCallback(
     async (event: SyntheticEvent<HTMLFormElement>) => {
@@ -223,6 +162,9 @@ export function AdvancedDiff() {
         return;
       }
       setURL(normalizedURL);
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      nextSearchParams.set('pr', normalizedURL);
+      router.replace(`?${nextSearchParams.toString()}`, { scroll: false });
     }
   );
   return (
