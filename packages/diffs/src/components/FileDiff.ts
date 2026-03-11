@@ -271,9 +271,6 @@ export class FileDiff<LAnnotation = undefined> {
         break hunkIterator;
       }
 
-      // For AI Review: should this be > or >= for the startLine + count
-      // Basically if our line number is not within this range, lets continue
-      // onwards
       if (lineNumber >= currentLineNumber + hunkCount) {
         if (hunk === lastHunk) {
           const difference = lineNumber - (currentLineNumber + hunkCount);
@@ -564,27 +561,31 @@ export class FileDiff<LAnnotation = undefined> {
     this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
+  // This wrapper must stay separate from `expandHunk` because subclasses like
+  // `VirtualizedFileDiff` replace `expandHunk` with their own instance field
+  // after `super()` returns. `InteractionManager` is created in this base
+  // constructor, so it needs a stable callback that resolves `this.expandHunk`
+  // at click time instead of capturing the base implementation too early.
   public handleExpandHunk = (
     hunkIndex: number,
     direction: ExpansionDirections,
-    expandFully = false
+    expansionLineCountOverride?: number
   ): void => {
-    if (expandFully) {
-      this.expandHunkFully(hunkIndex);
-      return;
-    }
-    this.expandHunk(hunkIndex, direction);
+    this.expandHunk(hunkIndex, direction, expansionLineCountOverride);
   };
 
-  public expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
-    this.hunksRenderer.expandHunk(hunkIndex, direction);
+  public expandHunk = (
+    hunkIndex: number,
+    direction: ExpansionDirections,
+    expansionLineCountOverride?: number
+  ): void => {
+    this.hunksRenderer.expandHunk(
+      hunkIndex,
+      direction,
+      expansionLineCountOverride
+    );
     this.rerender();
-  }
-
-  public expandHunkFully(hunkIndex: number): void {
-    this.hunksRenderer.expandHunkFully(hunkIndex);
-    this.rerender();
-  }
+  };
 
   public render({
     oldFile,

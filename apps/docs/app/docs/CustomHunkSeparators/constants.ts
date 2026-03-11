@@ -94,7 +94,12 @@ function renderCustomSeparator(
     expandChunk.type = 'button';
     expandChunk.className = classes.expandChunk;
     expandChunk.textContent = 'Expand entire hunk';
-    expandChunk.onclick = () => instance.expandHunkFully(hunkData.hunkIndex);
+    expandChunk.onclick = () =>
+      instance.expandHunk(
+        hunkData.hunkIndex,
+        'both',
+        Number.POSITIVE_INFINITY
+      );
     root.append(controls, separatorDot, expandChunk);
   } else {
     root.append(controls);

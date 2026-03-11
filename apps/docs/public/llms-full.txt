@@ -486,12 +486,17 @@ similar types of props, which you can find documented in
 
 ### Components
 
-The React API exposes four main components:
+The React API exposes five main components:
 
 - `MultiFileDiff` compares two file versions
 - `PatchDiff` renders from a patch string
 - `FileDiff` renders a pre-parsed `FileDiffMetadata`
 - `File` renders a single code file without a diff
+- `UnresolvedFile` renders merge conflict markers with built-in resolution UI
+  - _Currently in beta/experimental and may change in future releases._
+
+`UnresolvedFile` is intentionally uncontrolled in React. Treat `file` as initial
+input and remount (for example, with a changing `key`) when you want to reset.
 
 ### Shared Props
 
@@ -1234,6 +1239,48 @@ interface CommentMetadata {
 />
 ```
 
+**Unresolved File** (`unresolved_file.tsx`):
+
+```tsx
+import { UnresolvedFile, type FileContents } from '@pierre/diffs/react';
+import { useState } from 'react';
+
+// UnresolvedFile renders Git-style merge conflict markers.
+// React UnresolvedFile is intentionally uncontrolled:
+// - The `file` prop is treated as the initial source
+// - Conflict buttons apply changes internally
+// - To reset, remount the component (shown with the key below)
+
+const initialFile: FileContents = {
+  name: 'auth.ts',
+  contents: `export function createSession() {
+<<<<<<< HEAD
+  return { source: 'server', ttl: 12 };
+=======
+  return { source: 'web', ttl: 24 };
+>>>>>>> feature/web-session
+}`,
+};
+
+export function MergeConflictPreview() {
+  const [instanceKey, setInstanceKey] = useState(0);
+
+  return (
+    <>
+      <button onClick={() => setInstanceKey((v) => v + 1)}>Reset</button>
+      <UnresolvedFile
+        key={instanceKey}
+        file={initialFile}
+        options={{
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          diffIndicators: 'none',
+        }}
+      />
+    </>
+  );
+}
+```
+
 ## Vanilla JS API
 
 > Import vanilla JavaScript classes, components, and methods from
@@ -1241,11 +1288,18 @@ interface CommentMetadata {
 
 ### Components
 
-The Vanilla JS API exposes two core components: `FileDiff` (compare two file
-versions or render a pre-parsed `FileDiffMetadata`) and `File` (render a single
-code file without diff). Typically you'll want to interface with these as
+The Vanilla JS API exposes three core components: `FileDiff` (compare two file
+versions or render a pre-parsed `FileDiffMetadata`), `File` (render a single
+code file without diff), and `UnresolvedFile` (render merge conflicts with
+built-in resolution controls). Typically you'll want to interface with these as
 they'll handle all the complicated aspects of syntax highlighting, theming, and
 full interactivity for you.
+
+> `UnresolvedFile` is currently beta/experimental and may change in future
+> releases.
+
+`UnresolvedFile` in vanilla supports both uncontrolled and controlled callbacks
+(`onMergeConflictResolve` / `onMergeConflictAction`).
 
 ### Props
 
@@ -1635,7 +1689,10 @@ instance.setSelectedLines({
 instance.rerender();
 
 // Programmatically expand a collapsed hunk
-instance.expandHunk(0, 'down'); // hunkIndex, direction: 'up' | 'down' | 'all'
+instance.expandHunk(0, 'down'); // hunkIndex, direction: 'up' | 'down' | 'both'
+
+// Expand an entire collapsed hunk
+instance.expandHunk(0, 'both', Number.POSITIVE_INFINITY);
 
 // Change the active theme type
 instance.setThemeType('dark'); // 'dark' | 'light' | 'system'
@@ -2043,6 +2100,49 @@ for (const patch of patches) {
 }
 ```
 
+**Unresolved File Example** (`unresolved_file_example.ts`):
+
+```typescript
+import {
+  UnresolvedFile,
+  resolveMergeConflict,
+  type FileContents,
+  type MergeConflictActionPayload,
+} from '@pierre/diffs';
+
+const container = document.getElementById('diff-container');
+if (container == null) {
+  throw new Error('Expected #diff-container to exist');
+}
+
+let file: FileContents = {
+  name: 'auth.ts',
+  contents: `export function createSession() {
+<<<<<<< HEAD
+  return { source: 'server', ttl: 12 };
+=======
+  return { source: 'web', ttl: 24 };
+>>>>>>> feature/web-session
+}`,
+};
+
+const instance = new UnresolvedFile({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+
+  // Controlled mode (optional): apply payloads yourself.
+  onMergeConflictAction(payload: MergeConflictActionPayload) {
+    file = {
+      ...file,
+      contents: resolveMergeConflict(file.contents, payload),
+    };
+
+    instance.render({ file, containerWrapper: container });
+  },
+});
+
+instance.render({ file, containerWrapper: container });
+```
+
 ## Virtualization
 
 > **Warning:** Virtualization is in beta and subject to change. It is opt-in and best used
@@ -2393,7 +2493,12 @@ function renderCustomSeparator(
     expandChunk.type = 'button';
     expandChunk.className = classes.expandChunk;
     expandChunk.textContent = 'Expand entire hunk';
-    expandChunk.onclick = () => instance.expandHunkFully(hunkData.hunkIndex);
+    expandChunk.onclick = () =>
+      instance.expandHunk(
+        hunkData.hunkIndex,
+        'both',
+        Number.POSITIVE_INFINITY
+      );
     root.append(controls, separatorDot, expandChunk);
   } else {
     root.append(controls);
@@ -2443,6 +2548,23 @@ When you **accept** a hunk, the new (additions) version is kept and the hunk is
 converted to context lines. When you **reject** a hunk, the old (deletions)
 version is restored. The function returns a new `FileDiffMetadata` object with
 all line numbers properly adjusted for subsequent hunks.
+
+### resolveMergeConflict
+
+Apply a merge conflict action payload to a file string and return the next
+contents.
+
+> **Experimental:** `UnresolvedFile`-related merge conflict APIs are currently
+> beta/experimental and may change in future releases.
+
+Default merge-conflict buttons work even without callbacks: `UnresolvedFile`
+applies the resolution internally.
+
+In vanilla, provide `onMergeConflictAction` for controlled state (for example,
+to persist resolved contents, sync external stores, or trigger side effects).
+Use `onMergeConflictResolve` when you want uncontrolled resolution plus a
+notification with the resolved file. React `UnresolvedFile` is intentionally
+uncontrolled.
 
 ### disposeHighlighter
 
@@ -2818,6 +2940,44 @@ registerCustomTheme('inline-theme', async () => ({
 
 // Once registered, use the theme name in your components:
 // <FileDiff options={{ theme: 'my-custom-theme' }} ... />
+```
+
+**Resolve Merge Conflict** (`resolveMergeConflict.ts`):
+
+```typescript
+import {
+  UnresolvedFile,
+  type FileContents,
+  resolveMergeConflict,
+  type MergeConflictActionPayload,
+} from '@pierre/diffs';
+
+const container = document.getElementById('diff-container');
+
+let currentFile: FileContents = {
+  name: 'App.tsx',
+  contents: `export function handler() {
+<<<<<<< HEAD
+  return 'current';
+=======
+  return 'incoming';
+>>>>>>> feature/new-handler
+}`,
+};
+
+const instance = new UnresolvedFile({
+  // Controlled mode: apply payloads yourself.
+  onMergeConflictAction(payload: MergeConflictActionPayload) {
+    currentFile = {
+      ...currentFile,
+      contents: resolveMergeConflict(currentFile.contents, payload),
+    };
+
+    instance.render({ file: currentFile, containerWrapper: container });
+  },
+});
+
+instance.render({ file: currentFile, containerWrapper: container });
 ```
 
 **Set Language Override** (`setLanguageOverride.ts`):
@@ -3901,6 +4061,15 @@ Preloads a single file with syntax highlighting (no diff). Use this when you
 want to render a file without any diff context. Spread into the `File`
 component.
 
+#### preloadUnresolvedFile
+
+Preloads a merge-conflict file for `UnresolvedFile` hydration. Use this when the
+file contains conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) and you want to
+preserve the unresolved conflict UI from SSR to client.
+
+> **Experimental:** `UnresolvedFile` and `preloadUnresolvedFile` are currently
+> beta/experimental and may change in future releases.
+
 #### preloadFileDiff
 
 Preloads a diff from a `FileDiffMetadata` object. Use this when you already have
@@ -4024,6 +4193,29 @@ const results = await preloadPatchFile({
 });
 
 // Spread each result into <FileDiff {...results[i]} />
+```
+
+**Preload Unresolved File** (`example.tsx`):
+
+```tsx
+import { preloadUnresolvedFile } from '@pierre/diffs/ssr';
+
+const file = {
+  name: 'example.ts',
+  contents: `<<<<<<< HEAD
+const source = "server";
+=======
+const source = "web";
+>>>>>>> feature/web-source
+`,
+};
+
+const result = await preloadUnresolvedFile({
+  file,
+  options: { theme: 'pierre-dark' },
+});
+
+// Spread result into <UnresolvedFile {...result} />
 ```
 
 **Client Component** (`DiffViewer.tsx`):

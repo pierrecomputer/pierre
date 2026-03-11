@@ -468,7 +468,7 @@ describe('DiffHunksRenderer - Virtualization', () => {
         diffStyle: 'unified',
       });
 
-      expandedRenderer.expandHunkFully(3);
+      expandedRenderer.expandHunk(3, 'both', Number.POSITIVE_INFINITY);
 
       const result = await expandedRenderer.asyncRender(fileDiff, {
         startingLine: 0,

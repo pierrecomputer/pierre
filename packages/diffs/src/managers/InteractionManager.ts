@@ -154,7 +154,7 @@ export interface InteractionManagerOptions<
   onHunkExpand?(
     hunkIndex: number,
     direction: ExpansionDirections,
-    expandFully?: boolean
+    expansionLineCountOverride?: number
   ): unknown;
   onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
 }
@@ -435,7 +435,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           break;
         }
         if (isExpandoPointerTarget(target) && onHunkExpand != null) {
-          onHunkExpand(target.hunkIndex, target.direction, event.shiftKey);
+          onHunkExpand(
+            target.hunkIndex,
+            event.shiftKey ? 'both' : target.direction,
+            event.shiftKey ? Number.POSITIVE_INFINITY : undefined
+          );
           break;
         }
         if (!isLinePointerTarget(target)) {
@@ -1470,7 +1474,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
   onHunkExpand?: (
     hunkIndex: number,
     direction: ExpansionDirections,
-    expandFully?: boolean
+    expansionLineCount?: number
   ) => unknown,
   getLineIndex?: GetLineIndexUtility,
   onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void

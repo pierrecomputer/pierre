@@ -145,7 +145,7 @@ export class UnresolvedFile<
         typeof hunkSeparators === 'function' ||
           hunkSeparators === 'line-info' ||
           hunkSeparators === 'line-info-basic'
-          ? this.handleExpandHunk
+          ? this.expandHunk
           : undefined,
         this.getLineIndex,
         this.handleMergeConflictActionClick

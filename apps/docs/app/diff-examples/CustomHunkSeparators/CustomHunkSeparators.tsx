@@ -152,7 +152,7 @@ function createCustomSeparator(
     expandChunk.className = CUSTOM_SEPARATOR_CLASS_NAMES.expandChunkButton;
     expandChunk.textContent = 'Expand entire hunk';
     expandChunk.addEventListener('click', () => {
-      instance.expandHunkFully(hunkData.hunkIndex);
+      instance.expandHunk(hunkData.hunkIndex, 'both', Number.POSITIVE_INFINITY);
     });
     element.appendChild(separatorDot);
     element.appendChild(expandChunk);

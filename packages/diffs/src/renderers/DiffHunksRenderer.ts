@@ -203,8 +203,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.mergeOptions({ themeType });
   }
 
-  public expandHunk(index: number, direction: ExpansionDirections): void {
-    const { expansionLineCount } = this.getOptionsWithDefaults();
+  public expandHunk(
+    index: number,
+    direction: ExpansionDirections,
+    expansionLineCount: number = this.getOptionsWithDefaults()
+      .expansionLineCount
+  ): void {
     const region = {
       ...(this.expandedHunks.get(index) ?? {
         fromStart: 0,
@@ -223,18 +227,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.renderCache = undefined;
     }
     this.expandedHunks.set(index, region);
-  }
-
-  public expandHunkFully(index: number): void {
-    // NOTE(amadeus): If our render cache is not highlighted, we need to clear
-    // it, otherwise we won't have the correct AST lines
-    if (this.renderCache?.highlighted !== true) {
-      this.renderCache = undefined;
-    }
-    this.expandedHunks.set(index, {
-      fromStart: Number.POSITIVE_INFINITY,
-      fromEnd: Number.POSITIVE_INFINITY,
-    });
   }
 
   public getExpandedHunk(hunkIndex: number): HunkExpansionRegion {

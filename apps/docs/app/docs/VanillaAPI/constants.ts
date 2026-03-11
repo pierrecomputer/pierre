@@ -384,7 +384,10 @@ instance.setSelectedLines({
 instance.rerender();
 
 // Programmatically expand a collapsed hunk
-instance.expandHunk(0, 'down'); // hunkIndex, direction: 'up' | 'down' | 'all'
+instance.expandHunk(0, 'down'); // hunkIndex, direction: 'up' | 'down' | 'both'
+
+// Expand an entire collapsed hunk
+instance.expandHunk(0, 'both', Number.POSITIVE_INFINITY);
 
 // Change the active theme type
 instance.setThemeType('dark'); // 'dark' | 'light' | 'system'

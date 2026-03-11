@@ -193,21 +193,20 @@ export class VirtualizedFileDiff<
     super.cleanUp();
   }
 
-  override expandHunk(hunkIndex: number, direction: ExpansionDirections): void {
-    this.hunksRenderer.expandHunk(hunkIndex, direction);
+  override expandHunk = (
+    hunkIndex: number,
+    direction: ExpansionDirections,
+    expansionLineCountOverride?: number
+  ): void => {
+    this.hunksRenderer.expandHunk(
+      hunkIndex,
+      direction,
+      expansionLineCountOverride
+    );
     this.computeApproximateSize();
     this.renderRange = undefined;
     this.virtualizer.instanceChanged(this);
-    // NOTE(amadeus): We should probably defer to the virtualizer to re-render
-    // this.rerender();
-  }
-
-  override expandHunkFully(hunkIndex: number): void {
-    this.hunksRenderer.expandHunkFully(hunkIndex);
-    this.computeApproximateSize();
-    this.renderRange = undefined;
-    this.virtualizer.instanceChanged(this);
-  }
+  };
 
   public setVisibility(visible: boolean): void {
     if (this.fileContainer == null) {
