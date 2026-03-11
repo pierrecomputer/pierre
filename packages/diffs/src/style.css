@@ -1520,6 +1520,14 @@
     color: var(--diffs-fg);
   }
 
+  [data-merge-conflict-action='current']:hover {
+    color: var(--diffs-addition-base);
+  }
+
+  [data-merge-conflict-action='incoming']:hover {
+    color: var(--diffs-modified-base);
+  }
+
   [data-merge-conflict-action-separator] {
     color: var(--diffs-fg-number);
     opacity: 0.6;
