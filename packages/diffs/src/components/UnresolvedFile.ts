@@ -448,7 +448,7 @@ export class UnresolvedFile<
         cache.action !== action ||
         !areMergeConflictActionMetadataEqual(activeAction, cache.metadata)
       ) {
-        cache?.element.parentNode?.removeChild(cache.element);
+        cache?.element.remove();
         const rendered = this.renderMergeConflictAction(action);
         if (rendered == null) {
           continue;
@@ -463,7 +463,7 @@ export class UnresolvedFile<
     }
     for (const [id, { element }] of staleActions.entries()) {
       this.conflictActionCache.delete(id);
-      element.parentNode?.removeChild(element);
+      element.remove();
     }
   }
 

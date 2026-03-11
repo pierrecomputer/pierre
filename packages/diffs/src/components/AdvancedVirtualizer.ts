@@ -274,7 +274,7 @@ export class AdvancedVirtualizer<LAnnotations = undefined> {
 
 function cleanupRenderedItem<LAnnotations>(item: RenderedItems<LAnnotations>) {
   item.instance.cleanUp(true);
-  item.element.parentNode?.removeChild(item.element);
+  item.element.remove();
   item.element.innerHTML = '';
   if (item.element.shadowRoot != null) {
     item.element.shadowRoot.innerHTML = '';

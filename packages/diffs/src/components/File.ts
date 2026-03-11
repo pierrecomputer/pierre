@@ -235,7 +235,7 @@ export class File<LAnnotation = undefined> {
 
     // Clean up the elements
     if (!this.isContainerManaged) {
-      this.fileContainer?.parentNode?.removeChild(this.fileContainer);
+      this.fileContainer?.remove();
     }
     if (this.fileContainer?.shadowRoot != null) {
       this.fileContainer.shadowRoot.innerHTML = '';
@@ -359,16 +359,16 @@ export class File<LAnnotation = undefined> {
     if (disableFileHeader) {
       // Remove existing header from DOM
       if (this.headerElement != null) {
-        this.headerElement.parentNode?.removeChild(this.headerElement);
+        this.headerElement.remove();
         this.headerElement = undefined;
         this.lastRenderedHeaderHTML = undefined;
       }
       if (this.headerPrefix != null) {
-        this.headerPrefix.parentNode?.removeChild(this.headerPrefix);
+        this.headerPrefix.remove();
         this.headerPrefix = undefined;
       }
       if (this.headerMetadata != null) {
-        this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+        this.headerMetadata.remove();
         this.headerMetadata = undefined;
       }
     }
@@ -465,7 +465,7 @@ export class File<LAnnotation = undefined> {
 
   private clearAuxiliaryNodes(): void {
     for (const { element } of this.annotationCache.values()) {
-      element.parentNode?.removeChild(element);
+      element.remove();
     }
     this.annotationCache.clear();
 
@@ -537,7 +537,7 @@ export class File<LAnnotation = undefined> {
   private renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       for (const { element } of this.annotationCache.values()) {
-        element.parentNode?.removeChild(element);
+        element.remove();
       }
       this.annotationCache.clear();
       return;
@@ -552,7 +552,7 @@ export class File<LAnnotation = undefined> {
           cache == null ||
           !areLineAnnotationsEqual(annotation, cache.annotation)
         ) {
-          cache?.element.parentElement?.removeChild(cache.element);
+          cache?.element.remove();
           const content = renderAnnotation(annotation);
           // If we can't render anything, then we should not render anything
           // and clear the annotation cache if necessary.
@@ -574,7 +574,7 @@ export class File<LAnnotation = undefined> {
     }
     for (const [id, { element }] of staleAnnotations.entries()) {
       this.annotationCache.delete(id);
-      element.parentNode?.removeChild(element);
+      element.remove();
     }
   }
 
@@ -590,9 +590,7 @@ export class File<LAnnotation = undefined> {
     if (element != null && this.gutterUtilityContent != null) {
       return;
     } else if (element == null) {
-      this.gutterUtilityContent?.parentNode?.removeChild(
-        this.gutterUtilityContent
-      );
+      this.gutterUtilityContent?.remove();
       this.gutterUtilityContent = undefined;
       return;
     }
@@ -610,7 +608,7 @@ export class File<LAnnotation = undefined> {
 
     if (unsafeCSS == null || unsafeCSS === '') {
       if (this.unsafeCSSStyle != null) {
-        this.unsafeCSSStyle.parentNode?.removeChild(this.unsafeCSSStyle);
+        this.unsafeCSSStyle.remove();
         this.unsafeCSSStyle = undefined;
       }
       return;
@@ -841,11 +839,11 @@ export class File<LAnnotation = undefined> {
     const { disableVirtualizationBuffers = false } = this.options;
     if (disableVirtualizationBuffers || renderRange == null) {
       if (this.bufferBefore != null) {
-        this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+        this.bufferBefore.remove();
         this.bufferBefore = undefined;
       }
       if (this.bufferAfter != null) {
-        this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+        this.bufferAfter.remove();
         this.bufferAfter = undefined;
       }
       return;
@@ -863,7 +861,7 @@ export class File<LAnnotation = undefined> {
       );
       this.bufferBefore.style.setProperty('contain', 'strict');
     } else if (this.bufferBefore != null) {
-      this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+      this.bufferBefore.remove();
       this.bufferBefore = undefined;
     }
 
@@ -879,7 +877,7 @@ export class File<LAnnotation = undefined> {
       );
       this.bufferAfter.style.setProperty('contain', 'strict');
     } else if (this.bufferAfter != null) {
-      this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+      this.bufferAfter.remove();
       this.bufferAfter = undefined;
     }
   }
@@ -914,10 +912,10 @@ export class File<LAnnotation = undefined> {
 
     const { renderHeaderPrefix, renderCustomMetadata } = this.options;
     if (this.headerPrefix != null) {
-      this.headerPrefix.parentNode?.removeChild(this.headerPrefix);
+      this.headerPrefix.remove();
     }
     if (this.headerMetadata != null) {
-      this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+      this.headerMetadata.remove();
     }
     const prefix = renderHeaderPrefix?.(file) ?? undefined;
     const content = renderCustomMetadata?.(file) ?? undefined;
@@ -1025,7 +1023,7 @@ export class File<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     const pre = this.getOrCreatePreNode(container);
     pre.innerHTML = '';
-    pre.parentNode?.removeChild(pre);
+    pre.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
     const shadowRoot =
@@ -1045,7 +1043,7 @@ export class File<LAnnotation = undefined> {
   }
 
   private cleanupErrorWrapper() {
-    this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
+    this.errorWrapper?.remove();
     this.errorWrapper = undefined;
   }
 }

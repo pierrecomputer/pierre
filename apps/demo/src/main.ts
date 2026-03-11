@@ -459,7 +459,7 @@ const diff2Files = document.getElementById('diff-files');
 if (diff2Files != null) {
   diff2Files.addEventListener('click', () => {
     if (lastWrapper != null) {
-      lastWrapper.parentElement?.removeChild(lastWrapper);
+      lastWrapper.remove();
     }
     lastWrapper = document.createElement('div');
 
@@ -507,7 +507,7 @@ if (diff2Files != null) {
         cacheKey: `new-${fileNewContents.value}`,
       };
 
-      lastWrapper?.parentNode?.removeChild(lastWrapper);
+      lastWrapper?.remove();
       const parsed = parseDiffFromFile(oldFile, newFile);
       console.log('ZZZZZ - parsed', parsed);
       renderDiff([{ files: [parsed] }], poolManager);
@@ -519,7 +519,7 @@ if (diff2Files != null) {
     bottomWrapper.appendChild(cancel);
 
     cancel.addEventListener('click', () => {
-      lastWrapper?.parentNode?.removeChild(lastWrapper);
+      lastWrapper?.remove();
     });
 
     lastWrapper.append(bottomWrapper);

@@ -422,7 +422,7 @@ export class FileDiff<LAnnotation = undefined> {
 
     // Clean up the elements
     if (!this.isContainerManaged) {
-      this.fileContainer?.parentNode?.removeChild(this.fileContainer);
+      this.fileContainer?.remove();
     }
     if (this.fileContainer?.shadowRoot != null) {
       // Manually help garbage collection
@@ -670,16 +670,16 @@ export class FileDiff<LAnnotation = undefined> {
     if (disableFileHeader) {
       // Remove existing header from DOM
       if (this.headerElement != null) {
-        this.headerElement.parentNode?.removeChild(this.headerElement);
+        this.headerElement.remove();
         this.headerElement = undefined;
         this.lastRenderedHeaderHTML = undefined;
       }
       if (this.headerPrefix != null) {
-        this.headerPrefix.parentNode?.removeChild(this.headerPrefix);
+        this.headerPrefix.remove();
         this.headerPrefix = undefined;
       }
       if (this.headerMetadata != null) {
-        this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+        this.headerMetadata.remove();
         this.headerMetadata = undefined;
       }
     }
@@ -754,7 +754,7 @@ export class FileDiff<LAnnotation = undefined> {
         ) {
           this.applyHunksToDOM(pre, hunksResult);
         } else if (this.pre != null) {
-          this.pre.parentNode?.removeChild(this.pre);
+          this.pre.remove();
           this.pre = undefined;
         }
         this.renderSeparators(hunksResult.hunkData);
@@ -814,12 +814,12 @@ export class FileDiff<LAnnotation = undefined> {
 
   private clearAuxiliaryNodes(): void {
     for (const { element } of this.separatorCache.values()) {
-      element.parentNode?.removeChild(element);
+      element.remove();
     }
     this.separatorCache.clear();
 
     for (const { element } of this.annotationCache.values()) {
-      element.parentNode?.removeChild(element);
+      element.remove();
     }
     this.annotationCache.clear();
 
@@ -890,7 +890,7 @@ export class FileDiff<LAnnotation = undefined> {
       typeof hunkSeparators !== 'function'
     ) {
       for (const { element } of this.separatorCache.values()) {
-        element.parentNode?.removeChild(element);
+        element.remove();
       }
       this.separatorCache.clear();
       return;
@@ -900,7 +900,7 @@ export class FileDiff<LAnnotation = undefined> {
       const id = hunk.slotName;
       let cache = this.separatorCache.get(id);
       if (cache == null || !areHunkDataEqual(hunk, cache.hunkData)) {
-        cache?.element.parentNode?.removeChild(cache.element);
+        cache?.element.remove();
         const element = document.createElement('div');
         element.style.display = 'contents';
         element.slot = hunk.slotName;
@@ -916,14 +916,14 @@ export class FileDiff<LAnnotation = undefined> {
     }
     for (const [id, { element }] of staleSeparators.entries()) {
       this.separatorCache.delete(id);
-      element.parentNode?.removeChild(element);
+      element.remove();
     }
   }
 
   private renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       for (const { element } of this.annotationCache.values()) {
-        element.parentNode?.removeChild(element);
+        element.remove();
       }
       this.annotationCache.clear();
       return;
@@ -938,7 +938,7 @@ export class FileDiff<LAnnotation = undefined> {
           cache == null ||
           !areDiffLineAnnotationsEqual(annotation, cache.annotation)
         ) {
-          cache?.element.parentElement?.removeChild(cache.element);
+          cache?.element.remove();
           const content = renderAnnotation(annotation);
           // If we can't render anything, then we should not render anything
           // and clear the annotation cache if necessary.
@@ -960,7 +960,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
     for (const [id, { element }] of staleAnnotations.entries()) {
       this.annotationCache.delete(id);
-      element.parentNode?.removeChild(element);
+      element.remove();
     }
   }
 
@@ -976,9 +976,7 @@ export class FileDiff<LAnnotation = undefined> {
     if (element != null && this.gutterUtilityContent != null) {
       return;
     } else if (element == null) {
-      this.gutterUtilityContent?.parentNode?.removeChild(
-        this.gutterUtilityContent
-      );
+      this.gutterUtilityContent?.remove();
       this.gutterUtilityContent = undefined;
       return;
     }
@@ -1093,10 +1091,10 @@ export class FileDiff<LAnnotation = undefined> {
 
     const { renderHeaderPrefix, renderHeaderMetadata } = this.options;
     if (this.headerPrefix != null) {
-      this.headerPrefix.parentNode?.removeChild(this.headerPrefix);
+      this.headerPrefix.remove();
     }
     if (this.headerMetadata != null) {
-      this.headerMetadata.parentNode?.removeChild(this.headerMetadata);
+      this.headerMetadata.remove();
     }
     const prefix =
       renderHeaderPrefix?.({
@@ -1817,11 +1815,11 @@ export class FileDiff<LAnnotation = undefined> {
     const { disableVirtualizationBuffers = false } = this.options;
     if (disableVirtualizationBuffers || renderRange == null) {
       if (this.bufferBefore != null) {
-        this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+        this.bufferBefore.remove();
         this.bufferBefore = undefined;
       }
       if (this.bufferAfter != null) {
-        this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+        this.bufferAfter.remove();
         this.bufferAfter = undefined;
       }
       return;
@@ -1840,7 +1838,7 @@ export class FileDiff<LAnnotation = undefined> {
       );
       this.bufferBefore.style.setProperty('contain', 'strict');
     } else if (this.bufferBefore != null) {
-      this.bufferBefore.parentNode?.removeChild(this.bufferBefore);
+      this.bufferBefore.remove();
       this.bufferBefore = undefined;
     }
 
@@ -1856,7 +1854,7 @@ export class FileDiff<LAnnotation = undefined> {
       );
       this.bufferAfter.style.setProperty('contain', 'strict');
     } else if (this.bufferAfter != null) {
-      this.bufferAfter.parentNode?.removeChild(this.bufferAfter);
+      this.bufferAfter.remove();
       this.bufferAfter = undefined;
     }
   }
@@ -1906,7 +1904,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     const pre = this.getOrCreatePreNode(container);
     pre.innerHTML = '';
-    pre.parentNode?.removeChild(pre);
+    pre.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
     const shadowRoot =
@@ -1926,7 +1924,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private cleanupErrorWrapper() {
-    this.errorWrapper?.parentNode?.removeChild(this.errorWrapper);
+    this.errorWrapper?.remove();
     this.errorWrapper = undefined;
   }
 }
