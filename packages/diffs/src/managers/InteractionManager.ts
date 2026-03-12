@@ -88,7 +88,6 @@ export interface MergeConflictActionTarget {
   kind: 'merge-conflict-action';
   resolution: MergeConflictResolution;
   conflictIndex: number;
-  lineIndex: number | undefined;
 }
 
 type ResolvedPointerTarget<TMode extends InteractionManagerMode> =
@@ -1260,14 +1259,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         const conflictIndexValue =
           element.getAttribute('data-merge-conflict-conflict-index') ??
           undefined;
-        const lineIndexValue =
-          element.getAttribute('data-merge-conflict-line-index') ?? undefined;
         const conflictIndex =
           conflictIndexValue != null
             ? Number.parseInt(conflictIndexValue, 10)
             : Number.NaN;
-        const lineIndex =
-          lineIndexValue != null ? Number.parseInt(lineIndexValue, 10) : NaN;
         if (
           isMergeConflictResolution(resolutionValue) &&
           Number.isFinite(conflictIndex)
@@ -1276,7 +1271,6 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             kind: 'merge-conflict-action',
             resolution: resolutionValue,
             conflictIndex,
-            lineIndex: Number.isFinite(lineIndex) ? lineIndex : undefined,
           };
         }
       }

@@ -63,6 +63,25 @@ function getTopLevelBufferIndex(rows: ElementContent[]): number {
   });
 }
 
+function findFirstElementWithProperty(
+  rows: ElementContent[],
+  property: string
+): ElementContent | undefined {
+  for (const row of rows) {
+    if (!isHastElement(row)) {
+      continue;
+    }
+    if (row.properties?.[property] != null) {
+      return row;
+    }
+    const child = findFirstElementWithProperty(row.children, property);
+    if (child != null) {
+      return child;
+    }
+  }
+  return undefined;
+}
+
 class UnifiedInlineRowTestRenderer extends DiffHunksRenderer {
   protected override getUnifiedInlineRowsForLine = (
     ctx: RenderedLineContext
@@ -188,9 +207,15 @@ describe('inline row hooks', () => {
         row.properties?.['data-merge-conflict-actions'] != null
       );
     });
+    const actionButton = findFirstElementWithProperty(
+      result.unifiedContentAST,
+      'data-merge-conflict-action'
+    );
     const actionAnchorIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
 
     expect(result.rowCount).toBe(fileDiff.unifiedLineCount + actions.length);
     expect(actionRowIndex).toBe(actionAnchorIndex + 1);
+    assertDefined(actionButton, 'expected merge conflict action button');
+    expect(isHastElement(actionButton)).toBe(true);
   });
 });

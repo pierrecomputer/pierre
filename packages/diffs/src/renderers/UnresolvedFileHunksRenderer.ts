@@ -40,7 +40,6 @@ interface MergeConflictActionRowData {
   side: DiffLineAnnotation<undefined>['side'];
   lineNumber: number;
   conflictIndex: number;
-  lineIndex: number;
 }
 
 interface BaseUnresolvedOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
@@ -96,7 +95,6 @@ export class UnresolvedFileHunksRenderer<
         side: annotation.side,
         lineNumber: annotation.lineNumber,
         conflictIndex,
-        lineIndex: annotation.lineIndex,
       };
       const key = `${row.side}:${row.lineNumber}`;
       const rows = this.conflictActions.get(key);
@@ -345,7 +343,7 @@ function createMergeConflictActionsRowElement({
   includeSlot,
 }: CreateMergeConflictActionsRowElementProps): HASTElement {
   const contentChildren: HASTElement[] = includeDefaultActions
-    ? createMergeConflictActionsContent(row)
+    ? createMergeConflictActionsContent(row.conflictIndex)
     : [];
   if (includeSlot) {
     contentChildren.push(
@@ -378,29 +376,25 @@ function createMergeConflictActionsRowElement({
 }
 
 function createMergeConflictActionsContent(
-  row: Pick<MergeConflictActionRowData, 'conflictIndex' | 'lineIndex'>
+  conflictIndex: number
 ): HASTElement[] {
-  const { conflictIndex, lineIndex } = row;
   return [
     createMergeConflictActionButton({
       resolution: 'current',
       label: 'Accept current change',
       conflictIndex,
-      lineIndex,
     }),
     createMergeConflictActionSeparator(),
     createMergeConflictActionButton({
       resolution: 'incoming',
       label: 'Accept incoming change',
       conflictIndex,
-      lineIndex,
     }),
     createMergeConflictActionSeparator(),
     createMergeConflictActionButton({
       resolution: 'both',
       label: 'Accept both',
       conflictIndex,
-      lineIndex,
     }),
   ];
 }
@@ -409,14 +403,12 @@ interface CreateMergeConflictActionButtonProps {
   resolution: MergeConflictResolution;
   label: string;
   conflictIndex: number;
-  lineIndex: number;
 }
 
 function createMergeConflictActionButton({
   resolution,
   label,
   conflictIndex,
-  lineIndex,
 }: CreateMergeConflictActionButtonProps): HASTElement {
   return createHastElement({
     tagName: 'button',
@@ -424,7 +416,6 @@ function createMergeConflictActionButton({
       type: 'button',
       'data-merge-conflict-action': resolution,
       'data-merge-conflict-conflict-index': `${conflictIndex}`,
-      'data-merge-conflict-line-index': `${lineIndex}`,
     },
     children: [createTextNodeElement(label)],
   });
