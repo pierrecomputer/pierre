@@ -44,6 +44,10 @@ interface MergeConflictActionRowData {
   sourceIndex: number;
 }
 
+interface BaseUnresolvedOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
+  mergeConflictActionsType: MergeConflictActionsType;
+}
+
 type MergeConflictActionsType = 'none' | 'default' | 'custom';
 
 export interface UnresolvedFileHunksRendererOptions extends BaseDiffOptions {
@@ -247,7 +251,7 @@ export class UnresolvedFileHunksRenderer<
     result: HunksRenderResult,
     actionRows: MergeConflictActionRowData[]
   ): number {
-    const { mergeConflictActionsType = 'default' } = this.options;
+    const { mergeConflictActionsType } = this.getOptionsWithDefaults();
     const { unifiedContentAST, unifiedGutterAST } = result;
     if (unifiedContentAST == null || unifiedGutterAST == null) {
       return 0;
@@ -293,7 +297,7 @@ export class UnresolvedFileHunksRenderer<
     result: HunksRenderResult,
     actionRows: MergeConflictActionRowData[]
   ): number {
-    const { mergeConflictActionsType = 'default' } = this.options;
+    const { mergeConflictActionsType } = this.getOptionsWithDefaults();
     const {
       additionsContentAST,
       additionsGutterAST,
@@ -367,11 +371,14 @@ export class UnresolvedFileHunksRenderer<
     return targets.length;
   }
 
-  protected override getOptionsWithDefaults(): BaseDiffOptionsWithDefaults {
+  protected override getOptionsWithDefaults(): BaseUnresolvedOptionsWithDefaults {
     const options = super.getOptionsWithDefaults();
     options.diffStyle = 'unified';
     options.lineDiffType = 'none';
-    return options;
+    // NOTE(amadeus): Aint nobody got time for a spread
+    (options as BaseUnresolvedOptionsWithDefaults).mergeConflictActionsType =
+      this.options.mergeConflictActionsType ?? 'default';
+    return options as BaseUnresolvedOptionsWithDefaults;
   }
 }
 
