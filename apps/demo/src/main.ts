@@ -47,18 +47,17 @@ const streamingInstances: FileStream[] = [];
 const conflictInstances: UnresolvedFile<LineCommentMetadata>[] = [];
 
 function cleanupInstances(container: HTMLElement) {
-  for (const instance of diffInstances) {
-    instance.cleanUp();
+  for (const instances of [
+    diffInstances,
+    fileInstances,
+    streamingInstances,
+    conflictInstances,
+  ]) {
+    for (const instance of instances) {
+      instance.cleanUp();
+    }
+    instances.length = 0;
   }
-  for (const instance of fileInstances) {
-    instance.cleanUp();
-  }
-  for (const instance of streamingInstances) {
-    instance.cleanUp();
-  }
-  diffInstances.length = 0;
-  fileInstances.length = 0;
-  streamingInstances.length = 0;
   container.innerHTML = '';
   delete container.dataset.diff;
 }
