@@ -905,6 +905,7 @@ export function Root({
   } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hoveredContextMenuItemRef = useRef<string | null>(null);
+  const isScrollingRef = useRef(false);
   // Ref mirror of contextMenuItemId — lets callbacks read the current value
   // without including it as a dependency, keeping their identities stable.
   const contextMenuItemIdRef = useRef<string | null>(null);
@@ -935,8 +936,20 @@ export function Root({
       const container = tree.getElement()?.closest('[role="tree"]');
       if (container == null) return;
       const itemRect = itemEl.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      trigger.style.top = `${itemRect.top - containerRect.top}px`;
+      // For virtualized trees the trigger lives inside the scroll container,
+      // so we compute a content-relative offset that scrolls with items.
+      const scrollContainer = container.querySelector(
+        '[data-file-tree-virtualized-scroll]'
+      );
+      let top: number;
+      if (scrollContainer != null) {
+        const scrollRect = scrollContainer.getBoundingClientRect();
+        top = itemRect.top - scrollRect.top + scrollContainer.scrollTop;
+      } else {
+        const containerRect = container.getBoundingClientRect();
+        top = itemRect.top - containerRect.top;
+      }
+      trigger.style.top = `${top}px`;
       trigger.style.height = `${itemRect.height}px`;
       trigger.style.display = 'flex';
       trigger.dataset.itemId = itemEl.dataset.itemId ?? '';
@@ -962,11 +975,14 @@ export function Root({
         return;
       }
 
-      // Open: store position from trigger's current style.top
-      const top = parseFloat(trigger?.style.top ?? '0');
-      const height = parseFloat(trigger?.style.height ?? '30');
+      // Position the menu below the trigger using its visual location
+      // (trigger.style.top may be content-relative in virtualized trees).
+      const container = tree.getElement()?.closest('[role="tree"]');
+      if (container == null || trigger == null) return;
+      const triggerRect = trigger.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
       setContextMenuItemId(itemId);
-      setContextMenuPosition({ top: top + height });
+      setContextMenuPosition({ top: triggerRect.bottom - containerRect.top });
       const item = tree.getItemInstance(itemId);
       const data = item.getItemData();
       openContextMenu({
@@ -1016,6 +1032,41 @@ export function Root({
     target.addEventListener('scroll', handleScroll, { passive: true });
     return () => target.removeEventListener('scroll', handleScroll);
   }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled, tree]);
+
+  // Hide trigger during scroll — reappears on next pointerover after scrolling
+  // stops, matching the timing of the virtualizer's hover-style restoration.
+  useEffect(() => {
+    if (!isContextMenuEnabled) return;
+    const container = tree.getElement()?.closest('[role="tree"]');
+    const scrollParent = container?.closest(
+      '[data-file-tree-virtualized-scroll]'
+    );
+    const target = scrollParent ?? container?.parentElement;
+    if (target == null) return;
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleScroll = () => {
+      isScrollingRef.current = true;
+      const trigger = triggerRef.current;
+      if (trigger != null) {
+        trigger.style.display = 'none';
+      }
+      hoveredContextMenuItemRef.current = null;
+
+      if (scrollTimer != null) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        isScrollingRef.current = false;
+        scrollTimer = null;
+      }, 50);
+    };
+
+    target.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      target.removeEventListener('scroll', handleScroll);
+      if (scrollTimer != null) clearTimeout(scrollTimer);
+      isScrollingRef.current = false;
+    };
+  }, [isContextMenuEnabled, tree]);
 
   useEffect(() => {
     if (isContextMenuEnabled || contextMenuItemId == null) return;
@@ -1304,6 +1355,7 @@ export function Root({
       onPointerOver={
         isContextMenuEnabled
           ? (e: PointerEvent) => {
+              if (isScrollingRef.current) return;
               const target = e.target as HTMLElement;
               if (
                 target.closest?.(
@@ -1429,6 +1481,20 @@ export function Root({
           );
         };
 
+        const contextMenuTrigger = isContextMenuEnabled ? (
+          <button
+            ref={triggerRef}
+            data-type={CONTEXT_MENU_TRIGGER_TYPE}
+            tabIndex={-1}
+            aria-label="Options"
+            onMouseDown={(e: MouseEvent) => e.preventDefault()}
+            onClick={handleTriggerClick}
+            style={{ display: 'none' }}
+          >
+            Options
+          </button>
+        ) : null;
+
         if (
           shouldVirtualize &&
           items.length > 0 &&
@@ -1449,40 +1515,32 @@ export function Root({
                     : null
                 }
               />
+              {contextMenuTrigger}
             </div>
           );
         }
 
-        return items.map((_, i) => renderItemAtIndex(i));
+        return (
+          <>
+            {items.map((_, i) => renderItemAtIndex(i))}
+            {contextMenuTrigger}
+          </>
+        );
       })()}
-      {isContextMenuEnabled ? (
-        <>
-          {/* Single floating trigger — positioned imperatively, not per-item */}
-          <button
-            ref={triggerRef}
-            data-type={CONTEXT_MENU_TRIGGER_TYPE}
-            tabIndex={-1}
-            aria-label="Options"
-            onMouseDown={(e: MouseEvent) => e.preventDefault()}
-            onClick={handleTriggerClick}
-            style={{ display: 'none' }}
-          >
-            Options
-          </button>
-          {contextMenuItemId != null && contextMenuPosition != null ? (
-            <div
-              data-type="context-menu-container"
-              style={{
-                position: 'absolute',
-                top: `${contextMenuPosition.top}px`,
-                right: 'var(--trees-item-margin-x)',
-                zIndex: 10,
-              }}
-            >
-              <slot name={CONTEXT_MENU_SLOT_NAME} />
-            </div>
-          ) : null}
-        </>
+      {isContextMenuEnabled &&
+      contextMenuItemId != null &&
+      contextMenuPosition != null ? (
+        <div
+          data-type="context-menu-container"
+          style={{
+            position: 'absolute',
+            top: `${contextMenuPosition.top}px`,
+            right: 'var(--trees-item-margin-x)',
+            zIndex: 10,
+          }}
+        >
+          <slot name={CONTEXT_MENU_SLOT_NAME} />
+        </div>
       ) : null}
     </div>
   );

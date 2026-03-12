@@ -2244,6 +2244,11 @@ function VirtualizedLinuxKernelCard() {
 
   const ref = useCallback((node: HTMLDivElement | null) => {
     if (node == null) return;
+
+    const slotElement = document.createElement('div');
+    slotElement.setAttribute('slot', CONTEXT_MENU_SLOT_NAME);
+    slotElement.style.display = 'none';
+
     const fileTree = new FileTree(
       {
         initialFiles: linuxKernelFiles,
@@ -2251,10 +2256,28 @@ function VirtualizedLinuxKernelCard() {
         flattenEmptyDirectories: true,
         sort: false,
       },
-      { initialExpandedItems: linuxKernelAllFolders }
+      {
+        initialExpandedItems: linuxKernelAllFolders,
+        onContextMenuOpen: (item) => {
+          populateVanillaContextMenuSlot(slotElement, item);
+        },
+        onContextMenuClose: () => {
+          slotElement.replaceChildren();
+          slotElement.style.display = 'none';
+        },
+      }
     );
     fileTree.render({ containerWrapper: node });
-    return () => fileTree.cleanUp();
+
+    const container = fileTree.getFileTreeContainer();
+    if (container != null) {
+      container.appendChild(slotElement);
+    }
+
+    return () => {
+      slotElement.remove();
+      fileTree.cleanUp();
+    };
   }, []);
 
   return (
