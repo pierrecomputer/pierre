@@ -43,7 +43,6 @@ interface MergeConflictActionRowData {
   lineIndex: number;
   rowKey: string;
   slotName: string;
-  sourceIndex: number;
 }
 
 interface BaseUnresolvedOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
@@ -106,7 +105,6 @@ export class UnresolvedFileHunksRenderer<
           lineNumber: annotation.lineNumber,
           conflictIndex,
         }),
-        sourceIndex,
       };
       const key = `${row.side}:${row.lineNumber}`;
       const rows = this.conflictActions.get(key);
