@@ -16,10 +16,7 @@ import type {
 import { createStyleElement } from '../utils/createStyleElement';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
-import {
-  getMergeConflictActionMetadata,
-  parseMergeConflictDiffFromFile,
-} from '../utils/parseMergeConflictDiffFromFile';
+import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
 import { renderHTML } from './renderHTML';
 
 export interface PreloadDiffOptions<LAnnotation> {
@@ -70,7 +67,7 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
   if (annotations != null && annotations.length > 0) {
     renderer.setLineAnnotations(annotations);
   }
-  renderer.setConflictActions(getMergeConflictActionMetadata(actions));
+  renderer.setConflictActions(actions);
   return renderHTML(
     processHunkResult(
       await renderer.asyncRender(fileDiff),

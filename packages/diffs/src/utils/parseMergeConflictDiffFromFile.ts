@@ -1,7 +1,6 @@
 import type {
   FileContents,
   FileDiffMetadata,
-  MergeConflictMetadata,
   MergeConflictRegion,
 } from '../types';
 import {
@@ -27,30 +26,27 @@ export interface MergeConflictDiffAction {
   conflictIndex: number;
 }
 
-export function getMergeConflictActionMetadata(
-  actions: MergeConflictDiffAction[]
-): MergeConflictMetadata[] {
-  const conflictMetadata: MergeConflictMetadata[] = [];
-  for (const action of actions) {
-    if (action.incomingLineNumber != null) {
-      conflictMetadata.push({
-        type: 'merge-conflict-action',
-        side: 'additions',
-        lineNumber: action.incomingLineNumber,
-        conflict: action.conflict,
-        lineIndex: action.incomingLineNumber - 1,
-      });
-    } else if (action.currentLineNumber != null) {
-      conflictMetadata.push({
-        type: 'merge-conflict-action',
-        side: 'deletions',
-        lineNumber: action.currentLineNumber,
-        conflict: action.conflict,
-        lineIndex: action.currentLineNumber - 1,
-      });
-    }
+interface GetMergeConflictActionAnchorReturn {
+  side: 'additions' | 'deletions';
+  lineNumber: number;
+}
+
+export function getMergeConflictActionAnchor(
+  action: MergeConflictDiffAction
+): GetMergeConflictActionAnchorReturn | undefined {
+  if (action.incomingLineNumber != null) {
+    return {
+      side: 'additions',
+      lineNumber: action.incomingLineNumber,
+    };
   }
-  return conflictMetadata;
+  if (action.currentLineNumber != null) {
+    return {
+      side: 'deletions',
+      lineNumber: action.currentLineNumber,
+    };
+  }
+  return undefined;
 }
 
 export function parseMergeConflictDiffFromFile(

@@ -10,10 +10,7 @@ import {
 } from '../src';
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
 import { createGutterGap, createHastElement } from '../src/utils/hast_utils';
-import {
-  getMergeConflictActionMetadata,
-  parseMergeConflictDiffFromFile,
-} from '../src/utils/parseMergeConflictDiffFromFile';
+import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { assertDefined, isHastElement } from './testUtils';
 
 const inlineGutter = () => createGutterGap(undefined, 'annotation', 1);
@@ -196,7 +193,7 @@ describe('inline row hooks', () => {
     };
     const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
     const renderer = new UnresolvedFileHunksRenderer();
-    renderer.setConflictActions(getMergeConflictActionMetadata(actions));
+    renderer.setConflictActions(actions);
 
     const result = await renderer.asyncRender(fileDiff);
 

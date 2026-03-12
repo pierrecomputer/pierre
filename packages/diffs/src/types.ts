@@ -658,11 +658,3 @@ export interface SelectionPoint {
   lineNumber: number;
   side: SelectionSide | undefined;
 }
-
-export interface MergeConflictMetadata {
-  side: AnnotationSide;
-  lineNumber: number;
-  type: 'merge-conflict-action';
-  conflict: MergeConflictRegion;
-  lineIndex: number;
-}

@@ -10,15 +10,14 @@ import type {
   FileContents,
   FileDiffMetadata,
   MergeConflictActionPayload,
-  MergeConflictMetadata,
   MergeConflictResolution,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
-import { areMergeConflictActionMetadataEqual } from '../utils/areMergeConflictActionsEqual';
+import { areMergeConflictActionsEqual } from '../utils/areMergeConflictActionsEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import {
-  getMergeConflictActionMetadata,
+  getMergeConflictActionAnchor,
   type MergeConflictDiffAction,
   parseMergeConflictDiffFromFile,
 } from '../utils/parseMergeConflictDiffFromFile';
@@ -76,7 +75,6 @@ export interface UnresolvedFileHydrationProps<LAnnotation> extends Omit<
 interface MergeConflictActionElementCache {
   element: HTMLElement;
   action: MergeConflictDiffAction;
-  metadata: MergeConflictMetadata;
 }
 
 interface GetOrComputeDiffProps {
@@ -103,8 +101,7 @@ export class UnresolvedFile<
     fileDiff: undefined,
     actions: undefined,
   };
-  private actionsByConflictIndex: MergeConflictDiffAction[] = [];
-  private conflictMetadata: MergeConflictMetadata[] = [];
+  private conflictActions: MergeConflictDiffAction[] = [];
   private conflictActionCache: Map<string, MergeConflictActionElementCache> =
     new Map();
 
@@ -196,8 +193,7 @@ export class UnresolvedFile<
       fileDiff: undefined,
       actions: undefined,
     };
-    this.actionsByConflictIndex = [];
-    this.conflictMetadata = [];
+    this.conflictActions = [];
     super.cleanUp();
   }
 
@@ -333,9 +329,16 @@ export class UnresolvedFile<
     resolution: MergeConflictResolution,
     file: FileContents | undefined = this.computedCache.file
   ): FileContents | undefined {
-    const action = this.actionsByConflictIndex[conflictIndex];
+    const action = this.conflictActions[conflictIndex];
     if (file == null || action == null) {
       return undefined;
+    }
+
+    if (action.conflictIndex !== conflictIndex) {
+      console.error({ conflictIndex, action });
+      throw new Error(
+        "UnresolvedFile.resolveConflict: conflictIndex and conflictAction don't match"
+      );
     }
 
     const contents = resolveMergeConflict(file.contents, {
@@ -360,9 +363,15 @@ export class UnresolvedFile<
     conflictIndex: number,
     resolution: MergeConflictResolution
   ): FileContents | undefined {
-    const action = this.actionsByConflictIndex[conflictIndex];
+    const action = this.conflictActions[conflictIndex];
     if (action == null) {
       return undefined;
+    }
+    if (action.conflictIndex !== conflictIndex) {
+      console.error({ conflictIndex, action });
+      throw new Error(
+        "UnresolvedFile.resolveConflictAndRender: conflictIndex and conflictAction don't match"
+      );
     }
     const payload: MergeConflictActionPayload = {
       resolution,
@@ -385,23 +394,26 @@ export class UnresolvedFile<
   private setActiveMergeConflictActions(
     actions: MergeConflictDiffAction[]
   ): void {
-    this.actionsByConflictIndex = actions;
-    this.conflictMetadata =
-      this.options.mergeConflictActionsType === 'none'
-        ? []
-        : getMergeConflictActionMetadata(actions);
-
+    this.conflictActions = actions;
     if (this.hunksRenderer instanceof UnresolvedFileHunksRenderer) {
-      this.hunksRenderer.setConflictActions(this.conflictMetadata);
+      this.hunksRenderer.setConflictActions(
+        this.options.mergeConflictActionsType === 'none' ? [] : actions
+      );
     }
   }
 
   private handleMergeConflictActionClick = (
     target: MergeConflictActionTarget
   ): void => {
-    const action = this.actionsByConflictIndex[target.conflictIndex];
+    const action = this.conflictActions[target.conflictIndex];
     if (action == null) {
       return;
+    }
+    if (action.conflictIndex !== target.conflictIndex) {
+      console.error({ conflictIndex: target.conflictIndex, action });
+      throw new Error(
+        "UnresolvedFile.handleMergeConflictActionClick: conflictIndex and conflictAction don't match"
+      );
     }
     const payload: MergeConflictActionPayload = {
       resolution: target.resolution,
@@ -419,7 +431,7 @@ export class UnresolvedFile<
       this.isContainerManaged ||
       this.fileContainer == null ||
       typeof this.options.mergeConflictActionsType !== 'function' ||
-      this.conflictMetadata.length === 0
+      this.conflictActions.length === 0
     ) {
       this.clearMergeConflictActionCache();
       return;
@@ -427,26 +439,34 @@ export class UnresolvedFile<
     const staleActions = new Map(this.conflictActionCache);
     for (
       let actionIndex = 0;
-      actionIndex < this.conflictMetadata.length;
+      actionIndex < this.conflictActions.length;
       actionIndex++
     ) {
-      const activeAction = this.conflictMetadata[actionIndex];
-      const conflictIndex = activeAction.conflict.conflictIndex;
-      const action = this.actionsByConflictIndex[conflictIndex];
+      const action = this.conflictActions[actionIndex];
       if (action == null) {
         continue;
       }
+      if (action.conflictIndex !== actionIndex) {
+        console.error({ conflictIndex: actionIndex, action });
+        throw new Error(
+          "UnresolvedFile.renderMergeConflictActionSlots: conflictIndex and conflictAction don't match"
+        );
+      }
+      const anchor = getMergeConflictActionAnchor(action);
+      if (anchor == null) {
+        continue;
+      }
+      const conflictIndex = action.conflictIndex;
       const slotName = getMergeConflictActionSlotName({
-        side: activeAction.side,
-        lineNumber: activeAction.lineNumber,
+        side: anchor.side,
+        lineNumber: anchor.lineNumber,
         conflictIndex,
       });
       const id = `${actionIndex}-${slotName}`;
       let cache = this.conflictActionCache.get(id);
       if (
         cache == null ||
-        cache.action !== action ||
-        !areMergeConflictActionMetadataEqual(activeAction, cache.metadata)
+        !areMergeConflictActionsEqual(cache.action, action)
       ) {
         cache?.element.remove();
         const rendered = this.renderMergeConflictAction(action);
@@ -456,7 +476,7 @@ export class UnresolvedFile<
         const element = createAnnotationWrapperNode(slotName);
         element.appendChild(rendered);
         this.fileContainer.appendChild(element);
-        cache = { element, action, metadata: activeAction };
+        cache = { element, action };
         this.conflictActionCache.set(id, cache);
       }
       staleActions.delete(id);

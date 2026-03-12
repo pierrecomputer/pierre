@@ -6,7 +6,6 @@ import type {
   BaseDiffOptionsWithDefaults,
   DiffLineAnnotation,
   FileDiffMetadata,
-  MergeConflictMetadata,
   MergeConflictResolution,
   RenderRange,
 } from '../types';
@@ -16,6 +15,10 @@ import {
   createHastElement,
   createTextNodeElement,
 } from '../utils/hast_utils';
+import {
+  getMergeConflictActionAnchor,
+  type MergeConflictDiffAction,
+} from '../utils/parseMergeConflictDiffFromFile';
 import type { WorkerPoolManager } from '../worker';
 import {
   DiffHunksRenderer,
@@ -78,23 +81,17 @@ export class UnresolvedFileHunksRenderer<
     this.options = options;
   }
 
-  public setConflictActions(
-    conflictAnnotations: MergeConflictMetadata[]
-  ): void {
+  public setConflictActions(conflictActions: MergeConflictDiffAction[]): void {
     this.conflictActions.clear();
-    for (
-      let sourceIndex = 0;
-      sourceIndex < conflictAnnotations.length;
-      sourceIndex++
-    ) {
-      const annotation = conflictAnnotations[sourceIndex];
-      const conflictIndex = annotation.conflict.conflictIndex;
-      // FIXME(amadeus): Note to self to review this, we probalby don't need so
-      // much data or we can probably improve this...
+    for (const action of conflictActions) {
+      const anchor = getMergeConflictActionAnchor(action);
+      if (anchor == null) {
+        continue;
+      }
       const row = {
-        side: annotation.side,
-        lineNumber: annotation.lineNumber,
-        conflictIndex,
+        side: anchor.side,
+        lineNumber: anchor.lineNumber,
+        conflictIndex: action.conflictIndex,
       };
       const key = `${row.side}:${row.lineNumber}`;
       const rows = this.conflictActions.get(key);
