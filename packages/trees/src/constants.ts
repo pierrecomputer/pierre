@@ -9,3 +9,6 @@ export const FILE_TREE_UNSAFE_CSS_ATTRIBUTE =
  * Example: 'f::src/utils/deep' represents the chain src → utils → deep
  */
 export const FLATTENED_PREFIX = 'f::' as const;
+
+export const HEADER_SLOT_NAME = 'header' as const;
+export const CONTEXT_MENU_SLOT_NAME = 'context-menu' as const;

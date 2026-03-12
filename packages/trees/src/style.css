@@ -292,6 +292,7 @@
 
   /* The wrapper for the tree items */
   [role='tree'] {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--trees-gap-override, 0);
@@ -541,5 +542,32 @@
   }
   [data-item-section='lock'] svg {
     display: block;
+  }
+
+  [data-type='header-slot'] {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  /* Single floating context menu trigger */
+  [data-type='context-menu-trigger'] {
+    all: unset;
+    position: absolute;
+    right: var(--trees-item-margin-x);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--trees-item-padding-x);
+    color: var(--trees-fg-muted);
+    cursor: pointer;
+    z-index: 4;
+    font-family: var(--trees-font-family);
+    font-size: var(--trees-font-size);
+    border-radius: var(--trees-border-radius);
+  }
+
+  [data-type='context-menu-trigger']:hover {
+    background-color: var(--trees-bg-muted);
+    color: var(--trees-fg);
   }
 }

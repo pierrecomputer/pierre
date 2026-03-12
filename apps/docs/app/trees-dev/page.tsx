@@ -53,6 +53,12 @@ export default async function FileTreePage() {
     { ...fileTreeOptions, gitStatus: GIT_STATUSES_A },
     sharedDemoStateConfig
   );
+  const noop = () => {};
+  const contextMenuSsr = preloadFileTree(fileTreeOptions, {
+    ...sharedDemoStateConfig,
+    onContextMenuOpen: noop,
+    onContextMenuClose: noop,
+  });
   const customIconsSsr = preloadFileTree(
     {
       ...fileTreeOptions,
@@ -77,6 +83,8 @@ export default async function FileTreePage() {
       preloadedFileTreeContainerHtml={mainSsr.html}
       preloadedControlledFileTreeHtml={controlledSsr.shadowHtml}
       preloadedGitStatusFileTreeHtml={gitStatusSsr.shadowHtml}
+      preloadedContextMenuFileTreeHtml={contextMenuSsr.shadowHtml}
+      preloadedContextMenuFileTreeContainerHtml={contextMenuSsr.html}
       preloadedCustomIconsFileTreeHtml={customIconsSsr.shadowHtml}
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
       initialUseLazyDataLoader={useLazyDataLoader}

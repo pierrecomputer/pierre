@@ -16,9 +16,14 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from 'preact/hooks';
 
-import { FLATTENED_PREFIX } from '../constants';
+import {
+  CONTEXT_MENU_SLOT_NAME,
+  FLATTENED_PREFIX,
+  HEADER_SLOT_NAME,
+} from '../constants';
 import { dragAndDropFeature } from '../features/dragAndDropFeature';
 import {
   fileTreeSearchFeature,
@@ -886,6 +891,170 @@ export function Root({
 
   searchActiveRef.current = (tree.getState().search?.length ?? 0) > 0;
 
+  // --- Context menu ---
+  const isContextMenuEnabled =
+    callbacksRef != null
+      ? callbacksRef.current.onContextMenuOpen != null
+      : stateConfig?.onContextMenuOpen != null;
+  const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(
+    null
+  );
+  const [contextMenuPosition, setContextMenuPosition] = useState<{
+    top: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const hoveredContextMenuItemRef = useRef<string | null>(null);
+
+  const closeContextMenu = useCallback(
+    (notify = true) => {
+      if (contextMenuItemId == null) return;
+      setContextMenuItemId(null);
+      setContextMenuPosition(null);
+      if (notify) {
+        callbacksRef?.current.onContextMenuClose?.();
+      }
+    },
+    [callbacksRef, contextMenuItemId]
+  );
+
+  const updateTriggerPosition = useCallback(
+    (itemEl: HTMLElement | null) => {
+      const trigger = triggerRef.current;
+      if (trigger == null) return;
+      if (itemEl == null) {
+        if (contextMenuItemId == null) trigger.style.display = 'none';
+        hoveredContextMenuItemRef.current = null;
+        return;
+      }
+      const container = tree.getElement()?.closest('[role="tree"]');
+      if (container == null) return;
+      const itemRect = itemEl.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      trigger.style.top = `${itemRect.top - containerRect.top}px`;
+      trigger.style.height = `${itemRect.height}px`;
+      trigger.style.display = 'flex';
+      trigger.dataset.itemId = itemEl.dataset.itemId ?? '';
+      hoveredContextMenuItemRef.current = itemEl.dataset.itemId ?? null;
+    },
+    [tree, contextMenuItemId]
+  );
+
+  const handleTriggerClick = useCallback(
+    (e: MouseEvent) => {
+      const openContextMenu = callbacksRef?.current.onContextMenuOpen;
+      if (!isContextMenuEnabled || openContextMenu == null) {
+        return;
+      }
+      e.stopPropagation();
+      e.preventDefault();
+      const trigger = triggerRef.current;
+      const itemId = trigger?.dataset.itemId;
+      if (itemId == null) return;
+
+      if (contextMenuItemId === itemId) {
+        closeContextMenu();
+        return;
+      }
+
+      // Open: store position from trigger's current style.top
+      const top = parseFloat(trigger?.style.top ?? '0');
+      const height = parseFloat(trigger?.style.height ?? '30');
+      setContextMenuItemId(itemId);
+      setContextMenuPosition({ top: top + height });
+      const item = tree.getItemInstance(itemId);
+      const data = item.getItemData();
+      openContextMenu({
+        path: getSelectionPath(data.path),
+        isFolder: data.children?.direct != null,
+      });
+    },
+    [
+      callbacksRef,
+      closeContextMenu,
+      contextMenuItemId,
+      isContextMenuEnabled,
+      tree,
+    ]
+  );
+
+  // Click-outside handler
+  useEffect(() => {
+    if (!isContextMenuEnabled || contextMenuItemId == null) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      const path = e.composedPath();
+      const isOnTrigger = path.some(
+        (el) =>
+          el instanceof HTMLElement &&
+          el.dataset.type === 'context-menu-trigger'
+      );
+      const isInSlottedContent = path.some(
+        (el) =>
+          el instanceof HTMLElement &&
+          el.getAttribute?.('slot') === CONTEXT_MENU_SLOT_NAME
+      );
+      if (!isOnTrigger && !isInSlottedContent) {
+        closeContextMenu();
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown, true);
+    return () =>
+      document.removeEventListener('mousedown', handleMouseDown, true);
+  }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled]);
+
+  // Close on scroll
+  useEffect(() => {
+    if (!isContextMenuEnabled || contextMenuItemId == null) return;
+    const container = tree.getElement()?.closest('[role="tree"]');
+    const scrollParent = container?.closest(
+      '[data-file-tree-virtualized-scroll]'
+    );
+    const target = scrollParent ?? container?.parentElement;
+    if (target == null) return;
+    const handleScroll = () => closeContextMenu();
+    target.addEventListener('scroll', handleScroll, { passive: true });
+    return () => target.removeEventListener('scroll', handleScroll);
+  }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled, tree]);
+
+  useEffect(() => {
+    if (isContextMenuEnabled || contextMenuItemId == null) return;
+    closeContextMenu();
+  }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled]);
+
+  const prevContextMenuStructureRef = useRef({ files, idToPath });
+  useEffect(() => {
+    const previous = prevContextMenuStructureRef.current;
+    prevContextMenuStructureRef.current = { files, idToPath };
+    const structureChanged =
+      previous.files !== files || previous.idToPath !== idToPath;
+    if (
+      !isContextMenuEnabled ||
+      contextMenuItemId == null ||
+      !structureChanged
+    ) {
+      return;
+    }
+    closeContextMenu();
+  }, [
+    closeContextMenu,
+    contextMenuItemId,
+    files,
+    idToPath,
+    isContextMenuEnabled,
+  ]);
+
+  // Focus-based trigger positioning
+  const hasFocusedItem = tree.getState().focusedItem != null;
+  const focusedItemId = hasFocusedItem ? tree.getState().focusedItem : null;
+
+  useEffect(() => {
+    if (!isContextMenuEnabled || focusedItemId == null) return;
+    const container = tree.getElement()?.closest('[role="tree"]');
+    const itemEl = container?.querySelector(
+      `[data-item-id="${focusedItemId}"]`
+    ) as HTMLElement | null;
+    updateTriggerPosition(itemEl);
+  }, [focusedItemId, isContextMenuEnabled, updateTriggerPosition, tree]);
+
   // Detect stale expanded IDs when the file list changes. Flattened chains
   // may break or form, causing node IDs to change. We snapshot the expanded
   // paths using the OLD idToPath so the effect can re-map them to new IDs.
@@ -911,11 +1080,16 @@ export function Root({
   // Populate handleRef so the FileTree class can call tree methods directly
   useEffect(() => {
     if (handleRef == null) return;
-    handleRef.current = { tree, pathToId, idToPath };
+    handleRef.current = {
+      tree,
+      pathToId,
+      idToPath,
+      closeContextMenu: () => closeContextMenu(),
+    };
     return () => {
       handleRef.current = null;
     };
-  }, [tree, pathToId, idToPath, handleRef]);
+  }, [closeContextMenu, tree, pathToId, idToPath, handleRef]);
 
   // --- Migrate expanded state after file list changes ---
   // When the file list changes (DnD drop or controlled update), flattened
@@ -1071,8 +1245,6 @@ export function Root({
   const { onChange, ...origSearchInputProps } =
     tree.getSearchInputElementProps();
   const shouldRenderSearchInput = search === true;
-  const hasFocusedItem = tree.getState().focusedItem != null;
-  const focusedItemId = hasFocusedItem ? tree.getState().focusedItem : null;
   const isSearchOpen = tree.isSearchOpen?.() ?? false;
   const activeDescendantId =
     isSearchOpen && focusedItemId != null
@@ -1127,8 +1299,43 @@ export function Root({
       {...containerProps}
       id={treeDomId}
       data-file-tree-virtualized-root={shouldVirtualize ? 'true' : undefined}
+      onPointerOver={
+        isContextMenuEnabled
+          ? (e: PointerEvent) => {
+              const target = e.target as HTMLElement;
+              if (
+                target.closest?.('[data-type="context-menu-trigger"]') != null
+              ) {
+                return;
+              }
+              const itemEl = target.closest?.('[data-type="item"]') ?? null;
+              const itemId =
+                itemEl instanceof HTMLElement
+                  ? (itemEl.dataset.itemId ?? null)
+                  : null;
+              if (
+                itemId != null &&
+                hoveredContextMenuItemRef.current === itemId
+              ) {
+                return;
+              }
+              updateTriggerPosition(itemEl as HTMLElement | null);
+            }
+          : undefined
+      }
+      onPointerLeave={
+        isContextMenuEnabled
+          ? () => {
+              if (contextMenuItemId == null && triggerRef.current != null) {
+                triggerRef.current.style.display = 'none';
+              }
+              hoveredContextMenuItemRef.current = null;
+            }
+          : undefined
+      }
     >
       <style dangerouslySetInnerHTML={{ __html: guideStyleText }} />
+      <slot name={HEADER_SLOT_NAME} data-type="header-slot" />
       {shouldRenderSearchInput ? (
         <div data-file-tree-search-container>
           <input
@@ -1241,6 +1448,35 @@ export function Root({
 
         return items.map((_, i) => renderItemAtIndex(i));
       })()}
+      {isContextMenuEnabled ? (
+        <>
+          {/* Single floating trigger — positioned imperatively, not per-item */}
+          <button
+            ref={triggerRef}
+            data-type="context-menu-trigger"
+            tabIndex={-1}
+            aria-label="Options"
+            onMouseDown={(e: MouseEvent) => e.preventDefault()}
+            onClick={handleTriggerClick}
+            style={{ display: 'none' }}
+          >
+            Options
+          </button>
+          {contextMenuItemId != null && contextMenuPosition != null ? (
+            <div
+              data-type="context-menu-container"
+              style={{
+                position: 'absolute',
+                top: `${contextMenuPosition.top}px`,
+                right: 'var(--trees-item-margin-x)',
+                zIndex: 10,
+              }}
+            >
+              <slot name={CONTEXT_MENU_SLOT_NAME} />
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }

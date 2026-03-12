@@ -7,7 +7,7 @@ import {
   FLATTENED_PREFIX,
 } from './constants';
 import { SVGSpriteSheet } from './sprite';
-import type { FileTreeNode, GitStatusEntry } from './types';
+import type { ContextMenuItem, FileTreeNode, GitStatusEntry } from './types';
 import { wrapUnsafeCSS } from './utils/cssWrappers';
 import { expandImplicitParentDirectories } from './utils/expandImplicitParentDirectories';
 import {
@@ -60,6 +60,7 @@ export interface FileTreeHandle {
   tree: TreeInstance<FileTreeNode>;
   pathToId: Map<string, string>;
   idToPath: Map<string, string>;
+  closeContextMenu?: () => void;
 }
 
 export interface FileTreeCallbacks {
@@ -67,6 +68,8 @@ export interface FileTreeCallbacks {
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
   onFilesChange?: (files: string[]) => void;
+  onContextMenuOpen?: (item: ContextMenuItem) => void;
+  onContextMenuClose?: () => void;
   /** Internal: called when a DnD move produces a new file list. */
   _onDragMoveFiles?: (newFiles: string[]) => void;
 }
@@ -128,6 +131,8 @@ export interface FileTreeStateConfig {
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
   onFilesChange?: (files: string[]) => void;
+  onContextMenuOpen?: (item: ContextMenuItem) => void;
+  onContextMenuClose?: () => void;
 }
 
 const isBrowser = typeof document !== 'undefined';
@@ -166,6 +171,8 @@ export class FileTree {
         onSelectedItemsChange: stateConfig.onSelectedItemsChange,
         onSelection: stateConfig.onSelection,
         onFilesChange: stateConfig.onFilesChange,
+        onContextMenuOpen: stateConfig.onContextMenuOpen,
+        onContextMenuClose: stateConfig.onContextMenuClose,
         _onDragMoveFiles:
           options.dragAndDrop === true
             ? (newFiles) => this.setFiles(newFiles)
@@ -360,7 +367,12 @@ export class FileTree {
   // --- Callbacks ---
 
   setCallbacks(callbacks: Partial<FileTreeCallbacks>): void {
+    const hadContextMenu = this.callbacksRef.current.onContextMenuOpen != null;
     Object.assign(this.callbacksRef.current, callbacks);
+    const hasContextMenu = this.callbacksRef.current.onContextMenuOpen != null;
+    if (hadContextMenu !== hasContextMenu) {
+      this.rerender();
+    }
   }
 
   // --- Git status ---
@@ -393,6 +405,8 @@ export class FileTree {
     options: Partial<FileTreeOptions>,
     state?: Partial<FileTreeStateConfig>
   ): void {
+    const hadContextMenu = this.callbacksRef.current.onContextMenuOpen != null;
+
     if (options.dragAndDrop === false) {
       this.callbacksRef.current._onDragMoveFiles = undefined;
     } else if (
@@ -417,6 +431,12 @@ export class FileTree {
     }
     if (state?.onFilesChange !== undefined) {
       this.callbacksRef.current.onFilesChange = state.onFilesChange;
+    }
+    if (state != null && 'onContextMenuOpen' in state) {
+      this.callbacksRef.current.onContextMenuOpen = state.onContextMenuOpen;
+    }
+    if (state != null && 'onContextMenuClose' in state) {
+      this.callbacksRef.current.onContextMenuClose = state.onContextMenuClose;
     }
 
     // Check if structural props changed (require re-render)
@@ -452,6 +472,11 @@ export class FileTree {
     };
     if (state != null) {
       this.stateConfig = { ...this.stateConfig, ...state };
+    }
+
+    const hasContextMenu = this.callbacksRef.current.onContextMenuOpen != null;
+    if (hadContextMenu !== hasContextMenu) {
+      needsRerender = true;
     }
 
     if (needsRerender || stateFilesChanged) {

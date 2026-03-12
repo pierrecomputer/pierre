@@ -7,6 +7,7 @@ import {
   type FileTreeStateConfig,
   type GitStatusEntry,
 } from '../../FileTree';
+import type { ContextMenuItem } from '../../types';
 import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
 
 interface UseFileTreeInstanceProps {
@@ -31,6 +32,10 @@ interface UseFileTreeInstanceProps {
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
 
+  // Context menu
+  onContextMenuOpen?: (item: ContextMenuItem) => void;
+  onContextMenuClose?: () => void;
+
   // Git status
   gitStatus?: GitStatusEntry[];
 }
@@ -52,6 +57,8 @@ export function useFileTreeInstance({
   onExpandedItemsChange,
   onSelectedItemsChange,
   onSelection,
+  onContextMenuOpen,
+  onContextMenuClose,
   gitStatus,
 }: UseFileTreeInstanceProps): UseFileTreeInstanceReturn {
   const containerRef = useRef<HTMLElement | null>(null);
@@ -64,6 +71,8 @@ export function useFileTreeInstance({
     FileTreeStateConfig & {
       initialFiles?: string[];
       gitStatus?: GitStatusEntry[];
+      onContextMenuOpen?: (item: ContextMenuItem) => void;
+      onContextMenuClose?: () => void;
     }
   >({
     files,
@@ -78,6 +87,8 @@ export function useFileTreeInstance({
     initialSelectedItems,
     gitStatus,
     initialSearchQuery,
+    onContextMenuOpen,
+    onContextMenuClose,
   });
   statePropsRef.current = {
     files,
@@ -92,6 +103,8 @@ export function useFileTreeInstance({
     initialSelectedItems,
     gitStatus,
     initialSearchQuery,
+    onContextMenuOpen,
+    onContextMenuClose,
   };
 
   // Ref callback that handles mount/unmount and re-runs when options change.
@@ -167,6 +180,8 @@ export function useFileTreeInstance({
             onSelectedItemsChange: sp.onSelectedItemsChange,
             onSelection: sp.onSelection,
             onFilesChange: sp.onFilesChange,
+            onContextMenuOpen: sp.onContextMenuOpen,
+            onContextMenuClose: sp.onContextMenuClose,
           }
         );
       };
@@ -268,6 +283,8 @@ export function useFileTreeInstance({
       onSelectedItemsChange,
       onSelection,
       onFilesChange,
+      onContextMenuOpen,
+      onContextMenuClose,
       // In controlled DnD mode, override to only fire onFilesChange
       // without calling setFiles() directly, letting the parent decide.
       ...(files !== undefined &&
@@ -282,6 +299,8 @@ export function useFileTreeInstance({
     onSelectedItemsChange,
     onSelection,
     onFilesChange,
+    onContextMenuOpen,
+    onContextMenuClose,
     files,
     options.dragAndDrop,
   ]);

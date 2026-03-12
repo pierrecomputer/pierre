@@ -22,3 +22,5 @@ export type FileTreeNode = {
 };
 
 export type FileTreeData = Record<string, FileTreeNode>;
+
+export type ContextMenuItem = { path: string; isFolder: boolean };
