@@ -12,3 +12,4 @@ export const FLATTENED_PREFIX = 'f::' as const;
 
 export const HEADER_SLOT_NAME = 'header' as const;
 export const CONTEXT_MENU_SLOT_NAME = 'context-menu' as const;
+export const CONTEXT_MENU_TRIGGER_TYPE = 'context-menu-trigger' as const;

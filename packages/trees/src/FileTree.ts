@@ -432,10 +432,10 @@ export class FileTree {
     if (state?.onFilesChange !== undefined) {
       this.callbacksRef.current.onFilesChange = state.onFilesChange;
     }
-    if (state != null && 'onContextMenuOpen' in state) {
+    if (state?.onContextMenuOpen !== undefined) {
       this.callbacksRef.current.onContextMenuOpen = state.onContextMenuOpen;
     }
-    if (state != null && 'onContextMenuClose' in state) {
+    if (state?.onContextMenuClose !== undefined) {
       this.callbacksRef.current.onContextMenuClose = state.onContextMenuClose;
     }
 

@@ -21,6 +21,7 @@ import {
 
 import {
   CONTEXT_MENU_SLOT_NAME,
+  CONTEXT_MENU_TRIGGER_TYPE,
   FLATTENED_PREFIX,
   HEADER_SLOT_NAME,
 } from '../constants';
@@ -904,17 +905,21 @@ export function Root({
   } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hoveredContextMenuItemRef = useRef<string | null>(null);
+  // Ref mirror of contextMenuItemId — lets callbacks read the current value
+  // without including it as a dependency, keeping their identities stable.
+  const contextMenuItemIdRef = useRef<string | null>(null);
+  contextMenuItemIdRef.current = contextMenuItemId;
 
   const closeContextMenu = useCallback(
     (notify = true) => {
-      if (contextMenuItemId == null) return;
+      if (contextMenuItemIdRef.current == null) return;
       setContextMenuItemId(null);
       setContextMenuPosition(null);
       if (notify) {
         callbacksRef?.current.onContextMenuClose?.();
       }
     },
-    [callbacksRef, contextMenuItemId]
+    [callbacksRef]
   );
 
   const updateTriggerPosition = useCallback(
@@ -922,7 +927,8 @@ export function Root({
       const trigger = triggerRef.current;
       if (trigger == null) return;
       if (itemEl == null) {
-        if (contextMenuItemId == null) trigger.style.display = 'none';
+        if (contextMenuItemIdRef.current == null)
+          trigger.style.display = 'none';
         hoveredContextMenuItemRef.current = null;
         return;
       }
@@ -936,13 +942,13 @@ export function Root({
       trigger.dataset.itemId = itemEl.dataset.itemId ?? '';
       hoveredContextMenuItemRef.current = itemEl.dataset.itemId ?? null;
     },
-    [tree, contextMenuItemId]
+    [tree]
   );
 
   const handleTriggerClick = useCallback(
     (e: MouseEvent) => {
       const openContextMenu = callbacksRef?.current.onContextMenuOpen;
-      if (!isContextMenuEnabled || openContextMenu == null) {
+      if (openContextMenu == null) {
         return;
       }
       e.stopPropagation();
@@ -951,7 +957,7 @@ export function Root({
       const itemId = trigger?.dataset.itemId;
       if (itemId == null) return;
 
-      if (contextMenuItemId === itemId) {
+      if (contextMenuItemIdRef.current === itemId) {
         closeContextMenu();
         return;
       }
@@ -968,13 +974,7 @@ export function Root({
         isFolder: data.children?.direct != null,
       });
     },
-    [
-      callbacksRef,
-      closeContextMenu,
-      contextMenuItemId,
-      isContextMenuEnabled,
-      tree,
-    ]
+    [callbacksRef, closeContextMenu, tree]
   );
 
   // Click-outside handler
@@ -982,17 +982,19 @@ export function Root({
     if (!isContextMenuEnabled || contextMenuItemId == null) return;
     const handleMouseDown = (e: MouseEvent) => {
       const path = e.composedPath();
-      const isOnTrigger = path.some(
-        (el) =>
-          el instanceof HTMLElement &&
-          el.dataset.type === 'context-menu-trigger'
-      );
-      const isInSlottedContent = path.some(
-        (el) =>
-          el instanceof HTMLElement &&
-          el.getAttribute?.('slot') === CONTEXT_MENU_SLOT_NAME
-      );
-      if (!isOnTrigger && !isInSlottedContent) {
+      let isOnTriggerOrSlot = false;
+      for (const el of path) {
+        if (!(el instanceof HTMLElement)) continue;
+        if (el.dataset.type === CONTEXT_MENU_TRIGGER_TYPE) {
+          isOnTriggerOrSlot = true;
+          break;
+        }
+        if (el.getAttribute('slot') === CONTEXT_MENU_SLOT_NAME) {
+          isOnTriggerOrSlot = true;
+          break;
+        }
+      }
+      if (!isOnTriggerOrSlot) {
         closeContextMenu();
       }
     };
@@ -1043,8 +1045,8 @@ export function Root({
   ]);
 
   // Focus-based trigger positioning
-  const hasFocusedItem = tree.getState().focusedItem != null;
-  const focusedItemId = hasFocusedItem ? tree.getState().focusedItem : null;
+  const focusedItemId = tree.getState().focusedItem ?? null;
+  const hasFocusedItem = focusedItemId != null;
 
   useEffect(() => {
     if (!isContextMenuEnabled || focusedItemId == null) return;
@@ -1084,7 +1086,7 @@ export function Root({
       tree,
       pathToId,
       idToPath,
-      closeContextMenu: () => closeContextMenu(),
+      closeContextMenu,
     };
     return () => {
       handleRef.current = null;
@@ -1304,7 +1306,9 @@ export function Root({
           ? (e: PointerEvent) => {
               const target = e.target as HTMLElement;
               if (
-                target.closest?.('[data-type="context-menu-trigger"]') != null
+                target.closest?.(
+                  `[data-type="${CONTEXT_MENU_TRIGGER_TYPE}"]`
+                ) != null
               ) {
                 return;
               }
@@ -1326,7 +1330,10 @@ export function Root({
       onPointerLeave={
         isContextMenuEnabled
           ? () => {
-              if (contextMenuItemId == null && triggerRef.current != null) {
+              if (
+                contextMenuItemIdRef.current == null &&
+                triggerRef.current != null
+              ) {
                 triggerRef.current.style.display = 'none';
               }
               hoveredContextMenuItemRef.current = null;
@@ -1453,7 +1460,7 @@ export function Root({
           {/* Single floating trigger — positioned imperatively, not per-item */}
           <button
             ref={triggerRef}
-            data-type="context-menu-trigger"
+            data-type={CONTEXT_MENU_TRIGGER_TYPE}
             tabIndex={-1}
             aria-label="Options"
             onMouseDown={(e: MouseEvent) => e.preventDefault()}
