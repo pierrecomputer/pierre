@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { hydrate, render } from 'preact';
 
 import type { FileTreeRootProps } from '../components/Root';

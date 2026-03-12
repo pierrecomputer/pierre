@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import type { JSX } from 'preact';
 
 const DEFAULT_WIDTH = 16;

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { renderToString } from 'preact-render-to-string';
 
 import { Root } from '../components/Root';

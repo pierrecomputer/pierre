@@ -167,6 +167,9 @@ jobs:
       - name: Run tests - precision-diffs
         run: bun ws diffs test
 
+      - name: Run tests - trees
+        run: bun ws trees test
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:

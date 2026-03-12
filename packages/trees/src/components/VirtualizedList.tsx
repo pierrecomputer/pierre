@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 /**
  * Simple fixed-height virtualizer for tree rendering inside shadow DOM.
  *

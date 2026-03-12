@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import {
   expandAllFeature,
   hotkeysCoreFeature,
