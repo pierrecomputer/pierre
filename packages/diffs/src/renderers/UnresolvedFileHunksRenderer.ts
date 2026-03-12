@@ -41,7 +41,6 @@ interface MergeConflictActionRowData {
   lineNumber: number;
   conflictIndex: number;
   lineIndex: number;
-  rowKey: string;
   slotName: string;
 }
 
@@ -99,7 +98,6 @@ export class UnresolvedFileHunksRenderer<
         lineNumber: annotation.lineNumber,
         conflictIndex,
         lineIndex: annotation.lineIndex,
-        rowKey: `${conflictIndex},${annotation.lineIndex}`,
         slotName: getMergeConflictActionSlotName({
           side: annotation.side,
           lineNumber: annotation.lineNumber,
@@ -369,9 +367,7 @@ function createMergeConflictActionsRowElement({
   return createHastElement({
     tagName: 'div',
     properties: {
-      'data-merge-conflict-actions': row.rowKey,
-      'data-merge-conflict-actions-empty':
-        !includeDefaultActions && !includeSlot ? '' : undefined,
+      'data-merge-conflict-actions': '',
     },
     children: [
       createHastElement({
