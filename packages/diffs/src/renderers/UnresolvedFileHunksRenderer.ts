@@ -41,7 +41,6 @@ interface MergeConflictActionRowData {
   lineNumber: number;
   conflictIndex: number;
   lineIndex: number;
-  slotName: string;
 }
 
 interface BaseUnresolvedOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
@@ -98,11 +97,6 @@ export class UnresolvedFileHunksRenderer<
         lineNumber: annotation.lineNumber,
         conflictIndex,
         lineIndex: annotation.lineIndex,
-        slotName: getMergeConflictActionSlotName({
-          side: annotation.side,
-          lineNumber: annotation.lineNumber,
-          conflictIndex,
-        }),
       };
       const key = `${row.side}:${row.lineNumber}`;
       const rows = this.conflictActions.get(key);
@@ -358,7 +352,11 @@ function createMergeConflictActionsRowElement({
       createHastElement({
         tagName: 'slot',
         properties: {
-          name: row.slotName,
+          name: getMergeConflictActionSlotName({
+            side: row.side,
+            lineNumber: row.lineNumber,
+            conflictIndex: row.conflictIndex,
+          }),
           'data-merge-conflict-action-slot': '',
         },
       })
