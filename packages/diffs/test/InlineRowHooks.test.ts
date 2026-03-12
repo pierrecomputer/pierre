@@ -177,7 +177,7 @@ describe('inline row hooks', () => {
     };
     const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
     const renderer = new UnresolvedFileHunksRenderer();
-    renderer.setConflictAnnotations(getMergeConflictActionMetadata(actions));
+    renderer.setConflictActions(getMergeConflictActionMetadata(actions));
 
     const result = await renderer.asyncRender(fileDiff);
 

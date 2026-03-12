@@ -66,10 +66,7 @@ export class UnresolvedFileHunksRenderer<
 > extends DiffHunksRenderer<LAnnotation> {
   private cachedAdditionLines: string[] | undefined;
   private cachedDeletionLines: string[] | undefined;
-  private conflictAnnotationsBySideAndLine = new Map<
-    string,
-    MergeConflictActionRowData[]
-  >();
+  private conflictActions = new Map<string, MergeConflictActionRowData[]>();
   private additionMarkerLookup: MergeConflictMarkerLookup[] = [];
   private deletionMarkerLookup: MergeConflictMarkerLookup[] = [];
   public override options: UnresolvedFileHunksRendererOptions;
@@ -85,10 +82,10 @@ export class UnresolvedFileHunksRenderer<
     this.options = options;
   }
 
-  public setConflictAnnotations(
+  public setConflictActions(
     conflictAnnotations: MergeConflictMetadata[]
   ): void {
-    this.conflictAnnotationsBySideAndLine.clear();
+    this.conflictActions.clear();
     for (
       let sourceIndex = 0;
       sourceIndex < conflictAnnotations.length;
@@ -112,9 +109,9 @@ export class UnresolvedFileHunksRenderer<
         sourceIndex,
       };
       const key = `${row.side}:${row.lineNumber}`;
-      const rows = this.conflictAnnotationsBySideAndLine.get(key);
+      const rows = this.conflictActions.get(key);
       if (rows == null) {
-        this.conflictAnnotationsBySideAndLine.set(key, [row]);
+        this.conflictActions.set(key, [row]);
       } else {
         rows.push(row);
       }
@@ -215,9 +212,7 @@ export class UnresolvedFileHunksRenderer<
     if (lineNumber == null) {
       return undefined;
     }
-    const rows = this.conflictAnnotationsBySideAndLine.get(
-      `${side}:${lineNumber}`
-    );
+    const rows = this.conflictActions.get(`${side}:${lineNumber}`);
     if (rows == null || rows.length === 0) {
       return undefined;
     }

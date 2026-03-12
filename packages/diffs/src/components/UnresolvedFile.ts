@@ -392,7 +392,7 @@ export class UnresolvedFile<
         : getMergeConflictActionMetadata(actions);
 
     if (this.hunksRenderer instanceof UnresolvedFileHunksRenderer) {
-      this.hunksRenderer.setConflictAnnotations(this.conflictMetadata);
+      this.hunksRenderer.setConflictActions(this.conflictMetadata);
     }
   }
 
