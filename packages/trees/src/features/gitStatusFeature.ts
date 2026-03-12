@@ -191,7 +191,7 @@ export const gitStatusFeature: FeatureImplementation = {
 };
 
 declare module '@headless-tree/core' {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // oxlint-disable-next-line @typescript-oxlint/no-unused-vars
   interface ItemInstance<T> {
     getGitStatus(): GitStatus | null;
     containsGitChange(): boolean;

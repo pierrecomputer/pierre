@@ -1,4 +1,4 @@
-/* eslint-disable typescript-eslint/strict-boolean-expressions -- Ported from @headless-tree/core internals */
+/* oxlint-disable typescript-oxlint/strict-boolean-expressions -- Ported from @headless-tree/core internals */
 import type { ItemInstance, TreeInstance } from '@headless-tree/core';
 
 import type { DragTarget } from './dragAndDropTypes';
@@ -112,7 +112,7 @@ export const getInsertionIndex = <T>(
   return childIndex - numberOfDragItemsBeforeTarget;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line @typescript-oxlint/no-explicit-any
 export const getTargetPlacement = (
   e: { clientX: number; clientY: number },
   item: ItemInstance<unknown>,

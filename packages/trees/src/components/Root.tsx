@@ -742,7 +742,7 @@ export function Root({
       }
     },
     // tree.getElement() is stable across renders
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -1090,7 +1090,7 @@ export function Root({
       )
       .join(',\n');
     return `:is(${selectors}) { opacity: 1; }`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionSnapshot, focusedItemId, childToParent]);
 
   const shouldVirtualize = virtualize != null && virtualize !== false;

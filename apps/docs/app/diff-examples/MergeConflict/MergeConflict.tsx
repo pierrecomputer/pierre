@@ -68,7 +68,7 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         </ButtonGroup>
       </div>
 
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         onClickCapture={(e) => {
           if (hasResolved) return;

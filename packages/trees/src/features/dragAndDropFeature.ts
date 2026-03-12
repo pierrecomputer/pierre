@@ -1,4 +1,4 @@
-/* eslint-disable typescript-eslint/strict-boolean-expressions -- Ported from @headless-tree/core internals */
+/* oxlint-disable typescript-oxlint/strict-boolean-expressions -- Ported from @headless-tree/core internals */
 import type {
   FeatureImplementation,
   ItemInstance,
