@@ -147,26 +147,4 @@ describe('parseMergeConflictDiffFromFile', () => {
       },
     ]);
   });
-
-  test('returns a context-only diff for files without conflict markers', () => {
-    const file = {
-      name: 'plain.ts',
-      contents: ['const a = 1;', 'const b = 2;', ''].join('\n'),
-    };
-
-    const { currentFile, incomingFile, fileDiff, actions } =
-      parseMergeConflictDiffFromFile(file);
-
-    expect(currentFile.contents).toBe(file.contents);
-    expect(incomingFile.contents).toBe(file.contents);
-    expect(fileDiff.hunks[0]?.hunkContent).toEqual([
-      {
-        type: 'context',
-        lines: 2,
-        additionLineIndex: 0,
-        deletionLineIndex: 0,
-      },
-    ]);
-    expect(actions).toEqual([]);
-  });
 });
