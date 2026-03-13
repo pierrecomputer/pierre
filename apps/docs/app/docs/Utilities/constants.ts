@@ -341,6 +341,9 @@ fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'accept');
 // Or reject a hunk - reverts to the old (deletions) version.
 // fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'reject');
 
+// Or mux both sides together - keeps the old lines first, then the new lines.
+// fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'both');
+
 // Re-render with the updated fileDiff - the accepted hunk
 // now appears as context lines instead of additions/deletions
 instance.render({
