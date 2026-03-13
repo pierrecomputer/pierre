@@ -9,6 +9,7 @@ import {
 } from './getMergeConflictLineTypes';
 import { processFile } from './parsePatchFiles';
 import { splitFileContents } from './splitFileContents';
+import { trimPatchContext } from './trimPatchContext';
 
 export interface ParseMergeConflictDiffFromFileResult {
   fileDiff: FileDiffMetadata;
@@ -50,7 +51,8 @@ export function getMergeConflictActionAnchor(
 }
 
 export function parseMergeConflictDiffFromFile(
-  file: FileContents
+  file: FileContents,
+  maxContextLines: number = 2 // FIXME: Do not merge this, it should be 10 by default...
 ): ParseMergeConflictDiffFromFileResult {
   const lines = splitFileContents(file.contents);
   const { lineTypes, regions } = getMergeConflictParseResult(lines);
@@ -188,7 +190,10 @@ export function parseMergeConflictDiffFromFile(
     incomingLineCount: incomingLineNumber,
   });
 
-  const fileDiff = processFile(patch, {
+  // NOTE(amadeus): We have to add 1 here to account for the diff marker lines
+  // themselves since those will take up a line of space and we want the
+  // context lines to actually match the code lines
+  const fileDiff = processFile(trimPatchContext(patch, maxContextLines + 1), {
     oldFile: currentFile,
     newFile: incomingFile,
     cacheKey:
