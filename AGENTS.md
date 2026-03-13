@@ -74,6 +74,20 @@ We use project references between each of our packages and apps.
   block of the consuming package. This ensures fast and accurate type checking
   without extra work across all packages.
 
+## Code readability
+
+- When adding non-trivial helper functions, prefer a short comment directly
+  above the function declaration that explains, in plain language, what the
+  helper does and why it exists.
+- Write these comments as if the reader is new to the codepath. Avoid vague
+  shorthand like "snapshot" unless you immediately explain what data is being
+  captured or derived.
+- Prefer function-level comments over a lot of inline comments. Use inline
+  comments only when a specific step inside the function is still non-obvious.
+- Keep comments concrete and behavior-focused. Good comments usually explain
+  what data is being transformed, what invariant is being checked, or what the
+  helper is protecting against.
+
 ## Performance
 
 **CRITICAL: Avoid nested loops and O(n²) operations.**
