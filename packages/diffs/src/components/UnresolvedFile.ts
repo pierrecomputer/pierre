@@ -15,13 +15,13 @@ import type {
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areMergeConflictActionsEqual } from '../utils/areMergeConflictActionsEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
+import { diffAcceptRejectHunk } from '../utils/diffAcceptRejectHunk';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import {
   getMergeConflictActionAnchor,
   type MergeConflictDiffAction,
   parseMergeConflictDiffFromFile,
 } from '../utils/parseMergeConflictDiffFromFile';
-import { resolveMergeConflict } from '../utils/resolveMergeConflict';
 import type { WorkerPoolManager } from '../worker';
 import {
   FileDiff,
@@ -62,7 +62,7 @@ export interface UnresolvedFileRenderProps<LAnnotation> extends Omit<
   'oldFile' | 'newFile'
 > {
   file?: FileContents;
-  actions?: MergeConflictDiffAction[];
+  actions?: (MergeConflictDiffAction | undefined)[];
 }
 
 export interface UnresolvedFileHydrationProps<LAnnotation> extends Omit<
@@ -70,8 +70,6 @@ export interface UnresolvedFileHydrationProps<LAnnotation> extends Omit<
   'file'
 > {
   file?: FileContents;
-  fileDiff?: FileDiffMetadata;
-  actions?: MergeConflictDiffAction[];
   fileContainer: HTMLElement;
   prerenderedHTML?: string;
 }
@@ -84,12 +82,18 @@ interface MergeConflictActionElementCache {
 interface GetOrComputeDiffProps {
   file: FileContents | undefined;
   fileDiff: FileDiffMetadata | undefined;
-  actions: MergeConflictDiffAction[] | undefined;
+  actions: (MergeConflictDiffAction | undefined)[] | undefined;
 }
 
 interface GetOrComputeDiffResult {
   fileDiff: FileDiffMetadata;
-  actions: MergeConflictDiffAction[];
+  actions: (MergeConflictDiffAction | undefined)[];
+}
+
+interface ResolveConflictReturn {
+  file: FileContents;
+  fileDiff: FileDiffMetadata;
+  actions: (MergeConflictDiffAction | undefined)[];
 }
 
 type UnresolvedFileDataCache = GetOrComputeDiffProps;
@@ -353,10 +357,10 @@ export class UnresolvedFile<
   public resolveConflict(
     conflictIndex: number,
     resolution: MergeConflictResolution,
-    file: FileContents | undefined = this.computedCache.file
-  ): FileContents | undefined {
+    fileDiff: FileDiffMetadata | undefined = this.computedCache.fileDiff
+  ): ResolveConflictReturn | undefined {
     const action = this.conflictActions[conflictIndex];
-    if (file == null || action == null) {
+    if (fileDiff == null || action == null) {
       return undefined;
     }
 
@@ -367,21 +371,36 @@ export class UnresolvedFile<
       );
     }
 
-    const contents = resolveMergeConflict(file.contents, {
-      resolution,
-      conflict: action.conflict,
-    });
-    if (contents === file.contents) {
-      return undefined;
-    }
+    const actions = [...this.conflictActions];
+    actions[action.conflictIndex] = undefined;
+
+    const newFileDiff = diffAcceptRejectHunk(
+      fileDiff,
+      action.conflictIndex,
+      resolution === 'current'
+        ? 'reject'
+        : resolution === 'incoming'
+          ? 'accept'
+          : 'both'
+    );
+
+    // AI_TASK: I need to re-build the file using the newFileDiff, can you help
+    // me with that?
+    const file: FileContents = {
+      name: 'lol',
+      contents: 'fixme',
+      // Obviously this is broken right now, but should be fixed up however we
+      // rebuild the new FileContents
+      cacheKey:
+        (prevFile as any).cacheKey != null
+          ? `${(prevFile as any).cacheKey}:mc-${conflictIndex}-${resolution}`
+          : undefined,
+    };
 
     return {
-      ...file,
-      contents,
-      cacheKey:
-        file.cacheKey != null
-          ? `${file.cacheKey}:mc-${conflictIndex}-${resolution}`
-          : undefined,
+      file,
+      fileDiff: newFileDiff,
+      actions,
     };
   }
 
@@ -403,22 +422,20 @@ export class UnresolvedFile<
       resolution,
       conflict: action.conflict,
     };
-    const nextFile = this.resolveConflict(conflictIndex, resolution);
-    if (nextFile == null) {
+    const { file, fileDiff, actions } =
+      this.resolveConflict(conflictIndex, resolution) ?? {};
+    if (file == null || fileDiff == null || action == null) {
       return undefined;
     }
 
-    this.computedCache.file = nextFile;
-    // Clear out the diff cache to force a new compute next render
-    this.computedCache.fileDiff = undefined;
-    this.computedCache.actions = undefined;
-    this.render();
-    this.options.onMergeConflictResolve?.(nextFile, payload);
-    return nextFile;
+    this.computedCache = { file, fileDiff, actions };
+    this.render({ forceRender: true });
+    this.options.onMergeConflictResolve?.(file, payload);
+    return file;
   }
 
   private setActiveMergeConflictActions(
-    actions: MergeConflictDiffAction[]
+    actions: (MergeConflictDiffAction | undefined)[]
   ): void {
     this.conflictActions = actions;
     if (this.hunksRenderer instanceof UnresolvedFileHunksRenderer) {

@@ -17,7 +17,7 @@ import type { DiffBasePropsReact } from '../types';
 
 interface RenderDiffChildrenProps<LAnnotation, T> {
   fileDiff?: FileDiffMetadata;
-  actions?: MergeConflictDiffAction[];
+  actions?: (MergeConflictDiffAction | undefined)[];
   deletionFile?: FileContents;
   additionFile?: FileContents;
   renderHeaderPrefix: DiffBasePropsReact<LAnnotation>['renderHeaderPrefix'];
@@ -74,6 +74,9 @@ export function renderDiffChildren<LAnnotation, T>({
         renderMergeConflictUtility != null &&
         getInstance != null &&
         actions.map((action) => {
+          if (action == null) {
+            return undefined;
+          }
           const slot = getSlotName(action);
           return (
             <div key={slot} slot={slot} style={MergeConflictSlotStyles}>

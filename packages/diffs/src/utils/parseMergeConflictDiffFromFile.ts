@@ -15,7 +15,7 @@ export interface ParseMergeConflictDiffFromFileResult {
   fileDiff: FileDiffMetadata;
   currentFile: FileContents;
   incomingFile: FileContents;
-  actions: MergeConflictDiffAction[];
+  actions: (MergeConflictDiffAction | undefined)[];
 }
 
 export interface MergeConflictDiffAction {
@@ -59,7 +59,9 @@ export function parseMergeConflictDiffFromFile(
   const currentContentChunks: string[] = [];
   const incomingContentChunks: string[] = [];
   const patchContentChunks: string[] = [];
-  const actions: MergeConflictDiffAction[] = new Array(regions.length);
+  const actions: (MergeConflictDiffAction | undefined)[] = new Array(
+    regions.length
+  );
   const actionOriginalLineNumbersByRegion = new Array<number>(regions.length);
   const actionOriginalLineIndexesByRegion = new Array<number>(regions.length);
   const actionLineIndexSet = new Set<number>();
