@@ -97,7 +97,7 @@
       --trees-border-color-override,
       var(
         --trees-theme-sidebar-border,
-        light-dark(oklch(0% 0 0 / 0.15), oklch(100% 0 0 / 0.15))
+        light-dark(oklch(0% 0 0 / 0.2), oklch(100% 0 0 / 0.2))
       )
     );
     --trees-border-radius: var(--trees-border-radius-override, 6px);
@@ -485,8 +485,9 @@
   }
 
   :host(:hover) [data-item-section='spacing-item'] {
-    opacity: 0.55;
+    opacity: .75;
   }
+  
   [data-item-selected='true'],
   [data-type='item']:focus-visible {
     & [data-item-section='spacing-item'] {
