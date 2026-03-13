@@ -13,8 +13,11 @@ workflow where users need to selectively apply changes.
 
 When you **accept** a hunk, the new (additions) version is kept and the hunk is
 converted to context lines. When you **reject** a hunk, the old (deletions)
-version is restored. The function returns a new `FileDiffMetadata` object with
-all line numbers properly adjusted for subsequent hunks.
+version is restored. You can also use **both** as a lower-level way to mux the
+two sides together, which keeps the old lines first and then appends the new
+lines before collapsing the result back to context. The function returns a new
+`FileDiffMetadata` object with all line numbers properly adjusted for subsequent
+hunks.
 
 <AcceptRejectTabs
   diffAcceptReject={diffAcceptReject}
