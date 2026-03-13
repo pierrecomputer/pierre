@@ -39,12 +39,6 @@ export function getMergeConflictLineTypes(
   return getMergeConflictParseResult(lines).lineTypes;
 }
 
-export function getMergeConflictRegions(
-  lines: string[]
-): MergeConflictRegion[] {
-  return getMergeConflictParseResult(lines).regions;
-}
-
 export function getMergeConflictParseResult(
   lines: string[]
 ): MergeConflictParseResult {

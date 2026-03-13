@@ -81,11 +81,14 @@ export class UnresolvedFileHunksRenderer<
     this.options = options;
   }
 
-  public setConflictActions(conflictActions: MergeConflictDiffAction[]): void {
+  public setConflictActions(
+    conflictActions: (MergeConflictDiffAction | undefined)[]
+  ): void {
     this.conflictActions.clear();
     for (const action of conflictActions) {
-      const anchor = getMergeConflictActionAnchor(action);
-      if (anchor == null) {
+      const anchor =
+        action != null ? getMergeConflictActionAnchor(action) : undefined;
+      if (action == null || anchor == null) {
         continue;
       }
       const row = {
