@@ -40,6 +40,11 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
     flattenEmptyDirectories: true,
     fileTreeSearchMode: 'expand-matches',
     search: true,
+    unsafeCSS: \`
+      [data-item-section='icon'] {
+        color: oklch(67% 0.2 25);
+      }
+    \`,
   }}
   initialFiles={['src/index.ts', 'package.json']}
 

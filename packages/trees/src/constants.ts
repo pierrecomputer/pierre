@@ -1,4 +1,7 @@
 export const FILE_TREE_TAG_NAME = 'file-tree-container' as const;
+export const FILE_TREE_STYLE_ATTRIBUTE = 'data-file-tree-style' as const;
+export const FILE_TREE_UNSAFE_CSS_ATTRIBUTE =
+  'data-file-tree-unsafe-css' as const;
 
 /**
  * Prefix used for flattened node IDs.

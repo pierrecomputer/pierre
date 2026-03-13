@@ -90,6 +90,17 @@ describe('SSR + declarative shadow DOM', () => {
     expect(payload.shadowHtml).toContain('data-file-tree-search-container');
   });
 
+  test('preloadFileTree includes unsafeCSS when provided', () => {
+    const payload = preloadFileTree({
+      initialFiles: ['README.md', 'src/index.ts'],
+      unsafeCSS: `[data-item-section="content"] { color: hotpink; }`,
+    });
+
+    expect(payload.shadowHtml).toContain('data-file-tree-unsafe-css');
+    expect(payload.shadowHtml).toContain('@layer unsafe');
+    expect(payload.shadowHtml).toContain('color: hotpink');
+  });
+
   test('ensureFileTreeStyles adopts styles and removes SSR inline <style> marker when supported', () => {
     const host = document.createElement('div');
     const shadowRoot = host.attachShadow({ mode: 'open' });
@@ -472,6 +483,36 @@ describe('SSR + declarative shadow DOM', () => {
 
     ft.setOptions({ flattenEmptyDirectories: true }, { files: ['b.txt'] });
     expect(calls).toEqual([['b.txt']]);
+  });
+
+  test('render injects unsafeCSS into the shadow root and keeps it in sync', () => {
+    const container = document.createElement('file-tree-container');
+    const ft = new FileTree({
+      initialFiles: ['README.md', 'src/index.ts'],
+      unsafeCSS: `[data-item-section="content"] { color: hotpink; }`,
+    });
+
+    ft.render({ fileTreeContainer: container });
+
+    const initialStyle = container.shadowRoot?.querySelector(
+      'style[data-file-tree-unsafe-css]'
+    );
+    expect(initialStyle?.textContent).toContain('color: hotpink');
+    expect(initialStyle?.textContent).toContain('@layer unsafe');
+
+    ft.setOptions({
+      unsafeCSS: `[data-item-section="content"] { color: lime; }`,
+    });
+
+    const updatedStyle = container.shadowRoot?.querySelector(
+      'style[data-file-tree-unsafe-css]'
+    );
+    expect(updatedStyle?.textContent).toContain('color: lime');
+
+    ft.setOptions({ unsafeCSS: '' });
+    expect(
+      container.shadowRoot?.querySelector('style[data-file-tree-unsafe-css]')
+    ).toBeNull();
   });
 
   test('FileTree.hydrate falls back to renderRoot when no SSR wrapper is found', () => {

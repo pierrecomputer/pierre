@@ -32,6 +32,7 @@ import { SSR_HYDRATION_EXAMPLE, SSR_PRELOAD_FILE_TREE } from './SSR/constants';
 import {
   STYLING_CODE_GLOBAL,
   STYLING_CODE_INLINE,
+  STYLING_CODE_UNSAFE,
   STYLING_CODE_VANILLA,
 } from './Styling/constants';
 import {
@@ -232,16 +233,19 @@ async function SSRSection() {
 }
 
 async function StylingSection() {
-  const [stylingGlobal, stylingInline, stylingVanilla] = await Promise.all([
-    preloadFile(STYLING_CODE_GLOBAL),
-    preloadFile(STYLING_CODE_INLINE),
-    preloadFile(STYLING_CODE_VANILLA),
-  ]);
+  const [stylingGlobal, stylingInline, stylingVanilla, stylingUnsafe] =
+    await Promise.all([
+      preloadFile(STYLING_CODE_GLOBAL),
+      preloadFile(STYLING_CODE_INLINE),
+      preloadFile(STYLING_CODE_VANILLA),
+      preloadFile(STYLING_CODE_UNSAFE),
+    ]);
   const content = await renderMDX({
     filePath: 'trees/docs/Styling/content.mdx',
     scope: {
       stylingGlobal,
       stylingInline,
+      stylingUnsafe,
       stylingVanilla,
     },
   });

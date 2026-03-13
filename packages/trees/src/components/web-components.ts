@@ -1,7 +1,5 @@
-import { FILE_TREE_TAG_NAME } from '../constants';
+import { FILE_TREE_STYLE_ATTRIBUTE, FILE_TREE_TAG_NAME } from '../constants';
 import styles from '../style.css';
-
-const STYLE_MARKER_ATTR = 'data-file-tree-style';
 
 let sheet: CSSStyleSheet | undefined;
 
@@ -30,16 +28,16 @@ export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
       // If this markup came from SSR declarative shadow DOM, it likely already
       // includes an inline <style>. Remove it so SSR and CSR converge on the
       // adoptedStyleSheets path when supported.
-      shadowRoot.querySelector(`style[${STYLE_MARKER_ATTR}]`)?.remove();
+      shadowRoot.querySelector(`style[${FILE_TREE_STYLE_ATTRIBUTE}]`)?.remove();
       return;
     }
   }
 
   // Fallback path for environments without adoptedStyleSheets.
   // Ensure an inline style exists in the shadow root.
-  if (shadowRoot.querySelector(`style[${STYLE_MARKER_ATTR}]`) == null) {
+  if (shadowRoot.querySelector(`style[${FILE_TREE_STYLE_ATTRIBUTE}]`) == null) {
     const styleEl = document.createElement('style');
-    styleEl.setAttribute(STYLE_MARKER_ATTR, '');
+    styleEl.setAttribute(FILE_TREE_STYLE_ATTRIBUTE, '');
     styleEl.textContent = styles;
     shadowRoot.prepend(styleEl);
   }

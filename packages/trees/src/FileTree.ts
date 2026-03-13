@@ -1,9 +1,14 @@
 import { type TreeInstance } from '@headless-tree/core';
 
 import { FileTreeContainerLoaded } from './components/web-components';
-import { FILE_TREE_TAG_NAME, FLATTENED_PREFIX } from './constants';
+import {
+  FILE_TREE_TAG_NAME,
+  FILE_TREE_UNSAFE_CSS_ATTRIBUTE,
+  FLATTENED_PREFIX,
+} from './constants';
 import { SVGSpriteSheet } from './sprite';
 import type { FileTreeNode, GitStatusEntry } from './types';
+import { wrapUnsafeCSS } from './utils/cssWrappers';
 import { expandImplicitParentDirectories } from './utils/expandImplicitParentDirectories';
 import {
   buildDirectChildCountMap,
@@ -96,6 +101,9 @@ export interface FileTreeOptions {
    *  dot-prefixed next, then case-insensitive alphabetical). Pass `false` to
    *  preserve insertion order, or `{ comparator: fn }` for custom sorting. */
   sort?: boolean | { comparator: ChildrenComparator };
+  /** Inject raw CSS into the tree shadow root. Use this sparingly when CSS
+   *  variables are not sufficient. */
+  unsafeCSS?: string;
   useLazyDataLoader?: boolean;
   /** Enable virtualized rendering. Items are only rendered when visible.
    *  `threshold` is the minimum item count to activate virtualization. */
@@ -131,6 +139,7 @@ export class FileTree {
   private fileTreeContainer: HTMLElement | undefined;
   private divWrapper: HTMLDivElement | undefined;
   private defaultSpriteSheet: SVGElement | undefined;
+  private unsafeCSSStyle: HTMLStyleElement | undefined;
 
   /** Populated by the Preact Root component with the tree instance + maps. */
   readonly handleRef: { current: FileTreeHandle | null } = { current: null };
@@ -421,6 +430,7 @@ export class FileTree {
       'lockedPaths',
       'onCollision',
       'sort',
+      'unsafeCSS',
       'useLazyDataLoader',
       'virtualize',
     ] as const;
@@ -501,6 +511,7 @@ export class FileTree {
     if (this.divWrapper == null) return;
     if (this.fileTreeContainer != null) {
       this.syncIconSpriteSheets(this.fileTreeContainer);
+      this.syncUnsafeCSS(this.fileTreeContainer);
     }
     this.syncVirtualizedLayoutAttrs(this.fileTreeContainer, this.divWrapper);
     preactRenderRoot(this.divWrapper, this.buildRootProps());
@@ -602,6 +613,45 @@ export class FileTree {
     this.syncCustomSpriteSheet(shadowRoot);
   }
 
+  private syncUnsafeCSS(fileTreeContainer: HTMLElement): void {
+    const shadowRoot = fileTreeContainer.shadowRoot;
+    if (shadowRoot == null) {
+      return;
+    }
+
+    let unsafeStyle =
+      this.unsafeCSSStyle instanceof HTMLStyleElement &&
+      this.unsafeCSSStyle.parentNode === shadowRoot
+        ? this.unsafeCSSStyle
+        : undefined;
+
+    unsafeStyle ??= Array.from(shadowRoot.children).find(
+      (element): element is HTMLStyleElement =>
+        element instanceof HTMLStyleElement &&
+        element.hasAttribute(FILE_TREE_UNSAFE_CSS_ATTRIBUTE)
+    );
+
+    const unsafeCSS = this.options.unsafeCSS?.trim() ?? '';
+    if (unsafeCSS.length === 0) {
+      unsafeStyle?.remove();
+      this.unsafeCSSStyle = undefined;
+      return;
+    }
+
+    if (unsafeStyle == null) {
+      unsafeStyle = document.createElement('style');
+      unsafeStyle.setAttribute(FILE_TREE_UNSAFE_CSS_ATTRIBUTE, '');
+      shadowRoot.appendChild(unsafeStyle);
+    }
+
+    const wrappedUnsafeCSS = wrapUnsafeCSS(unsafeCSS);
+    if (unsafeStyle.textContent !== wrappedUnsafeCSS) {
+      unsafeStyle.textContent = wrappedUnsafeCSS;
+    }
+
+    this.unsafeCSSStyle = unsafeStyle;
+  }
+
   private getOrCreateFileTreeContainer(
     fileTreeContainer?: HTMLElement,
     parentNode?: HTMLElement
@@ -628,6 +678,7 @@ export class FileTree {
     }
 
     this.syncIconSpriteSheets(this.fileTreeContainer);
+    this.syncUnsafeCSS(this.fileTreeContainer);
     return this.fileTreeContainer;
   }
 
@@ -709,6 +760,7 @@ export class FileTree {
 
     this.fileTreeContainer = fileTreeContainer;
     this.syncIconSpriteSheets(fileTreeContainer);
+    this.syncUnsafeCSS(fileTreeContainer);
     this.syncVirtualizedLayoutAttrs(fileTreeContainer, this.divWrapper);
 
     if (this.divWrapper == null) {
@@ -740,6 +792,8 @@ export class FileTree {
     this.handleRef.current = null;
     this.expandPathsCache.clear();
     this.expandPathsCacheFor = null;
+    this.unsafeCSSStyle?.remove();
+    this.unsafeCSSStyle = undefined;
     this.fileTreeContainer = undefined;
     this.divWrapper = undefined;
     this.defaultSpriteSheet = undefined;

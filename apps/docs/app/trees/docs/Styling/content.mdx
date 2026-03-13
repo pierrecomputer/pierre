@@ -18,6 +18,15 @@ variables from global CSS, a wrapper, or the host element directly.
 <DocsCodeExample {...stylingInline} />
 <DocsCodeExample {...stylingVanilla} />
 
+### Unsafe CSS escape hatch
+
+If CSS variables are not enough, pass `unsafeCSS` in `FileTreeOptions` to inject
+raw CSS into the tree shadow root. This is the same escape hatch pattern we use
+in diffs, but for trees it should stay the exception rather than the default
+approach.
+
+<DocsCodeExample {...stylingUnsafe} />
+
 ### Fallback order
 
 Trees uses a consistent fallback chain for colors and theme tokens:

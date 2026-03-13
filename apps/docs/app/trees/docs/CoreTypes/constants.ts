@@ -62,6 +62,10 @@ interface FileTreeOptions {
   // order. { comparator: fn } for custom sorting.
   sort?: boolean | { comparator: ChildrenComparator };
 
+  // Optional: inject raw CSS directly into the tree shadow root.
+  // Use this only when --trees-* variables are not enough.
+  unsafeCSS?: string;
+
   // Optional: enable virtualized rendering (only visible items are rendered).
   // Pass { threshold: N } to activate when item count >= N. Default: undefined (off).
   virtualize?: { threshold: number } | false;
@@ -78,6 +82,11 @@ const options: FileTreeOptions = {
   flattenEmptyDirectories: true,
   fileTreeSearchMode: 'collapse-non-matches',
   search: true,
+  unsafeCSS: \`
+    button[data-type='item'][data-item-selected] {
+      border-radius: 999px;
+    }
+  \`,
 };
 
 // State callbacks and controlled state are configured separately:

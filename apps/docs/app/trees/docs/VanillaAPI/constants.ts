@@ -42,6 +42,11 @@ const options = {
   flattenEmptyDirectories: true,
   fileTreeSearchMode: 'expand-matches',
   search: true,
+  unsafeCSS: \`
+    button[data-type='item'][data-item-selected] {
+      border-radius: 999px;
+    }
+  \`,
   useLazyDataLoader: false,
 };
 

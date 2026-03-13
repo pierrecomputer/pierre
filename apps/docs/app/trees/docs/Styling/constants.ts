@@ -94,3 +94,32 @@ host.style.setProperty('--trees-git-modified-color-override', '#009fff');`,
   },
   options,
 };
+
+export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'unsafe-tree-css.tsx',
+    contents: `import { FileTree } from '@pierre/trees/react';
+
+<FileTree
+  options={{
+    initialFiles: ['src/index.ts', 'src/lib/utils.ts', 'package.json'],
+    unsafeCSS: \`
+      [data-file-tree-search-input] {
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      button[data-type='item'][data-item-selected] {
+        border-radius: 999px;
+      }
+
+      [data-item-section='icon'] {
+        color: oklch(67% 0.2 25);
+      }
+    \`,
+  }}
+/>;
+`,
+  },
+  options,
+};
