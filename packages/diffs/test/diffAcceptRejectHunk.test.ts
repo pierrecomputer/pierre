@@ -344,78 +344,78 @@ describe('diffAcceptRejectHunk', () => {
     });
   });
 
-  // test('both should collapse the resolved mixed hunk to a correct context-only hunk', () => {
-  //   const diff = createFixture();
-  //   const earlierHunks = [
-  //     snapshotHunk(diff, 0),
-  //     snapshotHunk(diff, 1),
-  //     snapshotHunk(diff, 2),
-  //   ];
-  //   const resolvedSnapshot = snapshotHunk(diff, 3);
-  //
-  //   const result = diffAcceptRejectHunk(diff, 3, 'both');
-  //
-  //   assertUnresolvedHunkMatchesSnapshot(result, 0, earlierHunks[0]);
-  //   assertUnresolvedHunkMatchesSnapshot(result, 1, earlierHunks[1]);
-  //   assertUnresolvedHunkMatchesSnapshot(result, 2, earlierHunks[2]);
-  //   assertResolvedHunkMatchesExpected(
-  //     result,
-  //     3,
-  //     getResolvedLines(resolvedSnapshot, 'both')
-  //   );
-  //   expect(verifyFileDiffHunkValues(result)).toEqual({
-  //     valid: true,
-  //     errors: [],
-  //   });
-  // });
+  test('both should collapse the resolved mixed hunk to a correct context-only hunk', () => {
+    const diff = createFixture();
+    const earlierHunks = [
+      snapshotHunk(diff, 0),
+      snapshotHunk(diff, 1),
+      snapshotHunk(diff, 2),
+    ];
+    const resolvedSnapshot = snapshotHunk(diff, 3);
 
-  // test('both should keep later hunk indices accurate when an earlier hunk grows', () => {
-  //   const diff = createFixture();
-  //   const resolvedSnapshot = snapshotHunk(diff, 0);
-  //   const laterHunks = diff.hunks
-  //     .slice(1)
-  //     .map((_, index) => snapshotHunk(diff, index + 1));
-  //
-  //   const result = diffAcceptRejectHunk(diff, 0, 'both');
-  //
-  //   assertResolvedHunkMatchesExpected(
-  //     result,
-  //     0,
-  //     getResolvedLines(resolvedSnapshot, 'both')
-  //   );
-  //   for (const [offset, snapshot] of laterHunks.entries()) {
-  //     assertUnresolvedHunkMatchesSnapshot(result, offset + 1, snapshot);
-  //   }
-  //   expect(verifyFileDiffHunkValues(result)).toEqual({
-  //     valid: true,
-  //     errors: [],
-  //   });
-  // });
+    const result = diffAcceptRejectHunk(diff, 3, 'both');
 
-  // test('updates cacheKey when both is used', () => {
-  //   const diff = parseDiffFromFile(
-  //     { name: 'example.ts', contents: 'old\n', cacheKey: 'old-key' },
-  //     { name: 'example.ts', contents: 'new\n', cacheKey: 'new-key' }
-  //   );
-  //
-  //   const result = diffAcceptRejectHunk(diff, 0, 'both');
-  //
-  //   expect(result.cacheKey).toBe('old-key:new-key:b-0');
-  // });
+    assertUnresolvedHunkMatchesSnapshot(result, 0, earlierHunks[0]);
+    assertUnresolvedHunkMatchesSnapshot(result, 1, earlierHunks[1]);
+    assertUnresolvedHunkMatchesSnapshot(result, 2, earlierHunks[2]);
+    assertResolvedHunkMatchesExpected(
+      result,
+      3,
+      getResolvedLines(resolvedSnapshot, 'both')
+    );
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
 
-  // test('both should inherit noEOFCR from additions', () => {
-  //   const diff = parseDiffFromFile(
-  //     { name: 'example.ts', contents: 'start\nold\n' },
-  //     { name: 'example.ts', contents: 'start\nnew' }
-  //   );
-  //   const expectedLines = splitFileContents('start\nold\nnew');
-  //
-  //   const result = diffAcceptRejectHunk(diff, 0, 'both');
-  //   const [hunk] = result.hunks;
-  //
-  //   expect(hunk?.noEOFCRAdditions).toBe(true);
-  //   expect(hunk?.noEOFCRDeletions).toBe(true);
-  //   expect(result.deletionLines).toEqual(expectedLines);
-  //   expect(result.additionLines).toEqual(expectedLines);
-  // });
+  test('both should keep later hunk indices accurate when an earlier hunk grows', () => {
+    const diff = createFixture();
+    const resolvedSnapshot = snapshotHunk(diff, 0);
+    const laterHunks = diff.hunks
+      .slice(1)
+      .map((_, index) => snapshotHunk(diff, index + 1));
+
+    const result = diffAcceptRejectHunk(diff, 0, 'both');
+
+    assertResolvedHunkMatchesExpected(
+      result,
+      0,
+      getResolvedLines(resolvedSnapshot, 'both')
+    );
+    for (const [offset, snapshot] of laterHunks.entries()) {
+      assertUnresolvedHunkMatchesSnapshot(result, offset + 1, snapshot);
+    }
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
+  test('updates cacheKey when both is used', () => {
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: 'old\n', cacheKey: 'old-key' },
+      { name: 'example.ts', contents: 'new\n', cacheKey: 'new-key' }
+    );
+
+    const result = diffAcceptRejectHunk(diff, 0, 'both');
+
+    expect(result.cacheKey).toBe('old-key:new-key:b-0');
+  });
+
+  test('both should inherit noEOFCR from additions', () => {
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: 'start\nold\n' },
+      { name: 'example.ts', contents: 'start\nnew' }
+    );
+    const expectedLines = ['start\n', 'old\n', 'new'];
+
+    const result = diffAcceptRejectHunk(diff, 0, 'both');
+    const [hunk] = result.hunks;
+
+    expect(hunk?.noEOFCRAdditions).toBe(true);
+    expect(hunk?.noEOFCRDeletions).toBe(true);
+    expect(result.deletionLines).toEqual(expectedLines);
+    expect(result.additionLines).toEqual(expectedLines);
+  });
 });

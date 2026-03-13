@@ -3,51 +3,54 @@ import type { ContextContent, FileDiffMetadata } from '../types';
 export function diffAcceptRejectHunk(
   diff: FileDiffMetadata,
   hunkIndex: number,
-  type: 'accept' | 'reject'
+  type: 'accept' | 'reject' | 'both'
 ): FileDiffMetadata {
+  const hunk = diff.hunks[hunkIndex];
+  if (hunk == null) {
+    console.error({ diff, hunkIndex });
+    throw new Error(`diffResolveRejectHunk: Invalid hunk index: ${hunkIndex}`);
+  }
+
+  // Build the resolved hunk lines from the original diff data before mutating
+  // either backing line array.
+  const resolvedLines = buildResolvedLines(diff, hunk, type);
+
   diff = {
     ...diff,
     hunks: [...diff.hunks],
     deletionLines:
-      type === 'accept' ? [...diff.deletionLines] : diff.deletionLines,
+      type === 'accept' || type === 'both'
+        ? [...diff.deletionLines]
+        : diff.deletionLines,
     additionLines:
-      type === 'reject' ? [...diff.additionLines] : diff.additionLines,
+      type === 'reject' || type === 'both'
+        ? [...diff.additionLines]
+        : diff.additionLines,
     // Automatically update cacheKey if it exists, since content is changing
     cacheKey:
       diff.cacheKey != null
         ? `${diff.cacheKey}:${type[0]}-${hunkIndex}`
         : undefined,
   };
-  // Fix the content lines
+
   const { additionLines, deletionLines } = diff;
-  if (additionLines != null && deletionLines != null) {
-    const hunk = diff.hunks[hunkIndex];
-    if (hunk == null) {
-      console.error({ diff, hunkIndex });
-      throw new Error(
-        `diffResolveRejectHunk: Invalid hunk index: ${hunkIndex}`
-      );
-    }
-    if (type === 'reject') {
-      additionLines.splice(
-        hunk.additionLineIndex,
-        hunk.additionCount,
-        ...deletionLines.slice(
-          hunk.deletionLineIndex,
-          hunk.deletionLineIndex + hunk.deletionCount
-        )
-      );
-    } else {
-      deletionLines.splice(
-        hunk.deletionLineIndex,
-        hunk.deletionCount,
-        ...additionLines.slice(
-          hunk.additionLineIndex,
-          hunk.additionLineIndex + hunk.additionCount
-        )
-      );
-    }
+
+  if (type === 'accept' || type === 'both') {
+    deletionLines.splice(
+      hunk.deletionLineIndex,
+      hunk.deletionCount,
+      ...resolvedLines
+    );
   }
+
+  if (type === 'reject' || type === 'both') {
+    additionLines.splice(
+      hunk.additionLineIndex,
+      hunk.additionCount,
+      ...resolvedLines
+    );
+  }
+
   let deletionOffset = 0;
   let additionOffset = 0;
   let splitOffset = 0;
@@ -68,26 +71,18 @@ export function diffAcceptRejectHunk(
       hunk.noEOFCRAdditions = false;
       if (
         (type === 'accept' && noEOFCRAdditions) ||
-        (type === 'reject' && noEOFCRDeletions)
+        (type === 'reject' && noEOFCRDeletions) ||
+        (type === 'both' && noEOFCRAdditions)
       ) {
         hunk.noEOFCRAdditions = true;
         hunk.noEOFCRDeletions = true;
       }
       const newContent: ContextContent = {
         type: 'context',
-        lines: 0,
+        lines: resolvedLines.length,
         additionLineIndex: hunk.additionLineIndex,
         deletionLineIndex: hunk.deletionLineIndex,
       };
-      for (const content of hunk.hunkContent) {
-        if (content.type === 'context') {
-          newContent.lines += content.lines;
-        } else if (type === 'accept') {
-          newContent.lines += content.additions;
-        } else if (type === 'reject') {
-          newContent.lines += content.deletions;
-        }
-      }
       const lineCount = newContent.lines;
       hunk.hunkContent = [newContent];
       splitOffset = lineCount - hunk.splitLineCount;
@@ -137,4 +132,49 @@ export function diffAcceptRejectHunk(
     }
   }
   return diff;
+}
+
+// Rebuild the line sequence that a resolved hunk should contribute by walking
+// the original hunk content in order and choosing the kept lines for each mode.
+function buildResolvedLines(
+  diff: FileDiffMetadata,
+  hunk: FileDiffMetadata['hunks'][number],
+  type: 'accept' | 'reject' | 'both'
+): string[] {
+  const resolvedLines: string[] = [];
+
+  for (const content of hunk.hunkContent) {
+    if (content.type === 'context') {
+      resolvedLines.push(
+        ...diff.additionLines.slice(
+          content.additionLineIndex,
+          content.additionLineIndex + content.lines
+        )
+      );
+      continue;
+    }
+
+    if (type === 'reject' || type === 'both') {
+      resolvedLines.push(
+        ...diff.deletionLines.slice(
+          content.deletionLineIndex,
+          content.deletionLineIndex + content.deletions
+        )
+      );
+      if (type === 'reject') {
+        continue;
+      }
+    }
+
+    if (type === 'accept' || type === 'both') {
+      resolvedLines.push(
+        ...diff.additionLines.slice(
+          content.additionLineIndex,
+          content.additionLineIndex + content.additions
+        )
+      );
+    }
+  }
+
+  return resolvedLines;
 }
