@@ -105,7 +105,7 @@ export class UnresolvedFile<
     fileDiff: undefined,
     actions: undefined,
   };
-  private conflictActions: MergeConflictDiffAction[] = [];
+  private conflictActions: (MergeConflictDiffAction | undefined)[] = [];
   private conflictActionCache: Map<string, MergeConflictActionElementCache> =
     new Map();
 
