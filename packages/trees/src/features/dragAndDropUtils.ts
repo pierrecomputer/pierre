@@ -235,7 +235,13 @@ export const getDragTarget = (
     canBecomeSibling &&
     placement.type !== PlacementType.MakeChild
   ) {
-    if (draggedItems?.some((item) => item.isDescendentOf(parent.getId()))) {
+    if (
+      draggedItems?.some(
+        (draggedItem) =>
+          item.getId() === draggedItem.getId() ||
+          item.isDescendentOf(draggedItem.getId())
+      )
+    ) {
       return itemTarget;
     }
     return parentTarget as DragTarget<unknown>;

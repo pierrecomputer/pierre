@@ -2,13 +2,18 @@ import {
   createTree,
   expandAllFeature,
   hotkeysCoreFeature,
+  type ItemInstance,
   selectionFeature,
   syncDataLoaderFeature,
+  type TreeInstance,
 } from '@headless-tree/core';
 import { describe, expect, test } from 'bun:test';
 
 import { FLATTENED_PREFIX } from '../src/constants';
+import { dragAndDropFeature } from '../src/features/dragAndDropFeature';
+import { canDrop, getDragTarget } from '../src/features/dragAndDropUtils';
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
+import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';
 import { computeNewFilesAfterDrop } from '../src/utils/computeNewFilesAfterDrop';
 import { expandPathsWithAncestors } from '../src/utils/expandPaths';
@@ -254,6 +259,98 @@ describe('computeNewFilesAfterDrop', () => {
     const files = ['src/index.ts', 'src/components/a.ts'];
     const result = computeNewFilesAfterDrop(files, ['src'], 'src/components');
     expect(result).toEqual(files);
+  });
+});
+
+function createNoReorderDragTree(
+  files: string[],
+  expandedPaths: string[] = []
+) {
+  const dataLoader = generateSyncDataLoader(files);
+  const { pathToId } = buildMapsFromLoader(dataLoader, 'root');
+  const expandedIds = expandPathsWithAncestors(expandedPaths, pathToId, {
+    flattenEmptyDirectories: false,
+  });
+
+  const tree = createTree<FileTreeNode>({
+    rootItemId: 'root',
+    dataLoader,
+    getItemName: (item) => item.getItemData().name,
+    isItemFolder: (item) => item.getItemData()?.children?.direct != null,
+    features: [syncDataLoaderFeature, dragAndDropFeature],
+    canReorder: false,
+    initialState: { expandedItems: expandedIds },
+  });
+  tree.setMounted(true);
+  tree.rebuildTree();
+
+  return tree;
+}
+
+function getVisibleItemByPath(
+  tree: ReturnType<typeof createTree<FileTreeNode>>,
+  path: string
+) {
+  const item = tree
+    .getItems()
+    .find((entry) => entry.getItemData().path === path);
+  expect(item).toBeDefined();
+  return item!;
+}
+
+function getUnknownTree(
+  tree: ReturnType<typeof createTree<FileTreeNode>>
+): TreeInstance<unknown> {
+  return tree as unknown as TreeInstance<unknown>;
+}
+
+function getUnknownItem(
+  item: ItemInstance<FileTreeNode>
+): ItemInstance<unknown> {
+  return item as unknown as ItemInstance<unknown>;
+}
+
+describe('getDragTarget with canReorder disabled', () => {
+  test('treats a root-level file hover as a root drop for nested drags', () => {
+    const tree = createNoReorderDragTree(
+      ['README.md', 'src/index.ts'],
+      ['src']
+    );
+    const draggedItem = getVisibleItemByPath(tree, 'src/index.ts');
+    const hoveredItem = getVisibleItemByPath(tree, 'README.md');
+
+    tree.applySubStateUpdate('dnd', { draggedItems: [draggedItem] });
+
+    const target = getDragTarget(
+      { clientX: 0, clientY: 0, dataTransfer: null },
+      getUnknownItem(hoveredItem),
+      getUnknownTree(tree)
+    );
+
+    expect(target.item.getId()).toBe('root');
+    expect(canDrop(null, target, getUnknownTree(tree))).toBe(true);
+  });
+
+  test('keeps descendant hovers invalid for dragged folders', () => {
+    const tree = createNoReorderDragTree(
+      ['README.md', 'src/index.ts'],
+      ['src']
+    );
+    const draggedItem = getVisibleItemByPath(tree, 'src');
+    const hoveredItem = getVisibleItemByPath(tree, 'src/index.ts');
+
+    tree.applySubStateUpdate('dnd', { draggedItems: [draggedItem] });
+
+    const target = getDragTarget(
+      { clientX: 0, clientY: 0, dataTransfer: null },
+      getUnknownItem(hoveredItem),
+      getUnknownTree(tree)
+    );
+
+    expect((target.item as ItemInstance<FileTreeNode>).getItemData().path).toBe(
+      'src'
+    );
+    expect(canDrop(null, target, getUnknownTree(tree))).toBe(false);
   });
 });
 
