@@ -13,6 +13,7 @@ import {
   type GitStatusEntry,
   gitStatusFeature,
 } from '../src/features/gitStatusFeature';
+import type { FileTreeSearchConfig } from '../src/FileTree';
 import type { FileTreeSearchMode } from '../src/FileTree';
 import { generateLazyDataLoader } from '../src/loader/lazy';
 import { generateSyncDataLoader } from '../src/loader/sync';
@@ -133,11 +134,16 @@ export function createTestTree(
     initialSelectedItems?: string[];
     fileTreeSearchMode?: FileTreeSearchMode;
     gitStatus?: GitStatusEntry[];
+    showSearchInput?: boolean;
   } = {}
 ): TestTree {
   const { flattenEmptyDirectories } = config;
-  const { initialExpandedItems, initialSelectedItems, fileTreeSearchMode } =
-    opts;
+  const {
+    initialExpandedItems,
+    initialSelectedItems,
+    fileTreeSearchMode,
+    showSearchInput,
+  } = opts;
 
   const dataLoader = config.createLoader(files, { flattenEmptyDirectories });
   const { pathToId, idToPath } = buildMapsFromLoader(dataLoader, 'root');
@@ -165,8 +171,13 @@ export function createTestTree(
 
   // fileTreeSearchMode is a custom config key read by fileTreeSearchFeature.
   // Spread from a variable to bypass excess property checks on TreeConfig.
-  const searchModeConfig =
-    fileTreeSearchMode != null ? { fileTreeSearchMode } : {};
+  const searchModeConfig: FileTreeSearchConfig =
+    fileTreeSearchMode != null || showSearchInput != null
+      ? {
+          ...(fileTreeSearchMode != null && { fileTreeSearchMode }),
+          ...(showSearchInput != null && { showSearchInput }),
+        }
+      : {};
   const gitStatusConfig = {
     gitStatus: opts.gitStatus,
     gitStatusSignature: getGitStatusSignature(opts.gitStatus),

@@ -368,6 +368,7 @@ export function Root({
     gitStatus,
     lockedPaths,
     onCollision,
+    showSearchInput,
     sort: sortOption,
     useLazyDataLoader,
     virtualize,
@@ -803,10 +804,10 @@ export function Root({
   // time, not render time) always reads the latest value.
   const searchActiveRef = useRef(false);
 
-  // fileTreeSearchMode is a custom config key read by fileTreeSearchFeature
+  // Search config is read by fileTreeSearchFeature via getConfig().
   // via getConfig(). We spread it from a variable to bypass excess property
   // checks on the TreeConfig object literal.
-  const searchModeConfig = { fileTreeSearchMode };
+  const searchModeConfig = { fileTreeSearchMode, showSearchInput };
   const gitStatusConfig = {
     gitStatus,
     gitStatusSignature: getGitStatusSignature(gitStatus),
@@ -1049,6 +1050,7 @@ export function Root({
 
   const { onChange, ...origSearchInputProps } =
     tree.getSearchInputElementProps();
+  const shouldRenderSearchInput = showSearchInput !== false;
   const hasFocusedItem = tree.getState().focusedItem != null;
   const focusedItemId = hasFocusedItem ? tree.getState().focusedItem : null;
   const isSearchOpen = tree.isSearchOpen?.() ?? false;
@@ -1106,13 +1108,15 @@ export function Root({
       data-file-tree-virtualized-root={shouldVirtualize ? 'true' : undefined}
     >
       <style dangerouslySetInnerHTML={{ __html: guideStyleText }} />
-      <div data-file-tree-search-container>
-        <input
-          placeholder="Search…"
-          data-file-tree-search-input
-          {...searchInputProps}
-        />
-      </div>
+      {shouldRenderSearchInput ? (
+        <div data-file-tree-search-container>
+          <input
+            placeholder="Search…"
+            data-file-tree-search-input
+            {...searchInputProps}
+          />
+        </div>
+      ) : null}
       {(() => {
         const allItems = tree.getItems();
         const visibleIdSet = getSearchVisibleIdSet(tree);

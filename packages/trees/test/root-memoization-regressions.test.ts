@@ -5,21 +5,27 @@ import {
   propMemoizationFeature,
   selectionFeature,
   syncDataLoaderFeature,
+  type TreeConfig,
 } from '@headless-tree/core';
 import { describe, expect, test } from 'bun:test';
 
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
 import { gitStatusFeature } from '../src/features/gitStatusFeature';
+import type { FileTreeSearchConfig } from '../src/FileTree';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';
 
-const createSearchTree = (withPropMemoization: boolean) => {
+const createSearchTree = (
+  withPropMemoization: boolean,
+  searchConfig: FileTreeSearchConfig = {}
+) => {
   const files = ['README.md', 'src/index.ts'];
   const dataLoader = generateSyncDataLoader(files, {
     flattenEmptyDirectories: false,
   });
 
-  const tree = createTree<FileTreeNode>({
+  const treeConfig: TreeConfig<FileTreeNode> & FileTreeSearchConfig = {
+    ...searchConfig,
     rootItemId: 'root',
     dataLoader,
     getItemName: (item) => item.getItemData().name,
@@ -33,7 +39,8 @@ const createSearchTree = (withPropMemoization: boolean) => {
       gitStatusFeature,
       ...(withPropMemoization ? [propMemoizationFeature] : []),
     ],
-  });
+  };
+  const tree = createTree<FileTreeNode>(treeConfig);
 
   tree.setMounted(true);
   tree.rebuildTree();
@@ -62,6 +69,13 @@ describe('Root memoization regressions', () => {
     } as MouseEvent);
 
     expect(tree.getState().search).toBe(null);
+  });
+
+  test('search hotkey stays disabled when the built-in input is hidden', () => {
+    const tree = createSearchTree(false, { showSearchInput: false });
+
+    const hotkey = fileTreeSearchFeature.hotkeys?.openSearch;
+    expect(hotkey?.isEnabled?.(tree)).toBe(false);
   });
 
   test('TreeItem memo equality should track expanded/collapsed state', async () => {

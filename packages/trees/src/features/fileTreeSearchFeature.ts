@@ -7,7 +7,7 @@ import type {
   TreeInstance,
 } from '@headless-tree/core';
 
-import type { FileTreeSearchMode } from '../FileTree';
+import type { FileTreeSearchConfig, FileTreeSearchMode } from '../FileTree';
 import type { FileTreeNode } from '../types';
 
 type SearchIndex = {
@@ -33,9 +33,8 @@ type FileTreeSearchDataRef<T> = SearchFeatureDataRef<T> & {
   searchCache?: SearchCache<T>;
 };
 
-type FileTreeSearchConfig = {
-  fileTreeSearchMode?: FileTreeSearchMode;
-};
+const isBuiltInSearchInputEnabled = <T>(tree: TreeInstance<T>): boolean =>
+  (tree.getConfig() as FileTreeSearchConfig).showSearchInput !== false;
 
 const defaultSearchMatcher = <T>(
   search: string,
@@ -354,7 +353,8 @@ export const fileTreeSearchFeature: FeatureImplementation = {
     openSearch: {
       hotkey: 'LetterOrNumber',
       preventDefault: true,
-      isEnabled: (tree) => !tree.isSearchOpen(),
+      isEnabled: (tree) =>
+        isBuiltInSearchInputEnabled(tree) && !tree.isSearchOpen(),
       handler: (event, tree) => {
         event.stopPropagation();
         tree.openSearch(event.key);

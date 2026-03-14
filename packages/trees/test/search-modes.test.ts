@@ -173,6 +173,28 @@ for (const cfg of TEST_CONFIGS) {
     // hide-non-matches
     // -----------------------------------------------------------------
     describe('hide-non-matches', () => {
+      test('search still filters when built-in input is hidden', () => {
+        const ft = createTestTree(FILES, cfg, {
+          fileTreeSearchMode: 'hide-non-matches',
+          showSearchInput: false,
+        });
+
+        ft.tree.setSearch('worker');
+
+        const visibleIdSet = getSearchVisibleIdSet(ft.tree);
+        expect(visibleIdSet).not.toBeNull();
+
+        const visiblePaths = [...visibleIdSet!]
+          .map((id) => ft.idToPath.get(id))
+          .filter((p): p is string => p != null)
+          .map(getSelectionPath);
+
+        expect(visiblePaths).toContain('src/utils/worker.ts');
+        expect(visiblePaths).toContain('src/utils');
+        expect(visiblePaths).toContain('src');
+        expect(visiblePaths).not.toContain('README.md');
+      });
+
       test('starts from empty baseline like collapse-non-matches', () => {
         const { expandedPaths } = searchTree(
           FILES,
