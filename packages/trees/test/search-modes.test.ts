@@ -109,6 +109,18 @@ for (const cfg of TEST_CONFIGS) {
         expect(visiblePaths).toContain('README.md');
         expect(visiblePaths).toContain('package.json');
       });
+
+      test('matches fuzzy subsequences against full paths', () => {
+        const { expandedPaths } = searchTree(
+          FILES,
+          cfg,
+          'expand-matches',
+          'srwk'
+        );
+
+        expect(expandedPaths).toContain('src');
+        expect(expandedPaths).toContain('src/utils');
+      });
     });
 
     // -----------------------------------------------------------------
@@ -166,6 +178,18 @@ for (const cfg of TEST_CONFIGS) {
 
         expect(visiblePaths).toContain('README.md');
         expect(visiblePaths).toContain('package.json');
+      });
+
+      test('matches path queries instead of only the basename', () => {
+        const { expandedPaths } = searchTree(
+          FILES,
+          cfg,
+          'collapse-non-matches',
+          'src/components/button.tsx'
+        );
+
+        expect(expandedPaths).toContain('src');
+        expect(expandedPaths).toContain('src/components');
       });
     });
 
@@ -260,6 +284,27 @@ for (const cfg of TEST_CONFIGS) {
         // Card.tsx does NOT match "Button"
         expect(visiblePaths).not.toContain('src/components/Card.tsx');
         expect(visiblePaths).not.toContain('README.md');
+      });
+
+      test('matches fuzzy path queries in hide mode', () => {
+        const { ft, visibleIdSet } = searchTree(
+          FILES,
+          cfg,
+          'hide-non-matches',
+          'src/cmp/btn.tsx'
+        );
+
+        expect(visibleIdSet).not.toBeNull();
+
+        const visiblePaths = [...visibleIdSet!]
+          .map((id) => ft.idToPath.get(id))
+          .filter((p): p is string => p != null)
+          .map(getSelectionPath);
+
+        expect(visiblePaths).toContain('src/components/Button.tsx');
+        expect(visiblePaths).toContain('src/components');
+        expect(visiblePaths).toContain('src');
+        expect(visiblePaths).not.toContain('src/components/Card.tsx');
       });
 
       test('returns null when search is empty', () => {

@@ -7,6 +7,7 @@ import type {
   TreeInstance,
 } from '@headless-tree/core';
 
+import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeSearchConfig, FileTreeSearchMode } from '../FileTree';
 import type { FileTreeNode } from '../types';
 
@@ -39,9 +40,56 @@ const isBuiltInSearchInputEnabled = <T>(tree: TreeInstance<T>): boolean =>
 const defaultSearchMatcher = <T>(
   search: string,
   item: ItemInstance<T>
-): boolean =>
-  search.length > 0 &&
-  item.getItemName().toLowerCase().includes(search.toLowerCase());
+): boolean => {
+  if (search.length === 0) {
+    return false;
+  }
+
+  const normalizedSearch = normalizeSearchText(search);
+  if (normalizedSearch.length === 0) {
+    return false;
+  }
+
+  const normalizedPath = getNormalizedItemPath(item);
+
+  if (normalizedPath.includes(normalizedSearch)) {
+    return true;
+  }
+
+  return isFuzzySubsequenceMatch(normalizedSearch, normalizedPath);
+};
+
+const normalizeSearchText = (value: string): string =>
+  value.trim().toLowerCase().replaceAll('\\', '/');
+
+const getNormalizedItemPath = <T>(item: ItemInstance<T>): string => {
+  const itemData = item.getItemData() as Partial<FileTreeNode> | undefined;
+  const itemPath = itemData?.path;
+  const path =
+    itemPath != null && itemPath.length > 0 ? itemPath : item.getItemName();
+  return normalizeTreePath(path);
+};
+
+const normalizeTreePath = (path: string): string =>
+  normalizeSearchText(
+    path.startsWith(FLATTENED_PREFIX)
+      ? path.slice(FLATTENED_PREFIX.length)
+      : path
+  );
+
+const isFuzzySubsequenceMatch = (search: string, target: string): boolean => {
+  let searchIndex = 0;
+  let targetIndex = 0;
+
+  while (searchIndex < search.length && targetIndex < target.length) {
+    if (search[searchIndex] === target[targetIndex]) {
+      searchIndex += 1;
+    }
+    targetIndex += 1;
+  }
+
+  return searchIndex === search.length;
+};
 
 const getSearchMode = <T>(tree: TreeInstance<T>): FileTreeSearchMode =>
   (tree.getConfig() as FileTreeSearchConfig).fileTreeSearchMode ??

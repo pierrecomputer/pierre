@@ -53,7 +53,7 @@ export function SearchSection() {
         title="Search and filter by name"
         description={
           <>
-            Filter the tree by typing in the search field. Trees includes three{' '}
+            Filter the tree by typing in the search field. Search across file paths and names. Trees includes three{' '}
             <Link
               href="/trees/docs#core-types-filetreesearchmode"
               className="inline-link"
