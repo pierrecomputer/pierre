@@ -39,6 +39,9 @@ interface FileTreeOptions {
   // Optional: file tree search behavior.
   fileTreeSearchMode?: FileTreeSearchMode;
 
+  // Optional: render the built-in search input. Default: false.
+  search?: boolean;
+
   // Optional: enable built-in drag and drop. Default: false.
   dragAndDrop?: boolean;
 
@@ -74,6 +77,7 @@ const options: FileTreeOptions = {
   ],
   flattenEmptyDirectories: true,
   fileTreeSearchMode: 'collapse-non-matches',
+  search: true,
 };
 
 // State callbacks and controlled state are configured separately:

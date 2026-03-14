@@ -41,6 +41,7 @@ const options = {
   id: 'my-tree',
   flattenEmptyDirectories: true,
   fileTreeSearchMode: 'expand-matches',
+  search: true,
   useLazyDataLoader: false,
 };
 

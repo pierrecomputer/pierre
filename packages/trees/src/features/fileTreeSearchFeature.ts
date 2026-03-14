@@ -34,7 +34,7 @@ type FileTreeSearchDataRef<T> = SearchFeatureDataRef<T> & {
 };
 
 const isBuiltInSearchInputEnabled = <T>(tree: TreeInstance<T>): boolean =>
-  (tree.getConfig() as FileTreeSearchConfig).showSearchInput !== false;
+  (tree.getConfig() as FileTreeSearchConfig).search === true;
 
 const defaultSearchMatcher = <T>(
   search: string,

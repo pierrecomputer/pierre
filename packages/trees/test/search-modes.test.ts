@@ -176,7 +176,7 @@ for (const cfg of TEST_CONFIGS) {
       test('search still filters when built-in input is hidden', () => {
         const ft = createTestTree(FILES, cfg, {
           fileTreeSearchMode: 'hide-non-matches',
-          showSearchInput: false,
+          search: false,
         });
 
         ft.tree.setSearch('worker');

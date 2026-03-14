@@ -134,7 +134,7 @@ export function createTestTree(
     initialSelectedItems?: string[];
     fileTreeSearchMode?: FileTreeSearchMode;
     gitStatus?: GitStatusEntry[];
-    showSearchInput?: boolean;
+    search?: boolean;
   } = {}
 ): TestTree {
   const { flattenEmptyDirectories } = config;
@@ -142,7 +142,7 @@ export function createTestTree(
     initialExpandedItems,
     initialSelectedItems,
     fileTreeSearchMode,
-    showSearchInput,
+    search,
   } = opts;
 
   const dataLoader = config.createLoader(files, { flattenEmptyDirectories });
@@ -172,10 +172,10 @@ export function createTestTree(
   // fileTreeSearchMode is a custom config key read by fileTreeSearchFeature.
   // Spread from a variable to bypass excess property checks on TreeConfig.
   const searchModeConfig: FileTreeSearchConfig =
-    fileTreeSearchMode != null || showSearchInput != null
+    fileTreeSearchMode != null || search != null
       ? {
           ...(fileTreeSearchMode != null && { fileTreeSearchMode }),
-          ...(showSearchInput != null && { showSearchInput }),
+          ...(search != null && { search }),
         }
       : {};
   const gitStatusConfig = {

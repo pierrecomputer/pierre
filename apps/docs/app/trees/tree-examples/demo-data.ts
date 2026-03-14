@@ -52,5 +52,6 @@ export function searchOptions(mode: FileTreeSearchMode): FileTreeOptions {
   return {
     ...sharedDemoFileTreeOptions,
     fileTreeSearchMode: mode,
+    search: true,
   };
 }

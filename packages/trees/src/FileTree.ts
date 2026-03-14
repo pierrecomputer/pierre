@@ -38,7 +38,7 @@ export type FileTreeSearchMode =
 
 export interface FileTreeSearchConfig {
   fileTreeSearchMode?: FileTreeSearchMode;
-  showSearchInput?: boolean;
+  search?: boolean;
 }
 
 export type FileTreeSelectionItem = {
@@ -90,8 +90,8 @@ export interface FileTreeOptions {
   lockedPaths?: string[];
   /** Return true to overwrite the destination file when a DnD move collides. */
   onCollision?: (collision: FileTreeCollision) => boolean;
-  /** Render the built-in search input. Defaults to `true`. */
-  showSearchInput?: boolean;
+  /** Render the built-in search input. Defaults to `false`. */
+  search?: boolean;
   /** Sort children within each directory. Defaults to `true` (folders first,
    *  dot-prefixed next, then case-insensitive alphabetical). Pass `false` to
    *  preserve insertion order, or `{ comparator: fn }` for custom sorting. */

@@ -368,7 +368,7 @@ export function Root({
     gitStatus,
     lockedPaths,
     onCollision,
-    showSearchInput,
+    search,
     sort: sortOption,
     useLazyDataLoader,
     virtualize,
@@ -807,7 +807,7 @@ export function Root({
   // Search config is read by fileTreeSearchFeature via getConfig().
   // via getConfig(). We spread it from a variable to bypass excess property
   // checks on the TreeConfig object literal.
-  const searchModeConfig = { fileTreeSearchMode, showSearchInput };
+  const searchModeConfig = { fileTreeSearchMode, search };
   const gitStatusConfig = {
     gitStatus,
     gitStatusSignature: getGitStatusSignature(gitStatus),
@@ -1050,7 +1050,7 @@ export function Root({
 
   const { onChange, ...origSearchInputProps } =
     tree.getSearchInputElementProps();
-  const shouldRenderSearchInput = showSearchInput !== false;
+  const shouldRenderSearchInput = search === true;
   const hasFocusedItem = tree.getState().focusedItem != null;
   const focusedItemId = hasFocusedItem ? tree.getState().focusedItem : null;
   const isSearchOpen = tree.isSearchOpen?.() ?? false;

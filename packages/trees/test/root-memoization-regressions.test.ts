@@ -71,11 +71,18 @@ describe('Root memoization regressions', () => {
     expect(tree.getState().search).toBe(null);
   });
 
-  test('search hotkey stays disabled when the built-in input is hidden', () => {
-    const tree = createSearchTree(false, { showSearchInput: false });
+  test('search hotkey stays disabled by default', () => {
+    const tree = createSearchTree(false);
 
     const hotkey = fileTreeSearchFeature.hotkeys?.openSearch;
     expect(hotkey?.isEnabled?.(tree)).toBe(false);
+  });
+
+  test('search hotkey is enabled when the built-in input is shown', () => {
+    const tree = createSearchTree(false, { search: true });
+
+    const hotkey = fileTreeSearchFeature.hotkeys?.openSearch;
+    expect(hotkey?.isEnabled?.(tree)).toBe(true);
   });
 
   test('TreeItem memo equality should track expanded/collapsed state', async () => {

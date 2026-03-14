@@ -39,6 +39,7 @@ export const REACT_API_FILE_TREE_PROPS: PreloadFileOptions<undefined> = {
   options={{
     flattenEmptyDirectories: true,
     fileTreeSearchMode: 'expand-matches',
+    search: true,
   }}
   initialFiles={['src/index.ts', 'package.json']}
 

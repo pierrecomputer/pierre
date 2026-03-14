@@ -71,14 +71,23 @@ describe('SSR + declarative shadow DOM', () => {
     expect(payload.html).toContain(payload.shadowHtml);
   });
 
-  test('preloadFileTree omits the built-in search input when disabled', () => {
+  test('preloadFileTree omits the built-in search input by default', () => {
     const payload = preloadFileTree({
       initialFiles: ['README.md', 'src/index.ts'],
-      showSearchInput: false,
     });
 
     expect(payload.shadowHtml).not.toContain('data-file-tree-search-input');
     expect(payload.shadowHtml).not.toContain('data-file-tree-search-container');
+  });
+
+  test('preloadFileTree includes the built-in search input when enabled', () => {
+    const payload = preloadFileTree({
+      initialFiles: ['README.md', 'src/index.ts'],
+      search: true,
+    });
+
+    expect(payload.shadowHtml).toContain('data-file-tree-search-input');
+    expect(payload.shadowHtml).toContain('data-file-tree-search-container');
   });
 
   test('ensureFileTreeStyles adopts styles and removes SSR inline <style> marker when supported', () => {
