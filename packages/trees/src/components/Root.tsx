@@ -960,7 +960,7 @@ export function Root({
       if (trigger == null) return;
       if (itemEl == null) {
         if (contextMenuItemIdRef.current == null)
-          trigger.style.display = 'none';
+          trigger.dataset.visible = 'false';
         hoveredContextMenuItemRef.current = null;
         return;
       }
@@ -981,8 +981,7 @@ export function Root({
         top = itemRect.top - containerRect.top;
       }
       trigger.style.top = `${top}px`;
-      trigger.style.height = `${itemRect.height}px`;
-      trigger.style.display = 'flex';
+      trigger.dataset.visible = 'true';
       trigger.dataset.itemId = itemEl.dataset.itemId ?? '';
       hoveredContextMenuItemRef.current = itemEl.dataset.itemId ?? null;
     },
@@ -1091,7 +1090,7 @@ export function Root({
       isScrollingRef.current = true;
       const trigger = triggerRef.current;
       if (trigger != null) {
-        trigger.style.display = 'none';
+        trigger.dataset.visible = 'false';
       }
       hoveredContextMenuItemRef.current = null;
 
@@ -1428,7 +1427,7 @@ export function Root({
                 contextMenuItemIdRef.current == null &&
                 triggerRef.current != null
               ) {
-                triggerRef.current.style.display = 'none';
+                triggerRef.current.dataset.visible = 'false';
               }
               hoveredContextMenuItemRef.current = null;
             }
@@ -1534,9 +1533,9 @@ export function Root({
             aria-haspopup="menu"
             onMouseDown={(e: MouseEvent) => e.preventDefault()}
             onClick={handleTriggerClick}
-            style={{ display: 'none' }}
+            data-visible="false"
           >
-            Options
+            <Icon {...remapIcon('file-tree-icon-ellipsis')} />
           </button>
         ) : null;
 
