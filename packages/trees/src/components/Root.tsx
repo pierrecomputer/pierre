@@ -177,6 +177,11 @@ interface TreeItemProps {
     height?: number;
     viewBox?: string;
   };
+  isContextMenuEnabled: boolean;
+  onOpenContextMenuRequest: (
+    itemId: string,
+    anchorEl: HTMLElement | null
+  ) => void;
   detectFlattenedSubfolder: (e: DragEvent) => void;
   clearFlattenedSubfolder: () => void;
 }
@@ -203,7 +208,9 @@ function treeItemPropsAreEqual(
     prev.containsGitChange === next.containsGitChange &&
     prev.flattens === next.flattens &&
     prev.ancestors === next.ancestors &&
-    prev.treeDomId === next.treeDomId
+    prev.treeDomId === next.treeDomId &&
+    prev.isContextMenuEnabled === next.isContextMenuEnabled &&
+    prev.onOpenContextMenuRequest === next.onOpenContextMenuRequest
   );
 }
 
@@ -229,6 +236,8 @@ function TreeItemInner({
   ancestors,
   treeDomId,
   remapIcon,
+  isContextMenuEnabled,
+  onOpenContextMenuRequest,
   detectFlattenedSubfolder,
   clearFlattenedSubfolder,
 }: TreeItemProps): JSX.Element {
@@ -278,6 +287,27 @@ function TreeItemInner({
           },
         }
       : baseProps;
+  const treeItemProps = isContextMenuEnabled
+    ? {
+        ...itemProps,
+        'aria-haspopup': 'menu',
+        onKeyDown: (e: KeyboardEvent) => {
+          (itemProps.onKeyDown as ((e: KeyboardEvent) => void) | undefined)?.(
+            e
+          );
+          if (e.defaultPrevented) return;
+          const isShiftF10 = e.shiftKey && e.key === 'F10';
+          if (!isShiftF10) return;
+
+          e.preventDefault();
+          e.stopPropagation();
+          onOpenContextMenuRequest(
+            itemId,
+            e.currentTarget instanceof HTMLElement ? e.currentTarget : null
+          );
+        },
+      }
+    : itemProps;
 
   const statusLabel =
     itemGitStatus === 'added'
@@ -302,7 +332,7 @@ function TreeItemInner({
       {...gitStatusProps}
       data-item-id={itemId}
       id={getItemDomId(itemId)}
-      {...itemProps}
+      {...treeItemProps}
       key={itemId}
     >
       {level > 0 ? (
@@ -959,31 +989,30 @@ export function Root({
     [tree]
   );
 
-  const handleTriggerClick = useCallback(
-    (e: MouseEvent) => {
+  const openContextMenuForItem = useCallback(
+    (
+      itemId: string,
+      anchorEl: HTMLElement | null,
+      toggleIfAlreadyOpen = false
+    ) => {
       const openContextMenu = callbacksRef?.current.onContextMenuOpen;
-      if (openContextMenu == null) {
-        return;
-      }
-      e.stopPropagation();
-      e.preventDefault();
-      const trigger = triggerRef.current;
-      const itemId = trigger?.dataset.itemId;
-      if (itemId == null) return;
+      if (openContextMenu == null) return;
 
-      if (contextMenuItemIdRef.current === itemId) {
+      if (toggleIfAlreadyOpen && contextMenuItemIdRef.current === itemId) {
         closeContextMenu();
         return;
       }
 
-      // Position the menu below the trigger using its visual location
-      // (trigger.style.top may be content-relative in virtualized trees).
       const container = tree.getElement()?.closest('[role="tree"]');
-      if (container == null || trigger == null) return;
-      const triggerRect = trigger.getBoundingClientRect();
+      if (container == null || anchorEl == null) return;
+      const anchorRect = anchorEl.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
+      if (anchorEl.dataset.type === 'item') {
+        updateTriggerPosition(anchorEl);
+      }
+
       setContextMenuItemId(itemId);
-      setContextMenuPosition({ top: triggerRect.bottom - containerRect.top });
+      setContextMenuPosition({ top: anchorRect.bottom - containerRect.top });
       const item = tree.getItemInstance(itemId);
       const data = item.getItemData();
       openContextMenu({
@@ -991,7 +1020,19 @@ export function Root({
         isFolder: data.children?.direct != null,
       });
     },
-    [callbacksRef, closeContextMenu, tree]
+    [callbacksRef, closeContextMenu, tree, updateTriggerPosition]
+  );
+
+  const handleTriggerClick = useCallback(
+    (e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const trigger = triggerRef.current;
+      const itemId = trigger?.dataset.itemId;
+      if (itemId == null || trigger == null) return;
+      openContextMenuForItem(itemId, trigger, true);
+    },
+    [openContextMenuForItem]
   );
 
   // Click-outside handler
@@ -1476,6 +1517,8 @@ export function Root({
               ancestors={ancestors}
               treeDomId={treeDomId}
               remapIcon={remapIcon}
+              isContextMenuEnabled={isContextMenuEnabled}
+              onOpenContextMenuRequest={openContextMenuForItem}
               detectFlattenedSubfolder={detectFlattenedSubfolder}
               clearFlattenedSubfolder={clearFlattenedSubfolder}
             />
@@ -1488,6 +1531,7 @@ export function Root({
             data-type={CONTEXT_MENU_TRIGGER_TYPE}
             tabIndex={-1}
             aria-label="Options"
+            aria-haspopup="menu"
             onMouseDown={(e: MouseEvent) => e.preventDefault()}
             onClick={handleTriggerClick}
             style={{ display: 'none' }}

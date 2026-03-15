@@ -1860,8 +1860,11 @@ function ContextMenuPanel({
 }: {
   item: { path: string; isFolder: boolean };
 }) {
+  const itemType = item.isFolder ? 'Folder' : 'File';
   return (
     <div
+      role="menu"
+      aria-label={`${itemType} options for ${item.path}`}
       style={{
         background: 'white',
         border: '1px solid #ccc',
@@ -1872,7 +1875,7 @@ function ContextMenuPanel({
       }}
     >
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        {item.isFolder ? 'Folder' : 'File'}: {item.path}
+        {itemType}: {item.path}
       </div>
       <div style={{ fontSize: 12, color: '#666' }}>
         Context menu content here
@@ -2094,6 +2097,7 @@ function populateVanillaContextMenuSlot(
   slotElement: HTMLDivElement,
   item: { path: string; isFolder: boolean }
 ) {
+  const itemType = item.isFolder ? 'Folder' : 'File';
   const panel = document.createElement('div');
   Object.assign(panel.style, {
     background: 'white',
@@ -2103,13 +2107,15 @@ function populateVanillaContextMenuSlot(
     boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
     minWidth: '160px',
   });
+  panel.setAttribute('role', 'menu');
+  panel.setAttribute('aria-label', `${itemType} options for ${item.path}`);
 
   const title = document.createElement('div');
   Object.assign(title.style, {
     fontWeight: '600',
     marginBottom: '4px',
   });
-  title.textContent = `${item.isFolder ? 'Folder' : 'File'}: ${item.path}`;
+  title.textContent = `${itemType}: ${item.path}`;
 
   const body = document.createElement('div');
   Object.assign(body.style, {

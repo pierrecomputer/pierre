@@ -15,6 +15,7 @@ beforeAll(async () => {
     window: dom.window,
     document: dom.window.document,
     HTMLElement: dom.window.HTMLElement,
+    KeyboardEvent: dom.window.KeyboardEvent,
     HTMLTemplateElement: dom.window.HTMLTemplateElement,
     HTMLDivElement: dom.window.HTMLDivElement,
     SVGElement: dom.window.SVGElement,
@@ -174,5 +175,78 @@ describe('context menu', () => {
 
     expect(ft.callbacksRef.current.onContextMenuOpen).toBe(onOpen);
     expect(ft.callbacksRef.current.onContextMenuClose).toBe(onClose);
+  });
+
+  test('Shift+F10 opens the context menu for the focused item', async () => {
+    const openedItems: Array<{ path: string; isFolder: boolean }> = [];
+    const ft = new FileTree(
+      { initialFiles: ['README.md'] },
+      {
+        onContextMenuOpen: (item) => {
+          openedItems.push(item);
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    itemButton?.focus();
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+
+    await Promise.resolve();
+
+    expect(openedItems).toEqual([{ path: 'README.md', isFolder: false }]);
+    expect(
+      shadowRoot?.querySelector('[data-type="context-menu-container"]')
+    ).not.toBeNull();
+  });
+
+  test('adds aria-haspopup=menu only when context menu is enabled', () => {
+    const disabled = new FileTree({ initialFiles: ['README.md'] });
+    const disabledContainer = document.createElement('div');
+    disabled.render({ containerWrapper: disabledContainer });
+
+    const disabledShadowRoot = disabled.getFileTreeContainer()?.shadowRoot;
+    const disabledItem = disabledShadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(disabledItem).not.toBeNull();
+    expect(disabledItem?.getAttribute('aria-haspopup')).toBeNull();
+    expect(
+      disabledShadowRoot?.querySelector('[data-type="context-menu-trigger"]')
+    ).toBeNull();
+
+    const enabled = new FileTree(
+      { initialFiles: ['README.md'] },
+      { onContextMenuOpen: () => {} }
+    );
+    const enabledContainer = document.createElement('div');
+    enabled.render({ containerWrapper: enabledContainer });
+
+    const enabledShadowRoot = enabled.getFileTreeContainer()?.shadowRoot;
+    const enabledItem = enabledShadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    const trigger = enabledShadowRoot?.querySelector(
+      '[data-type="context-menu-trigger"]'
+    ) as HTMLButtonElement | null;
+
+    expect(enabledItem).not.toBeNull();
+    expect(enabledItem?.getAttribute('aria-haspopup')).toBe('menu');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
   });
 });
