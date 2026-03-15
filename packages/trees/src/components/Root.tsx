@@ -936,22 +936,73 @@ export function Root({
   } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hoveredContextMenuItemRef = useRef<string | null>(null);
+  const contextHoverItemElRef = useRef<HTMLElement | null>(null);
+  const contextHoverItemIdRef = useRef<string | null>(null);
   const isScrollingRef = useRef(false);
   // Ref mirror of contextMenuItemId — lets callbacks read the current value
   // without including it as a dependency, keeping their identities stable.
   const contextMenuItemIdRef = useRef<string | null>(null);
   contextMenuItemIdRef.current = contextMenuItemId;
 
+  const setContextHoverItem = useCallback(
+    (itemId: string | null) => {
+      if (contextHoverItemIdRef.current === itemId) {
+        return;
+      }
+
+      if (contextHoverItemElRef.current != null) {
+        delete contextHoverItemElRef.current.dataset.itemContextHover;
+        contextHoverItemElRef.current = null;
+      }
+      contextHoverItemIdRef.current = null;
+
+      if (itemId == null) {
+        return;
+      }
+
+      const container = tree.getElement()?.closest('[role="tree"]');
+      if (container == null) {
+        return;
+      }
+      const itemEl = container.querySelector(
+        `[data-type="item"][data-item-id="${itemId}"]`
+      );
+      if (itemEl == null) {
+        return;
+      }
+
+      itemEl.dataset.itemContextHover = 'true';
+      contextHoverItemElRef.current = itemEl;
+      contextHoverItemIdRef.current = itemId;
+    },
+    [tree]
+  );
+
+  const isPointerEventInContextMenu = useCallback((e: PointerEvent) => {
+    const path = e.composedPath();
+    for (const entry of path) {
+      if (!(entry instanceof HTMLElement)) continue;
+      if (entry.dataset.type === 'context-menu-container') {
+        return true;
+      }
+      if (entry.getAttribute('slot') === CONTEXT_MENU_SLOT_NAME) {
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
   const closeContextMenu = useCallback(
     (notify = true) => {
       if (contextMenuItemIdRef.current == null) return;
+      setContextHoverItem(null);
       setContextMenuItemId(null);
       setContextMenuPosition(null);
       if (notify) {
         callbacksRef?.current.onContextMenuClose?.();
       }
     },
-    [callbacksRef]
+    [callbacksRef, setContextHoverItem]
   );
 
   const updateTriggerPosition = useCallback(
@@ -959,9 +1010,16 @@ export function Root({
       const trigger = triggerRef.current;
       if (trigger == null) return;
       if (itemEl == null) {
-        if (contextMenuItemIdRef.current == null)
+        const openItemId = contextMenuItemIdRef.current;
+        if (openItemId == null) {
           trigger.dataset.visible = 'false';
+        }
         hoveredContextMenuItemRef.current = null;
+        if (openItemId != null) {
+          setContextHoverItem(openItemId);
+        } else {
+          setContextHoverItem(null);
+        }
         return;
       }
       const container = tree.getElement()?.closest('[role="tree"]');
@@ -982,10 +1040,12 @@ export function Root({
       }
       trigger.style.top = `${top}px`;
       trigger.dataset.visible = 'true';
-      trigger.dataset.itemId = itemEl.dataset.itemId ?? '';
-      hoveredContextMenuItemRef.current = itemEl.dataset.itemId ?? null;
+      const nextItemId = itemEl.dataset.itemId ?? null;
+      trigger.dataset.itemId = nextItemId ?? '';
+      hoveredContextMenuItemRef.current = nextItemId;
+      setContextHoverItem(nextItemId);
     },
-    [tree]
+    [setContextHoverItem, tree]
   );
 
   const openContextMenuForItem = useCallback(
@@ -1033,6 +1093,17 @@ export function Root({
     },
     [openContextMenuForItem]
   );
+
+  useEffect(() => {
+    if (contextMenuItemId == null) {
+      return;
+    }
+    const trigger = triggerRef.current;
+    if (trigger != null) {
+      trigger.dataset.visible = 'true';
+    }
+    setContextHoverItem(contextMenuItemId);
+  }, [contextMenuItemId, setContextHoverItem]);
 
   // Click-outside handler
   useEffect(() => {
@@ -1089,10 +1160,13 @@ export function Root({
     const handleScroll = () => {
       isScrollingRef.current = true;
       const trigger = triggerRef.current;
-      if (trigger != null) {
+      if (trigger != null && contextMenuItemIdRef.current == null) {
         trigger.dataset.visible = 'false';
       }
-      hoveredContextMenuItemRef.current = null;
+      if (contextMenuItemIdRef.current == null) {
+        hoveredContextMenuItemRef.current = null;
+        setContextHoverItem(null);
+      }
 
       if (scrollTimer != null) clearTimeout(scrollTimer);
       scrollTimer = setTimeout(() => {
@@ -1107,7 +1181,14 @@ export function Root({
       if (scrollTimer != null) clearTimeout(scrollTimer);
       isScrollingRef.current = false;
     };
-  }, [isContextMenuEnabled, tree]);
+  }, [isContextMenuEnabled, setContextHoverItem, tree]);
+
+  useEffect(
+    () => () => {
+      setContextHoverItem(null);
+    },
+    [setContextHoverItem]
+  );
 
   useEffect(() => {
     if (isContextMenuEnabled || contextMenuItemId == null) return;
@@ -1386,6 +1467,10 @@ export function Root({
   const virtualizeThreshold = shouldVirtualize
     ? Math.max(0, virtualize.threshold)
     : Number.POSITIVE_INFINITY;
+  const isContextMenuOpen =
+    isContextMenuEnabled &&
+    contextMenuItemId != null &&
+    contextMenuPosition != null;
   const containerProps = tree.getContainerProps();
 
   return (
@@ -1403,6 +1488,14 @@ export function Root({
                   `[data-type="${CONTEXT_MENU_TRIGGER_TYPE}"]`
                 ) != null
               ) {
+                return;
+              }
+              if (target.closest?.('[data-type="context-menu-wash"]') != null) {
+                setContextHoverItem(contextMenuItemIdRef.current);
+                return;
+              }
+              if (isPointerEventInContextMenu(e)) {
+                setContextHoverItem(contextMenuItemIdRef.current);
                 return;
               }
               const itemEl = target.closest?.('[data-type="item"]') ?? null;
@@ -1430,6 +1523,11 @@ export function Root({
                 triggerRef.current.dataset.visible = 'false';
               }
               hoveredContextMenuItemRef.current = null;
+              if (contextMenuItemIdRef.current != null) {
+                setContextHoverItem(contextMenuItemIdRef.current);
+              } else {
+                setContextHoverItem(null);
+              }
             }
           : undefined
       }
@@ -1571,9 +1669,21 @@ export function Root({
           </>
         );
       })()}
-      {isContextMenuEnabled &&
-      contextMenuItemId != null &&
-      contextMenuPosition != null ? (
+      {isContextMenuOpen ? (
+        <div
+          data-type="context-menu-wash"
+          aria-hidden="true"
+          onWheelCapture={(e: WheelEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onTouchMoveCapture={(e: TouchEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        />
+      ) : null}
+      {isContextMenuOpen ? (
         <div
           data-type="context-menu-container"
           style={{

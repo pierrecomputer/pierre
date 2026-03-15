@@ -74,7 +74,7 @@ describe('context menu', () => {
     );
 
     expect(payload.shadowHtml).toContain('data-type="context-menu-trigger"');
-    expect(payload.shadowHtml).toContain('display:none');
+    expect(payload.shadowHtml).toContain('data-visible="false"');
     expect(payload.shadowHtml).not.toContain('context-menu-container');
     expect(payload.shadowHtml).not.toContain('slot name="context-menu"');
   });
@@ -212,6 +212,108 @@ describe('context menu', () => {
     expect(
       shadowRoot?.querySelector('[data-type="context-menu-container"]')
     ).not.toBeNull();
+  });
+
+  test('renders a transparent interaction wash and keeps trigger visible while open', async () => {
+    const ft = new FileTree(
+      { initialFiles: ['README.md'] },
+      { onContextMenuOpen: () => {} }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    const trigger = shadowRoot?.querySelector(
+      '[data-type="context-menu-trigger"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+    expect(trigger).not.toBeNull();
+
+    itemButton?.focus();
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+
+    const wash = shadowRoot?.querySelector(
+      '[data-type="context-menu-wash"]'
+    ) as HTMLDivElement | null;
+    expect(wash).not.toBeNull();
+    expect(wash?.getAttribute('aria-hidden')).toBe('true');
+    expect(trigger?.dataset.visible).toBe('true');
+    expect(itemButton?.dataset.itemContextHover).toBe('true');
+
+    const treeRoot = shadowRoot?.querySelector('[role="tree"]');
+    treeRoot?.dispatchEvent(new Event('pointerleave'));
+    expect(trigger?.dataset.visible).toBe('true');
+    expect(itemButton?.dataset.itemContextHover).toBe('true');
+
+    const wheelEvent = new Event('wheel', { bubbles: true, cancelable: true });
+    wash?.dispatchEvent(wheelEvent);
+    expect(wheelEvent.defaultPrevented).toBe(true);
+  });
+
+  test('keeps item hover styling active while context menu is open', async () => {
+    const ft = new FileTree(
+      { initialFiles: ['README.md'] },
+      {
+        onContextMenuOpen: () => {},
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const fileTreeContainer = ft.getFileTreeContainer();
+    const shadowRoot = fileTreeContainer?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    const contextMenuContent = document.createElement('div');
+    contextMenuContent.setAttribute('slot', 'context-menu');
+    contextMenuContent.textContent = 'Context Menu Content';
+    fileTreeContainer?.appendChild(contextMenuContent);
+
+    itemButton?.focus();
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+
+    expect(
+      shadowRoot?.querySelector('[data-type="context-menu-container"]')
+    ).not.toBeNull();
+
+    contextMenuContent.dispatchEvent(
+      new Event('pointerover', { bubbles: true, composed: true })
+    );
+    expect(itemButton?.dataset.itemContextHover).toBe('true');
+
+    const treeRoot = shadowRoot?.querySelector('[role="tree"]');
+    expect(treeRoot).not.toBeNull();
+    treeRoot?.dispatchEvent(
+      new Event('pointerover', { bubbles: true, composed: true })
+    );
+    expect(itemButton?.dataset.itemContextHover).toBe('true');
+
+    contextMenuContent.dispatchEvent(
+      new Event('pointerover', { bubbles: true, composed: true })
+    );
+    expect(itemButton?.dataset.itemContextHover).toBe('true');
   });
 
   test('adds aria-haspopup=menu only when context menu is enabled', () => {
