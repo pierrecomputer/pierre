@@ -53,7 +53,15 @@ Object.assign(globalThis, { CSSStyleSheet: MockCSSStyleSheet });
 // Imports (after globals are set up)
 // ---------------------------------------------------------------------------
 
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from 'bun:test';
 import { useMemo, useState } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -94,6 +102,15 @@ const setFilesSpy = spyOn(
   'setFiles'
 ).mockImplementation(() => {});
 
+const resetMethodMocks = (): void => {
+  renderSpy.mockImplementation(() => {});
+  cleanUpSpy.mockImplementation(() => {});
+  setExpandedSpy.mockImplementation(() => {});
+  setSelectedSpy.mockImplementation(() => {});
+  setCallbacksSpy.mockImplementation(() => {});
+  setFilesSpy.mockImplementation(() => {});
+};
+
 const requireCapturedStateConfig = (
   value: FileTreeStateConfig | null
 ): FileTreeStateConfig => {
@@ -114,6 +131,7 @@ describe('React controlled FileTree wrapper', () => {
   let root: Root;
 
   beforeEach(() => {
+    resetMethodMocks();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -130,6 +148,15 @@ describe('React controlled FileTree wrapper', () => {
       root.unmount();
     });
     container.remove();
+  });
+
+  afterAll(() => {
+    renderSpy.mockRestore();
+    cleanUpSpy.mockRestore();
+    setExpandedSpy.mockRestore();
+    setSelectedSpy.mockRestore();
+    setCallbacksSpy.mockRestore();
+    setFilesSpy.mockRestore();
   });
 
   // -- Mount / unmount --
