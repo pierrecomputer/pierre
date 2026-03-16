@@ -7,6 +7,10 @@ import {
   GIT_DIFF_FILE_BREAK_REGEX,
   HUNK_HEADER,
   INDEX_LINE_METADATA,
+  MERGE_CONFLICT_BASE_MARKER_REGEX,
+  MERGE_CONFLICT_END_MARKER_REGEX,
+  MERGE_CONFLICT_SEPARATOR_MARKER_REGEX,
+  MERGE_CONFLICT_START_MARKER_REGEX,
   SPLIT_WITH_NEWLINES,
   UNIFIED_DIFF_FILE_BREAK_REGEX,
 } from '../constants';
@@ -19,7 +23,21 @@ import type {
   ParsedPatch,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
+import type { MergeConflictLineType } from './getMergeConflictLineTypes';
 import { parseLineType } from './parseLineType';
+
+type ConflictMarkerLineType = Extract<
+  MergeConflictLineType,
+  'marker-start' | 'marker-base' | 'marker-separator' | 'marker-end'
+>;
+
+export interface ProcessFileConflictMarker {
+  type: ConflictMarkerLineType;
+  hunkIndex: number;
+  contextIndex: number;
+  additionLineIndex: number;
+  deletionLineIndex: number;
+}
 
 export function processPatch(
   data: string,
@@ -87,6 +105,7 @@ interface ProcessFileOptions {
   isGitDiff?: boolean;
   oldFile?: FileContents;
   newFile?: FileContents;
+  conflictMarkers?: ProcessFileConflictMarker[];
   throwOnError?: boolean;
 }
 
@@ -97,6 +116,7 @@ export function processFile(
     isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(fileDiffString),
     oldFile,
     newFile,
+    conflictMarkers,
     throwOnError = false,
   }: ProcessFileOptions = {}
 ): FileDiffMetadata | undefined {
@@ -339,7 +359,13 @@ export function processFile(
         deletionLines++;
         lastLineType = 'deletion';
       } else if (type === 'context') {
-        if (currentContent == null || currentContent.type !== 'context') {
+        const conflictMarkerType =
+          conflictMarkers != null ? getConflictMarkerLineType(line) : undefined;
+        if (
+          conflictMarkerType != null ||
+          currentContent == null ||
+          currentContent.type !== 'context'
+        ) {
           currentContent = createContentGroup(
             'context',
             deletionLineIndex,
@@ -354,6 +380,16 @@ export function processFile(
           currentFile.additionLines.push(line);
         }
         currentContent.lines++;
+        if (conflictMarkerType != null) {
+          conflictMarkers?.push({
+            type: conflictMarkerType,
+            hunkIndex: currentFile.hunks.length,
+            contextIndex: hunkData.hunkContent.length - 1,
+            additionLineIndex: currentContent.additionLineIndex,
+            deletionLineIndex: currentContent.deletionLineIndex,
+          });
+          currentContent = undefined;
+        }
         lastLineType = 'context';
       } else if (type === 'metadata' && currentContent != null) {
         if (currentContent.type === 'context') {
@@ -469,6 +505,26 @@ export function processFile(
     currentFile.prevName = undefined;
   }
   return currentFile;
+}
+
+function getConflictMarkerLineType(
+  line: string
+): ConflictMarkerLineType | undefined {
+  const trimmedLine = line.trimEnd();
+
+  if (MERGE_CONFLICT_START_MARKER_REGEX.test(trimmedLine)) {
+    return 'marker-start';
+  }
+  if (MERGE_CONFLICT_BASE_MARKER_REGEX.test(trimmedLine)) {
+    return 'marker-base';
+  }
+  if (MERGE_CONFLICT_SEPARATOR_MARKER_REGEX.test(trimmedLine)) {
+    return 'marker-separator';
+  }
+  if (MERGE_CONFLICT_END_MARKER_REGEX.test(trimmedLine)) {
+    return 'marker-end';
+  }
+  return undefined;
 }
 
 /**

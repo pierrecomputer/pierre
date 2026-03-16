@@ -1,3 +1,9 @@
+import {
+  MERGE_CONFLICT_BASE_MARKER_REGEX,
+  MERGE_CONFLICT_END_MARKER_REGEX,
+  MERGE_CONFLICT_SEPARATOR_MARKER_REGEX,
+  MERGE_CONFLICT_START_MARKER_REGEX,
+} from '../constants';
 import type { MergeConflictRegion } from '../types';
 
 export type MergeConflictLineType =
@@ -23,11 +29,6 @@ export interface MergeConflictParseResult {
   lineTypes: MergeConflictLineType[];
   regions: MergeConflictRegion[];
 }
-
-const START_MARKER = /^<{7,}(?:\s.*)?$/;
-const BASE_MARKER = /^\|{7,}(?:\s.*)?$/;
-const SEPARATOR_MARKER = /^={7,}(?:\s.*)?$/;
-const END_MARKER = /^>{7,}(?:\s.*)?$/;
 
 function trimLineEnding(line: string): string {
   return line.replace(/(?:\r\n|\n|\r)$/, '');
@@ -59,7 +60,7 @@ function parseMergeConflicts(lines: string[]): MergeConflictParseResult {
   for (let index = 0; index < lines.length; index++) {
     const line = trimLineEnding(lines[index]);
 
-    if (START_MARKER.test(line)) {
+    if (MERGE_CONFLICT_START_MARKER_REGEX.test(line)) {
       stack.push({ stage: 'current', startLineIndex: index });
       lineTypes[index] = 'marker-start';
       continue;
@@ -71,21 +72,21 @@ function parseMergeConflicts(lines: string[]): MergeConflictParseResult {
       continue;
     }
 
-    if (BASE_MARKER.test(line)) {
+    if (MERGE_CONFLICT_BASE_MARKER_REGEX.test(line)) {
       frame.stage = 'base';
       frame.baseMarkerLineIndex = index;
       lineTypes[index] = 'marker-base';
       continue;
     }
 
-    if (SEPARATOR_MARKER.test(line)) {
+    if (MERGE_CONFLICT_SEPARATOR_MARKER_REGEX.test(line)) {
       frame.stage = 'incoming';
       frame.separatorLineIndex = index;
       lineTypes[index] = 'marker-separator';
       continue;
     }
 
-    if (END_MARKER.test(line)) {
+    if (MERGE_CONFLICT_END_MARKER_REGEX.test(line)) {
       const completedFrame = stack.pop();
       lineTypes[index] = 'marker-end';
       if (completedFrame?.separatorLineIndex != null) {

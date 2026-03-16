@@ -7,7 +7,7 @@ import {
   getMergeConflictActionLineNumber,
   getMergeConflictParseResult,
 } from './getMergeConflictLineTypes';
-import { processFile } from './parsePatchFiles';
+import { processFile, type ProcessFileConflictMarker } from './parsePatchFiles';
 import { splitFileContents } from './splitFileContents';
 import { trimPatchContext } from './trimPatchContext';
 
@@ -15,6 +15,7 @@ export interface ParseMergeConflictDiffFromFileResult {
   fileDiff: FileDiffMetadata;
   currentFile: FileContents;
   incomingFile: FileContents;
+  conflictMarkers: ProcessFileConflictMarker[];
   actions: (MergeConflictDiffAction | undefined)[];
 }
 
@@ -200,7 +201,9 @@ export function parseMergeConflictDiffFromFile(
   // NOTE(amadeus): We have to add 1 here to account for the diff marker lines
   // themselves since those will take up a line of space and we want the
   // context lines to actually match the code lines
+  const conflictMarkers: ProcessFileConflictMarker[] = [];
   const fileDiff = processFile(trimPatchContext(patch, maxContextLines + 1), {
+    conflictMarkers,
     oldFile: currentFile,
     newFile: incomingFile,
     cacheKey:
@@ -220,6 +223,7 @@ export function parseMergeConflictDiffFromFile(
     fileDiff,
     currentFile,
     incomingFile,
+    conflictMarkers,
     actions: actions.map((action) => {
       if (action == null) return undefined;
       return {

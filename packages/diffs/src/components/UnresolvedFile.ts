@@ -622,7 +622,6 @@ function rebuildFileAndActions({
   for (let hunkIndex = 0; hunkIndex < fileDiff.hunks.length; hunkIndex++) {
     const hunk = fileDiff.hunks[hunkIndex];
     const action = pendingActions[hunkIndex];
-    // REVIEW: BRO, WHAT THE FUCK IS THIS?!
     const hunkLines =
       action != null
         ? buildUnresolvedHunkLines(fileDiff, hunk)
