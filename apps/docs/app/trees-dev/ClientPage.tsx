@@ -43,6 +43,22 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+function cleanupFileTreeInstance(
+  container: HTMLElement,
+  instanceRef: { current: FileTree | null }
+): void {
+  if (instanceRef.current == null) return;
+  instanceRef.current.cleanUp();
+  const shadowRoot = container.shadowRoot;
+  if (shadowRoot !== null) {
+    const treeElement = Array.from(shadowRoot.children).find(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.dataset?.fileTreeId != null
+    );
+    treeElement?.replaceChildren();
+  }
+}
+
 interface ClientPageProps {
   preloadedFileTreeHtml: string;
   preloadedFileTreeContainerHtml: string;
@@ -892,17 +908,7 @@ function VanillaSSRState({
       const fileTreeContainer = node.querySelector('file-tree-container');
       if (!(fileTreeContainer instanceof HTMLElement)) return;
 
-      if (instanceRef.current != null) {
-        instanceRef.current.cleanUp();
-        const shadowRoot = fileTreeContainer.shadowRoot;
-        if (shadowRoot !== null) {
-          const treeElement = Array.from(shadowRoot.children).find(
-            (child): child is HTMLElement =>
-              child instanceof HTMLElement && child.dataset?.fileTreeId != null
-          );
-          treeElement?.replaceChildren();
-        }
-      }
+      cleanupFileTreeInstance(fileTreeContainer, instanceRef);
 
       const fileTree = new FileTree(options, mergedStateConfig);
 
@@ -2060,17 +2066,7 @@ function VanillaSSRHeaderSlot({
       const fileTreeContainer = node.querySelector('file-tree-container');
       if (!(fileTreeContainer instanceof HTMLElement)) return;
 
-      if (instanceRef.current != null) {
-        instanceRef.current.cleanUp();
-        const shadowRoot = fileTreeContainer.shadowRoot;
-        if (shadowRoot !== null) {
-          const treeElement = Array.from(shadowRoot.children).find(
-            (child): child is HTMLElement =>
-              child instanceof HTMLElement && child.dataset?.fileTreeId != null
-          );
-          treeElement?.replaceChildren();
-        }
-      }
+      cleanupFileTreeInstance(fileTreeContainer, instanceRef);
 
       const headerButton = fileTreeContainer.querySelector(
         '[data-demo-header-button="true"]'
@@ -2191,17 +2187,7 @@ function VanillaSSRContextMenu({
       const fileTreeContainer = node.querySelector('file-tree-container');
       if (!(fileTreeContainer instanceof HTMLElement)) return;
 
-      if (instanceRef.current != null) {
-        instanceRef.current.cleanUp();
-        const shadowRoot = fileTreeContainer.shadowRoot;
-        if (shadowRoot !== null) {
-          const treeElement = Array.from(shadowRoot.children).find(
-            (child): child is HTMLElement =>
-              child instanceof HTMLElement && child.dataset?.fileTreeId != null
-          );
-          treeElement?.replaceChildren();
-        }
-      }
+      cleanupFileTreeInstance(fileTreeContainer, instanceRef);
 
       const slotElement = document.createElement('div');
       slotElement.setAttribute('slot', CONTEXT_MENU_SLOT_NAME);

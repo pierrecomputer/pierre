@@ -4,15 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import {
   CONTEXT_MENU_SLOT_NAME,
   CONTEXT_MENU_TRIGGER_TYPE,
-  FLATTENED_PREFIX,
 } from '../../constants';
 import type { FileTreeCallbacks } from '../../FileTree';
 import type { FileTreeNode } from '../../types';
-
-const getSelectionPath = (path: string): string =>
-  path.startsWith(FLATTENED_PREFIX)
-    ? path.slice(FLATTENED_PREFIX.length)
-    : path;
+import { getSelectionPath } from '../../utils/getSelectionPath';
 
 export interface UseContextMenuControllerArgs {
   tree: TreeInstance<FileTreeNode>;
@@ -74,12 +69,31 @@ export function useContextMenuController({
     typeof setTimeout
   > | null>(null);
   const isScrollingRef = useRef(false);
+  // Cached DOM references — stable across renders, updated when tree changes.
+  const treeContainerRef = useRef<Element | null>(null);
+  const scrollContainerRef = useRef<Element | null>(null);
 
   // Ref mirror of contextMenuItemId — lets callbacks read the current value
   // without including it as a dependency, keeping their identities stable.
   const contextMenuItemIdRef = useRef<string | null>(null);
   contextMenuItemIdRef.current = contextMenuItemId;
   const isContextMenuOpen = isContextMenuEnabled && contextMenuItemId != null;
+
+  // Lazily resolve and cache the tree container and its virtualized scroll
+  // child. The cache is invalidated when the container disconnects from DOM.
+  const getTreeContainer = (): Element | null => {
+    if (
+      treeContainerRef.current != null &&
+      treeContainerRef.current.isConnected
+    ) {
+      return treeContainerRef.current;
+    }
+    const container = tree.getElement()?.closest('[role="tree"]') ?? null;
+    treeContainerRef.current = container;
+    scrollContainerRef.current =
+      container?.querySelector('[data-file-tree-virtualized-scroll]') ?? null;
+    return container;
+  };
 
   const setContextHoverItem = useCallback(
     (itemId: string | null) => {
@@ -97,7 +111,7 @@ export function useContextMenuController({
         return;
       }
 
-      const container = tree.getElement()?.closest('[role="tree"]');
+      const container = getTreeContainer();
       if (container == null) {
         return;
       }
@@ -162,7 +176,7 @@ export function useContextMenuController({
 
     const focusedItemId = contextMenuRestoreFocusRef.current.focusedItemId;
     if (focusedItemId != null) {
-      const container = tree.getElement()?.closest('[role="tree"]');
+      const container = getTreeContainer();
       const focusedItemEl = container?.querySelector<HTMLElement>(
         `[data-type="item"][data-item-id="${focusedItemId}"]`
       );
@@ -187,6 +201,7 @@ export function useContextMenuController({
       clearContextMenuRestoreTimers();
 
       setContextHoverItem(null);
+      contextMenuItemIdRef.current = null;
       setContextMenuItemId(null);
       if (notify) {
         callbacksRef?.current.onContextMenuClose?.();
@@ -246,14 +261,12 @@ export function useContextMenuController({
         }
         return;
       }
-      const container = tree.getElement()?.closest('[role="tree"]');
+      const container = getTreeContainer();
       if (container == null) return;
       const itemRect = itemEl.getBoundingClientRect();
       // For virtualized trees the trigger lives inside the scroll container,
       // so we compute a content-relative offset that scrolls with items.
-      const scrollContainer = container.querySelector(
-        '[data-file-tree-virtualized-scroll]'
-      );
+      const scrollContainer = scrollContainerRef.current;
       let top: number;
       if (scrollContainer != null) {
         const scrollRect = scrollContainer.getBoundingClientRect();
@@ -317,6 +330,7 @@ export function useContextMenuController({
         anchorEl.dataset.type === CONTEXT_MENU_TRIGGER_TYPE && trigger != null
           ? trigger
           : (trigger ?? anchorEl);
+      contextMenuItemIdRef.current = itemId;
       setContextMenuItemId(itemId);
       const item = tree.getItemInstance(itemId);
       const data = item.getItemData();
@@ -380,7 +394,13 @@ export function useContextMenuController({
 
   const handleTreeKeyDownCapture = useCallback(
     (e: KeyboardEvent) => {
-      if (!isContextMenuOpen || e.defaultPrevented || isEventInContextMenu(e)) {
+      // Read from the ref so this callback always sees the latest open state
+      // even before Preact re-renders with the updated closure.
+      if (
+        contextMenuItemIdRef.current == null ||
+        e.defaultPrevented ||
+        isEventInContextMenu(e)
+      ) {
         return;
       }
       e.preventDefault();
@@ -390,49 +410,39 @@ export function useContextMenuController({
         return;
       }
     },
-    [closeContextMenu, isContextMenuOpen, isEventInContextMenu]
+    [closeContextMenu, isEventInContextMenu]
   );
 
-  // Close on scroll
-  useEffect(() => {
-    if (!isContextMenuEnabled || contextMenuItemId == null) return;
-    const container = tree.getElement()?.closest('[role="tree"]');
-    const scrollParent = container?.closest(
-      '[data-file-tree-virtualized-scroll]'
-    );
-    const target = scrollParent ?? container?.parentElement;
-    if (target == null) return;
-    const handleScroll = () => closeContextMenu();
-    target.addEventListener('scroll', handleScroll, { passive: true });
-    return () => target.removeEventListener('scroll', handleScroll);
-  }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled, tree]);
-
-  // Hide trigger during scroll — reappears on next pointerover after scrolling
-  // stops, matching the timing of the virtualizer's hover-style restoration.
+  // Close context menu on scroll and hide the trigger while scrolling.
+  // The trigger reappears on the next pointerover after scrolling stops,
+  // matching the timing of the virtualizer's hover-style restoration.
   useEffect(() => {
     if (!isContextMenuEnabled) return;
-    const container = tree.getElement()?.closest('[role="tree"]');
-    const scrollParent = container?.closest(
-      '[data-file-tree-virtualized-scroll]'
-    );
+    const container = getTreeContainer();
+    const scrollParent = scrollContainerRef.current ?? container?.parentElement;
     const target = scrollParent ?? container?.parentElement;
     if (target == null) return;
     let scrollTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleScroll = () => {
+      // Close context menu if open
+      if (contextMenuItemIdRef.current != null) {
+        closeContextMenu();
+        return;
+      }
+
+      // Hide trigger during scroll
       isScrollingRef.current = true;
       const trigger = triggerRef.current;
       const anchor = contextMenuAnchorRef.current;
-      if (trigger != null && contextMenuItemIdRef.current == null) {
+      if (trigger != null) {
         trigger.dataset.visible = 'false';
       }
-      if (anchor != null && contextMenuItemIdRef.current == null) {
+      if (anchor != null) {
         anchor.dataset.visible = 'false';
       }
-      if (contextMenuItemIdRef.current == null) {
-        hoveredContextMenuItemRef.current = null;
-        setContextHoverItem(null);
-      }
+      hoveredContextMenuItemRef.current = null;
+      setContextHoverItem(null);
 
       if (scrollTimer != null) clearTimeout(scrollTimer);
       scrollTimer = setTimeout(() => {
@@ -447,7 +457,7 @@ export function useContextMenuController({
       if (scrollTimer != null) clearTimeout(scrollTimer);
       isScrollingRef.current = false;
     };
-  }, [isContextMenuEnabled, setContextHoverItem, tree]);
+  }, [closeContextMenu, isContextMenuEnabled, setContextHoverItem, tree]);
 
   useEffect(
     () => () => {
@@ -493,7 +503,7 @@ export function useContextMenuController({
 
   useEffect(() => {
     if (!isContextMenuEnabled || focusedItemId == null) return;
-    const container = tree.getElement()?.closest('[role="tree"]');
+    const container = getTreeContainer();
     const itemEl = container?.querySelector(
       `[data-item-id="${focusedItemId}"]`
     ) as HTMLElement | null;

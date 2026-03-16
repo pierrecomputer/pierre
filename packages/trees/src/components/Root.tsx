@@ -57,6 +57,7 @@ import {
 } from '../utils/expandPaths';
 import { fileListToTree } from '../utils/fileListToTree';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
+import { getSelectionPath } from '../utils/getSelectionPath';
 import type { ChildrenSortOption } from '../utils/sortChildren';
 import { useContextMenuController } from './hooks/useContextMenuController';
 import { useTree } from './hooks/useTree';
@@ -91,11 +92,6 @@ function memo<P>(
   Memoed.displayName = `Memo(${c.displayName ?? c.name ?? 'Component'})`;
   return Memoed as unknown as FunctionComponent<P>;
 }
-
-const getSelectionPath = (path: string): string =>
-  path.startsWith(FLATTENED_PREFIX)
-    ? path.slice(FLATTENED_PREFIX.length)
-    : path;
 
 const getFilesSignature = (files: string[]): string =>
   `${files.length}\0${files.join('\0')}`;

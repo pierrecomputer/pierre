@@ -7,9 +7,9 @@ import type {
   TreeInstance,
 } from '@headless-tree/core';
 
-import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeSearchConfig, FileTreeSearchMode } from '../FileTree';
 import type { FileTreeNode } from '../types';
+import { getSelectionPath } from '../utils/getSelectionPath';
 
 type SearchIndex = {
   orderedIds: string[];
@@ -37,6 +37,16 @@ type FileTreeSearchDataRef<T> = SearchFeatureDataRef<T> & {
 const isBuiltInSearchInputEnabled = <T>(tree: TreeInstance<T>): boolean =>
   (tree.getConfig() as FileTreeSearchConfig).search === true;
 
+let cachedSearchInput = '';
+let cachedNormalizedSearch = '';
+
+const getNormalizedSearch = (search: string): string => {
+  if (search === cachedSearchInput) return cachedNormalizedSearch;
+  cachedSearchInput = search;
+  cachedNormalizedSearch = normalizeSearchText(search);
+  return cachedNormalizedSearch;
+};
+
 const defaultSearchMatcher = <T>(
   search: string,
   item: ItemInstance<T>
@@ -45,7 +55,7 @@ const defaultSearchMatcher = <T>(
     return false;
   }
 
-  const normalizedSearch = normalizeSearchText(search);
+  const normalizedSearch = getNormalizedSearch(search);
   if (normalizedSearch.length === 0) {
     return false;
   }
@@ -71,11 +81,7 @@ const getNormalizedItemPath = <T>(item: ItemInstance<T>): string => {
 };
 
 const normalizeTreePath = (path: string): string =>
-  normalizeSearchText(
-    path.startsWith(FLATTENED_PREFIX)
-      ? path.slice(FLATTENED_PREFIX.length)
-      : path
-  );
+  normalizeSearchText(getSelectionPath(path));
 
 const isFuzzySubsequenceMatch = (search: string, target: string): boolean => {
   let searchIndex = 0;
