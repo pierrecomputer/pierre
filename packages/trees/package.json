@@ -1,6 +1,6 @@
 {
   "name": "@pierre/trees",
-  "version": "0.0.1-beta.2",
+  "version": "0.0.1-beta.4",
   "license": "apache-2.0",
   "files": [
     "dist",
