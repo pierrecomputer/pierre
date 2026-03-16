@@ -56,6 +56,68 @@ export function Example({ files }: { files: string[] }) {
 }
 ```
 
+## Header And Context Menu Slots
+
+The tree can expose extension points in light DOM:
+
+- `slot="header"` for custom header UI
+- `slot="context-menu"` for custom context menu UI
+
+You can import slot names from `@pierre/trees`:
+
+```ts
+import { CONTEXT_MENU_SLOT_NAME, HEADER_SLOT_NAME } from '@pierre/trees';
+```
+
+### Vanilla context menu
+
+Provide `onContextMenuOpen` and render your own menu into `slot="context-menu"`
+(for example shadcn, react-aria, or any custom menu).
+
+```ts
+import { CONTEXT_MENU_SLOT_NAME, FileTree } from '@pierre/trees';
+
+const host = document.getElementById('tree') as HTMLElement;
+const slot = document.createElement('div');
+slot.setAttribute('slot', CONTEXT_MENU_SLOT_NAME);
+host.appendChild(slot);
+
+const fileTree = new FileTree(
+  { initialFiles: ['README.md', 'src/index.ts'] },
+  {
+    onContextMenuOpen: (item, context) => {
+      slot.textContent = `${item.path}`;
+      // context.anchorElement / context.anchorRect are provided for positioning.
+      // context.close() should be called when your menu closes.
+    },
+    onContextMenuClose: () => {
+      slot.textContent = '';
+    },
+  }
+);
+```
+
+### React context menu
+
+Use `renderContextMenu` on the React wrapper to render into the context-menu
+slot. The callback receives the same `item` and `context`.
+
+```tsx
+import { FileTree } from '@pierre/trees/react';
+
+<FileTree
+  options={{}}
+  initialFiles={['README.md', 'src/index.ts']}
+  renderContextMenu={(item, context) => (
+    <MyMenu
+      item={item}
+      anchor={context.anchorElement}
+      onClose={context.close}
+    />
+  )}
+/>;
+```
+
 ## Files API Contract
 
 - `initialFiles` is the uncontrolled initial value and is only used when a tree

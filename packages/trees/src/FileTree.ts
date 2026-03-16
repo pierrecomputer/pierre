@@ -655,16 +655,21 @@ export class FileTree {
       return;
     }
 
+    const isUnsafeStyleElement = (
+      element: Element | null | undefined
+    ): element is HTMLStyleElement =>
+      element != null &&
+      element.tagName === 'STYLE' &&
+      element.hasAttribute(FILE_TREE_UNSAFE_CSS_ATTRIBUTE);
+
     let unsafeStyle =
-      this.unsafeCSSStyle instanceof HTMLStyleElement &&
+      isUnsafeStyleElement(this.unsafeCSSStyle) &&
       this.unsafeCSSStyle.parentNode === shadowRoot
         ? this.unsafeCSSStyle
         : undefined;
 
     unsafeStyle ??= Array.from(shadowRoot.children).find(
-      (element): element is HTMLStyleElement =>
-        element instanceof HTMLStyleElement &&
-        element.hasAttribute(FILE_TREE_UNSAFE_CSS_ATTRIBUTE)
+      (element): element is HTMLStyleElement => isUnsafeStyleElement(element)
     );
 
     const unsafeCSS = this.options.unsafeCSS?.trim() ?? '';

@@ -17,6 +17,7 @@ beforeAll(async () => {
     window: dom.window,
     document: dom.window.document,
     HTMLElement: dom.window.HTMLElement,
+    HTMLStyleElement: dom.window.HTMLStyleElement,
     HTMLTemplateElement: dom.window.HTMLTemplateElement,
     HTMLDivElement: dom.window.HTMLDivElement,
     SVGElement: dom.window.SVGElement,
