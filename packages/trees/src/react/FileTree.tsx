@@ -15,20 +15,28 @@ import type {
   FileTreeSelectionItem,
   GitStatusEntry,
 } from '../FileTree';
-import type { ContextMenuItem } from '../types';
+import type { ContextMenuItem, ContextMenuOpenContext } from '../types';
 import { useFileTreeInstance } from './utils/useFileTreeInstance';
 
 function renderFileTreeChildren(
   header: ReactNode,
-  renderContextMenu: ((item: ContextMenuItem) => React.ReactNode) | undefined,
-  activeContextMenuItem: ContextMenuItem | null
+  renderContextMenu:
+    | ((
+        item: ContextMenuItem,
+        context: ContextMenuOpenContext
+      ) => React.ReactNode)
+    | undefined,
+  activeContextMenuItem: ContextMenuItem | null,
+  activeContextMenuContext: ContextMenuOpenContext | null
 ): ReactNode {
   const headerChild =
     header != null ? <div slot={HEADER_SLOT_NAME}>{header}</div> : null;
   const contextMenuChild =
-    renderContextMenu != null && activeContextMenuItem != null ? (
+    renderContextMenu != null &&
+    activeContextMenuItem != null &&
+    activeContextMenuContext != null ? (
       <div slot={CONTEXT_MENU_SLOT_NAME}>
-        {renderContextMenu(activeContextMenuItem)}
+        {renderContextMenu(activeContextMenuItem, activeContextMenuContext)}
       </div>
     ) : null;
 
@@ -98,8 +106,14 @@ export interface FileTreeProps {
   header?: React.ReactNode;
 
   // Context menu
-  renderContextMenu?: (item: ContextMenuItem) => React.ReactNode;
-  onContextMenuOpen?: (item: ContextMenuItem) => void;
+  renderContextMenu?: (
+    item: ContextMenuItem,
+    context: ContextMenuOpenContext
+  ) => React.ReactNode;
+  onContextMenuOpen?: (
+    item: ContextMenuItem,
+    context: ContextMenuOpenContext
+  ) => void;
   onContextMenuClose?: () => void;
 }
 
@@ -128,32 +142,42 @@ export function FileTree({
 }: FileTreeProps): React.JSX.Element {
   const [activeContextMenuItem, setActiveContextMenuItem] =
     useState<ContextMenuItem | null>(null);
+  const [activeContextMenuContext, setActiveContextMenuContext] =
+    useState<ContextMenuOpenContext | null>(null);
   const [containerElement, setContainerElement] = useState<HTMLElement | null>(
     null
   );
 
   const handleContextMenuOpen = useCallback(
-    (item: ContextMenuItem) => {
-      setActiveContextMenuItem(item);
-      onContextMenuOpen?.(item);
+    (item: ContextMenuItem, context: ContextMenuOpenContext) => {
+      if (renderContextMenu != null) {
+        setActiveContextMenuItem(item);
+        setActiveContextMenuContext(context);
+      }
+      onContextMenuOpen?.(item, context);
     },
-    [onContextMenuOpen]
+    [onContextMenuOpen, renderContextMenu]
   );
 
   const handleContextMenuClose = useCallback(() => {
-    setActiveContextMenuItem(null);
+    if (renderContextMenu != null) {
+      setActiveContextMenuItem(null);
+      setActiveContextMenuContext(null);
+    }
     onContextMenuClose?.();
-  }, [onContextMenuClose]);
+  }, [onContextMenuClose, renderContextMenu]);
 
   useEffect(() => {
     if (renderContextMenu != null) return;
     setActiveContextMenuItem(null);
+    setActiveContextMenuContext(null);
   }, [renderContextMenu]);
 
   const children = renderFileTreeChildren(
     header,
     renderContextMenu,
-    activeContextMenuItem
+    activeContextMenuItem,
+    activeContextMenuContext
   );
   const { ref } = useFileTreeInstance({
     options,
@@ -170,9 +194,13 @@ export function FileTree({
     onSelection,
     gitStatus,
     onContextMenuOpen:
-      renderContextMenu != null ? handleContextMenuOpen : undefined,
+      onContextMenuOpen != null || renderContextMenu != null
+        ? handleContextMenuOpen
+        : undefined,
     onContextMenuClose:
-      renderContextMenu != null ? handleContextMenuClose : undefined,
+      onContextMenuClose != null || renderContextMenu != null
+        ? handleContextMenuClose
+        : undefined,
   });
 
   useEffect(() => {

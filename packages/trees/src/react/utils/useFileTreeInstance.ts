@@ -7,7 +7,7 @@ import {
   type FileTreeStateConfig,
   type GitStatusEntry,
 } from '../../FileTree';
-import type { ContextMenuItem } from '../../types';
+import type { ContextMenuItem, ContextMenuOpenContext } from '../../types';
 import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
 
 interface UseFileTreeInstanceProps {
@@ -33,7 +33,10 @@ interface UseFileTreeInstanceProps {
   onSelection?: (items: FileTreeSelectionItem[]) => void;
 
   // Context menu
-  onContextMenuOpen?: (item: ContextMenuItem) => void;
+  onContextMenuOpen?: (
+    item: ContextMenuItem,
+    context: ContextMenuOpenContext
+  ) => void;
   onContextMenuClose?: () => void;
 
   // Git status
@@ -71,7 +74,10 @@ export function useFileTreeInstance({
     FileTreeStateConfig & {
       initialFiles?: string[];
       gitStatus?: GitStatusEntry[];
-      onContextMenuOpen?: (item: ContextMenuItem) => void;
+      onContextMenuOpen?: (
+        item: ContextMenuItem,
+        context: ContextMenuOpenContext
+      ) => void;
       onContextMenuClose?: () => void;
     }
   >({

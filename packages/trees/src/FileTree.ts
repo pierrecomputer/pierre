@@ -7,7 +7,12 @@ import {
   FLATTENED_PREFIX,
 } from './constants';
 import { SVGSpriteSheet } from './sprite';
-import type { ContextMenuItem, FileTreeNode, GitStatusEntry } from './types';
+import type {
+  ContextMenuItem,
+  ContextMenuOpenContext,
+  FileTreeNode,
+  GitStatusEntry,
+} from './types';
 import { wrapUnsafeCSS } from './utils/cssWrappers';
 import { expandImplicitParentDirectories } from './utils/expandImplicitParentDirectories';
 import {
@@ -68,7 +73,10 @@ export interface FileTreeCallbacks {
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
   onFilesChange?: (files: string[]) => void;
-  onContextMenuOpen?: (item: ContextMenuItem) => void;
+  onContextMenuOpen?: (
+    item: ContextMenuItem,
+    context: ContextMenuOpenContext
+  ) => void;
   onContextMenuClose?: () => void;
   /** Internal: called when a DnD move produces a new file list. */
   _onDragMoveFiles?: (newFiles: string[]) => void;
@@ -131,7 +139,10 @@ export interface FileTreeStateConfig {
   onSelectedItemsChange?: (items: string[]) => void;
   onSelection?: (items: FileTreeSelectionItem[]) => void;
   onFilesChange?: (files: string[]) => void;
-  onContextMenuOpen?: (item: ContextMenuItem) => void;
+  onContextMenuOpen?: (
+    item: ContextMenuItem,
+    context: ContextMenuOpenContext
+  ) => void;
   onContextMenuClose?: () => void;
 }
 

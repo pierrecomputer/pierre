@@ -500,6 +500,26 @@ describe('React controlled FileTree wrapper', () => {
     expect(lastCall?.onContextMenuClose).toBeUndefined();
   });
 
+  test('passes onContextMenuOpen callback without renderContextMenu', () => {
+    const onContextMenuOpen = () => {};
+
+    act(() => {
+      root.render(
+        <FileTreeReact
+          options={{}}
+          files={FILES}
+          onContextMenuOpen={onContextMenuOpen}
+        />
+      );
+    });
+
+    expect(setCallbacksSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        onContextMenuOpen: expect.any(Function),
+      })
+    );
+  });
+
   test('server-renders a slotted header child when header is provided', () => {
     const originalWindow = globalThis.window;
     Reflect.deleteProperty(globalThis, 'window');
@@ -524,7 +544,23 @@ describe('React controlled FileTree wrapper', () => {
 
   test('renders slot div as child when renderContextMenu callback fires', () => {
     let capturedOpen:
-      | ((item: { path: string; isFolder: boolean }) => void)
+      | ((
+          item: { path: string; isFolder: boolean },
+          context: {
+            anchorElement: HTMLElement;
+            anchorRect: {
+              top: number;
+              right: number;
+              bottom: number;
+              left: number;
+              width: number;
+              height: number;
+              x: number;
+              y: number;
+            };
+            close: () => void;
+          }
+        ) => void)
       | undefined;
     renderSpy.mockImplementation(function (this: FileTreeClass) {
       // Capture the onContextMenuOpen callback from stateConfig
@@ -547,7 +583,23 @@ describe('React controlled FileTree wrapper', () => {
 
     if (onOpen != null) {
       act(() => {
-        onOpen({ path: 'README.md', isFolder: false });
+        onOpen(
+          { path: 'README.md', isFolder: false },
+          {
+            anchorElement: container,
+            anchorRect: {
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              width: 0,
+              height: 0,
+              x: 0,
+              y: 0,
+            },
+            close: () => {},
+          }
+        );
       });
     }
 

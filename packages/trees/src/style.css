@@ -559,19 +559,36 @@
     touch-action: none;
   }
 
+  [data-type='context-menu-anchor'] {
+    position: absolute;
+    top: 0;
+    right: var(--trees-item-margin-x);
+    z-index: 4;
+    display: none;
+    align-items: center;
+
+    &[data-visible='true'] {
+      display: flex;
+    }
+  }
+
+  [data-type='context-menu-anchor'] > slot[name='context-menu'] {
+    display: block;
+    width: 0;
+    min-width: 0;
+    flex: 0 0 0;
+    overflow: visible;
+  }
+
   /* Single floating context menu trigger */
   [data-type='context-menu-trigger'] {
     all: unset;
-    position: absolute;
-    right: var(--trees-item-margin-x);
-    display: none;
     align-items: center;
     justify-content: center;
     padding: 0 var(--trees-item-padding-x);
     color: var(--trees-fg-muted);
     fill: currentColor;
     cursor: pointer;
-    z-index: 4;
     font-family: var(--trees-font-family);
     font-size: var(--trees-font-size);
     border-top-right-radius: var(--trees-border-radius);
@@ -581,9 +598,7 @@
     border-width: 0;
     transition: color 120ms ease;
 
-    &[data-visible='true'] {
-      display: flex;
-    }
+    display: flex;
   }
 
   [data-type='context-menu-trigger']:hover {

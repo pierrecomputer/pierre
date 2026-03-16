@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
 import {
   FILE_TREE_COOKIE_FLATTEN,
@@ -33,6 +34,14 @@ import {
   sharedDemoFileTreeOptions,
   sharedDemoStateConfig,
 } from './demo-data';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ClientPageProps {
   preloadedFileTreeHtml: string;
@@ -1855,33 +1864,97 @@ function ReactSSRCustomIcons({
   );
 }
 
-function ContextMenuPanel({
+type ContextMenuDemoItem = { path: string; isFolder: boolean };
+
+function TreeDemoContextMenu({
   item,
+  onClose,
 }: {
-  item: { path: string; isFolder: boolean };
+  item: ContextMenuDemoItem;
+  onClose: () => void;
 }) {
   const itemType = item.isFolder ? 'Folder' : 'File';
   return (
-    <div
-      role="menu"
-      aria-label={`${itemType} options for ${item.path}`}
-      style={{
-        background: 'white',
-        border: '1px solid #ccc',
-        padding: 8,
-        borderRadius: 4,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        minWidth: 160,
-      }}
+    <DropdownMenu
+      open
+      modal={false}
+      onOpenChange={(open) => !open && onClose()}
     >
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        {itemType}: {item.path}
-      </div>
-      <div style={{ fontSize: 12, color: '#666' }}>
-        Context menu content here
-      </div>
-    </div>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: 'none',
+            border: 0,
+            padding: 0,
+          }}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        side="right"
+        sideOffset={8}
+        className="min-w-[220px]"
+      >
+        <DropdownMenuLabel className="max-w-[280px] truncate">
+          {itemType}: {item.path}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onClose}>Open</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onClose}>Rename</DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={onClose}
+          className="text-destructive focus:text-destructive"
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
+}
+
+function renderVanillaContextMenuSlot({
+  slotElement,
+  menuRootRef,
+  item,
+  onClose,
+}: {
+  slotElement: HTMLDivElement;
+  menuRootRef: { current: ReactDomRoot | null };
+  item: ContextMenuDemoItem;
+  onClose: () => void;
+}): void {
+  menuRootRef.current ??= createRoot(slotElement);
+  slotElement.style.display = 'block';
+  menuRootRef.current.render(
+    <TreeDemoContextMenu item={item} onClose={onClose} />
+  );
+}
+
+function clearVanillaContextMenuSlot({
+  slotElement,
+  menuRootRef,
+  unmount = false,
+}: {
+  slotElement: HTMLDivElement;
+  menuRootRef: { current: ReactDomRoot | null };
+  unmount?: boolean;
+}): void {
+  if (menuRootRef.current == null) {
+    return;
+  }
+  if (unmount) {
+    menuRootRef.current.unmount();
+    menuRootRef.current = null;
+  } else {
+    menuRootRef.current.render(null);
+  }
+  slotElement.style.display = 'none';
 }
 
 function injectSlotMarkup(containerHtml: string, slotMarkup: string): string {
@@ -2093,42 +2166,6 @@ function ReactSSRHeaderSlot({
   );
 }
 
-function populateVanillaContextMenuSlot(
-  slotElement: HTMLDivElement,
-  item: { path: string; isFolder: boolean }
-) {
-  const itemType = item.isFolder ? 'Folder' : 'File';
-  const panel = document.createElement('div');
-  Object.assign(panel.style, {
-    background: 'white',
-    border: '1px solid #ccc',
-    padding: '8px',
-    borderRadius: '4px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-    minWidth: '160px',
-  });
-  panel.setAttribute('role', 'menu');
-  panel.setAttribute('aria-label', `${itemType} options for ${item.path}`);
-
-  const title = document.createElement('div');
-  Object.assign(title.style, {
-    fontWeight: '600',
-    marginBottom: '4px',
-  });
-  title.textContent = `${itemType}: ${item.path}`;
-
-  const body = document.createElement('div');
-  Object.assign(body.style, {
-    fontSize: '12px',
-    color: '#666',
-  });
-  body.textContent = 'Context menu content here';
-
-  panel.append(title, body);
-  slotElement.replaceChildren(panel);
-  slotElement.style.display = 'block';
-}
-
 /**
  * Vanilla FileTree - Server-Side Rendered context menu
  */
@@ -2143,6 +2180,7 @@ function VanillaSSRContextMenu({
 }) {
   const instanceRef = useRef<FileTree | null>(null);
   const hasHydratedRef = useRef(false);
+  const menuRootRef = useRef<ReactDomRoot | null>(null);
 
   const ref = useCallback(
     (node: HTMLDivElement | null) => {
@@ -2171,14 +2209,21 @@ function VanillaSSRContextMenu({
       fileTreeContainer.appendChild(slotElement);
 
       const closeMenu = () => {
-        slotElement.replaceChildren();
-        slotElement.style.display = 'none';
+        clearVanillaContextMenuSlot({
+          slotElement,
+          menuRootRef,
+        });
       };
 
       const fileTree = new FileTree(options, {
         ...stateConfig,
-        onContextMenuOpen: (item) => {
-          populateVanillaContextMenuSlot(slotElement, item);
+        onContextMenuOpen: (item, context) => {
+          renderVanillaContextMenuSlot({
+            slotElement,
+            menuRootRef,
+            item,
+            onClose: context.close,
+          });
         },
         onContextMenuClose: () => {
           closeMenu();
@@ -2197,7 +2242,11 @@ function VanillaSSRContextMenu({
       instanceRef.current = fileTree;
 
       return () => {
-        closeMenu();
+        clearVanillaContextMenuSlot({
+          slotElement,
+          menuRootRef,
+          unmount: true,
+        });
         slotElement.remove();
         fileTree.cleanUp();
         instanceRef.current = null;
@@ -2236,7 +2285,9 @@ function ReactSSRContextMenu({
       prerenderedHTML={prerenderedHTML}
       initialExpandedItems={stateConfig?.initialExpandedItems}
       onSelection={stateConfig?.onSelection}
-      renderContextMenu={(item) => <ContextMenuPanel item={item} />}
+      renderContextMenu={(item, context) => (
+        <TreeDemoContextMenu item={item} onClose={context.close} />
+      )}
     />
   );
 }
@@ -2247,6 +2298,7 @@ function ReactSSRContextMenu({
  */
 function VirtualizedLinuxKernelCard() {
   const [mounted, setMounted] = useState(false);
+  const menuRootRef = useRef<ReactDomRoot | null>(null);
 
   const ref = useCallback((node: HTMLDivElement | null) => {
     if (node == null) return;
@@ -2264,12 +2316,19 @@ function VirtualizedLinuxKernelCard() {
       },
       {
         initialExpandedItems: linuxKernelAllFolders,
-        onContextMenuOpen: (item) => {
-          populateVanillaContextMenuSlot(slotElement, item);
+        onContextMenuOpen: (item, context) => {
+          renderVanillaContextMenuSlot({
+            slotElement,
+            menuRootRef,
+            item,
+            onClose: context.close,
+          });
         },
         onContextMenuClose: () => {
-          slotElement.replaceChildren();
-          slotElement.style.display = 'none';
+          clearVanillaContextMenuSlot({
+            slotElement,
+            menuRootRef,
+          });
         },
       }
     );
@@ -2281,6 +2340,11 @@ function VirtualizedLinuxKernelCard() {
     }
 
     return () => {
+      clearVanillaContextMenuSlot({
+        slotElement,
+        menuRootRef,
+        unmount: true,
+      });
       slotElement.remove();
       fileTree.cleanUp();
     };

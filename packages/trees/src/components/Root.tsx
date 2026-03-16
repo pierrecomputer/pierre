@@ -931,18 +931,33 @@ export function Root({
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(
     null
   );
-  const [contextMenuPosition, setContextMenuPosition] = useState<{
-    top: number;
-  } | null>(null);
+  const contextMenuAnchorRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hoveredContextMenuItemRef = useRef<string | null>(null);
   const contextHoverItemElRef = useRef<HTMLElement | null>(null);
   const contextHoverItemIdRef = useRef<string | null>(null);
+  const contextMenuRestoreFocusRef = useRef<{
+    element: HTMLElement | null;
+    focusedItemId: string | null;
+  }>({
+    element: null,
+    focusedItemId: null,
+  });
+  const contextMenuRestoreFocusTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const contextMenuRestoreFocusRetryTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const contextMenuRestoreFocusLateTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const isScrollingRef = useRef(false);
   // Ref mirror of contextMenuItemId — lets callbacks read the current value
   // without including it as a dependency, keeping their identities stable.
   const contextMenuItemIdRef = useRef<string | null>(null);
   contextMenuItemIdRef.current = contextMenuItemId;
+  const isContextMenuOpen = isContextMenuEnabled && contextMenuItemId != null;
 
   const setContextHoverItem = useCallback(
     (itemId: string | null) => {
@@ -964,7 +979,7 @@ export function Root({
       if (container == null) {
         return;
       }
-      const itemEl = container.querySelector(
+      const itemEl = container.querySelector<HTMLElement>(
         `[data-type="item"][data-item-id="${itemId}"]`
       );
       if (itemEl == null) {
@@ -978,11 +993,11 @@ export function Root({
     [tree]
   );
 
-  const isPointerEventInContextMenu = useCallback((e: PointerEvent) => {
+  const isEventInContextMenu = useCallback((e: Event): boolean => {
     const path = e.composedPath();
     for (const entry of path) {
       if (!(entry instanceof HTMLElement)) continue;
-      if (entry.dataset.type === 'context-menu-container') {
+      if (entry.dataset.type === 'context-menu-anchor') {
         return true;
       }
       if (entry.getAttribute('slot') === CONTEXT_MENU_SLOT_NAME) {
@@ -992,27 +1007,114 @@ export function Root({
     return false;
   }, []);
 
+  const clearContextMenuRestoreTimers = useCallback(() => {
+    if (contextMenuRestoreFocusTimerRef.current != null) {
+      clearTimeout(contextMenuRestoreFocusTimerRef.current);
+      contextMenuRestoreFocusTimerRef.current = null;
+    }
+    if (contextMenuRestoreFocusRetryTimerRef.current != null) {
+      clearTimeout(contextMenuRestoreFocusRetryTimerRef.current);
+      contextMenuRestoreFocusRetryTimerRef.current = null;
+    }
+    if (contextMenuRestoreFocusLateTimerRef.current != null) {
+      clearTimeout(contextMenuRestoreFocusLateTimerRef.current);
+      contextMenuRestoreFocusLateTimerRef.current = null;
+    }
+  }, []);
+
+  const restoreContextMenuFocus = useCallback((): boolean => {
+    const focusElement = (element: HTMLElement | null): boolean => {
+      if (element == null || !element.isConnected) {
+        return false;
+      }
+      if (element === document.body || element === document.documentElement) {
+        return false;
+      }
+      element.focus();
+      return document.activeElement === element;
+    };
+
+    if (focusElement(contextMenuRestoreFocusRef.current.element)) {
+      return true;
+    }
+
+    const focusedItemId = contextMenuRestoreFocusRef.current.focusedItemId;
+    if (focusedItemId != null) {
+      const container = tree.getElement()?.closest('[role="tree"]');
+      const focusedItemEl = container?.querySelector<HTMLElement>(
+        `[data-type="item"][data-item-id="${focusedItemId}"]`
+      );
+      if (focusElement(focusedItemEl ?? null)) {
+        return true;
+      }
+    }
+
+    const treeElement = tree.getElement();
+    if (treeElement instanceof HTMLElement) {
+      treeElement.focus();
+      return document.activeElement === treeElement;
+    }
+
+    return false;
+  }, [tree]);
+
   const closeContextMenu = useCallback(
     (notify = true) => {
       if (contextMenuItemIdRef.current == null) return;
+
+      clearContextMenuRestoreTimers();
+
       setContextHoverItem(null);
       setContextMenuItemId(null);
-      setContextMenuPosition(null);
       if (notify) {
         callbacksRef?.current.onContextMenuClose?.();
       }
+
+      contextMenuRestoreFocusTimerRef.current = setTimeout(() => {
+        contextMenuRestoreFocusTimerRef.current = null;
+        restoreContextMenuFocus();
+        contextMenuRestoreFocusRetryTimerRef.current = setTimeout(() => {
+          contextMenuRestoreFocusRetryTimerRef.current = null;
+          if (
+            document.activeElement === document.body ||
+            document.activeElement === document.documentElement
+          ) {
+            restoreContextMenuFocus();
+          }
+        }, 0);
+        contextMenuRestoreFocusLateTimerRef.current = setTimeout(() => {
+          contextMenuRestoreFocusLateTimerRef.current = null;
+          if (
+            document.activeElement === document.body ||
+            document.activeElement === document.documentElement
+          ) {
+            restoreContextMenuFocus();
+          }
+          contextMenuRestoreFocusRef.current = {
+            element: null,
+            focusedItemId: null,
+          };
+        }, 32);
+      }, 0);
     },
-    [callbacksRef, setContextHoverItem]
+    [
+      callbacksRef,
+      clearContextMenuRestoreTimers,
+      restoreContextMenuFocus,
+      setContextHoverItem,
+    ]
   );
 
   const updateTriggerPosition = useCallback(
     (itemEl: HTMLElement | null) => {
       const trigger = triggerRef.current;
-      if (trigger == null) return;
+      const anchor = contextMenuAnchorRef.current;
+      if (trigger == null || anchor == null) return;
       if (itemEl == null) {
         const openItemId = contextMenuItemIdRef.current;
         if (openItemId == null) {
           trigger.dataset.visible = 'false';
+          anchor.dataset.visible = 'false';
         }
         hoveredContextMenuItemRef.current = null;
         if (openItemId != null) {
@@ -1038,8 +1140,9 @@ export function Root({
         const containerRect = container.getBoundingClientRect();
         top = itemRect.top - containerRect.top;
       }
-      trigger.style.top = `${top}px`;
+      anchor.style.top = `${top}px`;
       trigger.dataset.visible = 'true';
+      anchor.dataset.visible = 'true';
       const nextItemId = itemEl.dataset.itemId ?? null;
       trigger.dataset.itemId = nextItemId ?? '';
       hoveredContextMenuItemRef.current = nextItemId;
@@ -1062,24 +1165,68 @@ export function Root({
         return;
       }
 
-      const container = tree.getElement()?.closest('[role="tree"]');
-      if (container == null || anchorEl == null) return;
-      const anchorRect = anchorEl.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
+      if (anchorEl == null) return;
+
+      clearContextMenuRestoreTimers();
+      const activeElement = document.activeElement;
+      const focusTarget =
+        activeElement instanceof HTMLElement &&
+        activeElement !== document.body &&
+        activeElement !== document.documentElement
+          ? activeElement
+          : null;
+      contextMenuRestoreFocusRef.current =
+        focusTarget != null
+          ? {
+              element: focusTarget,
+              focusedItemId: tree.getState().focusedItem ?? null,
+            }
+          : {
+              element: null,
+              focusedItemId: tree.getState().focusedItem ?? null,
+            };
+
       if (anchorEl.dataset.type === 'item') {
         updateTriggerPosition(anchorEl);
       }
 
+      const trigger = triggerRef.current;
+      const menuAnchorEl =
+        anchorEl.dataset.type === CONTEXT_MENU_TRIGGER_TYPE && trigger != null
+          ? trigger
+          : (trigger ?? anchorEl);
       setContextMenuItemId(itemId);
-      setContextMenuPosition({ top: anchorRect.bottom - containerRect.top });
       const item = tree.getItemInstance(itemId);
       const data = item.getItemData();
-      openContextMenu({
-        path: getSelectionPath(data.path),
-        isFolder: data.children?.direct != null,
-      });
+      const anchorRect = menuAnchorEl.getBoundingClientRect();
+      openContextMenu(
+        {
+          path: getSelectionPath(data.path),
+          isFolder: data.children?.direct != null,
+        },
+        {
+          anchorElement: menuAnchorEl,
+          anchorRect: {
+            top: anchorRect.top,
+            right: anchorRect.right,
+            bottom: anchorRect.bottom,
+            left: anchorRect.left,
+            width: anchorRect.width,
+            height: anchorRect.height,
+            x: anchorRect.x,
+            y: anchorRect.y,
+          },
+          close: () => closeContextMenu(),
+        }
+      );
     },
-    [callbacksRef, closeContextMenu, tree, updateTriggerPosition]
+    [
+      callbacksRef,
+      clearContextMenuRestoreTimers,
+      closeContextMenu,
+      tree,
+      updateTriggerPosition,
+    ]
   );
 
   const handleTriggerClick = useCallback(
@@ -1099,37 +1246,30 @@ export function Root({
       return;
     }
     const trigger = triggerRef.current;
+    const anchor = contextMenuAnchorRef.current;
     if (trigger != null) {
       trigger.dataset.visible = 'true';
+    }
+    if (anchor != null) {
+      anchor.dataset.visible = 'true';
     }
     setContextHoverItem(contextMenuItemId);
   }, [contextMenuItemId, setContextHoverItem]);
 
-  // Click-outside handler
-  useEffect(() => {
-    if (!isContextMenuEnabled || contextMenuItemId == null) return;
-    const handleMouseDown = (e: MouseEvent) => {
-      const path = e.composedPath();
-      let isOnTriggerOrSlot = false;
-      for (const el of path) {
-        if (!(el instanceof HTMLElement)) continue;
-        if (el.dataset.type === CONTEXT_MENU_TRIGGER_TYPE) {
-          isOnTriggerOrSlot = true;
-          break;
-        }
-        if (el.getAttribute('slot') === CONTEXT_MENU_SLOT_NAME) {
-          isOnTriggerOrSlot = true;
-          break;
-        }
+  const handleTreeKeyDownCapture = useCallback(
+    (e: KeyboardEvent) => {
+      if (!isContextMenuOpen || e.defaultPrevented || isEventInContextMenu(e)) {
+        return;
       }
-      if (!isOnTriggerOrSlot) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') {
         closeContextMenu();
+        return;
       }
-    };
-    document.addEventListener('mousedown', handleMouseDown, true);
-    return () =>
-      document.removeEventListener('mousedown', handleMouseDown, true);
-  }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled]);
+    },
+    [closeContextMenu, isContextMenuOpen, isEventInContextMenu]
+  );
 
   // Close on scroll
   useEffect(() => {
@@ -1160,8 +1300,12 @@ export function Root({
     const handleScroll = () => {
       isScrollingRef.current = true;
       const trigger = triggerRef.current;
+      const anchor = contextMenuAnchorRef.current;
       if (trigger != null && contextMenuItemIdRef.current == null) {
         trigger.dataset.visible = 'false';
+      }
+      if (anchor != null && contextMenuItemIdRef.current == null) {
+        anchor.dataset.visible = 'false';
       }
       if (contextMenuItemIdRef.current == null) {
         hoveredContextMenuItemRef.current = null;
@@ -1186,8 +1330,13 @@ export function Root({
   useEffect(
     () => () => {
       setContextHoverItem(null);
+      clearContextMenuRestoreTimers();
+      contextMenuRestoreFocusRef.current = {
+        element: null,
+        focusedItemId: null,
+      };
     },
-    [setContextHoverItem]
+    [clearContextMenuRestoreTimers, setContextHoverItem]
   );
 
   useEffect(() => {
@@ -1467,10 +1616,6 @@ export function Root({
   const virtualizeThreshold = shouldVirtualize
     ? Math.max(0, virtualize.threshold)
     : Number.POSITIVE_INFINITY;
-  const isContextMenuOpen =
-    isContextMenuEnabled &&
-    contextMenuItemId != null &&
-    contextMenuPosition != null;
   const containerProps = tree.getContainerProps();
 
   return (
@@ -1478,11 +1623,15 @@ export function Root({
       {...containerProps}
       id={treeDomId}
       data-file-tree-virtualized-root={shouldVirtualize ? 'true' : undefined}
+      onKeyDownCapture={handleTreeKeyDownCapture}
       onPointerOver={
         isContextMenuEnabled
           ? (e: PointerEvent) => {
               if (isScrollingRef.current) return;
               const target = e.target as HTMLElement;
+              const contextHoverItemId =
+                contextMenuItemIdRef.current ??
+                hoveredContextMenuItemRef.current;
               if (
                 target.closest?.(
                   `[data-type="${CONTEXT_MENU_TRIGGER_TYPE}"]`
@@ -1491,11 +1640,11 @@ export function Root({
                 return;
               }
               if (target.closest?.('[data-type="context-menu-wash"]') != null) {
-                setContextHoverItem(contextMenuItemIdRef.current);
+                setContextHoverItem(contextHoverItemId);
                 return;
               }
-              if (isPointerEventInContextMenu(e)) {
-                setContextHoverItem(contextMenuItemIdRef.current);
+              if (isEventInContextMenu(e)) {
+                setContextHoverItem(contextHoverItemId);
                 return;
               }
               const itemEl = target.closest?.('[data-type="item"]') ?? null;
@@ -1516,11 +1665,15 @@ export function Root({
       onPointerLeave={
         isContextMenuEnabled
           ? () => {
+              const anchor = contextMenuAnchorRef.current;
               if (
                 contextMenuItemIdRef.current == null &&
                 triggerRef.current != null
               ) {
                 triggerRef.current.dataset.visible = 'false';
+                if (anchor != null) {
+                  anchor.dataset.visible = 'false';
+                }
               }
               hoveredContextMenuItemRef.current = null;
               if (contextMenuItemIdRef.current != null) {
@@ -1623,18 +1776,25 @@ export function Root({
         };
 
         const contextMenuTrigger = isContextMenuEnabled ? (
-          <button
-            ref={triggerRef}
-            data-type={CONTEXT_MENU_TRIGGER_TYPE}
-            tabIndex={-1}
-            aria-label="Options"
-            aria-haspopup="menu"
-            onMouseDown={(e: MouseEvent) => e.preventDefault()}
-            onClick={handleTriggerClick}
+          <div
+            ref={contextMenuAnchorRef}
+            data-type="context-menu-anchor"
             data-visible="false"
           >
-            <Icon {...remapIcon('file-tree-icon-ellipsis')} />
-          </button>
+            <button
+              ref={triggerRef}
+              data-type={CONTEXT_MENU_TRIGGER_TYPE}
+              tabIndex={-1}
+              aria-label="Options"
+              aria-haspopup="menu"
+              onMouseDown={(e: MouseEvent) => e.preventDefault()}
+              onClick={handleTriggerClick}
+              data-visible="false"
+            >
+              <Icon {...remapIcon('file-tree-icon-ellipsis')} />
+            </button>
+            {isContextMenuOpen ? <slot name={CONTEXT_MENU_SLOT_NAME} /> : null}
+          </div>
         ) : null;
 
         if (
@@ -1673,6 +1833,11 @@ export function Root({
         <div
           data-type="context-menu-wash"
           aria-hidden="true"
+          onMouseDownCapture={(e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeContextMenu();
+          }}
           onWheelCapture={(e: WheelEvent) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1682,19 +1847,6 @@ export function Root({
             e.stopPropagation();
           }}
         />
-      ) : null}
-      {isContextMenuOpen ? (
-        <div
-          data-type="context-menu-container"
-          style={{
-            position: 'absolute',
-            top: `${contextMenuPosition.top}px`,
-            right: 'var(--trees-item-margin-x)',
-            zIndex: 10,
-          }}
-        >
-          <slot name={CONTEXT_MENU_SLOT_NAME} />
-        </div>
       ) : null}
     </div>
   );

@@ -24,3 +24,20 @@ export type FileTreeNode = {
 export type FileTreeData = Record<string, FileTreeNode>;
 
 export type ContextMenuItem = { path: string; isFolder: boolean };
+
+export type ContextMenuAnchorRect = Readonly<{
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+}>;
+
+export type ContextMenuOpenContext = {
+  anchorElement: HTMLElement;
+  anchorRect: ContextMenuAnchorRect;
+  close: () => void;
+};

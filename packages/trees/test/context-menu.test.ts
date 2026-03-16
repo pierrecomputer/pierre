@@ -16,8 +16,12 @@ beforeAll(async () => {
     document: dom.window.document,
     HTMLElement: dom.window.HTMLElement,
     KeyboardEvent: dom.window.KeyboardEvent,
+    MouseEvent: dom.window.MouseEvent,
     HTMLTemplateElement: dom.window.HTMLTemplateElement,
     HTMLDivElement: dom.window.HTMLDivElement,
+    HTMLStyleElement: dom.window.HTMLStyleElement,
+    HTMLSlotElement: dom.window.HTMLSlotElement,
+    HTMLInputElement: dom.window.HTMLInputElement,
     SVGElement: dom.window.SVGElement,
     navigator: dom.window.navigator,
     Node: dom.window.Node,
@@ -179,11 +183,19 @@ describe('context menu', () => {
 
   test('Shift+F10 opens the context menu for the focused item', async () => {
     const openedItems: Array<{ path: string; isFolder: boolean }> = [];
+    const openContexts: Array<{
+      anchorElement: HTMLElement;
+      close: () => void;
+    }> = [];
     const ft = new FileTree(
       { initialFiles: ['README.md'] },
       {
-        onContextMenuOpen: (item) => {
+        onContextMenuOpen: (item, context) => {
           openedItems.push(item);
+          openContexts.push({
+            anchorElement: context.anchorElement,
+            close: context.close,
+          });
         },
       }
     );
@@ -191,6 +203,169 @@ describe('context menu', () => {
     ft.render({ containerWrapper });
 
     const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    const focusBeforeOpen = document.createElement('button');
+    document.body.appendChild(focusBeforeOpen);
+    focusBeforeOpen.focus();
+    expect(document.activeElement).toBe(focusBeforeOpen);
+
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+
+    await Promise.resolve();
+
+    expect(openedItems).toEqual([{ path: 'README.md', isFolder: false }]);
+    expect(openContexts).toHaveLength(1);
+    expect(openContexts[0]?.anchorElement.getAttribute('data-type')).toBe(
+      'context-menu-trigger'
+    );
+    expect(typeof openContexts[0]?.close).toBe('function');
+    expect(
+      shadowRoot?.querySelector(
+        '[data-type="context-menu-anchor"] slot[name="context-menu"]'
+      )
+    ).not.toBeNull();
+  });
+
+  test('context menu close helper closes tree-managed open state', async () => {
+    let closeContextMenu: (() => void) | null = null;
+    const ft = new FileTree(
+      { initialFiles: ['README.md'] },
+      {
+        onContextMenuOpen: (_item, context) => {
+          closeContextMenu = context.close;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    itemButton?.focus();
+    const focusBeforeOpen = document.activeElement;
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+
+    expect(
+      shadowRoot?.querySelector('[data-type="context-menu-wash"]')
+    ).not.toBeNull();
+
+    const closeHelper = closeContextMenu as (() => void) | null;
+    if (closeHelper == null) {
+      throw new Error('Expected close helper to be defined');
+    }
+    const tempFocusTarget = document.createElement('button');
+    document.body.appendChild(tempFocusTarget);
+    tempFocusTarget.focus();
+    expect(document.activeElement).toBe(tempFocusTarget);
+
+    closeHelper();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(shadowRoot?.querySelector('[data-type="context-menu-wash"]')).toBe(
+      null
+    );
+    expect(document.activeElement).toBe(focusBeforeOpen);
+    tempFocusTarget.remove();
+  });
+
+  test('restores keyboard focus after a mouse-opened context menu closes', async () => {
+    let closeContextMenu: (() => void) | null = null;
+    const ft = new FileTree(
+      { initialFiles: ['README.md', 'src/index.ts'] },
+      {
+        onContextMenuOpen: (_item, context) => {
+          closeContextMenu = context.close;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButtons = shadowRoot?.querySelectorAll(
+      'button[data-type="item"]'
+    );
+    const firstItem = itemButtons?.[0] ?? null;
+    const secondItem = itemButtons?.[1] ?? null;
+    const trigger = shadowRoot?.querySelector(
+      '[data-type="context-menu-trigger"]'
+    ) as HTMLButtonElement | null;
+    expect(firstItem).not.toBeNull();
+    expect(secondItem).not.toBeNull();
+    expect(trigger).not.toBeNull();
+
+    firstItem?.focus();
+    firstItem?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    const focusBeforeOpen = document.activeElement as HTMLElement | null;
+    expect(focusBeforeOpen).not.toBeNull();
+
+    // Simulate browser behavior where clicking the floating trigger can blur
+    // focus to <body> before the menu opens.
+    focusBeforeOpen?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    secondItem?.dispatchEvent(
+      new Event('pointerover', { bubbles: true, composed: true })
+    );
+    trigger?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true })
+    );
+    await Promise.resolve();
+
+    const closeHelper = closeContextMenu as (() => void) | null;
+    if (closeHelper == null) {
+      throw new Error('Expected close helper to be defined');
+    }
+    closeHelper();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(shadowRoot?.querySelector('[data-type="context-menu-wash"]')).toBe(
+      null
+    );
+    expect(document.activeElement).toBe(focusBeforeOpen);
+  });
+
+  test('blocks tree keyboard navigation while context menu is open', async () => {
+    const ft = new FileTree(
+      { initialFiles: ['README.md'] },
+      { onContextMenuOpen: () => {} }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const fileTreeContainer = ft.getFileTreeContainer();
+    const shadowRoot = fileTreeContainer?.shadowRoot;
     const itemButton = shadowRoot?.querySelector(
       'button[data-type="item"]'
     ) as HTMLButtonElement | null;
@@ -205,13 +380,16 @@ describe('context menu', () => {
         cancelable: true,
       })
     );
-
     await Promise.resolve();
 
-    expect(openedItems).toEqual([{ path: 'README.md', isFolder: false }]);
-    expect(
-      shadowRoot?.querySelector('[data-type="context-menu-container"]')
-    ).not.toBeNull();
+    const treeRoot = shadowRoot?.querySelector('[role="tree"]');
+    const blockedArrowKey = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    treeRoot?.dispatchEvent(blockedArrowKey);
+    expect(blockedArrowKey.defaultPrevented).toBe(true);
   });
 
   test('renders a transparent interaction wash and keeps trigger visible while open', async () => {
@@ -295,7 +473,9 @@ describe('context menu', () => {
     await Promise.resolve();
 
     expect(
-      shadowRoot?.querySelector('[data-type="context-menu-container"]')
+      shadowRoot?.querySelector(
+        '[data-type="context-menu-anchor"] slot[name="context-menu"]'
+      )
     ).not.toBeNull();
 
     contextMenuContent.dispatchEvent(
@@ -311,6 +491,35 @@ describe('context menu', () => {
     expect(itemButton?.dataset.itemContextHover).toBe('true');
 
     contextMenuContent.dispatchEvent(
+      new Event('pointerover', { bubbles: true, composed: true })
+    );
+    expect(itemButton?.dataset.itemContextHover).toBe('true');
+  });
+
+  test('keeps row hover when pointer moves from row to options anchor', () => {
+    const ft = new FileTree(
+      { initialFiles: ['README.md'] },
+      { onContextMenuOpen: () => {} }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    const contextMenuAnchor = shadowRoot?.querySelector(
+      '[data-type="context-menu-anchor"]'
+    ) as HTMLDivElement | null;
+    expect(itemButton).not.toBeNull();
+    expect(contextMenuAnchor).not.toBeNull();
+
+    itemButton?.dispatchEvent(
+      new Event('pointerover', { bubbles: true, composed: true })
+    );
+    expect(itemButton?.dataset.itemContextHover).toBe('true');
+
+    contextMenuAnchor?.dispatchEvent(
       new Event('pointerover', { bubbles: true, composed: true })
     );
     expect(itemButton?.dataset.itemContextHover).toBe('true');
