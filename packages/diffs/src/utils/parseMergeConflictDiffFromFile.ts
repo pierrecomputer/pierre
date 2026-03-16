@@ -19,8 +19,6 @@ export interface ParseMergeConflictDiffFromFileResult {
 }
 
 export interface MergeConflictDiffAction {
-  actionOriginalLineIndex: number;
-  actionOriginalLineNumber: number;
   currentLineNumber: number | undefined;
   incomingLineNumber: number | undefined;
   conflict: MergeConflictRegion;
@@ -52,13 +50,13 @@ export function getMergeConflictActionAnchor(
 
 export function parseMergeConflictDiffFromFile(
   file: FileContents,
-  maxContextLines: number = 2 // FIXME: Do not merge this, it should be 10 by default...
+  maxContextLines: number = 10000 // FIXME: Do not merge this, it should be 10 by default...
 ): ParseMergeConflictDiffFromFileResult {
   const lines = splitFileContents(file.contents);
   const { lineTypes, regions } = getMergeConflictParseResult(lines);
-  const currentContentChunks: string[] = [];
-  const incomingContentChunks: string[] = [];
-  const patchContentChunks: string[] = [];
+  let currentContentChunks: string = '';
+  let incomingContentChunks: string = '';
+  let patchContentChunks: string = '';
   const actions: (MergeConflictDiffAction | undefined)[] = new Array(
     regions.length
   );
@@ -85,8 +83,6 @@ export function parseMergeConflictDiffFromFile(
   let incomingLineNumber = 0;
   let actionIndex = 0;
   let nextConflict = regions[actionIndex];
-  let nextActionOriginalLineNumber =
-    nextConflict != null ? actionOriginalLineNumbersByRegion[actionIndex] : -1;
   let nextActionOriginalLineIndex =
     nextConflict != null ? actionOriginalLineIndexesByRegion[actionIndex] : -1;
   for (let index = 0; index < lines.length; index++) {
@@ -96,9 +92,9 @@ export function parseMergeConflictDiffFromFile(
     let incomingLineNumberAtIndex: number | undefined;
     switch (lineType) {
       case 'none': {
-        currentContentChunks.push(line);
-        incomingContentChunks.push(line);
-        patchContentChunks.push(` ${line}`);
+        currentContentChunks += line;
+        incomingContentChunks += line;
+        patchContentChunks += ` ${line}`;
         currentLineNumber++;
         incomingLineNumber++;
         currentLineNumberAtIndex = currentLineNumber;
@@ -106,15 +102,15 @@ export function parseMergeConflictDiffFromFile(
         break;
       }
       case 'current': {
-        currentContentChunks.push(line);
-        patchContentChunks.push(`-${line}`);
+        currentContentChunks += line;
+        patchContentChunks += `-${line}`;
         currentLineNumber++;
         currentLineNumberAtIndex = currentLineNumber;
         break;
       }
       case 'incoming': {
-        incomingContentChunks.push(line);
-        patchContentChunks.push(`+${line}`);
+        incomingContentChunks += line;
+        patchContentChunks += `+${line}`;
         incomingLineNumber++;
         incomingLineNumberAtIndex = incomingLineNumber;
         break;
@@ -124,9 +120,9 @@ export function parseMergeConflictDiffFromFile(
       case 'marker-base':
       case 'marker-separator':
       case 'marker-end': {
-        currentContentChunks.push(line);
-        incomingContentChunks.push(line);
-        patchContentChunks.push(` ${line}`);
+        currentContentChunks += line;
+        incomingContentChunks += line;
+        patchContentChunks += ` ${line}`;
         currentLineNumber++;
         incomingLineNumber++;
         currentLineNumberAtIndex = currentLineNumber;
@@ -152,8 +148,6 @@ export function parseMergeConflictDiffFromFile(
         nextActionOriginalLineIndex
       );
       actions[actionIndex] = {
-        actionOriginalLineIndex: nextActionOriginalLineIndex,
-        actionOriginalLineNumber: nextActionOriginalLineNumber,
         currentLineNumber: actionLineNumbers?.currentLineNumber,
         incomingLineNumber: actionLineNumbers?.incomingLineNumber,
         conflict: nextConflict,
@@ -164,30 +158,24 @@ export function parseMergeConflictDiffFromFile(
       if (nextConflict == null) {
         break;
       }
-      nextActionOriginalLineNumber =
-        actionOriginalLineNumbersByRegion[actionIndex];
       nextActionOriginalLineIndex =
         actionOriginalLineIndexesByRegion[actionIndex];
     }
   }
 
-  const currentContents = currentContentChunks.join('');
-  const incomingContents = incomingContentChunks.join('');
-  const patchContents = patchContentChunks.join('');
-
   const currentFile = createResolvedConflictFile(
     file,
     'current',
-    currentContents
+    currentContentChunks
   );
   const incomingFile = createResolvedConflictFile(
     file,
     'incoming',
-    incomingContents
+    incomingContentChunks
   );
   const patch = createMergeConflictPatch({
     name: file.name,
-    patchContents,
+    patchContents: patchContentChunks,
     currentLineCount: currentLineNumber,
     incomingLineCount: incomingLineNumber,
   });

@@ -7,6 +7,7 @@ import type {
 } from '../src/types';
 import { diffAcceptRejectHunk } from '../src/utils/diffAcceptRejectHunk';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { verifyFileDiffHunkValues } from './testUtils';
 
 type ResolvedType = 'accept' | 'reject' | 'both';
@@ -417,5 +418,83 @@ describe('diffAcceptRejectHunk', () => {
     expect(hunk?.noEOFCRDeletions).toBe(true);
     expect(result.deletionLines).toEqual(expectedLines);
     expect(result.additionLines).toEqual(expectedLines);
+  });
+
+  test('can strip merge conflict separators from a resolved hunk', () => {
+    const { fileDiff } = parseMergeConflictDiffFromFile({
+      name: 'conflict.ts',
+      contents: [
+        'before',
+        '<<<<<<< HEAD',
+        'const value = 1;',
+        '||||||| base',
+        'const value = 0;',
+        '=======',
+        'const value = 2;',
+        '>>>>>>> branch',
+        'after',
+        '',
+      ].join('\n'),
+    });
+
+    const result = diffAcceptRejectHunk(fileDiff, 0, {
+      type: 'incoming',
+      stripConflictSeparators: true,
+    });
+
+    expect(result.hunks[0]?.hunkContent).toEqual<ContextContent[]>([
+      {
+        type: 'context',
+        lines: 3,
+        additionLineIndex: 0,
+        deletionLineIndex: 0,
+      },
+    ]);
+    expect(result.deletionLines).toEqual([
+      'before\n',
+      'const value = 2;\n',
+      'after\n',
+    ]);
+    expect(result.additionLines).toEqual([
+      'before\n',
+      'const value = 2;\n',
+      'after\n',
+    ]);
+  });
+
+  test('can strip separators when a hunk contains multiple conflicts', () => {
+    const { fileDiff } = parseMergeConflictDiffFromFile({
+      name: 'conflict.ts',
+      contents: [
+        'start',
+        '<<<<<<< HEAD',
+        'ours one',
+        '=======',
+        'theirs one',
+        '>>>>>>> branch',
+        'middle',
+        '<<<<<<< HEAD',
+        'ours two',
+        '=======',
+        'theirs two',
+        '>>>>>>> branch',
+        'end',
+        '',
+      ].join('\n'),
+    });
+
+    const result = diffAcceptRejectHunk(fileDiff, 0, {
+      type: 'current',
+      stripConflictSeparators: true,
+    });
+
+    expect(result.deletionLines).toEqual([
+      'start\n',
+      'ours one\n',
+      'middle\n',
+      'ours two\n',
+      'end\n',
+    ]);
+    expect(result.additionLines).toEqual(result.deletionLines);
   });
 });

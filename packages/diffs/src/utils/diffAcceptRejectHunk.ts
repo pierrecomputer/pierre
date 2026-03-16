@@ -1,10 +1,28 @@
 import type { ContextContent, FileDiffMetadata } from '../types';
+import { getMergeConflictParseResult } from './getMergeConflictLineTypes';
+
+type DiffAcceptRejectHunkType =
+  | 'accept'
+  | 'reject'
+  | 'both'
+  | 'incoming'
+  | 'current';
+
+interface DiffAcceptRejectHunkConfig {
+  type: DiffAcceptRejectHunkType;
+  stripConflictSeparators?: boolean;
+}
+
+type DiffAcceptRejectHunkOptions =
+  | DiffAcceptRejectHunkType
+  | DiffAcceptRejectHunkConfig;
 
 export function diffAcceptRejectHunk(
   diff: FileDiffMetadata,
   hunkIndex: number,
-  type: 'accept' | 'reject' | 'both'
+  options: DiffAcceptRejectHunkOptions
 ): FileDiffMetadata {
+  const { type, stripConflictSeparators } = normalizeOptions(options);
   const hunk = diff.hunks[hunkIndex];
   if (hunk == null) {
     console.error({ diff, hunkIndex });
@@ -13,17 +31,22 @@ export function diffAcceptRejectHunk(
 
   // Build the resolved hunk lines from the original diff data before mutating
   // either backing line array.
-  const resolvedLines = buildResolvedLines(diff, hunk, type);
+  const resolvedLines = buildResolvedLines(
+    diff,
+    hunk,
+    type,
+    stripConflictSeparators
+  );
 
   diff = {
     ...diff,
     hunks: [...diff.hunks],
     deletionLines:
-      type === 'accept' || type === 'both'
+      type === 'accept' || type === 'both' || stripConflictSeparators
         ? [...diff.deletionLines]
         : diff.deletionLines,
     additionLines:
-      type === 'reject' || type === 'both'
+      type === 'reject' || type === 'both' || stripConflictSeparators
         ? [...diff.additionLines]
         : diff.additionLines,
     // Automatically update cacheKey if it exists, since content is changing
@@ -35,7 +58,7 @@ export function diffAcceptRejectHunk(
 
   const { additionLines, deletionLines } = diff;
 
-  if (type === 'accept' || type === 'both') {
+  if (type === 'accept' || type === 'both' || stripConflictSeparators) {
     deletionLines.splice(
       hunk.deletionLineIndex,
       hunk.deletionCount,
@@ -43,7 +66,7 @@ export function diffAcceptRejectHunk(
     );
   }
 
-  if (type === 'reject' || type === 'both') {
+  if (type === 'reject' || type === 'both' || stripConflictSeparators) {
     additionLines.splice(
       hunk.additionLineIndex,
       hunk.additionCount,
@@ -139,7 +162,8 @@ export function diffAcceptRejectHunk(
 function buildResolvedLines(
   diff: FileDiffMetadata,
   hunk: FileDiffMetadata['hunks'][number],
-  type: 'accept' | 'reject' | 'both'
+  type: 'accept' | 'reject' | 'both',
+  stripConflictSeparators: boolean
 ): string[] {
   const resolvedLines: string[] = [];
 
@@ -176,5 +200,39 @@ function buildResolvedLines(
     }
   }
 
-  return resolvedLines;
+  return stripConflictSeparators
+    ? stripMergeConflictLines(resolvedLines)
+    : resolvedLines;
+}
+
+// Normalize shorthand and config-object inputs into one internal resolution
+// mode so the rest of the helper only handles the three concrete diff states.
+function normalizeOptions(options: DiffAcceptRejectHunkOptions): {
+  type: 'accept' | 'reject' | 'both';
+  stripConflictSeparators: boolean;
+} {
+  const config = typeof options === 'string' ? { type: options } : options;
+
+  return {
+    type:
+      config.type === 'incoming'
+        ? 'accept'
+        : config.type === 'current'
+          ? 'reject'
+          : config.type,
+    stripConflictSeparators: config.stripConflictSeparators ?? false,
+  };
+}
+
+// Strip parsed merge-conflict structure from the resolved hunk output while
+// keeping the current/incoming code lines that survived the resolution.
+function stripMergeConflictLines(lines: string[]): string[] {
+  const { lineTypes } = getMergeConflictParseResult(lines);
+
+  return lines.filter((_, index) => {
+    const lineType = lineTypes[index];
+    return (
+      lineType === 'none' || lineType === 'current' || lineType === 'incoming'
+    );
+  });
 }
