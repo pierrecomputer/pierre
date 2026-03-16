@@ -19,8 +19,18 @@ export interface ParseMergeConflictDiffFromFileResult {
 }
 
 export interface MergeConflictDiffAction {
+  hunkIndex: number;
+  startContextIndex: number;
+  currentChangeIndex?: number;
+  baseMarkerContextIndex?: number;
+  baseChangeIndex?: number;
+  separatorContextIndex: number;
+  incomingChangeIndex?: number;
+  endContextIndex: number;
   currentLineNumber: number | undefined;
   incomingLineNumber: number | undefined;
+  // Kept temporarily for callback compatibility while the unresolved-file flow
+  // migrates to structural conflict metadata.
   conflict: MergeConflictRegion;
   conflictIndex: number;
 }
@@ -28,6 +38,13 @@ export interface MergeConflictDiffAction {
 interface GetMergeConflictActionAnchorReturn {
   side: 'additions' | 'deletions';
   lineNumber: number;
+}
+
+interface MergeConflictDiffActionSeed {
+  currentLineNumber: number | undefined;
+  incomingLineNumber: number | undefined;
+  conflict: MergeConflictRegion;
+  conflictIndex: number;
 }
 
 export function getMergeConflictActionAnchor(
@@ -57,7 +74,7 @@ export function parseMergeConflictDiffFromFile(
   let currentContentChunks: string = '';
   let incomingContentChunks: string = '';
   let patchContentChunks: string = '';
-  const actions: (MergeConflictDiffAction | undefined)[] = new Array(
+  const actions: (MergeConflictDiffActionSeed | undefined)[] = new Array(
     regions.length
   );
   const actionOriginalLineNumbersByRegion = new Array<number>(regions.length);
@@ -203,8 +220,173 @@ export function parseMergeConflictDiffFromFile(
     fileDiff,
     currentFile,
     incomingFile,
-    actions,
+    actions: actions.map((action) => {
+      if (action == null) return undefined;
+      return {
+        ...action,
+        ...locateConflictStructure(fileDiff, action),
+      };
+    }),
   };
+}
+
+// Map one merge-conflict action onto its containing hunk and the relevant
+// content indexes inside that hunk. This is a transitional bridge until the
+// parser emits structural conflict metadata inline.
+// PLAN_NOTE: We definitely don't want to do this long term. We need to be able
+// to figure out how to emit this stuff as part of the old/new file parsing
+// phase
+function locateConflictStructure(
+  fileDiff: FileDiffMetadata,
+  action: Pick<
+    MergeConflictDiffAction,
+    'conflict' | 'currentLineNumber' | 'incomingLineNumber'
+  >
+): Omit<
+  MergeConflictDiffAction,
+  'conflictIndex' | 'conflict' | 'currentLineNumber' | 'incomingLineNumber'
+> {
+  const anchorLineNumber =
+    action.currentLineNumber ?? action.incomingLineNumber ?? 1;
+  const hunkIndex = fileDiff.hunks.findIndex((hunk) => {
+    const start = hunk.additionStart;
+    const end = hunk.additionStart + hunk.additionCount;
+    return anchorLineNumber >= start && anchorLineNumber <= end;
+  });
+
+  if (hunkIndex < 0) {
+    throw new Error(
+      'parseMergeConflictDiffFromFile: failed to locate merge conflict hunk'
+    );
+  }
+
+  const hunk = fileDiff.hunks[hunkIndex];
+  const startContextIndex = findContextIndexAtLineNumber(
+    hunk,
+    (action.incomingLineNumber ?? action.currentLineNumber ?? 1) + 1
+  );
+  const baseMarkerContextIndex =
+    action.conflict.baseMarkerLineNumber != null
+      ? findContextIndexWithMarker(
+          fileDiff,
+          hunk,
+          /^\|{7,}(?:\s.*)?$/,
+          startContextIndex + 1
+        )
+      : undefined;
+  const separatorContextIndex = findContextIndexWithMarker(
+    fileDiff,
+    hunk,
+    /^={7,}(?:\s.*)?$/,
+    startContextIndex + 1
+  );
+  const endContextIndex = findContextIndexWithMarker(
+    fileDiff,
+    hunk,
+    /^>{7,}(?:\s.*)?$/,
+    separatorContextIndex + 1
+  );
+
+  return {
+    hunkIndex,
+    startContextIndex,
+    currentChangeIndex: findAdjacentChangeIndex(hunk, startContextIndex, 1),
+    baseMarkerContextIndex,
+    baseChangeIndex:
+      baseMarkerContextIndex != null
+        ? findAdjacentChangeIndex(hunk, baseMarkerContextIndex, 1)
+        : undefined,
+    separatorContextIndex,
+    incomingChangeIndex: findAdjacentChangeIndex(
+      hunk,
+      separatorContextIndex,
+      1
+    ),
+    endContextIndex,
+  };
+}
+
+// Find the context block that contains a given addition-side line number within
+// the hunk.
+function findContextIndexAtLineNumber(
+  hunk: FileDiffMetadata['hunks'][number],
+  lineNumber: number
+): number {
+  let currentLineNumber = hunk.additionStart;
+
+  for (const [contentIndex, content] of hunk.hunkContent.entries()) {
+    const contentLineCount =
+      content.type === 'context'
+        ? content.lines
+        : Math.max(content.additions, content.deletions);
+    const nextLineNumber = currentLineNumber + contentLineCount;
+
+    if (
+      content.type === 'context' &&
+      lineNumber >= currentLineNumber &&
+      lineNumber < nextLineNumber
+    ) {
+      return contentIndex;
+    }
+
+    currentLineNumber = nextLineNumber;
+  }
+
+  throw new Error(
+    'parseMergeConflictDiffFromFile: failed to locate merge conflict marker block'
+  );
+}
+
+// Find the next context block whose actual lines include the requested marker.
+function findContextIndexWithMarker(
+  fileDiff: FileDiffMetadata,
+  hunk: FileDiffMetadata['hunks'][number],
+  marker: RegExp,
+  startIndex: number
+): number {
+  for (
+    let contentIndex = startIndex;
+    contentIndex < hunk.hunkContent.length;
+    contentIndex++
+  ) {
+    const content = hunk.hunkContent[contentIndex];
+    if (content.type !== 'context') {
+      continue;
+    }
+    const lines = fileDiff.additionLines.slice(
+      content.additionLineIndex,
+      content.additionLineIndex + content.lines
+    );
+    if (lines.some((line) => marker.test(line.trimEnd()))) {
+      return contentIndex;
+    }
+  }
+
+  throw new Error(
+    'parseMergeConflictDiffFromFile: failed to locate merge conflict marker block'
+  );
+}
+
+// Find the next or previous change block relative to a known marker context.
+function findAdjacentChangeIndex(
+  hunk: FileDiffMetadata['hunks'][number],
+  contextIndex: number,
+  direction: -1 | 1
+): number | undefined {
+  let index = contextIndex + direction;
+
+  while (index >= 0 && index < hunk.hunkContent.length) {
+    const content = hunk.hunkContent[index];
+    if (content.type === 'change') {
+      return index;
+    }
+    if (content.type === 'context' && content.lines > 0) {
+      return undefined;
+    }
+    index += direction;
+  }
+
+  return undefined;
 }
 
 interface CreateMergeConflictPatchProps {
