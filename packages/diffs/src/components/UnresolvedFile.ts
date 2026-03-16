@@ -17,6 +17,7 @@ import { areMergeConflictActionsEqual } from '../utils/areMergeConflictActionsEq
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { diffAcceptRejectHunk } from '../utils/diffAcceptRejectHunk';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
+import { getMergeConflictParseResult } from '../utils/getMergeConflictLineTypes';
 import {
   getMergeConflictActionAnchor,
   type MergeConflictDiffAction,
@@ -231,8 +232,21 @@ export class UnresolvedFile<
           break wrapper;
         }
         // If we were provided a new file, we should attempt to parse out a new
-        // diff/actions if we haven't computed it before
+        // diff/actions if we haven't computed it before. Once we initialize from
+        // a file, later updates must flow through fileDiff/actions instead of
+        // reparsing from a new file input.
         else if (file != null || this.computedCache.file != null) {
+          if (
+            file != null &&
+            this.computedCache.file != null &&
+            !areFilesEqual(file, this.computedCache.file) &&
+            this.computedCache.fileDiff != null &&
+            this.computedCache.actions != null
+          ) {
+            throw new Error(
+              'UnresolvedFile.getOrComputeDiff: file can only be used to initialize unresolved state once. Pass fileDiff and actions for subsequent updates.'
+            );
+          }
           file ??= this.computedCache.file;
           if (file == null) {
             throw new Error(
@@ -245,6 +259,7 @@ export class UnresolvedFile<
             this.computedCache.actions == null
           ) {
             const computed = parseMergeConflictDiffFromFile(file);
+            console.log('ZZZZZ - fileDiff', computed.fileDiff);
             this.computedCache = {
               file,
               fileDiff: computed.fileDiff,
@@ -263,11 +278,21 @@ export class UnresolvedFile<
         }
       }
       // If we are uncontrolled we only rely on the file and only use the first
-      // version, otherwise utilize the cached version
+      // version. After that, the cached diff/action pair is the source of
+      // truth and we should not accept a new file input.
       else {
         if (fileDiff != null || actions != null) {
           throw new Error(
             'UnresolvedFile.getOrComputeDiff: fileDiff and actions are only usable in controlled mode, you must pass in `onMergeConflictAction`'
+          );
+        }
+        if (
+          file != null &&
+          this.computedCache.file != null &&
+          !areFilesEqual(file, this.computedCache.file)
+        ) {
+          throw new Error(
+            'UnresolvedFile.getOrComputeDiff: uncontrolled unresolved files parse the file only once. Later updates must come from the cached diff state.'
           );
         }
         this.computedCache.file ??= file;
@@ -278,6 +303,7 @@ export class UnresolvedFile<
           const computed = parseMergeConflictDiffFromFile(
             this.computedCache.file
           );
+          console.log('ZZZZZ - fileDiff', computed.fileDiff);
           this.computedCache.fileDiff = computed.fileDiff;
           this.computedCache.actions = computed.actions;
         }
@@ -371,31 +397,29 @@ export class UnresolvedFile<
       );
     }
 
-    const actions = [...this.conflictActions];
-    actions[action.conflictIndex] = undefined;
-
-    const newFileDiff = diffAcceptRejectHunk(
-      fileDiff,
-      action.conflictIndex,
-      resolution === 'current'
-        ? 'reject'
-        : resolution === 'incoming'
-          ? 'accept'
-          : 'both'
-    );
-
-    // AI_TASK: I need to re-build the file using the newFileDiff, can you help
-    // me with that?
-    const file: FileContents = {
-      name: 'lol',
-      contents: 'fixme',
-      // Obviously this is broken right now, but should be fixed up however we
-      // rebuild the new FileContents
-      cacheKey:
-        (prevFile as any).cacheKey != null
-          ? `${(prevFile as any).cacheKey}:mc-${conflictIndex}-${resolution}`
-          : undefined,
-    };
+    const newFileDiff = diffAcceptRejectHunk(fileDiff, action.conflictIndex, {
+      type: resolution,
+      stripConflictSeparators: true,
+    });
+    const previousHunk = fileDiff.hunks[action.conflictIndex];
+    const nextHunk = newFileDiff.hunks[action.conflictIndex];
+    console.log('ZZZZ - hmm?', { previousHunk, nextHunk });
+    const previousFile = this.computedCache.file;
+    const { file, actions } = rebuildFileAndActions({
+      fileDiff: newFileDiff,
+      previousActions: this.conflictActions,
+      resolvedConflictIndex: conflictIndex,
+      additionOffset:
+        previousHunk != null && nextHunk != null
+          ? nextHunk.additionCount - previousHunk.additionCount
+          : 0,
+      deletionOffset:
+        previousHunk != null && nextHunk != null
+          ? nextHunk.deletionCount - previousHunk.deletionCount
+          : 0,
+      previousFile,
+      resolution,
+    });
 
     return {
       file,
@@ -561,4 +585,147 @@ export class UnresolvedFile<
     }
     this.conflictActionCache.clear();
   }
+}
+
+interface RebuildFileAndActionsProps {
+  fileDiff: FileDiffMetadata;
+  previousActions: (MergeConflictDiffAction | undefined)[];
+  resolvedConflictIndex: number;
+  additionOffset: number;
+  deletionOffset: number;
+  previousFile: FileContents | undefined;
+  resolution: MergeConflictResolution;
+}
+
+// Rebuild the emitted unresolved file contents and remaining action anchors in
+// one pass over the post-resolution diff state.
+function rebuildFileAndActions({
+  fileDiff,
+  previousActions,
+  resolvedConflictIndex,
+  additionOffset,
+  deletionOffset,
+  previousFile,
+  resolution,
+}: RebuildFileAndActionsProps): Pick<
+  ResolveConflictReturn,
+  'file' | 'actions'
+> {
+  const pendingActions = [...previousActions];
+  pendingActions[resolvedConflictIndex] = undefined;
+
+  const nextActions: (MergeConflictDiffAction | undefined)[] = new Array(
+    pendingActions.length
+  );
+  let contents: string = '';
+
+  for (let hunkIndex = 0; hunkIndex < fileDiff.hunks.length; hunkIndex++) {
+    const hunk = fileDiff.hunks[hunkIndex];
+    const action = pendingActions[hunkIndex];
+    // REVIEW: BRO, WHAT THE FUCK IS THIS?!
+    const hunkLines =
+      action != null
+        ? buildUnresolvedHunkLines(fileDiff, hunk)
+        : buildResolvedHunkLines(fileDiff, hunk);
+
+    if (hunkIndex === resolvedConflictIndex) {
+    } else {
+      contents += buildUnresolvedHunkLines(fileDiff, hunk);
+    }
+
+    if (action != null) {
+      if (hunkIndex > resolvedConflictIndex) {
+        nextActions[hunkIndex] = {
+          ...action,
+          currentLineNumber:
+            action.currentLineNumber != null
+              ? action.currentLineNumber + deletionOffset
+              : action.currentLineNumber,
+          incomingLineNumber:
+            action.incomingLineNumber != null
+              ? action.incomingLineNumber + additionOffset
+              : action.incomingLineNumber,
+        };
+      } else {
+        nextActions[hunkIndex] = action;
+      }
+    }
+  }
+
+  return {
+    file: {
+      name: previousFile?.name ?? fileDiff.name,
+      contents,
+      cacheKey:
+        previousFile?.cacheKey != null
+          ? `${previousFile.cacheKey}:mc-${resolvedConflictIndex}-${resolution}`
+          : undefined,
+    },
+    actions: nextActions,
+  };
+}
+
+// Reconstruct the unresolved file text for a hunk by keeping shared context and
+// muxing both sides of each change block back together in file order.
+function buildUnresolvedHunkLines(
+  fileDiff: FileDiffMetadata,
+  hunk: FileDiffMetadata['hunks'][number]
+): string {
+  let lines: string = '';
+  let index = 0;
+  let len = 0;
+  for (const content of hunk.hunkContent) {
+    if (content.type === 'context') {
+      index = content.additionLineIndex;
+      len = index + content.lines;
+      for (; index < len; index++) {
+        lines += fileDiff.additionLines[index];
+      }
+    } else {
+      index = content.deletionLineIndex;
+      len = index + content.deletions;
+      for (; index < len; index++) {
+        lines += fileDiff.deletionLines[index];
+      }
+
+      index = content.additionLineIndex;
+      len = index + content.additions;
+      for (; index < len; index++) {
+        lines += fileDiff.additionLines[index];
+      }
+    }
+  }
+
+  return lines;
+}
+
+// Reconstruct the saved file text for a resolved hunk by dropping merge marker
+// and base lines while preserving the code lines that survived the resolution.
+function buildResolvedHunkLines(
+  fileDiff: FileDiffMetadata,
+  hunk: FileDiffMetadata['hunks'][number]
+): string[] {
+  const lines: string[] = [];
+
+  for (const content of hunk.hunkContent) {
+    if (content.type !== 'context') {
+      lines.push(...buildUnresolvedHunkLines(fileDiff, hunk));
+      return lines;
+    }
+
+    lines.push(
+      ...fileDiff.additionLines.slice(
+        content.additionLineIndex,
+        content.additionLineIndex + content.lines
+      )
+    );
+  }
+
+  const { lineTypes } = getMergeConflictParseResult(lines);
+  return lines.filter((_, index) => {
+    const lineType = lineTypes[index];
+    return (
+      lineType === 'none' || lineType === 'current' || lineType === 'incoming'
+    );
+  });
 }

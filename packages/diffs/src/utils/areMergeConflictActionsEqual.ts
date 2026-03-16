@@ -6,8 +6,6 @@ export function areMergeConflictActionsEqual(
   b: MergeConflictDiffAction
 ): boolean {
   return (
-    a.actionOriginalLineIndex === b.actionOriginalLineIndex &&
-    a.actionOriginalLineNumber === b.actionOriginalLineNumber &&
     a.currentLineNumber === b.currentLineNumber &&
     a.incomingLineNumber === b.incomingLineNumber &&
     a.conflictIndex === b.conflictIndex &&
