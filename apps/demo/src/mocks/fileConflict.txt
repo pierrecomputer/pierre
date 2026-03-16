@@ -13,6 +13,29 @@ export async function createSession(userId: string) {
   };
 
   const session = await db.session.create({ data: sessionData });
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // This is a comment, that will add some lines
+  // Word to this business
 
 <<<<<<< HEAD
   await db.auditLog.create({
@@ -31,4 +54,23 @@ export async function createSession(userId: string) {
 >>>>>>> feature/oauth-session-source
 
   return session;
+}
+
+/*
+
+And here we have a big comment for something.
+Because it helps with things...
+
+Yup
+*/
+
+class Test {
+<<<<<<< HEAD
+  constructor(wow: boolean) {
+    console.log('isWow': wow)
+=======
+  constructor(noWow: boolean) {
+    console.log('noWow', wow);
+>>>>>>> feature/oauth-session-source
+  }
 }
