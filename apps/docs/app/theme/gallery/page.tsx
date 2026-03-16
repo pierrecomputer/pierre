@@ -1,6 +1,5 @@
 import { parseDiffFromFile, resolveTheme } from '@pierre/diffs';
 import { themeToTreeStyles } from '@pierre/trees';
-import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { ThemesGridClient } from './ThemesGridClient';
@@ -164,11 +163,7 @@ const THEMES = [
   'min-dark',
 ] as const;
 
-export default async function TreesThemesPage() {
-  if (process.env.NODE_ENV !== 'development') {
-    return notFound();
-  }
-
+export default async function ThemeGalleryPage() {
   const resolvedThemes = await Promise.all(
     THEMES.map(async (themeName) => {
       try {
