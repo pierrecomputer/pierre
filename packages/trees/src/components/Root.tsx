@@ -17,7 +17,6 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from 'preact/hooks';
 
 import {
@@ -26,6 +25,10 @@ import {
   FLATTENED_PREFIX,
   HEADER_SLOT_NAME,
 } from '../constants';
+import {
+  contextMenuFeature,
+  type ContextMenuRequest,
+} from '../features/contextMenuFeature';
 import { dragAndDropFeature } from '../features/dragAndDropFeature';
 import {
   fileTreeSearchFeature,
@@ -55,6 +58,7 @@ import {
 import { fileListToTree } from '../utils/fileListToTree';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
 import type { ChildrenSortOption } from '../utils/sortChildren';
+import { useContextMenuController } from './hooks/useContextMenuController';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
 import { VirtualizedList } from './VirtualizedList';
@@ -177,11 +181,6 @@ interface TreeItemProps {
     height?: number;
     viewBox?: string;
   };
-  isContextMenuEnabled: boolean;
-  onOpenContextMenuRequest: (
-    itemId: string,
-    anchorEl: HTMLElement | null
-  ) => void;
   detectFlattenedSubfolder: (e: DragEvent) => void;
   clearFlattenedSubfolder: () => void;
 }
@@ -208,9 +207,7 @@ function treeItemPropsAreEqual(
     prev.containsGitChange === next.containsGitChange &&
     prev.flattens === next.flattens &&
     prev.ancestors === next.ancestors &&
-    prev.treeDomId === next.treeDomId &&
-    prev.isContextMenuEnabled === next.isContextMenuEnabled &&
-    prev.onOpenContextMenuRequest === next.onOpenContextMenuRequest
+    prev.treeDomId === next.treeDomId
   );
 }
 
@@ -236,8 +233,6 @@ function TreeItemInner({
   ancestors,
   treeDomId,
   remapIcon,
-  isContextMenuEnabled,
-  onOpenContextMenuRequest,
   detectFlattenedSubfolder,
   clearFlattenedSubfolder,
 }: TreeItemProps): JSX.Element {
@@ -287,28 +282,6 @@ function TreeItemInner({
           },
         }
       : baseProps;
-  const treeItemProps = isContextMenuEnabled
-    ? {
-        ...itemProps,
-        'aria-haspopup': 'menu',
-        onKeyDown: (e: KeyboardEvent) => {
-          (itemProps.onKeyDown as ((e: KeyboardEvent) => void) | undefined)?.(
-            e
-          );
-          if (e.defaultPrevented) return;
-          const isShiftF10 = e.shiftKey && e.key === 'F10';
-          if (!isShiftF10) return;
-
-          e.preventDefault();
-          e.stopPropagation();
-          onOpenContextMenuRequest(
-            itemId,
-            e.currentTarget instanceof HTMLElement ? e.currentTarget : null
-          );
-        },
-      }
-    : itemProps;
-
   const statusLabel =
     itemGitStatus === 'added'
       ? 'A'
@@ -332,7 +305,7 @@ function TreeItemInner({
       {...gitStatusProps}
       data-item-id={itemId}
       id={getItemDomId(itemId)}
-      {...treeItemProps}
+      {...itemProps}
       key={itemId}
     >
       {level > 0 ? (
@@ -681,6 +654,10 @@ export function Root({
   );
 
   const isDnD = fileTreeOptions.dragAndDrop === true;
+  const isContextMenuEnabled =
+    callbacksRef != null
+      ? callbacksRef.current.onContextMenuOpen != null
+      : stateConfig?.onContextMenuOpen != null;
 
   const features = useMemo(() => {
     const base = [
@@ -690,6 +667,7 @@ export function Root({
       fileTreeSearchFeature,
       expandAllFeature,
       gitStatusFeature,
+      contextMenuFeature,
     ];
     if (isDnD) {
       base.push(dragAndDropFeature, keyboardDragAndDropFeature);
@@ -848,10 +826,24 @@ export function Root({
     gitStatusSignature: getGitStatusSignature(gitStatus),
     gitStatusPathToId: pathToId,
   };
+  const contextMenuRequestHandlerRef = useRef<{
+    (request: ContextMenuRequest): void;
+  } | null>(null);
+  const handleContextMenuFeatureRequest = useCallback(
+    (request: ContextMenuRequest) => {
+      contextMenuRequestHandlerRef.current?.(request);
+    },
+    []
+  );
+  const contextMenuFeatureConfig = {
+    contextMenuEnabled: isContextMenuEnabled,
+    onContextMenuRequest: handleContextMenuFeatureRequest,
+  };
   const tree = useTree<FileTreeNode>({
     ...restTreeConfig,
     ...searchModeConfig,
     ...gitStatusConfig,
+    ...contextMenuFeatureConfig,
     rootItemId: 'root',
     dataLoader,
     getItemName: (item) => item.getItemData().name,
@@ -923,461 +915,32 @@ export function Root({
 
   searchActiveRef.current = (tree.getState().search?.length ?? 0) > 0;
 
-  // --- Context menu ---
-  const isContextMenuEnabled =
-    callbacksRef != null
-      ? callbacksRef.current.onContextMenuOpen != null
-      : stateConfig?.onContextMenuOpen != null;
-  const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(
-    null
-  );
-  const contextMenuAnchorRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const hoveredContextMenuItemRef = useRef<string | null>(null);
-  const contextHoverItemElRef = useRef<HTMLElement | null>(null);
-  const contextHoverItemIdRef = useRef<string | null>(null);
-  const contextMenuRestoreFocusRef = useRef<{
-    element: HTMLElement | null;
-    focusedItemId: string | null;
-  }>({
-    element: null,
-    focusedItemId: null,
-  });
-  const contextMenuRestoreFocusTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const contextMenuRestoreFocusRetryTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const contextMenuRestoreFocusLateTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const isScrollingRef = useRef(false);
-  // Ref mirror of contextMenuItemId — lets callbacks read the current value
-  // without including it as a dependency, keeping their identities stable.
-  const contextMenuItemIdRef = useRef<string | null>(null);
-  contextMenuItemIdRef.current = contextMenuItemId;
-  const isContextMenuOpen = isContextMenuEnabled && contextMenuItemId != null;
-
-  const setContextHoverItem = useCallback(
-    (itemId: string | null) => {
-      if (contextHoverItemIdRef.current === itemId) {
-        return;
-      }
-
-      if (contextHoverItemElRef.current != null) {
-        delete contextHoverItemElRef.current.dataset.itemContextHover;
-        contextHoverItemElRef.current = null;
-      }
-      contextHoverItemIdRef.current = null;
-
-      if (itemId == null) {
-        return;
-      }
-
-      const container = tree.getElement()?.closest('[role="tree"]');
-      if (container == null) {
-        return;
-      }
-      const itemEl = container.querySelector<HTMLElement>(
-        `[data-type="item"][data-item-id="${itemId}"]`
-      );
-      if (itemEl == null) {
-        return;
-      }
-
-      itemEl.dataset.itemContextHover = 'true';
-      contextHoverItemElRef.current = itemEl;
-      contextHoverItemIdRef.current = itemId;
-    },
-    [tree]
-  );
-
-  const isEventInContextMenu = useCallback((e: Event): boolean => {
-    const path = e.composedPath();
-    for (const entry of path) {
-      if (!(entry instanceof HTMLElement)) continue;
-      if (entry.dataset.type === 'context-menu-anchor') {
-        return true;
-      }
-      if (entry.getAttribute('slot') === CONTEXT_MENU_SLOT_NAME) {
-        return true;
-      }
-    }
-    return false;
-  }, []);
-
-  const clearContextMenuRestoreTimers = useCallback(() => {
-    if (contextMenuRestoreFocusTimerRef.current != null) {
-      clearTimeout(contextMenuRestoreFocusTimerRef.current);
-      contextMenuRestoreFocusTimerRef.current = null;
-    }
-    if (contextMenuRestoreFocusRetryTimerRef.current != null) {
-      clearTimeout(contextMenuRestoreFocusRetryTimerRef.current);
-      contextMenuRestoreFocusRetryTimerRef.current = null;
-    }
-    if (contextMenuRestoreFocusLateTimerRef.current != null) {
-      clearTimeout(contextMenuRestoreFocusLateTimerRef.current);
-      contextMenuRestoreFocusLateTimerRef.current = null;
-    }
-  }, []);
-
-  const restoreContextMenuFocus = useCallback((): boolean => {
-    const focusElement = (element: HTMLElement | null): boolean => {
-      if (element == null || !element.isConnected) {
-        return false;
-      }
-      if (element === document.body || element === document.documentElement) {
-        return false;
-      }
-      element.focus();
-      return document.activeElement === element;
-    };
-
-    if (focusElement(contextMenuRestoreFocusRef.current.element)) {
-      return true;
-    }
-
-    const focusedItemId = contextMenuRestoreFocusRef.current.focusedItemId;
-    if (focusedItemId != null) {
-      const container = tree.getElement()?.closest('[role="tree"]');
-      const focusedItemEl = container?.querySelector<HTMLElement>(
-        `[data-type="item"][data-item-id="${focusedItemId}"]`
-      );
-      if (focusElement(focusedItemEl ?? null)) {
-        return true;
-      }
-    }
-
-    const treeElement = tree.getElement();
-    if (treeElement instanceof HTMLElement) {
-      treeElement.focus();
-      return document.activeElement === treeElement;
-    }
-
-    return false;
-  }, [tree]);
-
-  const closeContextMenu = useCallback(
-    (notify = true) => {
-      if (contextMenuItemIdRef.current == null) return;
-
-      clearContextMenuRestoreTimers();
-
-      setContextHoverItem(null);
-      setContextMenuItemId(null);
-      if (notify) {
-        callbacksRef?.current.onContextMenuClose?.();
-      }
-
-      contextMenuRestoreFocusTimerRef.current = setTimeout(() => {
-        contextMenuRestoreFocusTimerRef.current = null;
-        restoreContextMenuFocus();
-        contextMenuRestoreFocusRetryTimerRef.current = setTimeout(() => {
-          contextMenuRestoreFocusRetryTimerRef.current = null;
-          if (
-            document.activeElement === document.body ||
-            document.activeElement === document.documentElement
-          ) {
-            restoreContextMenuFocus();
-          }
-        }, 0);
-        contextMenuRestoreFocusLateTimerRef.current = setTimeout(() => {
-          contextMenuRestoreFocusLateTimerRef.current = null;
-          if (
-            document.activeElement === document.body ||
-            document.activeElement === document.documentElement
-          ) {
-            restoreContextMenuFocus();
-          }
-          contextMenuRestoreFocusRef.current = {
-            element: null,
-            focusedItemId: null,
-          };
-        }, 32);
-      }, 0);
-    },
-    [
-      callbacksRef,
-      clearContextMenuRestoreTimers,
-      restoreContextMenuFocus,
-      setContextHoverItem,
-    ]
-  );
-
-  const updateTriggerPosition = useCallback(
-    (itemEl: HTMLElement | null) => {
-      const trigger = triggerRef.current;
-      const anchor = contextMenuAnchorRef.current;
-      if (trigger == null || anchor == null) return;
-      if (itemEl == null) {
-        const openItemId = contextMenuItemIdRef.current;
-        if (openItemId == null) {
-          trigger.dataset.visible = 'false';
-          anchor.dataset.visible = 'false';
-        }
-        hoveredContextMenuItemRef.current = null;
-        if (openItemId != null) {
-          setContextHoverItem(openItemId);
-        } else {
-          setContextHoverItem(null);
-        }
-        return;
-      }
-      const container = tree.getElement()?.closest('[role="tree"]');
-      if (container == null) return;
-      const itemRect = itemEl.getBoundingClientRect();
-      // For virtualized trees the trigger lives inside the scroll container,
-      // so we compute a content-relative offset that scrolls with items.
-      const scrollContainer = container.querySelector(
-        '[data-file-tree-virtualized-scroll]'
-      );
-      let top: number;
-      if (scrollContainer != null) {
-        const scrollRect = scrollContainer.getBoundingClientRect();
-        top = itemRect.top - scrollRect.top + scrollContainer.scrollTop;
-      } else {
-        const containerRect = container.getBoundingClientRect();
-        top = itemRect.top - containerRect.top;
-      }
-      anchor.style.top = `${top}px`;
-      trigger.dataset.visible = 'true';
-      anchor.dataset.visible = 'true';
-      const nextItemId = itemEl.dataset.itemId ?? null;
-      trigger.dataset.itemId = nextItemId ?? '';
-      hoveredContextMenuItemRef.current = nextItemId;
-      setContextHoverItem(nextItemId);
-    },
-    [setContextHoverItem, tree]
-  );
-
-  const openContextMenuForItem = useCallback(
-    (
-      itemId: string,
-      anchorEl: HTMLElement | null,
-      toggleIfAlreadyOpen = false
-    ) => {
-      const openContextMenu = callbacksRef?.current.onContextMenuOpen;
-      if (openContextMenu == null) return;
-
-      if (toggleIfAlreadyOpen && contextMenuItemIdRef.current === itemId) {
-        closeContextMenu();
-        return;
-      }
-
-      if (anchorEl == null) return;
-
-      clearContextMenuRestoreTimers();
-      const activeElement = document.activeElement;
-      const focusTarget =
-        activeElement instanceof HTMLElement &&
-        activeElement !== document.body &&
-        activeElement !== document.documentElement
-          ? activeElement
-          : null;
-      contextMenuRestoreFocusRef.current =
-        focusTarget != null
-          ? {
-              element: focusTarget,
-              focusedItemId: tree.getState().focusedItem ?? null,
-            }
-          : {
-              element: null,
-              focusedItemId: tree.getState().focusedItem ?? null,
-            };
-
-      if (anchorEl.dataset.type === 'item') {
-        updateTriggerPosition(anchorEl);
-      }
-
-      const trigger = triggerRef.current;
-      const menuAnchorEl =
-        anchorEl.dataset.type === CONTEXT_MENU_TRIGGER_TYPE && trigger != null
-          ? trigger
-          : (trigger ?? anchorEl);
-      setContextMenuItemId(itemId);
-      const item = tree.getItemInstance(itemId);
-      const data = item.getItemData();
-      const anchorRect = menuAnchorEl.getBoundingClientRect();
-      openContextMenu(
-        {
-          path: getSelectionPath(data.path),
-          isFolder: data.children?.direct != null,
-        },
-        {
-          anchorElement: menuAnchorEl,
-          anchorRect: {
-            top: anchorRect.top,
-            right: anchorRect.right,
-            bottom: anchorRect.bottom,
-            left: anchorRect.left,
-            width: anchorRect.width,
-            height: anchorRect.height,
-            x: anchorRect.x,
-            y: anchorRect.y,
-          },
-          close: () => closeContextMenu(),
-        }
-      );
-    },
-    [
-      callbacksRef,
-      clearContextMenuRestoreTimers,
-      closeContextMenu,
-      tree,
-      updateTriggerPosition,
-    ]
-  );
-
-  const handleTriggerClick = useCallback(
-    (e: MouseEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      const trigger = triggerRef.current;
-      const itemId = trigger?.dataset.itemId;
-      if (itemId == null || trigger == null) return;
-      openContextMenuForItem(itemId, trigger, true);
-    },
-    [openContextMenuForItem]
-  );
-
-  useEffect(() => {
-    if (contextMenuItemId == null) {
-      return;
-    }
-    const trigger = triggerRef.current;
-    const anchor = contextMenuAnchorRef.current;
-    if (trigger != null) {
-      trigger.dataset.visible = 'true';
-    }
-    if (anchor != null) {
-      anchor.dataset.visible = 'true';
-    }
-    setContextHoverItem(contextMenuItemId);
-  }, [contextMenuItemId, setContextHoverItem]);
-
-  const handleTreeKeyDownCapture = useCallback(
-    (e: KeyboardEvent) => {
-      if (!isContextMenuOpen || e.defaultPrevented || isEventInContextMenu(e)) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === 'Escape') {
-        closeContextMenu();
-        return;
-      }
-    },
-    [closeContextMenu, isContextMenuOpen, isEventInContextMenu]
-  );
-
-  // Close on scroll
-  useEffect(() => {
-    if (!isContextMenuEnabled || contextMenuItemId == null) return;
-    const container = tree.getElement()?.closest('[role="tree"]');
-    const scrollParent = container?.closest(
-      '[data-file-tree-virtualized-scroll]'
-    );
-    const target = scrollParent ?? container?.parentElement;
-    if (target == null) return;
-    const handleScroll = () => closeContextMenu();
-    target.addEventListener('scroll', handleScroll, { passive: true });
-    return () => target.removeEventListener('scroll', handleScroll);
-  }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled, tree]);
-
-  // Hide trigger during scroll — reappears on next pointerover after scrolling
-  // stops, matching the timing of the virtualizer's hover-style restoration.
-  useEffect(() => {
-    if (!isContextMenuEnabled) return;
-    const container = tree.getElement()?.closest('[role="tree"]');
-    const scrollParent = container?.closest(
-      '[data-file-tree-virtualized-scroll]'
-    );
-    const target = scrollParent ?? container?.parentElement;
-    if (target == null) return;
-    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const handleScroll = () => {
-      isScrollingRef.current = true;
-      const trigger = triggerRef.current;
-      const anchor = contextMenuAnchorRef.current;
-      if (trigger != null && contextMenuItemIdRef.current == null) {
-        trigger.dataset.visible = 'false';
-      }
-      if (anchor != null && contextMenuItemIdRef.current == null) {
-        anchor.dataset.visible = 'false';
-      }
-      if (contextMenuItemIdRef.current == null) {
-        hoveredContextMenuItemRef.current = null;
-        setContextHoverItem(null);
-      }
-
-      if (scrollTimer != null) clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        isScrollingRef.current = false;
-        scrollTimer = null;
-      }, 50);
-    };
-
-    target.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      target.removeEventListener('scroll', handleScroll);
-      if (scrollTimer != null) clearTimeout(scrollTimer);
-      isScrollingRef.current = false;
-    };
-  }, [isContextMenuEnabled, setContextHoverItem, tree]);
-
-  useEffect(
-    () => () => {
-      setContextHoverItem(null);
-      clearContextMenuRestoreTimers();
-      contextMenuRestoreFocusRef.current = {
-        element: null,
-        focusedItemId: null,
-      };
-    },
-    [clearContextMenuRestoreTimers, setContextHoverItem]
-  );
-
-  useEffect(() => {
-    if (isContextMenuEnabled || contextMenuItemId == null) return;
-    closeContextMenu();
-  }, [closeContextMenu, contextMenuItemId, isContextMenuEnabled]);
-
-  const prevContextMenuStructureRef = useRef({ files, idToPath });
-  useEffect(() => {
-    const previous = prevContextMenuStructureRef.current;
-    prevContextMenuStructureRef.current = { files, idToPath };
-    const structureChanged =
-      previous.files !== files || previous.idToPath !== idToPath;
-    if (
-      !isContextMenuEnabled ||
-      contextMenuItemId == null ||
-      !structureChanged
-    ) {
-      return;
-    }
-    closeContextMenu();
-  }, [
+  const {
+    isContextMenuOpen,
+    contextMenuAnchorRef,
+    triggerRef,
     closeContextMenu,
-    contextMenuItemId,
+    openContextMenuForItem,
+    handleTriggerClick,
+    handleTreeKeyDownCapture,
+    handleTreePointerOver,
+    handleTreePointerLeave,
+    handleWashMouseDownCapture,
+    handleWashWheelCapture,
+    handleWashTouchMoveCapture,
+  } = useContextMenuController({
+    tree,
+    isContextMenuEnabled,
+    callbacksRef,
     files,
     idToPath,
-    isContextMenuEnabled,
-  ]);
+  });
+  contextMenuRequestHandlerRef.current = (request: ContextMenuRequest) => {
+    openContextMenuForItem(request.itemId, request.anchorEl);
+  };
 
-  // Focus-based trigger positioning
   const focusedItemId = tree.getState().focusedItem ?? null;
   const hasFocusedItem = focusedItemId != null;
-
-  useEffect(() => {
-    if (!isContextMenuEnabled || focusedItemId == null) return;
-    const container = tree.getElement()?.closest('[role="tree"]');
-    const itemEl = container?.querySelector(
-      `[data-item-id="${focusedItemId}"]`
-    ) as HTMLElement | null;
-    updateTriggerPosition(itemEl);
-  }, [focusedItemId, isContextMenuEnabled, updateTriggerPosition, tree]);
 
   // Detect stale expanded IDs when the file list changes. Flattened chains
   // may break or form, causing node IDs to change. We snapshot the expanded
@@ -1624,66 +1187,8 @@ export function Root({
       id={treeDomId}
       data-file-tree-virtualized-root={shouldVirtualize ? 'true' : undefined}
       onKeyDownCapture={handleTreeKeyDownCapture}
-      onPointerOver={
-        isContextMenuEnabled
-          ? (e: PointerEvent) => {
-              if (isScrollingRef.current) return;
-              const target = e.target as HTMLElement;
-              const contextHoverItemId =
-                contextMenuItemIdRef.current ??
-                hoveredContextMenuItemRef.current;
-              if (
-                target.closest?.(
-                  `[data-type="${CONTEXT_MENU_TRIGGER_TYPE}"]`
-                ) != null
-              ) {
-                return;
-              }
-              if (target.closest?.('[data-type="context-menu-wash"]') != null) {
-                setContextHoverItem(contextHoverItemId);
-                return;
-              }
-              if (isEventInContextMenu(e)) {
-                setContextHoverItem(contextHoverItemId);
-                return;
-              }
-              const itemEl = target.closest?.('[data-type="item"]') ?? null;
-              const itemId =
-                itemEl instanceof HTMLElement
-                  ? (itemEl.dataset.itemId ?? null)
-                  : null;
-              if (
-                itemId != null &&
-                hoveredContextMenuItemRef.current === itemId
-              ) {
-                return;
-              }
-              updateTriggerPosition(itemEl as HTMLElement | null);
-            }
-          : undefined
-      }
-      onPointerLeave={
-        isContextMenuEnabled
-          ? () => {
-              const anchor = contextMenuAnchorRef.current;
-              if (
-                contextMenuItemIdRef.current == null &&
-                triggerRef.current != null
-              ) {
-                triggerRef.current.dataset.visible = 'false';
-                if (anchor != null) {
-                  anchor.dataset.visible = 'false';
-                }
-              }
-              hoveredContextMenuItemRef.current = null;
-              if (contextMenuItemIdRef.current != null) {
-                setContextHoverItem(contextMenuItemIdRef.current);
-              } else {
-                setContextHoverItem(null);
-              }
-            }
-          : undefined
-      }
+      onPointerOver={isContextMenuEnabled ? handleTreePointerOver : undefined}
+      onPointerLeave={isContextMenuEnabled ? handleTreePointerLeave : undefined}
     >
       <style dangerouslySetInnerHTML={{ __html: guideStyleText }} />
       <slot name={HEADER_SLOT_NAME} data-type="header-slot" />
@@ -1767,8 +1272,6 @@ export function Root({
               ancestors={ancestors}
               treeDomId={treeDomId}
               remapIcon={remapIcon}
-              isContextMenuEnabled={isContextMenuEnabled}
-              onOpenContextMenuRequest={openContextMenuForItem}
               detectFlattenedSubfolder={detectFlattenedSubfolder}
               clearFlattenedSubfolder={clearFlattenedSubfolder}
             />
@@ -1833,19 +1336,9 @@ export function Root({
         <div
           data-type="context-menu-wash"
           aria-hidden="true"
-          onMouseDownCapture={(e: MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            closeContextMenu();
-          }}
-          onWheelCapture={(e: WheelEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onTouchMoveCapture={(e: TouchEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
+          onMouseDownCapture={handleWashMouseDownCapture}
+          onWheelCapture={handleWashWheelCapture}
+          onTouchMoveCapture={handleWashTouchMoveCapture}
         />
       ) : null}
     </div>

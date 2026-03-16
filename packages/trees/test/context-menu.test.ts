@@ -306,7 +306,7 @@ describe('context menu', () => {
     ft.render({ containerWrapper });
 
     const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
-    const itemButtons = shadowRoot?.querySelectorAll(
+    const itemButtons = shadowRoot?.querySelectorAll<HTMLButtonElement>(
       'button[data-type="item"]'
     );
     const firstItem = itemButtons?.[0] ?? null;
