@@ -316,7 +316,11 @@ export function ClientPage({
           description="Expands folders containing matches but keeps all items visible"
         >
           <ReactClientRendered
-            options={{ ...reactOptions, fileTreeSearchMode: 'expand-matches' }}
+            options={{
+              ...reactOptions,
+              search: true,
+              fileTreeSearchMode: 'expand-matches',
+            }}
             initialFiles={reactFiles}
             stateConfig={sharedDemoStateConfig}
           />
@@ -328,6 +332,7 @@ export function ClientPage({
           <ReactClientRendered
             options={{
               ...reactOptions,
+              search: true,
               fileTreeSearchMode: 'collapse-non-matches',
             }}
             initialFiles={reactFiles}
@@ -341,6 +346,7 @@ export function ClientPage({
           <ReactClientRendered
             options={{
               ...reactOptions,
+              search: true,
               fileTreeSearchMode: 'hide-non-matches',
             }}
             initialFiles={reactFiles}
