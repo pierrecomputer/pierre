@@ -31,6 +31,8 @@ export function File<LAnnotation = undefined>({
     lineAnnotations,
     selectedLines,
     prerenderedHTML,
+    hasCustomGutterUtility:
+      renderGutterUtility != null || renderHoverUtility != null,
   });
   const children = renderFileChildren({
     file,

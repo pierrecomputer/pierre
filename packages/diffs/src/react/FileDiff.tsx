@@ -37,6 +37,8 @@ export function FileDiff<LAnnotation = undefined>({
     lineAnnotations,
     selectedLines,
     prerenderedHTML,
+    hasCustomGutterUtility:
+      renderGutterUtility != null || renderHoverUtility != null,
   });
   const children = renderDiffChildren({
     fileDiff,

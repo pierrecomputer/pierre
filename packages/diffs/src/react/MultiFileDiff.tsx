@@ -40,6 +40,8 @@ export function MultiFileDiff<LAnnotation = undefined>({
     lineAnnotations,
     selectedLines,
     prerenderedHTML,
+    hasCustomGutterUtility:
+      renderGutterUtility != null || renderHoverUtility != null,
   });
   const children = renderDiffChildren({
     deletionFile: oldFile,

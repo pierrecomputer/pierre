@@ -26,6 +26,8 @@ import { useStableCallback } from './useStableCallback';
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
+const noopGutterUtility = () => null;
+
 interface UseFileDiffInstanceProps<LAnnotation> {
   oldFile?: FileContents;
   newFile?: FileContents;
@@ -35,6 +37,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
+  hasCustomGutterUtility?: boolean;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -51,12 +54,21 @@ export function useFileDiffInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
   metrics,
+  hasCustomGutterUtility,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<
     FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
   >(null);
+
+  const effectiveOptions =
+    hasCustomGutterUtility === true &&
+    options?.renderGutterUtility == null &&
+    options?.renderHoverUtility == null
+      ? { ...options, renderGutterUtility: noopGutterUtility }
+      : options;
+
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
       if (instanceRef.current != null) {
@@ -66,14 +78,14 @@ export function useFileDiffInstance<LAnnotation>({
       }
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFileDiff(
-          options,
+          effectiveOptions,
           simpleVirtualizer,
           metrics,
           poolManager,
           true
         );
       } else {
-        instanceRef.current = new FileDiff(options, poolManager, true);
+        instanceRef.current = new FileDiff(effectiveOptions, poolManager, true);
       }
       void instanceRef.current.hydrate({
         fileDiff,
@@ -97,8 +109,8 @@ export function useFileDiffInstance<LAnnotation>({
   useIsometricEffect(() => {
     const { current: instance } = instanceRef;
     if (instance == null) return;
-    const forceRender = !areOptionsEqual(instance.options, options);
-    instance.setOptions(options);
+    const forceRender = !areOptionsEqual(instance.options, effectiveOptions);
+    instance.setOptions(effectiveOptions);
     void instance.render({
       forceRender,
       fileDiff,

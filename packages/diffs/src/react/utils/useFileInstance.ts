@@ -25,6 +25,8 @@ import { useStableCallback } from './useStableCallback';
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
+const noopGutterUtility = () => null;
+
 interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
@@ -32,6 +34,7 @@ interface UseFileInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
+  hasCustomGutterUtility?: boolean;
 }
 
 interface UseFileInstanceReturn {
@@ -46,12 +49,21 @@ export function useFileInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
   metrics,
+  hasCustomGutterUtility,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<
     File<LAnnotation> | VirtualizedFile<LAnnotation> | null
   >(null);
+
+  const effectiveOptions =
+    hasCustomGutterUtility === true &&
+    options?.renderGutterUtility == null &&
+    options?.renderHoverUtility == null
+      ? { ...options, renderGutterUtility: noopGutterUtility }
+      : options;
+
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
       if (instanceRef.current != null) {
@@ -61,14 +73,14 @@ export function useFileInstance<LAnnotation>({
       }
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFile(
-          options,
+          effectiveOptions,
           simpleVirtualizer,
           metrics,
           poolManager,
           true
         );
       } else {
-        instanceRef.current = new File(options, poolManager, true);
+        instanceRef.current = new File(effectiveOptions, poolManager, true);
       }
       void instanceRef.current.hydrate({
         file,
@@ -87,8 +99,11 @@ export function useFileInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
-    const forceRender = !areOptionsEqual(instanceRef.current.options, options);
-    instanceRef.current.setOptions(options);
+    const forceRender = !areOptionsEqual(
+      instanceRef.current.options,
+      effectiveOptions
+    );
+    instanceRef.current.setOptions(effectiveOptions);
     void instanceRef.current.render({ file, lineAnnotations, forceRender });
     if (selectedLines !== undefined) {
       instanceRef.current.setSelectedLines(selectedLines);

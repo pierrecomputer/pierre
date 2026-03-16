@@ -34,6 +34,8 @@ import { useStableCallback } from './useStableCallback';
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
+const noopGutterUtility = () => null;
+
 interface UseUnresolvedFileInstanceProps<LAnnotation> {
   file: FileContents;
   options?: Omit<UnresolvedFileHunksRendererOptions, 'onMergeConflictAction'>;
@@ -41,6 +43,7 @@ interface UseUnresolvedFileInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   hasConflictUtility: boolean;
+  hasCustomGutterUtility?: boolean;
 }
 
 interface UseUnresolvedFileInstanceReturn<LAnnotation> {
@@ -58,6 +61,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
   hasConflictUtility,
+  hasCustomGutterUtility,
 }: UseUnresolvedFileInstanceProps<LAnnotation>): UseUnresolvedFileInstanceReturn<LAnnotation> {
   const [{ fileDiff, actions }, setState] = useState(() => {
     const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
@@ -97,7 +101,8 @@ export function useUnresolvedFileInstance<LAnnotation>({
         mergeUnresolvedOptions(
           options,
           onMergeConflictAction,
-          hasConflictUtility
+          hasConflictUtility,
+          hasCustomGutterUtility
         ),
         poolManager,
         true
@@ -126,7 +131,8 @@ export function useUnresolvedFileInstance<LAnnotation>({
     const newOptions = mergeUnresolvedOptions(
       options,
       onMergeConflictAction,
-      hasConflictUtility
+      hasConflictUtility,
+      hasCustomGutterUtility
     );
     const forceRender = !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
@@ -157,21 +163,29 @@ export function useUnresolvedFileInstance<LAnnotation>({
 function mergeUnresolvedOptions<LAnnotation>(
   options: UnresolvedFileHunksRendererOptions | undefined,
   onMergeConflictAction: UnresolvedFileOptions<LAnnotation>['onMergeConflictAction'],
-  hasConflictUtility: boolean
+  hasConflictUtility: boolean,
+  hasCustomGutterUtility?: boolean
 ): UnresolvedFileOptions<LAnnotation> {
-  return {
+  const merged: UnresolvedFileOptions<LAnnotation> = {
     ...options,
     onMergeConflictAction,
     hunkSeparators:
       options?.hunkSeparators === 'custom'
         ? emptyRender
         : options?.hunkSeparators,
-    // Add a placeholder type for the custom render
     mergeConflictActionsType:
       hasConflictUtility || options?.mergeConflictActionsType === 'custom'
         ? emptyRender
         : options?.mergeConflictActionsType,
   };
+  if (
+    hasCustomGutterUtility === true &&
+    merged.renderGutterUtility == null &&
+    merged.renderHoverUtility == null
+  ) {
+    merged.renderGutterUtility = noopGutterUtility;
+  }
+  return merged;
 }
 
 function emptyRender() {
