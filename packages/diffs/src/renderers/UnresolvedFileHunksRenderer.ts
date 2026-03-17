@@ -65,6 +65,7 @@ export class UnresolvedFileHunksRenderer<
 > extends DiffHunksRenderer<LAnnotation> {
   private cachedAdditionLines: string[] | undefined;
   private cachedDeletionLines: string[] | undefined;
+  private pendingConflictActions: (MergeConflictDiffAction | undefined)[] = [];
   private conflictActions = new Map<string, MergeConflictActionRowData[]>();
   private additionMarkerLookup: MergeConflictMarkerLookup[] = [];
   private deletionMarkerLookup: MergeConflictMarkerLookup[] = [];
@@ -81,13 +82,30 @@ export class UnresolvedFileHunksRenderer<
     this.options = options;
   }
 
+  // SELF_REVIEW: I don't love how this is hooked up with `renderDiff` right
+  // now, so we definitely need to figure out what the fuck we are gonna do
+  // about it...
+  // I think at the very least we should keep it like annotations, and just
+  // sorta assume there's a disconnect there
   public setConflictActions(
-    conflictActions: (MergeConflictDiffAction | undefined)[]
+    conflictActions: (MergeConflictDiffAction | undefined)[],
+    diff?: FileDiffMetadata
+  ): void {
+    this.pendingConflictActions = conflictActions;
+    if (diff == null) {
+      return;
+    }
+    this.syncConflictActionRows(conflictActions, diff);
+  }
+
+  private syncConflictActionRows(
+    conflictActions: (MergeConflictDiffAction | undefined)[],
+    diff: FileDiffMetadata
   ): void {
     this.conflictActions.clear();
     for (const action of conflictActions) {
       const anchor =
-        action != null ? getMergeConflictActionAnchor(action) : undefined;
+        action != null ? getMergeConflictActionAnchor(action, diff) : undefined;
       if (action == null || anchor == null) {
         continue;
       }
@@ -112,6 +130,7 @@ export class UnresolvedFileHunksRenderer<
   ): HunksRenderResult | undefined {
     if (diff != null) {
       this.prepareMarkerLookups(diff);
+      this.syncConflictActionRows(this.pendingConflictActions, diff);
     }
     return super.renderDiff(diff, renderRange);
   }
@@ -121,6 +140,7 @@ export class UnresolvedFileHunksRenderer<
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
     this.prepareMarkerLookups(diff);
+    this.syncConflictActionRows(this.pendingConflictActions, diff);
     return super.asyncRender(diff, renderRange);
   }
 

@@ -6,8 +6,14 @@ export function areMergeConflictActionsEqual(
   b: MergeConflictDiffAction
 ): boolean {
   return (
-    a.currentLineNumber === b.currentLineNumber &&
-    a.incomingLineNumber === b.incomingLineNumber &&
+    a.hunkIndex === b.hunkIndex &&
+    a.startContextIndex === b.startContextIndex &&
+    a.currentChangeIndex === b.currentChangeIndex &&
+    a.baseMarkerContextIndex === b.baseMarkerContextIndex &&
+    a.baseChangeIndex === b.baseChangeIndex &&
+    a.separatorContextIndex === b.separatorContextIndex &&
+    a.incomingChangeIndex === b.incomingChangeIndex &&
+    a.endContextIndex === b.endContextIndex &&
     a.conflictIndex === b.conflictIndex &&
     areConflictsEqual(a.conflict, b.conflict)
   );

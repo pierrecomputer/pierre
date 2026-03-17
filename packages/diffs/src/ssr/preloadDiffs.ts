@@ -67,7 +67,7 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
   if (annotations != null && annotations.length > 0) {
     renderer.setLineAnnotations(annotations);
   }
-  renderer.setConflictActions(actions);
+  renderer.setConflictActions(actions, fileDiff);
   return renderHTML(
     processHunkResult(
       await renderer.asyncRender(fileDiff),
