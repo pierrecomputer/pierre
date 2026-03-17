@@ -61,6 +61,8 @@ export function UnresolvedFile<LAnnotation = undefined>({
       selectedLines,
       prerenderedHTML,
       hasConflictUtility: renderMergeConflictUtility != null,
+      hasGutterRenderUtility:
+        renderGutterUtility != null || renderHoverUtility != null,
     });
   const children = renderDiffChildren({
     fileDiff,

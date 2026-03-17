@@ -10,3 +10,7 @@ export const GutterUtilitySlotStyles: CSSProperties = {
 export const MergeConflictSlotStyles: CSSProperties = {
   display: 'contents',
 };
+
+export function noopRender() {
+  return null;
+}

@@ -18,6 +18,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
+import { noopRender as renderGutterUtility } from '../constants';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -32,6 +33,7 @@ interface UseFileInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
+  hasGutterRenderUtility: boolean;
 }
 
 interface UseFileInstanceReturn {
@@ -46,6 +48,7 @@ export function useFileInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
   metrics,
+  hasGutterRenderUtility,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -61,14 +64,18 @@ export function useFileInstance<LAnnotation>({
       }
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFile(
-          options,
+          mergeFileOptions(options, hasGutterRenderUtility),
           simpleVirtualizer,
           metrics,
           poolManager,
           true
         );
       } else {
-        instanceRef.current = new File(options, poolManager, true);
+        instanceRef.current = new File(
+          mergeFileOptions(options, hasGutterRenderUtility),
+          poolManager,
+          true
+        );
       }
       void instanceRef.current.hydrate({
         file,
@@ -87,8 +94,12 @@ export function useFileInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
-    const forceRender = !areOptionsEqual(instanceRef.current.options, options);
-    instanceRef.current.setOptions(options);
+    const newOptions = mergeFileOptions(options, hasGutterRenderUtility);
+    const forceRender = !areOptionsEqual(
+      instanceRef.current.options,
+      newOptions
+    );
+    instanceRef.current.setOptions(newOptions);
     void instanceRef.current.render({ file, lineAnnotations, forceRender });
     if (selectedLines !== undefined) {
       instanceRef.current.setSelectedLines(selectedLines);
@@ -101,4 +112,14 @@ export function useFileInstance<LAnnotation>({
     return instanceRef.current?.getHoveredLine();
   }, []);
   return { ref, getHoveredLine };
+}
+
+function mergeFileOptions<LAnnotation>(
+  options: FileOptions<LAnnotation> | undefined,
+  hasGutterRenderUtility: boolean
+): FileOptions<LAnnotation> | undefined {
+  if (hasGutterRenderUtility) {
+    return { ...options, renderGutterUtility };
+  }
+  return options;
 }

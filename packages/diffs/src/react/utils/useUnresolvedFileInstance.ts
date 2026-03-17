@@ -28,6 +28,7 @@ import {
   type MergeConflictDiffAction,
   parseMergeConflictDiffFromFile,
 } from '../../utils/parseMergeConflictDiffFromFile';
+import { noopRender } from '../constants';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
@@ -41,6 +42,7 @@ interface UseUnresolvedFileInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   hasConflictUtility: boolean;
+  hasGutterRenderUtility: boolean;
 }
 
 interface UseUnresolvedFileInstanceReturn<LAnnotation> {
@@ -58,6 +60,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
   hasConflictUtility,
+  hasGutterRenderUtility,
 }: UseUnresolvedFileInstanceProps<LAnnotation>): UseUnresolvedFileInstanceReturn<LAnnotation> {
   const [{ fileDiff, actions }, setState] = useState(() => {
     const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
@@ -97,7 +100,8 @@ export function useUnresolvedFileInstance<LAnnotation>({
         mergeUnresolvedOptions(
           options,
           onMergeConflictAction,
-          hasConflictUtility
+          hasConflictUtility,
+          hasGutterRenderUtility
         ),
         poolManager,
         true
@@ -126,7 +130,8 @@ export function useUnresolvedFileInstance<LAnnotation>({
     const newOptions = mergeUnresolvedOptions(
       options,
       onMergeConflictAction,
-      hasConflictUtility
+      hasConflictUtility,
+      hasGutterRenderUtility
     );
     const forceRender = !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
@@ -157,23 +162,21 @@ export function useUnresolvedFileInstance<LAnnotation>({
 function mergeUnresolvedOptions<LAnnotation>(
   options: UnresolvedFileHunksRendererOptions | undefined,
   onMergeConflictAction: UnresolvedFileOptions<LAnnotation>['onMergeConflictAction'],
-  hasConflictUtility: boolean
+  hasConflictUtility: boolean,
+  hasGutterRenderUtility: boolean
 ): UnresolvedFileOptions<LAnnotation> {
   return {
     ...options,
     onMergeConflictAction,
     hunkSeparators:
       options?.hunkSeparators === 'custom'
-        ? emptyRender
+        ? noopRender
         : options?.hunkSeparators,
     // Add a placeholder type for the custom render
     mergeConflictActionsType:
       hasConflictUtility || options?.mergeConflictActionsType === 'custom'
-        ? emptyRender
+        ? noopRender
         : options?.mergeConflictActionsType,
+    renderGutterUtility: hasGutterRenderUtility ? noopRender : undefined,
   };
-}
-
-function emptyRender() {
-  return undefined;
 }

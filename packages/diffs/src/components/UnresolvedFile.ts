@@ -32,7 +32,7 @@ import {
 export type RenderMergeConflictActions<LAnnotation> = (
   action: MergeConflictDiffAction,
   instance: UnresolvedFile<LAnnotation>
-) => HTMLElement | DocumentFragment | undefined;
+) => HTMLElement | DocumentFragment | null | undefined;
 
 export type MergeConflictActionsTypeOption<LAnnotation> =
   | 'none'

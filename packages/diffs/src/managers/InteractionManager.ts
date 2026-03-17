@@ -1440,10 +1440,10 @@ type InteractionPluckOptions<TMode extends InteractionManagerMode> =
     enableHoverUtility?: boolean;
     renderGutterUtility?(
       getHoveredRow: () => GetHoveredLineResult<TMode> | undefined
-    ): HTMLElement | null;
+    ): HTMLElement | null | undefined;
     renderHoverUtility?(
       getHoveredRow: () => GetHoveredLineResult<TMode> | undefined
-    ): HTMLElement | null;
+    ): HTMLElement | null | undefined;
   };
 
 export function pluckInteractionOptions<TMode extends InteractionManagerMode>(

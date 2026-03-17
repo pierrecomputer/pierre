@@ -82,13 +82,13 @@ export interface FileOptions<LAnnotation>
   ): HTMLElement | undefined;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
-  ): HTMLElement | null;
+  ): HTMLElement | null | undefined;
   /**
    * @deprecated Use `renderGutterUtility` instead.
    */
   renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
-  ): HTMLElement | null;
+  ): HTMLElement | null | undefined;
 }
 
 interface AnnotationElementCache<LAnnotation> {

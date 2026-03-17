@@ -19,6 +19,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
+import { noopRender as renderGutterUtility } from '../constants';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -35,6 +36,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
+  hasGutterRenderUtility: boolean;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -51,6 +53,7 @@ export function useFileDiffInstance<LAnnotation>({
   selectedLines,
   prerenderedHTML,
   metrics,
+  hasGutterRenderUtility,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -66,14 +69,18 @@ export function useFileDiffInstance<LAnnotation>({
       }
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFileDiff(
-          options,
+          mergeFileDiffOptions(options, hasGutterRenderUtility),
           simpleVirtualizer,
           metrics,
           poolManager,
           true
         );
       } else {
-        instanceRef.current = new FileDiff(options, poolManager, true);
+        instanceRef.current = new FileDiff(
+          mergeFileDiffOptions(options, hasGutterRenderUtility),
+          poolManager,
+          true
+        );
       }
       void instanceRef.current.hydrate({
         fileDiff,
@@ -97,8 +104,9 @@ export function useFileDiffInstance<LAnnotation>({
   useIsometricEffect(() => {
     const { current: instance } = instanceRef;
     if (instance == null) return;
-    const forceRender = !areOptionsEqual(instance.options, options);
-    instance.setOptions(options);
+    const newOptions = mergeFileDiffOptions(options, hasGutterRenderUtility);
+    const forceRender = !areOptionsEqual(instance.options, newOptions);
+    instance.setOptions(newOptions);
     void instance.render({
       forceRender,
       fileDiff,
@@ -118,4 +126,14 @@ export function useFileDiffInstance<LAnnotation>({
   }, []);
 
   return { ref, getHoveredLine };
+}
+
+function mergeFileDiffOptions<LAnnotation>(
+  options: FileDiffOptions<LAnnotation> | undefined,
+  hasGutterRenderUtility: boolean
+): FileDiffOptions<LAnnotation> | undefined {
+  if (hasGutterRenderUtility) {
+    return { ...options, renderGutterUtility };
+  }
+  return options;
 }

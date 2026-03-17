@@ -88,7 +88,7 @@ export interface FileDiffOptions<LAnnotation>
     | ((
         hunk: HunkData,
         instance: FileDiff<LAnnotation>
-      ) => HTMLElement | DocumentFragment | undefined);
+      ) => HTMLElement | DocumentFragment | null | undefined);
   disableFileHeader?: boolean;
   /**
    * @deprecated Use `enableGutterUtility` instead.
@@ -107,13 +107,13 @@ export interface FileDiffOptions<LAnnotation>
   ): HTMLElement | undefined;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
-  ): HTMLElement | null;
+  ): HTMLElement | null | undefined;
   /**
    * @deprecated Use `renderGutterUtility` instead.
    */
   renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
-  ): HTMLElement | null;
+  ): HTMLElement | null | undefined;
 }
 
 interface AnnotationElementCache<LAnnotation> {
