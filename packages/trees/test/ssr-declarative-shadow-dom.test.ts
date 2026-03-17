@@ -551,6 +551,187 @@ describe('SSR + declarative shadow DOM', () => {
     expect(getIconHref('README.md')).toBe('#custom-default');
   });
 
+  test('preloadFileTree uses the simple icon set when icons are unset', () => {
+    const payload = preloadFileTree({
+      initialFiles: [
+        'package.json',
+        'index.ts',
+        'app.tsx',
+        'card.module.css',
+        'README.md',
+        'image.png',
+        'agent.mcp',
+      ],
+    });
+
+    const container = document.createElement('file-tree-container');
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = payload.shadowHtml;
+
+    const wrapper = shadowRoot.querySelector(
+      `[data-file-tree-id="${payload.id}"]`
+    );
+    expect(wrapper).not.toBeNull();
+    if (wrapper == null) {
+      throw new Error('Expected file-tree wrapper in shadow DOM');
+    }
+
+    const getIconHref = (fileName: string): string => {
+      const button = Array.from(
+        wrapper.querySelectorAll('button[data-type="item"]')
+      ).find((item) => item.textContent?.includes(fileName));
+      expect(button).not.toBeUndefined();
+      if (button == null) {
+        throw new Error(`Expected file row for ${fileName}`);
+      }
+      const useNode = button.querySelector('div[data-item-section="icon"] use');
+      const href = useNode?.getAttribute('href');
+      expect(href).not.toBeNull();
+      if (href == null) {
+        throw new Error(`Expected icon for ${fileName}`);
+      }
+      return href;
+    };
+
+    expect(getIconHref('package.json')).toBe('#file-tree-icon-file');
+    expect(getIconHref('index.ts')).toBe('#file-tree-icon-file');
+    expect(getIconHref('app.tsx')).toBe('#file-tree-icon-file');
+    expect(getIconHref('card.module.css')).toBe('#file-tree-icon-file');
+    expect(getIconHref('README.md')).toBe('#file-tree-icon-file');
+    expect(getIconHref('image.png')).toBe('#file-tree-icon-file');
+    expect(getIconHref('agent.mcp')).toBe('#file-tree-icon-file');
+  });
+
+  test('preloadFileTree uses the simple icon set when requested', () => {
+    const payload = preloadFileTree({
+      initialFiles: ['package.json', 'index.ts', 'app.tsx'],
+      icons: 'simple',
+    });
+
+    const container = document.createElement('file-tree-container');
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = payload.shadowHtml;
+
+    const wrapper = shadowRoot.querySelector(
+      `[data-file-tree-id="${payload.id}"]`
+    );
+    expect(wrapper).not.toBeNull();
+    if (wrapper == null) {
+      throw new Error('Expected file-tree wrapper in shadow DOM');
+    }
+
+    const iconHrefs = Array.from(
+      wrapper.querySelectorAll('button[data-type="item"] use')
+    ).map((node) => node.getAttribute('href'));
+
+    expect(iconHrefs).toEqual([
+      '#file-tree-icon-file',
+      '#file-tree-icon-file',
+      '#file-tree-icon-file',
+    ]);
+  });
+
+  test('preloadFileTree uses the file-type icon set when requested', () => {
+    const payload = preloadFileTree({
+      initialFiles: [
+        'package.json',
+        'index.ts',
+        'app.tsx',
+        'card.module.css',
+        'README.md',
+        'image.png',
+        'agent.mcp',
+      ],
+      icons: 'file-type',
+    });
+
+    const container = document.createElement('file-tree-container');
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = payload.shadowHtml;
+
+    const wrapper = shadowRoot.querySelector(
+      `[data-file-tree-id="${payload.id}"]`
+    );
+    expect(wrapper).not.toBeNull();
+    if (wrapper == null) {
+      throw new Error('Expected file-tree wrapper in shadow DOM');
+    }
+
+    const getIconHref = (fileName: string): string => {
+      const button = Array.from(
+        wrapper.querySelectorAll('button[data-type="item"]')
+      ).find((item) => item.textContent?.includes(fileName));
+      expect(button).not.toBeUndefined();
+      if (button == null) {
+        throw new Error(`Expected file row for ${fileName}`);
+      }
+      const useNode = button.querySelector('div[data-item-section="icon"] use');
+      const href = useNode?.getAttribute('href');
+      expect(href).not.toBeNull();
+      if (href == null) {
+        throw new Error(`Expected icon for ${fileName}`);
+      }
+      return href;
+    };
+
+    expect(getIconHref('package.json')).toBe(
+      '#file-tree-builtin-file-type-npm'
+    );
+    expect(getIconHref('index.ts')).toBe(
+      '#file-tree-builtin-file-type-typescript'
+    );
+    expect(getIconHref('app.tsx')).toBe('#file-tree-builtin-file-type-react');
+    expect(getIconHref('card.module.css')).toBe(
+      '#file-tree-builtin-file-type-css'
+    );
+    expect(getIconHref('README.md')).toBe(
+      '#file-tree-builtin-file-type-markdown'
+    );
+    expect(getIconHref('image.png')).toBe('#file-tree-builtin-file-type-image');
+    expect(getIconHref('agent.mcp')).toBe('#file-tree-builtin-file-type-mcp');
+  });
+
+  test('setOptions swaps built-in icon sets and colored mode at runtime', () => {
+    const container = document.createElement('file-tree-container');
+    const ft = new FileTree({
+      initialFiles: ['index.ts'],
+      icons: 'simple',
+    });
+
+    const origRender = preactRenderer.renderRoot;
+    preactRenderer.renderRoot = () => {};
+    try {
+      ft.render({ fileTreeContainer: container });
+
+      const shadowRoot = container.shadowRoot;
+      const wrapper = shadowRoot?.querySelector(
+        '[data-file-tree-id]'
+      ) as HTMLElement | null;
+      expect(wrapper).not.toBeNull();
+      expect(
+        shadowRoot?.querySelector('#file-tree-builtin-file-type-typescript')
+      ).toBeNull();
+      expect(wrapper?.dataset.fileTreeColoredIcons).toBeUndefined();
+
+      ft.setOptions({
+        icons: {
+          set: 'duo-tone',
+          colored: true,
+        },
+      });
+
+      expect(
+        shadowRoot?.querySelector('#file-tree-builtin-duo-tone-typescript')
+      ).not.toBeNull();
+      expect(wrapper?.dataset.fileTreeColoredIcons).toBe('true');
+    } finally {
+      preactRenderer.renderRoot = origRender;
+    }
+  });
+
   test('setFiles invokes onFilesChange callback', () => {
     const calls: string[][] = [];
     const ft = new FileTree(

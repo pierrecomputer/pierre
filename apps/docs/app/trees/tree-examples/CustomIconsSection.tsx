@@ -6,10 +6,6 @@ import type { CSSProperties } from 'react';
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import {
-  coloredCustomIconOverrides,
-  customIconOverrides,
-} from './custom-icon-overrides';
-import {
   baseTreeOptions,
   DEFAULT_FILE_TREE_PANEL_CLASS,
   DEFAULT_FILE_TREE_PANEL_STYLE,
@@ -21,38 +17,42 @@ const panelStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const iconOverrides = customIconOverrides;
-const coloredIconOverrides = coloredCustomIconOverrides;
-
-const defaultPrerenderedHTML = preloadFileTree(
+const simplePrerenderedHTML = preloadFileTree(
   {
     ...baseTreeOptions,
-    id: 'custom-icons-default',
+    id: 'built-in-icons-simple',
     lockedPaths: ['package.json'],
+    icons: 'simple',
   },
   {
     initialExpandedItems: ['src', 'src/components'],
   }
 ).shadowHtml;
 
-const overridePrerenderedHTML = preloadFileTree(
+const fileTypePrerenderedHTML = preloadFileTree(
   {
     ...baseTreeOptions,
-    id: 'custom-icons-overrides',
+    id: 'built-in-icons-file-type',
     lockedPaths: ['package.json'],
-    icons: iconOverrides,
+    icons: {
+      set: 'file-type',
+      colored: false,
+    },
   },
   {
     initialExpandedItems: ['src', 'src/components'],
   }
 ).shadowHtml;
 
-const coloredOverridePrerenderedHTML = preloadFileTree(
+const duoTonePrerenderedHTML = preloadFileTree(
   {
     ...baseTreeOptions,
-    id: 'custom-icons-colored',
+    id: 'built-in-icons-duo-tone',
     lockedPaths: ['package.json'],
-    icons: coloredIconOverrides,
+    icons: {
+      set: 'duo-tone',
+      colored: true,
+    },
   },
   {
     initialExpandedItems: ['src', 'src/components'],
@@ -64,11 +64,15 @@ export function CustomIconsSection() {
     <TreeExampleSection>
       <FeatureHeader
         id="custom-icons"
-        title="Custom icons"
+        title="Built-in icon sets"
         description={
           <>
-            Swap out our default icons by using a custom SVG sprite that remaps
-            the built-in icon names to your custom symbols. See the{' '}
+            Choose between the shipped <code>simple</code>,{' '}
+            <code>file-type</code>, and <code>duo-tone</code> icon sets. You can
+            also enable <code>colored: true</code>, override the built-in
+            palette with CSS variables like{' '}
+            <code>--trees-file-icon-color-javascript</code>, or fall back to a
+            fully custom sprite. See the{' '}
             <a href="/preview/trees/docs#custom-icons" className="inline-link">
               FileTreeIconConfig docs
             </a>{' '}
@@ -82,19 +86,20 @@ export function CustomIconsSection() {
             icon={<IconFileTreeFill />}
             description={
               <>
-                The default icons used when no <code>icons</code> option is set.
+                Generic built-ins with a single file glyph and no file-type map.
               </>
             }
           >
-            Default
+            Simple
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
-            prerenderedHTML={defaultPrerenderedHTML}
+            prerenderedHTML={simplePrerenderedHTML}
             options={{
               ...baseTreeOptions,
-              id: 'custom-icons-default',
+              id: 'built-in-icons-simple',
               lockedPaths: ['package.json'],
+              icons: 'simple',
             }}
             initialExpandedItems={['src', 'src/components']}
             style={panelStyle}
@@ -104,21 +109,22 @@ export function CustomIconsSection() {
           <TreeExampleHeading
             icon={<IconFire />}
             description={
-              <>
-                Pass a <code>spriteSheet</code> to override the default icons.
-              </>
+              <>Semantic file-type icons without any extra configuration.</>
             }
           >
-            Overrides
+            File-type
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
-            prerenderedHTML={overridePrerenderedHTML}
+            prerenderedHTML={fileTypePrerenderedHTML}
             options={{
               ...baseTreeOptions,
-              id: 'custom-icons-overrides',
+              id: 'built-in-icons-file-type',
               lockedPaths: ['package.json'],
-              icons: iconOverrides,
+              icons: {
+                set: 'file-type',
+                colored: false,
+              },
             }}
             initialExpandedItems={['src', 'src/components']}
             style={panelStyle}
@@ -127,18 +133,26 @@ export function CustomIconsSection() {
         <div>
           <TreeExampleHeading
             icon={<IconBrush />}
-            description={<>Bake per-icon fills for language-specific color.</>}
+            description={
+              <>
+                With built-in semantic colors enabled via{' '}
+                <code>colored: true</code>.
+              </>
+            }
           >
-            Colored Overrides
+            Duo-tone
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
-            prerenderedHTML={coloredOverridePrerenderedHTML}
+            prerenderedHTML={duoTonePrerenderedHTML}
             options={{
               ...baseTreeOptions,
-              id: 'custom-icons-colored',
+              id: 'built-in-icons-duo-tone',
               lockedPaths: ['package.json'],
-              icons: coloredIconOverrides,
+              icons: {
+                set: 'duo-tone',
+                colored: true,
+              },
             }}
             initialExpandedItems={['src', 'src/components']}
             style={panelStyle}

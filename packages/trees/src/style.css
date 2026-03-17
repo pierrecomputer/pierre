@@ -43,6 +43,20 @@
       --trees-git-modified-color-override
       --trees-git-deleted-color-override
 
+      // Built-in File Icon Color Overrides
+      --trees-file-icon-color
+      --trees-file-icon-color-css
+      --trees-file-icon-color-default
+      --trees-file-icon-color-git
+      --trees-file-icon-color-image
+      --trees-file-icon-color-javascript
+      --trees-file-icon-color-json
+      --trees-file-icon-color-markdown
+      --trees-file-icon-color-mcp
+      --trees-file-icon-color-npm
+      --trees-file-icon-color-react
+      --trees-file-icon-color-typescript
+
       // Available CSS Layout Overrides
       --trees-gap-override
       --trees-border-radius-override
@@ -188,6 +202,51 @@
     --trees-git-deleted-color: var(
       --trees-git-deleted-color-override,
       var(--trees-status-deleted)
+    );
+
+    --trees-file-icon-color-default: var(
+      --trees-file-icon-color,
+      light-dark(oklch(58% 0.02 255), oklch(72% 0.01 255))
+    );
+    --trees-file-icon-color-css: var(
+      --trees-file-icon-color,
+      light-dark(oklch(68% 0.12 240), oklch(76% 0.1 240))
+    );
+    --trees-file-icon-color-git: var(
+      --trees-file-icon-color,
+      light-dark(oklch(70% 0.16 45), oklch(78% 0.14 45))
+    );
+    --trees-file-icon-color-image: var(
+      --trees-file-icon-color,
+      light-dark(oklch(71% 0.18 350), oklch(79% 0.16 350))
+    );
+    --trees-file-icon-color-javascript: var(
+      --trees-file-icon-color,
+      light-dark(oklch(86% 0.18 103), oklch(90% 0.16 103))
+    );
+    --trees-file-icon-color-json: var(
+      --trees-file-icon-color,
+      light-dark(oklch(76% 0.16 55), oklch(82% 0.14 55))
+    );
+    --trees-file-icon-color-markdown: var(
+      --trees-file-icon-color,
+      light-dark(oklch(73% 0.16 155), oklch(80% 0.14 155))
+    );
+    --trees-file-icon-color-mcp: var(
+      --trees-file-icon-color,
+      light-dark(oklch(73% 0.12 195), oklch(81% 0.1 195))
+    );
+    --trees-file-icon-color-npm: var(
+      --trees-file-icon-color,
+      light-dark(oklch(70% 0.18 25), oklch(77% 0.16 25))
+    );
+    --trees-file-icon-color-react: var(
+      --trees-file-icon-color,
+      light-dark(oklch(78% 0.1 215), oklch(84% 0.09 215))
+    );
+    --trees-file-icon-color-typescript: var(
+      --trees-file-icon-color,
+      light-dark(oklch(70% 0.12 250), oklch(78% 0.1 250))
     );
 
     --trees-level-gap: var(--trees-level-gap-override, 8px);
@@ -379,6 +438,76 @@
     width: var(--trees-icon-width);
   }
 
+  [data-item-section='icon'] > [data-icon-token] {
+    color: var(--trees-fg-muted);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='css'] {
+    color: var(--trees-file-icon-color-css);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='default'] {
+    color: var(--trees-file-icon-color-default);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='git'] {
+    color: var(--trees-file-icon-color-git);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='image'] {
+    color: var(--trees-file-icon-color-image);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='javascript'] {
+    color: var(--trees-file-icon-color-javascript);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='json'] {
+    color: var(--trees-file-icon-color-json);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='markdown'] {
+    color: var(--trees-file-icon-color-markdown);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='mcp'] {
+    color: var(--trees-file-icon-color-mcp);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='npm'] {
+    color: var(--trees-file-icon-color-npm);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='react'] {
+    color: var(--trees-file-icon-color-react);
+  }
+
+  [data-file-tree-colored-icons='true']
+    [data-item-section='icon']
+    > [data-icon-token='typescript'] {
+    color: var(--trees-file-icon-color-typescript);
+  }
+
   /* Chevron rotation and visual alignment */
   /* Chevron pointing down */
   [data-icon-name='file-tree-icon-chevron'] {
@@ -485,9 +614,9 @@
   }
 
   :host(:hover) [data-item-section='spacing-item'] {
-    opacity: .75;
+    opacity: 0.75;
   }
-  
+
   [data-item-selected='true'],
   [data-type='item']:focus-visible {
     & [data-item-section='spacing-item'] {

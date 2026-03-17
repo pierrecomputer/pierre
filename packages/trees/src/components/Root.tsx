@@ -9,6 +9,11 @@ import {
 } from 'preact/hooks';
 
 import {
+  type BuiltInFileIconToken,
+  getBuiltInFileIconName,
+  resolveBuiltInFileIconToken,
+} from '../builtInIcons';
+import {
   CONTEXT_MENU_SLOT_NAME,
   CONTEXT_MENU_TRIGGER_TYPE,
   FLATTENED_PREFIX,
@@ -43,6 +48,7 @@ import {
   type FileTreeStateConfig,
   isRenamingEnabled,
 } from '../FileTree';
+import { normalizeFileTreeIcons, type RemappedIcon } from '../iconConfig';
 import {
   attachBenchmarkInstrumentation,
   getBenchmarkInstrumentation,
@@ -84,21 +90,13 @@ export interface FileTreeRootProps {
   initialViewportHeight?: number | null;
 }
 
-type RemappedIconEntry =
-  | string
-  | {
-      name: string;
-      width?: number;
-      height?: number;
-      viewBox?: string;
-    };
-
 type RemappedIconProps = {
   name: string;
   remappedFrom?: string;
   width?: number;
   height?: number;
   viewBox?: string;
+  token?: BuiltInFileIconToken;
 };
 
 const EMPTY_ANCESTORS: string[] = [];
@@ -161,40 +159,38 @@ export function Root({
       ? renaming
       : undefined;
 
-  const iconRemap = fileTreeOptions.icons?.remap;
+  const normalizedIcons = useMemo(
+    () => normalizeFileTreeIcons(fileTreeOptions.icons),
+    [fileTreeOptions.icons]
+  );
+  const iconRemap = normalizedIcons.remap;
   const iconByFileName = useMemo(() => {
-    const entries = fileTreeOptions.icons?.byFileName;
-    const map = new Map<string, RemappedIconEntry>();
+    const entries = normalizedIcons.byFileName;
+    const map = new Map<string, RemappedIcon>();
     if (entries == null) return map;
     for (const [fileName, icon] of Object.entries(entries)) {
       map.set(fileName.toLowerCase(), icon);
     }
     return map;
-  }, [fileTreeOptions.icons?.byFileName]);
+  }, [normalizedIcons.byFileName]);
   const iconByFileExtension = useMemo(() => {
-    const entries = fileTreeOptions.icons?.byFileExtension;
-    const map = new Map<string, RemappedIconEntry>();
+    const entries = normalizedIcons.byFileExtension;
+    const map = new Map<string, RemappedIcon>();
     if (entries == null) return map;
     for (const [extension, icon] of Object.entries(entries)) {
       map.set(normalizeIconRuleKey(extension), icon);
     }
     return map;
-  }, [fileTreeOptions.icons?.byFileExtension]);
+  }, [normalizedIcons.byFileExtension]);
   const iconByFileNameContains = useMemo(() => {
-    const entries = fileTreeOptions.icons?.byFileNameContains;
-    if (entries == null) return [] as [string, RemappedIconEntry][];
+    const entries = normalizedIcons.byFileNameContains;
+    if (entries == null) return [] as [string, RemappedIcon][];
     return Object.entries(entries).map(
-      ([needle, icon]): [string, RemappedIconEntry] => [
-        needle.toLowerCase(),
-        icon,
-      ]
+      ([needle, icon]): [string, RemappedIcon] => [needle.toLowerCase(), icon]
     );
-  }, [fileTreeOptions.icons?.byFileNameContains]);
+  }, [normalizedIcons.byFileNameContains]);
   const remapEntryToIcon = useCallback(
-    (
-      entry: RemappedIconEntry,
-      remappedFrom: SVGSpriteNames
-    ): RemappedIconProps => {
+    (entry: RemappedIcon, remappedFrom: SVGSpriteNames): RemappedIconProps => {
       if (typeof entry === 'string') {
         return { name: entry, remappedFrom };
       }
@@ -225,6 +221,19 @@ export function Root({
             return remapEntryToIcon(extensionEntry, name);
           }
         }
+
+        const builtInToken = resolveBuiltInFileIconToken(
+          normalizedIcons.set,
+          fileName,
+          extensionCandidates
+        );
+        if (builtInToken != null && normalizedIcons.set !== 'none') {
+          return {
+            name: getBuiltInFileIconName(normalizedIcons.set, builtInToken),
+            remappedFrom: name,
+            token: builtInToken,
+          };
+        }
       }
 
       const entry = iconRemap?.[name];
@@ -236,6 +245,7 @@ export function Root({
       iconByFileName,
       iconByFileNameContains,
       iconRemap,
+      normalizedIcons.set,
       remapEntryToIcon,
     ]
   );
