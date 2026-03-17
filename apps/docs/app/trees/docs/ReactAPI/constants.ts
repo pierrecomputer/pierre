@@ -83,33 +83,14 @@ export const REACT_API_CUSTOM_ICONS_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'custom_icons_file_tree.tsx',
     contents: `import { FileTree } from '@pierre/trees/react';
 
-const customSpriteSheet = \`
-  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
-    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2">
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-    </symbol>
-  </svg>
-\`;
-
-export function CustomIconsTree() {
+export function IconSetTree() {
   return (
     <FileTree
       options={{
-        id: 'custom-icons-tree',
+        id: 'icon-set-tree',
         icons: {
-          spriteSheet: customSpriteSheet,
-          byFileExtension: {
-            ts: 'my-file',
-            tsx: 'my-file',
-          },
-          byFileName: {
-            'package.json': 'my-file',
-          },
-          byFileNameContains: {
-            dockerfile: 'my-file',
-          },
+          set: 'duo-tone',
+          colored: true,
         },
       }}
       initialFiles={[

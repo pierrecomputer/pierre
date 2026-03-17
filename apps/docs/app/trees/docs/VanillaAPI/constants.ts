@@ -130,16 +130,6 @@ export const VANILLA_API_CUSTOM_ICONS_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'custom_icons_file_tree.ts',
     contents: `import { FileTree } from '@pierre/trees';
 
-const customSpriteSheet = \`
-  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
-    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2">
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-    </symbol>
-  </svg>
-\`;
-
 const fileTree = new FileTree({
   initialFiles: [
     'src/index.ts',
@@ -147,17 +137,8 @@ const fileTree = new FileTree({
     'package.json',
   ],
   icons: {
-    spriteSheet: customSpriteSheet,
-    byFileExtension: {
-      ts: 'my-file',
-      tsx: 'my-file',
-    },
-    byFileName: {
-      'package.json': 'my-file',
-    },
-    byFileNameContains: {
-      dockerfile: 'my-file',
-    },
+    set: 'file-type',
+    colored: true,
   },
 });
 

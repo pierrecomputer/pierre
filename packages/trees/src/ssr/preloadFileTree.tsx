@@ -1,13 +1,17 @@
 /** @jsxImportSource preact */
 import { renderToString } from 'preact-render-to-string';
 
+import {
+  getBuiltInSpriteSheet,
+  isColoredBuiltInIconSet,
+} from '../builtInIcons';
 import { Root } from '../components/Root';
 import {
   FILE_TREE_STYLE_ATTRIBUTE,
   FILE_TREE_UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { FileTreeOptions, FileTreeStateConfig } from '../FileTree';
-import { SVGSpriteSheet } from '../sprite';
+import { normalizeFileTreeIcons } from '../iconConfig';
 import fileTreeStyles from '../style.css';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 
@@ -27,14 +31,19 @@ export function preloadFileTree(
   stateConfig?: FileTreeStateConfig
 ): FileTreeSsrPayload {
   const id = fileTreeOptions.id ?? `ft_srv_${++ssrInstanceId}`;
-  const customSpriteSheet = fileTreeOptions.icons?.spriteSheet?.trim() ?? '';
+  const normalizedIcons = normalizeFileTreeIcons(fileTreeOptions.icons);
+  const customSpriteSheet = normalizedIcons.spriteSheet?.trim() ?? '';
+  const coloredIconsAttr =
+    normalizedIcons.colored && isColoredBuiltInIconSet(normalizedIcons.set)
+      ? ' data-file-tree-colored-icons="true"'
+      : '';
   const unsafeCSS = fileTreeOptions.unsafeCSS?.trim();
   const unsafeStyle =
     unsafeCSS != null && unsafeCSS.length > 0
       ? `<style ${FILE_TREE_UNSAFE_CSS_ATTRIBUTE}>${wrapUnsafeCSS(unsafeCSS)}</style>`
       : '';
-  const shadowHtml = `${SVGSpriteSheet}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${fileTreeStyles}</style>${unsafeStyle}
-<div data-file-tree-id="${id}">
+  const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${fileTreeStyles}</style>${unsafeStyle}
+<div data-file-tree-id="${id}"${coloredIconsAttr}>
   ${renderToString(<Root fileTreeOptions={{ ...fileTreeOptions, id }} stateConfig={stateConfig} />)}
 </div>
 `;
