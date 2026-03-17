@@ -1,4 +1,4 @@
-import { IconBrush, IconFire } from '@pierre/icons';
+import { IconBrush, IconFileTreeFill, IconFire } from '@pierre/icons';
 import { FileTree } from '@pierre/trees/react';
 import { preloadFileTree } from '@pierre/trees/ssr';
 import type { CSSProperties } from 'react';
@@ -6,11 +6,14 @@ import type { CSSProperties } from 'react';
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import {
+  coloredCustomIconOverrides,
+  customIconOverrides,
+} from './custom-icon-overrides';
+import {
   baseTreeOptions,
   DEFAULT_FILE_TREE_PANEL_CLASS,
   DEFAULT_FILE_TREE_PANEL_STYLE,
 } from './demo-data';
-import { setiFullIconOverrides } from './seti-full.generated';
 import { TreeExampleSection } from './TreeExampleSection';
 
 const panelStyle = {
@@ -18,7 +21,8 @@ const panelStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const iconOverrides = setiFullIconOverrides;
+const iconOverrides = customIconOverrides;
+const coloredIconOverrides = coloredCustomIconOverrides;
 
 const defaultPrerenderedHTML = preloadFileTree(
   {
@@ -43,6 +47,18 @@ const overridePrerenderedHTML = preloadFileTree(
   }
 ).shadowHtml;
 
+const coloredOverridePrerenderedHTML = preloadFileTree(
+  {
+    ...baseTreeOptions,
+    id: 'custom-icons-colored',
+    lockedPaths: ['package.json'],
+    icons: coloredIconOverrides,
+  },
+  {
+    initialExpandedItems: ['src', 'src/components'],
+  }
+).shadowHtml;
+
 export function CustomIconsSection() {
   return (
     <TreeExampleSection>
@@ -60,10 +76,10 @@ export function CustomIconsSection() {
           </>
         }
       />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div>
           <TreeExampleHeading
-            icon={<IconBrush />}
+            icon={<IconFileTreeFill />}
             description={
               <>
                 The default icons used when no <code>icons</code> option is set.
@@ -89,9 +105,7 @@ export function CustomIconsSection() {
             icon={<IconFire />}
             description={
               <>
-                Pass a <code>spriteSheet</code>, <code>remap</code>,{' '}
-                <code>byFileExtension</code>, <code>byFileName</code>, and{' '}
-                <code>byFileNameContains</code>.
+                Pass a <code>spriteSheet</code> to override the default icons.
               </>
             }
           >
@@ -105,6 +119,26 @@ export function CustomIconsSection() {
               id: 'custom-icons-overrides',
               lockedPaths: ['package.json'],
               icons: iconOverrides,
+            }}
+            initialExpandedItems={['src', 'src/components']}
+            style={panelStyle}
+          />
+        </div>
+        <div>
+          <TreeExampleHeading
+            icon={<IconBrush />}
+            description={<>Bake per-icon fills for language-specific color.</>}
+          >
+            Colored Overrides
+          </TreeExampleHeading>
+          <FileTree
+            className={DEFAULT_FILE_TREE_PANEL_CLASS}
+            prerenderedHTML={coloredOverridePrerenderedHTML}
+            options={{
+              ...baseTreeOptions,
+              id: 'custom-icons-colored',
+              lockedPaths: ['package.json'],
+              icons: coloredIconOverrides,
             }}
             initialExpandedItems={['src', 'src/components']}
             style={panelStyle}
