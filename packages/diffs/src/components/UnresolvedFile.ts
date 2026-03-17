@@ -17,7 +17,6 @@ import { areMergeConflictActionsEqual } from '../utils/areMergeConflictActionsEq
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { diffAcceptRejectHunk } from '../utils/diffAcceptRejectHunk';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
-import { getMergeConflictParseResult } from '../utils/getMergeConflictLineTypes';
 import {
   getMergeConflictActionAnchor,
   type MergeConflictDiffAction,
@@ -401,22 +400,20 @@ export class UnresolvedFile<
       type: resolution,
       stripConflictSeparators: true,
     });
-    const previousHunk = fileDiff.hunks[action.conflictIndex];
-    const nextHunk = newFileDiff.hunks[action.conflictIndex];
-    console.log('ZZZZ - hmm?', { previousHunk, nextHunk });
     const previousFile = this.computedCache.file;
     const { file, actions } = rebuildFileAndActions({
       fileDiff: newFileDiff,
       previousActions: this.conflictActions,
       resolvedConflictIndex: conflictIndex,
-      additionOffset:
-        previousHunk != null && nextHunk != null
-          ? nextHunk.additionCount - previousHunk.additionCount
-          : 0,
-      deletionOffset:
-        previousHunk != null && nextHunk != null
-          ? nextHunk.deletionCount - previousHunk.deletionCount
-          : 0,
+      // FIXME: Probably save to remove this?
+      // additionOffset:
+      //   previousHunk != null && nextHunk != null
+      //     ? nextHunk.additionCount - previousHunk.additionCount
+      //     : 0,
+      // deletionOffset:
+      //   previousHunk != null && nextHunk != null
+      //     ? nextHunk.deletionCount - previousHunk.deletionCount
+      //     : 0,
       previousFile,
       resolution,
     });
@@ -464,7 +461,8 @@ export class UnresolvedFile<
     this.conflictActions = actions;
     if (this.hunksRenderer instanceof UnresolvedFileHunksRenderer) {
       this.hunksRenderer.setConflictActions(
-        this.options.mergeConflictActionsType === 'none' ? [] : actions
+        this.options.mergeConflictActionsType === 'none' ? [] : actions,
+        this.computedCache.fileDiff
       );
     }
   }
@@ -494,11 +492,13 @@ export class UnresolvedFile<
   };
 
   private renderMergeConflictActionSlots(): void {
+    const { fileDiff } = this.computedCache;
     if (
       this.isContainerManaged ||
       this.fileContainer == null ||
       typeof this.options.mergeConflictActionsType !== 'function' ||
-      this.conflictActions.length === 0
+      this.conflictActions.length === 0 ||
+      fileDiff == null
     ) {
       this.clearMergeConflictActionCache();
       return;
@@ -519,7 +519,7 @@ export class UnresolvedFile<
           "UnresolvedFile.renderMergeConflictActionSlots: conflictIndex and conflictAction don't match"
         );
       }
-      const anchor = getMergeConflictActionAnchor(action);
+      const anchor = getMergeConflictActionAnchor(action, fileDiff);
       if (anchor == null) {
         continue;
       }
@@ -591,8 +591,9 @@ interface RebuildFileAndActionsProps {
   fileDiff: FileDiffMetadata;
   previousActions: (MergeConflictDiffAction | undefined)[];
   resolvedConflictIndex: number;
-  additionOffset: number;
-  deletionOffset: number;
+  // FIXME: Probably should remove this...
+  // additionOffset: number;
+  // deletionOffset: number;
   previousFile: FileContents | undefined;
   resolution: MergeConflictResolution;
 }
@@ -603,8 +604,6 @@ function rebuildFileAndActions({
   fileDiff,
   previousActions,
   resolvedConflictIndex,
-  additionOffset,
-  deletionOffset,
   previousFile,
   resolution,
 }: RebuildFileAndActionsProps): Pick<
@@ -620,31 +619,17 @@ function rebuildFileAndActions({
   let contents: string = '';
 
   for (let hunkIndex = 0; hunkIndex < fileDiff.hunks.length; hunkIndex++) {
-    const hunk = fileDiff.hunks[hunkIndex];
     const action = pendingActions[hunkIndex];
-    const hunkLines =
-      action != null
-        ? buildUnresolvedHunkLines(fileDiff, hunk)
-        : buildResolvedHunkLines(fileDiff, hunk);
 
     if (hunkIndex === resolvedConflictIndex) {
     } else {
+      const hunk = fileDiff.hunks[hunkIndex];
       contents += buildUnresolvedHunkLines(fileDiff, hunk);
     }
 
     if (action != null) {
       if (hunkIndex > resolvedConflictIndex) {
-        nextActions[hunkIndex] = {
-          ...action,
-          currentLineNumber:
-            action.currentLineNumber != null
-              ? action.currentLineNumber + deletionOffset
-              : action.currentLineNumber,
-          incomingLineNumber:
-            action.incomingLineNumber != null
-              ? action.incomingLineNumber + additionOffset
-              : action.incomingLineNumber,
-        };
+        nextActions[hunkIndex] = { ...action };
       } else {
         nextActions[hunkIndex] = action;
       }
@@ -696,35 +681,4 @@ function buildUnresolvedHunkLines(
   }
 
   return lines;
-}
-
-// Reconstruct the saved file text for a resolved hunk by dropping merge marker
-// and base lines while preserving the code lines that survived the resolution.
-function buildResolvedHunkLines(
-  fileDiff: FileDiffMetadata,
-  hunk: FileDiffMetadata['hunks'][number]
-): string[] {
-  const lines: string[] = [];
-
-  for (const content of hunk.hunkContent) {
-    if (content.type !== 'context') {
-      lines.push(...buildUnresolvedHunkLines(fileDiff, hunk));
-      return lines;
-    }
-
-    lines.push(
-      ...fileDiff.additionLines.slice(
-        content.additionLineIndex,
-        content.additionLineIndex + content.lines
-      )
-    );
-  }
-
-  const { lineTypes } = getMergeConflictParseResult(lines);
-  return lines.filter((_, index) => {
-    const lineType = lineTypes[index];
-    return (
-      lineType === 'none' || lineType === 'current' || lineType === 'incoming'
-    );
-  });
 }

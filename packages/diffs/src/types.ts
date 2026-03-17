@@ -658,3 +658,14 @@ export interface SelectionPoint {
   lineNumber: number;
   side: SelectionSide | undefined;
 }
+
+export interface ProcessFileConflictData {
+  hunkIndex: number;
+  startContextIndex: number;
+  currentChangeIndex?: number;
+  baseMarkerContextIndex?: number;
+  baseChangeIndex?: number;
+  separatorContextIndex: number;
+  incomingChangeIndex?: number;
+  endContextIndex: number;
+}

@@ -21,6 +21,7 @@ import type {
   FileDiffMetadata,
   Hunk,
   ParsedPatch,
+  ProcessFileConflictData,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import type { MergeConflictLineType } from './getMergeConflictLineTypes';
@@ -31,13 +32,13 @@ type ConflictMarkerLineType = Extract<
   'marker-start' | 'marker-base' | 'marker-separator' | 'marker-end'
 >;
 
-export interface ProcessFileConflictMarker {
-  type: ConflictMarkerLineType;
-  hunkIndex: number;
-  contextIndex: number;
-  additionLineIndex: number;
-  deletionLineIndex: number;
-}
+type ActiveProcessFileConflict = Omit<
+  ProcessFileConflictData,
+  'separatorContextIndex' | 'endContextIndex'
+> & {
+  separatorContextIndex?: number;
+  endContextIndex?: number;
+};
 
 export function processPatch(
   data: string,
@@ -105,7 +106,7 @@ interface ProcessFileOptions {
   isGitDiff?: boolean;
   oldFile?: FileContents;
   newFile?: FileContents;
-  conflictMarkers?: ProcessFileConflictMarker[];
+  processConflict?(conflict: ProcessFileConflictData): void;
   throwOnError?: boolean;
 }
 
@@ -116,7 +117,7 @@ export function processFile(
     isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(fileDiffString),
     oldFile,
     newFile,
-    conflictMarkers,
+    processConflict,
     throwOnError = false,
   }: ProcessFileOptions = {}
 ): FileDiffMetadata | undefined {
@@ -315,6 +316,7 @@ export function processFile(
     }
 
     // Now we process each line of the hunk
+    let activeConflict: ActiveProcessFileConflict | undefined;
     for (const rawLine of lines) {
       const parsedLine = parseLineType(rawLine);
       // If we can't properly process the line, well, lets just try to salvage
@@ -334,6 +336,12 @@ export function processFile(
             additionLineIndex
           );
           hunkData.hunkContent.push(currentContent);
+          if (processConflict != null && activeConflict != null) {
+            const contentIndex = hunkData.hunkContent.length - 1;
+            if (activeConflict.separatorContextIndex != null) {
+              activeConflict.incomingChangeIndex = contentIndex;
+            }
+          }
         }
         additionLineIndex++;
         if (isPartial) {
@@ -350,6 +358,18 @@ export function processFile(
             additionLineIndex
           );
           hunkData.hunkContent.push(currentContent);
+          if (processConflict != null && activeConflict != null) {
+            const contentIndex = hunkData.hunkContent.length - 1;
+            if (activeConflict.separatorContextIndex != null) {
+              if (activeConflict.baseMarkerContextIndex != null) {
+                activeConflict.baseChangeIndex = contentIndex;
+              } else {
+                activeConflict.incomingChangeIndex = contentIndex;
+              }
+            } else {
+              activeConflict.currentChangeIndex = contentIndex;
+            }
+          }
         }
         deletionLineIndex++;
         if (isPartial) {
@@ -360,7 +380,7 @@ export function processFile(
         lastLineType = 'deletion';
       } else if (type === 'context') {
         const conflictMarkerType =
-          conflictMarkers != null ? getConflictMarkerLineType(line) : undefined;
+          processConflict != null ? getConflictMarkerLineType(line) : undefined;
         if (
           conflictMarkerType != null ||
           currentContent == null ||
@@ -381,13 +401,44 @@ export function processFile(
         }
         currentContent.lines++;
         if (conflictMarkerType != null) {
-          conflictMarkers?.push({
-            type: conflictMarkerType,
-            hunkIndex: currentFile.hunks.length,
-            contextIndex: hunkData.hunkContent.length - 1,
-            additionLineIndex: currentContent.additionLineIndex,
-            deletionLineIndex: currentContent.deletionLineIndex,
-          });
+          const contextIndex = hunkData.hunkContent.length - 1;
+          if (processConflict != null) {
+            if (conflictMarkerType === 'marker-start') {
+              activeConflict = {
+                hunkIndex: currentFile.hunks.length,
+                startContextIndex: contextIndex,
+              };
+            } else if (conflictMarkerType === 'marker-base') {
+              if (activeConflict == null) {
+                throw new Error(
+                  'processFile: encountered merge conflict base marker before start marker'
+                );
+              }
+              activeConflict.baseMarkerContextIndex = contextIndex;
+            } else if (conflictMarkerType === 'marker-separator') {
+              if (activeConflict == null) {
+                throw new Error(
+                  'processFile: encountered merge conflict separator before start marker'
+                );
+              }
+              activeConflict.separatorContextIndex = contextIndex;
+            } else if (conflictMarkerType === 'marker-end') {
+              if (
+                activeConflict == null ||
+                activeConflict.separatorContextIndex == null
+              ) {
+                throw new Error(
+                  'processFile: encountered merge conflict end marker before separator'
+                );
+              }
+              processConflict({
+                ...activeConflict,
+                separatorContextIndex: activeConflict.separatorContextIndex,
+                endContextIndex: contextIndex,
+              });
+              activeConflict = undefined;
+            }
+          }
           currentContent = undefined;
         }
         lastLineType = 'context';
