@@ -120,8 +120,8 @@ import { FileTree } from '@pierre/trees/react';
 
 ## Files API Contract
 
-- Paths use forward slashes. End a path with `/` to create an explicit
-  directory entry, including an empty folder.
+- Paths use forward slashes. End a path with `/` to create an explicit directory
+  entry, including an empty folder.
 - `initialFiles` is the uncontrolled initial value and is only used when a tree
   instance is created.
 - React controlled usage should pass `files` and keep parent state
