@@ -513,19 +513,24 @@ function getMergeConflictMarkerInlineRow(
   if (hunk == null || row.lineText == null) {
     return undefined;
   }
-  let lineNumber = hunk.additionStart;
-  for (let i = 0; i < row.contentIndex; i++) {
-    const content = hunk.hunkContent[i];
-    lineNumber +=
-      content.type === 'context'
-        ? content.lines
-        : Math.max(content.additions, content.deletions);
+  let lineIndex = row.lineIndex;
+  if (lineIndex == null) {
+    lineIndex = hunk.unifiedLineStart;
+    for (let i = 0; i < row.contentIndex; i++) {
+      const content = hunk.hunkContent[i];
+      lineIndex +=
+        content.type === 'context'
+          ? content.lines
+          : content.additions + content.deletions;
+    }
+    if (row.contentIndex !== 0) {
+      lineIndex = Math.max(0, lineIndex - 1);
+    }
   }
   return {
     type: 'marker',
     hunkIndex: row.hunkIndex,
-    lineIndex:
-      row.contentIndex === 0 ? lineNumber : Math.max(0, lineNumber - 1),
+    lineIndex,
     markerType: row.type,
     lineText: row.lineText,
   };
