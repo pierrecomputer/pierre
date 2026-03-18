@@ -15,7 +15,7 @@ import type {
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areMergeConflictActionsEqual } from '../utils/areMergeConflictActionsEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
-import { diffAcceptRejectHunk } from '../utils/diffAcceptRejectHunk';
+import { resolveConflict as resolveConflictDiff } from '../utils/diffAcceptRejectHunk';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import {
   getMergeConflictActionAnchor,
@@ -258,7 +258,6 @@ export class UnresolvedFile<
             this.computedCache.actions == null
           ) {
             const computed = parseMergeConflictDiffFromFile(file);
-            console.log('ZZZZZ - fileDiff', computed.fileDiff);
             this.computedCache = {
               file,
               fileDiff: computed.fileDiff,
@@ -302,7 +301,6 @@ export class UnresolvedFile<
           const computed = parseMergeConflictDiffFromFile(
             this.computedCache.file
           );
-          console.log('ZZZZZ - fileDiff', computed.fileDiff);
           this.computedCache.fileDiff = computed.fileDiff;
           this.computedCache.actions = computed.actions;
         }
@@ -396,24 +394,12 @@ export class UnresolvedFile<
       );
     }
 
-    const newFileDiff = diffAcceptRejectHunk(fileDiff, action.conflictIndex, {
-      type: resolution,
-      stripConflictSeparators: true,
-    });
+    const newFileDiff = resolveConflictDiff(fileDiff, action, resolution);
     const previousFile = this.computedCache.file;
     const { file, actions } = rebuildFileAndActions({
       fileDiff: newFileDiff,
       previousActions: this.conflictActions,
       resolvedConflictIndex: conflictIndex,
-      // FIXME: Probably save to remove this?
-      // additionOffset:
-      //   previousHunk != null && nextHunk != null
-      //     ? nextHunk.additionCount - previousHunk.additionCount
-      //     : 0,
-      // deletionOffset:
-      //   previousHunk != null && nextHunk != null
-      //     ? nextHunk.deletionCount - previousHunk.deletionCount
-      //     : 0,
       previousFile,
       resolution,
     });
@@ -610,30 +596,12 @@ function rebuildFileAndActions({
   ResolveConflictReturn,
   'file' | 'actions'
 > {
-  const pendingActions = [...previousActions];
-  pendingActions[resolvedConflictIndex] = undefined;
-
-  const nextActions: (MergeConflictDiffAction | undefined)[] = new Array(
-    pendingActions.length
-  );
+  const nextActions = [...previousActions];
+  nextActions[resolvedConflictIndex] = undefined;
   let contents: string = '';
 
-  for (let hunkIndex = 0; hunkIndex < fileDiff.hunks.length; hunkIndex++) {
-    const action = pendingActions[hunkIndex];
-
-    if (hunkIndex === resolvedConflictIndex) {
-    } else {
-      const hunk = fileDiff.hunks[hunkIndex];
-      contents += buildUnresolvedHunkLines(fileDiff, hunk);
-    }
-
-    if (action != null) {
-      if (hunkIndex > resolvedConflictIndex) {
-        nextActions[hunkIndex] = { ...action };
-      } else {
-        nextActions[hunkIndex] = action;
-      }
-    }
+  for (const hunk of fileDiff.hunks) {
+    contents += buildUnresolvedHunkLines(fileDiff, hunk);
   }
 
   return {

@@ -5,7 +5,7 @@ exports[`trimPatchContext trims trim.patch fixture and matches snapshot: trim.pa
 index 237cb4b1ba250c1bc63337b50d1d2ae5c02b6658..71f4e2dcdeafcdf9d3cb16f84c2d85c283edd54c 100644
 --- a/api/oai-synthetics/oai_synthetics/utils/api_config.py
 +++ b/api/oai-synthetics/oai_synthetics/utils/api_config.py
-@@ -28,21 +28,21 @@ looks like:
+@@ -28,21 +28,21 @@
  - "EU" (run data residency tests in the EU)
  - "Expanded" (run data residency tests in a randomly-chosen region from [AU, CA, IN, JP, KR, SG])
  
@@ -28,7 +28,7 @@ index 237cb4b1ba250c1bc63337b50d1d2ae5c02b6658..71f4e2dcdeafcdf9d3cb16f84c2d85c2
      maybe_build_data_residency_test_cases,
      maybe_build_scale_tier_test_cases,
  )
-@@ -143,34 +143,44 @@ def _build_test_configs_for_model(
+@@ -143,34 +143,44 @@
                  blob_storage_container_names=blob_storage_container_names,
              )
              configs.append(preprod_tc)
@@ -75,5 +75,6 @@ index 237cb4b1ba250c1bc63337b50d1d2ae5c02b6658..71f4e2dcdeafcdf9d3cb16f84c2d85c2
      test_configs: list[TestConfig[Any]] = []
  
      for model_entry in model_configs:
-         model_name: str = model_entry["name"]"
+         model_name: str = model_entry["name"]
+"
 `;

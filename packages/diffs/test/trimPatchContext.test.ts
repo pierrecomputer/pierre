@@ -111,6 +111,68 @@ describe('trimPatchContext', () => {
     expect(trimmed).toBe(expected);
   });
 
+  test('keeps the closest context before a later change', () => {
+    const beforeFirstChange = buildContext(10, 'before-first-change');
+    const betweenChanges = buildContext(15, 'between-changes');
+
+    const patch = [
+      'diff --git a/context.txt b/context.txt',
+      '--- a/context.txt',
+      '+++ b/context.txt',
+      '@@ -1,29 +1,29 @@',
+      ...beforeFirstChange,
+      '-first-old',
+      '+first-new',
+      ...betweenChanges,
+      '-second-old',
+      '+second-new',
+    ].join('\n');
+
+    const trimmed = trimPatchContext(patch, 10);
+
+    const expected = [
+      'diff --git a/context.txt b/context.txt',
+      '--- a/context.txt',
+      '+++ b/context.txt',
+      '@@ -1,22 +1,22 @@',
+      ...beforeFirstChange,
+      '-first-old',
+      '+first-new',
+      ...betweenChanges.slice(5),
+      '-second-old',
+      '+second-new',
+    ].join('\n');
+
+    expect(trimmed).toBe(expected);
+  });
+
+  test('preserves merge conflict marker lines while trimming later context', () => {
+    const betweenConflicts = buildContext(12, 'between-conflicts');
+
+    const patch = [
+      'diff --git a/conflict.ts b/conflict.ts',
+      '--- a/conflict.ts',
+      '+++ b/conflict.ts',
+      '@@ -1,24 +1,24 @@',
+      ' <<<<<<< HEAD',
+      '-first-current',
+      ' =======',
+      '+first-incoming',
+      ' >>>>>>> first',
+      ...betweenConflicts,
+      ' <<<<<<< HEAD',
+      '-second-current',
+      ' =======',
+      '+second-incoming',
+      ' >>>>>>> second',
+    ].join('\n');
+
+    const trimmed = trimPatchContext(patch, 10);
+
+    expect(trimmed).toContain(' >>>>>>> first');
+    expect(trimmed).toContain(' <<<<<<< HEAD\n-second-current');
+  });
+
   test('trims trim.patch fixture and matches snapshot', () => {
     const patch = readFileSync(resolve(__dirname, './trim.patch'), 'utf-8');
     const trimmed = trimPatchContext(patch, 10);
