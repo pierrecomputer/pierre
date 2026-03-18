@@ -511,8 +511,8 @@ export class UnresolvedFile<
       }
       const conflictIndex = action.conflictIndex;
       const slotName = getMergeConflictActionSlotName({
-        side: anchor.side,
-        lineNumber: anchor.lineNumber,
+        hunkIndex: anchor.hunkIndex,
+        lineIndex: anchor.lineIndex,
         conflictIndex,
       });
       const id = `${actionIndex}-${slotName}`;

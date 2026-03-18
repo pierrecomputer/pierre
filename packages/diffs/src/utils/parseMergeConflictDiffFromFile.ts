@@ -26,8 +26,8 @@ export interface MergeConflictDiffAction extends ProcessFileConflictData {
 }
 
 interface GetMergeConflictActionAnchorReturn {
-  side: 'additions' | 'deletions';
-  lineNumber: number;
+  hunkIndex: number;
+  lineIndex: number;
 }
 
 // REVIEW: Why do we need this function?
@@ -39,17 +39,18 @@ export function getMergeConflictActionAnchor(
   if (hunk == null) {
     return undefined;
   }
-  let lineNumber = hunk.additionStart;
+  let lineIndex = hunk.unifiedLineStart;
   for (let i = 0; i < action.startContextIndex; i++) {
     const content = hunk.hunkContent[i];
-    lineNumber +=
+    lineIndex +=
       content.type === 'context'
         ? content.lines
-        : Math.max(content.additions, content.deletions);
+        : content.additions + content.deletions;
   }
   return {
-    side: 'additions',
-    lineNumber: Math.max(1, lineNumber - 1),
+    hunkIndex: action.hunkIndex,
+    lineIndex:
+      action.startContextIndex === 0 ? lineIndex : Math.max(0, lineIndex - 1),
   };
 }
 
