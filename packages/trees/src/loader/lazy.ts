@@ -4,6 +4,10 @@ import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
 import { createIdMaps } from '../utils/createIdMaps';
 import { createLoaderUtils } from '../utils/createLoaderUtils';
+import {
+  forEachFolderInNormalizedPath,
+  normalizeInputPath,
+} from '../utils/normalizeInputPath';
 import { defaultChildrenComparator, sortChildren } from '../utils/sortChildren';
 import type { DataLoaderOptions } from './index';
 
@@ -26,8 +30,25 @@ export function generateLazyDataLoader(
     sortComparator = defaultChildrenComparator,
   } = options;
 
+  const sortedPaths: string[] = [];
+  const folderSet = new Set<string>();
+
+  for (const filePath of filePaths) {
+    const normalizedPath = normalizeInputPath(filePath);
+    if (normalizedPath == null) continue;
+
+    sortedPaths.push(normalizedPath.path);
+    forEachFolderInNormalizedPath(
+      normalizedPath.path,
+      normalizedPath.isDirectory,
+      (folderPath) => {
+        folderSet.add(folderPath);
+      }
+    );
+  }
+
   // Pre-sort for efficient prefix matching
-  const sortedPaths = [...filePaths].sort();
+  sortedPaths.sort();
 
   const lowerBound = (target: string): number => {
     let lo = 0;
@@ -42,17 +63,6 @@ export function generateLazyDataLoader(
     }
     return lo;
   };
-
-  // Pre-compute folder set (fast O(n) scan)
-  const folderSet = new Set<string>();
-  for (const path of sortedPaths) {
-    let current = '';
-    const parts = path.split('/');
-    for (let i = 0; i < parts.length - 1; i++) {
-      current = current !== '' ? `${current}/${parts[i]}` : parts[i];
-      folderSet.add(current);
-    }
-  }
 
   // Lazy caches - populated as nodes are accessed
   const nodeCache = new Map<string, FileTreeNode>();

@@ -21,7 +21,8 @@ container in vanilla. See [SSR](#ssr) for usage.
 
 The tree is built from an array of file paths (strings). Folders are inferred
 from path segments; use forward slashes. Top-level paths (e.g. `README.md`) and
-nested paths (e.g. `src/components/Button.tsx`) are both valid.
+nested paths (e.g. `src/components/Button.tsx`) are both valid. A trailing slash
+(e.g. `src/components/`) marks an explicit directory, including empty folders.
 
 <DocsCodeExample {...filesOptionExample} />
 

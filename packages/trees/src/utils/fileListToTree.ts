@@ -2,6 +2,7 @@ import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
 import { createIdMaps } from './createIdMaps';
 import { createLoaderUtils } from './createLoaderUtils';
+import { normalizeInputPath } from './normalizeInputPath';
 import type { ChildrenSortOption } from './sortChildren';
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
 
@@ -43,12 +44,18 @@ export function fileListToTree(
 
   // Build the folder structure from file paths
   for (const filePath of filePaths) {
-    const parts = filePath.split('/');
-    let currentPath: string | undefined;
+    const normalizedPath = normalizeInputPath(filePath);
+    if (normalizedPath == null) continue;
 
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isFile = i === parts.length - 1;
+    const { isDirectory, path } = normalizedPath;
+    let currentPath: string | undefined;
+    let segmentStart = 0;
+
+    while (segmentStart < path.length) {
+      const nextSlashIndex = path.indexOf('/', segmentStart);
+      const segmentEnd = nextSlashIndex === -1 ? path.length : nextSlashIndex;
+      const part = path.slice(segmentStart, segmentEnd);
+      const isFile = !isDirectory && nextSlashIndex === -1;
       const parentPath = currentPath ?? rootId;
       currentPath = currentPath != null ? `${currentPath}/${part}` : part;
 
@@ -67,6 +74,11 @@ export function fileListToTree(
         // Ensure folder has a children set for tracking
         folderChildren.set(currentPath, new Set());
       }
+
+      if (nextSlashIndex === -1) {
+        break;
+      }
+      segmentStart = nextSlashIndex + 1;
     }
   }
 
@@ -153,7 +165,7 @@ export function fileListToTree(
           ...(flattenedChildren != null && { flattened: flattenedChildren }),
         },
       };
-    } else if (tree[path] == null) {
+    } else {
       const lastSlashIndex = path.lastIndexOf('/');
       const name = lastSlashIndex >= 0 ? path.slice(lastSlashIndex + 1) : path;
       tree[path] = {

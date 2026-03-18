@@ -191,6 +191,33 @@ export function createLoaderTests(
         expect(tree.src.children?.direct).toContain('src/index.ts');
         expect(tree.src.children?.direct).toContain('src/utils.ts');
       });
+
+      test('should treat trailing slash paths as explicit directories', async () => {
+        const files = ['/foo/bar/baz/'];
+        const loader = await createLoader(files);
+        const tree = await buildNormalizedTree(loader, 'root');
+
+        expect(tree.root).toEqual({
+          name: 'root',
+          children: {
+            direct: ['foo'],
+            flattened: ['f::foo/bar/baz'],
+          },
+        });
+        expect(tree['foo/bar/baz']).toEqual({
+          name: 'baz',
+          children: {
+            direct: [],
+          },
+        });
+        expect(tree['f::foo/bar/baz']).toEqual({
+          name: 'foo/bar/baz',
+          flattens: ['foo', 'foo/bar', 'foo/bar/baz'],
+          children: {
+            direct: [],
+          },
+        });
+      });
     });
 
     describe('flattening functionality', () => {

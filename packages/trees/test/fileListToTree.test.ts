@@ -219,6 +219,44 @@ describe('fileListToTree', () => {
     });
   });
 
+  test('should treat trailing slash paths as explicit directories', () => {
+    const files = ['/foo/bar/baz/'];
+    const tree = buildTree(files);
+
+    expect(tree.root).toEqual({
+      name: 'root',
+      children: {
+        direct: ['foo'],
+        flattened: ['f::foo/bar/baz'],
+      },
+    });
+    expect(tree.foo).toEqual({
+      name: 'foo',
+      children: {
+        direct: ['foo/bar'],
+      },
+    });
+    expect(tree['foo/bar']).toEqual({
+      name: 'bar',
+      children: {
+        direct: ['foo/bar/baz'],
+      },
+    });
+    expect(tree['foo/bar/baz']).toEqual({
+      name: 'baz',
+      children: {
+        direct: [],
+      },
+    });
+    expect(tree['f::foo/bar/baz']).toEqual({
+      name: 'foo/bar/baz',
+      flattens: ['foo', 'foo/bar', 'foo/bar/baz'],
+      children: {
+        direct: [],
+      },
+    });
+  });
+
   test('should handle mixed depth files', () => {
     const files = [
       'README.md',
