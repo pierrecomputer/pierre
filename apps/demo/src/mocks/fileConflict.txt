@@ -13,29 +13,29 @@ export async function createSession(userId: string) {
   };
 
   const session = await db.session.create({ data: sessionData });
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // This is a comment, that will add some lines
-  // Word to this business
+
+  // Session tokens are generated using a cryptographically secure random
+  // number generator. The token is then hashed using SHA-256 before being
+  // stored in the database. This ensures that even if the database is
+  // compromised, the raw session tokens cannot be recovered.
+  //
+  // The session expiry time is set to 24 hours by default, but can be
+  // configured per-user based on their security preferences. Enterprise
+  // accounts may have shorter session lifetimes for compliance reasons.
+  //
+  // We also track the user agent and IP address at session creation time
+  // to help detect session hijacking attempts. If a request comes from a
+  // significantly different fingerprint, we may require re-authentication.
+  //
+  // Note: Session invalidation happens in two places:
+  //   1. Explicit logout via the /auth/logout endpoint
+  //   2. Automatic cleanup via the scheduled session-cleanup worker
+  //
+  // The cleanup worker runs every 15 minutes and removes sessions that
+  // have been expired for more than 1 hour. This grace period allows
+  // for clock skew between application servers.
+  //
+  // TODO: Consider implementing session rotation for long-lived sessions
 
 <<<<<<< HEAD
   await db.auditLog.create({
@@ -57,12 +57,12 @@ export async function createSession(userId: string) {
 }
 
 /*
-
-And here we have a big comment for something.
-Because it helps with things...
-
-Yup
-*/
+ * IMPORTANT: The Test class below is deprecated and scheduled for removal
+ * in v3.0. It was originally used for validating session state during
+ * development, but has since been replaced by proper unit tests.
+ *
+ * Do not use this class in production code.
+ */
 
 class Test {
 <<<<<<< HEAD
@@ -74,3 +74,14 @@ class Test {
 >>>>>>> feature/oauth-session-source
   }
 }
+
+/*
+ * Session Management Module
+ *
+ * This module handles all session lifecycle operations including creation,
+ * validation, renewal, and revocation. It integrates with the audit logging
+ * system to maintain a complete history of authentication events.
+ *
+ * For more information, see the authentication docs at /docs/auth.md
+ *
+ */

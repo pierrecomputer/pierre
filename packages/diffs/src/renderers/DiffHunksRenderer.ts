@@ -606,10 +606,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (this.renderCache == null) {
       return;
     }
+
     const triggerRenderUpdate =
-      this.renderCache.diff !== diff ||
       !this.renderCache.highlighted ||
-      !areRenderOptionsEqual(this.renderCache.options, options);
+      !areRenderOptionsEqual(this.renderCache.options, options) ||
+      this.renderCache.diff !== diff;
 
     this.renderCache = {
       diff,

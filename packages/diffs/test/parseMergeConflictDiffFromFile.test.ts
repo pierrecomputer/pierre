@@ -56,9 +56,13 @@ describe('parseMergeConflictDiffFromFile', () => {
     ).toBe(true);
     expect(actions).toEqual([
       {
-        currentLineNumber: 1,
-        incomingLineNumber: 1,
         conflictIndex: 0,
+        hunkIndex: 0,
+        startContextIndex: 1,
+        currentChangeIndex: 2,
+        separatorContextIndex: 3,
+        incomingChangeIndex: 4,
+        endContextIndex: 5,
         conflict: {
           conflictIndex: 0,
           startLineIndex: 1,
@@ -126,9 +130,14 @@ describe('parseMergeConflictDiffFromFile', () => {
     ).toBe(true);
     expect(actions).toEqual([
       {
-        currentLineNumber: 1,
-        incomingLineNumber: 1,
         conflictIndex: 0,
+        hunkIndex: 0,
+        startContextIndex: 1,
+        currentChangeIndex: 2,
+        baseMarkerContextIndex: 3,
+        separatorContextIndex: 5,
+        incomingChangeIndex: 6,
+        endContextIndex: 7,
         conflict: {
           conflictIndex: 0,
           startLineIndex: 1,

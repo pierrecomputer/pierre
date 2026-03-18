@@ -53,7 +53,7 @@ export function getMergeConflictActionAnchor(
 
 export function parseMergeConflictDiffFromFile(
   file: FileContents,
-  maxContextLines: number = 10000 // FIXME: Do not merge this, it should be 10 by default...
+  maxContextLines: number = 10
 ): ParseMergeConflictDiffFromFileResult {
   const lines = splitFileContents(file.contents);
   const { lineTypes, regions } = getMergeConflictParseResult(lines);
@@ -131,6 +131,7 @@ export function parseMergeConflictDiffFromFile(
   const fileDiff = processFile(trimPatchContext(patch, maxContextLines + 1), {
     processConflict(conflict) {
       const region = regions[nextConflictActionIndex];
+      console.log('ZZZZZ - region is', region);
       if (region == null) {
         throw new Error(
           'parseMergeConflictDiffFromFile: missing merge conflict region for parsed conflict'

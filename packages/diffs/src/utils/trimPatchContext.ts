@@ -1,7 +1,6 @@
 import { HUNK_HEADER } from '../constants';
 
 interface CurrentHunk {
-  hunkContextString: string;
   additionStart: number;
   deletionStart: number;
   additionCount: number;
@@ -9,6 +8,8 @@ interface CurrentHunk {
   hunkLines: string[];
   contextLines: string[];
 }
+
+type ContextFlushMode = 'before-change' | 'leading' | 'trailing';
 
 /**
  * A utility function to trim out excess context lines from a patch file.  It
@@ -22,12 +23,13 @@ export function trimPatchContext(patch: string, contextSize = 10): string {
   let currentHunk: CurrentHunk | undefined;
   for (const line of patch.split('\n')) {
     const parsedHunkHeader = line.match(HUNK_HEADER);
-    // If we've come across a new hunk boundary, then we should close out the
-    // current hunk and setup a new one
+    // We've come across a new hunk boundary
     if (parsedHunkHeader != null) {
+      // If we have an existing hunk, lets close it out
+      // before setting up a new one
       if (currentHunk != null) {
         if (currentHunk.hunkLines.length > 0) {
-          flushContextLines(currentHunk, contextSize);
+          flushContextLines(currentHunk, contextSize, 'trailing');
           flushHunk(currentHunk, lines);
         }
         currentHunk = undefined;
@@ -49,7 +51,6 @@ export function trimPatchContext(patch: string, contextSize = 10): string {
         lines.push(line);
       } else {
         currentHunk = {
-          hunkContextString: parsedHunkHeader[5] ?? '',
           additionStart,
           deletionStart,
           additionCount: 0,
@@ -71,35 +72,42 @@ export function trimPatchContext(patch: string, contextSize = 10): string {
     // If we are dealing with a context line...
     if (line.startsWith(' ')) {
       currentHunk.contextLines.push(line);
-      // If we've exceeded double our context window size + 1, that means we
-      // should create a new hunk...
+    } else if (line !== '') {
       if (
         currentHunk.hunkLines.length > 0 &&
-        currentHunk.contextLines.length === contextSize * 2 + 1
+        currentHunk.contextLines.length > contextSize * 2
       ) {
-        const removedItems = currentHunk.contextLines.slice(contextSize);
-        flushContextLines(currentHunk, contextSize);
+        const omittedContextLineCount =
+          currentHunk.contextLines.length - contextSize * 2;
+        const nextContextLines = currentHunk.contextLines.slice(-contextSize);
+        flushContextLines(currentHunk, contextSize, 'trailing');
         const {
           additionCount: emittedAdditionCount,
           deletionCount: emittedDeletionCount,
         } = currentHunk;
         flushHunk(currentHunk, lines);
 
-        removedItems.shift();
         currentHunk = {
-          // NOTE(amadeus): Not sure there's an easy way to manage this context
-          // string stuff, so lets just remove it from auto generated hunks
-          hunkContextString: '',
-          additionStart: currentHunk.additionStart + emittedAdditionCount + 1,
-          deletionStart: currentHunk.deletionStart + emittedDeletionCount + 1,
+          additionStart:
+            currentHunk.additionStart +
+            emittedAdditionCount +
+            omittedContextLineCount,
+          deletionStart:
+            currentHunk.deletionStart +
+            emittedDeletionCount +
+            omittedContextLineCount,
           deletionCount: 0,
           additionCount: 0,
-          contextLines: removedItems,
+          contextLines: nextContextLines,
           hunkLines: [],
         };
       }
-    } else if (line !== '') {
-      flushContextLines(currentHunk, contextSize);
+
+      flushContextLines(
+        currentHunk,
+        contextSize,
+        currentHunk.hunkLines.length === 0 ? 'leading' : 'before-change'
+      );
       currentHunk.hunkLines.push(line);
       if (line.startsWith('+')) {
         currentHunk.additionCount += 1;
@@ -110,28 +118,30 @@ export function trimPatchContext(patch: string, contextSize = 10): string {
   }
 
   if (currentHunk != null && currentHunk.hunkLines.length > 0) {
-    flushContextLines(currentHunk, contextSize);
+    flushContextLines(currentHunk, contextSize, 'trailing');
     flushHunk(currentHunk, lines);
   }
 
-  return lines.join('\n');
+  const result = lines.join('\n');
+  return patch.endsWith('\n') ? `${result}\n` : result;
 }
 
-function flushContextLines(hunk: CurrentHunk, contextSize: number) {
-  if (hunk.contextLines.length > contextSize) {
-    // If this context group is at the beginning of the hunk, truncate from the
-    // beginning
-    if (hunk.hunkLines.length === 0) {
-      const difference = hunk.contextLines.length - contextSize;
-      hunk.contextLines.splice(0, difference);
-      hunk.additionStart += difference;
-      hunk.deletionStart += difference;
-    }
-    // Otherwise truncate from the end
-    else {
-      hunk.contextLines.length = contextSize;
-    }
+function flushContextLines(
+  hunk: CurrentHunk,
+  contextSize: number,
+  mode: ContextFlushMode
+) {
+  if (mode === 'leading' && hunk.contextLines.length > contextSize) {
+    const difference = hunk.contextLines.length - contextSize;
+    hunk.contextLines.splice(0, difference);
+    hunk.additionStart += difference;
+    hunk.deletionStart += difference;
   }
+
+  if (mode === 'trailing' && hunk.contextLines.length > contextSize) {
+    hunk.contextLines.length = contextSize;
+  }
+
   if (hunk.contextLines.length > 0) {
     hunk.hunkLines.push(...hunk.contextLines);
     hunk.additionCount += hunk.contextLines.length;
@@ -143,7 +153,7 @@ function flushContextLines(hunk: CurrentHunk, contextSize: number) {
 
 function flushHunk(hunk: CurrentHunk, lines: string[]) {
   lines.push(
-    `@@ -${formatHunkRange(hunk.deletionStart, hunk.deletionCount)} +${formatHunkRange(hunk.additionStart, hunk.additionCount)} @@${hunk.hunkContextString !== '' ? ` ${hunk.hunkContextString}` : ''}`
+    `@@ -${formatHunkRange(hunk.deletionStart, hunk.deletionCount)} +${formatHunkRange(hunk.additionStart, hunk.additionCount)} @@`
   );
   lines.push(...hunk.hunkLines);
 }
