@@ -4,7 +4,6 @@ import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
 import type {
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
-  DiffLineAnnotation,
   FileDiffMetadata,
   MergeConflictRenderRow,
   MergeConflictResolution,
@@ -41,14 +40,14 @@ type MergeConflictMarkerType =
 type MergeConflictMarkerLookup = MergeConflictMarkerType | 'none';
 
 interface MergeConflictActionRowData {
-  side: DiffLineAnnotation<undefined>['side'];
-  lineNumber: number;
+  hunkIndex: number;
+  lineIndex: number;
   conflictIndex: number;
 }
 
 interface MergeConflictMarkerRowData {
-  side: DiffLineAnnotation<undefined>['side'];
-  lineNumber: number;
+  hunkIndex: number;
+  lineIndex: number;
   markerType: Extract<
     MergeConflictRenderRow['type'],
     'marker-start' | 'marker-base' | 'marker-separator' | 'marker-end'
@@ -128,8 +127,8 @@ export class UnresolvedFileHunksRenderer<
       }
       const row: MergeConflictInlineRowData = {
         type: 'actions',
-        side: anchor.side,
-        lineNumber: anchor.lineNumber,
+        hunkIndex: anchor.hunkIndex,
+        lineIndex: anchor.lineIndex,
         conflictIndex: action.conflictIndex,
       };
       this.addInlineRow(row);
@@ -154,7 +153,7 @@ export class UnresolvedFileHunksRenderer<
   }
 
   private addInlineRow(row: MergeConflictInlineRowData): void {
-    const key = `${row.side}:${row.lineNumber}`;
+    const key = `${row.hunkIndex}:${row.lineIndex}`;
     const rows = this.inlineRows.get(key);
     if (rows == null) {
       this.inlineRows.set(key, [row]);
@@ -251,15 +250,7 @@ export class UnresolvedFileHunksRenderer<
   protected override getUnifiedInlineRowsForLine = (
     ctx: RenderedLineContext
   ): InlineRow[] | undefined => {
-    const side = getUnifiedRenderedSide(ctx);
-    const lineNumber =
-      side === 'deletions'
-        ? ctx.deletionLine?.lineNumber
-        : ctx.additionLine?.lineNumber;
-    if (lineNumber == null) {
-      return undefined;
-    }
-    const rows = this.inlineRows.get(`${side}:${lineNumber}`);
+    const rows = this.inlineRows.get(`${ctx.hunkIndex}:${ctx.lineIndex}`);
     if (rows == null || rows.length === 0) {
       return undefined;
     }
@@ -379,19 +370,6 @@ function buildMarkerLookup(lines: string[]): MergeConflictMarkerLookup[] {
   return markerLookup;
 }
 
-function getUnifiedRenderedSide(
-  ctx: RenderedLineContext
-): DiffLineAnnotation<undefined>['side'] {
-  if (
-    ctx.type === 'change' &&
-    ctx.deletionLine != null &&
-    ctx.additionLine == null
-  ) {
-    return 'deletions';
-  }
-  return 'additions';
-}
-
 function createMergeConflictGutterGap(type: 'action' | 'marker'): HASTElement {
   const gap = createGutterGap(undefined, 'annotation', 1);
   gap.properties['data-gutter-buffer'] =
@@ -419,8 +397,8 @@ function createMergeConflictActionsRowElement({
         tagName: 'slot',
         properties: {
           name: getMergeConflictActionSlotName({
-            side: row.side,
-            lineNumber: row.lineNumber,
+            hunkIndex: row.hunkIndex,
+            lineIndex: row.lineIndex,
             conflictIndex: row.conflictIndex,
           }),
           'data-merge-conflict-action-slot': '',
@@ -453,7 +431,9 @@ function createMergeConflictMarkerRowElement(
       'data-merge-conflict': row.markerType,
       'data-merge-conflict-marker-row': '',
     },
-    children: [createTextNodeElement(trimLineEnding(row.lineText))],
+    children: [
+      createTextNodeElement(row.lineText.replace(/(?:\r\n|\n|\r)$/, '')),
+    ],
   });
 }
 
@@ -543,13 +523,10 @@ function getMergeConflictMarkerInlineRow(
   }
   return {
     type: 'marker',
-    side: 'additions',
-    lineNumber: Math.max(1, lineNumber - 1),
+    hunkIndex: row.hunkIndex,
+    lineIndex:
+      row.contentIndex === 0 ? lineNumber : Math.max(0, lineNumber - 1),
     markerType: row.type,
     lineText: row.lineText,
   };
-}
-
-function trimLineEnding(line: string): string {
-  return line.replace(/(?:\r\n|\n|\r)$/, '');
 }

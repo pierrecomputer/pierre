@@ -1,15 +1,13 @@
-import type { AnnotationSide } from '../types';
-
 interface MergeConflictActionSlotInput {
-  side: AnnotationSide;
-  lineNumber: number;
+  hunkIndex: number;
+  lineIndex: number;
   conflictIndex: number;
 }
 
 export function getMergeConflictActionSlotName({
-  side,
-  lineNumber,
+  hunkIndex,
+  lineIndex,
   conflictIndex,
 }: MergeConflictActionSlotInput): string {
-  return `merge-conflict-action-${side}-${lineNumber}-${conflictIndex}`;
+  return `merge-conflict-action-${hunkIndex}-${lineIndex}-${conflictIndex}`;
 }

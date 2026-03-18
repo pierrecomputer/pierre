@@ -100,7 +100,8 @@ function getSlotName(
   const anchor = getMergeConflictActionAnchor(action, fileDiff);
   return anchor != null
     ? getMergeConflictActionSlotName({
-        ...anchor,
+        hunkIndex: anchor.hunkIndex,
+        lineIndex: anchor.lineIndex,
         conflictIndex: action.conflictIndex,
       })
     : undefined;
