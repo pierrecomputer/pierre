@@ -313,6 +313,32 @@ export interface FileDiffMetadata {
    * the `cacheKey`.
    */
   cacheKey?: string;
+
+  /**
+   * Structural metadata for unresolved merge conflict rows that should be
+   * rendered independently from the stored diff line arrays.
+   */
+  mergeConflictRenderData?: MergeConflictRenderData[];
+}
+
+export type MergeConflictRenderRowType =
+  | 'actions'
+  | 'marker-start'
+  | 'marker-base'
+  | 'marker-separator'
+  | 'marker-end';
+
+export interface MergeConflictRenderRow {
+  type: MergeConflictRenderRowType;
+  hunkIndex: number;
+  contentIndex: number;
+  conflictIndex: number;
+}
+
+export interface MergeConflictRenderData {
+  conflictIndex: number;
+  hunkIndex: number;
+  rows: MergeConflictRenderRow[];
 }
 
 export type SupportedLanguages =
