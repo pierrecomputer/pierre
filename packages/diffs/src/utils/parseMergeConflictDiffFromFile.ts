@@ -2,6 +2,8 @@ import type {
   FileContents,
   FileDiffMetadata,
   MergeConflictRegion,
+  MergeConflictRenderData,
+  MergeConflictRenderRow,
   ProcessFileConflictData,
 } from '../types';
 import { getMergeConflictParseResult } from './getMergeConflictLineTypes';
@@ -131,7 +133,6 @@ export function parseMergeConflictDiffFromFile(
   const fileDiff = processFile(trimPatchContext(patch, maxContextLines + 1), {
     processConflict(conflict) {
       const region = regions[nextConflictActionIndex];
-      console.log('ZZZZZ - region is', region);
       if (region == null) {
         throw new Error(
           'parseMergeConflictDiffFromFile: missing merge conflict region for parsed conflict'
@@ -158,6 +159,10 @@ export function parseMergeConflictDiffFromFile(
       'parseMergeConflictDiffFromFile: failed to build merge conflict diff metadata'
     );
   }
+
+  fileDiff.mergeConflictRenderData = actions.flatMap((action) =>
+    action != null ? [createMergeConflictRenderData(action)] : []
+  );
 
   return {
     fileDiff,
@@ -202,6 +207,59 @@ function createResolvedConflictFile(
       file.cacheKey != null
         ? `${file.cacheKey}:merge-conflict-${side}`
         : undefined,
+  };
+}
+
+// Build a structural list of unresolved merge conflict rows so the renderer can
+// eventually inject marker/action rows without depending on diff line numbers.
+function createMergeConflictRenderData(
+  action: MergeConflictDiffAction
+): MergeConflictRenderData {
+  const rows: MergeConflictRenderRow[] = [
+    createMergeConflictRenderRow(action, 'actions', action.startContextIndex),
+    createMergeConflictRenderRow(
+      action,
+      'marker-start',
+      action.startContextIndex
+    ),
+  ];
+
+  if (action.baseMarkerContextIndex != null) {
+    rows.push(
+      createMergeConflictRenderRow(
+        action,
+        'marker-base',
+        action.baseMarkerContextIndex
+      )
+    );
+  }
+
+  rows.push(
+    createMergeConflictRenderRow(
+      action,
+      'marker-separator',
+      action.separatorContextIndex
+    ),
+    createMergeConflictRenderRow(action, 'marker-end', action.endContextIndex)
+  );
+
+  return {
+    conflictIndex: action.conflictIndex,
+    hunkIndex: action.hunkIndex,
+    rows,
+  };
+}
+
+function createMergeConflictRenderRow(
+  action: MergeConflictDiffAction,
+  type: MergeConflictRenderRow['type'],
+  contentIndex: number
+): MergeConflictRenderRow {
+  return {
+    type,
+    hunkIndex: action.hunkIndex,
+    contentIndex,
+    conflictIndex: action.conflictIndex,
   };
 }
 
