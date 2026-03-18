@@ -6,6 +6,7 @@ import type {
   BaseDiffOptionsWithDefaults,
   DiffLineAnnotation,
   FileDiffMetadata,
+  MergeConflictRenderRow,
   MergeConflictResolution,
   RenderRange,
 } from '../types';
@@ -45,6 +46,22 @@ interface MergeConflictActionRowData {
   conflictIndex: number;
 }
 
+interface MergeConflictMarkerRowData {
+  side: DiffLineAnnotation<undefined>['side'];
+  lineNumber: number;
+  markerType: Extract<
+    MergeConflictRenderRow['type'],
+    'marker-start' | 'marker-base' | 'marker-separator' | 'marker-end'
+  >;
+  lineText: string;
+}
+
+// NOTE(amadeus): Don't love this, should probably rework into an
+// interface/extender
+type MergeConflictInlineRowData =
+  | ({ type: 'actions' } & MergeConflictActionRowData)
+  | ({ type: 'marker' } & MergeConflictMarkerRowData);
+
 interface BaseUnresolvedOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
   mergeConflictActionsType: MergeConflictActionsType;
 }
@@ -66,7 +83,7 @@ export class UnresolvedFileHunksRenderer<
   private cachedAdditionLines: string[] | undefined;
   private cachedDeletionLines: string[] | undefined;
   private pendingConflictActions: (MergeConflictDiffAction | undefined)[] = [];
-  private conflictActions = new Map<string, MergeConflictActionRowData[]>();
+  private inlineRows = new Map<string, MergeConflictInlineRowData[]>();
   private additionMarkerLookup: MergeConflictMarkerLookup[] = [];
   private deletionMarkerLookup: MergeConflictMarkerLookup[] = [];
   public override options: UnresolvedFileHunksRendererOptions;
@@ -95,32 +112,54 @@ export class UnresolvedFileHunksRenderer<
     if (diff == null) {
       return;
     }
-    this.syncConflictActionRows(conflictActions, diff);
+    this.syncInlineRows(conflictActions, diff);
   }
 
-  private syncConflictActionRows(
+  private syncInlineRows(
     conflictActions: (MergeConflictDiffAction | undefined)[],
     diff: FileDiffMetadata
   ): void {
-    this.conflictActions.clear();
+    this.inlineRows.clear();
     for (const action of conflictActions) {
       const anchor =
         action != null ? getMergeConflictActionAnchor(action, diff) : undefined;
       if (action == null || anchor == null) {
         continue;
       }
-      const row = {
+      const row: MergeConflictInlineRowData = {
+        type: 'actions',
         side: anchor.side,
         lineNumber: anchor.lineNumber,
         conflictIndex: action.conflictIndex,
       };
-      const key = `${row.side}:${row.lineNumber}`;
-      const rows = this.conflictActions.get(key);
-      if (rows == null) {
-        this.conflictActions.set(key, [row]);
-      } else {
-        rows.push(row);
+      this.addInlineRow(row);
+    }
+
+    if (hasPhysicalMarkerRows(diff)) {
+      return;
+    }
+
+    for (const conflict of diff.mergeConflictRenderData ?? []) {
+      for (const row of conflict.rows) {
+        if (row.type === 'actions') {
+          continue;
+        }
+        const inlineRow = getMergeConflictMarkerInlineRow(row, diff);
+        if (inlineRow == null) {
+          continue;
+        }
+        this.addInlineRow(inlineRow);
       }
+    }
+  }
+
+  private addInlineRow(row: MergeConflictInlineRowData): void {
+    const key = `${row.side}:${row.lineNumber}`;
+    const rows = this.inlineRows.get(key);
+    if (rows == null) {
+      this.inlineRows.set(key, [row]);
+    } else {
+      rows.push(row);
     }
   }
 
@@ -130,7 +169,7 @@ export class UnresolvedFileHunksRenderer<
   ): HunksRenderResult | undefined {
     if (diff != null) {
       this.prepareMarkerLookups(diff);
-      this.syncConflictActionRows(this.pendingConflictActions, diff);
+      this.syncInlineRows(this.pendingConflictActions, diff);
     }
     return super.renderDiff(diff, renderRange);
   }
@@ -140,7 +179,7 @@ export class UnresolvedFileHunksRenderer<
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
     this.prepareMarkerLookups(diff);
-    this.syncConflictActionRows(this.pendingConflictActions, diff);
+    this.syncInlineRows(this.pendingConflictActions, diff);
     return super.asyncRender(diff, renderRange);
   }
 
@@ -220,19 +259,27 @@ export class UnresolvedFileHunksRenderer<
     if (lineNumber == null) {
       return undefined;
     }
-    const rows = this.conflictActions.get(`${side}:${lineNumber}`);
+    const rows = this.inlineRows.get(`${side}:${lineNumber}`);
     if (rows == null || rows.length === 0) {
       return undefined;
     }
     const { mergeConflictActionsType } = this.getOptionsWithDefaults();
-    return rows.map((row) => ({
-      content: createMergeConflictActionsRowElement({
-        row,
-        includeDefaultActions: mergeConflictActionsType === 'default',
-        includeSlot: true,
-      }),
-      gutter: createMergeConflictGutterGap(),
-    }));
+    return rows.map((row) => {
+      if (row.type === 'actions') {
+        return {
+          content: createMergeConflictActionsRowElement({
+            row,
+            includeDefaultActions: mergeConflictActionsType === 'default',
+            includeSlot: true,
+          }),
+          gutter: createMergeConflictGutterGap('action'),
+        };
+      }
+      return {
+        content: createMergeConflictMarkerRowElement(row),
+        gutter: createMergeConflictGutterGap('marker'),
+      };
+    });
   };
 
   private prepareMarkerLookups(diff: FileDiffMetadata): void {
@@ -345,9 +392,10 @@ function getUnifiedRenderedSide(
   return 'additions';
 }
 
-function createMergeConflictGutterGap(): HASTElement {
+function createMergeConflictGutterGap(type: 'action' | 'marker'): HASTElement {
   const gap = createGutterGap(undefined, 'annotation', 1);
-  gap.properties['data-gutter-buffer'] = 'merge-conflict-action';
+  gap.properties['data-gutter-buffer'] =
+    type === 'action' ? 'merge-conflict-action' : 'merge-conflict-marker';
   return gap;
 }
 
@@ -392,6 +440,20 @@ function createMergeConflictActionsRowElement({
         children: contentChildren,
       }),
     ],
+  });
+}
+
+function createMergeConflictMarkerRowElement(
+  row: MergeConflictMarkerRowData
+): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    properties: {
+      'data-line-type': 'context',
+      'data-merge-conflict': row.markerType,
+      'data-merge-conflict-marker-row': '',
+    },
+    children: [createTextNodeElement(trimLineEnding(row.lineText))],
   });
 }
 
@@ -447,4 +509,47 @@ function createMergeConflictActionSeparator(): HASTElement {
     properties: { 'data-merge-conflict-action-separator': '' },
     children: [createTextNodeElement('|')],
   });
+}
+
+function hasPhysicalMarkerRows(diff: FileDiffMetadata): boolean {
+  return diff.additionLines.some(
+    (line) => getMergeConflictMarkerType(line) != null
+  );
+}
+
+function getMergeConflictMarkerInlineRow(
+  row: MergeConflictRenderRow,
+  diff: FileDiffMetadata
+): MergeConflictInlineRowData | undefined {
+  if (
+    row.type !== 'marker-start' &&
+    row.type !== 'marker-base' &&
+    row.type !== 'marker-separator' &&
+    row.type !== 'marker-end'
+  ) {
+    return undefined;
+  }
+  const hunk = diff.hunks[row.hunkIndex];
+  if (hunk == null || row.lineText == null) {
+    return undefined;
+  }
+  let lineNumber = hunk.additionStart;
+  for (let i = 0; i < row.contentIndex; i++) {
+    const content = hunk.hunkContent[i];
+    lineNumber +=
+      content.type === 'context'
+        ? content.lines
+        : Math.max(content.additions, content.deletions);
+  }
+  return {
+    type: 'marker',
+    side: 'additions',
+    lineNumber: Math.max(1, lineNumber - 1),
+    markerType: row.type,
+    lineText: row.lineText,
+  };
+}
+
+function trimLineEnding(line: string): string {
+  return line.replace(/(?:\r\n|\n|\r)$/, '');
 }

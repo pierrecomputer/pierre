@@ -161,7 +161,7 @@ export function parseMergeConflictDiffFromFile(
   }
 
   fileDiff.mergeConflictRenderData = actions.flatMap((action) =>
-    action != null ? [createMergeConflictRenderData(action)] : []
+    action != null ? [createMergeConflictRenderData(action, lines)] : []
   );
 
   return {
@@ -213,14 +213,16 @@ function createResolvedConflictFile(
 // Build a structural list of unresolved merge conflict rows so the renderer can
 // eventually inject marker/action rows without depending on diff line numbers.
 function createMergeConflictRenderData(
-  action: MergeConflictDiffAction
+  action: MergeConflictDiffAction,
+  lines: string[]
 ): MergeConflictRenderData {
   const rows: MergeConflictRenderRow[] = [
     createMergeConflictRenderRow(action, 'actions', action.startContextIndex),
     createMergeConflictRenderRow(
       action,
       'marker-start',
-      action.startContextIndex
+      action.startContextIndex,
+      getConflictMarkerLine(lines, action.conflict.startLineIndex)
     ),
   ];
 
@@ -229,7 +231,8 @@ function createMergeConflictRenderData(
       createMergeConflictRenderRow(
         action,
         'marker-base',
-        action.baseMarkerContextIndex
+        action.baseMarkerContextIndex,
+        getConflictMarkerLine(lines, action.conflict.baseMarkerLineIndex)
       )
     );
   }
@@ -238,9 +241,15 @@ function createMergeConflictRenderData(
     createMergeConflictRenderRow(
       action,
       'marker-separator',
-      action.separatorContextIndex
+      action.separatorContextIndex,
+      getConflictMarkerLine(lines, action.conflict.separatorLineIndex)
     ),
-    createMergeConflictRenderRow(action, 'marker-end', action.endContextIndex)
+    createMergeConflictRenderRow(
+      action,
+      'marker-end',
+      action.endContextIndex,
+      getConflictMarkerLine(lines, action.conflict.endLineIndex)
+    )
   );
 
   return {
@@ -253,14 +262,23 @@ function createMergeConflictRenderData(
 function createMergeConflictRenderRow(
   action: MergeConflictDiffAction,
   type: MergeConflictRenderRow['type'],
-  contentIndex: number
+  contentIndex: number,
+  lineText?: string
 ): MergeConflictRenderRow {
   return {
     type,
     hunkIndex: action.hunkIndex,
     contentIndex,
     conflictIndex: action.conflictIndex,
+    lineText,
   };
+}
+
+function getConflictMarkerLine(
+  lines: string[],
+  lineIndex: number | undefined
+): string | undefined {
+  return lineIndex != null ? lines[lineIndex] : undefined;
 }
 
 function assertNever(value: never): never {

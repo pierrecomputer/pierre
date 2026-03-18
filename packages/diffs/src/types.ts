@@ -333,6 +333,7 @@ export interface MergeConflictRenderRow {
   hunkIndex: number;
   contentIndex: number;
   conflictIndex: number;
+  lineText?: string;
 }
 
 export interface MergeConflictRenderData {
