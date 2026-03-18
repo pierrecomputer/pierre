@@ -98,7 +98,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.1.0-beta.19",
+      "version": "1.1.1",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -170,7 +170,7 @@
     },
     "packages/trees": {
       "name": "@pierre/trees",
-      "version": "0.0.1-beta.2",
+      "version": "0.0.1-beta.4",
       "dependencies": {
         "@headless-tree/core": "catalog:",
         "preact": "catalog:",
@@ -189,6 +189,22 @@
         "tsdown": "catalog:",
         "typescript": "catalog:",
         "vite": "catalog:",
+      },
+      "peerDependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+    },
+    "packages/truncate": {
+      "name": "@pierre/truncate",
+      "version": "0.0.1-beta.1",
+      "devDependencies": {
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "tsdown": "catalog:",
+        "typescript": "catalog:",
       },
       "peerDependencies": {
         "react": "^19.0.0",
@@ -599,6 +615,8 @@
     "@pierre/theme": ["@pierre/theme@0.0.22", "", {}, "sha512-ePUIdQRNGjrveELTU7fY89Xa7YGHHEy5Po5jQy/18lm32eRn96+tnYJEtFooGdffrx55KBUtOXfvVy/7LDFFhA=="],
 
     "@pierre/trees": ["@pierre/trees@workspace:packages/trees"],
+
+    "@pierre/truncate": ["@pierre/truncate@workspace:packages/truncate"],
 
     "@playwright/test": ["@playwright/test@1.51.1", "", { "dependencies": { "playwright": "1.51.1" }, "bin": { "playwright": "cli.js" } }, "sha512-nM+kEaTSAoVlXmMPH10017vn3FSiFqr/bh4fKg9vmAdMfd9SDqRZNvPSiAHADc/itWak+qPvMPZQOPwCBW7k7Q=="],
 
