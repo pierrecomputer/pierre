@@ -62,7 +62,7 @@ export function forEachFolderInNormalizedPath(
   const limit = isDirectory ? path.length : lastSlashIndex;
   let slashIndex = path.indexOf('/');
 
-  while (slashIndex !== -1 && slashIndex < limit) {
+  while (slashIndex !== -1 && slashIndex <= limit) {
     visit(path.slice(0, slashIndex));
     slashIndex = path.indexOf('/', slashIndex + 1);
   }
