@@ -7,6 +7,12 @@
 The SSR API allows you to pre-render file diffs on the server with syntax
 highlighting, then hydrate them on the client for full interactivity.
 
+If you pass `prerenderedHTML`, `onPostRender` still fires on the client after
+hydration. On later renders, it also fires after DOM-committing updates, whether
+those updates are a full replacement or a partial update. This is useful for
+measuring, observing, or otherwise manipulating the mounted diff container or
+content of the diffs itself.
+
 ### Usage
 
 Each preload function returns an object containing the original inputs plus a

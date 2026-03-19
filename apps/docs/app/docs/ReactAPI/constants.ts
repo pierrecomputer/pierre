@@ -131,6 +131,16 @@ interface DiffOptions {
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
+  // Fires after hydration, and after render passes that commit DOM updates.
+  // Those DOM updates may be a full replacement or a partial update.
+  // Receives the outer diffs container element.
+  // Useful when you want to do your own post-render DOM manipulation.
+  // You can access the shadow DOM from here if you need to inspect lines.
+  onPostRender(node: HTMLElement) {
+    const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
+    console.log('rendered line count', codeLines?.length ?? 0);
+  },
+
   // ─────────────────────────────────────────────────────────────
   // LINE SELECTION
   // ─────────────────────────────────────────────────────────────
@@ -536,6 +546,12 @@ export function MergeConflictPreview() {
         options={{
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           diffIndicators: 'none',
+          onPostRender(node: HTMLElement) {
+            const codeLines = node.shadowRoot?.querySelectorAll(
+              '[data-line]'
+            );
+            console.log('rendered line count', codeLines?.length ?? 0);
+          },
         }}
       />
     </>
@@ -604,6 +620,16 @@ interface FileOptions {
 
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
+
+  // Fires after hydration, and after render passes that commit DOM updates.
+  // Those DOM updates may be a full replacement or a partial update.
+  // Receives the outer diffs container element.
+  // Useful when you want to do your own post-render DOM manipulation.
+  // You can access the shadow DOM from here if you need to inspect lines.
+  onPostRender(node: HTMLElement) {
+    const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
+    console.log('rendered line count', codeLines?.length ?? 0);
+  },
 
   // ─────────────────────────────────────────────────────────────
   // LINE SELECTION
