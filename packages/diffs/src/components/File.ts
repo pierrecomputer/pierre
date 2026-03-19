@@ -50,11 +50,12 @@ export interface FileRenderProps<LAnnotation> {
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   forceRender?: boolean;
+  preventEmit?: boolean;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   renderRange?: RenderRange;
 }
 
-export interface FileHyrdateProps<LAnnotation> extends Omit<
+export interface FileHydrateProps<LAnnotation> extends Omit<
   FileRenderProps<LAnnotation>,
   'fileContainer'
 > {
@@ -257,8 +258,8 @@ export class File<LAnnotation = undefined> {
     this.placeHolder = undefined;
   }
 
-  public hydrate(props: FileHyrdateProps<LAnnotation>): void {
-    const { fileContainer, prerenderedHTML } = props;
+  public hydrate(props: FileHydrateProps<LAnnotation>): void {
+    const { fileContainer, prerenderedHTML, preventEmit = false } = props;
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
       fileContainer.shadowRoot?.children ?? []
@@ -290,7 +291,7 @@ export class File<LAnnotation = undefined> {
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      this.render(props);
+      this.render({ ...props, preventEmit: true });
     }
     // Otherwise orchestrate our setup
     else {
@@ -307,6 +308,8 @@ export class File<LAnnotation = undefined> {
       this.injectUnsafeCSS();
       this.interactionManager.setup(this.pre);
       this.resizeManager.setup(this.pre, overflow === 'wrap');
+    }
+    if (!preventEmit) {
       this.emitPostRender();
     }
   }
@@ -323,6 +326,7 @@ export class File<LAnnotation = undefined> {
     file,
     fileContainer,
     forceRender = false,
+    preventEmit = false,
     containerWrapper,
     lineAnnotations,
     renderRange,
@@ -403,7 +407,9 @@ export class File<LAnnotation = undefined> {
           this.applyErrorToDOM(error, fileContainer);
         }
       }
-      this.emitPostRender();
+      if (!preventEmit) {
+        this.emitPostRender();
+      }
       return true;
     }
 
@@ -445,7 +451,9 @@ export class File<LAnnotation = undefined> {
         this.applyErrorToDOM(error, fileContainer);
       }
     }
-    this.emitPostRender();
+    if (!preventEmit) {
+      this.emitPostRender();
+    }
     return true;
   }
 

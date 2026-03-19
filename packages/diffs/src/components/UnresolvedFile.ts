@@ -287,7 +287,14 @@ export class UnresolvedFile<
   }
 
   override hydrate(props: UnresolvedFileHydrationProps<LAnnotation>): void {
-    const { file, fileDiff, actions, lineAnnotations, ...rest } = props;
+    const {
+      file,
+      fileDiff,
+      actions,
+      lineAnnotations,
+      preventEmit = false,
+      ...rest
+    } = props;
     const source = this.getOrComputeDiff({ file, fileDiff, actions });
     if (source == null) {
       return;
@@ -297,8 +304,12 @@ export class UnresolvedFile<
       ...rest,
       fileDiff: source.fileDiff,
       lineAnnotations,
+      preventEmit: true,
     });
     this.renderMergeConflictActionSlots();
+    if (!preventEmit) {
+      this.emitPostRender();
+    }
   }
 
   override rerender(): void {
@@ -319,8 +330,12 @@ export class UnresolvedFile<
       ...rest,
       fileDiff: source.fileDiff,
       lineAnnotations,
+      preventEmit: true,
     });
     this.renderMergeConflictActionSlots();
+    if (didRender) {
+      this.emitPostRender();
+    }
     return didRender;
   }
 

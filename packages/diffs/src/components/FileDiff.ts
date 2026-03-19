@@ -62,6 +62,7 @@ export interface FileDiffRenderProps<LAnnotation> {
   oldFile?: FileContents;
   newFile?: FileContents;
   forceRender?: boolean;
+  preventEmit?: boolean;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
@@ -468,7 +469,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   public hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
     const { overflow = 'scroll', diffStyle = 'split' } = this.options;
-    const { fileContainer, prerenderedHTML } = props;
+    const { fileContainer, prerenderedHTML, preventEmit = false } = props;
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
       if (element instanceof SVGElement) {
@@ -516,7 +517,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
     // If we have no pre tag, then we should render
     if (this.pre == null) {
-      this.render(props);
+      this.render({ ...props, preventEmit: true });
     }
     // Otherwise orchestrate our setup
     else {
@@ -548,6 +549,8 @@ export class FileDiff<LAnnotation = undefined> {
           this.codeAdditions
         );
       }
+    }
+    if (!preventEmit) {
       this.emitPostRender();
     }
   }
@@ -595,6 +598,7 @@ export class FileDiff<LAnnotation = undefined> {
     newFile,
     fileDiff,
     forceRender = false,
+    preventEmit = false,
     lineAnnotations,
     fileContainer,
     containerWrapper,
@@ -715,7 +719,9 @@ export class FileDiff<LAnnotation = undefined> {
           this.applyErrorToDOM(error, fileContainer);
         }
       }
-      this.emitPostRender();
+      if (!preventEmit) {
+        this.emitPostRender();
+      }
       return true;
     }
 
@@ -790,11 +796,13 @@ export class FileDiff<LAnnotation = undefined> {
         this.applyErrorToDOM(error, fileContainer);
       }
     }
-    this.emitPostRender();
+    if (!preventEmit) {
+      this.emitPostRender();
+    }
     return true;
   }
 
-  private emitPostRender() {
+  protected emitPostRender(): void {
     if (this.fileContainer != null) {
       this.options.onPostRender?.(this.fileContainer);
     }
