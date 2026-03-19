@@ -1,4 +1,4 @@
-import { OverflowText } from '@pierre/truncate/react';
+import { Fruncate, Truncate } from '@pierre/truncate/react';
 import { notFound } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
@@ -29,11 +29,18 @@ export default function TruncateDevPage() {
           font-weight: 600;
         }
       `}</style>
+
       <h2>Truncate</h2>
 
-      <OverflowText>{defaultMessage}</OverflowText>
+      <Truncate>{defaultMessage}</Truncate>
 
-      <OverflowText
+      <Truncate marker="………">{defaultMessage}</Truncate>
+
+      <Truncate marker={() => <span style={{ color: 'red' }}>…</span>}>
+        {defaultMessage}
+      </Truncate>
+
+      <Truncate
         style={
           {
             backgroundColor: '#E5E5E5',
@@ -42,22 +49,19 @@ export default function TruncateDevPage() {
         }
       >
         {defaultMessage}
-      </OverflowText>
-
-      <OverflowText renderOverflowMarker="………">{defaultMessage}</OverflowText>
-
-      <OverflowText
-        renderOverflowMarker={() => <span style={{ color: 'red' }}>…</span>}
-      >
-        {defaultMessage}
-      </OverflowText>
+      </Truncate>
 
       <h2>Fruncate</h2>
 
-      <OverflowText mode="fruncate">{defaultMessage}</OverflowText>
+      <Fruncate>{defaultMessage}</Fruncate>
 
-      <OverflowText
-        mode="fruncate"
+      <Fruncate marker="………">{defaultMessage}</Fruncate>
+
+      <Fruncate marker={() => <span style={{ color: 'red' }}>…</span>}>
+        {defaultMessage}
+      </Fruncate>
+
+      <Fruncate
         style={
           {
             backgroundColor: '#E5E5E5',
@@ -66,18 +70,7 @@ export default function TruncateDevPage() {
         }
       >
         {defaultMessage}
-      </OverflowText>
-
-      <OverflowText mode="fruncate" renderOverflowMarker="………">
-        {defaultMessage}
-      </OverflowText>
-
-      <OverflowText
-        mode="fruncate"
-        renderOverflowMarker={() => <span style={{ color: 'red' }}>…</span>}
-      >
-        {defaultMessage}
-      </OverflowText>
+      </Fruncate>
     </div>
   );
 }

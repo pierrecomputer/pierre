@@ -1,14 +1,12 @@
 import { type CSSProperties, type ReactNode, useId, useMemo } from 'react';
 import type { PropsWithChildren } from 'react';
 
-export interface RenderOverflowMarkerProps extends PropsWithChildren {}
+export interface MarkerProps extends PropsWithChildren {}
 
 export interface OverflowTextProps extends PropsWithChildren {
   mode?: 'truncate' | 'fruncate';
   style?: Omit<CSSProperties, 'height' | 'overflow'>;
-  renderOverflowMarker?:
-    | ReactNode
-    | ((props: RenderOverflowMarkerProps) => ReactNode);
+  marker?: ReactNode | ((props: MarkerProps) => ReactNode);
 }
 
 const CONTENTS_STYLE = {
@@ -32,11 +30,7 @@ const CONTENTS_STYLE = {
   },
 } as const;
 
-function OverflowMarker({
-  children,
-  mode,
-  renderOverflowMarker,
-}: OverflowTextProps) {
+function OverflowMarker({ children, mode, marker }: OverflowTextProps) {
   return (
     <div
       data-truncate-overflow-marker
@@ -59,9 +53,7 @@ function OverflowMarker({
           backgroundColor: 'var(--truncate-internal-marker-background-color)',
         }}
       >
-        {typeof renderOverflowMarker === 'function'
-          ? renderOverflowMarker({ children })
-          : renderOverflowMarker}
+        {typeof marker === 'function' ? marker({ children }) : marker}
       </div>
     </div>
   );
@@ -85,7 +77,13 @@ function OverflowContent(
           ...CONTENTS_STYLE[mode].outer,
         }}
       >
-        <span style={CONTENTS_STYLE[mode].inner}>{children}</span>
+        {mode === 'truncate' ? (
+          // The span wrapper here is only needed to implement the right aligned internals
+          // for fruncate
+          children
+        ) : (
+          <span style={CONTENTS_STYLE[mode].inner}>{children}</span>
+        )}
       </div>
       <div
         data-truncate-overflow-content
@@ -108,7 +106,7 @@ export function OverflowText({
   children,
   mode = 'truncate',
   style,
-  renderOverflowMarker = '…',
+  marker = '…',
   ...props
 }: OverflowTextProps) {
   const id = useId();
@@ -122,19 +120,15 @@ export function OverflowText({
 @container measure (height > 1lh) { [data-truncate-overflow-marker-inner] { opacity: 1; } }`;
   }, []);
 
-  const content = (
+  const contentNode = (
     <OverflowContent key="content" mode={mode}>
       {children}
     </OverflowContent>
   );
-  const marker = (
-    <OverflowMarker
-      key="marker"
-      renderOverflowMarker={renderOverflowMarker}
-      mode={mode}
-    />
+  const markerNode = (
+    <OverflowMarker key="marker" marker={marker} mode={mode} />
   );
-  const fill = <div key="fill" data-truncate-fill></div>;
+  const fillNode = <div key="fill" data-truncate-fill></div>;
 
   return (
     <div
@@ -161,8 +155,32 @@ export function OverflowText({
           position: 'relative',
         }}
       >
-        {mode === 'truncate' ? [content, marker] : [marker, content, fill]}
+        {mode === 'truncate'
+          ? [contentNode, markerNode]
+          : [markerNode, contentNode, fillNode]}
       </div>
     </div>
+  );
+}
+
+export function Truncate({
+  children,
+  ...props
+}: Omit<OverflowTextProps, 'mode'>) {
+  return (
+    <OverflowText mode="truncate" {...props}>
+      {children}
+    </OverflowText>
+  );
+}
+
+export function Fruncate({
+  children,
+  ...props
+}: Omit<OverflowTextProps, 'mode'>) {
+  return (
+    <OverflowText mode="fruncate" {...props}>
+      {children}
+    </OverflowText>
   );
 }
