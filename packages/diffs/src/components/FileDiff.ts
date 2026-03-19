@@ -116,7 +116,7 @@ export interface FileDiffOptions<LAnnotation>
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null | undefined;
 
-  onPostRender?(node: HTMLElement): unknown;
+  onPostRender?(node: HTMLElement, instance: FileDiff<LAnnotation>): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -804,7 +804,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected emitPostRender(): void {
     if (this.fileContainer != null) {
-      this.options.onPostRender?.(this.fileContainer);
+      this.options.onPostRender?.(this.fileContainer, this);
     }
   }
 

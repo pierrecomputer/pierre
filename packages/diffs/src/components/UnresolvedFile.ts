@@ -42,6 +42,10 @@ export type MergeConflictActionsTypeOption<LAnnotation> =
 export interface UnresolvedFileOptions<
   LAnnotation,
 > extends FileDiffOptions<LAnnotation> {
+  onPostRender?(
+    node: HTMLElement,
+    instance: UnresolvedFile<LAnnotation>
+  ): unknown;
   mergeConflictActionsType?: MergeConflictActionsTypeOption<LAnnotation>;
   onMergeConflictAction?(
     payload: MergeConflictActionPayload,

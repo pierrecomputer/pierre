@@ -31,9 +31,14 @@ export interface UnresolvedFileReactOptions<LAnnotation>
   extends
     Omit<
       FileDiffOptions<LAnnotation>,
-      'hunkSeparators' | 'diffStyle' | 'onMergeConflictAction'
+      'hunkSeparators' | 'diffStyle' | 'onMergeConflictAction' | 'onPostRender'
     >,
-    UnresolvedFileHunksRendererOptions {}
+    UnresolvedFileHunksRendererOptions {
+  onPostRender?(
+    node: HTMLElement,
+    instance: UnresolvedFileClass<LAnnotation>
+  ): unknown;
+}
 
 export interface UnresolvedFileProps<LAnnotation> extends Omit<
   FileDiffProps<LAnnotation>,

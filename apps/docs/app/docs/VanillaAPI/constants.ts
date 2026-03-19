@@ -253,7 +253,7 @@ const instance = new FileDiff({
   // Receives the outer diffs container element.
   // Useful when you want to do your own post-render DOM manipulation.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node) {
+  onPostRender(node, fileDiffInstance) {
     const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },
@@ -466,8 +466,8 @@ const instance = new File({
   // Receives the outer diffs container element.
   // Useful when you want to do your own post-render DOM manipulation.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node) {
-    const codeLines = node.shadowRoot?.querySelectorAll('[data-line-number]');
+  onPostRender(node, fileInstance) {
+    const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },
 

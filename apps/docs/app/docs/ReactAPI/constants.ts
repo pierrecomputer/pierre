@@ -17,6 +17,7 @@ export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
 // These options are shared by MultiFileDiff, PatchDiff, and FileDiff.
 // Pass them via the \`options\` prop.
 
+import type { FileDiff as FileDiffClass } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 
 <MultiFileDiff
@@ -136,7 +137,7 @@ interface DiffOptions {
   // Receives the outer diffs container element.
   // Useful when you want to do your own post-render DOM manipulation.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node: HTMLElement) {
+  onPostRender(node: HTMLElement, instance: FileDiffClass) {
     const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },
@@ -514,7 +515,8 @@ export function CodeFile() {
 export const REACT_API_UNRESOLVED_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'unresolved_file.tsx',
-    contents: `import { UnresolvedFile, type FileContents } from '@pierre/diffs/react';
+    contents: `import type { UnresolvedFile as UnresolvedFileClass } from '@pierre/diffs';
+import { UnresolvedFile, type FileContents } from '@pierre/diffs/react';
 import { useState } from 'react';
 
 // UnresolvedFile renders Git-style merge conflict markers.
@@ -546,7 +548,7 @@ export function MergeConflictPreview() {
         options={{
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           diffIndicators: 'none',
-          onPostRender(node: HTMLElement) {
+          onPostRender(node: HTMLElement, instance: UnresolvedFileClass) {
             const codeLines = node.shadowRoot?.querySelectorAll(
               '[data-line]'
             );
@@ -569,6 +571,7 @@ export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
 // ============================================================
 // Pass these via the \`options\` prop on the File component.
 
+import type { File as FileClass } from '@pierre/diffs';
 import { File } from '@pierre/diffs/react';
 
 <File
@@ -626,7 +629,7 @@ interface FileOptions {
   // Receives the outer diffs container element.
   // Useful when you want to do your own post-render DOM manipulation.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node: HTMLElement) {
+  onPostRender(node: HTMLElement, instance: FileClass) {
     const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },

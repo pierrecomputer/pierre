@@ -91,7 +91,7 @@ export interface FileOptions<LAnnotation>
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null | undefined;
 
-  onPostRender?(node: HTMLElement): unknown;
+  onPostRender?(node: HTMLElement, instance: File<LAnnotation>): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -459,7 +459,7 @@ export class File<LAnnotation = undefined> {
 
   private emitPostRender() {
     if (this.fileContainer != null) {
-      this.options.onPostRender?.(this.fileContainer);
+      this.options.onPostRender?.(this.fileContainer, this);
     }
   }
 
