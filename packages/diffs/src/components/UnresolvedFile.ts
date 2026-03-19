@@ -324,7 +324,14 @@ export class UnresolvedFile<
   }
 
   override render(props: UnresolvedFileRenderProps<LAnnotation> = {}): boolean {
-    let { file, fileDiff, actions, lineAnnotations, ...rest } = props;
+    let {
+      file,
+      fileDiff,
+      actions,
+      lineAnnotations,
+      preventEmit = false,
+      ...rest
+    } = props;
     const source = this.getOrComputeDiff({ file, fileDiff, actions });
     if (source == null) {
       return false;
@@ -337,7 +344,7 @@ export class UnresolvedFile<
       preventEmit: true,
     });
     this.renderMergeConflictActionSlots();
-    if (didRender) {
+    if (didRender && !preventEmit) {
       this.emitPostRender();
     }
     return didRender;
