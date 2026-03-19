@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 
+import type { FileDiffOptions } from '../components/FileDiff';
 import type { UnresolvedFile as UnresolvedFileClass } from '../components/UnresolvedFile';
 import { DIFFS_TAG_NAME } from '../constants';
 import type { UnresolvedFileHunksRendererOptions } from '../renderers/UnresolvedFileHunksRenderer';
@@ -26,12 +27,20 @@ export type MergeConflictActionsTypeOption =
   | 'default'
   | RenderMergeConflictActions;
 
+export interface UnresolvedFileReactOptions<LAnnotation>
+  extends
+    Omit<
+      FileDiffOptions<LAnnotation>,
+      'hunkSeparators' | 'diffStyle' | 'onMergeConflictAction'
+    >,
+    UnresolvedFileHunksRendererOptions {}
+
 export interface UnresolvedFileProps<LAnnotation> extends Omit<
   FileDiffProps<LAnnotation>,
   'fileDiff' | 'options'
 > {
   file: FileContents;
-  options?: Omit<UnresolvedFileHunksRendererOptions, 'onMergeConflictAction'>;
+  options?: UnresolvedFileReactOptions<LAnnotation>;
   renderMergeConflictUtility?(
     action: MergeConflictDiffAction,
     getInstance: () => UnresolvedFileClass<LAnnotation> | undefined

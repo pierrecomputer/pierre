@@ -89,6 +89,8 @@ export interface FileOptions<LAnnotation>
   renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null | undefined;
+
+  onPostRender?(node: HTMLElement): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -305,6 +307,7 @@ export class File<LAnnotation = undefined> {
       this.injectUnsafeCSS();
       this.interactionManager.setup(this.pre);
       this.resizeManager.setup(this.pre, overflow === 'wrap');
+      this.emitPostRender();
     }
   }
 
@@ -400,6 +403,7 @@ export class File<LAnnotation = undefined> {
           this.applyErrorToDOM(error, fileContainer);
         }
       }
+      this.emitPostRender();
       return true;
     }
 
@@ -441,7 +445,14 @@ export class File<LAnnotation = undefined> {
         this.applyErrorToDOM(error, fileContainer);
       }
     }
+    this.emitPostRender();
     return true;
+  }
+
+  private emitPostRender() {
+    if (this.fileContainer != null) {
+      this.options.onPostRender?.(this.fileContainer);
+    }
   }
 
   private removeRenderedCode(): void {

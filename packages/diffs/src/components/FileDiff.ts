@@ -114,6 +114,8 @@ export interface FileDiffOptions<LAnnotation>
   renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null | undefined;
+
+  onPostRender?(node: HTMLElement): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -546,6 +548,7 @@ export class FileDiff<LAnnotation = undefined> {
           this.codeAdditions
         );
       }
+      this.emitPostRender();
     }
   }
 
@@ -712,6 +715,7 @@ export class FileDiff<LAnnotation = undefined> {
           this.applyErrorToDOM(error, fileContainer);
         }
       }
+      this.emitPostRender();
       return true;
     }
 
@@ -786,7 +790,14 @@ export class FileDiff<LAnnotation = undefined> {
         this.applyErrorToDOM(error, fileContainer);
       }
     }
+    this.emitPostRender();
     return true;
+  }
+
+  private emitPostRender() {
+    if (this.fileContainer != null) {
+      this.options.onPostRender?.(this.fileContainer);
+    }
   }
 
   private removeRenderedCode(): void {
