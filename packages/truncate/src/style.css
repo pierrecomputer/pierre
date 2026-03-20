@@ -1,0 +1,136 @@
+[data-truncate-marker] {
+  --truncate-marker-prefade-width: 3px;
+  --truncate-marker-gap: 1px;
+  display: flex;
+  position: absolute;
+  height: 1lh;
+  z-index: 2;
+  color: color-mix(
+    in srgb,
+    currentColor var(--truncate-marker-opacity, 50%),
+    transparent
+  );
+
+  /* Core trick for hiding the marker until overflow occurs */
+  opacity: 0;
+  transition: opacity var(--truncate-marker-fade-out-duration, 100ms)
+    ease-in-out;
+}
+
+@container measure (height > 1lh) {
+  [data-truncate-marker] {
+    opacity: 1;
+    transition: opacity var(--truncate-marker-fade-in-duration, 0ms) ease-in-out;
+  }
+}
+
+[data-truncate-container] {
+  height: 1lh;
+  overflow: hidden;
+  --truncate-internal-marker-background-color: var(
+    --truncate-marker-background-color,
+    light-dark(white, black)
+  );
+}
+
+[data-truncate-grid] {
+  display: grid;
+  position: relative;
+}
+
+[data-truncate-content='visible'] {
+  white-space: nowrap;
+}
+
+[data-truncate-content='overflow'] {
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  word-break: break-all;
+  margin-top: -1lh;
+}
+
+[data-truncate-marker-cell] {
+  container: measure / size;
+  overflow: visible;
+  user-select: none;
+  pointer-events: none;
+}
+
+[data-truncate-container='truncate'] {
+  & [data-truncate-grid] {
+    grid-template-columns: minmax(0, max-content) 0;
+  }
+  & [data-truncate-marker] {
+    right: 0;
+    padding-left: calc(
+      var(--truncate-marker-prefade-width) + var(--truncate-marker-gap)
+    );
+  }
+  & [data-truncate-fade] {
+    background: radial-gradient(
+      at right center,
+      light-dark(#0007, #000f),
+      35%,
+      transparent 65%,
+      transparent
+    );
+  }
+}
+
+[data-truncate-container='fruncate'] {
+  & [data-truncate-grid] {
+    grid-template-columns: 0 minmax(0, max-content) auto;
+  }
+  & [data-truncate-content] {
+    direction: rtl;
+  }
+  & [data-truncate-content] > span {
+    unicode-bidi: plaintext;
+  }
+  & [data-truncate-marker] {
+    padding-right: calc(
+      var(--truncate-marker-prefade-width) + var(--truncate-marker-gap)
+    );
+  }
+  & [data-truncate-fade] {
+    background: radial-gradient(
+      at left center,
+      light-dark(#0007, #000f),
+      35%,
+      transparent 65%,
+      transparent
+    );
+  }
+}
+
+[data-truncate-variant='default'] {
+  --fade-dir: to right;
+
+  &[data-truncate-container='fruncate'] {
+    --fade-dir: to left;
+  }
+  & [data-truncate-marker] {
+    background: linear-gradient(
+      var(--fade-dir),
+      transparent,
+      var(--truncate-marker-prefade-width),
+      var(--truncate-internal-marker-background-color),
+      calc(2.5 * var(--truncate-marker-prefade-width)),
+      var(--truncate-internal-marker-background-color)
+    );
+  }
+}
+
+[data-truncate-variant='fade'] {
+  & [data-truncate-marker] {
+    background: transparent;
+  }
+}
+
+[data-truncate-fade] {
+  width: 4px;
+  height: 0.9lh;
+  margin-top: 0.05lh;
+  margin-bottom: 0.05lh;
+}

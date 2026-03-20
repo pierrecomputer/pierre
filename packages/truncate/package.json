@@ -13,6 +13,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./style.css": {
+      "import": "./dist/style.css"
+    },
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"

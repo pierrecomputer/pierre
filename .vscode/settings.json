@@ -20,6 +20,7 @@
   "files.associations": {
     "**/apps/**/*.css": "tailwindcss",
     "*.css": "css",
+    "**/packages/truncate/**/*.css": "postcss",
     "*.mdx": "markdown"
   },
   "stylelint.validate": ["css", "postcss"],

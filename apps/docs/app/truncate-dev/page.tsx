@@ -1,4 +1,5 @@
 import { Fruncate, Truncate } from '@pierre/truncate/react';
+import '@pierre/truncate/style.css';
 import { notFound } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
@@ -26,7 +27,7 @@ function ExampleGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <h2 style={{ fontSize: '16px', fontWeight: '600' }}>{title}</h2>
       {children}
     </div>
@@ -46,14 +47,14 @@ export default function TruncateDevPage() {
             'light-dark(var(--color-background), var(--color-card))',
           fontFamily: 'var(--font-geist-sans)',
           fontSize: '13px',
-          margin: '30px 35%',
+          margin: '30px 25%',
           maxWidth: '640px',
           padding: '4px 0',
           border: '2px solid light-dark(#CCC, #222)',
           borderRadius: '4px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '10px',
+          gap: '20px',
           '--truncate-marker-background-color':
             'light-dark(var(--color-background), var(--color-card))',
           '--app-custom-background-color': 'light-dark(#F0F0F0, #222)',
