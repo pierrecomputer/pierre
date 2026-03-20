@@ -1,12 +1,13 @@
 import type { FileDiffOptions } from '../components/FileDiff';
 import {
+  getUnresolvedDiffHunksRendererOptions,
+  type UnresolvedFileOptions,
+} from '../components/UnresolvedFile';
+import {
   DiffHunksRenderer,
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
-import {
-  UnresolvedFileHunksRenderer,
-  type UnresolvedFileHunksRendererOptions,
-} from '../renderers/UnresolvedFileHunksRenderer';
+import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
@@ -62,12 +63,17 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadUnresolvedFileOptions<LAnnotation>): Promise<string> {
-  const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
-  const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(options);
+  const { fileDiff, actions, markerRows } = parseMergeConflictDiffFromFile(
+    file,
+    options?.maxContextLines
+  );
+  const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(
+    getUnresolvedDiffHunksRendererOptions(options)
+  );
   if (annotations != null && annotations.length > 0) {
     renderer.setLineAnnotations(annotations);
   }
-  renderer.setConflictActions(actions, fileDiff);
+  renderer.setConflictState(actions, markerRows, fileDiff);
   return renderHTML(
     processHunkResult(
       await renderer.asyncRender(fileDiff),
@@ -145,7 +151,10 @@ export async function preloadFileDiff<LAnnotation = undefined>({
 
 export interface PreloadUnresolvedFileOptions<LAnnotation> {
   file: FileContents;
-  options?: UnresolvedFileHunksRendererOptions;
+  options?: Omit<
+    UnresolvedFileOptions<LAnnotation>,
+    'onMergeConflictAction' | 'onMergeConflictResolve' | 'onPostRender'
+  >;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 

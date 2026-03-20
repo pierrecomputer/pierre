@@ -42,10 +42,10 @@ export async function createSession(userId: string) {
 `,
   },
   options: {
-    theme: 'pierre-dark',
+    themeType: 'dark',
+    theme: { light: 'pierre-light', dark: 'pierre-dark' },
     overflow: 'wrap',
     diffIndicators: 'none',
     unsafeCSS: CustomScrollbarCSS,
-    // mergeConflictActionsType: 'custom',
   },
 };

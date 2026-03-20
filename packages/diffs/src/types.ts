@@ -313,34 +313,23 @@ export interface FileDiffMetadata {
    * the `cacheKey`.
    */
   cacheKey?: string;
-
-  /**
-   * Structural metadata for unresolved merge conflict rows that should be
-   * rendered independently from the stored diff line arrays.
-   */
-  mergeConflictRenderData?: MergeConflictRenderData[];
 }
 
-export type MergeConflictRenderRowType =
-  | 'actions'
+export type MergeConflictMarkerRowType =
   | 'marker-start'
   | 'marker-base'
   | 'marker-separator'
   | 'marker-end';
 
-export interface MergeConflictRenderRow {
-  type: MergeConflictRenderRowType;
+export interface MergeConflictMarkerRow {
+  type: MergeConflictMarkerRowType;
   hunkIndex: number;
+  /** Index into `hunk.hunkContent` for the structural block this row belongs to. */
   contentIndex: number;
   conflictIndex: number;
-  lineText?: string;
-  lineIndex?: number;
-}
-
-export interface MergeConflictRenderData {
-  conflictIndex: number;
-  hunkIndex: number;
-  rows: MergeConflictRenderRow[];
+  lineText: string;
+  /** Unified rendered-row index where this virtual row should be injected. */
+  lineIndex: number;
 }
 
 export type SupportedLanguages =
@@ -687,13 +676,41 @@ export interface SelectionPoint {
   side: SelectionSide | undefined;
 }
 
+export type DiffAcceptRejectHunkType = 'accept' | 'reject' | 'both';
+
+export type ConflictResolverTypes = 'current' | 'incoming' | 'both';
+
+export interface DiffAcceptRejectHunkConfig {
+  type: DiffAcceptRejectHunkType;
+  changeIndex: number;
+}
+
+/**
+ * Unresolved merge conflict indexes use three different coordinate spaces:
+ * - source line indexes live on `conflict.*LineIndex`
+ * - hunk-content indexes live on the fields below, with `startContentIndex`
+ *   serving as both the conflict-range start and the start-marker anchor
+ * - rendered row indexes live on unresolved `markerRows`
+ */
 export interface ProcessFileConflictData {
+  /** Index of the hunk that owns this unresolved conflict. */
   hunkIndex: number;
-  startContextIndex: number;
-  currentChangeIndex?: number;
-  baseMarkerContextIndex?: number;
-  baseChangeIndex?: number;
-  separatorContextIndex: number;
-  incomingChangeIndex?: number;
-  endContextIndex: number;
+
+  /** First hunk-content entry that belongs to the conflict region. */
+  startContentIndex: number;
+
+  /** Last hunk-content entry that belongs to the conflict region. */
+  endContentIndex: number;
+
+  /** Hunk-content index for the current/ours change block. */
+  currentContentIndex?: number;
+
+  /** Hunk-content index for the optional base context block. */
+  baseContentIndex?: number;
+
+  /** Hunk-content index for the incoming/theirs change block. */
+  incomingContentIndex?: number;
+
+  /** Hunk-content index that anchors the end marker row. */
+  endMarkerContentIndex: number;
 }

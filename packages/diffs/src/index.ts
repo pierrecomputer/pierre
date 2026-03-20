@@ -95,6 +95,8 @@ export * from './utils/prerenderHTMLIfNecessary';
 export * from './utils/processLine';
 export * from './utils/renderDiffWithHighlighter';
 export * from './utils/renderFileWithHighlighter';
+export * from './utils/resolveConflict';
+export * from './utils/resolveRegion';
 export * from './utils/setLanguageOverride';
 export * from './utils/setWrapperNodeProps';
 export * from './utils/trimPatchContext';
