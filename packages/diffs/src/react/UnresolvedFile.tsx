@@ -6,7 +6,11 @@ import type { FileDiffOptions } from '../components/FileDiff';
 import type { UnresolvedFile as UnresolvedFileClass } from '../components/UnresolvedFile';
 import { DIFFS_TAG_NAME } from '../constants';
 import type { UnresolvedFileHunksRendererOptions } from '../renderers/UnresolvedFileHunksRenderer';
-import type { FileContents, MergeConflictResolution } from '../types';
+import type {
+  FileContents,
+  HunkSeparators,
+  MergeConflictResolution,
+} from '../types';
 import { type MergeConflictDiffAction } from '../utils/parseMergeConflictDiffFromFile';
 import type { FileDiffProps } from './FileDiff';
 import { renderDiffChildren } from './utils/renderDiffChildren';
@@ -34,10 +38,12 @@ export interface UnresolvedFileReactOptions<LAnnotation>
       'hunkSeparators' | 'diffStyle' | 'onMergeConflictAction' | 'onPostRender'
     >,
     UnresolvedFileHunksRendererOptions {
+  hunkSeparators?: HunkSeparators;
   onPostRender?(
     node: HTMLElement,
     instance: UnresolvedFileClass<LAnnotation>
   ): unknown;
+  maxContextLines?: number;
 }
 
 export interface UnresolvedFileProps<LAnnotation> extends Omit<

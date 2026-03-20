@@ -4,9 +4,8 @@ import type {
   FileContents,
   FileDiffMetadata,
   Hunk,
+  MergeConflictMarkerRow,
   MergeConflictRegion,
-  MergeConflictRenderData,
-  MergeConflictRenderRow,
   ProcessFileConflictData,
 } from '../types';
 import { getMergeConflictParseResult } from './getMergeConflictLineTypes';
@@ -19,13 +18,20 @@ export interface ParseMergeConflictDiffFromFileResult {
   currentFile: FileContents;
   incomingFile: FileContents;
   actions: (MergeConflictDiffAction | undefined)[];
+  markerRows: MergeConflictMarkerRow[];
 }
 
 export interface MergeConflictDiffAction extends ProcessFileConflictData {
-  // Kept temporarily for callback compatibility while the unresolved-file flow
-  // migrates to structural conflict metadata.
+  // Kept for callback consumers that still need the original unresolved-region
+  // source-line coordinates alongside structural hunk-content anchors.
   conflict: MergeConflictRegion;
   conflictIndex: number;
+  markerLines: {
+    start: string;
+    base?: string;
+    separator: string;
+    end: string;
+  };
 }
 
 interface ParsedMergeConflictSections {
@@ -44,7 +50,6 @@ interface GetMergeConflictActionAnchorReturn {
   lineIndex: number;
 }
 
-// REVIEW: Why do we need this function?
 export function getMergeConflictActionAnchor(
   action: MergeConflictDiffAction,
   fileDiff: FileDiffMetadata
@@ -53,18 +58,9 @@ export function getMergeConflictActionAnchor(
   if (hunk == null) {
     return undefined;
   }
-  let lineIndex = hunk.unifiedLineStart;
-  for (let i = 0; i < action.startContextIndex; i++) {
-    const content = hunk.hunkContent[i];
-    lineIndex +=
-      content.type === 'context'
-        ? content.lines
-        : content.additions + content.deletions;
-  }
   return {
     hunkIndex: action.hunkIndex,
-    lineIndex:
-      action.startContextIndex === 0 ? lineIndex : Math.max(0, lineIndex - 1),
+    lineIndex: getUnifiedLineStartForContent(hunk, action.startContentIndex),
   };
 }
 
@@ -72,7 +68,10 @@ export function parseMergeConflictDiffFromFile(
   file: FileContents,
   maxContextLines: number = 10
 ): ParseMergeConflictDiffFromFileResult {
+  const start = Date.now();
   const lines = splitFileContents(file.contents);
+  // Never allow maxContextLines to drop below 1 or else things break...
+  maxContextLines = Math.max(maxContextLines, 1);
   const { lineTypes, regions } = getMergeConflictParseResult(lines);
   let currentContentChunks: string = '';
   let incomingContentChunks: string = '';
@@ -195,17 +194,16 @@ export function parseMergeConflictDiffFromFile(
     );
   }
 
-  const { actions, renderData } = locateMergeConflictRenderData(
-    fileDiff,
-    parsedConflicts
-  );
-  fileDiff.mergeConflictRenderData = renderData;
+  const actions = locateMergeConflictActions(fileDiff, parsedConflicts);
+  const markerRows = buildMergeConflictMarkerRows(fileDiff, actions);
 
+  console.log('ZZZZ - time to parse', Date.now() - start);
   return {
     fileDiff,
     currentFile,
     incomingFile,
     actions,
+    markerRows,
   };
 }
 
@@ -247,17 +245,15 @@ function createResolvedConflictFile(
   };
 }
 
-function locateMergeConflictRenderData(
+// Walk conflicts and hunk content in order so unresolved marker rows can be
+// anchored structurally without storing marker lines in the parsed diff itself.
+function locateMergeConflictActions(
   fileDiff: FileDiffMetadata,
   parsedConflicts: ParsedMergeConflictSections[]
-): {
-  actions: (MergeConflictDiffAction | undefined)[];
-  renderData: MergeConflictRenderData[];
-} {
+): (MergeConflictDiffAction | undefined)[] {
   const actions: (MergeConflictDiffAction | undefined)[] = new Array(
     parsedConflicts.length
   );
-  const renderData: MergeConflictRenderData[] = [];
   let searchHunkIndex = 0;
   let searchContentIndex = 0;
 
@@ -275,12 +271,11 @@ function locateMergeConflictRenderData(
     }
 
     actions[conflict.region.conflictIndex] = match.action;
-    renderData.push(match.renderData);
     searchHunkIndex = match.nextHunkIndex;
     searchContentIndex = match.nextContentIndex;
   }
 
-  return { actions, renderData };
+  return actions;
 }
 
 function locateConflictInDiff(
@@ -291,7 +286,6 @@ function locateConflictInDiff(
 ):
   | {
       action: MergeConflictDiffAction;
-      renderData: MergeConflictRenderData;
       nextHunkIndex: number;
       nextContentIndex: number;
     }
@@ -346,7 +340,6 @@ function matchTwoWayConflict(
 ):
   | {
       action: MergeConflictDiffAction;
-      renderData: MergeConflictRenderData;
       nextHunkIndex: number;
       nextContentIndex: number;
     }
@@ -368,65 +361,24 @@ function matchTwoWayConflict(
     return undefined;
   }
 
-  const unifiedStart = getUnifiedLineStartForContent(hunk, contentIndex);
-  const actionLineIndex =
-    contentIndex === 0 ? unifiedStart : Math.max(0, unifiedStart - 1);
-  const separatorLineIndex =
-    conflict.currentLines.length > 0
-      ? unifiedStart + conflict.currentLines.length - 1
-      : actionLineIndex;
-  const endLineIndex =
-    unifiedStart +
-    conflict.currentLines.length +
-    conflict.incomingLines.length -
-    1;
   const action: MergeConflictDiffAction = {
     conflict: conflict.region,
     conflictIndex: conflict.region.conflictIndex,
     hunkIndex,
-    startContextIndex: contentIndex,
-    currentChangeIndex: contentIndex,
-    separatorContextIndex: contentIndex,
-    incomingChangeIndex: contentIndex,
-    endContextIndex: contentIndex,
+    startContentIndex: contentIndex,
+    endContentIndex: contentIndex,
+    currentContentIndex: contentIndex,
+    incomingContentIndex: contentIndex,
+    endMarkerContentIndex: contentIndex,
+    markerLines: {
+      start: conflict.startMarkerLine,
+      separator: conflict.separatorMarkerLine,
+      end: conflict.endMarkerLine,
+    },
   };
 
   return {
     action,
-    renderData: {
-      conflictIndex: action.conflictIndex,
-      hunkIndex,
-      rows: [
-        createMergeConflictRenderRow(
-          action,
-          'actions',
-          contentIndex,
-          undefined,
-          actionLineIndex
-        ),
-        createMergeConflictRenderRow(
-          action,
-          'marker-start',
-          contentIndex,
-          conflict.startMarkerLine,
-          actionLineIndex
-        ),
-        createMergeConflictRenderRow(
-          action,
-          'marker-separator',
-          contentIndex,
-          conflict.separatorMarkerLine,
-          separatorLineIndex
-        ),
-        createMergeConflictRenderRow(
-          action,
-          'marker-end',
-          contentIndex,
-          conflict.endMarkerLine,
-          endLineIndex
-        ),
-      ],
-    },
     nextHunkIndex: hunkIndex,
     nextContentIndex: contentIndex + 1,
   };
@@ -441,7 +393,6 @@ function matchThreeWayConflict(
 ):
   | {
       action: MergeConflictDiffAction;
-      renderData: MergeConflictRenderData;
       nextHunkIndex: number;
       nextContentIndex: number;
     }
@@ -464,81 +415,168 @@ function matchThreeWayConflict(
     return undefined;
   }
 
-  const currentStart = getUnifiedLineStartForContent(hunk, contentIndex);
-  const baseStart = getUnifiedLineStartForContent(hunk, contentIndex + 1);
-  const incomingStart = getUnifiedLineStartForContent(hunk, contentIndex + 2);
-  const actionLineIndex =
-    contentIndex === 0 ? currentStart : Math.max(0, currentStart - 1);
-  const baseMarkerLineIndex = currentStart + conflict.currentLines.length - 1;
-  const separatorLineIndex = baseStart + conflict.baseLines.length - 1;
-  const endLineIndex = incomingStart + conflict.incomingLines.length - 1;
   const action: MergeConflictDiffAction = {
     conflict: conflict.region,
     conflictIndex: conflict.region.conflictIndex,
     hunkIndex,
-    startContextIndex: contentIndex,
-    currentChangeIndex: contentIndex,
-    baseMarkerContextIndex: contentIndex + 1,
-    separatorContextIndex: contentIndex + 1,
-    incomingChangeIndex: contentIndex + 2,
-    endContextIndex: contentIndex + 2,
+    startContentIndex: contentIndex,
+    endContentIndex: contentIndex + 2,
+    currentContentIndex: contentIndex,
+    baseContentIndex: contentIndex + 1,
+    incomingContentIndex: contentIndex + 2,
+    endMarkerContentIndex: contentIndex + 2,
+    markerLines: {
+      start: conflict.startMarkerLine,
+      base: conflict.baseMarkerLine,
+      separator: conflict.separatorMarkerLine,
+      end: conflict.endMarkerLine,
+    },
   };
 
   return {
     action,
-    renderData: {
-      conflictIndex: action.conflictIndex,
-      hunkIndex,
-      rows: [
-        createMergeConflictRenderRow(
-          action,
-          'actions',
-          contentIndex,
-          undefined,
-          actionLineIndex
-        ),
-        createMergeConflictRenderRow(
-          action,
-          'marker-start',
-          contentIndex,
-          conflict.startMarkerLine,
-          actionLineIndex
-        ),
-        createMergeConflictRenderRow(
-          action,
-          'marker-base',
-          contentIndex + 1,
-          conflict.baseMarkerLine,
-          baseMarkerLineIndex
-        ),
-        createMergeConflictRenderRow(
-          action,
-          'marker-separator',
-          contentIndex + 1,
-          conflict.separatorMarkerLine,
-          separatorLineIndex
-        ),
-        createMergeConflictRenderRow(
-          action,
-          'marker-end',
-          contentIndex + 2,
-          conflict.endMarkerLine,
-          endLineIndex
-        ),
-      ],
-    },
     nextHunkIndex: hunkIndex,
     nextContentIndex: contentIndex + 3,
   };
 }
 
-function createMergeConflictRenderRow(
+export function buildMergeConflictMarkerRows(
+  fileDiff: FileDiffMetadata,
+  actions: (MergeConflictDiffAction | undefined)[]
+): MergeConflictMarkerRow[] {
+  const markerRows: MergeConflictMarkerRow[] = [];
+
+  for (const action of actions) {
+    if (action == null) {
+      continue;
+    }
+
+    const hunk = fileDiff.hunks[action.hunkIndex];
+    if (hunk == null) {
+      continue;
+    }
+
+    const actionLineIndex = getUnifiedLineStartForContent(
+      hunk,
+      action.startContentIndex
+    );
+    markerRows.push(
+      createMergeConflictMarkerRow(
+        action,
+        'marker-start',
+        action.startContentIndex,
+        action.markerLines.start,
+        actionLineIndex
+      )
+    );
+
+    if (action.baseContentIndex != null) {
+      const currentContentIndex = action.currentContentIndex;
+      const incomingContentIndex = action.incomingContentIndex;
+      if (currentContentIndex == null || incomingContentIndex == null) {
+        continue;
+      }
+      const baseMarkerLine = action.markerLines.base;
+      if (baseMarkerLine == null) {
+        continue;
+      }
+      const currentChange = hunk.hunkContent[currentContentIndex];
+      const baseContext = hunk.hunkContent[action.baseContentIndex];
+      const incomingChange = hunk.hunkContent[incomingContentIndex];
+      if (
+        currentChange?.type !== 'change' ||
+        baseContext?.type !== 'context' ||
+        incomingChange?.type !== 'change'
+      ) {
+        continue;
+      }
+
+      const currentStart = getUnifiedLineStartForContent(
+        hunk,
+        currentContentIndex
+      );
+      const incomingStart = getUnifiedLineStartForContent(
+        hunk,
+        incomingContentIndex
+      );
+      markerRows.push(
+        createMergeConflictMarkerRow(
+          action,
+          'marker-base',
+          action.baseContentIndex,
+          baseMarkerLine,
+          currentStart + currentChange.deletions
+        )
+      );
+
+      markerRows.push(
+        createMergeConflictMarkerRow(
+          action,
+          'marker-separator',
+          action.baseContentIndex,
+          action.markerLines.separator,
+          incomingStart
+        ),
+        createMergeConflictMarkerRow(
+          action,
+          'marker-end',
+          action.endMarkerContentIndex,
+          action.markerLines.end,
+          getLineIndexAtContentEnd(hunk, action.endMarkerContentIndex)
+        )
+      );
+    } else {
+      const currentContentIndex = action.currentContentIndex;
+      if (currentContentIndex == null) {
+        continue;
+      }
+      const content = hunk.hunkContent[currentContentIndex];
+      if (content?.type !== 'change') {
+        continue;
+      }
+
+      const contentStart = getUnifiedLineStartForContent(
+        hunk,
+        currentContentIndex
+      );
+      const separatorLineIndex =
+        content.deletions > 0
+          ? contentStart + content.deletions
+          : actionLineIndex;
+      const endLineIndex = getLineIndexAtContentEnd(
+        hunk,
+        action.endMarkerContentIndex
+      );
+
+      markerRows.push(
+        createMergeConflictMarkerRow(
+          action,
+          'marker-separator',
+          currentContentIndex,
+          action.markerLines.separator,
+          separatorLineIndex
+        ),
+        createMergeConflictMarkerRow(
+          action,
+          'marker-end',
+          action.endMarkerContentIndex,
+          action.markerLines.end,
+          endLineIndex
+        )
+      );
+    }
+  }
+
+  return markerRows;
+}
+
+function createMergeConflictMarkerRow(
   action: MergeConflictDiffAction,
-  type: MergeConflictRenderRow['type'],
+  type: MergeConflictMarkerRow['type'],
   contentIndex: number,
-  lineText?: string,
-  lineIndex?: number
-): MergeConflictRenderRow {
+  lineText: string,
+  lineIndex: number
+): MergeConflictMarkerRow {
   return {
     type,
     hunkIndex: action.hunkIndex,
@@ -631,6 +669,22 @@ function getUnifiedLineStartForContent(
         : content.deletions + content.additions;
   }
   return lineIndex;
+}
+
+function getLineIndexAtContentEnd(hunk: Hunk, contentIndex: number): number {
+  const content = hunk.hunkContent[contentIndex];
+  if (content == null) {
+    return getUnifiedLineStartForContent(hunk, contentIndex);
+  }
+
+  const contentStart = getUnifiedLineStartForContent(hunk, contentIndex);
+  return (
+    contentStart +
+    (content.type === 'context'
+      ? content.lines
+      : content.deletions + content.additions) -
+    1
+  );
 }
 
 function assertNever(value: never): never {

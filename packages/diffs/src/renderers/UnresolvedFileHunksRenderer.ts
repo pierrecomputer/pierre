@@ -5,7 +5,7 @@ import type {
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
   FileDiffMetadata,
-  MergeConflictRenderRow,
+  MergeConflictMarkerRow,
   MergeConflictResolution,
   RenderRange,
 } from '../types';
@@ -23,10 +23,11 @@ import type { WorkerPoolManager } from '../worker';
 import {
   DiffHunksRenderer,
   type HunksRenderResult,
-  type InlineRow,
+  type InjectedRow,
   type LineDecoration,
   type RenderedLineContext,
   type SplitLineDecorationProps,
+  type UnifiedInjectedRowPlacement,
   type UnifiedLineDecorationProps,
 } from './DiffHunksRenderer';
 
@@ -37,7 +38,6 @@ type MergeConflictMarkerType =
   | 'marker-end'
   | 'current'
   | 'incoming';
-type MergeConflictMarkerLookup = MergeConflictMarkerType | 'none';
 
 interface MergeConflictActionRowData {
   hunkIndex: number;
@@ -45,21 +45,20 @@ interface MergeConflictActionRowData {
   conflictIndex: number;
 }
 
-interface MergeConflictMarkerRowData {
-  hunkIndex: number;
-  lineIndex: number;
-  markerType: Extract<
-    MergeConflictRenderRow['type'],
+interface MergeConflictMarkerInjectedRow extends MergeConflictMarkerRow {
+  type: Extract<
+    MergeConflictMarkerRow['type'],
     'marker-start' | 'marker-base' | 'marker-separator' | 'marker-end'
   >;
   lineText: string;
+  lineIndex: number;
 }
 
 // NOTE(amadeus): Don't love this, should probably rework into an
 // interface/extender
-type MergeConflictInlineRowData =
+type MergeConflictInjectedRowData =
   | ({ type: 'actions' } & MergeConflictActionRowData)
-  | ({ type: 'marker' } & MergeConflictMarkerRowData);
+  | MergeConflictMarkerInjectedRow;
 
 interface BaseUnresolvedOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
   mergeConflictActionsType: MergeConflictActionsType;
@@ -71,20 +70,12 @@ export interface UnresolvedFileHunksRendererOptions extends BaseDiffOptions {
   mergeConflictActionsType?: MergeConflictActionsType;
 }
 
-const START_MARKER = /^<{7,}(?:\s.*)?$/;
-const BASE_MARKER = /^\|{7,}(?:\s.*)?$/;
-const SEPARATOR_MARKER = /^={7,}(?:\s.*)?$/;
-const END_MARKER = /^>{7,}(?:\s.*)?$/;
-
 export class UnresolvedFileHunksRenderer<
   LAnnotation = undefined,
 > extends DiffHunksRenderer<LAnnotation> {
-  private cachedAdditionLines: string[] | undefined;
-  private cachedDeletionLines: string[] | undefined;
   private pendingConflictActions: (MergeConflictDiffAction | undefined)[] = [];
-  private inlineRows = new Map<string, MergeConflictInlineRowData[]>();
-  private additionMarkerLookup: MergeConflictMarkerLookup[] = [];
-  private deletionMarkerLookup: MergeConflictMarkerLookup[] = [];
+  private pendingMarkerRows: MergeConflictMarkerRow[] = [];
+  private injectedRows = new Map<string, MergeConflictInjectedRowData[]>();
   public override options: UnresolvedFileHunksRendererOptions;
 
   constructor(
@@ -103,60 +94,47 @@ export class UnresolvedFileHunksRenderer<
   // about it...
   // I think at the very least we should keep it like annotations, and just
   // sorta assume there's a disconnect there
-  public setConflictActions(
+  public setConflictState(
     conflictActions: (MergeConflictDiffAction | undefined)[],
-    diff?: FileDiffMetadata
-  ): void {
-    this.pendingConflictActions = conflictActions;
-    if (diff == null) {
-      return;
-    }
-    this.syncInlineRows(conflictActions, diff);
-  }
-
-  private syncInlineRows(
-    conflictActions: (MergeConflictDiffAction | undefined)[],
+    markerRows: MergeConflictMarkerRow[],
     diff: FileDiffMetadata
   ): void {
-    this.inlineRows.clear();
+    this.pendingConflictActions = conflictActions;
+    this.pendingMarkerRows = markerRows;
+    this.syncInjectedRows(conflictActions, markerRows, diff);
+  }
+
+  private syncInjectedRows(
+    conflictActions: (MergeConflictDiffAction | undefined)[],
+    markerRows: MergeConflictMarkerRow[],
+    diff: FileDiffMetadata
+  ): void {
+    this.injectedRows.clear();
     for (const action of conflictActions) {
       const anchor =
         action != null ? getMergeConflictActionAnchor(action, diff) : undefined;
       if (action == null || anchor == null) {
         continue;
       }
-      const row: MergeConflictInlineRowData = {
+      const row: MergeConflictInjectedRowData = {
         type: 'actions',
         hunkIndex: anchor.hunkIndex,
         lineIndex: anchor.lineIndex,
         conflictIndex: action.conflictIndex,
       };
-      this.addInlineRow(row);
+      this.addInjectedRow(row);
     }
 
-    if (hasPhysicalMarkerRows(diff)) {
-      return;
-    }
-
-    for (const conflict of diff.mergeConflictRenderData ?? []) {
-      for (const row of conflict.rows) {
-        if (row.type === 'actions') {
-          continue;
-        }
-        const inlineRow = getMergeConflictMarkerInlineRow(row, diff);
-        if (inlineRow == null) {
-          continue;
-        }
-        this.addInlineRow(inlineRow);
-      }
+    for (const row of markerRows) {
+      this.addInjectedRow(row);
     }
   }
 
-  private addInlineRow(row: MergeConflictInlineRowData): void {
+  private addInjectedRow(row: MergeConflictInjectedRowData): void {
     const key = `${row.hunkIndex}:${row.lineIndex}`;
-    const rows = this.inlineRows.get(key);
+    const rows = this.injectedRows.get(key);
     if (rows == null) {
-      this.inlineRows.set(key, [row]);
+      this.injectedRows.set(key, [row]);
     } else {
       rows.push(row);
     }
@@ -167,8 +145,11 @@ export class UnresolvedFileHunksRenderer<
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): HunksRenderResult | undefined {
     if (diff != null) {
-      this.prepareMarkerLookups(diff);
-      this.syncInlineRows(this.pendingConflictActions, diff);
+      this.syncInjectedRows(
+        this.pendingConflictActions,
+        this.pendingMarkerRows,
+        diff
+      );
     }
     return super.renderDiff(diff, renderRange);
   }
@@ -177,8 +158,11 @@ export class UnresolvedFileHunksRenderer<
     diff: FileDiffMetadata,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
-    this.prepareMarkerLookups(diff);
-    this.syncInlineRows(this.pendingConflictActions, diff);
+    this.syncInjectedRows(
+      this.pendingConflictActions,
+      this.pendingMarkerRows,
+      diff
+    );
     return super.asyncRender(diff, renderRange);
   }
 
@@ -200,22 +184,13 @@ export class UnresolvedFileHunksRenderer<
   protected override getUnifiedLineDecoration({
     type,
     lineType,
-    additionLineIndex,
-    deletionLineIndex,
   }: UnifiedLineDecorationProps): LineDecoration {
     const mergeConflictType =
       type === 'change'
         ? lineType === 'change-deletion'
           ? 'current'
           : 'incoming'
-        : (this.getMergeConflictMarkerTypeAtIndex(
-            'additions',
-            additionLineIndex
-          ) ??
-          this.getMergeConflictMarkerTypeAtIndex(
-            'deletions',
-            deletionLineIndex
-          ));
+        : undefined;
     return {
       gutterLineType: type === 'change' ? 'context' : lineType,
       gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
@@ -229,14 +204,13 @@ export class UnresolvedFileHunksRenderer<
   protected override getSplitLineDecoration({
     side,
     type,
-    lineIndex,
   }: SplitLineDecorationProps): LineDecoration {
     const mergeConflictType =
       type === 'change'
         ? side === 'deletions'
           ? 'current'
           : 'incoming'
-        : this.getMergeConflictMarkerTypeAtIndex(side, lineIndex);
+        : undefined;
     return {
       gutterLineType: type === 'change' ? 'context' : type,
       gutterProperties: getMergeConflictGutterProperties(mergeConflictType),
@@ -247,60 +221,39 @@ export class UnresolvedFileHunksRenderer<
     };
   }
 
-  protected override getUnifiedInlineRowsForLine = (
+  protected override getUnifiedInjectedRowsForLine = (
     ctx: RenderedLineContext
-  ): InlineRow[] | undefined => {
-    const rows = this.inlineRows.get(`${ctx.hunkIndex}:${ctx.lineIndex}`);
+  ): UnifiedInjectedRowPlacement | undefined => {
+    const rows = this.injectedRows.get(`${ctx.hunkIndex}:${ctx.lineIndex}`);
     if (rows == null || rows.length === 0) {
       return undefined;
     }
     const { mergeConflictActionsType } = this.getOptionsWithDefaults();
-    return rows.map((row) => {
+    const before: InjectedRow[] = [];
+    const after: InjectedRow[] = [];
+    for (const row of rows) {
       if (row.type === 'actions') {
-        return {
+        before.push({
           content: createMergeConflictActionsRowElement({
             row,
             includeDefaultActions: mergeConflictActionsType === 'default',
             includeSlot: true,
           }),
           gutter: createMergeConflictGutterGap('action'),
-        };
+        });
+        continue;
       }
-      return {
+      const target = row.type === 'marker-end' ? after : before;
+      target.push({
         content: createMergeConflictMarkerRowElement(row),
-        gutter: createMergeConflictGutterGap('marker'),
-      };
-    });
+        gutter: createMergeConflictGutterGap('marker', row.type),
+      });
+    }
+    return {
+      before: before.length > 0 ? before : undefined,
+      after: after.length > 0 ? after : undefined,
+    };
   };
-
-  private prepareMarkerLookups(diff: FileDiffMetadata): void {
-    if (this.cachedAdditionLines !== diff.additionLines) {
-      this.cachedAdditionLines = diff.additionLines;
-      this.additionMarkerLookup = buildMarkerLookup(diff.additionLines);
-    }
-    if (this.cachedDeletionLines !== diff.deletionLines) {
-      this.cachedDeletionLines = diff.deletionLines;
-      this.deletionMarkerLookup = buildMarkerLookup(diff.deletionLines);
-    }
-  }
-
-  private getMergeConflictMarkerTypeAtIndex(
-    side: 'additions' | 'deletions',
-    lineIndex: number | undefined
-  ): MergeConflictMarkerType | undefined {
-    if (lineIndex == null) {
-      return undefined;
-    }
-    const value = (
-      side === 'additions'
-        ? this.additionMarkerLookup
-        : this.deletionMarkerLookup
-    )[lineIndex];
-    if (value == null) {
-      return undefined;
-    }
-    return value === 'none' ? undefined : value;
-  }
 
   protected override getOptionsWithDefaults(): BaseUnresolvedOptionsWithDefaults {
     const options = super.getOptionsWithDefaults();
@@ -348,32 +301,15 @@ function getMergeConflictContentProperties(
   return undefined;
 }
 
-function getMergeConflictMarkerType(
-  line: string | undefined
-): MergeConflictMarkerType | undefined {
-  if (line == null) {
-    return undefined;
-  }
-  const trimmed = line.replace(/(?:\r\n|\n|\r)$/, '');
-  if (START_MARKER.test(trimmed)) return 'marker-start';
-  if (BASE_MARKER.test(trimmed)) return 'marker-base';
-  if (SEPARATOR_MARKER.test(trimmed)) return 'marker-separator';
-  if (END_MARKER.test(trimmed)) return 'marker-end';
-  return undefined;
-}
-
-function buildMarkerLookup(lines: string[]): MergeConflictMarkerLookup[] {
-  const markerLookup: MergeConflictMarkerLookup[] = new Array(lines.length);
-  for (let index = 0; index < lines.length; index++) {
-    markerLookup[index] = getMergeConflictMarkerType(lines[index]) ?? 'none';
-  }
-  return markerLookup;
-}
-
-function createMergeConflictGutterGap(type: 'action' | 'marker'): HASTElement {
+function createMergeConflictGutterGap(
+  type: 'action' | 'marker',
+  markerType?: MergeConflictMarkerInjectedRow['type']
+): HASTElement {
   const gap = createGutterGap(undefined, 'annotation', 1);
   gap.properties['data-gutter-buffer'] =
-    type === 'action' ? 'merge-conflict-action' : 'merge-conflict-marker';
+    type === 'action'
+      ? 'merge-conflict-action'
+      : `merge-conflict-${markerType ?? 'marker'}`;
   return gap;
 }
 
@@ -422,13 +358,12 @@ function createMergeConflictActionsRowElement({
 }
 
 function createMergeConflictMarkerRowElement(
-  row: MergeConflictMarkerRowData
+  row: MergeConflictMarkerInjectedRow
 ): HASTElement {
   return createHastElement({
     tagName: 'div',
     properties: {
-      'data-line-type': 'context',
-      'data-merge-conflict': row.markerType,
+      'data-merge-conflict': row.type,
       'data-merge-conflict-marker-row': '',
     },
     children: [
@@ -489,49 +424,4 @@ function createMergeConflictActionSeparator(): HASTElement {
     properties: { 'data-merge-conflict-action-separator': '' },
     children: [createTextNodeElement('|')],
   });
-}
-
-function hasPhysicalMarkerRows(diff: FileDiffMetadata): boolean {
-  return diff.additionLines.some(
-    (line) => getMergeConflictMarkerType(line) != null
-  );
-}
-
-function getMergeConflictMarkerInlineRow(
-  row: MergeConflictRenderRow,
-  diff: FileDiffMetadata
-): MergeConflictInlineRowData | undefined {
-  if (
-    row.type !== 'marker-start' &&
-    row.type !== 'marker-base' &&
-    row.type !== 'marker-separator' &&
-    row.type !== 'marker-end'
-  ) {
-    return undefined;
-  }
-  const hunk = diff.hunks[row.hunkIndex];
-  if (hunk == null || row.lineText == null) {
-    return undefined;
-  }
-  let lineIndex = row.lineIndex;
-  if (lineIndex == null) {
-    lineIndex = hunk.unifiedLineStart;
-    for (let i = 0; i < row.contentIndex; i++) {
-      const content = hunk.hunkContent[i];
-      lineIndex +=
-        content.type === 'context'
-          ? content.lines
-          : content.additions + content.deletions;
-    }
-    if (row.contentIndex !== 0) {
-      lineIndex = Math.max(0, lineIndex - 1);
-    }
-  }
-  return {
-    type: 'marker',
-    hunkIndex: row.hunkIndex,
-    lineIndex,
-    markerType: row.type,
-    lineText: row.lineText,
-  };
 }

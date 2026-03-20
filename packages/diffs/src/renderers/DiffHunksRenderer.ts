@@ -143,14 +143,24 @@ export interface RenderedLineContext {
   additionLine?: DiffLineMetadata;
 }
 
-export interface InlineRow {
+export interface InjectedRow {
   content: HASTElement;
   gutter: HASTElement;
 }
 
-export interface SplitInlineRow {
-  deletion: InlineRow | undefined;
-  addition: InlineRow | undefined;
+export interface SplitInjectedRow {
+  deletion: InjectedRow | undefined;
+  addition: InjectedRow | undefined;
+}
+
+export interface UnifiedInjectedRowPlacement {
+  before?: InjectedRow[];
+  after?: InjectedRow[];
+}
+
+export interface SplitInjectedRowPlacement {
+  before?: SplitInjectedRow[];
+  after?: SplitInjectedRow[];
 }
 
 export interface HunksRenderResult {
@@ -308,15 +318,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return createDefaultAnnotationElement(span);
   }
 
-  // Unified hook returns extra rows for the single rendered column.
-  declare protected getUnifiedInlineRowsForLine?: (
+  // Unified hook returns extra rows that render before/after the current line.
+  declare protected getUnifiedInjectedRowsForLine?: (
     ctx: RenderedLineContext
-  ) => InlineRow[] | undefined;
+  ) => UnifiedInjectedRowPlacement | undefined;
 
-  // Split hook returns extra rows per side after the current rendered line.
-  declare protected getSplitInlineRowsForLine?: (
+  // Split hook returns extra rows per side before/after the current line.
+  declare protected getSplitInjectedRowsForLine?: (
     ctx: RenderedLineContext
-  ) => SplitInlineRow[] | undefined;
+  ) => SplitInjectedRowPlacement | undefined;
 
   protected getOptionsWithDefaults(): BaseDiffOptionsWithDefaults {
     const {
@@ -793,6 +803,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         };
 
         if (diffStyle === 'unified') {
+          const injectedRows =
+            this.getUnifiedInjectedRowsForLine?.(renderedLineContext);
+          if (injectedRows?.before != null) {
+            pushUnifiedInjectedRows(injectedRows.before, context);
+          }
           let deletionLineContent =
             deletionLine != null
               ? deletionLines[deletionLine.lineIndex]
@@ -857,12 +872,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               this.createAnnotationElement(span),
             context,
           });
-          const inlineRows =
-            this.getUnifiedInlineRowsForLine?.(renderedLineContext);
-          if (inlineRows != null) {
-            pushUnifiedInlineRows(inlineRows, context);
+          if (injectedRows?.after != null) {
+            pushUnifiedInjectedRows(injectedRows.after, context);
           }
         } else {
+          const injectedRows =
+            this.getSplitInjectedRowsForLine?.(renderedLineContext);
+          if (injectedRows?.before != null) {
+            pushSplitInjectedRows(
+              injectedRows.before,
+              context,
+              pendingSplitContext
+            );
+          }
+
           let deletionLineContent =
             deletionLine != null
               ? deletionLines[deletionLine.lineIndex]
@@ -966,10 +989,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               this.createAnnotationElement(span),
             context,
           });
-          const inlineRows =
-            this.getSplitInlineRowsForLine?.(renderedLineContext);
-          if (inlineRows != null) {
-            pushSplitInlineRows(inlineRows, context, pendingSplitContext);
+          if (injectedRows?.after != null) {
+            pushSplitInjectedRows(
+              injectedRows.after,
+              context,
+              pendingSplitContext
+            );
           }
         }
 
@@ -1313,8 +1338,8 @@ function getModifiedLinesString(lines: number) {
   return `${lines} unmodified line${lines > 1 ? 's' : ''}`;
 }
 
-function pushUnifiedInlineRows(
-  rows: InlineRow[],
+function pushUnifiedInjectedRows(
+  rows: InjectedRow[],
   context: ProcessContext
 ): void {
   for (const row of rows) {
@@ -1324,8 +1349,8 @@ function pushUnifiedInlineRows(
   }
 }
 
-function pushSplitInlineRows(
-  rows: SplitInlineRow[],
+function pushSplitInjectedRows(
+  rows: SplitInjectedRow[],
   context: ProcessContext,
   pendingSplitContext: PendingSplitContext
 ): void {

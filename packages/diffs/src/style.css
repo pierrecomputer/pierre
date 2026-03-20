@@ -1254,52 +1254,40 @@
     }
   }
 
-  [data-merge-conflict^='marker-'][data-line] {
-    &[data-line-type='context'],
-    &[data-line-type='context-expanded'] {
-      color: var(--diffs-fg);
-
-      span {
-        color: var(--diffs-fg) !important;
-      }
-    }
-  }
-
-  [data-merge-conflict='marker-start'][data-line] {
-    &[data-line-type='context'],
-    &[data-line-type='context-expanded'] {
-      &::after {
-        content: '  (Current Change)';
-        color: var(--diffs-fg-conflict-marker);
-        opacity: 1;
-        font-style: normal;
-        font-family: var(
-          --diffs-header-font-family,
-          var(--diffs-header-font-fallback)
-        );
-      }
-    }
-  }
-
-  [data-merge-conflict='marker-end'][data-line] {
-    &[data-line-type='context'],
-    &[data-line-type='context-expanded'] {
-      &::after {
-        content: '  (Incoming Change)';
-        color: var(--diffs-fg-conflict-marker);
-        opacity: 1;
-        font-style: normal;
-        font-family: var(
-          --diffs-header-font-family,
-          var(--diffs-header-font-fallback)
-        );
-      }
-    }
+  [data-merge-conflict='marker-start'],
+  [data-merge-conflict='marker-separator'],
+  [data-merge-conflict='marker-end'] {
+    padding-left: 1ch;
+    color: var(--diffs-fg);
   }
 
   [data-merge-conflict='marker-start'],
+  [data-merge-conflict='marker-end'] {
+    display: flex;
+    align-items: center;
+
+    &::after {
+      color: var(--diffs-fg-conflict-marker);
+      font-style: normal;
+      font-size: 0.75rem;
+      line-height: 1.25rem;
+      padding-left: 1ch;
+      font-family: var(
+        --diffs-header-font-family,
+        var(--diffs-header-font-fallback)
+      );
+    }
+  }
+
+  [data-merge-conflict='marker-start']::after {
+    content: '(Current Change)';
+  }
+
+  [data-merge-conflict='marker-end']::after {
+    content: '(Incoming Change)';
+  }
+
   [data-merge-conflict='marker-base'],
-  [data-merge-conflict='marker-separator'],
   [data-merge-conflict='marker-end'] {
     &[data-line],
     &[data-no-newline] {
@@ -1328,36 +1316,14 @@
     }
   }
 
+  [data-gutter-buffer='merge-conflict-marker-start'],
   [data-merge-conflict='marker-start'] {
-    &[data-line],
-    &[data-no-newline] {
-      background-color: var(--conflict-bg-current-header);
-    }
-
-    &[data-column-number] {
-      background-color: var(--conflict-bg-current-header-number);
-      color: var(--diffs-addition-base);
-
-      [data-line-number-content] {
-        color: var(--diffs-addition-base);
-      }
-    }
+    background-color: var(--conflict-bg-current-header);
   }
 
+  [data-gutter-buffer='merge-conflict-marker-end'],
   [data-merge-conflict='marker-end'] {
-    &[data-line],
-    &[data-no-newline] {
-      background-color: var(--conflict-bg-incoming-header);
-    }
-
-    &[data-column-number] {
-      background-color: var(--conflict-bg-incoming-header-number);
-      color: var(--diffs-modified-base);
-
-      [data-line-number-content] {
-        color: var(--diffs-modified-base);
-      }
-    }
+    background-color: var(--conflict-bg-incoming-header);
   }
 
   [data-merge-conflict='marker-separator'] {

@@ -5,12 +5,10 @@ import type {
   ContextContent,
   FileDiffMetadata,
 } from '../src/types';
-import {
-  diffAcceptRejectHunk,
-  resolveConflict,
-} from '../src/utils/diffAcceptRejectHunk';
+import { diffAcceptRejectHunk } from '../src/utils/diffAcceptRejectHunk';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
+import { resolveConflict } from '../src/utils/resolveConflict';
 import { verifyFileDiffHunkValues } from './testUtils';
 
 type ResolvedType = 'accept' | 'reject' | 'both';
@@ -406,7 +404,69 @@ describe('diffAcceptRejectHunk', () => {
 
     const result = diffAcceptRejectHunk(diff, 0, 'both');
 
-    expect(result.cacheKey).toBe('old-key:new-key:b-0');
+    expect(result.cacheKey).toBe('old-key:new-key:b-0:0-0');
+  });
+
+  test('updates cacheKey when resolving a single content block', () => {
+    const diff = parseDiffFromFile(
+      {
+        name: 'example.ts',
+        contents: [
+          'line 01 stable',
+          'line 02 add anchor',
+          'line 03 stable',
+          'line 04 stable',
+          'line 05 stable',
+          'line 06 delete me',
+          'line 07 stable',
+          'line 08 stable',
+          'line 09 stable',
+          'line 10 replace old',
+          'line 11 stable',
+          'line 12 stable',
+          'line 13 stable',
+          'line 14 mix old a',
+          'line 15 mix shared',
+          'line 16 mix old b',
+          'line 17 stable',
+          '',
+        ].join('\n'),
+        cacheKey: 'old-key',
+      },
+      {
+        name: 'example.ts',
+        contents: [
+          'line 01 stable',
+          'line 02 add anchor',
+          'line 02.1 add first',
+          'line 02.2 add second',
+          'line 03 stable',
+          'line 04 stable',
+          'line 05 stable',
+          'line 07 stable',
+          'line 08 stable',
+          'line 09 stable',
+          'line 10 replace new',
+          'line 11 stable',
+          'line 12 stable',
+          'line 13 stable',
+          'line 14 mix new a',
+          'line 15 mix shared',
+          'line 16 mix new b',
+          'line 17 stable',
+          '',
+        ].join('\n'),
+        cacheKey: 'new-key',
+      },
+      { context: 1 }
+    );
+
+    const result = diffAcceptRejectHunk(diff, 2, {
+      type: 'accept',
+      changeIndex: 1,
+    });
+
+    expect(result.cacheKey).toBe('old-key:new-key:a-2:1-1');
   });
 
   test('both should inherit noEOFCR from additions', () => {
@@ -495,20 +555,14 @@ describe('diffAcceptRejectHunk', () => {
       'start\n',
       'ours one\n',
       'middle\n',
-      '<<<<<<< HEAD\n',
       'ours two\n',
-      '=======\n',
-      '>>>>>>> branch\n',
       'end\n',
     ]);
     expect(result.additionLines).toEqual([
       'start\n',
       'ours one\n',
       'middle\n',
-      '<<<<<<< HEAD\n',
-      '=======\n',
       'theirs two\n',
-      '>>>>>>> branch\n',
       'end\n',
     ]);
   });

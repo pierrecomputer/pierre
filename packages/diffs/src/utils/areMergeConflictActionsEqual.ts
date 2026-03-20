@@ -7,13 +7,12 @@ export function areMergeConflictActionsEqual(
 ): boolean {
   return (
     a.hunkIndex === b.hunkIndex &&
-    a.startContextIndex === b.startContextIndex &&
-    a.currentChangeIndex === b.currentChangeIndex &&
-    a.baseMarkerContextIndex === b.baseMarkerContextIndex &&
-    a.baseChangeIndex === b.baseChangeIndex &&
-    a.separatorContextIndex === b.separatorContextIndex &&
-    a.incomingChangeIndex === b.incomingChangeIndex &&
-    a.endContextIndex === b.endContextIndex &&
+    a.startContentIndex === b.startContentIndex &&
+    a.endContentIndex === b.endContentIndex &&
+    a.currentContentIndex === b.currentContentIndex &&
+    a.baseContentIndex === b.baseContentIndex &&
+    a.incomingContentIndex === b.incomingContentIndex &&
+    a.endMarkerContentIndex === b.endMarkerContentIndex &&
     a.conflictIndex === b.conflictIndex &&
     areConflictsEqual(a.conflict, b.conflict)
   );

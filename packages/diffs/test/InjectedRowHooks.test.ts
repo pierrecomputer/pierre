@@ -3,10 +3,11 @@ import type { ElementContent } from 'hast';
 
 import {
   DiffHunksRenderer,
-  type InlineRow,
+  type InjectedRow,
   parseDiffFromFile,
   type RenderedLineContext,
-  type SplitInlineRow,
+  type SplitInjectedRowPlacement,
+  type UnifiedInjectedRowPlacement,
 } from '../src';
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
 import { createGutterGap, createHastElement } from '../src/utils/hast_utils';
@@ -15,7 +16,7 @@ import { assertDefined, isHastElement } from './testUtils';
 
 const inlineGutter = () => createGutterGap(undefined, 'annotation', 1);
 
-function createInlineRow(name: string): InlineRow {
+function createInjectedRow(name: string): InjectedRow {
   return {
     content: createHastElement({
       tagName: 'div',
@@ -79,40 +80,44 @@ function findFirstElementWithProperty(
   return undefined;
 }
 
-class UnifiedInlineRowTestRenderer extends DiffHunksRenderer {
-  protected override getUnifiedInlineRowsForLine = (
+class UnifiedInjectedRowTestRenderer extends DiffHunksRenderer {
+  protected override getUnifiedInjectedRowsForLine = (
     ctx: RenderedLineContext
-  ): InlineRow[] | undefined => {
+  ): UnifiedInjectedRowPlacement | undefined => {
     if (ctx.additionLine?.lineNumber !== 1) {
       return undefined;
     }
-    return [createInlineRow('unified-after-line-1')];
+    return { before: [createInjectedRow('unified-before-line-1')] };
   };
 }
 
-class SplitInlineRowTestRenderer extends DiffHunksRenderer {
-  protected override getSplitInlineRowsForLine = (
+class SplitInjectedRowTestRenderer extends DiffHunksRenderer {
+  protected override getSplitInjectedRowsForLine = (
     ctx: RenderedLineContext
-  ): SplitInlineRow[] | undefined => {
+  ): SplitInjectedRowPlacement | undefined => {
     if (ctx.splitLineIndex !== 0) {
       return undefined;
     }
-    return [
-      {
-        deletion: createInlineRow('split-deletion-only'),
-        addition: undefined,
-      },
-      {
-        deletion: createInlineRow('split-deletion-paired'),
-        addition: createInlineRow('split-addition-paired'),
-      },
-    ];
+    return {
+      before: [
+        {
+          deletion: createInjectedRow('split-deletion-only'),
+          addition: undefined,
+        },
+        {
+          deletion: createInjectedRow('split-deletion-paired'),
+          addition: createInjectedRow('split-addition-paired'),
+        },
+      ],
+    };
   };
 }
 
-describe('inline row hooks', () => {
-  test('unified hook inserts rows directly after the triggering line', async () => {
-    const renderer = new UnifiedInlineRowTestRenderer({ diffStyle: 'unified' });
+describe('injected row hooks', () => {
+  test('unified hook inserts before rows before the triggering line', async () => {
+    const renderer = new UnifiedInjectedRowTestRenderer({
+      diffStyle: 'unified',
+    });
     const diff = parseDiffFromFile(
       { name: 'file.ts', contents: 'const a = 1;\nconst b = 2;\n' },
       { name: 'file.ts', contents: 'const a = 1;\nconst c = 3;\n' }
@@ -124,16 +129,16 @@ describe('inline row hooks', () => {
     const lineIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
     const inlineRowIndex = getTopLevelRowIndex(
       result.unifiedContentAST,
-      'unified-after-line-1'
+      'unified-before-line-1'
     );
 
     expect(result.rowCount).toBe(diff.unifiedLineCount + 1);
     expect(lineIndex).toBeGreaterThanOrEqual(0);
-    expect(inlineRowIndex).toBe(lineIndex + 1);
+    expect(inlineRowIndex + 1).toBe(lineIndex);
   });
 
   test('split hook preserves one-sided buffering before later paired rows', async () => {
-    const renderer = new SplitInlineRowTestRenderer({ diffStyle: 'split' });
+    const renderer = new SplitInjectedRowTestRenderer({ diffStyle: 'split' });
     const diff = parseDiffFromFile(
       {
         name: 'file.ts',
@@ -191,9 +196,13 @@ describe('inline row hooks', () => {
         'const after = true;',
       ].join('\n'),
     };
-    const { fileDiff, actions } = parseMergeConflictDiffFromFile(file);
+    const {
+      fileDiff,
+      actions,
+      markerRows: conflictMarkerRows,
+    } = parseMergeConflictDiffFromFile(file);
     const renderer = new UnresolvedFileHunksRenderer();
-    renderer.setConflictActions(actions);
+    renderer.setConflictState(actions, conflictMarkerRows, fileDiff);
 
     const result = await renderer.asyncRender(fileDiff);
 
@@ -209,8 +218,17 @@ describe('inline row hooks', () => {
       'data-merge-conflict-action'
     );
     const actionAnchorIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
+    const markerRows = result.unifiedContentAST.filter((row) => {
+      return (
+        isHastElement(row) &&
+        row.properties?.['data-merge-conflict-marker-row'] != null
+      );
+    });
 
-    expect(result.rowCount).toBe(fileDiff.unifiedLineCount + actions.length);
+    expect(result.rowCount).toBe(
+      fileDiff.unifiedLineCount + actions.length + markerRows.length
+    );
+    expect(markerRows).toHaveLength(3);
     expect(actionRowIndex).toBe(actionAnchorIndex + 1);
     assertDefined(actionButton, 'expected merge conflict action button');
     expect(isHastElement(actionButton)).toBe(true);

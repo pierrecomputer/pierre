@@ -1,6 +1,9 @@
 'use client';
 
-import { UnresolvedFile } from '@pierre/diffs/react';
+import {
+  UnresolvedFile,
+  type UnresolvedFileReactOptions,
+} from '@pierre/diffs/react';
 import type { PreloadUnresolvedFileResult } from '@pierre/diffs/ssr';
 import { IconColorDark, IconColorLight, IconRefresh } from '@pierre/icons';
 import { useMemo, useState } from 'react';
@@ -16,16 +19,28 @@ interface MergeConflictProps {
 export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const [instanceKey, setInstanceKey] = useState(0);
   const [hasResolved, setHasResolved] = useState(false);
-  const [themeType, setThemeType] = useState<'light' | 'dark'>('dark');
 
-  const options = useMemo(
-    () => ({
-      ...prerenderedFile.options,
-      themeType,
-      theme: { light: 'pierre-light' as const, dark: 'pierre-dark' as const },
-    }),
-    [prerenderedFile.options, themeType]
+  const [themeType, setThemeType] = useState<'light' | 'dark' | 'system'>(
+    () => prerenderedFile.options?.themeType ?? 'dark'
   );
+
+  // NOTE(amadeus): These server render APIs definitely suck, and it's
+  // something we need to take a pass at.  Curious if it's something Nicolas
+  // could help with designing...
+  const options: UnresolvedFileReactOptions<undefined> = useMemo(() => {
+    const { mergeConflictActionsType, hunkSeparators, ...rest } =
+      prerenderedFile.options ?? {};
+    return {
+      ...rest,
+      mergeConflictActionsType:
+        typeof mergeConflictActionsType === 'function'
+          ? 'custom'
+          : mergeConflictActionsType,
+      hunkSeparators:
+        typeof hunkSeparators === 'function' ? 'custom' : hunkSeparators,
+      themeType,
+    };
+  }, [prerenderedFile.options, themeType]);
 
   return (
     <div className="scroll-mt-20 space-y-5" id="conflicts">

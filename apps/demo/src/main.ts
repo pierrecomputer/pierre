@@ -74,21 +74,42 @@ async function loadPatchContent() {
   return loadingPatch;
 }
 
-// Create worker API - helper handles worker creation automatically!
-const poolManager = (() => {
-  const manager = createWorkerAPI({
-    theme: DEFAULT_THEMES,
-    langs: ['typescript', 'tsx'],
-    preferredHighlighter: 'shiki-wasm',
-  });
-  void manager.initialize().then(() => {
-    console.log('WorkerPoolManager initialized, with:', manager.getStats());
-  });
+let loadingLargeConflict: Promise<FileContents> | undefined;
+async function loadLargeConflictFile(): Promise<FileContents> {
+  loadingLargeConflict =
+    loadingLargeConflict ??
+    new Promise((resolve) => {
+      void import('./mocks/fileConflictLarge.txt?raw').then(
+        ({ default: contents }) =>
+          resolve({
+            name: 'fileConflictLarge.ts',
+            contents,
+            cacheKey: 'file-conflict-large',
+          })
+      );
+    });
+  return loadingLargeConflict;
+}
 
-  // @ts-expect-error bcuz
-  window.__POOL = manager;
-  return manager;
-})();
+const WORKER_POOL = true;
+
+// Create worker API - helper handles worker creation automatically!
+const poolManager: WorkerPoolManager | undefined = WORKER_POOL
+  ? (() => {
+      const manager = createWorkerAPI({
+        theme: DEFAULT_THEMES,
+        langs: ['typescript', 'tsx'],
+        preferredHighlighter: 'shiki-wasm',
+      });
+      void manager.initialize().then(() => {
+        console.log('WorkerPoolManager initialized, with:', manager.getStats());
+      });
+
+      // @ts-expect-error bcuz
+      window.__POOL = manager;
+      return manager;
+    })()
+  : undefined;
 
 const VIRTUALIZE = true;
 
@@ -584,6 +605,8 @@ const fileConflict: FileContents = {
   contents: FILE_CONFLICT,
 };
 
+const LARGE_CONFLICT_FILE = false;
+
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
   // oxlint-disable-next-line @typescript-oxlint/no-misused-promises
@@ -697,7 +720,8 @@ if (renderFileButton != null) {
 
 const renderFileConflictButton = document.getElementById('render-conflict');
 if (renderFileConflictButton != null) {
-  renderFileConflictButton.addEventListener('click', () => {
+  // oxlint-disable-next-line @typescript-oxlint/no-misused-promises
+  renderFileConflictButton.addEventListener('click', async () => {
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) {
       return;
@@ -714,11 +738,15 @@ if (renderFileConflictButton != null) {
         renderAnnotation,
         enableLineSelection: true,
         enableGutterUtility: true,
+        maxContextLines: 4,
       },
       poolManager
     );
+    const file = LARGE_CONFLICT_FILE
+      ? await loadLargeConflictFile()
+      : fileConflict;
     instance.render({
-      file: fileConflict,
+      file,
       // lineAnnotations: FAKE_DIFF_LINE_ANNOTATIONS[0][0],
       fileContainer,
     });
