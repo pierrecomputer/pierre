@@ -1,37 +1,91 @@
+[data-truncate-container] {
+  --truncate-internal-marker-prefade-width: var(
+    --truncate-marker-prefade-width,
+    3px
+  );
+  --truncate-internal-marker-prefade-ratio: var(
+    --truncate-marker-prefade-ratio,
+    2.5
+  );
+  --truncate-internal-fade-marker-width: var(--truncate-fade-marker-width, 4px);
+  --truncate-internal-fade-marker-height: var(
+    --truncate-fade-marker-height,
+    0.9lh
+  );
+  --truncate-internal-marker-gap: var(--truncate-marker-gap, 1px);
+  --truncate-internal-marker-opacity: var(--truncate-marker-opacity, 50%);
+  --truncate-internal-middle-marker-opacity: var(
+    --truncate-middle-marker-opacity,
+    80%
+  );
+  --truncate-internal-marker-background-color: var(
+    --truncate-marker-background-color,
+    light-dark(white, black)
+  );
+  --truncate-internal-marker-fade-out-duration: var(
+    --truncate-marker-fade-out-duration,
+    100ms
+  );
+  --truncate-internal-marker-fade-in-duration: var(
+    --truncate-marker-fade-in-duration,
+    0ms
+  );
+  --truncate-internal-fade-right-background: var(
+    --truncate-fade-right-background,
+    radial-gradient(
+      at right center,
+      light-dark(#0007, #000f),
+      35%,
+      transparent 65%,
+      transparent
+    )
+  );
+  --truncate-internal-fade-left-background: var(
+    --truncate-fade-left-background,
+    radial-gradient(
+      at left center,
+      light-dark(#0007, #000f),
+      35%,
+      transparent 65%,
+      transparent
+    )
+  );
+  /*
+  In some special cases people might be adding spacing in other ways
+  that would benefit from being able to override this, however the container
+  query below can't use this and would need to be redeclared with the overridden
+  value. It's a bad time, but better than nothing.
+  */
+  --truncate-internal-single-line-height: 1lh;
+
+  height: var(--truncate-internal-single-line-height);
+  min-width: 0;
+  overflow: hidden;
+}
+
 [data-truncate-marker] {
-  --truncate-marker-prefade-width: 3px;
-  --truncate-marker-gap: 1px;
   display: flex;
   position: absolute;
-  height: 1lh;
+  height: var(--truncate-internal-single-line-height);
   z-index: 2;
   color: color-mix(
     in srgb,
-    currentColor var(--truncate-marker-opacity, 50%),
+    currentColor var(--truncate-internal-marker-opacity),
     transparent
   );
 
   /* Core trick for hiding the marker until overflow occurs */
   opacity: 0;
-  transition: opacity var(--truncate-marker-fade-out-duration, 100ms)
+  transition: opacity var(--truncate-internal-marker-fade-out-duration)
     ease-in-out;
 }
 
 @container measure (height > 1lh) {
   [data-truncate-marker] {
     opacity: 1;
-    transition: opacity var(--truncate-marker-fade-in-duration, 0ms) ease-in-out;
+    transition: opacity var(--truncate-internal-marker-fade-in-duration)
+      ease-in-out;
   }
-}
-
-[data-truncate-container] {
-  height: 1lh;
-  min-width: 0;
-  overflow: hidden;
-  --truncate-internal-marker-background-color: var(
-    --truncate-marker-background-color,
-    light-dark(white, black)
-  );
 }
 
 [data-truncate-grid] {
@@ -48,7 +102,7 @@
   pointer-events: none;
   user-select: none;
   word-break: break-all;
-  margin-top: -1lh;
+  margin-top: calc(-1 * var(--truncate-internal-single-line-height));
 }
 
 [data-truncate-marker-cell] {
@@ -65,20 +119,12 @@
   & [data-truncate-marker] {
     right: 0;
     padding-left: calc(
-      var(--truncate-marker-prefade-width) + var(--truncate-marker-gap)
+      var(--truncate-internal-marker-prefade-width) +
+        var(--truncate-internal-marker-gap)
     );
   }
   & [data-truncate-fade] {
-    background: var(
-      --truncate-fade-background,
-      radial-gradient(
-        at right center,
-        light-dark(#0007, #000f),
-        35%,
-        transparent 65%,
-        transparent
-      )
-    );
+    background: var(--truncate-internal-fade-right-background);
   }
 }
 
@@ -94,33 +140,31 @@
   }
   & [data-truncate-marker] {
     padding-right: calc(
-      var(--truncate-marker-prefade-width) + var(--truncate-marker-gap)
+      var(--truncate-internal-marker-prefade-width) +
+        var(--truncate-internal-marker-gap)
     );
   }
   & [data-truncate-fade] {
-    background: radial-gradient(
-      at left center,
-      light-dark(#0007, #000f),
-      35%,
-      transparent 65%,
-      transparent
-    );
+    background: var(--truncate-internal-fade-left-background);
   }
 }
 
 [data-truncate-variant='default'] {
-  --fade-dir: to right;
+  --truncate-internal-fade-dir: to right;
 
   &[data-truncate-container='fruncate'] {
-    --fade-dir: to left;
+    --truncate-internal-fade-dir: to left;
   }
   & [data-truncate-marker] {
     background: linear-gradient(
-      var(--fade-dir),
+      var(--truncate-internal-fade-dir),
       transparent,
-      var(--truncate-marker-prefade-width),
+      var(--truncate-internal-marker-prefade-width),
       var(--truncate-internal-marker-background-color),
-      calc(2.5 * var(--truncate-marker-prefade-width)),
+      calc(
+        var(--truncate-internal-marker-prefade-ratio) *
+          var(--truncate-internal-marker-prefade-width)
+      ),
       var(--truncate-internal-marker-background-color)
     );
   }
@@ -133,8 +177,45 @@
 }
 
 [data-truncate-fade] {
-  width: 4px;
-  height: 0.9lh;
-  margin-top: 0.05lh;
-  margin-bottom: 0.05lh;
+  --truncate-internal-half-difference-of-fade-height: calc(
+    calc(
+        var(--truncate-internal-single-line-height) -
+          var(--truncate-internal-fade-marker-height)
+      ) /
+      2
+  );
+  width: var(--truncate-internal-fade-marker-width);
+  height: var(--truncate-internal-fade-marker-height);
+  margin: var(--truncate-internal-half-difference-of-fade-height) 0;
+}
+
+[data-truncate-group-container='middle'] {
+  & [data-truncate-container] {
+    --truncate-marker-opacity: var(--truncate-internal-middle-marker-opacity);
+  }
+
+  display: flex;
+  min-width: 0;
+
+  & > div {
+    min-width: 0;
+  }
+
+  &[data-truncate-group-priority='end'] {
+    & > div:nth-child(1) {
+      flex: 0 999999 max-content;
+    }
+    & > div:nth-child(2) {
+      flex: 0 1 max-content;
+    }
+  }
+
+  &[data-truncate-group-priority='start'] {
+    & > div:nth-child(1) {
+      flex: 0 1 max-content;
+    }
+    & > div:nth-child(2) {
+      flex: 0 999999 max-content;
+    }
+  }
 }

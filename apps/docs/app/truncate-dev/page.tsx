@@ -129,6 +129,8 @@ export default function TruncateDevPage() {
 
       <ExampleGroup title="Middle">
         <MiddleTruncate>{defaultMessage}</MiddleTruncate>
+        <MiddleTruncate priority="start">{defaultMessage}</MiddleTruncate>
+
         <MiddleTruncate variant="fade">{defaultMessage}</MiddleTruncate>
       </ExampleGroup>
     </ResizableRightBorder>

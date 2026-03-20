@@ -17,10 +17,6 @@ export interface OverflowTextProps extends PropsWithChildren {
   variant?: 'default' | 'fade';
 }
 
-function FadeMarker() {
-  return <span data-truncate-fade />;
-}
-
 function OverflowMarker({
   children,
   marker,
@@ -30,11 +26,13 @@ function OverflowMarker({
   return (
     <div data-truncate-marker-cell>
       <div data-truncate-marker>
-        {typeof marker === 'function'
-          ? marker({ children })
-          : isFadeVariant
-            ? FadeMarker()
-            : marker}
+        {typeof marker === 'function' ? (
+          marker({ children })
+        ) : isFadeVariant ? (
+          <span data-truncate-fade />
+        ) : (
+          marker
+        )}
       </div>
     </div>
   );
@@ -128,32 +126,24 @@ export function Fruncate({
   );
 }
 
+export interface MiddleTruncateProps extends Omit<OverflowTextProps, 'mode'> {
+  priority?: 'start' | 'end' | 'equal';
+}
+
 export function MiddleTruncate({
   children,
+  priority = 'end',
   ...props
-}: Omit<OverflowTextProps, 'mode'>) {
+}: MiddleTruncateProps) {
   return (
     <div
-      style={
-        {
-          '--truncate-marker-opacity': '100%',
-          display: 'flex',
-          minWidth: 0,
-        } as CSSProperties
-      }
+      data-truncate-group-container="middle"
+      data-truncate-group-priority={priority}
     >
-      <div
-        style={
-          {
-            minWidth: 0,
-            flex: '0 999999 max-content',
-            '--truncate-marker-opacity': '100%',
-          } as CSSPropertiesWithVars
-        }
-      >
+      <div>
         <Truncate {...props}>{(children as string).slice(0, 29)}</Truncate>
       </div>
-      <div style={{ minWidth: 0, flex: '0 1 max-content' }}>
+      <div>
         <Fruncate {...props}>{(children as string).slice(29)}</Fruncate>
       </div>
     </div>
