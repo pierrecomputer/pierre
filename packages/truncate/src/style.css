@@ -26,6 +26,7 @@
 
 [data-truncate-container] {
   height: 1lh;
+  min-width: 0;
   overflow: hidden;
   --truncate-internal-marker-background-color: var(
     --truncate-marker-background-color,
@@ -68,12 +69,15 @@
     );
   }
   & [data-truncate-fade] {
-    background: radial-gradient(
-      at right center,
-      light-dark(#0007, #000f),
-      35%,
-      transparent 65%,
-      transparent
+    background: var(
+      --truncate-fade-background,
+      radial-gradient(
+        at right center,
+        light-dark(#0007, #000f),
+        35%,
+        transparent 65%,
+        transparent
+      )
     );
   }
 }

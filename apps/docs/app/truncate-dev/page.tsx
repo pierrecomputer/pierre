@@ -125,6 +125,31 @@ export default function TruncateDevPage() {
           {defaultMessage}
         </Fruncate>
       </ExampleGroup>
+
+      <ExampleGroup title="Middle">
+        <div
+          style={
+            {
+              '--truncate-marker-opacity': '100%',
+              '--truncate-fade-background': 'none',
+              display: 'flex',
+              minWidth: 0,
+            } as CSSProperties
+          }
+        >
+          <div
+            style={{
+              minWidth: 0,
+              flex: '0 999999 max-content',
+            }}
+          >
+            <Truncate>{defaultMessage.slice(0, 26)}</Truncate>
+          </div>
+          <div style={{ minWidth: 0, flex: '0 1 max-content' }}>
+            <Fruncate>{defaultMessage.slice(26)}</Fruncate>
+          </div>
+        </div>
+      </ExampleGroup>
     </ResizableRightBorder>
   );
 }
