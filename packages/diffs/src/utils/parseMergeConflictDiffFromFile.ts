@@ -1,3 +1,19 @@
+// Parses a file containing git merge conflict markers (<<<<<<< / ======= / >>>>>>>)
+// into a synthetic unified diff. The core idea: treat the conflict file as though
+// "current" lines are deletions and "incoming" lines are additions. Lines outside
+// conflicts (and optional "base" sections from diff3) become shared context.
+//
+// The result is a standard FileDiffMetadata with hunks — identical in shape to what
+// you'd get from parsing a real unified diff — plus a parallel array of
+// MergeConflictDiffActions that anchor each conflict region to positions within the
+// hunk structure. Downstream consumers (e.g. the merge conflict UI) use these
+// anchors to overlay conflict markers onto the diff view.
+//
+// Architecture note: all helper functions are module-level (not closures inside the
+// main function) and receive a shared ParseState object by reference. This avoids
+// per-call scope-chain traversal on the hot path (~20K lines), where every line
+// triggers 2-3 helper calls.
+
 import type {
   FileContents,
   FileDiffMetadata,
@@ -34,11 +50,27 @@ interface GetMergeConflictActionAnchorReturn {
   lineIndex: number;
 }
 
+// Which section of a conflict we're currently inside while scanning lines.
+// Progresses: current → (optional) base → incoming.
 type MergeConflictStage = 'current' | 'base' | 'incoming';
 type MergeConflictSide = MergeConflictStage;
 type MergeConflictMarkerType = 'start' | 'base' | 'separator' | 'end';
+
+// Controls how buffered context lines are trimmed when flushed to hunkContent:
+//   'leading'       — first flush of a hunk; trim excess from the start
+//   'before-change' — flush between changes; emit all buffered lines
+//   'trailing'      — last flush of a hunk; trim excess from the end
 type ContextFlushMode = 'before-change' | 'leading' | 'trailing';
 
+// Mutable accumulator for building a single Hunk. Tracks line counts, the
+// hunkContent array (sequence of context/change groups), and a "context buffer"
+// that defers writing context lines until we know whether they're leading,
+// trailing, or mid-hunk context.
+//
+// The context buffer avoids eagerly committing context lines to hunkContent.
+// When a change line arrives, we flush the buffer — trimming to maxContextLines
+// if it's the leading or trailing edge of a hunk, or splitting into two hunks
+// if the gap between changes exceeds maxContextLines * 2.
 interface HunkBuilder {
   additionStart: number;
   deletionStart: number;
@@ -60,6 +92,10 @@ interface HunkBuilder {
   contextBufferBaseConflicts: Map<number, number> | undefined;
 }
 
+// Tracks an in-progress conflict as we scan through its lines. Pushed onto
+// conflictStack when we hit a <<<<<<< marker, and popped + finalized when we
+// hit the matching >>>>>>> marker. The `stage` field tells processLine which
+// section we're in so it knows whether to emit deletions, context, or additions.
 interface ConflictFrame {
   conflictIndex: number;
   stage: MergeConflictStage;
@@ -80,19 +116,35 @@ interface ConflictActionBuilder {
 
 // Bundles all mutable state shared across parse helper functions, replacing
 // closure-captured variables with a single object passed by reference.
+//
+// The two key arrays — deletionLines and additionLines — are the synthetic
+// "before" and "after" file contents. Context lines are pushed to both arrays
+// (identical on both sides). Current-side conflict lines go only into
+// deletionLines; incoming-side lines go only into additionLines. After parsing,
+// joining each array produces the resolved file for that side.
 interface ParseState {
+  // "Before" file lines (context + current-side conflict content).
   deletionLines: string[];
+  // "After" file lines (context + incoming-side conflict content).
   additionLines: string[];
+  // Stack of open conflict regions (supports nested conflicts, though rare).
   conflictStack: ConflictFrame[];
+  // Parallel to actions[]; accumulates content indices during parsing.
   conflictBuilders: ConflictActionBuilder[];
+  // Final output: one action per conflict, indexed by conflictIndex.
   actions: (MergeConflictDiffAction | undefined)[];
+  // Finalized hunks, appended as context gaps cause hunk splits.
   hunks: Hunk[];
   nextConflictIndex: number;
+  // Running line totals used to compute hunk splitLineStart/unifiedLineStart.
   splitLineCount: number;
   unifiedLineCount: number;
+  // 1-based line number where the previous hunk ended (for collapsedBefore).
   lastHunkEnd: number;
+  // The hunk currently being built; undefined between hunks.
   activeHunk: HunkBuilder | undefined;
   maxContextLines: number;
+  // Cached maxContextLines * 2 (the threshold for splitting a hunk).
   maxContextLines2: number;
 }
 
@@ -110,6 +162,15 @@ export function getMergeConflictActionAnchor(
   };
 }
 
+// Main entry point. Walks every line of the conflict file exactly once,
+// dispatching each line through processLine which routes it to the appropriate
+// emitter (context or change). After the loop, finalizes the last hunk,
+// validates all conflicts were closed, and assembles the result.
+//
+// The three phases are:
+//   1. Line-by-line scan  — builds hunks and conflict actions incrementally
+//   2. Post-loop cleanup  — flushes trailing context, finalizes last hunk
+//   3. Result assembly    — joins line arrays, builds marker rows for the UI
 export function parseMergeConflictDiffFromFile(
   file: FileContents,
   maxContextLines: number = 10
@@ -133,7 +194,9 @@ export function parseMergeConflictDiffFromFile(
     maxContextLines2: maxContextLines * 2,
   };
 
-  // Inline line iteration to avoid closure overhead on the hot path.
+  // Phase 1: Line-by-line scan. We inline the indexOf loop here (rather than
+  // calling a helper with a callback) to avoid creating a closure on the hot
+  // path. Each line is sliced and dispatched to processLine.
   const contents = file.contents;
   const contentLength = contents.length;
   if (contentLength > 0) {
@@ -151,6 +214,9 @@ export function parseMergeConflictDiffFromFile(
     }
   }
 
+  // Phase 2: Post-loop cleanup. Any unclosed conflict is an error. If the
+  // last hunk has buffered context lines, flush them as trailing context and
+  // finalize the hunk.
   if (s.conflictStack.length > 0) {
     throw new Error(
       'parseMergeConflictDiffFromFile: unfinished merge conflict marker stack'
@@ -175,6 +241,8 @@ export function parseMergeConflictDiffFromFile(
     }
   }
 
+  // Phase 3: Result assembly. Account for any collapsed lines after the last
+  // hunk, then join the line arrays to produce resolved file contents.
   if (
     s.hunks.length > 0 &&
     s.additionLines.length > 0 &&
@@ -235,9 +303,23 @@ export function parseMergeConflictDiffFromFile(
   };
 }
 
-// --- Module-level parse helpers (no closures) ---
+// ---------------------------------------------------------------------------
+// Module-level parse helpers. Each receives ParseState by reference rather
+// than capturing variables via closure. The call graph from the hot path is:
+//
+//   processLine
+//     ├─ emitContextLine    → ensureActiveHunk
+//     ├─ emitChangeLine     → ensureActiveHunk, splitHunkWithBufferedContext,
+//     │                       flushBufferedContext, appendChangeLine,
+//     │                       assignConflictContent
+//     ├─ handleStartMarker
+//     └─ finalizeConflict
+// ---------------------------------------------------------------------------
 
-// Process a single line during the main parse loop.
+// Routes a single source line to the right emitter based on whether we're
+// inside a conflict and, if so, which section (current/base/incoming).
+// Outside conflicts, only the start marker (<<<<<<< / charCode 60) can
+// change state, so we skip the full marker check for non-'<' lines.
 function processLine(s: ParseState, line: string, index: number): void {
   const frame = s.conflictStack[s.conflictStack.length - 1];
 
@@ -298,6 +380,9 @@ function processLine(s: ParseState, line: string, index: number): void {
   }
 }
 
+// Lazily creates the active HunkBuilder if one doesn't exist yet. The hunk's
+// start positions are derived from the current length of the line arrays
+// (1-based, matching unified diff conventions).
 function ensureActiveHunk(s: ParseState): HunkBuilder {
   s.activeHunk ??= createHunkBuilder(
     s.additionLines.length + 1,
@@ -306,6 +391,11 @@ function ensureActiveHunk(s: ParseState): HunkBuilder {
   return s.activeHunk;
 }
 
+// "Anchors" a conflict to its position in the hunk's content array. Each
+// conflict needs to know which hunk it lives in (hunkIndex) and which content
+// entries correspond to its current/base/incoming sections. This is called
+// every time we emit a change or context line that belongs to a conflict, and
+// it incrementally widens the start/end content range.
 function assignConflictContent(
   s: ParseState,
   conflictIndex: number,
@@ -346,7 +436,10 @@ function assignConflictContent(
   action.incomingContentIndex = contentIndex;
 }
 
-// Append a change line, coalescing with the previous group if also a change.
+// Appends a change line to the hunk's content array. If the previous entry is
+// already a 'change' group, we just bump its addition/deletion count instead
+// of creating a new entry — this keeps hunkContent compact. Returns the
+// content index so the caller can anchor the conflict to it.
 function appendChangeLine(
   hunk: HunkBuilder,
   lineType: 'addition' | 'deletion',
@@ -373,6 +466,18 @@ function appendChangeLine(
   return hunkContent.length - 1;
 }
 
+// Drains the hunk's context buffer into hunkContent, applying mode-dependent
+// trimming. The buffer accumulates context lines without committing them,
+// because we don't know yet whether they'll be leading context (trim start),
+// trailing context (trim end), or mid-hunk context (keep all). The mode tells
+// us which case we're in:
+//
+//   'leading'       — first change in a new hunk; drop lines beyond
+//                     maxContextLines from the front, and shift the hunk's
+//                     start position forward accordingly.
+//   'trailing'      — last flush before hunk finalization; keep at most
+//                     maxContextLines from the front of the buffer.
+//   'before-change' — mid-hunk context between two changes; emit everything.
 function flushBufferedContext(
   s: ParseState,
   hunk: HunkBuilder,
@@ -438,6 +543,10 @@ function flushBufferedContext(
   hunk.contextBufferBaseConflicts = undefined;
 }
 
+// Converts the mutable HunkBuilder into an immutable Hunk and pushes it onto
+// s.hunks. Computes line counts for split and unified view, the collapsed-
+// before gap (lines between the previous hunk and this one), and the hunk
+// header string (e.g. "@@ -1,5 +1,7 @@").
 function finalizeActiveHunk(s: ParseState): void {
   if (s.activeHunk == null) {
     return;
@@ -489,6 +598,14 @@ function finalizeActiveHunk(s: ParseState): void {
   s.lastHunkEnd = hunk.additionStart + hunk.additionCount - 1;
 }
 
+// Called when the context buffer between two changes exceeds maxContextLines*2.
+// This means there's a big enough gap to warrant splitting into separate hunks
+// (just like `diff -U` does). The procedure:
+//   1. Flush the first maxContextLines of the buffer as trailing context
+//   2. Finalize the current hunk
+//   3. Start a new hunk pre-seeded with the last maxContextLines as leading context
+// The middle portion of the buffer (between the two maxContextLines slices) is
+// the "collapsed" region — lines omitted from the diff view.
 function splitHunkWithBufferedContext(s: ParseState): void {
   if (s.activeHunk == null) {
     return;
@@ -531,8 +648,14 @@ function splitHunkWithBufferedContext(s: ParseState): void {
   s.activeHunk.contextBufferBaseConflicts = nextBaseConflicts;
 }
 
-// Emit a context line. For base-section lines inside a conflict, pass the
-// conflict index; otherwise defaults to -1 (no conflict association).
+// Adds a context line (identical on both sides of the diff). The line is pushed
+// to both additionLines and deletionLines, then buffered in the hunk's context
+// buffer rather than committed to hunkContent immediately. This deferred write
+// is what enables the leading/trailing trim logic in flushBufferedContext.
+//
+// For base-section lines inside a diff3 conflict, pass the conflict index so
+// the buffer can record the association; when the buffer is flushed, those
+// lines get anchored to the conflict via assignConflictContent.
 function emitContextLine(
   s: ParseState,
   line: string,
@@ -556,6 +679,14 @@ function emitContextLine(
   hunk.contextBufferCount++;
 }
 
+// Adds a change line (addition or deletion) to the current hunk. This is the
+// main "work" function on the hot path and orchestrates several steps:
+//   1. If there's a large context gap since the last change, split the hunk
+//   2. Flush any buffered context lines (leading trim on first change, or
+//      pass-through for mid-hunk context)
+//   3. Push the line to the appropriate line array (additions or deletions)
+//   4. Append/coalesce the change into hunkContent
+//   5. Anchor the conflict action to the content index
 function emitChangeLine(
   s: ParseState,
   lineType: 'addition' | 'deletion',
@@ -564,6 +695,8 @@ function emitChangeLine(
   role: MergeConflictSide
 ): void {
   let hunk = ensureActiveHunk(s);
+  // If the context gap since the last change exceeds 2x maxContextLines,
+  // split into two hunks: trailing context for the old, leading for the new.
   if (
     hunk.hunkContent.length > 0 &&
     hunk.contextBufferCount > s.maxContextLines2
@@ -603,6 +736,12 @@ function emitChangeLine(
   assignConflictContent(s, conflictIndex, role, contentIndex);
 }
 
+// Called when we hit a >>>>>>> end marker. Takes the completed ConflictFrame
+// and writes the final source-line coordinates and marker text into the
+// conflict action. Also handles empty-side conflicts: if one side had no
+// content lines, we fall back to the other side's content index so the action
+// always has valid anchors. This is what makes conflicts like "add vs nothing"
+// or "nothing vs add" representable.
 function finalizeConflict(
   s: ParseState,
   frame: ConflictFrame,
@@ -644,6 +783,9 @@ function finalizeConflict(
         : undefined,
   };
 
+  // If one side of the conflict was empty (e.g. "add vs nothing"), its content
+  // index will be undefined. Use the other side as a fallback so the action
+  // always has a valid anchor for the UI to render.
   const fallbackContentIndex =
     action.currentContentIndex ?? action.incomingContentIndex;
   action.currentContentIndex ??= fallbackContentIndex;
@@ -673,7 +815,11 @@ function finalizeConflict(
   builder.completed = true;
 }
 
-// Push a new conflict frame + builder for a start marker line.
+// Pushes a new ConflictFrame onto the stack and creates a placeholder
+// ConflictActionBuilder. The builder starts with sentinel values (-1 for
+// indices) that get filled in as we encounter content lines and markers.
+// The frame tracks which section we're scanning (current → base → incoming);
+// the builder accumulates the final action that downstream consumers use.
 function handleStartMarker(
   s: ParseState,
   line: string,
@@ -740,6 +886,15 @@ function formatHunkRange(start: number, count: number): string {
   return count === 1 ? `${start}` : `${start},${count}`;
 }
 
+// Detects whether a line is a merge conflict marker by inspecting the first
+// character and counting consecutive repetitions. Git conflict markers are
+// 7+ repeated characters:
+//   '<' (60)  = start   (<<<<<<< current)
+//   '|' (124) = base    (||||||| base)
+//   '=' (61)  = separator (=======)
+//   '>' (62)  = end     (>>>>>>> incoming)
+// The separator must be exactly '=======' with no trailing text; other markers
+// allow an optional space + label (e.g. "<<<<<<< HEAD").
 function getMergeConflictMarkerType(
   line: string
 ): MergeConflictMarkerType | undefined {
@@ -831,6 +986,13 @@ function createResolvedConflictFile(
   };
 }
 
+// Builds the marker row array that tells the UI where to render conflict
+// decorations (start/base/separator/end lines) in the diff view. Each marker
+// row maps a conflict marker to a specific line index in unified view.
+//
+// This is a post-processing step over the finalized hunks and actions. It
+// caches cumulative line-start positions per hunk to avoid recomputing them
+// for every marker.
 export function buildMergeConflictMarkerRows(
   fileDiff: FileDiffMetadata,
   actions: (MergeConflictDiffAction | undefined)[]
