@@ -45,7 +45,7 @@ function OverflowContent(options: OverflowTextProps) {
       <div data-truncate-content="visible">
         {mode === 'fruncate' ? <span>{children}</span> : children}
       </div>
-      <div data-truncate-content="overflow">
+      <div data-truncate-content="overflow" aria-hidden>
         {mode === 'fruncate' ? <span>{children}</span> : children}
       </div>
     </div>
