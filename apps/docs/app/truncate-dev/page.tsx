@@ -1,6 +1,5 @@
 import { Fruncate, MiddleTruncate, Truncate } from '@pierre/truncate/react';
 import '@pierre/truncate/style.css';
-import { notFound } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
 import { ResizableRightBorder } from './ResizableRightBorder';
@@ -38,9 +37,7 @@ function ExampleGroup({
         style={{
           fontSize: '16px',
           fontWeight: '600',
-          paddingTop: '8px',
-          paddingBottom: '4px',
-          paddingInline: '8px',
+          padding: '8px',
           backgroundColor: 'light-dark(#F0F0F0, #000)',
         }}
       >
@@ -87,9 +84,9 @@ function Example({
 }
 
 export default function TruncateDevPage() {
-  if (process.env.NODE_ENV !== 'development') {
-    return notFound();
-  }
+  // if (process.env.NODE_ENV !== 'development') {
+  //   return notFound();
+  // }
 
   return (
     <ResizableRightBorder
@@ -99,8 +96,8 @@ export default function TruncateDevPage() {
           fontFamily: 'var(--font-geist-sans)',
           fontSize: '14px',
           margin: '30px 30px',
-          width: '100%',
-          maxWidth: '480px',
+          width: '480px',
+          maxWidth: 'calc(100% - 60px)',
           border: '2px solid light-dark(#CCC, #222)',
           borderRadius: '4px',
           display: 'flex',
@@ -141,10 +138,10 @@ export default function TruncateDevPage() {
         </Example>
         <Example description="variant='fade'">
           <Truncate variant="fade">{defaultMessage}</Truncate>
-        </Example>{' '}
+        </Example>
         <Example description="marker={() => <EllipsisIcon />}">
           <Truncate marker={() => <EllipsisIcon />}>{defaultMessage}</Truncate>
-        </Example>{' '}
+        </Example>
         <Example description="style={{ backgroundColor: 'var(--app-custom-background-color)', '--truncate-marker-background-color': 'var(--app-custom-background-color)', '--truncate-marker-fade-in-duration': '500ms' }}">
           <Truncate
             style={{

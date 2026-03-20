@@ -10,16 +10,18 @@ import {
 
 type ResizableRightBorderProps = PropsWithChildren<{
   style?: CSSProperties;
+  startWidth?: number;
   minWidth?: number;
 }>;
 
 export function ResizableRightBorder({
   children,
   style,
+  startWidth = 480,
   minWidth = 80,
 }: ResizableRightBorderProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState<number | null>(null);
+  const [width, setWidth] = useState<number | null>(startWidth ?? null);
   const dragStateRef = useRef<{
     pointerId: number;
     startX: number;
