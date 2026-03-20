@@ -82,6 +82,7 @@ function OverflowMarker({
   variant = 'default',
 }: OverflowTextProps) {
   const fadeDir = mode === 'truncate' ? 'to right' : 'to left';
+  const isFadeVariant = variant === 'fade';
   return (
     <div
       data-truncate-overflow-marker
@@ -97,23 +98,23 @@ function OverflowMarker({
         style={
           {
             ...CONTENTS_STYLE[mode!].marker,
-            display: 'inline-flex',
+            display: 'flex',
             position: 'absolute',
+            height: '1lh',
             zIndex: 2,
             color:
               'color-mix(in srgb, currentColor var(--truncate-marker-opacity, 50%), transparent)',
-            '--truncate-marker-prefade-width': '2px',
-            '--truncate-marker-gap': '2px',
-            background:
-              variant === 'fade'
-                ? 'transparent'
-                : `linear-gradient(${fadeDir}, transparent, var(--truncate-marker-prefade-width), var(--truncate-internal-marker-background-color), calc(2.5 * var(--truncate-marker-prefade-width)), var(--truncate-internal-marker-background-color))`,
+            '--truncate-marker-prefade-width': '3px',
+            '--truncate-marker-gap': '1px',
+            background: isFadeVariant
+              ? 'transparent'
+              : `linear-gradient(${fadeDir}, transparent, var(--truncate-marker-prefade-width), var(--truncate-internal-marker-background-color), calc(2.5 * var(--truncate-marker-prefade-width)), var(--truncate-internal-marker-background-color))`,
           } as CSSPropertiesWithVars
         }
       >
         {typeof marker === 'function'
           ? marker({ children })
-          : variant === 'fade'
+          : isFadeVariant
             ? FadeMarker(mode!)
             : marker}
       </div>
