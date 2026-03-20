@@ -160,27 +160,6 @@ export function parseMergeConflictDiffFromFile(
     action.incomingContentIndex = contentIndex;
   };
 
-  // Append a context line, coalescing with the previous group if also context.
-  const appendContextLine = (
-    hunk: HunkBuilder,
-    additionLineIndex: number,
-    deletionLineIndex: number
-  ): number => {
-    const hunkContent = hunk.hunkContent;
-    const lastContent = hunkContent[hunkContent.length - 1];
-    if (lastContent?.type === 'context') {
-      lastContent.lines++;
-      return hunkContent.length - 1;
-    }
-    hunkContent.push({
-      type: 'context',
-      lines: 1,
-      additionLineIndex,
-      deletionLineIndex,
-    });
-    return hunkContent.length - 1;
-  };
-
   // Append a change line, coalescing with the previous group if also a change.
   const appendChangeLine = (
     hunk: HunkBuilder,
@@ -234,16 +213,34 @@ export function parseMergeConflictDiffFromFile(
       return;
     }
 
+    // Bulk-append context: coalesce with previous context entry or create new
+    // one. This avoids a per-line loop — significant when maxContextLines is
+    // large.
+    const hunkContent = hunk.hunkContent;
+    const lastContent = hunkContent[hunkContent.length - 1];
+    let contentIndex: number;
+    if (lastContent?.type === 'context') {
+      lastContent.lines += count;
+      contentIndex = hunkContent.length - 1;
+    } else {
+      hunkContent.push({
+        type: 'context',
+        lines: count,
+        additionLineIndex: addStart,
+        deletionLineIndex: delStart,
+      });
+      contentIndex = hunkContent.length - 1;
+    }
+    hunk.additionCount += count;
+    hunk.deletionCount += count;
+
+    // Assign base-section conflict anchors (rare — only when base lines exist)
     const baseConflicts = hunk.contextBufferBaseConflicts;
-    const bufferStartOffset = addStart - hunk.contextBufferAdditionStart;
-    for (let i = 0; i < count; i++) {
-      const contentIndex = appendContextLine(hunk, addStart + i, delStart + i);
-      hunk.additionCount++;
-      hunk.deletionCount++;
-      if (baseConflicts != null) {
-        const baseConflictIndex = baseConflicts.get(bufferStartOffset + i);
-        if (baseConflictIndex != null) {
-          assignConflictContent(baseConflictIndex, 'base', contentIndex);
+    if (baseConflicts != null) {
+      const bufferStartOffset = addStart - hunk.contextBufferAdditionStart;
+      for (const [offset, conflictIndex] of baseConflicts) {
+        if (offset >= bufferStartOffset && offset < bufferStartOffset + count) {
+          assignConflictContent(conflictIndex, 'base', contentIndex);
         }
       }
     }
@@ -371,18 +368,18 @@ export function parseMergeConflictDiffFromFile(
     conflictIndex: number,
     role: MergeConflictSide
   ) => {
-    const hunk = ensureActiveHunk();
+    let hunk = ensureActiveHunk();
     if (
       hunk.hunkContent.length > 0 &&
       hunk.contextBufferCount > maxContextLines2
     ) {
       splitHunkWithBufferedContext();
+      hunk = activeHunk!;
     }
 
-    const targetHunk = ensureActiveHunk();
     flushBufferedContext(
-      targetHunk,
-      targetHunk.hunkContent.length === 0 ? 'leading' : 'before-change'
+      hunk,
+      hunk.hunkContent.length === 0 ? 'leading' : 'before-change'
     );
 
     const additionLineIndex = additionLines.length;
@@ -394,18 +391,18 @@ export function parseMergeConflictDiffFromFile(
     }
 
     const contentIndex = appendChangeLine(
-      targetHunk,
+      hunk,
       lineType,
       additionLineIndex,
       deletionLineIndex
     );
 
     if (lineType === 'addition') {
-      targetHunk.additionCount++;
-      targetHunk.additionLines++;
+      hunk.additionCount++;
+      hunk.additionLines++;
     } else {
-      targetHunk.deletionCount++;
-      targetHunk.deletionLines++;
+      hunk.deletionCount++;
+      hunk.deletionLines++;
     }
     assignConflictContent(conflictIndex, role, contentIndex);
   };
@@ -482,87 +479,92 @@ export function parseMergeConflictDiffFromFile(
     builder.completed = true;
   };
 
-  forEachFileLine(file.contents, (line, index) => {
-    const markerType = getMergeConflictMarkerType(line);
-
-    if (markerType === 'start') {
-      const conflictIndex = nextConflictIndex;
-      nextConflictIndex++;
-      conflictStack.push({
-        conflictIndex,
-        stage: 'current',
-        startLineIndex: index,
-        markerLines: { start: line },
-      });
-      conflictBuilders[conflictIndex] = {
-        completed: false,
-        action: {
-          conflict: {
-            conflictIndex,
-            startLineIndex: index,
-            startLineNumber: index + 1,
-            separatorLineIndex: index,
-            separatorLineNumber: index + 1,
-            endLineIndex: index,
-            endLineNumber: index + 1,
-            baseMarkerLineIndex: undefined,
-            baseMarkerLineNumber: undefined,
-          },
+  // Push a new conflict frame + builder for a start marker line.
+  const handleStartMarker = (line: string, lineIndex: number) => {
+    const conflictIndex = nextConflictIndex;
+    nextConflictIndex++;
+    conflictStack.push({
+      conflictIndex,
+      stage: 'current',
+      startLineIndex: lineIndex,
+      markerLines: { start: line },
+    });
+    conflictBuilders[conflictIndex] = {
+      completed: false,
+      action: {
+        conflict: {
           conflictIndex,
-          hunkIndex: -1,
-          startContentIndex: -1,
-          endContentIndex: -1,
-          endMarkerContentIndex: -1,
-          markerLines: {
-            start: line,
-            separator: '',
-            end: '',
-          },
+          startLineIndex: lineIndex,
+          startLineNumber: lineIndex + 1,
+          separatorLineIndex: lineIndex,
+          separatorLineNumber: lineIndex + 1,
+          endLineIndex: lineIndex,
+          endLineNumber: lineIndex + 1,
+          baseMarkerLineIndex: undefined,
+          baseMarkerLineNumber: undefined,
         },
-      };
+        conflictIndex,
+        hunkIndex: -1,
+        startContentIndex: -1,
+        endContentIndex: -1,
+        endMarkerContentIndex: -1,
+        markerLines: {
+          start: line,
+          separator: '',
+          end: '',
+        },
+      },
+    };
+  };
+
+  forEachFileLine(file.contents, (line, index) => {
+    const frame = conflictStack[conflictStack.length - 1];
+
+    // Outside any conflict: only start markers (<<<<<<<) can transition state.
+    // Skip the full marker check for lines that can't be start markers.
+    if (frame == null) {
+      if (
+        line.length >= 7 &&
+        line.charCodeAt(0) === 60 &&
+        getMergeConflictMarkerType(line) === 'start'
+      ) {
+        handleStartMarker(line, index);
+        return;
+      }
+      emitContextLine(line);
       return;
     }
 
-    const frame = conflictStack[conflictStack.length - 1];
+    // Inside a conflict: all marker types must be checked.
+    const markerType = getMergeConflictMarkerType(line);
+
+    if (markerType === 'start') {
+      handleStartMarker(line, index);
+      return;
+    }
+
     if (markerType === 'base') {
-      if (frame == null) {
-        emitContextLine(line);
-      } else {
-        frame.stage = 'base';
-        frame.baseMarkerLineIndex = index;
-        frame.markerLines.base = line;
-      }
+      frame.stage = 'base';
+      frame.baseMarkerLineIndex = index;
+      frame.markerLines.base = line;
       return;
     }
 
     if (markerType === 'separator') {
-      if (frame == null) {
-        emitContextLine(line);
-      } else {
-        frame.stage = 'incoming';
-        frame.separatorLineIndex = index;
-        frame.markerLines.separator = line;
-      }
+      frame.stage = 'incoming';
+      frame.separatorLineIndex = index;
+      frame.markerLines.separator = line;
       return;
     }
 
     if (markerType === 'end') {
-      if (frame == null) {
-        emitContextLine(line);
-      } else {
-        const completedFrame = conflictStack.pop();
-        if (completedFrame == null) {
-          throw new Error(
-            'parseMergeConflictDiffFromFile: encountered end marker before start marker'
-          );
-        }
-        finalizeConflict(completedFrame, index, line);
+      const completedFrame = conflictStack.pop();
+      if (completedFrame == null) {
+        throw new Error(
+          'parseMergeConflictDiffFromFile: encountered end marker before start marker'
+        );
       }
-      return;
-    }
-
-    if (frame == null) {
-      emitContextLine(line);
+      finalizeConflict(completedFrame, index, line);
       return;
     }
 
@@ -693,14 +695,12 @@ function forEachFileLine(
 
   let lineStart = 0;
   let lineIndex = 0;
-  for (let index = 0; index < contentLength; index++) {
-    if (contents.charCodeAt(index) !== 10) {
-      continue;
-    }
-
-    callback(contents.slice(lineStart, index + 1), lineIndex);
-    lineStart = index + 1;
+  let newlinePos = contents.indexOf('\n', lineStart);
+  while (newlinePos !== -1) {
+    callback(contents.slice(lineStart, newlinePos + 1), lineIndex);
+    lineStart = newlinePos + 1;
     lineIndex++;
+    newlinePos = contents.indexOf('\n', lineStart);
   }
 
   if (lineStart < contentLength) {
