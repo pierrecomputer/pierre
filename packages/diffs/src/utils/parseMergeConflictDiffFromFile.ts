@@ -7,7 +7,6 @@ import type {
   MergeConflictRegion,
   ProcessFileConflictData,
 } from '../types';
-import { splitFileContents } from './splitFileContents';
 
 export interface ParseMergeConflictDiffFromFileResult {
   fileDiff: FileDiffMetadata;
@@ -50,14 +49,9 @@ interface HunkBuilder {
   additionLineIndex: number;
   deletionLineIndex: number;
   hunkContent: Hunk['hunkContent'];
-  contextBuffer: BufferedContextLine[];
-}
-
-interface BufferedContextLine {
-  additionLineIndex: number;
-  deletionLineIndex: number;
-  conflictIndex?: number;
-  role?: MergeConflictSide;
+  contextBufferAdditionLineIndices: number[];
+  contextBufferDeletionLineIndices: number[];
+  contextBufferBaseConflictIndices: number[];
 }
 
 interface ConflictFrame {
@@ -96,14 +90,13 @@ export function parseMergeConflictDiffFromFile(
   file: FileContents,
   maxContextLines: number = 10
 ): ParseMergeConflictDiffFromFileResult {
-  const lines = splitFileContents(file.contents);
   // Never allow maxContextLines to drop below 1 or else things break.
   maxContextLines = Math.max(maxContextLines, 1);
 
   const deletionLines: string[] = [];
   const additionLines: string[] = [];
   const conflictStack: ConflictFrame[] = [];
-  const conflictBuilders = new Map<number, ConflictActionBuilder>();
+  const conflictBuilders: ConflictActionBuilder[] = [];
   const actions: (MergeConflictDiffAction | undefined)[] = [];
   const hunks: Hunk[] = [];
 
@@ -128,7 +121,7 @@ export function parseMergeConflictDiffFromFile(
     role: MergeConflictSide,
     contentIndex: number
   ) => {
-    const builder = conflictBuilders.get(conflictIndex);
+    const builder = conflictBuilders[conflictIndex];
     if (builder == null) {
       throw new Error(
         `parseMergeConflictDiffFromFile: failed to locate conflict action ${conflictIndex}`
@@ -166,15 +159,19 @@ export function parseMergeConflictDiffFromFile(
     action.incomingContentIndex = contentIndex;
   };
 
-  const appendContextLine = (hunk: HunkBuilder, line: BufferedContextLine) => {
+  const appendContextLine = (
+    hunk: HunkBuilder,
+    additionLineIndex: number,
+    deletionLineIndex: number
+  ) => {
     const lastContent = hunk.hunkContent[hunk.hunkContent.length - 1];
     let contentIndex = hunk.hunkContent.length - 1;
     if (lastContent?.type !== 'context') {
       hunk.hunkContent.push({
         type: 'context',
         lines: 0,
-        additionLineIndex: line.additionLineIndex,
-        deletionLineIndex: line.deletionLineIndex,
+        additionLineIndex,
+        deletionLineIndex,
       });
       contentIndex = hunk.hunkContent.length - 1;
     }
@@ -223,32 +220,52 @@ export function parseMergeConflictDiffFromFile(
   };
 
   const flushBufferedContext = (hunk: HunkBuilder, mode: ContextFlushMode) => {
-    if (mode === 'leading' && hunk.contextBuffer.length > maxContextLines) {
-      const difference = hunk.contextBuffer.length - maxContextLines;
-      hunk.contextBuffer.splice(0, difference);
+    const contextBufferLength = hunk.contextBufferAdditionLineIndices.length;
+
+    if (mode === 'leading' && contextBufferLength > maxContextLines) {
+      const difference = contextBufferLength - maxContextLines;
+      hunk.contextBufferAdditionLineIndices.splice(0, difference);
+      hunk.contextBufferDeletionLineIndices.splice(0, difference);
+      hunk.contextBufferBaseConflictIndices.splice(0, difference);
       hunk.additionStart += difference;
       hunk.deletionStart += difference;
       hunk.additionLineIndex += difference;
       hunk.deletionLineIndex += difference;
     }
 
-    if (mode === 'trailing' && hunk.contextBuffer.length > maxContextLines) {
-      hunk.contextBuffer.length = maxContextLines;
+    if (
+      mode === 'trailing' &&
+      hunk.contextBufferAdditionLineIndices.length > maxContextLines
+    ) {
+      hunk.contextBufferAdditionLineIndices.length = maxContextLines;
+      hunk.contextBufferDeletionLineIndices.length = maxContextLines;
+      hunk.contextBufferBaseConflictIndices.length = maxContextLines;
     }
 
-    if (hunk.contextBuffer.length === 0) {
+    if (hunk.contextBufferAdditionLineIndices.length === 0) {
       return;
     }
 
-    for (const bufferedLine of hunk.contextBuffer) {
-      const contentIndex = appendContextLine(hunk, bufferedLine);
+    for (
+      let index = 0;
+      index < hunk.contextBufferAdditionLineIndices.length;
+      index++
+    ) {
+      const contentIndex = appendContextLine(
+        hunk,
+        hunk.contextBufferAdditionLineIndices[index],
+        hunk.contextBufferDeletionLineIndices[index]
+      );
       hunk.additionCount++;
       hunk.deletionCount++;
-      if (bufferedLine.conflictIndex != null && bufferedLine.role === 'base') {
-        assignConflictContent(bufferedLine.conflictIndex, 'base', contentIndex);
+      const baseConflictIndex = hunk.contextBufferBaseConflictIndices[index];
+      if (baseConflictIndex >= 0) {
+        assignConflictContent(baseConflictIndex, 'base', contentIndex);
       }
     }
-    hunk.contextBuffer.length = 0;
+    hunk.contextBufferAdditionLineIndices.length = 0;
+    hunk.contextBufferDeletionLineIndices.length = 0;
+    hunk.contextBufferBaseConflictIndices.length = 0;
   };
 
   const finalizeActiveHunk = () => {
@@ -308,9 +325,15 @@ export function parseMergeConflictDiffFromFile(
     }
 
     const hunk = activeHunk;
-    const omittedContextLineCount =
-      hunk.contextBuffer.length - maxContextLines * 2;
-    const nextContextLines = hunk.contextBuffer.slice(-maxContextLines);
+    const contextBufferLength = hunk.contextBufferAdditionLineIndices.length;
+    const omittedContextLineCount = contextBufferLength - maxContextLines * 2;
+    const nextContextAdditionLineIndices =
+      hunk.contextBufferAdditionLineIndices.slice(-maxContextLines);
+    const nextContextDeletionLineIndices =
+      hunk.contextBufferDeletionLineIndices.slice(-maxContextLines);
+    const nextContextBaseConflictIndices =
+      hunk.contextBufferBaseConflictIndices.slice(-maxContextLines);
+
     flushBufferedContext(hunk, 'trailing');
     const emittedAdditionCount = hunk.additionCount;
     const emittedDeletionCount = hunk.deletionCount;
@@ -320,7 +343,12 @@ export function parseMergeConflictDiffFromFile(
       hunk.additionStart + emittedAdditionCount + omittedContextLineCount,
       hunk.deletionStart + emittedDeletionCount + omittedContextLineCount
     );
-    activeHunk.contextBuffer = nextContextLines;
+    activeHunk.contextBufferAdditionLineIndices =
+      nextContextAdditionLineIndices;
+    activeHunk.contextBufferDeletionLineIndices =
+      nextContextDeletionLineIndices;
+    activeHunk.contextBufferBaseConflictIndices =
+      nextContextBaseConflictIndices;
   };
 
   const emitContextLine = (
@@ -333,12 +361,11 @@ export function parseMergeConflictDiffFromFile(
     const deletionLineIndex = deletionLines.length;
     additionLines.push(line);
     deletionLines.push(line);
-    hunk.contextBuffer.push({
-      additionLineIndex,
-      deletionLineIndex,
-      conflictIndex,
-      role,
-    });
+    hunk.contextBufferAdditionLineIndices.push(additionLineIndex);
+    hunk.contextBufferDeletionLineIndices.push(deletionLineIndex);
+    hunk.contextBufferBaseConflictIndices.push(
+      role === 'base' && conflictIndex != null ? conflictIndex : -1
+    );
   };
 
   const emitChangeLine = (
@@ -350,7 +377,7 @@ export function parseMergeConflictDiffFromFile(
     const hunk = ensureActiveHunk();
     if (
       hunk.hunkContent.length > 0 &&
-      hunk.contextBuffer.length > maxContextLines * 2
+      hunk.contextBufferAdditionLineIndices.length > maxContextLines * 2
     ) {
       splitHunkWithBufferedContext();
     }
@@ -400,7 +427,7 @@ export function parseMergeConflictDiffFromFile(
       );
     }
 
-    const builder = conflictBuilders.get(frame.conflictIndex);
+    const builder = conflictBuilders[frame.conflictIndex];
     if (builder == null) {
       throw new Error(
         `parseMergeConflictDiffFromFile: failed to finalize conflict ${frame.conflictIndex}`
@@ -462,8 +489,7 @@ export function parseMergeConflictDiffFromFile(
     builder.completed = true;
   };
 
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
+  forEachFileLine(file.contents, (line, index) => {
     const markerType = getMergeConflictMarkerType(line);
 
     if (markerType === 'start') {
@@ -475,7 +501,7 @@ export function parseMergeConflictDiffFromFile(
         startLineIndex: index,
         markerLines: { start: line },
       });
-      conflictBuilders.set(conflictIndex, {
+      conflictBuilders[conflictIndex] = {
         completed: false,
         action: {
           conflict: {
@@ -500,8 +526,8 @@ export function parseMergeConflictDiffFromFile(
             end: '',
           },
         },
-      });
-      continue;
+      };
+      return;
     }
 
     const frame = conflictStack[conflictStack.length - 1];
@@ -513,7 +539,7 @@ export function parseMergeConflictDiffFromFile(
         frame.baseMarkerLineIndex = index;
         frame.markerLines.base = line;
       }
-      continue;
+      return;
     }
 
     if (markerType === 'separator') {
@@ -524,7 +550,7 @@ export function parseMergeConflictDiffFromFile(
         frame.separatorLineIndex = index;
         frame.markerLines.separator = line;
       }
-      continue;
+      return;
     }
 
     if (markerType === 'end') {
@@ -539,12 +565,12 @@ export function parseMergeConflictDiffFromFile(
         }
         finalizeConflict(completedFrame, index, line);
       }
-      continue;
+      return;
     }
 
     if (frame == null) {
       emitContextLine(line);
-      continue;
+      return;
     }
 
     if (frame.stage === 'current') {
@@ -554,7 +580,7 @@ export function parseMergeConflictDiffFromFile(
     } else {
       emitChangeLine('addition', line, frame.conflictIndex, 'incoming');
     }
-  }
+  });
 
   if (conflictStack.length > 0) {
     throw new Error(
@@ -567,8 +593,13 @@ export function parseMergeConflictDiffFromFile(
     finalizeActiveHunk();
   }
 
-  for (const [conflictIndex, builder] of conflictBuilders) {
-    if (!builder.completed) {
+  for (
+    let conflictIndex = 0;
+    conflictIndex < conflictBuilders.length;
+    conflictIndex++
+  ) {
+    const builder = conflictBuilders[conflictIndex];
+    if (builder == null || !builder.completed) {
       throw new Error(
         `parseMergeConflictDiffFromFile: failed to build merge conflict action ${conflictIndex}`
       );
@@ -649,8 +680,38 @@ function createHunkBuilder(
     additionLineIndex: Math.max(additionStart - 1, 0),
     deletionLineIndex: Math.max(deletionStart - 1, 0),
     hunkContent: [],
-    contextBuffer: [],
+    contextBufferAdditionLineIndices: [],
+    contextBufferDeletionLineIndices: [],
+    contextBufferBaseConflictIndices: [],
   };
+}
+
+// Iterate file contents line-by-line while preserving trailing newlines.
+// This avoids allocating an intermediate `string[]` for large conflict files.
+function forEachFileLine(
+  contents: string,
+  callback: (line: string, index: number) => void
+) {
+  const contentLength = contents.length;
+  if (contentLength === 0) {
+    return;
+  }
+
+  let lineStart = 0;
+  let lineIndex = 0;
+  for (let index = 0; index < contentLength; index++) {
+    if (contents.charCodeAt(index) !== 10) {
+      continue;
+    }
+
+    callback(contents.slice(lineStart, index + 1), lineIndex);
+    lineStart = index + 1;
+    lineIndex++;
+  }
+
+  if (lineStart < contentLength) {
+    callback(contents.slice(lineStart), lineIndex);
+  }
 }
 
 function formatHunkRange(start: number, count: number): string {
@@ -749,14 +810,16 @@ export function buildMergeConflictMarkerRows(
   actions: (MergeConflictDiffAction | undefined)[]
 ): MergeConflictMarkerRow[] {
   const markerRows: MergeConflictMarkerRow[] = [];
-  const hunkLineStartCache = new Map<number, number[]>();
+  const hunkLineStartCache: (number[] | undefined)[] = new Array(
+    fileDiff.hunks.length
+  );
 
   const getLineStart = (hunkIndex: number, contentIndex: number): number => {
     const hunk = fileDiff.hunks[hunkIndex];
     if (hunk == null) {
       return 0;
     }
-    let starts = hunkLineStartCache.get(hunkIndex);
+    let starts = hunkLineStartCache[hunkIndex];
     if (starts == null) {
       starts = new Array<number>(hunk.hunkContent.length + 1);
       let lineIndex = hunk.unifiedLineStart;
@@ -769,14 +832,14 @@ export function buildMergeConflictMarkerRows(
             : content.deletions + content.additions;
         starts[index + 1] = lineIndex;
       }
-      hunkLineStartCache.set(hunkIndex, starts);
+      hunkLineStartCache[hunkIndex] = starts;
     }
     return starts[Math.max(contentIndex, 0)] ?? hunk.unifiedLineStart;
   };
 
   const getLineEnd = (hunkIndex: number, contentIndex: number): number => {
     const lineStart = getLineStart(hunkIndex, contentIndex);
-    const starts = hunkLineStartCache.get(hunkIndex);
+    const starts = hunkLineStartCache[hunkIndex];
     const lineEndExclusive =
       starts?.[Math.max(contentIndex + 1, 0)] ??
       getLineStart(hunkIndex, contentIndex + 1);
