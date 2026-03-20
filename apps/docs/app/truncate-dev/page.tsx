@@ -1,4 +1,4 @@
-import { Fruncate, Truncate } from '@pierre/truncate/react';
+import { Fruncate, MiddleTruncate, Truncate } from '@pierre/truncate/react';
 import '@pierre/truncate/style.css';
 import { notFound } from 'next/navigation';
 import type { CSSProperties } from 'react';
@@ -46,7 +46,7 @@ export default function TruncateDevPage() {
           backgroundColor:
             'light-dark(var(--color-background), var(--color-card))',
           fontFamily: 'var(--font-geist-sans)',
-          fontSize: '13px',
+          fontSize: '16px',
           margin: '30px 25%',
           maxWidth: '640px',
           padding: '4px 0',
@@ -76,6 +76,7 @@ export default function TruncateDevPage() {
         <div
           style={{
             width: '100%',
+            whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
           }}
@@ -127,28 +128,8 @@ export default function TruncateDevPage() {
       </ExampleGroup>
 
       <ExampleGroup title="Middle">
-        <div
-          style={
-            {
-              '--truncate-marker-opacity': '100%',
-              '--truncate-fade-background': 'none',
-              display: 'flex',
-              minWidth: 0,
-            } as CSSProperties
-          }
-        >
-          <div
-            style={{
-              minWidth: 0,
-              flex: '0 999999 max-content',
-            }}
-          >
-            <Truncate>{defaultMessage.slice(0, 26)}</Truncate>
-          </div>
-          <div style={{ minWidth: 0, flex: '0 1 max-content' }}>
-            <Fruncate>{defaultMessage.slice(26)}</Fruncate>
-          </div>
-        </div>
+        <MiddleTruncate>{defaultMessage}</MiddleTruncate>
+        <MiddleTruncate variant="fade">{defaultMessage}</MiddleTruncate>
       </ExampleGroup>
     </ResizableRightBorder>
   );

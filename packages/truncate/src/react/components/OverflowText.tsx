@@ -127,3 +127,35 @@ export function Fruncate({
     </OverflowText>
   );
 }
+
+export function MiddleTruncate({
+  children,
+  ...props
+}: Omit<OverflowTextProps, 'mode'>) {
+  return (
+    <div
+      style={
+        {
+          '--truncate-marker-opacity': '100%',
+          display: 'flex',
+          minWidth: 0,
+        } as CSSProperties
+      }
+    >
+      <div
+        style={
+          {
+            minWidth: 0,
+            flex: '0 999999 max-content',
+            '--truncate-marker-opacity': '100%',
+          } as CSSPropertiesWithVars
+        }
+      >
+        <Truncate {...props}>{(children as string).slice(0, 29)}</Truncate>
+      </div>
+      <div style={{ minWidth: 0, flex: '0 1 max-content' }}>
+        <Fruncate {...props}>{(children as string).slice(29)}</Fruncate>
+      </div>
+    </div>
+  );
+}
