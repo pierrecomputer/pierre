@@ -721,8 +721,7 @@ function formatHunkRange(start: number, count: number): string {
 function getMergeConflictMarkerType(
   line: string
 ): MergeConflictMarkerType | undefined {
-  const lineEnd = getLineContentEndIndex(line);
-  if (lineEnd < 7) {
+  if (line.length < 7) {
     return undefined;
   }
 
@@ -733,6 +732,11 @@ function getMergeConflictMarkerType(
     markerCode !== 61 &&
     markerCode !== 124
   ) {
+    return undefined;
+  }
+
+  const lineEnd = getLineContentEndIndex(line);
+  if (lineEnd < 7) {
     return undefined;
   }
 
