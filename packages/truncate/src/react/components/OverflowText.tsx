@@ -1,21 +1,18 @@
-import { type CSSProperties, type ReactNode } from 'react';
-import type { PropsWithChildren } from 'react';
+import type { ReactNode } from 'react';
 
-type CSSPropertiesWithVars = CSSProperties & {
-  [key: `--${string}`]: string | number | undefined;
-};
-
-export interface MarkerProps extends PropsWithChildren {}
-
-export type TruncateMode = 'truncate' | 'fruncate';
-
-export interface OverflowTextProps extends PropsWithChildren {
-  mode?: TruncateMode;
-  style?: Omit<CSSPropertiesWithVars, 'height' | 'overflow'>;
-  className?: string;
-  marker?: ReactNode | ((props: MarkerProps) => ReactNode);
-  variant?: 'default' | 'fade';
-}
+import {
+  splitByIndex,
+  splitCenter,
+  splitExtension,
+  splitFirst,
+  splitLast,
+  splitLeafPath,
+} from '../../lib/splits';
+import type {
+  CustomSplitFn,
+  MiddleTruncateProps,
+  OverflowTextProps,
+} from '../../lib/types';
 
 function OverflowMarker({
   children,
@@ -38,30 +35,18 @@ function OverflowMarker({
   );
 }
 
-function OverflowContent(
-  options: OverflowTextProps & { mode: 'truncate' | 'fruncate' }
-) {
+function OverflowContent(options: OverflowTextProps) {
   const { mode, children } = options;
 
+  // The inner span wrapper here is only needed to implement
+  // the right aligned internals for fruncate
   return (
     <div>
       <div data-truncate-content="visible">
-        {mode === 'fruncate' ? (
-          // The span wrapper here is only needed to implement the right aligned internals
-          // for fruncate
-          <span>{children}</span>
-        ) : (
-          children
-        )}
+        {mode === 'fruncate' ? <span>{children}</span> : children}
       </div>
       <div data-truncate-content="overflow">
-        {mode === 'fruncate' ? (
-          // The span wrapper here is only needed to implement the right aligned internals
-          // for fruncate
-          <span>{children}</span>
-        ) : (
-          children
-        )}
+        {mode === 'fruncate' ? <span>{children}</span> : children}
       </div>
     </div>
   );
@@ -125,48 +110,136 @@ export function Fruncate({
     </OverflowText>
   );
 }
-export interface MiddleTruncateProps extends Omit<OverflowTextProps, 'mode'> {
-  priority?: 'start' | 'end' | 'equal';
-  splitIndex?: number;
-}
 
 export function MiddleTruncate({
   children,
+  contents,
   priority = 'end',
-  splitIndex = 29,
+  split = 'center',
+  minimumLength = 12,
+  className,
+  style,
   ...props
 }: MiddleTruncateProps) {
-  const firstHalfMessage = (children as string).slice(0, splitIndex);
-  const secondHalfMessage = (children as string).slice(splitIndex);
-  const firstIsLarger = firstHalfMessage.length >= secondHalfMessage.length;
-  const secondIsLarger = !firstIsLarger;
+  let firstSegment: ReactNode | null = null;
+  let secondSegment: ReactNode | null = null;
+  if (Array.isArray(contents)) {
+    if (contents.length !== 2) {
+      console.error('MiddleTruncate: contents must be an array of two strings');
+      return null;
+    }
+    firstSegment = (
+      <Truncate {...props} className={className} style={style}>
+        {contents[0]}
+      </Truncate>
+    );
+    secondSegment = (
+      <Fruncate {...props} className={className} style={style}>
+        {contents[1]}
+      </Fruncate>
+    );
+  } else {
+    // TODO: figure out how to support ReactNode children in the future
+    if (typeof children !== 'string') {
+      console.error('MiddleTruncate: children must be a string');
+      return null;
+    }
 
-  const firstCanBeSimple = priority === 'equal' && secondIsLarger;
-  const secondCanBeSimple = priority === 'equal' && firstIsLarger;
+    // In case styling relies on the presence of the component, we will return a div
+    if (children.length === 0) {
+      return <div className={className} style={style}></div>;
+    }
 
-  const firstPropOverrides: Partial<OverflowTextProps> = {};
-  const secondPropOverrides: Partial<OverflowTextProps> = {};
+    // If the minimumLength is not met, we will still truncate the text,
+    // but we will not split it into two segments.
+    if (children.length < minimumLength) {
+      if (priority === 'start') {
+        return (
+          <Truncate {...props} className={className} style={style}>
+            {children}
+          </Truncate>
+        );
+      } else if (priority === 'end') {
+        return (
+          <Fruncate {...props} className={className} style={style}>
+            {children}
+          </Fruncate>
+        );
+      }
+    }
 
-  if (firstCanBeSimple) {
-    firstPropOverrides.marker = '';
+    let splitFn: CustomSplitFn | null = null;
+    let splitIndex: number | null = null;
+    let splitOffset: number | null = null;
+
+    // A little ugly, but want to make it fast?
+    if (typeof split === 'string') {
+      if (split === 'center') {
+        splitFn = splitCenter;
+      } else if (split === 'extension') {
+        splitFn = splitExtension;
+      } else if (split === 'leaf-path') {
+        splitFn = splitLeafPath;
+      }
+    } else if (typeof split === 'number') {
+      splitFn = splitByIndex;
+      splitIndex = split;
+    } else if (Array.isArray(split)) {
+      const [offsetType, offsetValue] = split;
+      splitOffset = offsetValue;
+      if (offsetType === 'last') {
+        splitFn = splitLast;
+      } else if (offsetType === 'first') {
+        splitFn = splitFirst;
+      }
+    } else if (typeof split === 'function') {
+      splitFn = split;
+    }
+
+    // If we can't determine the split function, use the center split
+    splitFn ??= splitCenter;
+
+    const [firstHalfMessage, secondHalfMessage] = splitFn(children, {
+      priority,
+      variant: props.variant,
+      splitIndex: typeof splitIndex === 'number' ? splitIndex : undefined,
+      splitOffset: typeof splitOffset === 'number' ? splitOffset : undefined,
+    });
+
+    const firstIsLarger = firstHalfMessage.length >= secondHalfMessage.length;
+    const secondIsLarger = !firstIsLarger;
+
+    const firstCanBeSimple = priority === 'equal' && secondIsLarger;
+    const secondCanBeSimple = priority === 'equal' && firstIsLarger;
+
+    const firstPropOverrides: Partial<OverflowTextProps> = {};
+    const secondPropOverrides: Partial<OverflowTextProps> = {};
+
+    if (firstCanBeSimple) {
+      firstPropOverrides.marker = '';
+    }
+    if (secondCanBeSimple) {
+      secondPropOverrides.marker = '';
+    }
+
+    firstSegment = (
+      <Truncate {...props} {...firstPropOverrides}>
+        {firstHalfMessage}
+      </Truncate>
+    );
+    secondSegment = (
+      <Fruncate {...props} {...secondPropOverrides}>
+        {secondHalfMessage}
+      </Fruncate>
+    );
   }
-  if (secondCanBeSimple) {
-    secondPropOverrides.marker = '';
-  }
-
-  const firstSegment = (
-    <Truncate {...props} {...firstPropOverrides}>
-      {firstHalfMessage}
-    </Truncate>
-  );
-  const secondSegment = (
-    <Fruncate {...props} {...secondPropOverrides}>
-      {secondHalfMessage}
-    </Fruncate>
-  );
 
   return (
-    <div data-truncate-group-container="middle">
+    <div
+      data-truncate-group-container="middle"
+      className={className}
+      style={style}
+    >
       <div
         data-truncate-segment-priority={
           priority === 'start' || priority === 'equal' ? '1' : '2'
