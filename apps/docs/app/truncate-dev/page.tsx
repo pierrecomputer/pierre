@@ -13,13 +13,14 @@ export default function TruncateDevPage() {
     <div
       style={
         {
+          fontFamily: 'var(--font-geist-sans)',
           margin: '30px 20%',
-          borderLeft: '8px solid #999',
-          borderRight: '8px solid #999',
+          borderLeft: '8px solid light-dark(#999, #222)',
+          borderRight: '8px solid light-dark(#999, #222)',
           display: 'flex',
           flexDirection: 'column',
           gap: '10px',
-          backgroundColor: 'white',
+          '--truncate-marker-background-color': 'var(--color-background)',
         } as CSSProperties
       }
     >
@@ -34,19 +35,20 @@ export default function TruncateDevPage() {
 
       <Truncate>{defaultMessage}</Truncate>
 
-      <Truncate marker="………">{defaultMessage}</Truncate>
+      <Truncate marker="▸">{defaultMessage}</Truncate>
 
-      <Truncate marker={() => <span style={{ color: 'red' }}>…</span>}>
+      <Truncate variant="fade">{defaultMessage}</Truncate>
+
+      <Truncate marker={() => <span style={{ color: 'aliceblue' }}>…</span>}>
         {defaultMessage}
       </Truncate>
 
       <Truncate
-        style={
-          {
-            backgroundColor: '#E5E5E5',
-            '--truncate-marker-background-color': '#E5E5E5',
-          } as CSSProperties
-        }
+        style={{
+          backgroundColor: 'light-dark(#E5E5E5, #111)',
+          '--truncate-marker-background-color': 'light-dark(#E5E5E5, #111)',
+          '--truncate-marker-fade-in-duration': '500ms',
+        }}
       >
         {defaultMessage}
       </Truncate>
@@ -55,19 +57,20 @@ export default function TruncateDevPage() {
 
       <Fruncate>{defaultMessage}</Fruncate>
 
-      <Fruncate marker="………">{defaultMessage}</Fruncate>
+      <Fruncate marker="◂">{defaultMessage}</Fruncate>
 
-      <Fruncate marker={() => <span style={{ color: 'red' }}>…</span>}>
+      <Fruncate variant="fade">{defaultMessage}</Fruncate>
+
+      <Fruncate marker={() => <span style={{ color: 'lightgray' }}>…</span>}>
         {defaultMessage}
       </Fruncate>
 
       <Fruncate
-        style={
-          {
-            backgroundColor: '#E5E5E5',
-            '--truncate-marker-background-color': '#E5E5E5',
-          } as CSSProperties
-        }
+        style={{
+          backgroundColor: 'light-dark(#E5E5E5, #111)',
+          '--truncate-marker-background-color': 'light-dark(#E5E5E5, #111)',
+          '--truncate-marker-fade-in-duration': '500ms',
+        }}
       >
         {defaultMessage}
       </Fruncate>

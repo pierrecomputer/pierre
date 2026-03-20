@@ -1,36 +1,87 @@
-import { type CSSProperties, type ReactNode, useId, useMemo } from 'react';
+import { type CSSProperties, type ReactNode, useId } from 'react';
 import type { PropsWithChildren } from 'react';
+
+type CSSPropertiesWithVars = CSSProperties & {
+  [key: `--${string}`]: string | number | undefined;
+};
 
 export interface MarkerProps extends PropsWithChildren {}
 
+export type TruncateMode = 'truncate' | 'fruncate';
+
 export interface OverflowTextProps extends PropsWithChildren {
-  mode?: 'truncate' | 'fruncate';
-  style?: Omit<CSSProperties, 'height' | 'overflow'>;
+  mode?: TruncateMode;
+  style?: Omit<CSSPropertiesWithVars, 'height' | 'overflow'>;
   marker?: ReactNode | ((props: MarkerProps) => ReactNode);
+  variant?: 'default' | 'fade';
 }
 
+// TODO: I think this only needs to be injected once per document
+// maybe we can figure out a way to make sure multiple instance dont result in
+// multiple style blocks, without needing to query the dom
+// Or we have the users add this to their stylesheet themselves
+const styleBlock = `
+[data-truncate-overflow-marker-inner] {
+  opacity: 0;
+  transition: opacity var(--truncate-marker-fade-out-duration, 100ms) ease-in-out;
+}
+@container measure (height > 1lh) {
+ [data-truncate-overflow-marker-inner] {
+   opacity: 1;
+   transition: opacity var(--truncate-marker-fade-in-duration, 0ms) ease-in-out;
+  }
+}`.trim();
+
+const FADE = 'light-dark(#0007, #000F), 35%, transparent 65%, transparent';
 const CONTENTS_STYLE = {
   truncate: {
     columns: 'minmax(0, max-content) 0',
     marker: {
       right: 0,
+      paddingLeft:
+        'calc(var(--truncate-marker-prefade-width) + var(--truncate-marker-gap))',
     },
     outer: {},
     inner: {},
+    fadeBg: `radial-gradient(at right center, ${FADE});`,
   },
   fruncate: {
     columns: '0 minmax(0, max-content) auto',
-    marker: {},
+    marker: {
+      paddingRight:
+        'calc(var(--truncate-marker-prefade-width) + var(--truncate-marker-gap))',
+    },
     outer: {
       direction: 'rtl',
     },
     inner: {
       unicodeBidi: 'plaintext',
     },
+    fadeBg: `radial-gradient(at left center, ${FADE});`,
   },
 } as const;
 
-function OverflowMarker({ children, mode, marker }: OverflowTextProps) {
+function FadeMarker(mode: TruncateMode) {
+  return (
+    <span
+      style={{
+        width: '4px',
+        height: '0.9lh',
+        marginTop: '0.05lh',
+        marginBottom: '0.05lh',
+        background: CONTENTS_STYLE[mode].fadeBg,
+      }}
+    />
+  );
+}
+
+function OverflowMarker({
+  children,
+  mode,
+  marker,
+  variant = 'default',
+}: OverflowTextProps) {
+  const fadeDir = mode === 'truncate' ? 'to right' : 'to left';
   return (
     <div
       data-truncate-overflow-marker
@@ -43,17 +94,28 @@ function OverflowMarker({ children, mode, marker }: OverflowTextProps) {
     >
       <div
         data-truncate-overflow-marker-inner
-        style={{
-          display: 'inline-flex',
-          position: 'absolute',
-          ...CONTENTS_STYLE[mode!].marker,
-          // css mask to hide the text underneath
-          // mask: 'linear-gradient(to right, transparent, black 100%)',
-          zIndex: 2,
-          backgroundColor: 'var(--truncate-internal-marker-background-color)',
-        }}
+        style={
+          {
+            ...CONTENTS_STYLE[mode!].marker,
+            display: 'inline-flex',
+            position: 'absolute',
+            zIndex: 2,
+            color:
+              'color-mix(in srgb, currentColor var(--truncate-marker-opacity, 50%), transparent)',
+            '--truncate-marker-prefade-width': '2px',
+            '--truncate-marker-gap': '2px',
+            background:
+              variant === 'fade'
+                ? 'transparent'
+                : `linear-gradient(${fadeDir}, transparent, var(--truncate-marker-prefade-width), var(--truncate-internal-marker-background-color), calc(2.5 * var(--truncate-marker-prefade-width)), var(--truncate-internal-marker-background-color))`,
+          } as CSSPropertiesWithVars
+        }
       >
-        {typeof marker === 'function' ? marker({ children }) : marker}
+        {typeof marker === 'function'
+          ? marker({ children })
+          : variant === 'fade'
+            ? FadeMarker(mode!)
+            : marker}
       </div>
     </div>
   );
@@ -107,18 +169,10 @@ export function OverflowText({
   mode = 'truncate',
   style,
   marker = '…',
+  variant = 'default',
   ...props
 }: OverflowTextProps) {
   const id = useId();
-
-  // TODO: I think this only needs to be injected once per document
-  // maybe we can figure out a way to make sure multiple instance dont result in
-  // multiple style blocks, without needing to query the dom
-  // Or we have the users add this to their stylesheet themselves
-  const styleBlock = useMemo(() => {
-    return `[data-truncate-overflow-marker-inner] { opacity: 0; }
-@container measure (height > 1lh) { [data-truncate-overflow-marker-inner] { opacity: 1; } }`;
-  }, []);
 
   const contentNode = (
     <OverflowContent key="content" mode={mode}>
@@ -126,7 +180,12 @@ export function OverflowText({
     </OverflowContent>
   );
   const markerNode = (
-    <OverflowMarker key="marker" marker={marker} mode={mode} />
+    <OverflowMarker
+      key="marker"
+      marker={marker}
+      mode={mode}
+      variant={variant}
+    />
   );
   const fillNode = <div key="fill" data-truncate-fill></div>;
 
@@ -142,13 +201,13 @@ export function OverflowText({
           overflow: 'hidden',
           '--truncate-internal-marker-background-color':
             'var(--truncate-marker-background-color, light-dark(white, black))',
-        } as CSSProperties
+        } as CSSPropertiesWithVars
       }
     >
       <style>{styleBlock}</style>
 
       <div
-        data-truncate-grid-container
+        data-truncate-grid-container={mode}
         style={{
           display: 'grid',
           gridTemplateColumns: CONTENTS_STYLE[mode].columns,
