@@ -47,6 +47,7 @@
     "test:e2e:installbinary": "bunx playwright@1.51.1 install chromium",
     "test:e2e:server": "vite --config test/e2e/vite.config.ts",
     "tsc": "tsgo --noEmit --pretty",
+    "generate-icons": "bun scripts/generate-built-in-icons.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
@@ -56,6 +57,7 @@
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
     "@pierre/tree-test-data": "workspace:*",
+    "@pierre/vscode-icons": "catalog:",
     "@playwright/test": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

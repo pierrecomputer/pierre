@@ -204,49 +204,60 @@
       var(--trees-status-deleted)
     );
 
+    --trees-icon-gray: light-dark(#84848a, #adadb1);
+    --trees-icon-red: light-dark(#d52c36, #ff6762);
+    --trees-icon-orange: light-dark(#d47628, #ffa359);
+    --trees-icon-yellow: light-dark(#d5a910, #ffd452);
+    --trees-icon-green: light-dark(#199f43, #5ecc71);
+    --trees-icon-teal: light-dark(#17a5af, #64d1db);
+    --trees-icon-cyan: light-dark(#1ca1c7, #68cdf2);
+    --trees-icon-blue: light-dark(#1a85d4, #69b1ff);
+    --trees-icon-indigo: light-dark(#693acf, #9d6afb);
+    --trees-icon-pink: light-dark(#d32a61, #ff678d);
+
     --trees-file-icon-color-default: var(
       --trees-file-icon-color,
-      light-dark(oklch(58% 0.02 255), oklch(72% 0.01 255))
+      var(--trees-icon-gray)
     );
     --trees-file-icon-color-css: var(
       --trees-file-icon-color,
-      light-dark(oklch(68% 0.12 240), oklch(76% 0.1 240))
+      var(--trees-icon-indigo)
     );
     --trees-file-icon-color-git: var(
       --trees-file-icon-color,
-      light-dark(oklch(70% 0.16 45), oklch(78% 0.14 45))
+      var(--trees-icon-orange)
     );
     --trees-file-icon-color-image: var(
       --trees-file-icon-color,
-      light-dark(oklch(71% 0.18 350), oklch(79% 0.16 350))
+      var(--trees-icon-pink)
     );
     --trees-file-icon-color-javascript: var(
       --trees-file-icon-color,
-      light-dark(oklch(86% 0.18 103), oklch(90% 0.16 103))
+      var(--trees-icon-yellow)
     );
     --trees-file-icon-color-json: var(
       --trees-file-icon-color,
-      light-dark(oklch(76% 0.16 55), oklch(82% 0.14 55))
+      var(--trees-icon-orange)
     );
     --trees-file-icon-color-markdown: var(
       --trees-file-icon-color,
-      light-dark(oklch(73% 0.16 155), oklch(80% 0.14 155))
+      var(--trees-icon-green)
     );
     --trees-file-icon-color-mcp: var(
       --trees-file-icon-color,
-      light-dark(oklch(73% 0.12 195), oklch(81% 0.1 195))
+      var(--trees-icon-teal)
     );
     --trees-file-icon-color-npm: var(
       --trees-file-icon-color,
-      light-dark(oklch(70% 0.18 25), oklch(77% 0.16 25))
+      var(--trees-icon-red)
     );
     --trees-file-icon-color-react: var(
       --trees-file-icon-color,
-      light-dark(oklch(78% 0.1 215), oklch(84% 0.09 215))
+      var(--trees-icon-cyan)
     );
     --trees-file-icon-color-typescript: var(
       --trees-file-icon-color,
-      light-dark(oklch(70% 0.12 250), oklch(78% 0.1 250))
+      var(--trees-icon-blue)
     );
 
     --trees-level-gap: var(--trees-level-gap-override, 8px);
@@ -438,74 +449,44 @@
     width: var(--trees-icon-width);
   }
 
-  [data-item-section='icon'] > [data-icon-token] {
+  :where([data-item-section='icon'] > [data-icon-token]) {
     color: var(--trees-fg-muted);
   }
 
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='css'] {
-    color: var(--trees-file-icon-color-css);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='default'] {
-    color: var(--trees-file-icon-color-default);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='git'] {
-    color: var(--trees-file-icon-color-git);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='image'] {
-    color: var(--trees-file-icon-color-image);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='javascript'] {
-    color: var(--trees-file-icon-color-javascript);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='json'] {
-    color: var(--trees-file-icon-color-json);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='markdown'] {
-    color: var(--trees-file-icon-color-markdown);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='mcp'] {
-    color: var(--trees-file-icon-color-mcp);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='npm'] {
-    color: var(--trees-file-icon-color-npm);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='react'] {
-    color: var(--trees-file-icon-color-react);
-  }
-
-  [data-file-tree-colored-icons='true']
-    [data-item-section='icon']
-    > [data-icon-token='typescript'] {
-    color: var(--trees-file-icon-color-typescript);
+  [data-file-tree-colored-icons='true'] {
+    [data-icon-token='css'] {
+      color: var(--trees-file-icon-color-css);
+    }
+    [data-icon-token='default'] {
+      color: var(--trees-file-icon-color-default);
+    }
+    [data-icon-token='git'] {
+      color: var(--trees-file-icon-color-git);
+    }
+    [data-icon-token='image'] {
+      color: var(--trees-file-icon-color-image);
+    }
+    [data-icon-token='javascript'] {
+      color: var(--trees-file-icon-color-javascript);
+    }
+    [data-icon-token='json'] {
+      color: var(--trees-file-icon-color-json);
+    }
+    [data-icon-token='markdown'] {
+      color: var(--trees-file-icon-color-markdown);
+    }
+    [data-icon-token='mcp'] {
+      color: var(--trees-file-icon-color-mcp);
+    }
+    [data-icon-token='npm'] {
+      color: var(--trees-file-icon-color-npm);
+    }
+    [data-icon-token='react'] {
+      color: var(--trees-file-icon-color-react);
+    }
+    [data-icon-token='typescript'] {
+      color: var(--trees-file-icon-color-typescript);
+    }
   }
 
   /* Chevron rotation and visual alignment */

@@ -195,6 +195,7 @@
       "devDependencies": {
         "@arethetypeswrong/core": "catalog:",
         "@pierre/tree-test-data": "workspace:*",
+        "@pierre/vscode-icons": "catalog:",
         "@playwright/test": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
@@ -250,6 +251,7 @@
     "@pierre/icons": "0.1.0",
     "@pierre/storage": "0.0.10",
     "@pierre/theme": "0.0.28",
+    "@pierre/vscode-icons": "0.0.6",
     "@playwright/test": "1.51.1",
     "@radix-ui/react-avatar": "1.1.10",
     "@radix-ui/react-dialog": "1.1.15",
@@ -636,6 +638,8 @@
     "@pierre/trees": ["@pierre/trees@workspace:packages/trees"],
 
     "@pierre/truncate": ["@pierre/truncate@workspace:packages/truncate"],
+
+    "@pierre/vscode-icons": ["@pierre/vscode-icons@0.0.4", "", {}, "sha512-NYlJsmdI1aXOiKY+2SWeeBrza7y0xQMN01zLMRME4n5IXrct+XDetkamkcGAuANG0jqA6VUeD6VOOxFvF832jw=="],
 
     "@playwright/test": ["@playwright/test@1.51.1", "", { "dependencies": { "playwright": "1.51.1" }, "bin": { "playwright": "cli.js" } }, "sha512-nM+kEaTSAoVlXmMPH10017vn3FSiFqr/bh4fKg9vmAdMfd9SDqRZNvPSiAHADc/itWak+qPvMPZQOPwCBW7k7Q=="],
 
