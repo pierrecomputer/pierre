@@ -27,30 +27,13 @@
   );
 
   /* FADE Variant specifics */
-  --truncate-internal-fade-right-background: var(
-    --truncate-fade-right-background,
-    radial-gradient(
-      at right center,
-      light-dark(#0007, #000f),
-      35%,
-      transparent 65%,
-      transparent
-    )
+  --truncate-internal-fade-marker-color: var(
+    --truncate-fade-marker-color,
+    #000
   );
-  --truncate-internal-fade-left-background: var(
-    --truncate-fade-left-background,
-    radial-gradient(
-      at left center,
-      light-dark(#0007, #000f),
-      35%,
-      transparent 65%,
-      transparent
-    )
-  );
-  --truncate-internal-fade-marker-width: var(--truncate-fade-marker-width, 4px);
-  --truncate-internal-fade-marker-height: var(
-    --truncate-fade-marker-height,
-    0.9lh
+  --truncate-internal-fade-marker-width: var(
+    --truncate-fade-marker-width,
+    0.2lh
   );
 
   /*
@@ -123,7 +106,7 @@
     right: 0;
   }
   & [data-truncate-fade] {
-    background: var(--truncate-internal-fade-right-background);
+    margin-right: calc(-2 * var(--truncate-internal-fade-marker-width));
   }
 }
 
@@ -138,7 +121,7 @@
     unicode-bidi: plaintext;
   }
   & [data-truncate-fade] {
-    background: var(--truncate-internal-fade-left-background);
+    margin-left: calc(-2 * var(--truncate-internal-fade-marker-width));
   }
 }
 
@@ -192,16 +175,17 @@
 }
 
 [data-truncate-fade] {
-  --truncate-internal-half-difference-of-fade-height: calc(
-    calc(
-        var(--truncate-internal-single-line-height) -
-          var(--truncate-internal-fade-marker-height)
-      ) /
-      2
+  box-shadow:
+    0 0 calc(var(--truncate-internal-fade-marker-width) / 2)
+      var(--truncate-internal-fade-marker-color),
+    0 0 var(--truncate-internal-fade-marker-width)
+      var(--truncate-internal-fade-marker-color);
+  width: calc(var(--truncate-internal-fade-marker-width) * 2);
+  height: calc(
+    var(--truncate-internal-single-line-height) -
+      (var(--truncate-internal-fade-marker-width) * 2)
   );
-  width: var(--truncate-internal-fade-marker-width);
-  height: var(--truncate-internal-fade-marker-height);
-  margin: var(--truncate-internal-half-difference-of-fade-height) 0;
+  margin: var(--truncate-internal-fade-marker-width) 0;
 }
 
 [data-truncate-group-container='middle'] {
