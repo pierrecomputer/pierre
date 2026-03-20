@@ -1,17 +1,13 @@
 import type {
-  ChangeContent,
-  ContextContent,
   FileContents,
   FileDiffMetadata,
   Hunk,
   MergeConflictMarkerRow,
+  MergeConflictMarkerRowType,
   MergeConflictRegion,
   ProcessFileConflictData,
 } from '../types';
-import { getMergeConflictParseResult } from './getMergeConflictLineTypes';
-import { processFile } from './parsePatchFiles';
 import { splitFileContents } from './splitFileContents';
-import { trimPatchContext } from './trimPatchContext';
 
 export interface ParseMergeConflictDiffFromFileResult {
   fileDiff: FileDiffMetadata;
@@ -34,20 +30,52 @@ export interface MergeConflictDiffAction extends ProcessFileConflictData {
   };
 }
 
-interface ParsedMergeConflictSections {
-  region: MergeConflictRegion;
-  startMarkerLine: string;
-  currentLines: string[];
-  baseMarkerLine?: string;
-  baseLines: string[];
-  separatorMarkerLine: string;
-  incomingLines: string[];
-  endMarkerLine: string;
-}
-
 interface GetMergeConflictActionAnchorReturn {
   hunkIndex: number;
   lineIndex: number;
+}
+
+type MergeConflictStage = 'current' | 'base' | 'incoming';
+type MergeConflictSide = MergeConflictStage;
+type MergeConflictMarkerType = 'start' | 'base' | 'separator' | 'end';
+type ContextFlushMode = 'before-change' | 'leading' | 'trailing';
+
+interface HunkBuilder {
+  additionStart: number;
+  deletionStart: number;
+  additionCount: number;
+  deletionCount: number;
+  additionLines: number;
+  deletionLines: number;
+  additionLineIndex: number;
+  deletionLineIndex: number;
+  hunkContent: Hunk['hunkContent'];
+  contextBuffer: BufferedContextLine[];
+}
+
+interface BufferedContextLine {
+  additionLineIndex: number;
+  deletionLineIndex: number;
+  conflictIndex?: number;
+  role?: MergeConflictSide;
+}
+
+interface ConflictFrame {
+  conflictIndex: number;
+  stage: MergeConflictStage;
+  startLineIndex: number;
+  baseMarkerLineIndex?: number;
+  separatorLineIndex?: number;
+  markerLines: {
+    start: string;
+    base?: string;
+    separator?: string;
+  };
+}
+
+interface ConflictActionBuilder {
+  action: MergeConflictDiffAction;
+  completed: boolean;
 }
 
 export function getMergeConflictActionAnchor(
@@ -69,161 +97,635 @@ export function parseMergeConflictDiffFromFile(
   maxContextLines: number = 10
 ): ParseMergeConflictDiffFromFileResult {
   const lines = splitFileContents(file.contents);
-  // Never allow maxContextLines to drop below 1 or else things break...
+  // Never allow maxContextLines to drop below 1 or else things break.
   maxContextLines = Math.max(maxContextLines, 1);
-  const { lineTypes, regions } = getMergeConflictParseResult(lines);
-  let currentContentChunks: string = '';
-  let incomingContentChunks: string = '';
-  let patchContentChunks: string = '';
-  let currentLineNumber = 0;
-  let incomingLineNumber = 0;
-  const parsedConflicts: ParsedMergeConflictSections[] = [];
-  let activeConflict: ParsedMergeConflictSections | undefined;
-  let nextConflictRegionIndex = 0;
+
+  const deletionLines: string[] = [];
+  const additionLines: string[] = [];
+  const conflictStack: ConflictFrame[] = [];
+  const conflictBuilders = new Map<number, ConflictActionBuilder>();
+  const actions: (MergeConflictDiffAction | undefined)[] = [];
+  const hunks: Hunk[] = [];
+
+  let nextConflictIndex = 0;
+  let splitLineCount = 0;
+  let unifiedLineCount = 0;
+  let lastHunkEnd = 0;
+  let activeHunk: HunkBuilder | undefined;
+
+  const ensureActiveHunk = () => {
+    if (activeHunk == null) {
+      activeHunk = createHunkBuilder(
+        additionLines.length + 1,
+        deletionLines.length + 1
+      );
+    }
+    return activeHunk;
+  };
+
+  const assignConflictContent = (
+    conflictIndex: number,
+    role: MergeConflictSide,
+    contentIndex: number
+  ) => {
+    const builder = conflictBuilders.get(conflictIndex);
+    if (builder == null) {
+      throw new Error(
+        `parseMergeConflictDiffFromFile: failed to locate conflict action ${conflictIndex}`
+      );
+    }
+
+    const action = builder.action;
+    const hunkIndex = hunks.length;
+    if (action.hunkIndex < 0) {
+      action.hunkIndex = hunkIndex;
+    } else if (action.hunkIndex !== hunkIndex) {
+      throw new Error(
+        `parseMergeConflictDiffFromFile: conflict ${conflictIndex} spans multiple hunks and cannot be anchored`
+      );
+    }
+
+    if (action.startContentIndex < 0) {
+      action.startContentIndex = contentIndex;
+    }
+    action.endContentIndex = contentIndex;
+    action.endMarkerContentIndex = contentIndex;
+
+    if (role === 'current') {
+      if (action.currentContentIndex == null) {
+        action.currentContentIndex = contentIndex;
+      }
+      return;
+    }
+    if (role === 'base') {
+      if (action.baseContentIndex == null) {
+        action.baseContentIndex = contentIndex;
+      }
+      return;
+    }
+    action.incomingContentIndex = contentIndex;
+  };
+
+  const appendContextLine = (hunk: HunkBuilder, line: BufferedContextLine) => {
+    const lastContent = hunk.hunkContent[hunk.hunkContent.length - 1];
+    let contentIndex = hunk.hunkContent.length - 1;
+    if (lastContent?.type !== 'context') {
+      hunk.hunkContent.push({
+        type: 'context',
+        lines: 0,
+        additionLineIndex: line.additionLineIndex,
+        deletionLineIndex: line.deletionLineIndex,
+      });
+      contentIndex = hunk.hunkContent.length - 1;
+    }
+
+    const content = hunk.hunkContent[contentIndex];
+    if (content.type !== 'context') {
+      throw new Error(
+        'parseMergeConflictDiffFromFile: expected context content group'
+      );
+    }
+    content.lines++;
+    return contentIndex;
+  };
+
+  const appendChangeLine = (
+    hunk: HunkBuilder,
+    lineType: 'addition' | 'deletion',
+    additionLineIndex: number,
+    deletionLineIndex: number
+  ) => {
+    const lastContent = hunk.hunkContent[hunk.hunkContent.length - 1];
+    let contentIndex = hunk.hunkContent.length - 1;
+    if (lastContent?.type !== 'change') {
+      hunk.hunkContent.push({
+        type: 'change',
+        additions: 0,
+        deletions: 0,
+        additionLineIndex,
+        deletionLineIndex,
+      });
+      contentIndex = hunk.hunkContent.length - 1;
+    }
+
+    const content = hunk.hunkContent[contentIndex];
+    if (content.type !== 'change') {
+      throw new Error(
+        'parseMergeConflictDiffFromFile: expected change content group'
+      );
+    }
+    if (lineType === 'addition') {
+      content.additions++;
+    } else {
+      content.deletions++;
+    }
+    return contentIndex;
+  };
+
+  const flushBufferedContext = (hunk: HunkBuilder, mode: ContextFlushMode) => {
+    if (mode === 'leading' && hunk.contextBuffer.length > maxContextLines) {
+      const difference = hunk.contextBuffer.length - maxContextLines;
+      hunk.contextBuffer.splice(0, difference);
+      hunk.additionStart += difference;
+      hunk.deletionStart += difference;
+      hunk.additionLineIndex += difference;
+      hunk.deletionLineIndex += difference;
+    }
+
+    if (mode === 'trailing' && hunk.contextBuffer.length > maxContextLines) {
+      hunk.contextBuffer.length = maxContextLines;
+    }
+
+    if (hunk.contextBuffer.length === 0) {
+      return;
+    }
+
+    for (const bufferedLine of hunk.contextBuffer) {
+      const contentIndex = appendContextLine(hunk, bufferedLine);
+      hunk.additionCount++;
+      hunk.deletionCount++;
+      if (bufferedLine.conflictIndex != null && bufferedLine.role === 'base') {
+        assignConflictContent(bufferedLine.conflictIndex, 'base', contentIndex);
+      }
+    }
+    hunk.contextBuffer.length = 0;
+  };
+
+  const finalizeActiveHunk = () => {
+    if (activeHunk == null) {
+      return;
+    }
+
+    const hunk = activeHunk;
+    activeHunk = undefined;
+    if (hunk.hunkContent.length === 0) {
+      return;
+    }
+
+    let hunkSplitLineCount = 0;
+    let hunkUnifiedLineCount = 0;
+    for (const content of hunk.hunkContent) {
+      if (content.type === 'context') {
+        hunkSplitLineCount += content.lines;
+        hunkUnifiedLineCount += content.lines;
+      } else {
+        hunkSplitLineCount += Math.max(content.additions, content.deletions);
+        hunkUnifiedLineCount += content.additions + content.deletions;
+      }
+    }
+
+    const collapsedBefore = Math.max(hunk.additionStart - 1 - lastHunkEnd, 0);
+    const finalizedHunk: Hunk = {
+      collapsedBefore,
+      additionStart: hunk.additionStart,
+      additionCount: hunk.additionCount,
+      additionLines: hunk.additionLines,
+      additionLineIndex: hunk.additionLineIndex,
+      deletionStart: hunk.deletionStart,
+      deletionCount: hunk.deletionCount,
+      deletionLines: hunk.deletionLines,
+      deletionLineIndex: hunk.deletionLineIndex,
+      hunkContent: hunk.hunkContent,
+      hunkContext: undefined,
+      hunkSpecs: `@@ -${formatHunkRange(hunk.deletionStart, hunk.deletionCount)} +${formatHunkRange(hunk.additionStart, hunk.additionCount)} @@\n`,
+      splitLineStart: splitLineCount + collapsedBefore,
+      splitLineCount: hunkSplitLineCount,
+      unifiedLineStart: unifiedLineCount + collapsedBefore,
+      unifiedLineCount: hunkUnifiedLineCount,
+      noEOFCRAdditions: false,
+      noEOFCRDeletions: false,
+    };
+
+    hunks.push(finalizedHunk);
+    splitLineCount += collapsedBefore + hunkSplitLineCount;
+    unifiedLineCount += collapsedBefore + hunkUnifiedLineCount;
+    lastHunkEnd = hunk.additionStart + hunk.additionCount - 1;
+  };
+
+  const splitHunkWithBufferedContext = () => {
+    if (activeHunk == null) {
+      return;
+    }
+
+    const hunk = activeHunk;
+    const omittedContextLineCount =
+      hunk.contextBuffer.length - maxContextLines * 2;
+    const nextContextLines = hunk.contextBuffer.slice(-maxContextLines);
+    flushBufferedContext(hunk, 'trailing');
+    const emittedAdditionCount = hunk.additionCount;
+    const emittedDeletionCount = hunk.deletionCount;
+    finalizeActiveHunk();
+
+    activeHunk = createHunkBuilder(
+      hunk.additionStart + emittedAdditionCount + omittedContextLineCount,
+      hunk.deletionStart + emittedDeletionCount + omittedContextLineCount
+    );
+    activeHunk.contextBuffer = nextContextLines;
+  };
+
+  const emitContextLine = (
+    line: string,
+    conflictIndex?: number,
+    role?: MergeConflictSide
+  ) => {
+    const hunk = ensureActiveHunk();
+    const additionLineIndex = additionLines.length;
+    const deletionLineIndex = deletionLines.length;
+    additionLines.push(line);
+    deletionLines.push(line);
+    hunk.contextBuffer.push({
+      additionLineIndex,
+      deletionLineIndex,
+      conflictIndex,
+      role,
+    });
+  };
+
+  const emitChangeLine = (
+    lineType: 'addition' | 'deletion',
+    line: string,
+    conflictIndex: number,
+    role: MergeConflictSide
+  ) => {
+    const hunk = ensureActiveHunk();
+    if (
+      hunk.hunkContent.length > 0 &&
+      hunk.contextBuffer.length > maxContextLines * 2
+    ) {
+      splitHunkWithBufferedContext();
+    }
+
+    const targetHunk = ensureActiveHunk();
+    flushBufferedContext(
+      targetHunk,
+      targetHunk.hunkContent.length === 0 ? 'leading' : 'before-change'
+    );
+
+    const additionLineIndex = additionLines.length;
+    const deletionLineIndex = deletionLines.length;
+    if (lineType === 'addition') {
+      additionLines.push(line);
+    } else {
+      deletionLines.push(line);
+    }
+
+    const contentIndex = appendChangeLine(
+      targetHunk,
+      lineType,
+      additionLineIndex,
+      deletionLineIndex
+    );
+
+    if (lineType === 'addition') {
+      targetHunk.additionCount++;
+      targetHunk.additionLines++;
+    } else {
+      targetHunk.deletionCount++;
+      targetHunk.deletionLines++;
+    }
+    assignConflictContent(conflictIndex, role, contentIndex);
+  };
+
+  const finalizeConflict = (
+    frame: ConflictFrame,
+    endLineIndex: number,
+    endMarkerLine: string
+  ) => {
+    if (
+      frame.separatorLineIndex == null ||
+      frame.markerLines.separator == null
+    ) {
+      throw new Error(
+        `parseMergeConflictDiffFromFile: conflict ${frame.conflictIndex} is missing a separator marker`
+      );
+    }
+
+    const builder = conflictBuilders.get(frame.conflictIndex);
+    if (builder == null) {
+      throw new Error(
+        `parseMergeConflictDiffFromFile: failed to finalize conflict ${frame.conflictIndex}`
+      );
+    }
+
+    const action = builder.action;
+    action.markerLines.separator = frame.markerLines.separator;
+    action.markerLines.end = endMarkerLine;
+    if (frame.markerLines.base != null) {
+      action.markerLines.base = frame.markerLines.base;
+    }
+
+    action.conflict = {
+      conflictIndex: frame.conflictIndex,
+      startLineIndex: frame.startLineIndex,
+      startLineNumber: frame.startLineIndex + 1,
+      separatorLineIndex: frame.separatorLineIndex,
+      separatorLineNumber: frame.separatorLineIndex + 1,
+      endLineIndex,
+      endLineNumber: endLineIndex + 1,
+      baseMarkerLineIndex: frame.baseMarkerLineIndex,
+      baseMarkerLineNumber:
+        frame.baseMarkerLineIndex != null
+          ? frame.baseMarkerLineIndex + 1
+          : undefined,
+    };
+
+    const fallbackContentIndex =
+      action.currentContentIndex ?? action.incomingContentIndex;
+    if (action.currentContentIndex == null) {
+      action.currentContentIndex = fallbackContentIndex;
+    }
+    if (action.incomingContentIndex == null) {
+      action.incomingContentIndex = fallbackContentIndex;
+    }
+    if (action.startContentIndex < 0 && fallbackContentIndex != null) {
+      action.startContentIndex = fallbackContentIndex;
+    }
+    if (action.endContentIndex < 0 && fallbackContentIndex != null) {
+      action.endContentIndex = fallbackContentIndex;
+    }
+    if (action.endMarkerContentIndex < 0 && fallbackContentIndex != null) {
+      action.endMarkerContentIndex = fallbackContentIndex;
+    }
+
+    if (
+      action.hunkIndex < 0 ||
+      action.startContentIndex < 0 ||
+      action.endContentIndex < 0 ||
+      action.endMarkerContentIndex < 0
+    ) {
+      throw new Error(
+        `parseMergeConflictDiffFromFile: failed to anchor merge conflict ${frame.conflictIndex}`
+      );
+    }
+
+    actions[action.conflictIndex] = action;
+    builder.completed = true;
+  };
+
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    const lineType = lineTypes[index];
-    switch (lineType) {
-      case 'none': {
-        currentContentChunks += line;
-        incomingContentChunks += line;
-        patchContentChunks += ` ${line}`;
-        currentLineNumber++;
-        incomingLineNumber++;
-        break;
+    const markerType = getMergeConflictMarkerType(line);
+
+    if (markerType === 'start') {
+      const conflictIndex = nextConflictIndex;
+      nextConflictIndex++;
+      conflictStack.push({
+        conflictIndex,
+        stage: 'current',
+        startLineIndex: index,
+        markerLines: { start: line },
+      });
+      conflictBuilders.set(conflictIndex, {
+        completed: false,
+        action: {
+          conflict: {
+            conflictIndex,
+            startLineIndex: index,
+            startLineNumber: index + 1,
+            separatorLineIndex: index,
+            separatorLineNumber: index + 1,
+            endLineIndex: index,
+            endLineNumber: index + 1,
+            baseMarkerLineIndex: undefined,
+            baseMarkerLineNumber: undefined,
+          },
+          conflictIndex,
+          hunkIndex: -1,
+          startContentIndex: -1,
+          endContentIndex: -1,
+          endMarkerContentIndex: -1,
+          markerLines: {
+            start: line,
+            separator: '',
+            end: '',
+          },
+        },
+      });
+      continue;
+    }
+
+    const frame = conflictStack[conflictStack.length - 1];
+    if (markerType === 'base') {
+      if (frame == null) {
+        emitContextLine(line);
+      } else {
+        frame.stage = 'base';
+        frame.baseMarkerLineIndex = index;
+        frame.markerLines.base = line;
       }
-      case 'current': {
-        activeConflict?.currentLines.push(line);
-        currentContentChunks += line;
-        patchContentChunks += `-${line}`;
-        currentLineNumber++;
-        break;
+      continue;
+    }
+
+    if (markerType === 'separator') {
+      if (frame == null) {
+        emitContextLine(line);
+      } else {
+        frame.stage = 'incoming';
+        frame.separatorLineIndex = index;
+        frame.markerLines.separator = line;
       }
-      case 'incoming': {
-        activeConflict?.incomingLines.push(line);
-        incomingContentChunks += line;
-        patchContentChunks += `+${line}`;
-        incomingLineNumber++;
-        break;
-      }
-      case 'marker-start': {
-        activeConflict = createParsedMergeConflictSections(
-          regions[nextConflictRegionIndex],
-          line
-        );
-        if (activeConflict == null) {
-          throw new Error(
-            'parseMergeConflictDiffFromFile: missing merge conflict region for start marker'
-          );
-        }
-        nextConflictRegionIndex++;
-        break;
-      }
-      case 'base': {
-        activeConflict?.baseLines.push(line);
-        currentContentChunks += line;
-        incomingContentChunks += line;
-        patchContentChunks += ` ${line}`;
-        currentLineNumber++;
-        incomingLineNumber++;
-        break;
-      }
-      case 'marker-base': {
-        if (activeConflict != null) {
-          activeConflict.baseMarkerLine = line;
-        }
-        break;
-      }
-      case 'marker-separator': {
-        if (activeConflict == null) {
-          throw new Error(
-            'parseMergeConflictDiffFromFile: encountered separator marker before start marker'
-          );
-        }
-        activeConflict.separatorMarkerLine = line;
-        break;
-      }
-      case 'marker-end': {
-        if (activeConflict == null) {
+      continue;
+    }
+
+    if (markerType === 'end') {
+      if (frame == null) {
+        emitContextLine(line);
+      } else {
+        const completedFrame = conflictStack.pop();
+        if (completedFrame == null) {
           throw new Error(
             'parseMergeConflictDiffFromFile: encountered end marker before start marker'
           );
         }
-        activeConflict.endMarkerLine = line;
-        parsedConflicts.push(activeConflict);
-        activeConflict = undefined;
-        break;
+        finalizeConflict(completedFrame, index, line);
       }
-      default: {
-        assertNever(lineType);
-      }
+      continue;
+    }
+
+    if (frame == null) {
+      emitContextLine(line);
+      continue;
+    }
+
+    if (frame.stage === 'current') {
+      emitChangeLine('deletion', line, frame.conflictIndex, 'current');
+    } else if (frame.stage === 'base') {
+      emitContextLine(line, frame.conflictIndex, 'base');
+    } else {
+      emitChangeLine('addition', line, frame.conflictIndex, 'incoming');
     }
   }
 
+  if (conflictStack.length > 0) {
+    throw new Error(
+      'parseMergeConflictDiffFromFile: unfinished merge conflict marker stack'
+    );
+  }
+
+  if (activeHunk != null && activeHunk.hunkContent.length > 0) {
+    flushBufferedContext(activeHunk, 'trailing');
+    finalizeActiveHunk();
+  }
+
+  for (const [conflictIndex, builder] of conflictBuilders) {
+    if (!builder.completed) {
+      throw new Error(
+        `parseMergeConflictDiffFromFile: failed to build merge conflict action ${conflictIndex}`
+      );
+    }
+  }
+
+  if (
+    hunks.length > 0 &&
+    additionLines.length > 0 &&
+    deletionLines.length > 0
+  ) {
+    const lastHunk = hunks[hunks.length - 1];
+    const collapsedAfter = Math.max(
+      additionLines.length -
+        (lastHunk.additionStart + lastHunk.additionCount - 1),
+      0
+    );
+    splitLineCount += collapsedAfter;
+    unifiedLineCount += collapsedAfter;
+  }
+
+  const currentContents = deletionLines.join('');
+  const incomingContents = additionLines.join('');
   const currentFile = createResolvedConflictFile(
     file,
     'current',
-    currentContentChunks
+    currentContents
   );
   const incomingFile = createResolvedConflictFile(
     file,
     'incoming',
-    incomingContentChunks
+    incomingContents
   );
-  const patch = createMergeConflictPatch({
-    name: file.name,
-    patchContents: patchContentChunks,
-    currentLineCount: currentLineNumber,
-    incomingLineCount: incomingLineNumber,
-  });
 
-  const fileDiff = processFile(trimPatchContext(patch, maxContextLines), {
-    oldFile: currentFile,
-    newFile: incomingFile,
+  let type: FileDiffMetadata['type'] = 'change';
+  if (incomingContents === '') {
+    type = 'deleted';
+  } else if (currentContents === '') {
+    type = 'new';
+  }
+
+  const fileDiff: FileDiffMetadata = {
+    name: file.name,
+    prevName: undefined,
+    type,
+    hunks,
+    splitLineCount,
+    unifiedLineCount,
+    isPartial: false,
+    deletionLines,
+    additionLines,
     cacheKey:
       file.cacheKey != null
         ? `${file.cacheKey}:merge-conflict-diff`
         : undefined,
-    throwOnError: true,
-  });
+  };
 
-  if (fileDiff == null) {
-    throw new Error(
-      'parseMergeConflictDiffFromFile: failed to build merge conflict diff metadata'
-    );
-  }
-
-  const actions = locateMergeConflictActions(fileDiff, parsedConflicts);
-  const markerRows = buildMergeConflictMarkerRows(fileDiff, actions);
   return {
     fileDiff,
     currentFile,
     incomingFile,
     actions,
-    markerRows,
+    markerRows: buildMergeConflictMarkerRows(fileDiff, actions),
   };
 }
 
-interface CreateMergeConflictPatchProps {
-  name: string;
-  patchContents: string;
-  currentLineCount: number;
-  incomingLineCount: number;
+function createHunkBuilder(
+  additionStart: number,
+  deletionStart: number
+): HunkBuilder {
+  return {
+    additionStart,
+    deletionStart,
+    additionCount: 0,
+    deletionCount: 0,
+    additionLines: 0,
+    deletionLines: 0,
+    additionLineIndex: Math.max(additionStart - 1, 0),
+    deletionLineIndex: Math.max(deletionStart - 1, 0),
+    hunkContent: [],
+    contextBuffer: [],
+  };
 }
 
-function createMergeConflictPatch({
-  name,
-  patchContents,
-  currentLineCount,
-  incomingLineCount,
-}: CreateMergeConflictPatchProps): string {
-  const currentStart = currentLineCount > 0 ? 1 : 0;
-  const incomingStart = incomingLineCount > 0 ? 1 : 0;
+function formatHunkRange(start: number, count: number): string {
+  return count === 1 ? `${start}` : `${start},${count}`;
+}
+
+function getMergeConflictMarkerType(
+  line: string
+): MergeConflictMarkerType | undefined {
+  const lineEnd = getLineContentEndIndex(line);
+  if (lineEnd < 7) {
+    return undefined;
+  }
+
+  const markerCode = line.charCodeAt(0);
+  if (
+    markerCode !== 60 &&
+    markerCode !== 62 &&
+    markerCode !== 61 &&
+    markerCode !== 124
+  ) {
+    return undefined;
+  }
+
+  let markerLength = 1;
+  while (
+    markerLength < lineEnd &&
+    line.charCodeAt(markerLength) === markerCode
+  ) {
+    markerLength++;
+  }
+
+  if (markerLength < 7) {
+    return undefined;
+  }
+
+  if (markerCode === 61) {
+    return markerLength === lineEnd ? 'separator' : undefined;
+  }
+
+  if (
+    markerLength !== lineEnd &&
+    !isWhitespaceCode(line.charCodeAt(markerLength))
+  ) {
+    return undefined;
+  }
+
+  if (markerCode === 60) {
+    return 'start';
+  }
+  if (markerCode === 62) {
+    return 'end';
+  }
+  return 'base';
+}
+
+function getLineContentEndIndex(line: string): number {
+  let end = line.length;
+  if (end > 0 && line.charCodeAt(end - 1) === 10) {
+    end--;
+  }
+  if (end > 0 && line.charCodeAt(end - 1) === 13) {
+    end--;
+  }
+  return end;
+}
+
+function isWhitespaceCode(code: number): boolean {
   return (
-    `--- ${name}\n` +
-    `+++ ${name}\n` +
-    `@@ -${currentStart},${currentLineCount} +${incomingStart},${incomingLineCount} @@\n` +
-    patchContents
+    code === 9 ||
+    code === 10 ||
+    code === 11 ||
+    code === 12 ||
+    code === 13 ||
+    code === 32
   );
 }
 
@@ -242,206 +744,44 @@ function createResolvedConflictFile(
   };
 }
 
-// Walk conflicts and hunk content in order so unresolved marker rows can be
-// anchored structurally without storing marker lines in the parsed diff itself.
-function locateMergeConflictActions(
-  fileDiff: FileDiffMetadata,
-  parsedConflicts: ParsedMergeConflictSections[]
-): (MergeConflictDiffAction | undefined)[] {
-  const actions: (MergeConflictDiffAction | undefined)[] = new Array(
-    parsedConflicts.length
-  );
-  let searchHunkIndex = 0;
-  let searchContentIndex = 0;
-
-  for (const conflict of parsedConflicts) {
-    const match = locateConflictInDiff(
-      fileDiff,
-      conflict,
-      searchHunkIndex,
-      searchContentIndex
-    );
-    if (match == null) {
-      throw new Error(
-        `parseMergeConflictDiffFromFile: failed to locate merge conflict ${conflict.region.conflictIndex} in parsed diff`
-      );
-    }
-
-    actions[conflict.region.conflictIndex] = match.action;
-    searchHunkIndex = match.nextHunkIndex;
-    searchContentIndex = match.nextContentIndex;
-  }
-
-  return actions;
-}
-
-function locateConflictInDiff(
-  fileDiff: FileDiffMetadata,
-  conflict: ParsedMergeConflictSections,
-  startingHunkIndex: number,
-  startingContentIndex: number
-):
-  | {
-      action: MergeConflictDiffAction;
-      nextHunkIndex: number;
-      nextContentIndex: number;
-    }
-  | undefined {
-  for (
-    let hunkIndex = startingHunkIndex;
-    hunkIndex < fileDiff.hunks.length;
-    hunkIndex++
-  ) {
-    const hunk = fileDiff.hunks[hunkIndex];
-    const startContentIndex =
-      hunkIndex === startingHunkIndex ? startingContentIndex : 0;
-
-    for (
-      let contentIndex = startContentIndex;
-      contentIndex < hunk.hunkContent.length;
-      contentIndex++
-    ) {
-      const threeWayMatch = matchThreeWayConflict(
-        fileDiff,
-        hunk,
-        hunkIndex,
-        contentIndex,
-        conflict
-      );
-      if (threeWayMatch != null) {
-        return threeWayMatch;
-      }
-
-      const twoWayMatch = matchTwoWayConflict(
-        fileDiff,
-        hunk,
-        hunkIndex,
-        contentIndex,
-        conflict
-      );
-      if (twoWayMatch != null) {
-        return twoWayMatch;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function matchTwoWayConflict(
-  fileDiff: FileDiffMetadata,
-  hunk: Hunk,
-  hunkIndex: number,
-  contentIndex: number,
-  conflict: ParsedMergeConflictSections
-):
-  | {
-      action: MergeConflictDiffAction;
-      nextHunkIndex: number;
-      nextContentIndex: number;
-    }
-  | undefined {
-  if (conflict.baseLines.length > 0) {
-    return undefined;
-  }
-
-  const content = hunk.hunkContent[contentIndex];
-  if (
-    content?.type !== 'change' ||
-    !areChangeLinesEqual(
-      fileDiff,
-      content,
-      conflict.currentLines,
-      conflict.incomingLines
-    )
-  ) {
-    return undefined;
-  }
-
-  const action: MergeConflictDiffAction = {
-    conflict: conflict.region,
-    conflictIndex: conflict.region.conflictIndex,
-    hunkIndex,
-    startContentIndex: contentIndex,
-    endContentIndex: contentIndex,
-    currentContentIndex: contentIndex,
-    incomingContentIndex: contentIndex,
-    endMarkerContentIndex: contentIndex,
-    markerLines: {
-      start: conflict.startMarkerLine,
-      separator: conflict.separatorMarkerLine,
-      end: conflict.endMarkerLine,
-    },
-  };
-
-  return {
-    action,
-    nextHunkIndex: hunkIndex,
-    nextContentIndex: contentIndex + 1,
-  };
-}
-
-function matchThreeWayConflict(
-  fileDiff: FileDiffMetadata,
-  hunk: Hunk,
-  hunkIndex: number,
-  contentIndex: number,
-  conflict: ParsedMergeConflictSections
-):
-  | {
-      action: MergeConflictDiffAction;
-      nextHunkIndex: number;
-      nextContentIndex: number;
-    }
-  | undefined {
-  if (conflict.baseLines.length === 0) {
-    return undefined;
-  }
-
-  const currentChange = hunk.hunkContent[contentIndex];
-  const baseContext = hunk.hunkContent[contentIndex + 1];
-  const incomingChange = hunk.hunkContent[contentIndex + 2];
-  if (
-    currentChange?.type !== 'change' ||
-    baseContext?.type !== 'context' ||
-    incomingChange?.type !== 'change' ||
-    !areChangeLinesEqual(fileDiff, currentChange, conflict.currentLines, []) ||
-    !areContextLinesEqual(fileDiff, baseContext, conflict.baseLines) ||
-    !areChangeLinesEqual(fileDiff, incomingChange, [], conflict.incomingLines)
-  ) {
-    return undefined;
-  }
-
-  const action: MergeConflictDiffAction = {
-    conflict: conflict.region,
-    conflictIndex: conflict.region.conflictIndex,
-    hunkIndex,
-    startContentIndex: contentIndex,
-    endContentIndex: contentIndex + 2,
-    currentContentIndex: contentIndex,
-    baseContentIndex: contentIndex + 1,
-    incomingContentIndex: contentIndex + 2,
-    endMarkerContentIndex: contentIndex + 2,
-    markerLines: {
-      start: conflict.startMarkerLine,
-      base: conflict.baseMarkerLine,
-      separator: conflict.separatorMarkerLine,
-      end: conflict.endMarkerLine,
-    },
-  };
-
-  return {
-    action,
-    nextHunkIndex: hunkIndex,
-    nextContentIndex: contentIndex + 3,
-  };
-}
-
 export function buildMergeConflictMarkerRows(
   fileDiff: FileDiffMetadata,
   actions: (MergeConflictDiffAction | undefined)[]
 ): MergeConflictMarkerRow[] {
   const markerRows: MergeConflictMarkerRow[] = [];
+  const hunkLineStartCache = new Map<number, number[]>();
+
+  const getLineStart = (hunkIndex: number, contentIndex: number): number => {
+    const hunk = fileDiff.hunks[hunkIndex];
+    if (hunk == null) {
+      return 0;
+    }
+    let starts = hunkLineStartCache.get(hunkIndex);
+    if (starts == null) {
+      starts = new Array<number>(hunk.hunkContent.length + 1);
+      let lineIndex = hunk.unifiedLineStart;
+      starts[0] = lineIndex;
+      for (let index = 0; index < hunk.hunkContent.length; index++) {
+        const content = hunk.hunkContent[index];
+        lineIndex +=
+          content.type === 'context'
+            ? content.lines
+            : content.deletions + content.additions;
+        starts[index + 1] = lineIndex;
+      }
+      hunkLineStartCache.set(hunkIndex, starts);
+    }
+    return starts[Math.max(contentIndex, 0)] ?? hunk.unifiedLineStart;
+  };
+
+  const getLineEnd = (hunkIndex: number, contentIndex: number): number => {
+    const lineStart = getLineStart(hunkIndex, contentIndex);
+    const starts = hunkLineStartCache.get(hunkIndex);
+    const lineEndExclusive =
+      starts?.[Math.max(contentIndex + 1, 0)] ??
+      getLineStart(hunkIndex, contentIndex + 1);
+    return Math.max(lineStart, lineEndExclusive - 1);
+  };
 
   for (const action of actions) {
     if (action == null) {
@@ -453,8 +793,8 @@ export function buildMergeConflictMarkerRows(
       continue;
     }
 
-    const actionLineIndex = getUnifiedLineStartForContent(
-      hunk,
+    const actionLineIndex = getLineStart(
+      action.hunkIndex,
       action.startContentIndex
     );
     markerRows.push(
@@ -473,10 +813,12 @@ export function buildMergeConflictMarkerRows(
       if (currentContentIndex == null || incomingContentIndex == null) {
         continue;
       }
+
       const baseMarkerLine = action.markerLines.base;
       if (baseMarkerLine == null) {
         continue;
       }
+
       const currentChange = hunk.hunkContent[currentContentIndex];
       const baseContext = hunk.hunkContent[action.baseContentIndex];
       const incomingChange = hunk.hunkContent[incomingContentIndex];
@@ -488,12 +830,9 @@ export function buildMergeConflictMarkerRows(
         continue;
       }
 
-      const currentStart = getUnifiedLineStartForContent(
-        hunk,
-        currentContentIndex
-      );
-      const incomingStart = getUnifiedLineStartForContent(
-        hunk,
+      const currentStart = getLineStart(action.hunkIndex, currentContentIndex);
+      const incomingStart = getLineStart(
+        action.hunkIndex,
         incomingContentIndex
       );
       markerRows.push(
@@ -519,49 +858,43 @@ export function buildMergeConflictMarkerRows(
           'marker-end',
           action.endMarkerContentIndex,
           action.markerLines.end,
-          getLineIndexAtContentEnd(hunk, action.endMarkerContentIndex)
+          getLineEnd(action.hunkIndex, action.endMarkerContentIndex)
         )
       );
-    } else {
-      const currentContentIndex = action.currentContentIndex;
-      if (currentContentIndex == null) {
-        continue;
-      }
-      const content = hunk.hunkContent[currentContentIndex];
-      if (content?.type !== 'change') {
-        continue;
-      }
-
-      const contentStart = getUnifiedLineStartForContent(
-        hunk,
-        currentContentIndex
-      );
-      const separatorLineIndex =
-        content.deletions > 0
-          ? contentStart + content.deletions
-          : actionLineIndex;
-      const endLineIndex = getLineIndexAtContentEnd(
-        hunk,
-        action.endMarkerContentIndex
-      );
-
-      markerRows.push(
-        createMergeConflictMarkerRow(
-          action,
-          'marker-separator',
-          currentContentIndex,
-          action.markerLines.separator,
-          separatorLineIndex
-        ),
-        createMergeConflictMarkerRow(
-          action,
-          'marker-end',
-          action.endMarkerContentIndex,
-          action.markerLines.end,
-          endLineIndex
-        )
-      );
+      continue;
     }
+
+    const currentContentIndex = action.currentContentIndex;
+    if (currentContentIndex == null) {
+      continue;
+    }
+    const content = hunk.hunkContent[currentContentIndex];
+    if (content?.type !== 'change') {
+      continue;
+    }
+
+    const contentStart = getLineStart(action.hunkIndex, currentContentIndex);
+    const separatorLineIndex =
+      content.deletions > 0
+        ? contentStart + content.deletions
+        : actionLineIndex;
+
+    markerRows.push(
+      createMergeConflictMarkerRow(
+        action,
+        'marker-separator',
+        currentContentIndex,
+        action.markerLines.separator,
+        separatorLineIndex
+      ),
+      createMergeConflictMarkerRow(
+        action,
+        'marker-end',
+        action.endMarkerContentIndex,
+        action.markerLines.end,
+        getLineEnd(action.hunkIndex, action.endMarkerContentIndex)
+      )
+    );
   }
 
   return markerRows;
@@ -569,7 +902,7 @@ export function buildMergeConflictMarkerRows(
 
 function createMergeConflictMarkerRow(
   action: MergeConflictDiffAction,
-  type: MergeConflictMarkerRow['type'],
+  type: MergeConflictMarkerRowType,
   contentIndex: number,
   lineText: string,
   lineIndex: number
@@ -582,75 +915,6 @@ function createMergeConflictMarkerRow(
     lineText,
     lineIndex,
   };
-}
-
-function createParsedMergeConflictSections(
-  region: MergeConflictRegion | undefined,
-  startMarkerLine: string
-): ParsedMergeConflictSections | undefined {
-  return region != null
-    ? {
-        region,
-        startMarkerLine,
-        currentLines: [],
-        baseLines: [],
-        separatorMarkerLine: '',
-        incomingLines: [],
-        endMarkerLine: '',
-      }
-    : undefined;
-}
-
-function areChangeLinesEqual(
-  fileDiff: FileDiffMetadata,
-  content: ChangeContent,
-  deletionLines: string[],
-  additionLines: string[]
-): boolean {
-  return (
-    areLinesEqual(
-      fileDiff.deletionLines,
-      content.deletionLineIndex,
-      content.deletions,
-      deletionLines
-    ) &&
-    areLinesEqual(
-      fileDiff.additionLines,
-      content.additionLineIndex,
-      content.additions,
-      additionLines
-    )
-  );
-}
-
-function areContextLinesEqual(
-  fileDiff: FileDiffMetadata,
-  content: ContextContent,
-  lines: string[]
-): boolean {
-  return areLinesEqual(
-    fileDiff.additionLines,
-    content.additionLineIndex,
-    content.lines,
-    lines
-  );
-}
-
-function areLinesEqual(
-  source: string[],
-  startIndex: number,
-  count: number,
-  expected: string[]
-): boolean {
-  if (count !== expected.length) {
-    return false;
-  }
-  for (let index = 0; index < count; index++) {
-    if (source[startIndex + index] !== expected[index]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function getUnifiedLineStartForContent(
@@ -666,26 +930,4 @@ function getUnifiedLineStartForContent(
         : content.deletions + content.additions;
   }
   return lineIndex;
-}
-
-function getLineIndexAtContentEnd(hunk: Hunk, contentIndex: number): number {
-  const content = hunk.hunkContent[contentIndex];
-  if (content == null) {
-    return getUnifiedLineStartForContent(hunk, contentIndex);
-  }
-
-  const contentStart = getUnifiedLineStartForContent(hunk, contentIndex);
-  return (
-    contentStart +
-    (content.type === 'context'
-      ? content.lines
-      : content.deletions + content.additions) -
-    1
-  );
-}
-
-function assertNever(value: never): never {
-  throw new Error(
-    `parseMergeConflictDiffFromFile: unknown merge conflict line type ${String(value)}`
-  );
 }
