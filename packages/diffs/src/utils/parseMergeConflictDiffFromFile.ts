@@ -13,6 +13,30 @@
 // main function) and receive a shared ParseState object by reference. This avoids
 // per-call scope-chain traversal on the hot path (~20K lines), where every line
 // triggers 2-3 helper calls.
+//
+// ---
+// NOTE: This file was nearly entirely written and optimized by AI. It has a
+// verification harness that any future changes (human or AI) should be validated
+// against:
+//
+//   Snapshot tests (from packages/diffs/):
+//     bun test parseMergeConflictDiffFromFile
+//
+//   Performance benchmark (checksum must match 33121550):
+//     bun ws diffs benchmark:parse-merge-conflict
+//
+// If you encounter a bug:
+//   1. Add a new test case in test/parseMergeConflictDiffFromFile.test.ts with
+//      input that reproduces the failure. Use toMatchSnapshot() so the expected
+//      output is captured automatically once fixed.
+//   2. Run `bun test parseMergeConflictDiffFromFile` from packages/diffs/ to
+//      confirm the new test fails.
+//   3. Use an AI agent with extended/high thinking to fix the logic — the
+//      snapshot tests and benchmark provide a tight feedback loop. The agent
+//      should iterate until all snapshots pass AND the benchmark checksum
+//      matches. Update snapshots with `bun test test/parseMergeConflictDiffFromFile.test.ts -u`
+//      only after verifying the new output is correct.
+// ---
 
 import type {
   FileContents,
