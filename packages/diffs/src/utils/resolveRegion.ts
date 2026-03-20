@@ -26,7 +26,6 @@ export function resolveRegion(
   diff: FileDiffMetadata,
   target: RegionResolutionTarget
 ): FileDiffMetadata {
-  const start = Date.now();
   const {
     resolution,
     hunkIndex,
@@ -213,7 +212,6 @@ export function resolveRegion(
   resolvedDiff.splitLineCount = cursor.splitLineCount;
   resolvedDiff.unifiedLineCount = cursor.unifiedLineCount;
 
-  console.log('ZZZZZ - resolveRegion', Date.now() - start);
   return resolvedDiff;
 }
 

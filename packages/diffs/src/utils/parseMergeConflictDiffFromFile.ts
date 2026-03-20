@@ -68,7 +68,6 @@ export function parseMergeConflictDiffFromFile(
   file: FileContents,
   maxContextLines: number = 10
 ): ParseMergeConflictDiffFromFileResult {
-  const start = Date.now();
   const lines = splitFileContents(file.contents);
   // Never allow maxContextLines to drop below 1 or else things break...
   maxContextLines = Math.max(maxContextLines, 1);
@@ -196,8 +195,6 @@ export function parseMergeConflictDiffFromFile(
 
   const actions = locateMergeConflictActions(fileDiff, parsedConflicts);
   const markerRows = buildMergeConflictMarkerRows(fileDiff, actions);
-
-  console.log('ZZZZ - time to parse', Date.now() - start);
   return {
     fileDiff,
     currentFile,
