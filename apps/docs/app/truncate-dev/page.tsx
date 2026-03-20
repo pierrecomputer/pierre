@@ -2,6 +2,8 @@ import { Fruncate, Truncate } from '@pierre/truncate/react';
 import { notFound } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
+import { ResizableRightBorder } from './ResizableRightBorder';
+
 const defaultMessage = 'src/components/ui/elements/deprecated/button.tsx';
 
 function EllipsisIcon() {
@@ -16,38 +18,72 @@ function EllipsisIcon() {
   );
 }
 
+function ExampleGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <h2 style={{ fontSize: '16px', fontWeight: '600' }}>{title}</h2>
+      {children}
+    </div>
+  );
+}
+
 export default function TruncateDevPage() {
   if (process.env.NODE_ENV !== 'development') {
     return notFound();
   }
 
   return (
-    <div
+    <ResizableRightBorder
       style={
         {
+          backgroundColor:
+            'light-dark(var(--color-background), var(--color-card))',
           fontFamily: 'var(--font-geist-sans)',
-          fontSize: '14px',
-          margin: '30px 20%',
-          borderLeft: '2px solid light-dark(#CCC, #222)',
-          borderRight: '2px solid light-dark(#CCC, #222)',
+          fontSize: '13px',
+          margin: '30px 35%',
+          maxWidth: '640px',
+          padding: '4px 0',
+          border: '2px solid light-dark(#CCC, #222)',
+          borderRadius: '4px',
           display: 'flex',
           flexDirection: 'column',
           gap: '10px',
-          '--truncate-marker-background-color': 'var(--color-background)',
-          '--app-custom-background-color': 'light-dark(#E5E5E5, #111)',
+          '--truncate-marker-background-color':
+            'light-dark(var(--color-background), var(--color-card))',
+          '--app-custom-background-color': 'light-dark(#F0F0F0, #222)',
         } as CSSProperties
       }
     >
       <style>{`
+        body {
+          background-color: var(--color-background);
+        }
         h2 {
           font-size: 20px;
           font-weight: 600;
+          overflow: hidden;
         }
       `}</style>
 
-      <div>
-        <h2>Truncate</h2>
+      <ExampleGroup title="Native">
+        <div
+          style={{
+            width: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {defaultMessage}
+        </div>
+      </ExampleGroup>
 
+      <ExampleGroup title="Truncate">
         <Truncate>{defaultMessage}</Truncate>
 
         <Truncate marker="▸">{defaultMessage}</Truncate>
@@ -66,11 +102,9 @@ export default function TruncateDevPage() {
         >
           {defaultMessage}
         </Truncate>
-      </div>
+      </ExampleGroup>
 
-      <div>
-        <h2>Fruncate</h2>
-
+      <ExampleGroup title="Fruncate">
         <Fruncate>{defaultMessage}</Fruncate>
 
         <Fruncate marker="◂">{defaultMessage}</Fruncate>
@@ -89,7 +123,7 @@ export default function TruncateDevPage() {
         >
           {defaultMessage}
         </Fruncate>
-      </div>
-    </div>
+      </ExampleGroup>
+    </ResizableRightBorder>
   );
 }
