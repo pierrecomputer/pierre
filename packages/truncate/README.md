@@ -27,7 +27,7 @@ Lastly, due to the underlying css technique that's used to make this library wor
 
 The `Truncate` component acts much like `text-overflow: ellipsis` does. It clips text on the end boundary, and injects a `marker` when text is overflowing. By default that marker is `…`.
 
-```
+```tsx
 import { Truncate } from '@pierre/truncate/react';
 
 export function MyApp() {
@@ -41,7 +41,7 @@ export function MyApp() {
 
 The `Fruncate` component is simply the reverse direction version of `Truncate`. When the contents overflow, it will clip contents on the *start* (err… *front*) boundary.
 
-```
+```tsx
 import { Fruncate } from '@pierre/truncate/react';
 
 export function MyApp() {
@@ -57,7 +57,7 @@ The `MiddleTruncate` component is the combination of both `Truncate` and `Frunca
 
 By default, the `split` setting is set to `center`, and the `priority` is set to `end`. This means that the text will begin to clip at the center point of the contents, and will clip the `start` segment completely before then clipping the `end` segment. These settings can be configured. 
 
-```
+```tsx
 import { MiddleTruncate } from '@pierre/truncate/react';
 
 export function MyApp() {
