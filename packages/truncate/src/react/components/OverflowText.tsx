@@ -125,26 +125,61 @@ export function Fruncate({
     </OverflowText>
   );
 }
-
 export interface MiddleTruncateProps extends Omit<OverflowTextProps, 'mode'> {
   priority?: 'start' | 'end' | 'equal';
+  splitIndex?: number;
 }
 
 export function MiddleTruncate({
   children,
   priority = 'end',
+  splitIndex = 29,
   ...props
 }: MiddleTruncateProps) {
+  const firstHalfMessage = (children as string).slice(0, splitIndex);
+  const secondHalfMessage = (children as string).slice(splitIndex);
+  const firstIsLarger = firstHalfMessage.length >= secondHalfMessage.length;
+  const secondIsLarger = !firstIsLarger;
+
+  const firstCanBeSimple = priority === 'equal' && secondIsLarger;
+  const secondCanBeSimple = priority === 'equal' && firstIsLarger;
+
+  const firstPropOverrides: Partial<OverflowTextProps> = {};
+  const secondPropOverrides: Partial<OverflowTextProps> = {};
+
+  if (firstCanBeSimple) {
+    firstPropOverrides.marker = '';
+  }
+  if (secondCanBeSimple) {
+    secondPropOverrides.marker = '';
+  }
+
+  const firstSegment = (
+    <Truncate {...props} {...firstPropOverrides}>
+      {firstHalfMessage}
+    </Truncate>
+  );
+  const secondSegment = (
+    <Fruncate {...props} {...secondPropOverrides}>
+      {secondHalfMessage}
+    </Fruncate>
+  );
+
   return (
-    <div
-      data-truncate-group-container="middle"
-      data-truncate-group-priority={priority}
-    >
-      <div>
-        <Truncate {...props}>{(children as string).slice(0, 29)}</Truncate>
+    <div data-truncate-group-container="middle">
+      <div
+        data-truncate-segment-priority={
+          priority === 'start' || priority === 'equal' ? '1' : '2'
+        }
+      >
+        {firstSegment}
       </div>
-      <div>
-        <Fruncate {...props}>{(children as string).slice(29)}</Fruncate>
+      <div
+        data-truncate-segment-priority={
+          priority === 'end' || priority === 'equal' ? '1' : '2'
+        }
+      >
+        {secondSegment}
       </div>
     </div>
   );

@@ -1,35 +1,32 @@
 [data-truncate-container] {
-  --truncate-internal-marker-prefade-width: var(
-    --truncate-marker-prefade-width,
-    3px
-  );
-  --truncate-internal-marker-prefade-ratio: var(
-    --truncate-marker-prefade-ratio,
-    2.5
-  );
-  --truncate-internal-fade-marker-width: var(--truncate-fade-marker-width, 4px);
-  --truncate-internal-fade-marker-height: var(
-    --truncate-fade-marker-height,
-    0.9lh
-  );
-  --truncate-internal-marker-gap: var(--truncate-marker-gap, 1px);
+  /* Width of the fade from default marker to text */
+  --truncate-internal-marker-fade-width: var(--truncate-marker-fade-width, 2px);
+  /* Width of the solid color between the fade from the default marker to the text */
+  --truncate-internal-marker-gap: var(--truncate-marker-gap, 0px);
+  /* Opacity of the marker 'color' property, not of the element itself */
   --truncate-internal-marker-opacity: var(--truncate-marker-opacity, 50%);
+  /* Opacity of the marker 'color' property specifically for the middle truncate, not opacity of the element itself */
   --truncate-internal-middle-marker-opacity: var(
     --truncate-middle-marker-opacity,
     80%
   );
+  /* Background color of the default marker */
   --truncate-internal-marker-background-color: var(
     --truncate-marker-background-color,
     light-dark(white, black)
   );
+  /* Duration of the fade out animation for the marker */
   --truncate-internal-marker-fade-out-duration: var(
     --truncate-marker-fade-out-duration,
-    100ms
-  );
-  --truncate-internal-marker-fade-in-duration: var(
-    --truncate-marker-fade-in-duration,
     0ms
   );
+  /* Duration of the fade in animation for the marker */
+  --truncate-internal-marker-fade-in-duration: var(
+    --truncate-marker-fade-in-duration,
+    100ms
+  );
+
+  /* FADE Variant specifics */
   --truncate-internal-fade-right-background: var(
     --truncate-fade-right-background,
     radial-gradient(
@@ -50,6 +47,12 @@
       transparent
     )
   );
+  --truncate-internal-fade-marker-width: var(--truncate-fade-marker-width, 4px);
+  --truncate-internal-fade-marker-height: var(
+    --truncate-fade-marker-height,
+    0.9lh
+  );
+
   /*
   In some special cases people might be adding spacing in other ways
   that would benefit from being able to override this, however the container
@@ -118,10 +121,6 @@
   }
   & [data-truncate-marker] {
     right: 0;
-    padding-left: calc(
-      var(--truncate-internal-marker-prefade-width) +
-        var(--truncate-internal-marker-gap)
-    );
   }
   & [data-truncate-fade] {
     background: var(--truncate-internal-fade-right-background);
@@ -138,34 +137,50 @@
   & [data-truncate-content] > span {
     unicode-bidi: plaintext;
   }
-  & [data-truncate-marker] {
-    padding-right: calc(
-      var(--truncate-internal-marker-prefade-width) +
-        var(--truncate-internal-marker-gap)
-    );
-  }
   & [data-truncate-fade] {
     background: var(--truncate-internal-fade-left-background);
   }
 }
 
 [data-truncate-variant='default'] {
-  --truncate-internal-fade-dir: to right;
-
-  &[data-truncate-container='fruncate'] {
-    --truncate-internal-fade-dir: to left;
-  }
   & [data-truncate-marker] {
+    background-color: var(--truncate-internal-marker-background-color);
+  }
+  & [data-truncate-marker]::after,
+  & [data-truncate-marker]::before {
+    content: '';
+    position: absolute;
+    width: calc(
+      var(--truncate-internal-marker-fade-width) +
+        var(--truncate-internal-marker-gap)
+    );
+    height: var(--truncate-internal-single-line-height);
     background: linear-gradient(
       var(--truncate-internal-fade-dir),
-      transparent,
-      var(--truncate-internal-marker-prefade-width),
-      var(--truncate-internal-marker-background-color),
-      calc(
-        var(--truncate-internal-marker-prefade-ratio) *
-          var(--truncate-internal-marker-prefade-width)
-      ),
+      var(--truncate-internal-marker-background-color) 0%,
       var(--truncate-internal-marker-background-color)
+        var(--truncate-internal-marker-gap),
+      transparent 100%
+    );
+  }
+  & [data-truncate-marker]::after {
+    --truncate-internal-fade-dir: to right;
+    right: calc(
+      -1 *
+        (
+          var(--truncate-internal-marker-fade-width) +
+            var(--truncate-internal-marker-gap)
+        )
+    );
+  }
+  & [data-truncate-marker]::before {
+    --truncate-internal-fade-dir: to left;
+    left: calc(
+      -1 *
+        (
+          var(--truncate-internal-marker-fade-width) +
+            var(--truncate-internal-marker-gap)
+        )
     );
   }
 }
@@ -201,21 +216,10 @@
     min-width: 0;
   }
 
-  &[data-truncate-group-priority='end'] {
-    & > div:nth-child(1) {
-      flex: 0 999999 max-content;
-    }
-    & > div:nth-child(2) {
-      flex: 0 1 max-content;
-    }
+  & > div[data-truncate-segment-priority='1'] {
+    flex: 0 1 max-content;
   }
-
-  &[data-truncate-group-priority='start'] {
-    & > div:nth-child(1) {
-      flex: 0 1 max-content;
-    }
-    & > div:nth-child(2) {
-      flex: 0 999999 max-content;
-    }
+  & > div[data-truncate-segment-priority='2'] {
+    flex: 0 999999 max-content;
   }
 }
