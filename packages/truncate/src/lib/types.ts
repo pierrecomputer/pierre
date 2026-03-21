@@ -44,7 +44,7 @@ export type SplitOffset = [SplitOffsetType, number];
 type AllowableContentGroups =
   | {
       children?: never;
-      contents: ReactNode;
+      contents: [ReactNode, ReactNode];
     }
   | {
       contents?: never;

@@ -125,19 +125,11 @@ export function MiddleTruncate({
   let secondSegment: ReactNode | null = null;
   if (Array.isArray(contents)) {
     if (contents.length !== 2) {
-      console.error('MiddleTruncate: contents must be an array of two strings');
+      console.error('MiddleTruncate: contents must be an array of two items');
       return null;
     }
-    firstSegment = (
-      <Truncate {...props} className={className} style={style}>
-        {contents[0]}
-      </Truncate>
-    );
-    secondSegment = (
-      <Fruncate {...props} className={className} style={style}>
-        {contents[1]}
-      </Fruncate>
-    );
+    firstSegment = <Truncate {...props}>{contents[0]}</Truncate>;
+    secondSegment = <Fruncate {...props}>{contents[1]}</Fruncate>;
   } else {
     // TODO: figure out how to support ReactNode children in the future
     if (typeof children !== 'string') {
@@ -153,17 +145,18 @@ export function MiddleTruncate({
     // If the minimumLength is not met, we will still truncate the text,
     // but we will not split it into two segments.
     if (children.length < minimumLength) {
-      if (priority === 'start') {
-        return (
-          <Truncate {...props} className={className} style={style}>
-            {children}
-          </Truncate>
-        );
-      } else if (priority === 'end') {
+      if (priority === 'end') {
         return (
           <Fruncate {...props} className={className} style={style}>
             {children}
           </Fruncate>
+        );
+      } else {
+        // 'start' and 'equal' both fall back to standard end-clipping.
+        return (
+          <Truncate {...props} className={className} style={style}>
+            {children}
+          </Truncate>
         );
       }
     }
