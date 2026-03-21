@@ -100,7 +100,7 @@ function printHelpAndExit(): never {
   console.log('');
   console.log('Options:');
   console.log(
-    '  --runs <number>          Measured runs per benchmark case (default: 100)'
+    '  --runs <number>          Measured runs per benchmark case (default: 500)'
   );
   console.log(
     '  --warmup-runs <number>   Warmup runs per benchmark case before measurement (default: 20)'
