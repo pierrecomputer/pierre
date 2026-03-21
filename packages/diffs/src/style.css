@@ -1255,6 +1255,7 @@
   }
 
   [data-merge-conflict='marker-start'],
+  [data-merge-conflict='marker-base'],
   [data-merge-conflict='marker-separator'],
   [data-merge-conflict='marker-end'] {
     padding-left: 1ch;

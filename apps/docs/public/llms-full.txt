@@ -690,6 +690,7 @@ export function MyPatchDiff() {
 // These options are shared by MultiFileDiff, PatchDiff, and FileDiff.
 // Pass them via the `options` prop.
 
+import type { FileDiff as FileDiffClass } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 
 <MultiFileDiff
@@ -803,6 +804,16 @@ interface DiffOptions {
 
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
+
+  // Fires after hydration, and after render passes that commit DOM updates.
+  // Those DOM updates may be a full replacement or a partial update.
+  // Receives the outer diffs container element.
+  // Useful when you want to do your own post-render DOM manipulation.
+  // You can access the shadow DOM from here if you need to inspect lines.
+  onPostRender(node: HTMLElement, instance: FileDiffClass) {
+    const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
+    console.log('rendered line count', codeLines?.length ?? 0);
+  },
 
   // ─────────────────────────────────────────────────────────────
   // LINE SELECTION
@@ -1002,6 +1013,7 @@ interface ThreadMetadata {
 // ============================================================
 // Pass these via the `options` prop on the File component.
 
+import type { File as FileClass } from '@pierre/diffs';
 import { File } from '@pierre/diffs/react';
 
 <File
@@ -1053,6 +1065,16 @@ interface FileOptions {
 
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
+
+  // Fires after hydration, and after render passes that commit DOM updates.
+  // Those DOM updates may be a full replacement or a partial update.
+  // Receives the outer diffs container element.
+  // Useful when you want to do your own post-render DOM manipulation.
+  // You can access the shadow DOM from here if you need to inspect lines.
+  onPostRender(node: HTMLElement, instance: FileClass) {
+    const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
+    console.log('rendered line count', codeLines?.length ?? 0);
+  },
 
   // ─────────────────────────────────────────────────────────────
   // LINE SELECTION
@@ -1242,6 +1264,7 @@ interface CommentMetadata {
 **Unresolved File** (`unresolved_file.tsx`):
 
 ```tsx
+import type { UnresolvedFile as UnresolvedFileClass } from '@pierre/diffs';
 import { UnresolvedFile, type FileContents } from '@pierre/diffs/react';
 import { useState } from 'react';
 
@@ -1274,6 +1297,12 @@ export function MergeConflictPreview() {
         options={{
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           diffIndicators: 'none',
+          onPostRender(node: HTMLElement, instance: UnresolvedFileClass) {
+            const codeLines = node.shadowRoot?.querySelectorAll(
+              '[data-line]'
+            );
+            console.log('rendered line count', codeLines?.length ?? 0);
+          },
         }}
       />
     </>
@@ -1553,6 +1582,16 @@ const instance = new FileDiff({
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
+  // Fires after hydration, and after render passes that commit DOM updates.
+  // Those DOM updates may be a full replacement or a partial update.
+  // Receives the outer diffs container element.
+  // Useful when you want to do your own post-render DOM manipulation.
+  // You can access the shadow DOM from here if you need to inspect lines.
+  onPostRender(node, fileDiffInstance) {
+    const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
+    console.log('rendered line count', codeLines?.length ?? 0);
+  },
+
   // ─────────────────────────────────────────────────────────────
   // LINE SELECTION
   // ─────────────────────────────────────────────────────────────
@@ -1784,6 +1823,16 @@ const instance = new File({
 
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
+
+  // Fires after hydration, and after render passes that commit DOM updates.
+  // Those DOM updates may be a full replacement or a partial update.
+  // Receives the outer diffs container element.
+  // Useful when you want to do your own post-render DOM manipulation.
+  // You can access the shadow DOM from here if you need to inspect lines.
+  onPostRender(node, fileInstance) {
+    const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
+    console.log('rendered line count', codeLines?.length ?? 0);
+  },
 
   // ─────────────────────────────────────────────────────────────
   // LINE SELECTION
@@ -2540,14 +2589,24 @@ function HunkSeparatorDemo({ oldFile, newFile }) {
 
 ### diffAcceptRejectHunk
 
-Programmatically accept or reject individual hunks in a diff. This is useful for
-building interactive code review interfaces, AI-assisted coding tools, or any
-workflow where users need to selectively apply changes.
+Programmatically accept or reject individual hunks (or specific change blocks
+inside a hunk) in a diff. This is useful for building interactive code review
+interfaces, AI-assisted coding tools, or any workflow where users need to
+selectively apply changes.
+
+To resolve an entire hunk, pass `'accept'`, `'reject'`, or `'both'`. To resolve
+only one change block in a hunk, pass an object with `type` and `changeIndex`
+(for example:
+`diffAcceptRejectHunk(diff, hunkIndex, { type: 'accept', changeIndex: 0 })`).
+`changeIndex` maps to the target entry in that hunk's `hunkContent` array.
 
 When you **accept** a hunk, the new (additions) version is kept and the hunk is
 converted to context lines. When you **reject** a hunk, the old (deletions)
-version is restored. The function returns a new `FileDiffMetadata` object with
-all line numbers properly adjusted for subsequent hunks.
+version is restored. You can also use **both** as a lower-level way to mux the
+two sides together, which keeps the old lines first and then appends the new
+lines before collapsing the result back to context. The function returns a new
+`FileDiffMetadata` object with all line numbers properly adjusted for subsequent
+hunks.
 
 ### resolveMergeConflict
 
@@ -2666,6 +2725,13 @@ fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'accept');
 // Or reject a hunk - reverts to the old (deletions) version.
 // fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'reject');
 
+// Or target a single change block inside the hunk by content index.
+// 'changeIndex' maps to that hunk's hunkContent entry.
+// fileDiff = diffAcceptRejectHunk(fileDiff, 0, {
+//   type: 'accept',
+//   changeIndex: 0,
+// });
+
 // Re-render with the updated fileDiff - the accepted hunk
 // now appears as context lines instead of additions/deletions
 instance.render({
@@ -2688,6 +2754,7 @@ import { useState } from 'react';
 
 interface ChangeMetadata {
   hunkIndex: number;
+  changeIndex: number;
 }
 
 // Store initial diff outside component to keep reference stable
@@ -2698,7 +2765,7 @@ const initialDiff = parseDiffFromFile(
 
 // Create annotation for first hunk
 const initialAnnotations: DiffLineAnnotation<ChangeMetadata>[] = [
-  { side: 'additions', lineNumber: 1, metadata: { hunkIndex: 0 } },
+  { side: 'additions', lineNumber: 1, metadata: { hunkIndex: 0, changeIndex: 0 } },
 ];
 
 export function AcceptRejectExample() {
@@ -2711,6 +2778,20 @@ export function AcceptRejectExample() {
     // Remove the annotation after accepting
     setAnnotations((prev) =>
       prev.filter((a) => a.metadata.hunkIndex !== hunkIndex)
+    );
+  };
+
+  const handleAcceptChange = (hunkIndex: number, changeIndex: number) => {
+    setFileDiff((prev) =>
+      diffAcceptRejectHunk(prev, hunkIndex, { type: 'accept', changeIndex })
+    );
+    // Remove the annotation for that specific change block
+    setAnnotations((prev) =>
+      prev.filter(
+        (a) =>
+          a.metadata.hunkIndex !== hunkIndex ||
+          a.metadata.changeIndex !== changeIndex
+      )
     );
   };
 
@@ -2733,6 +2814,16 @@ export function AcceptRejectExample() {
           </button>
           <button onClick={() => handleAccept(annotation.metadata.hunkIndex)}>
             Accept
+          </button>
+          <button
+            onClick={() =>
+              handleAcceptChange(
+                annotation.metadata.hunkIndex,
+                annotation.metadata.changeIndex
+              )
+            }
+          >
+            Accept Change
           </button>
         </div>
       )}
@@ -4034,6 +4125,12 @@ const workerScriptUri = webview.asWebviewUri(workerScriptPath);
 
 The SSR API allows you to pre-render file diffs on the server with syntax
 highlighting, then hydrate them on the client for full interactivity.
+
+If you pass `prerenderedHTML`, `onPostRender` still fires on the client after
+hydration. On later renders, it also fires after DOM-committing updates, whether
+those updates are a full replacement or a partial update. This is useful for
+measuring, observing, or otherwise manipulating the mounted diff container or
+content of the diffs itself.
 
 ### Usage
 

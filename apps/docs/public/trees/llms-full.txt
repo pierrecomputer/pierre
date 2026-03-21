@@ -104,7 +104,8 @@ container in vanilla. See [SSR](#ssr) for usage.
 
 The tree is built from an array of file paths (strings). Folders are inferred
 from path segments; use forward slashes. Top-level paths (e.g. `README.md`) and
-nested paths (e.g. `src/components/Button.tsx`) are both valid.
+nested paths (e.g. `src/components/Button.tsx`) are both valid. A trailing slash
+(e.g. `src/components/`) marks an explicit directory, including empty folders.
 
 That produces a tree with `README.md` and `package.json` at the root and a `src`
 folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
@@ -120,6 +121,7 @@ folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
 | `id`                      | Unique identifier for this instance (DOM ids, SSR). Default: e.g. `ft_brw_1`.                                                                                                                                               |
 | `flattenEmptyDirectories` | When `true`, single-child folder chains become one row (e.g. `build / assets / images` → `build · assets · images`). Default: `false`. [Live demo](/preview/trees#flattening).                                              |
 | `fileTreeSearchMode`      | Search behavior: `'expand-matches'` (default), `'collapse-non-matches'`, or `'hide-non-matches'`.                                                                                                                           |
+| `search`                  | Render the built-in search input and enable keyboard-open search behavior. Default: `false`.                                                                                                                                |
 | `useLazyDataLoader`       | When `true`, children load when a folder is expanded. Default: `false`.                                                                                                                                                     |
 | `dragAndDrop`             | Enables built-in drag and drop interactions. Default: `false`.                                                                                                                                                              |
 | `lockedPaths`             | Optional list of file/folder paths that cannot be dragged when drag and drop is enabled.                                                                                                                                    |
@@ -241,6 +243,9 @@ interface FileTreeOptions {
   // Optional: file tree search behavior.
   fileTreeSearchMode?: FileTreeSearchMode;
 
+  // Optional: render the built-in search input. Default: false.
+  search?: boolean;
+
   // Optional: enable built-in drag and drop. Default: false.
   dragAndDrop?: boolean;
 
@@ -261,6 +266,10 @@ interface FileTreeOptions {
   // order. { comparator: fn } for custom sorting.
   sort?: boolean | { comparator: ChildrenComparator };
 
+  // Optional: inject raw CSS directly into the tree shadow root.
+  // Use this only when --trees-* variables are not enough.
+  unsafeCSS?: string;
+
   // Optional: enable virtualized rendering (only visible items are rendered).
   // Pass { threshold: N } to activate when item count >= N. Default: undefined (off).
   virtualize?: { threshold: number } | false;
@@ -276,6 +285,12 @@ const options: FileTreeOptions = {
   ],
   flattenEmptyDirectories: true,
   fileTreeSearchMode: 'collapse-non-matches',
+  search: true,
+  unsafeCSS: `
+    button[data-type='item'][data-item-selected] {
+      border-radius: 999px;
+    }
+  `,
 };
 
 // State callbacks and controlled state are configured separately:
@@ -401,6 +416,9 @@ The React API exposes one main component: `FileTree`, which renders a file tree
 from a list of file paths with support for selection, search, and customization
 via options.
 
+Set `options.search` to `true` when you want the built-in search field and
+keyboard-open search behavior.
+
 ### Component
 
 ### Props
@@ -477,6 +495,12 @@ import { FileTree } from '@pierre/trees/react';
   options={{
     flattenEmptyDirectories: true,
     fileTreeSearchMode: 'expand-matches',
+    search: true,
+    unsafeCSS: `
+      [data-item-section='icon'] {
+        color: oklch(67% 0.2 25);
+      }
+    `,
   }}
   initialFiles={['src/index.ts', 'package.json']}
 
@@ -554,6 +578,9 @@ The Vanilla JS API exposes the `FileTree` class. Create an instance with
 options, then call `render({ fileTreeContainer })` or
 `render({ containerWrapper })` to mount the tree into the DOM (pass a host
 element to reuse, or a parent to append the host to).
+
+Set `search: true` in the constructor options when you want the built-in search
+field and keyboard-open search behavior.
 
 ### Basic usage
 
@@ -656,6 +683,12 @@ const options = {
   id: 'my-tree',
   flattenEmptyDirectories: true,
   fileTreeSearchMode: 'expand-matches',
+  search: true,
+  unsafeCSS: `
+    button[data-type='item'][data-item-selected] {
+      border-radius: 999px;
+    }
+  `,
   useLazyDataLoader: false,
 };
 
@@ -735,8 +768,7 @@ void refreshGitStatus();
 Use the `gitStatus` option to show file-level status indicators for added,
 modified, and deleted files. Folders that contain changed descendants
 automatically receive a change hint.
-[Try the live demo](/preview/trees#path-colors) on
-the homepage.
+[Try the live demo](/preview/trees#path-colors) on the homepage.
 
 `GitStatusEntry` pairs a file `path` with a status value:
 `{ path: string; status: 'added' | 'modified' | 'deleted' }`.
@@ -934,6 +966,13 @@ variables from global CSS, a wrapper, or the host element directly.
 > Think of styling in two layers: host styles change the outer panel, and
 > `--trees-*` variables change the UI rendered inside the shadow DOM.
 
+### Unsafe CSS escape hatch
+
+If CSS variables are not enough, pass `unsafeCSS` in `FileTreeOptions` to inject
+raw CSS into the tree shadow root. This is the same escape hatch pattern we use
+in diffs, but for trees it should stay the exception rather than the default
+approach.
+
 ### Fallback order
 
 Trees uses a consistent fallback chain for colors and theme tokens:
@@ -1002,6 +1041,33 @@ import type { CSSProperties } from 'react';
     '--trees-icon-width-override': '14px',
   } as CSSProperties}
 />
+```
+
+**Unsafe CSS** (`unsafe-tree-css.tsx`):
+
+```tsx
+import { FileTree } from '@pierre/trees/react';
+
+<FileTree
+  options={{
+    initialFiles: ['src/index.ts', 'src/lib/utils.ts', 'package.json'],
+    unsafeCSS: `
+      [data-file-tree-search-input] {
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      button[data-type='item'][data-item-selected] {
+        border-radius: 999px;
+      }
+
+      [data-item-section='icon'] {
+        color: oklch(67% 0.2 25);
+      }
+    `,
+  }}
+/>;
+
 ```
 
 **Vanilla** (`file-tree.ts`):

@@ -341,8 +341,12 @@ fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'accept');
 // Or reject a hunk - reverts to the old (deletions) version.
 // fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'reject');
 
-// Or mux both sides together - keeps the old lines first, then the new lines.
-// fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'both');
+// Or target a single change block inside the hunk by content index.
+// 'changeIndex' maps to that hunk's hunkContent entry.
+// fileDiff = diffAcceptRejectHunk(fileDiff, 0, {
+//   type: 'accept',
+//   changeIndex: 0,
+// });
 
 // Re-render with the updated fileDiff - the accepted hunk
 // now appears as context lines instead of additions/deletions
@@ -368,6 +372,7 @@ import { useState } from 'react';
 
 interface ChangeMetadata {
   hunkIndex: number;
+  changeIndex: number;
 }
 
 // Store initial diff outside component to keep reference stable
@@ -378,7 +383,7 @@ const initialDiff = parseDiffFromFile(
 
 // Create annotation for first hunk
 const initialAnnotations: DiffLineAnnotation<ChangeMetadata>[] = [
-  { side: 'additions', lineNumber: 1, metadata: { hunkIndex: 0 } },
+  { side: 'additions', lineNumber: 1, metadata: { hunkIndex: 0, changeIndex: 0 } },
 ];
 
 export function AcceptRejectExample() {
@@ -391,6 +396,20 @@ export function AcceptRejectExample() {
     // Remove the annotation after accepting
     setAnnotations((prev) =>
       prev.filter((a) => a.metadata.hunkIndex !== hunkIndex)
+    );
+  };
+
+  const handleAcceptChange = (hunkIndex: number, changeIndex: number) => {
+    setFileDiff((prev) =>
+      diffAcceptRejectHunk(prev, hunkIndex, { type: 'accept', changeIndex })
+    );
+    // Remove the annotation for that specific change block
+    setAnnotations((prev) =>
+      prev.filter(
+        (a) =>
+          a.metadata.hunkIndex !== hunkIndex ||
+          a.metadata.changeIndex !== changeIndex
+      )
     );
   };
 
@@ -413,6 +432,16 @@ export function AcceptRejectExample() {
           </button>
           <button onClick={() => handleAccept(annotation.metadata.hunkIndex)}>
             Accept
+          </button>
+          <button
+            onClick={() =>
+              handleAcceptChange(
+                annotation.metadata.hunkIndex,
+                annotation.metadata.changeIndex
+              )
+            }
+          >
+            Accept Change
           </button>
         </div>
       )}

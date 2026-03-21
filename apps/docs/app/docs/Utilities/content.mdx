@@ -7,9 +7,16 @@
 
 ### diffAcceptRejectHunk [toc-ignore]
 
-Programmatically accept or reject individual hunks in a diff. This is useful for
-building interactive code review interfaces, AI-assisted coding tools, or any
-workflow where users need to selectively apply changes.
+Programmatically accept or reject individual hunks (or specific change blocks
+inside a hunk) in a diff. This is useful for building interactive code review
+interfaces, AI-assisted coding tools, or any workflow where users need to
+selectively apply changes.
+
+To resolve an entire hunk, pass `'accept'`, `'reject'`, or `'both'`. To resolve
+only one change block in a hunk, pass an object with `type` and `changeIndex`
+(for example:
+`diffAcceptRejectHunk(diff, hunkIndex, { type: 'accept', changeIndex: 0 })`).
+`changeIndex` maps to the target entry in that hunk's `hunkContent` array.
 
 When you **accept** a hunk, the new (additions) version is kept and the hunk is
 converted to context lines. When you **reject** a hunk, the old (deletions)

@@ -36,7 +36,7 @@ export function resolveRegion(
   const currentHunk = diff.hunks[hunkIndex];
   if (currentHunk == null) {
     console.error({ diff, hunkIndex });
-    throw new Error(`diffResolveRejectHunk: Invalid hunk index: ${hunkIndex}`);
+    throw new Error(`resolveRegion: Invalid hunk index: ${hunkIndex}`);
   }
 
   if (
@@ -45,7 +45,7 @@ export function resolveRegion(
     startContentIndex > endContentIndex
   ) {
     throw new Error(
-      `diffResolveRejectHunk: Invalid content range, ${startContentIndex}, ${endContentIndex}`
+      `resolveRegion: Invalid content range, ${startContentIndex}, ${endContentIndex}`
     );
   }
 
@@ -291,7 +291,7 @@ function pushResolveLinesToDiff(
       const line = deletionLines[content.deletionLineIndex + i];
       if (line == null) {
         console.error({ deletionLines, content, i });
-        throw new Error('pushResolveLinesToDiff: Deletion line doesnt exist');
+        throw new Error('pushResolveLinesToDiff: Deletion line does not exist');
       }
       diff.deletionLines.push(line);
       diff.additionLines.push(line);
@@ -302,7 +302,7 @@ function pushResolveLinesToDiff(
       const line = additionLines[content.additionLineIndex + i];
       if (line == null) {
         console.error({ additionLines, content, i });
-        throw new Error('pushResolveLinesToDiff: Addition line doesnt exist');
+        throw new Error('pushResolveLinesToDiff: Addition line does not exist');
       }
       diff.deletionLines.push(line);
       diff.additionLines.push(line);
