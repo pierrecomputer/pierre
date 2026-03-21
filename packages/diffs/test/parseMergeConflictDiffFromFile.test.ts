@@ -10,22 +10,6 @@ const fileConflictLarge = readFileSync(
   'utf-8'
 );
 
-function runLargeConflictCase(maxContextLines: number): {
-  elapsedMs: number;
-  result: ReturnType<typeof parseMergeConflictDiffFromFile>;
-} {
-  const start = performance.now();
-  const result = parseMergeConflictDiffFromFile(
-    {
-      name: 'fileConflictLarge.ts',
-      contents: fileConflictLarge,
-    },
-    maxContextLines
-  );
-  const elapsedMs = Number((performance.now() - start).toFixed(3));
-  return { elapsedMs, result };
-}
-
 describe('parseMergeConflictDiffFromFile', () => {
   test('creates a diff between current and incoming conflict sections', () => {
     const file = {
@@ -171,13 +155,13 @@ describe('parseMergeConflictDiffFromFile', () => {
   test('large conflict harness snapshots and timing for multiple maxContentLines', () => {
     const maxContentLinesCases = [10, 3, Infinity] as const;
 
-    for (const maxContentLines of maxContentLinesCases) {
-      const { elapsedMs, result } = runLargeConflictCase(maxContentLines);
-      console.log(
-        `[parseMergeConflictDiffFromFile] maxContentLines=${maxContentLines} elapsedMs=${elapsedMs}`
+    for (const maxContextLines of maxContentLinesCases) {
+      const result = parseMergeConflictDiffFromFile(
+        { name: 'fileConflictLarge.ts', contents: fileConflictLarge },
+        maxContextLines
       );
       expect(result).toMatchSnapshot(
-        `fileConflictLarge raw-result maxContentLines=${maxContentLines}`
+        `fileConflictLarge raw-result maxContentLines=${maxContextLines}`
       );
     }
   });
