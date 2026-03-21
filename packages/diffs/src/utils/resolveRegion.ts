@@ -227,7 +227,9 @@ function pushCollapsedContextLines(
     const deletionLine = deletionLines[deletionLineIndex + index];
     const additionLine = additionLines[additionLineIndex + index];
     if (deletionLine == null || additionLine == null) {
-      throw new Error('diffAcceptRejectHunk: missing collapsed context line');
+      throw new Error(
+        'pushCollapsedContextLines: missing collapsed context line'
+      );
     }
     diff.deletionLines.push(deletionLine);
     diff.additionLines.push(additionLine);
@@ -244,7 +246,8 @@ function pushContentLinesToDiff(
     for (let i = 0; i < content.lines; i++) {
       const line = additionLines[content.additionLineIndex + i];
       if (line == null) {
-        throw new Error('fixme');
+        console.error({ additionLines, content, i });
+        throw new Error('pushContentLinesToDiff: Context line does not exist');
       }
       diff.deletionLines.push(line);
       diff.additionLines.push(line);
@@ -255,14 +258,20 @@ function pushContentLinesToDiff(
       if (i < content.deletions) {
         const line = deletionLines[content.deletionLineIndex + i];
         if (line == null) {
-          throw new Error('fixme');
+          console.error({ deletionLines, content, i });
+          throw new Error(
+            'pushContentLinesToDiff: Deletion line does not exist'
+          );
         }
         diff.deletionLines.push(line);
       }
       if (i < content.additions) {
         const line = additionLines[content.additionLineIndex + i];
         if (line == null) {
-          throw new Error('fixme');
+          console.error({ additionLines, content, i });
+          throw new Error(
+            'pushContentLinesToDiff: Addition line does not exist'
+          );
         }
         diff.additionLines.push(line);
       }
@@ -281,7 +290,8 @@ function pushResolveLinesToDiff(
     for (let i = 0; i < content.deletions; i++) {
       const line = deletionLines[content.deletionLineIndex + i];
       if (line == null) {
-        throw new Error('fixme');
+        console.error({ deletionLines, content, i });
+        throw new Error('pushResolveLinesToDiff: Deletion line doesnt exist');
       }
       diff.deletionLines.push(line);
       diff.additionLines.push(line);
@@ -291,7 +301,8 @@ function pushResolveLinesToDiff(
     for (let i = 0; i < content.additions; i++) {
       const line = additionLines[content.additionLineIndex + i];
       if (line == null) {
-        throw new Error('fixme');
+        console.error({ additionLines, content, i });
+        throw new Error('pushResolveLinesToDiff: Addition line doesnt exist');
       }
       diff.deletionLines.push(line);
       diff.additionLines.push(line);

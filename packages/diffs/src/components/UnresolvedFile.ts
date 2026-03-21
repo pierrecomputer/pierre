@@ -477,7 +477,7 @@ export class UnresolvedFile<
     // bunch of jittery re-renders as things resolve out.  In a more perfect
     // world we would have a more elegant way to kick off a render to the
     // highlighter and then resolve actions in a cleaner way, but time is short
-    // rignt now.  Can't let perfect be the enemy of good
+    // right now.  Can't let perfect be the enemy of good
     if (this.workerManager != null) {
       // Because we are using a workerManager, if we fire off the renderDiff
       // call, it will eventually get back to us in a callback which will
