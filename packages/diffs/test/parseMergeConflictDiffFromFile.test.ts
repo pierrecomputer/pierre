@@ -10,7 +10,7 @@ const fileConflictLarge = readFileSync(
   'utf-8'
 );
 
-function runLargeConflictCase(maxContentLines: number): {
+function runLargeConflictCase(maxContextLines: number): {
   elapsedMs: number;
   result: ReturnType<typeof parseMergeConflictDiffFromFile>;
 } {
@@ -20,7 +20,7 @@ function runLargeConflictCase(maxContentLines: number): {
       name: 'fileConflictLarge.ts',
       contents: fileConflictLarge,
     },
-    maxContentLines
+    maxContextLines
   );
   const elapsedMs = Number((performance.now() - start).toFixed(3));
   return { elapsedMs, result };
