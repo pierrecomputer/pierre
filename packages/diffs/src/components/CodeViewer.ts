@@ -55,7 +55,7 @@ type AdvancedVirtualizedItem<LAnnotation> =
   | AdvancedVirtualizedDiffItem<LAnnotation>
   | AdvancedVirtualizedFileItem<LAnnotation>;
 
-export class AdvancedVirtualizer<LAnnotation = undefined> {
+export class CodeViewer<LAnnotation = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
 
@@ -73,7 +73,6 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
   > = new Set();
   private scrollHeight = 0;
 
-  private containerOffset = 0;
   private lastContainerHeight = -1;
   private container: HTMLElement | undefined;
 
@@ -89,7 +88,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     height: 0,
   };
 
-  private root: Document | HTMLElement | undefined;
+  private root: HTMLElement | undefined;
   private resizeObserver: ResizeObserver | undefined;
 
   private stickyContainer = document.createElement('div');
@@ -109,42 +108,34 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     // FIXME(amadeus): Remove me before release
     window.__INSTANCE = this;
     window.__TOGGLE = () => {
-      if (AdvancedVirtualizer.__STOP) {
-        AdvancedVirtualizer.__STOP = false;
-        this.scrollTo(AdvancedVirtualizer.__lastScrollPosition, 'instant');
+      if (CodeViewer.__STOP) {
+        CodeViewer.__STOP = false;
+        this.scrollTo(CodeViewer.__lastScrollPosition, 'instant');
       } else {
-        AdvancedVirtualizer.__lastScrollPosition = this.getScrollTop();
-        AdvancedVirtualizer.__STOP = true;
+        CodeViewer.__lastScrollPosition = this.getScrollTop();
+        CodeViewer.__STOP = true;
       }
     };
   }
 
-  public setup(root: Document | HTMLElement, container: HTMLElement): void {
+  public setup(root: HTMLElement): void {
     if (this.root != null) {
-      throw new Error('AdvancedVirtualizer.setup: already setup');
+      throw new Error('CodeViewer.setup: already setup');
     }
     this.root = root;
-    this.container = container;
+    this.container = document.createElement('div');
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
+    this.root.appendChild(this.container);
     this.scrollDirty = true;
     this.heightDirty = true;
     this.lastRenderedScrollY = -1;
     this.resizeObserver = new ResizeObserver(this.handleResize);
     this.resizeObserver.observe(this.stickyContainer);
-    if (this.root instanceof Document) {
-      window.addEventListener('scroll', this.handleScroll, {
-        passive: true,
-      });
-      window.addEventListener('resize', this.handleWindowResize, {
-        passive: true,
-      });
-    } else {
-      this.root.addEventListener('scroll', this.handleScroll, {
-        passive: true,
-      });
-      this.resizeObserver.observe(this.root);
-    }
+    this.root.addEventListener('scroll', this.handleScroll, {
+      passive: true,
+    });
+    this.resizeObserver.observe(this.root);
     this.render(true);
   }
 
@@ -174,8 +165,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
-    window.removeEventListener('scroll', this.handleScroll);
-    window.removeEventListener('resize', this.handleWindowResize);
+    this.container?.remove();
     this.stickyOffset.remove();
     this.stickyContainer.remove();
     this.stickyContainer.textContent = '';
@@ -195,16 +185,11 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       const item = this.items[index];
       if (item == null) {
         throw new Error(
-          `AdvancedVirtualizer.cleanAllRenderedItems: Item does not exist at index: ${index}`
+          `CodeViewer.cleanAllRenderedItems: Item does not exist at index: ${index}`
         );
       }
       cleanRenderedItem(item);
     }
-  }
-
-  public setContainerOffset(offset: number): void {
-    this.containerOffset = offset;
-    this.render(true);
   }
 
   public scrollTo(top: number, behavior?: ScrollBehavior): void {
@@ -215,11 +200,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       0,
       Math.min(top, Math.max(this.getScrollHeight() - this.getHeight(), 0))
     );
-    if (!(this.root instanceof Document)) {
-      this.root.scrollTo({ top: clampedTop, behavior });
-    } else {
-      window.scrollTo({ top: clampedTop, behavior });
-    }
+    this.root.scrollTo({ top: clampedTop, behavior });
   }
 
   public addFileOrDiff(fileOrDiff: FileContents | FileDiffMetadata): void {
@@ -264,7 +245,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
   }
 
   public render(immediate = false): void {
-    if (AdvancedVirtualizer.__STOP || this.items.length === 0) return;
+    if (CodeViewer.__STOP || this.items.length === 0) return;
     if (immediate) {
       dequeueRender(this.computeRenderRangeAndEmit);
       this.computeRenderRangeAndEmit();
@@ -283,7 +264,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     const item = this.instanceToItem.get(instance);
     if (item == null) {
       throw new Error(
-        'AdvancedVirtualizer.instanceChanged: An instance has changed that is not registered'
+        'CodeViewer.instanceChanged: An instance has changed that is not registered'
       );
     }
     this.changedInstances.add(instance);
@@ -298,7 +279,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     const item = this.instanceToItem.get(instance);
     if (item == null) {
       throw new Error(
-        'AdvancedVirtualizer.getTopForInstance: unknown virtualized instance'
+        'CodeViewer.getTopForInstance: unknown virtualized instance'
       );
     }
     return item.top;
@@ -307,7 +288,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
   private computeRenderRangeAndEmit = (): void => {
     if (
       this.items.length === 0 ||
-      AdvancedVirtualizer.__STOP ||
+      CodeViewer.__STOP ||
       this.container == null
     ) {
       return;
@@ -315,8 +296,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     const scrollTop = this.getScrollTop();
     const height = this.getHeight();
     const scrollHeight = this.getScrollHeight();
-    const containerOffset =
-      this.root instanceof Document ? this.containerOffset : 0;
+    const containerOffset = 0;
     const fitPerfectly =
       this.lastRenderedScrollY === -1 ||
       Math.abs(scrollTop - this.lastRenderedScrollY) >
@@ -439,9 +419,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       }
       const item = this.items[index];
       if (item == null) {
-        throw new Error(
-          'AdvancedVirtualizer.reconcileRenderedItems: Invalid item'
-        );
+        throw new Error('CodeViewer.reconcileRenderedItems: Invalid item');
       }
       if (currentTop === -1) {
         currentTop = item.top;
@@ -529,16 +507,8 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
     }
   };
 
-  private handleWindowResize = (): void => {
-    this.scrollDirty = true;
-    this.heightDirty = true;
-    this.render();
-  };
-
   private getScrollContainerElement(): HTMLElement | undefined {
-    return this.root == null || this.root instanceof Document
-      ? undefined
-      : this.root;
+    return this.root;
   }
 
   private getScrollAnchor(): ScrollAnchor | undefined {
@@ -658,17 +628,13 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
   }
 
   private applyScrollFix(scrollOffset: number): void {
-    if (this.root == null || this.root instanceof Document) {
-      window.scrollTo({
-        top: window.scrollY + scrollOffset,
-        behavior: 'instant',
-      });
-    } else {
-      this.root.scrollTo({
-        top: this.root.scrollTop + scrollOffset,
-        behavior: 'instant',
-      });
+    if (this.root == null) {
+      return;
     }
+    this.root.scrollTo({
+      top: this.root.scrollTop + scrollOffset,
+      behavior: 'instant',
+    });
     this.scrollDirty = true;
     this.heightDirty = true;
   }
@@ -678,15 +644,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       return this.scrollTop;
     }
     this.scrollDirty = false;
-    const scrollTop = (() => {
-      if (this.root == null) {
-        return 0;
-      }
-      if (this.root instanceof Document) {
-        return window.scrollY;
-      }
-      return this.root.scrollTop;
-    })();
+    const scrollTop = this.root?.scrollTop ?? 0;
     const maxScroll = Math.max(this.getScrollHeight() - this.getHeight(), 0);
     this.scrollTop = Math.max(0, Math.min(scrollTop, maxScroll));
     return this.scrollTop;
@@ -697,15 +655,7 @@ export class AdvancedVirtualizer<LAnnotation = undefined> {
       return this.height;
     }
     this.heightDirty = false;
-    this.height = (() => {
-      if (this.root == null) {
-        return 0;
-      }
-      if (this.root instanceof Document) {
-        return window.innerHeight;
-      }
-      return this.root.getBoundingClientRect().height;
-    })();
+    this.height = this.root?.getBoundingClientRect().height ?? 0;
     return this.height;
   }
 

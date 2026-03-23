@@ -1,12 +1,8 @@
 'use client';
 
-import {
-  AdvancedVirtualizer,
-  DEFAULT_THEMES,
-  parsePatchFiles,
-} from '@pierre/diffs';
+import { CodeViewer, DEFAULT_THEMES, parsePatchFiles } from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
-import { type SyntheticEvent, useRef, useState } from 'react';
+import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
 
 import styles from './advanced-diff.module.css';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
@@ -16,7 +12,7 @@ const unsafeCSS = `[data-diffs-header] {
   container-type: scroll-state;
   container-name: sticky-header;
   position: sticky;
-  top: 61px;
+  top: 0;
 }
 @container sticky-header scroll-state(stuck: top) {
   [data-diffs-header]::after {
@@ -28,8 +24,7 @@ const unsafeCSS = `[data-diffs-header] {
     content: '';
     background-color: var(--color-border);
   }
-}
-`;
+}`;
 
 const DEFAULT_PR_URL = 'https://github.com/nodejs/node/pull/59805';
 
@@ -57,9 +52,9 @@ export function AdvancedDiff() {
   const workerPool = useWorkerPool();
   const [fetching, setFetching] = useState(false);
   const [url, setURL] = useState(DEFAULT_PR_URL);
-  const bigBoiRef = useRef<AdvancedVirtualizer>(null);
+  const codeViewerRef = useRef<CodeViewer>(null);
   const lastLoadedURLRef = useRef<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
     const prPath = getPullRequestPath(normalizedURL);
@@ -72,11 +67,11 @@ export function AdvancedDiff() {
     lastLoadedURLRef.current = normalizedURL;
 
     try {
-      if (ref.current == null) {
+      if (scrollRef.current == null) {
         console.error('No valid container to run the virtualizer with');
         return undefined;
       }
-      bigBoiRef.current ??= new AdvancedVirtualizer(
+      codeViewerRef.current ??= new CodeViewer(
         {
           theme: DEFAULT_THEMES,
           diffStyle: 'split',
@@ -87,8 +82,8 @@ export function AdvancedDiff() {
         undefined,
         workerPool
       );
-      bigBoiRef.current.setup(document, ref.current);
-      bigBoiRef.current.reset();
+      codeViewerRef.current.setup(scrollRef.current);
+      codeViewerRef.current.reset();
       console.time('--     request time');
       const response = await fetch(
         `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
@@ -116,7 +111,7 @@ export function AdvancedDiff() {
       console.time('-- computing layout');
       for (const patch of parsedPatches) {
         for (const fileDiff of patch.files) {
-          bigBoiRef.current.addFileOrDiff(fileDiff);
+          codeViewerRef.current.addFileOrDiff(fileDiff);
         }
       }
       console.timeEnd('-- computing layout');
@@ -145,6 +140,49 @@ export function AdvancedDiff() {
       setURL(normalizedURL);
     }
   );
+  const scrollStateRef = useRef({
+    isScrolled: false,
+    handleScroll() {
+      const { current: currentTarget } = scrollRef;
+      if (currentTarget == null) return;
+      const { scrollTop } = currentTarget;
+      console.log(scrollTop);
+      if (
+        (scrollTop > 0 && scrollStateRef.current.isScrolled) ||
+        (scrollTop <= 0 && !scrollStateRef.current.isScrolled)
+      ) {
+        return;
+      }
+      if (scrollTop > 0) {
+        currentTarget.setAttribute('data-scrolled', '');
+        scrollStateRef.current.isScrolled = true;
+      } else {
+        currentTarget.removeAttribute('data-scrolled');
+        scrollStateRef.current.isScrolled = false;
+      }
+    },
+  });
+  const handleRef = useStableCallback((node: HTMLDivElement | null) => {
+    if (scrollRef.current != null) {
+      scrollRef.current.removeEventListener(
+        'scroll',
+        scrollStateRef.current.handleScroll
+      );
+    }
+    scrollRef.current = node;
+    if (scrollRef.current != null) {
+      scrollRef.current.addEventListener(
+        'scroll',
+        scrollStateRef.current.handleScroll,
+        {
+          passive: true,
+        }
+      );
+    }
+  });
+  useEffect(() => {
+    codeViewerRef.current?.cleanUp();
+  }, []);
   return (
     <>
       <div className="bg-muted mx-5 mb-5 max-w-full rounded-lg p-2">
@@ -169,7 +207,7 @@ export function AdvancedDiff() {
           </Button>
         </form>
       </div>
-      <div ref={ref} className={styles.wrapper} />
+      <div ref={handleRef} className={styles.scrollContainer} />
       <WorkerPoolStatus />
     </>
   );

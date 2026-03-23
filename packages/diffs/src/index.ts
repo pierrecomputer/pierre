@@ -4,7 +4,7 @@ import {
 } from 'shiki';
 
 export * from './components/AdvancedVirtualizedFileDiff';
-export * from './components/AdvancedVirtualizer';
+export * from './components/CodeViewer';
 export * from './components/File';
 export * from './components/FileDiff';
 export * from './components/FileStream';

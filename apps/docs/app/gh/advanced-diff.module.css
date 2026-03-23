@@ -1,28 +1,23 @@
-.wrapper {
+.scrollContainer {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   overscroll-behavior-x: none;
-  position: relative;
-  margin-inline: 20px;
-  margin-top: 8px;
+  padding-inline: 20px;
   overflow-anchor: none;
+  position: relative;
 }
 
-.wrapper diffs-container {
+.scrollContainer[data-scrolled] {
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
+.scrollContainer diffs-container {
   contain: layout paint style;
   overflow: clip;
   box-shadow: 0 0 0 1px var(--color-border);
   border-radius: 9px;
-  /* box-shadow: 0 0 0 2px red; */
+  /* FIXME(amadeus): This sucks -- we shouldn't have it and figure out how to
+   * get the metrics stuff to add this gap... */
   margin-bottom: 8px;
-  /* Need to percolate on this because
-   * it will cause cause things to register
-   * 0 height until the browser is scrolled close to them scrollability-wise. But
-   * it's also super effective as a way to optimized the browser, we we probably
-   * want it on at some point. */
-  /* content-visibility: auto; */
-}
-
-.stickyWrapper {
-  contain: strict;
-  position: sticky;
-  width: 100%;
 }
