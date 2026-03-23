@@ -611,7 +611,7 @@
 
   /** @pierre/truncate css here, manually copy pasted for now */
   [data-truncate-container] {
-    /* CUSTOM TO TREES */
+    /* CUSTOM TO TREES, TO SUPPORT THE OUTLINE */
     margin-top: -1px;
     margin-bottom: -1px;
 
