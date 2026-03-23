@@ -8,7 +8,7 @@ import type {
 } from '../types';
 import { iterateOverFile } from '../utils/iterateOverFile';
 import type { WorkerPoolManager } from '../worker';
-import type { AdvancedVirtualizer } from './AdvancedVirtualizer';
+import type { CodeViewer } from './CodeViewer';
 import { File, type FileOptions, type FileRenderProps } from './File';
 import type { Virtualizer } from './Virtualizer';
 
@@ -30,7 +30,7 @@ export class VirtualizedFile<
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
-    private virtualizer: Virtualizer | AdvancedVirtualizer<LAnnotation>,
+    private virtualizer: Virtualizer | CodeViewer<LAnnotation>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false

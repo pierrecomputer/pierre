@@ -11,7 +11,7 @@ import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { resolveVirtualFileMetrics } from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
-import type { AdvancedVirtualizer } from './AdvancedVirtualizer';
+import type { CodeViewer } from './CodeViewer';
 import {
   FileDiff,
   type FileDiffOptions,
@@ -41,11 +41,11 @@ export class VirtualizedFileDiff<
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
   private isSetup: boolean = false;
-  private virtualizer: Virtualizer | AdvancedVirtualizer<LAnnotation>;
+  private virtualizer: Virtualizer | CodeViewer<LAnnotation>;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
-    virtualizer: Virtualizer | AdvancedVirtualizer<LAnnotation>,
+    virtualizer: Virtualizer | CodeViewer<LAnnotation>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false

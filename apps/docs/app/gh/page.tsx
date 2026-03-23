@@ -7,8 +7,10 @@ import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 export default function AdvancedDiffPage() {
   return (
     <WorkerPoolContext>
-      <Header className="px-5" />
-      <AdvancedDiff />
+      <div className="flex h-dvh flex-col">
+        <Header className="px-5" />
+        <AdvancedDiff />
+      </div>
     </WorkerPoolContext>
   );
 }
