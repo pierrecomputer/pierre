@@ -35,4 +35,23 @@ describe('parseDiffFromFile', () => {
     const expectedNewLineCount = fileNew.split(/(?<=\n)/).length;
     expect(result.additionLines.length).toBe(expectedNewLineCount);
   });
+
+  test('ignoreWhitespace hides leading/trailing whitespace changes', () => {
+    const oldFile = {
+      name: 'test.txt',
+      contents: 'hello world\nfoo bar\n',
+    };
+    const newFile = {
+      name: 'test.txt',
+      contents: '  hello world\nfoo bar\n',
+    };
+
+    const withWhitespace = parseDiffFromFile(oldFile, newFile);
+    expect(withWhitespace.hunks.length).toBeGreaterThan(0);
+
+    const withoutWhitespace = parseDiffFromFile(oldFile, newFile, {
+      ignoreWhitespace: true,
+    });
+    expect(withoutWhitespace.hunks).toHaveLength(0);
+  });
 });

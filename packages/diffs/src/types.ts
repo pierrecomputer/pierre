@@ -1,3 +1,4 @@
+import type { CreatePatchOptionsNonabortable } from 'diff';
 import type { ElementContent } from 'hast';
 import type {
   BundledLanguage,
@@ -393,10 +394,25 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 
   // How many lines to expand per click
   expansionLineCount?: number; // 100 is default
+
+  /**
+   * Options forwarded to the underlying diff algorithm when computing diffs
+   * from file contents (oldFile/newFile). Has no effect on pre-parsed patches.
+   *
+   * Supported options:
+   * - `ignoreWhitespace`: treat lines differing only in whitespace as unchanged
+   * - `stripTrailingCr`: strip `\r` before diffing (useful for UNIX vs Windows)
+   */
+  diffOptions?: DiffComputeOptions;
 }
 
+export type DiffComputeOptions = Pick<
+  CreatePatchOptionsNonabortable,
+  'ignoreWhitespace' | 'stripTrailingCr'
+>;
+
 export type BaseDiffOptionsWithDefaults = Required<
-  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter'>
+  Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter' | 'diffOptions'>
 >;
 
 export type CustomPreProperties = Record<string, string | number | undefined>;

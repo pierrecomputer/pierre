@@ -347,11 +347,7 @@ export class VirtualizedFileDiff<
     this.fileDiff ??=
       fileDiff ??
       (oldFile != null && newFile != null
-        ? // NOTE(amadeus): We might be forcing ourselves to double up the
-          // computation of fileDiff (in the super.render() call), so we might want
-          // to figure out a way to avoid that.  That also could be just as simple as
-          // passing through fileDiff though... so maybe we good?
-          parseDiffFromFile(oldFile, newFile)
+        ? parseDiffFromFile(oldFile, newFile, this.options.diffOptions)
         : undefined);
 
     fileContainer = this.getOrCreateFileContainer(fileContainer);
