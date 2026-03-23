@@ -1,24 +1,156 @@
-import type { ReactNode } from 'react';
+/** @jsxImportSource preact */
 
-import {
-  splitByIndex,
-  splitCenter,
-  splitExtension,
-  splitFirst,
-  splitLast,
-  splitLeafPath,
-} from '../../lib/splits';
-import type {
-  CustomSplitFn,
+import type { ComponentChildren, CSSProperties } from 'preact';
+
+type PropsWithChildren<T = {}> = T & {
+  children?: ComponentChildren;
+};
+
+export type CSSPropertiesWithVars = CSSProperties & {
+  [key: `--${string}`]: string | number | undefined;
+};
+
+export interface MarkerProps extends PropsWithChildren {}
+
+export type TruncateMode = 'truncate' | 'fruncate';
+
+export interface OverflowTextProps extends PropsWithChildren {
+  mode?: TruncateMode;
+  style?: Omit<CSSPropertiesWithVars, 'height' | 'overflow'>;
+  className?: string;
+  marker?: ComponentChildren | ((props: MarkerProps) => ComponentChildren);
+  variant?: 'default' | 'fade';
+}
+
+export type MiddleTruncateProps = Omit<OverflowTextProps, 'mode' | 'children'> &
+  AllowableContentGroups & {
+    minimumLength?: number;
+    priority?: 'start' | 'end' | 'equal';
+    split?:
+      | 'center'
+      | 'extension'
+      | 'leaf-path'
+      | number
+      | SplitOffset
+      | CustomSplitFn;
+  };
+
+export type MiddleTruncateFilteredProps = Pick<
   MiddleTruncateProps,
-  OverflowTextProps,
-} from '../../lib/types';
+  'priority' | 'variant'
+> & { splitIndex?: number; splitOffset?: number };
+
+export type CustomSplitFn = (
+  contents: string,
+  props?: MiddleTruncateFilteredProps
+) => [string, string];
+export type SplitOffsetType = 'last' | 'first';
+export type SplitOffset = [SplitOffsetType, number];
+
+type AllowableContentGroups =
+  | {
+      children?: never;
+      contents: [ComponentChildren, ComponentChildren];
+    }
+  | {
+      contents?: never;
+      children: string;
+    };
+
+// Split the contents into two equal segments
+export const splitCenter: CustomSplitFn = (contents) => {
+  if (contents.length < 2) {
+    return [contents, ''];
+  }
+  const splitIndex = Math.ceil(contents.length / 2);
+  return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
+};
+
+// Find the last dot in the contents and split a that index
+export const splitExtension: CustomSplitFn = (contents) => {
+  if (contents.length < 4) {
+    return [contents, ''];
+  }
+  const lastDotIndex = contents.lastIndexOf('.');
+  const extensionIndex = lastDotIndex + 1;
+  const impliedExtensionLength = contents.length - extensionIndex;
+  const maxExtensionLength = 10;
+  const isTooLong = impliedExtensionLength > maxExtensionLength;
+
+  const splitIndex =
+    extensionIndex >= 1 && !isTooLong
+      ? extensionIndex
+      : Math.ceil(contents.length / 2);
+
+  return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
+};
+
+export const splitLeafPath: CustomSplitFn = (contents) => {
+  if (contents.length < 4) {
+    return [contents, ''];
+  }
+  const lastSlashIndex = contents.lastIndexOf('/');
+  const leafPathIndex = lastSlashIndex + 1;
+  const impliedLeafPathLength = contents.length - leafPathIndex;
+  const maxLeafPathLength = 25;
+  const isTooLong = impliedLeafPathLength > maxLeafPathLength;
+  const splitIndex =
+    leafPathIndex >= 1 && !isTooLong
+      ? leafPathIndex
+      : Math.ceil(contents.length / 2);
+  return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
+};
+
+export const splitByIndex: CustomSplitFn = (contents, { splitIndex } = {}) => {
+  if (typeof splitIndex !== 'number') {
+    const centerIndex = Math.ceil(contents.length / 2);
+    return [contents.slice(0, centerIndex), contents.slice(centerIndex)];
+  }
+  return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
+};
+
+export const splitLast: CustomSplitFn = (
+  contents: string,
+  { splitOffset } = {}
+) => {
+  // fall back to center split if the offset is not valid
+  if (
+    typeof splitOffset !== 'number' ||
+    splitOffset <= 0 ||
+    splitOffset >= contents.length
+  ) {
+    const centerIndex = Math.ceil(contents.length / 2);
+    return [contents.slice(0, centerIndex), contents.slice(centerIndex)];
+  }
+
+  const splitIndex = contents.length - splitOffset;
+  return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
+};
+
+export const splitFirst: CustomSplitFn = (
+  contents: string,
+  { splitOffset } = {}
+) => {
+  // fall back to center split if the offset is not valid
+  if (
+    typeof splitOffset !== 'number' ||
+    splitOffset <= 0 ||
+    splitOffset >= contents.length
+  ) {
+    const centerIndex = Math.ceil(contents.length / 2);
+    return [contents.slice(0, centerIndex), contents.slice(centerIndex)];
+  }
+
+  const splitIndex = splitOffset;
+  return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
+};
 
 function OverflowMarker({
   children,
   marker,
   variant = 'default',
 }: OverflowTextProps) {
+  'use no memo';
   const isFadeVariant = variant === 'fade';
   return (
     <div aria-hidden data-truncate-marker-cell>
@@ -36,6 +168,7 @@ function OverflowMarker({
 }
 
 function OverflowContent(options: OverflowTextProps) {
+  'use no memo';
   const { mode, children } = options;
 
   // The inner span wrapper here is only needed to implement
@@ -59,6 +192,7 @@ export function OverflowText({
   variant = 'default',
   ...props
 }: OverflowTextProps) {
+  'use no memo';
   const contentNode = (
     <OverflowContent key="content" mode={mode}>
       {children}
@@ -93,6 +227,7 @@ export function Truncate({
   children,
   ...props
 }: Omit<OverflowTextProps, 'mode'>) {
+  'use no memo';
   return (
     <OverflowText mode="truncate" {...props}>
       {children}
@@ -104,6 +239,7 @@ export function Fruncate({
   children,
   ...props
 }: Omit<OverflowTextProps, 'mode'>) {
+  'use no memo';
   return (
     <OverflowText mode="fruncate" {...props}>
       {children}
@@ -121,8 +257,9 @@ export function MiddleTruncate({
   style,
   ...props
 }: MiddleTruncateProps) {
-  let firstSegment: ReactNode | null = null;
-  let secondSegment: ReactNode | null = null;
+  'use no memo';
+  let firstSegment: ComponentChildren | null = null;
+  let secondSegment: ComponentChildren | null = null;
   if (Array.isArray(contents)) {
     if (contents.length !== 2) {
       console.error('MiddleTruncate: contents must be an array of two items');

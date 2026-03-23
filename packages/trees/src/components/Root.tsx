@@ -62,6 +62,7 @@ import type { ChildrenSortOption } from '../utils/sortChildren';
 import { useContextMenuController } from './hooks/useContextMenuController';
 import { useTree } from './hooks/useTree';
 import { Icon } from './Icon';
+import { MiddleTruncate } from './OverflowText';
 import { VirtualizedList } from './VirtualizedList';
 
 export interface FileTreeRootProps {
@@ -334,7 +335,7 @@ function TreeItemInner({
             fallbackName={itemName}
           />
         ) : (
-          itemName
+          <MiddleTruncate>{itemName}</MiddleTruncate>
         )}
       </div>
 

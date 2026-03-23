@@ -1,6 +1,7 @@
 export * from './constants';
 export * from './FileTree';
 export * from './loader';
+export { default as fileTreeStyles } from './style.css';
 export type {
   ContextMenuAnchorRect,
   ContextMenuItem,
@@ -9,4 +10,3 @@ export type {
 export * from './utils/expandImplicitParentDirectories';
 export * from './utils/sortChildren';
 export * from './utils/themeToTreeStyles';
-export { default as fileTreeStyles } from './style.css';
