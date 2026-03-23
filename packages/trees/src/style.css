@@ -616,7 +616,10 @@
     margin-bottom: -1px;
 
     /* Width of the fade from default marker to text */
-    --truncate-internal-marker-fade-width: var(--truncate-marker-fade-width, 2px);
+    --truncate-internal-marker-fade-width: var(
+      --truncate-marker-fade-width,
+      2px
+    );
     /* Width of the solid color between the fade from the default marker to the text */
     --truncate-internal-marker-gap: var(--truncate-marker-gap, 0px);
     /* Opacity of the marker 'color' property, not of the element itself */
@@ -823,5 +826,4 @@
       flex: 0 999999 max-content;
     }
   }
-
 }
