@@ -93,7 +93,7 @@ export function useContextMenuController({
 
   // Lazily resolve and cache the tree container and its virtualized scroll
   // child. The cache is invalidated when the container disconnects from DOM.
-  const getTreeContainer = (): Element | null => {
+  const getTreeContainer = useCallback((): Element | null => {
     if (
       treeContainerRef.current != null &&
       treeContainerRef.current.isConnected
@@ -105,7 +105,7 @@ export function useContextMenuController({
     scrollContainerRef.current =
       container?.querySelector('[data-file-tree-virtualized-scroll]') ?? null;
     return container;
-  };
+  }, [tree]);
 
   const setContextHoverItem = useCallback(
     (itemId: string | null) => {
@@ -138,7 +138,7 @@ export function useContextMenuController({
       contextHoverItemElRef.current = itemEl;
       contextHoverItemIdRef.current = itemId;
     },
-    [tree]
+    [getTreeContainer]
   );
 
   const isEventInContextMenu = useCallback((e: Event): boolean => {
@@ -204,7 +204,7 @@ export function useContextMenuController({
     }
 
     return false;
-  }, [tree]);
+  }, [getTreeContainer, tree]);
 
   const closeContextMenu = useCallback(
     (notify = true) => {
@@ -295,7 +295,7 @@ export function useContextMenuController({
       hoveredContextMenuItemRef.current = nextItemId;
       setContextHoverItem(nextItemId);
     },
-    [setContextHoverItem, tree]
+    [getTreeContainer, setContextHoverItem]
   );
 
   const openContextMenuForItem = useCallback(
@@ -491,7 +491,12 @@ export function useContextMenuController({
       if (scrollTimer != null) clearTimeout(scrollTimer);
       isScrollingRef.current = false;
     };
-  }, [closeContextMenu, isContextMenuEnabled, setContextHoverItem, tree]);
+  }, [
+    closeContextMenu,
+    getTreeContainer,
+    isContextMenuEnabled,
+    setContextHoverItem,
+  ]);
 
   useEffect(
     () => () => {
@@ -542,7 +547,12 @@ export function useContextMenuController({
       `[data-item-id="${focusedItemId}"]`
     ) as HTMLElement | null;
     updateTriggerPosition(itemEl);
-  }, [focusedItemId, isContextMenuEnabled, updateTriggerPosition, tree]);
+  }, [
+    focusedItemId,
+    getTreeContainer,
+    isContextMenuEnabled,
+    updateTriggerPosition,
+  ]);
 
   const handleTreePointerOver = useCallback(
     (e: PointerEvent) => {
