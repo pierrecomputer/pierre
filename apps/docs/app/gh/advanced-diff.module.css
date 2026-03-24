@@ -16,8 +16,5 @@
   contain: layout paint style;
   overflow: clip;
   box-shadow: 0 0 0 1px var(--color-border);
-  border-radius: 9px;
-  /* FIXME(amadeus): This sucks -- we shouldn't have it and figure out how to
-   * get the metrics stuff to add this gap... */
-  margin-bottom: 8px;
+  border-radius: 8px;
 }

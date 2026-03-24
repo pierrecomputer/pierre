@@ -1,4 +1,5 @@
 import type {
+  CodeViewerMetrics,
   HunkExpansionRegion,
   RenderRange,
   ThemesType,
@@ -53,6 +54,12 @@ export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
 export const DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
   hunkLineCount: 1,
+};
+
+export const DEFAULT_CODE_VIEWER_METRICS: CodeViewerMetrics = {
+  paddingTop: 8,
+  paddingBottom: 8,
+  gap: 8,
 };
 
 export const DEFAULT_EXPANDED_REGION: HunkExpansionRegion = Object.freeze({
