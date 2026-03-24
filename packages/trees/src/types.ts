@@ -40,4 +40,6 @@ export type ContextMenuOpenContext = {
   anchorElement: HTMLElement;
   anchorRect: ContextMenuAnchorRect;
   close: () => void;
+  canRename?: boolean;
+  startRenaming?: () => void;
 };

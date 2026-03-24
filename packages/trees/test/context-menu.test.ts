@@ -1,6 +1,17 @@
+import {
+  createTree,
+  hotkeysCoreFeature,
+  selectionFeature,
+  syncDataLoaderFeature,
+} from '@headless-tree/core';
 import { beforeAll, describe, expect, test } from 'bun:test';
 // @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
+
+import { renamingFeature } from '../src/features/renamingFeature';
+import { generateSyncDataLoader } from '../src/loader/sync';
+import type { ContextMenuOpenContext } from '../src/types';
+import type { FileTreeNode } from '../src/types';
 
 let FileTree: typeof import('../src/FileTree').FileTree;
 let preloadFileTree: typeof import('../src/ssr/preloadFileTree').preloadFileTree;
@@ -235,6 +246,259 @@ describe('context menu', () => {
         '[data-type="context-menu-anchor"] slot[name="context-menu"]'
       )
     ).not.toBeNull();
+  });
+
+  test('context menu exposes startRenaming/canRename when renaming is enabled', async () => {
+    const openContextRef: { current: ContextMenuOpenContext | null } = {
+      current: null,
+    };
+    const ft = new FileTree(
+      { initialFiles: ['README.md'], renaming: true },
+      {
+        onContextMenuOpen: (_item, context) => {
+          openContextRef.current = context;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+
+    const capturedContext = openContextRef.current;
+    expect(capturedContext).not.toBeNull();
+    if (capturedContext == null) {
+      throw new Error('Expected context menu open context');
+    }
+    expect(capturedContext.canRename).toBe(true);
+    expect(typeof capturedContext.startRenaming).toBe('function');
+
+    capturedContext.startRenaming?.();
+    await Promise.resolve();
+
+    const tree = ft.handleRef.current?.tree;
+    expect(tree?.isRenamingItem?.()).toBe(true);
+    expect(
+      shadowRoot?.querySelector('[data-type="context-menu-wash"]')
+    ).toBeNull();
+  });
+
+  test('context menu reports canRename=false when renaming is disabled', async () => {
+    let canRenameValue: boolean | undefined;
+    const ft = new FileTree(
+      { initialFiles: ['README.md'] },
+      {
+        onContextMenuOpen: (_item, context) => {
+          canRenameValue = context.canRename;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+
+    expect(canRenameValue).toBe(false);
+  });
+
+  test('renaming feature applies onInput value before completeRenaming', () => {
+    const renamedValueRef: { current: string | null } = { current: null };
+    const tree = createTree<FileTreeNode>({
+      rootItemId: 'root',
+      dataLoader: generateSyncDataLoader(['README.md']),
+      getItemName: (item) => item.getItemData().name,
+      isItemFolder: (item) => item.getItemData()?.children?.direct != null,
+      features: [
+        syncDataLoaderFeature,
+        selectionFeature,
+        hotkeysCoreFeature,
+        renamingFeature,
+      ],
+      onRename: (_item, value) => {
+        renamedValueRef.current = value;
+      },
+    });
+    tree.setMounted(true);
+    tree.rebuildTree();
+
+    const readme = tree
+      .getItems()
+      .find((item) => item.getItemData().path === 'README.md');
+    if (readme == null) {
+      throw new Error('Expected README item');
+    }
+
+    readme.startRenaming();
+    const renameInputProps = readme.getRenameInputProps() as {
+      onInput?: (event: { target?: { value: string } }) => void;
+    };
+    renameInputProps.onInput?.({ target: { value: 'RENAMED.md' } });
+    tree.completeRenaming();
+
+    expect(renamedValueRef.current).toBe('RENAMED.md');
+  });
+
+  test('renaming.onRename is called for file rename', async () => {
+    const renameEvents: Array<{
+      sourcePath: string;
+      destinationPath: string;
+      isFolder: boolean;
+    }> = [];
+    const openContextRef: { current: ContextMenuOpenContext | null } = {
+      current: null,
+    };
+    const ft = new FileTree(
+      {
+        initialFiles: ['README.md'],
+        renaming: {
+          onRename: (event) => {
+            renameEvents.push(event);
+          },
+        },
+      },
+      {
+        onContextMenuOpen: (_item, context) => {
+          openContextRef.current = context;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+
+    const context = openContextRef.current;
+    expect(context).not.toBeNull();
+    if (context == null) {
+      throw new Error('Expected context menu open context');
+    }
+    context.startRenaming?.();
+    await Promise.resolve();
+
+    const tree = ft.handleRef.current?.tree;
+    expect(tree).not.toBeUndefined();
+    tree?.applySubStateUpdate('renamingValue', () => 'RENAMED.md');
+    tree?.completeRenaming();
+    await Promise.resolve();
+
+    expect(renameEvents).toEqual([
+      {
+        sourcePath: 'README.md',
+        destinationPath: 'RENAMED.md',
+        isFolder: false,
+      },
+    ]);
+    expect(ft.getFiles()).toEqual(['RENAMED.md']);
+  });
+
+  test('renaming.onRename is called for folder rename', async () => {
+    const renameEvents: Array<{
+      sourcePath: string;
+      destinationPath: string;
+      isFolder: boolean;
+    }> = [];
+    const openContextRef: { current: ContextMenuOpenContext | null } = {
+      current: null,
+    };
+    const ft = new FileTree(
+      {
+        initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
+        renaming: {
+          onRename: (event) => {
+            renameEvents.push(event);
+          },
+        },
+      },
+      {
+        onContextMenuOpen: (_item, context) => {
+          openContextRef.current = context;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const itemButton = shadowRoot?.querySelector(
+      'button[data-type="item"]'
+    ) as HTMLButtonElement | null;
+    expect(itemButton).not.toBeNull();
+
+    itemButton?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+
+    const context = openContextRef.current;
+    expect(context).not.toBeNull();
+    if (context == null) {
+      throw new Error('Expected context menu open context');
+    }
+    context.startRenaming?.();
+    await Promise.resolve();
+
+    const tree = ft.handleRef.current?.tree;
+    expect(tree).not.toBeUndefined();
+    tree?.applySubStateUpdate('renamingValue', () => 'source');
+    tree?.completeRenaming();
+    await Promise.resolve();
+
+    expect(renameEvents).toEqual([
+      {
+        sourcePath: 'src',
+        destinationPath: 'source',
+        isFolder: true,
+      },
+    ]);
+    expect(ft.getFiles()).toContain('source/index.ts');
+    expect(ft.getFiles()).toContain('source/components/Button.tsx');
   });
 
   test('context menu close helper closes tree-managed open state', async () => {

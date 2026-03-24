@@ -33,7 +33,7 @@ export interface UseContextMenuControllerResult {
   isContextMenuOpen: boolean;
   contextMenuAnchorRef: { current: HTMLDivElement | null };
   triggerRef: { current: HTMLButtonElement | null };
-  closeContextMenu: (notify?: boolean) => void;
+  closeContextMenu: (notify?: boolean, restoreFocus?: boolean) => void;
   openContextMenuForItem: (
     itemId: string,
     anchorEl: HTMLElement | null,
@@ -207,7 +207,7 @@ export function useContextMenuController({
   }, [getTreeContainer, tree]);
 
   const closeContextMenu = useCallback(
-    (notify = true) => {
+    (notify = true, restoreFocus = true) => {
       if (contextMenuItemIdRef.current == null) return;
 
       clearContextMenuRestoreTimers();
@@ -217,6 +217,13 @@ export function useContextMenuController({
       setContextMenuItemId(null);
       if (notify) {
         callbacksRef?.current.onContextMenuClose?.();
+      }
+      if (!restoreFocus) {
+        contextMenuRestoreFocusRef.current = {
+          element: null,
+          focusedItemId: null,
+        };
+        return;
       }
 
       contextMenuRestoreFocusTimerRef.current = setTimeout(() => {
@@ -346,6 +353,7 @@ export function useContextMenuController({
       setContextMenuItemId(itemId);
       const item = tree.getItemInstance(itemId);
       const data = item.getItemData();
+      const canRename = item.canRename?.() ?? false;
       const anchorRect = menuAnchorEl.getBoundingClientRect();
       openContextMenu(
         {
@@ -365,6 +373,12 @@ export function useContextMenuController({
             y: anchorRect.y,
           },
           close: () => closeContextMenu(),
+          canRename,
+          startRenaming: () => {
+            if (!canRename) return;
+            closeContextMenu(true, false);
+            item.startRenaming?.();
+          },
         }
       );
     },

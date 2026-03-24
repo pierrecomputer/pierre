@@ -6,7 +6,11 @@ import {
   FileTree,
   HEADER_SLOT_NAME,
 } from '@pierre/trees';
-import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/trees';
+import type {
+  ContextMenuOpenContext,
+  FileTreeOptions,
+  FileTreeStateConfig,
+} from '@pierre/trees';
 import { FileTree as FileTreeReact } from '@pierre/trees/react';
 import '@pierre/trees/web-components';
 import {
@@ -1878,138 +1882,21 @@ function ReactSSRCustomIcons({
 
 type ContextMenuDemoItem = { path: string; isFolder: boolean };
 
-type RenameContextMenuItemResult = { nextFiles: string[] } | { error: string };
-
-function splitFilePath(path: string): { parentPath: string; baseName: string } {
-  const separatorIndex = path.lastIndexOf('/');
-  if (separatorIndex < 0) {
-    return { parentPath: '', baseName: path };
-  }
-  return {
-    parentPath: path.slice(0, separatorIndex),
-    baseName: path.slice(separatorIndex + 1),
-  };
-}
-
-function joinFilePath(parentPath: string, baseName: string): string {
-  return parentPath === '' ? baseName : `${parentPath}/${baseName}`;
-}
-
-/**
- * Renames a selected file/folder path by rewriting the in-memory file list.
- */
-function renameContextMenuItemInFileList({
-  files,
-  item,
-  nextBasename,
-}: {
-  files: string[];
-  item: ContextMenuDemoItem;
-  nextBasename: string;
-}): RenameContextMenuItemResult {
-  const trimmedBasename = nextBasename.trim();
-  if (trimmedBasename.length === 0) {
-    return { error: 'Name cannot be empty.' };
-  }
-  if (trimmedBasename.includes('/')) {
-    return { error: 'Name cannot include "/".' };
-  }
-
-  const { parentPath, baseName } = splitFilePath(item.path);
-  if (trimmedBasename === baseName) {
-    return { nextFiles: files };
-  }
-
-  const destinationPath = joinFilePath(parentPath, trimmedBasename);
-  const nextFiles = new Array<string>(files.length);
-  const seenPaths = new Set<string>();
-
-  if (!item.isFolder) {
-    let renamed = false;
-    for (let index = 0; index < files.length; index++) {
-      const file = files[index];
-      const nextFile = file === item.path ? destinationPath : file;
-      if (seenPaths.has(nextFile)) {
-        return { error: `"${destinationPath}" already exists.` };
-      }
-      seenPaths.add(nextFile);
-      nextFiles[index] = nextFile;
-      if (file === item.path) {
-        renamed = true;
-      }
-    }
-    if (!renamed) {
-      return { error: 'Could not find the selected file to rename.' };
-    }
-    return { nextFiles };
-  }
-
-  const sourcePrefix = `${item.path}/`;
-  const destinationPrefix = `${destinationPath}/`;
-  let renamedPathCount = 0;
-
-  for (let index = 0; index < files.length; index++) {
-    const file = files[index];
-    const isWithinRenamedFolder =
-      file === item.path || file.startsWith(sourcePrefix);
-    if (
-      !isWithinRenamedFolder &&
-      (file === destinationPath || file.startsWith(destinationPrefix))
-    ) {
-      return { error: `"${destinationPath}" already exists.` };
-    }
-
-    const nextFile = isWithinRenamedFolder
-      ? `${destinationPath}${file.slice(item.path.length)}`
-      : file;
-    if (seenPaths.has(nextFile)) {
-      return { error: `"${destinationPath}" already exists.` };
-    }
-
-    seenPaths.add(nextFile);
-    nextFiles[index] = nextFile;
-    if (isWithinRenamedFolder) {
-      renamedPathCount++;
-    }
-  }
-
-  if (renamedPathCount === 0) {
-    return { error: 'Cannot rename an empty folder in this demo.' };
-  }
-  return { nextFiles };
-}
-
 function TreeDemoContextMenu({
   item,
-  onClose,
-  onRename,
+  context,
 }: {
   item: ContextMenuDemoItem;
-  onClose: () => void;
-  onRename?: (item: ContextMenuDemoItem, nextBasename: string) => void;
+  context: ContextMenuOpenContext;
 }) {
   const itemType = item.isFolder ? 'Folder' : 'File';
-  const handleRenameSelect = () => {
-    if (onRename == null) {
-      onClose();
-      return;
-    }
-    const { baseName } = splitFilePath(item.path);
-    const nextBasename = window.prompt(
-      `Rename ${itemType.toLowerCase()}`,
-      baseName
-    );
-    if (nextBasename != null) {
-      onRename(item, nextBasename);
-    }
-    onClose();
-  };
+  const handleRenameSelect = () => context.startRenaming?.();
 
   return (
     <DropdownMenu
       open
       modal={false}
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={(open) => !open && context.close()}
     >
       <DropdownMenuTrigger asChild>
         <button
@@ -2036,12 +1923,15 @@ function TreeDemoContextMenu({
           {itemType}: {item.path}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onClose}>Open</DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleRenameSelect}>
+        <DropdownMenuItem onSelect={context.close}>Open</DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={handleRenameSelect}
+          disabled={context.canRename !== true}
+        >
           Rename
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={onClose}
+          onSelect={context.close}
           className="text-destructive focus:text-destructive"
         >
           Delete
@@ -2055,19 +1945,17 @@ function renderVanillaContextMenuSlot({
   slotElement,
   menuRootRef,
   item,
-  onClose,
-  onRename,
+  context,
 }: {
   slotElement: HTMLDivElement;
   menuRootRef: { current: ReactDomRoot | null };
   item: ContextMenuDemoItem;
-  onClose: () => void;
-  onRename?: (item: ContextMenuDemoItem, nextBasename: string) => void;
+  context: ContextMenuOpenContext;
 }): void {
   menuRootRef.current ??= createRoot(slotElement);
   slotElement.style.display = 'block';
   menuRootRef.current.render(
-    <TreeDemoContextMenu item={item} onClose={onClose} onRename={onRename} />
+    <TreeDemoContextMenu item={item} context={context} />
   );
 }
 
@@ -2308,31 +2196,27 @@ function VanillaSSRContextMenu({
   const menuRootRef = useRef<ReactDomRoot | null>(null);
   const [files, setFiles] = useState<string[]>(options.initialFiles);
   const filesRef = useRef(files);
+  const renamingOptions = useMemo(
+    () => ({
+      onError: (error: string) => {
+        window.alert(error);
+      },
+      onRename: (event: {
+        sourcePath: string;
+        destinationPath: string;
+        isFolder: boolean;
+      }) => {
+        console.log(
+          `[trees-dev][vanilla-ssr] rename ${event.isFolder ? 'folder' : 'file'}: ${event.sourcePath} -> ${event.destinationPath}`
+        );
+      },
+    }),
+    []
+  );
 
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
-
-  const handleRename = useCallback(
-    (item: ContextMenuDemoItem, nextBasename: string) => {
-      const result = renameContextMenuItemInFileList({
-        files: filesRef.current,
-        item,
-        nextBasename,
-      });
-      if ('error' in result) {
-        window.alert(result.error);
-        return;
-      }
-      if (result.nextFiles === filesRef.current) {
-        return;
-      }
-      filesRef.current = result.nextFiles;
-      setFiles(result.nextFiles);
-      instanceRef.current?.setFiles(result.nextFiles);
-    },
-    []
-  );
 
   const ref = useCallback(
     (node: HTMLDivElement | null) => {
@@ -2358,16 +2242,24 @@ function VanillaSSRContextMenu({
       };
 
       const fileTree = new FileTree(
-        { ...options, initialFiles: filesRef.current },
+        {
+          ...options,
+          initialFiles: filesRef.current,
+          renaming: renamingOptions,
+        },
         {
           ...stateConfig,
+          onFilesChange: (nextFiles) => {
+            filesRef.current = nextFiles;
+            setFiles(nextFiles);
+            stateConfig?.onFilesChange?.(nextFiles);
+          },
           onContextMenuOpen: (item, context) => {
             renderVanillaContextMenuSlot({
               slotElement,
               menuRootRef,
               item,
-              onClose: context.close,
-              onRename: handleRename,
+              context,
             });
           },
           onContextMenuClose: () => {
@@ -2398,7 +2290,7 @@ function VanillaSSRContextMenu({
         instanceRef.current = null;
       };
     },
-    [handleRename, options, stateConfig]
+    [options, renamingOptions, stateConfig]
   );
 
   return (
@@ -2425,39 +2317,34 @@ function ReactSSRContextMenu({
   prerenderedHTML: string;
 }) {
   const [files, setFiles] = useState<string[]>(() => initialFiles ?? []);
-
-  const handleRename = useCallback(
-    (item: ContextMenuDemoItem, nextBasename: string) => {
-      const result = renameContextMenuItemInFileList({
-        files,
-        item,
-        nextBasename,
-      });
-      if ('error' in result) {
-        window.alert(result.error);
-        return;
-      }
-      if (result.nextFiles !== files) {
-        setFiles(result.nextFiles);
-      }
-    },
-    [files]
+  const renamingOptions = useMemo(
+    () => ({
+      onError: (error: string) => {
+        window.alert(error);
+      },
+      onRename: (event: {
+        sourcePath: string;
+        destinationPath: string;
+        isFolder: boolean;
+      }) => {
+        console.log(
+          `[trees-dev][react-ssr] rename ${event.isFolder ? 'folder' : 'file'}: ${event.sourcePath} -> ${event.destinationPath}`
+        );
+      },
+    }),
+    []
   );
 
   return (
     <FileTreeReact
-      options={options}
+      options={{ ...options, renaming: renamingOptions }}
       files={files}
       onFilesChange={setFiles}
       prerenderedHTML={prerenderedHTML}
       initialExpandedItems={stateConfig?.initialExpandedItems}
       onSelection={stateConfig?.onSelection}
       renderContextMenu={(item, context) => (
-        <TreeDemoContextMenu
-          item={item}
-          onClose={context.close}
-          onRename={handleRename}
-        />
+        <TreeDemoContextMenu item={item} context={context} />
       )}
     />
   );
@@ -2471,25 +2358,21 @@ function VirtualizedLinuxKernelCard() {
   const [mounted, setMounted] = useState(false);
   const menuRootRef = useRef<ReactDomRoot | null>(null);
   const instanceRef = useRef<FileTree | null>(null);
-  const filesRef = useRef<string[]>(linuxKernelFiles);
-
-  const handleRename = useCallback(
-    (item: ContextMenuDemoItem, nextBasename: string) => {
-      const result = renameContextMenuItemInFileList({
-        files: filesRef.current,
-        item,
-        nextBasename,
-      });
-      if ('error' in result) {
-        window.alert(result.error);
-        return;
-      }
-      if (result.nextFiles === filesRef.current) {
-        return;
-      }
-      filesRef.current = result.nextFiles;
-      instanceRef.current?.setFiles(result.nextFiles);
-    },
+  const renamingOptions = useMemo(
+    () => ({
+      onError: (error: string) => {
+        window.alert(error);
+      },
+      onRename: (event: {
+        sourcePath: string;
+        destinationPath: string;
+        isFolder: boolean;
+      }) => {
+        console.log(
+          `[trees-dev][vanilla-virtualized] rename ${event.isFolder ? 'folder' : 'file'}: ${event.sourcePath} -> ${event.destinationPath}`
+        );
+      },
+    }),
     []
   );
 
@@ -2503,10 +2386,11 @@ function VirtualizedLinuxKernelCard() {
 
       const fileTree = new FileTree(
         {
-          initialFiles: filesRef.current,
+          initialFiles: linuxKernelFiles,
           virtualize: { threshold: 0 },
           flattenEmptyDirectories: true,
           sort: false,
+          renaming: renamingOptions,
         },
         {
           initialExpandedItems: linuxKernelAllFolders,
@@ -2515,8 +2399,7 @@ function VirtualizedLinuxKernelCard() {
               slotElement,
               menuRootRef,
               item,
-              onClose: context.close,
-              onRename: handleRename,
+              context,
             });
           },
           onContextMenuClose: () => {
@@ -2546,7 +2429,7 @@ function VirtualizedLinuxKernelCard() {
         instanceRef.current = null;
       };
     },
-    [handleRename]
+    [renamingOptions]
   );
 
   return (

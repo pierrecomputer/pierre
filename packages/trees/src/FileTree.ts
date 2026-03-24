@@ -51,6 +51,23 @@ export interface FileTreeSearchConfig {
   search?: boolean;
 }
 
+export type FileTreeRenamingItem = {
+  path: string;
+  isFolder: boolean;
+};
+
+export type FileTreeRenameEvent = {
+  sourcePath: string;
+  destinationPath: string;
+  isFolder: boolean;
+};
+
+export interface FileTreeRenamingConfig {
+  canRename?: (item: FileTreeRenamingItem) => boolean;
+  onError?: (error: string) => void;
+  onRename?: (event: FileTreeRenameEvent) => void;
+}
+
 export type FileTreeSelectionItem = {
   path: string;
   isFolder: boolean;
@@ -80,6 +97,8 @@ export interface FileTreeCallbacks {
   onContextMenuClose?: () => void;
   /** Internal: called when a DnD move produces a new file list. */
   _onDragMoveFiles?: (newFiles: string[]) => void;
+  /** Internal: called when a rename produces a new file list. */
+  _onRenameFiles?: (newFiles: string[]) => void;
 }
 
 type RemappedIcon =
@@ -106,6 +125,8 @@ export interface FileTreeOptions {
   lockedPaths?: string[];
   /** Return true to overwrite the destination file when a DnD move collides. */
   onCollision?: (collision: FileTreeCollision) => boolean;
+  /** Enable inline item renaming (F2/context menu start). */
+  renaming?: boolean | FileTreeRenamingConfig;
   /** Render the built-in search input. Defaults to `false`. */
   search?: boolean;
   /** Sort children within each directory. Defaults to `true` (folders first,
@@ -147,6 +168,9 @@ export interface FileTreeStateConfig {
 }
 
 const isBrowser = typeof document !== 'undefined';
+const isRenamingEnabled = (
+  renaming: FileTreeOptions['renaming'] | undefined
+): boolean => renaming != null && renaming !== false;
 
 export class FileTree {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
@@ -188,6 +212,9 @@ export class FileTree {
           options.dragAndDrop === true
             ? (newFiles) => this.setFiles(newFiles)
             : undefined,
+        _onRenameFiles: isRenamingEnabled(options.renaming)
+          ? (newFiles) => this.setFiles(newFiles)
+          : undefined,
       },
     };
   }
@@ -427,6 +454,14 @@ export class FileTree {
       this.callbacksRef.current._onDragMoveFiles = (newFiles) =>
         this.setFiles(newFiles);
     }
+    if ('renaming' in options) {
+      if (!isRenamingEnabled(options.renaming)) {
+        this.callbacksRef.current._onRenameFiles = undefined;
+      } else {
+        this.callbacksRef.current._onRenameFiles ??= (newFiles) =>
+          this.setFiles(newFiles);
+      }
+    }
 
     // Update callbacks without re-rendering
     if (state?.onExpandedItemsChange !== undefined) {
@@ -460,6 +495,7 @@ export class FileTree {
       'flattenEmptyDirectories',
       'lockedPaths',
       'onCollision',
+      'renaming',
       'sort',
       'unsafeCSS',
       'useLazyDataLoader',

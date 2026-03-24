@@ -400,6 +400,27 @@
     /* white-space: nowrap; */
   }
 
+  [data-item-rename-input] {
+    --trees-focus-ring-width: 2px;
+    width: 100%;
+    min-width: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: calc(var(--trees-row-height) - 8px);
+    height: calc(var(--trees-row-height) - 8px);
+    color: inherit;
+    background-color: var(--trees-search-bg);
+    border: 1px solid var(--trees-border-color);
+    border-radius: calc(var(--trees-border-radius) - 1px);
+    padding-inline: 6px;
+    outline: none;
+
+    &:focus-visible {
+      outline: var(--trees-focus-ring-width) solid var(--trees-focus-ring-color);
+      outline-offset: var(--trees-focus-ring-offset);
+    }
+  }
+
   [data-item-section='status'] {
     flex: 0 0 auto;
     width: 12px;

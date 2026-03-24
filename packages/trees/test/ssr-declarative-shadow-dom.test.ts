@@ -2,6 +2,11 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 // @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
+import {
+  remapExpandedPathsForFolderRename,
+  renameFileTreePaths,
+} from '../src/utils/renameFileTreePaths';
+
 let FileTree: typeof import('../src/FileTree').FileTree;
 let preloadFileTree: typeof import('../src/ssr/preloadFileTree').preloadFileTree;
 let ensureFileTreeStyles: typeof import('../src/components/web-components').ensureFileTreeStyles;
@@ -473,6 +478,31 @@ describe('SSR + declarative shadow DOM', () => {
 
     ft.setFiles(['b.txt', 'c.txt']);
     expect(calls).toEqual([['b.txt', 'c.txt']]);
+  });
+
+  test('folder rename remaps expanded subtree paths', () => {
+    const result = renameFileTreePaths({
+      files: ['src/index.ts', 'src/components/Button.tsx'],
+      path: 'src',
+      isFolder: true,
+      nextBasename: 'source',
+    });
+    expect('error' in result).toBe(false);
+    if ('error' in result) {
+      return;
+    }
+
+    const nextExpanded = remapExpandedPathsForFolderRename({
+      expandedPaths: ['src', 'src/components'],
+      sourcePath: result.sourcePath,
+      destinationPath: result.destinationPath,
+    });
+
+    expect(result.nextFiles).toContain('source/index.ts');
+    expect(result.nextFiles).toContain('source/components/Button.tsx');
+    expect(nextExpanded).toContain('source');
+    expect(nextExpanded).toContain('source/components');
+    expect(nextExpanded).not.toContain('src');
   });
 
   test('setOptions with state.files invokes onFilesChange callback', () => {

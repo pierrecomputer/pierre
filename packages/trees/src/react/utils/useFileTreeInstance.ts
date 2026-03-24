@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import {
   FileTree,
+  type FileTreeCallbacks,
   type FileTreeOptions,
   type FileTreeSelectionItem,
   type FileTreeStateConfig,
@@ -194,12 +195,22 @@ export function useFileTreeInstance({
 
       const setupControlledDnD = (inst: FileTree): void => {
         const sp = statePropsRef.current;
-        if (sp.files !== undefined && options.dragAndDrop === true) {
-          inst.setCallbacks({
-            _onDragMoveFiles: (newFiles) => {
+        if (sp.files === undefined) return;
+        const controlledCallbacks: Partial<FileTreeCallbacks> = {
+          ...(options.dragAndDrop === true && {
+            _onDragMoveFiles: (newFiles: string[]) => {
               sp.onFilesChange?.(newFiles);
             },
-          });
+          }),
+          ...(options.renaming != null &&
+            options.renaming !== false && {
+              _onRenameFiles: (newFiles: string[]) => {
+                sp.onFilesChange?.(newFiles);
+              },
+            }),
+        };
+        if (Object.keys(controlledCallbacks).length > 0) {
+          inst.setCallbacks(controlledCallbacks);
         }
       };
 
@@ -299,6 +310,13 @@ export function useFileTreeInstance({
             onFilesChange?.(newFiles);
           },
         }),
+      ...(files !== undefined &&
+        options.renaming != null &&
+        options.renaming !== false && {
+          _onRenameFiles: (newFiles: string[]) => {
+            onFilesChange?.(newFiles);
+          },
+        }),
     });
   }, [
     onExpandedItemsChange,
@@ -309,6 +327,7 @@ export function useFileTreeInstance({
     onContextMenuClose,
     files,
     options.dragAndDrop,
+    options.renaming,
   ]);
 
   return { ref };
