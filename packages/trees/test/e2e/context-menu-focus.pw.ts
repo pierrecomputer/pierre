@@ -72,6 +72,19 @@ test.describe('file-tree context menu focus continuity', () => {
 
     const menu = page.locator('[data-test-context-menu]');
     await expect(menu).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const deleteButton = document.querySelector(
+            '[data-test-menu-delete]'
+          );
+          return (
+            deleteButton instanceof HTMLButtonElement &&
+            document.activeElement === deleteButton
+          );
+        })
+      )
+      .toBe(true);
 
     // While the menu is open, tree navigation should be blocked.
     await page.keyboard.press('ArrowDown');

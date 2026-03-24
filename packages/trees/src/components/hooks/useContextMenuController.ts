@@ -405,7 +405,7 @@ export function useContextMenuController({
 
   const handleContextMenuKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (contextMenuItemIdRef.current == null || e.defaultPrevented) {
+      if (contextMenuItemIdRef.current == null) {
         return;
       }
       if (!isEventInContextMenu(e)) {
