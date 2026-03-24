@@ -13,6 +13,7 @@ import type {
   BaseCodeOptions,
   DiffsHighlighter,
   FileContents,
+  FileHeaderRenderMode,
   LineAnnotation,
   RenderedFileASTCache,
   RenderFileOptions,
@@ -72,8 +73,9 @@ interface LineCache {
   lines: string[];
 }
 
-// oxlint-disable-next-line typescript/no-empty-object-type
-export interface FileRendererOptions extends BaseCodeOptions {}
+export interface FileRendererOptions extends BaseCodeOptions {
+  headerRenderMode?: FileHeaderRenderMode;
+}
 
 let instanceId = -1;
 
@@ -417,9 +419,10 @@ export class FileRenderer<LAnnotation = undefined> {
     themeStyles: string,
     baseThemeType: 'light' | 'dark' | undefined
   ) {
-    const { themeType = 'system' } = this.options;
+    const { headerRenderMode = 'default', themeType = 'system' } = this.options;
     return createFileHeaderElement({
       fileOrDiff: file,
+      mode: headerRenderMode,
       themeStyles,
       themeType: baseThemeType ?? themeType,
     });

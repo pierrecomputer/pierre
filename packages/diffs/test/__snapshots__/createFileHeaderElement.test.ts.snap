@@ -1,0 +1,106 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`createFileHeaderElement renders default file header AST 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [],
+          "properties": {
+            "name": "header-prefix",
+          },
+          "tagName": "slot",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [],
+              "properties": {
+                "href": "#diffs-icon-file-code",
+              },
+              "tagName": "use",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-change-icon": "file",
+            "height": 16,
+            "viewBox": "0 0 16 16",
+            "width": 16,
+          },
+          "tagName": "svg",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "src/index.ts",
+            },
+          ],
+          "properties": {
+            "data-title": "",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-header-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [],
+          "properties": {
+            "name": "header-metadata",
+          },
+          "tagName": "slot",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-metadata": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-change-type": undefined,
+    "data-diffs-header": "",
+    "data-theme-type": "light",
+    "style": "--test: 1;",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;
+
+exports[`createFileHeaderElement renders custom file header AST 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "properties": {
+        "name": "header-custom",
+      },
+      "tagName": "slot",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-change-type": undefined,
+    "data-diffs-header": "",
+    "data-theme-type": "light",
+    "style": "--test: 1;",
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;

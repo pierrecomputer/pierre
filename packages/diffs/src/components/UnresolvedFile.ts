@@ -510,7 +510,7 @@ export class UnresolvedFile<
   ): void {
     const action = this.conflictActions[conflictIndex];
     if (action == null) {
-      return undefined;
+      return;
     }
     if (action.conflictIndex !== conflictIndex) {
       console.error({ conflictIndex, action });
@@ -530,7 +530,7 @@ export class UnresolvedFile<
       actions == null ||
       markerRows == null
     ) {
-      return undefined;
+      return;
     }
 
     this.computedCache = { file, fileDiff, actions, markerRows };

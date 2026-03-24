@@ -23,14 +23,14 @@ export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
   themeStyles: string;
   themeType: ThemeTypes;
-  mode?: FileHeaderRenderMode;
+  mode: FileHeaderRenderMode;
 }
 
 export function createFileHeaderElement({
   fileOrDiff,
   themeStyles,
   themeType,
-  mode = 'default',
+  mode,
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {

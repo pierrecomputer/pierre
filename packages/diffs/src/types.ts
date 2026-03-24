@@ -439,6 +439,7 @@ export type RenderHeaderPrefixCallback = (
 
 export type RenderFileMetadata = (
   file: FileContents
+  // REVIEW: We should add the instance as an argument
 ) => Element | null | undefined | string | number;
 
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;

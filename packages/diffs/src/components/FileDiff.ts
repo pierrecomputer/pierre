@@ -2,6 +2,7 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
@@ -21,6 +22,7 @@ import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
 import {
   DiffHunksRenderer,
+  type DiffHunksRendererOptions,
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
 import { SVGSpriteSheet } from '../sprite';
@@ -97,6 +99,7 @@ export interface FileDiffOptions<LAnnotation>
   enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderHeaderPrefixCallback;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
+  renderCustomHeader?: RenderHeaderMetadataCallback;
   /**
    * When true, errors during rendering are rethrown instead of being caught
    * and displayed in the DOM. Useful for testing or when you want to handle
@@ -174,6 +177,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected headerElement: HTMLElement | undefined;
   protected headerPrefix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
+  protected headerCustom: HTMLElement | undefined;
   protected separatorCache: Map<string, CustomHunkElementCache> = new Map();
   protected errorWrapper: HTMLElement | undefined;
   protected placeHolder: HTMLElement | undefined;
@@ -227,9 +231,11 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected getHunksRendererOptions(
     options: FileDiffOptions<LAnnotation>
-  ): BaseDiffOptions {
+  ): DiffHunksRendererOptions {
     return {
       ...options,
+      headerRenderMode:
+        options.renderCustomHeader != null ? 'custom' : 'default',
       hunkSeparators:
         typeof options.hunkSeparators === 'function'
           ? 'custom'
@@ -443,6 +449,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerElement = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
@@ -658,13 +665,7 @@ export class FileDiff<LAnnotation = undefined> {
     if (this.fileDiff == null) {
       return false;
     }
-    this.hunksRenderer.setOptions({
-      ...this.options,
-      hunkSeparators:
-        typeof this.options.hunkSeparators === 'function'
-          ? 'custom'
-          : this.options.hunkSeparators,
-    });
+    this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
 
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
@@ -682,14 +683,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.headerElement = undefined;
         this.lastRenderedHeaderHTML = undefined;
       }
-      if (this.headerPrefix != null) {
-        this.headerPrefix.remove();
-        this.headerPrefix = undefined;
-      }
-      if (this.headerMetadata != null) {
-        this.headerMetadata.remove();
-        this.headerMetadata = undefined;
-      }
+      this.clearHeaderSlots();
     }
     fileContainer = this.getOrCreateFileContainer(
       fileContainer,
@@ -880,6 +874,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.gutterUtilityContent?.remove();
     this.headerPrefix?.remove();
     this.headerMetadata?.remove();
+    this.headerCustom?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
     this.unsafeCSSStyle?.remove();
@@ -894,6 +889,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.gutterUtilityContent = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
     this.unsafeCSSStyle = undefined;
@@ -1109,13 +1105,29 @@ export class FileDiff<LAnnotation = undefined> {
 
     if (this.isContainerManaged) return;
 
-    const { renderHeaderPrefix, renderHeaderMetadata } = this.options;
-    if (this.headerPrefix != null) {
-      this.headerPrefix.remove();
+    const { renderCustomHeader, renderHeaderPrefix, renderHeaderMetadata } =
+      this.options;
+
+    if (renderCustomHeader != null) {
+      const content =
+        renderCustomHeader({
+          deletionFile: this.deletionFile,
+          additionFile: this.additionFile,
+          fileDiff: this.fileDiff,
+        }) ?? undefined;
+      this.headerCustom = this.upsertHeaderSlotElement(
+        container,
+        this.headerCustom,
+        CUSTOM_HEADER_SLOT_ID,
+        content
+      );
+      this.headerPrefix?.remove();
+      this.headerMetadata?.remove();
+      this.headerPrefix = undefined;
+      this.headerMetadata = undefined;
+      return;
     }
-    if (this.headerMetadata != null) {
-      this.headerMetadata.remove();
-    }
+
     const prefix =
       renderHeaderPrefix?.({
         deletionFile: this.deletionFile,
@@ -1128,26 +1140,66 @@ export class FileDiff<LAnnotation = undefined> {
         additionFile: this.additionFile,
         fileDiff: this.fileDiff,
       }) ?? undefined;
-    if (prefix != null) {
-      this.headerPrefix = document.createElement('div');
-      this.headerPrefix.slot = HEADER_PREFIX_SLOT_ID;
-      if (prefix instanceof Element) {
-        this.headerPrefix.appendChild(prefix);
-      } else {
-        this.headerPrefix.innerText = `${prefix}`;
-      }
-      container.appendChild(this.headerPrefix);
+    this.headerPrefix = this.upsertHeaderSlotElement(
+      container,
+      this.headerPrefix,
+      HEADER_PREFIX_SLOT_ID,
+      prefix
+    );
+    this.headerMetadata = this.upsertHeaderSlotElement(
+      container,
+      this.headerMetadata,
+      HEADER_METADATA_SLOT_ID,
+      content
+    );
+    this.headerCustom?.remove();
+    this.headerCustom = undefined;
+  }
+
+  private clearHeaderSlots(): void {
+    this.headerPrefix?.remove();
+    this.headerMetadata?.remove();
+    this.headerCustom?.remove();
+    this.headerPrefix = undefined;
+    this.headerMetadata = undefined;
+    this.headerCustom = undefined;
+  }
+
+  // Header slot callbacks are presence-based render hooks, not reactive views.
+  private upsertHeaderSlotElement(
+    container: HTMLElement,
+    current: HTMLElement | undefined,
+    slot: string,
+    content: Element | string | number | undefined
+  ): HTMLElement | undefined {
+    if (content == null) {
+      current?.remove();
+      return undefined;
     }
-    if (content != null) {
-      this.headerMetadata = document.createElement('div');
-      this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
-      if (content instanceof Element) {
-        this.headerMetadata.appendChild(content);
-      } else {
-        this.headerMetadata.innerText = `${content}`;
-      }
-      container.appendChild(this.headerMetadata);
+    const element = current ?? this.createHeaderSlotElement(slot);
+    if (current == null) {
+      container.appendChild(element);
     }
+    this.replaceHeaderSlotContent(element, content);
+    return element;
+  }
+
+  private replaceHeaderSlotContent(
+    element: HTMLElement,
+    content: Element | string | number
+  ): void {
+    element.replaceChildren();
+    if (content instanceof Element) {
+      element.appendChild(content);
+    } else {
+      element.innerText = `${content}`;
+    }
+  }
+
+  private createHeaderSlotElement(slot: string): HTMLElement {
+    const element = document.createElement('div');
+    element.slot = slot;
+    return element;
   }
 
   protected injectUnsafeCSS(): void {

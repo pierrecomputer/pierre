@@ -2,8 +2,6 @@ import type { Element as HASTElement, Properties } from 'hast';
 
 import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
 import type {
-  BaseDiffOptions,
-  BaseDiffOptionsWithDefaults,
   FileDiffMetadata,
   MergeConflictMarkerRow,
   MergeConflictResolution,
@@ -22,6 +20,8 @@ import {
 import type { WorkerPoolManager } from '../worker';
 import {
   DiffHunksRenderer,
+  type DiffHunksRendererOptions,
+  type DiffHunksRendererOptionsWithDefaults,
   type HunksRenderResult,
   type InjectedRow,
   type LineDecoration,
@@ -60,13 +60,13 @@ type MergeConflictInjectedRowData =
   | ({ type: 'actions' } & MergeConflictActionRowData)
   | MergeConflictMarkerInjectedRow;
 
-interface BaseUnresolvedOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
+interface BaseUnresolvedOptionsWithDefaults extends DiffHunksRendererOptionsWithDefaults {
   mergeConflictActionsType: MergeConflictActionsType;
 }
 
 type MergeConflictActionsType = 'none' | 'default' | 'custom';
 
-export interface UnresolvedFileHunksRendererOptions extends BaseDiffOptions {
+export interface UnresolvedFileHunksRendererOptions extends DiffHunksRendererOptions {
   mergeConflictActionsType?: MergeConflictActionsType;
 }
 

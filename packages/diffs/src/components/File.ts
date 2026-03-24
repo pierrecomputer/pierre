@@ -2,6 +2,7 @@ import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
@@ -72,6 +73,7 @@ export interface FileOptions<LAnnotation>
   enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderFileMetadata;
   renderCustomMetadata?: RenderFileMetadata;
+  renderCustomHeader?: RenderFileMetadata;
   /**
    * When true, errors during rendering are rethrown instead of being caught
    * and displayed in the DOM. Useful for testing or when you want to handle
@@ -126,6 +128,7 @@ export class File<LAnnotation = undefined> {
   protected lastRowCount: number | undefined;
 
   protected headerElement: HTMLElement | undefined;
+  protected headerCustom: HTMLElement | undefined;
   protected headerPrefix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
 
@@ -252,6 +255,7 @@ export class File<LAnnotation = undefined> {
     this.headerElement = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.unsafeCSSStyle = undefined;
@@ -352,7 +356,11 @@ export class File<LAnnotation = undefined> {
 
     this.renderRange = nextRenderRange;
     this.file = file;
-    this.fileRenderer.setOptions(this.options);
+    this.fileRenderer.setOptions({
+      ...this.options,
+      headerRenderMode:
+        this.options.renderCustomHeader != null ? 'custom' : 'default',
+    });
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
@@ -370,14 +378,7 @@ export class File<LAnnotation = undefined> {
         this.headerElement = undefined;
         this.lastRenderedHeaderHTML = undefined;
       }
-      if (this.headerPrefix != null) {
-        this.headerPrefix.remove();
-        this.headerPrefix = undefined;
-      }
-      if (this.headerMetadata != null) {
-        this.headerMetadata.remove();
-        this.headerMetadata = undefined;
-      }
+      this.clearHeaderSlots();
     }
 
     fileContainer = this.getOrCreateFileContainerNode(
@@ -533,6 +534,7 @@ export class File<LAnnotation = undefined> {
     this.gutterUtilityContent?.remove();
     this.headerPrefix?.remove();
     this.headerMetadata?.remove();
+    this.headerCustom?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
     this.unsafeCSSStyle?.remove();
@@ -545,6 +547,7 @@ export class File<LAnnotation = undefined> {
     this.gutterUtilityContent = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
     this.unsafeCSSStyle = undefined;
@@ -929,35 +932,85 @@ export class File<LAnnotation = undefined> {
 
     if (this.isContainerManaged) return;
 
-    const { renderHeaderPrefix, renderCustomMetadata } = this.options;
-    if (this.headerPrefix != null) {
-      this.headerPrefix.remove();
+    const { renderHeaderPrefix, renderCustomHeader, renderCustomMetadata } =
+      this.options;
+
+    if (renderCustomHeader != null) {
+      const content = renderCustomHeader(file) ?? undefined;
+      this.headerCustom = this.upsertHeaderSlotElement(
+        container,
+        this.headerCustom,
+        CUSTOM_HEADER_SLOT_ID,
+        content
+      );
+      this.headerPrefix?.remove();
+      this.headerMetadata?.remove();
+      this.headerPrefix = undefined;
+      this.headerMetadata = undefined;
+    } else {
+      const prefix = renderHeaderPrefix?.(file) ?? undefined;
+      const content = renderCustomMetadata?.(file) ?? undefined;
+      this.headerPrefix = this.upsertHeaderSlotElement(
+        container,
+        this.headerPrefix,
+        HEADER_PREFIX_SLOT_ID,
+        prefix
+      );
+      this.headerMetadata = this.upsertHeaderSlotElement(
+        container,
+        this.headerMetadata,
+        HEADER_METADATA_SLOT_ID,
+        content
+      );
+      this.headerCustom?.remove();
+      this.headerCustom = undefined;
     }
-    if (this.headerMetadata != null) {
-      this.headerMetadata.remove();
+  }
+
+  private clearHeaderSlots(): void {
+    this.headerPrefix?.remove();
+    this.headerMetadata?.remove();
+    this.headerCustom?.remove();
+    this.headerPrefix = undefined;
+    this.headerMetadata = undefined;
+    this.headerCustom = undefined;
+  }
+
+  // Header slot callbacks are presence-based render hooks, not reactive views.
+  private upsertHeaderSlotElement(
+    container: HTMLElement,
+    current: HTMLElement | undefined,
+    slot: string,
+    content: Element | string | number | undefined
+  ): HTMLElement | undefined {
+    if (content == null) {
+      current?.remove();
+      return undefined;
     }
-    const prefix = renderHeaderPrefix?.(file) ?? undefined;
-    const content = renderCustomMetadata?.(file) ?? undefined;
-    if (prefix != null) {
-      this.headerPrefix = document.createElement('div');
-      this.headerPrefix.slot = HEADER_PREFIX_SLOT_ID;
-      if (prefix instanceof Element) {
-        this.headerPrefix.appendChild(prefix);
-      } else {
-        this.headerPrefix.innerText = `${prefix}`;
-      }
-      container.appendChild(this.headerPrefix);
+    const element = current ?? this.createHeaderSlotElement(slot);
+    if (current == null) {
+      container.appendChild(element);
     }
-    if (content != null) {
-      this.headerMetadata = document.createElement('div');
-      this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
-      if (content instanceof Element) {
-        this.headerMetadata.appendChild(content);
-      } else {
-        this.headerMetadata.innerText = `${content}`;
-      }
-      container.appendChild(this.headerMetadata);
+    this.replaceHeaderSlotContent(element, content);
+    return element;
+  }
+
+  private replaceHeaderSlotContent(
+    element: HTMLElement,
+    content: Element | string | number
+  ): void {
+    element.replaceChildren();
+    if (content instanceof Element) {
+      element.appendChild(content);
+    } else {
+      element.innerText = `${content}`;
     }
+  }
+
+  private createHeaderSlotElement(slot: string): HTMLElement {
+    const element = document.createElement('div');
+    element.slot = slot;
+    return element;
   }
 
   protected getOrCreateFileContainerNode(

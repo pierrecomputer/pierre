@@ -24,6 +24,7 @@ import type {
   DiffsHighlighter,
   ExpansionDirections,
   FileDiffMetadata,
+  FileHeaderRenderMode,
   HunkData,
   HunkExpansionRegion,
   HunkSeparators,
@@ -105,6 +106,14 @@ interface ProcessContext {
   hunkData: HunkData[];
   pushToGutter(type: CodeColumnType, element: HASTElement): void;
   incrementRowCount(count?: number): void;
+}
+
+export interface DiffHunksRendererOptions extends BaseDiffOptions {
+  headerRenderMode?: FileHeaderRenderMode;
+}
+
+export interface DiffHunksRendererOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
+  headerRenderMode: FileHeaderRenderMode;
 }
 
 export interface UnifiedLineDecorationProps {
@@ -199,7 +208,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private renderCache: RenderedDiffASTCache | undefined;
 
   constructor(
-    public options: BaseDiffOptions = { theme: DEFAULT_THEMES },
+    public options: DiffHunksRendererOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
@@ -226,11 +235,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.workerManager?.cleanUpPendingTasks(this);
   }
 
-  public setOptions(options: BaseDiffOptions): void {
+  public setOptions(options: DiffHunksRendererOptions): void {
     this.options = options;
   }
 
-  private mergeOptions(options: Partial<BaseDiffOptions>) {
+  private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
     this.options = { ...this.options, ...options };
   }
 
@@ -328,7 +337,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ctx: RenderedLineContext
   ) => SplitInjectedRowPlacement | undefined;
 
-  protected getOptionsWithDefaults(): BaseDiffOptionsWithDefaults {
+  protected getOptionsWithDefaults(): DiffHunksRendererOptionsWithDefaults {
     const {
       diffIndicators = 'bars',
       diffStyle = 'split',
@@ -346,6 +355,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       overflow = 'scroll',
       theme = DEFAULT_THEMES,
       themeType = 'system',
+      headerRenderMode = 'default',
       tokenizeMaxLineLength = 1000,
       useCSSClasses = false,
     } = this.options;
@@ -366,6 +376,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       overflow,
       theme: this.workerManager?.getDiffRenderOptions().theme ?? theme,
       themeType,
+      headerRenderMode,
       tokenizeMaxLineLength,
       useCSSClasses,
     };
@@ -1314,9 +1325,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     themeStyles: string,
     baseThemeType: 'light' | 'dark' | undefined
   ): HASTElement {
-    const { themeType } = this.getOptionsWithDefaults();
+    const { headerRenderMode, themeType } = this.getOptionsWithDefaults();
     return createFileHeaderElement({
       fileOrDiff: diff,
+      mode: headerRenderMode,
       themeStyles,
       themeType: baseThemeType ?? themeType,
     });
