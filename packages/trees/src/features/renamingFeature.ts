@@ -73,6 +73,8 @@ export const renamingFeature: FeatureImplementation = {
       };
       return {
         ref: (element: HTMLInputElement | null) => element?.focus(),
+        // Safe after completeRenaming: renamingItem is already null so
+        // abortRenaming becomes a no-op.
         onBlur: () => tree.abortRenaming(),
         value: tree.getRenamingValue(),
         // Preact text inputs emit `onInput` for per-keystroke updates.

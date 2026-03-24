@@ -833,6 +833,8 @@ export function Root({
     path: string;
     expectedFilesSignature: string;
   } | null>(null);
+  // Rename-only: stores the old/new folder path so the expand-migration
+  // effect can remap expanded children once the new idToPath is available.
   const pendingRenameExpandedRemapRef = useRef<{
     sourcePath: string;
     destinationPath: string;
@@ -967,6 +969,9 @@ export function Root({
           };
         } else {
           pendingRenameExpandedRemapRef.current = null;
+        }
+        if (result.sourcePath === result.destinationPath) {
+          return;
         }
         renamingConfig?.onRename?.({
           sourcePath: result.sourcePath,
