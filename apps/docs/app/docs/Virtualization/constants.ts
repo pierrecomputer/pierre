@@ -146,7 +146,7 @@ virtualizer.setup(root, content);
 // Only include values that differ from defaults.
 const metrics = {
   lineHeight: 22,
-  fileGap: 10,
+  spacing: 10,
 };
 
 const diff = new VirtualizedFileDiff(
