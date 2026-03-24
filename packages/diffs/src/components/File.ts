@@ -241,9 +241,11 @@ export class File<LAnnotation = undefined> {
       this.fileContainer?.remove();
     }
     if (this.fileContainer?.shadowRoot != null) {
-      this.fileContainer.shadowRoot.innerHTML = '';
+      this.fileContainer.shadowRoot.textContent = '';
     }
     this.fileContainer = undefined;
+    this.lineAnnotations = [];
+    this.annotationCache.clear();
     this.pre = undefined;
     this.bufferBefore = undefined;
     this.bufferAfter = undefined;
@@ -1222,7 +1224,7 @@ export class File<LAnnotation = undefined> {
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
     const pre = this.getOrCreatePreNode(container);
-    pre.innerHTML = '';
+    pre.textContent = '';
     pre.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
@@ -1230,7 +1232,7 @@ export class File<LAnnotation = undefined> {
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     this.errorWrapper ??= document.createElement('div');
     this.errorWrapper.dataset.errorWrapper = '';
-    this.errorWrapper.innerHTML = '';
+    this.errorWrapper.textContent = '';
     shadowRoot.appendChild(this.errorWrapper);
     const errorMessage = document.createElement('div');
     errorMessage.dataset.errorMessage = '';
