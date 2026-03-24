@@ -1882,6 +1882,23 @@ function ReactSSRCustomIcons({
 
 type ContextMenuDemoItem = { path: string; isFolder: boolean };
 
+function makeDemoRenamingOptions(label: string) {
+  return {
+    onError: (error: string) => {
+      window.alert(error);
+    },
+    onRename: (event: {
+      sourcePath: string;
+      destinationPath: string;
+      isFolder: boolean;
+    }) => {
+      console.log(
+        `[trees-dev][${label}] rename ${event.isFolder ? 'folder' : 'file'}: ${event.sourcePath} -> ${event.destinationPath}`
+      );
+    },
+  };
+}
+
 function TreeDemoContextMenu({
   item,
   context,
@@ -2197,20 +2214,7 @@ function VanillaSSRContextMenu({
   const [files, setFiles] = useState<string[]>(options.initialFiles);
   const filesRef = useRef(files);
   const renamingOptions = useMemo(
-    () => ({
-      onError: (error: string) => {
-        window.alert(error);
-      },
-      onRename: (event: {
-        sourcePath: string;
-        destinationPath: string;
-        isFolder: boolean;
-      }) => {
-        console.log(
-          `[trees-dev][vanilla-ssr] rename ${event.isFolder ? 'folder' : 'file'}: ${event.sourcePath} -> ${event.destinationPath}`
-        );
-      },
-    }),
+    () => makeDemoRenamingOptions('vanilla-ssr'),
     []
   );
 
@@ -2318,20 +2322,7 @@ function ReactSSRContextMenu({
 }) {
   const [files, setFiles] = useState<string[]>(() => initialFiles ?? []);
   const renamingOptions = useMemo(
-    () => ({
-      onError: (error: string) => {
-        window.alert(error);
-      },
-      onRename: (event: {
-        sourcePath: string;
-        destinationPath: string;
-        isFolder: boolean;
-      }) => {
-        console.log(
-          `[trees-dev][react-ssr] rename ${event.isFolder ? 'folder' : 'file'}: ${event.sourcePath} -> ${event.destinationPath}`
-        );
-      },
-    }),
+    () => makeDemoRenamingOptions('react-ssr'),
     []
   );
 
@@ -2359,20 +2350,7 @@ function VirtualizedLinuxKernelCard() {
   const menuRootRef = useRef<ReactDomRoot | null>(null);
   const instanceRef = useRef<FileTree | null>(null);
   const renamingOptions = useMemo(
-    () => ({
-      onError: (error: string) => {
-        window.alert(error);
-      },
-      onRename: (event: {
-        sourcePath: string;
-        destinationPath: string;
-        isFolder: boolean;
-      }) => {
-        console.log(
-          `[trees-dev][vanilla-virtualized] rename ${event.isFolder ? 'folder' : 'file'}: ${event.sourcePath} -> ${event.destinationPath}`
-        );
-      },
-    }),
+    () => makeDemoRenamingOptions('vanilla-virtualized'),
     []
   );
 

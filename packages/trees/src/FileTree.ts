@@ -168,7 +168,8 @@ export interface FileTreeStateConfig {
 }
 
 const isBrowser = typeof document !== 'undefined';
-const isRenamingEnabled = (
+/** Checks whether the renaming option is enabled (not false/undefined). */
+export const isRenamingEnabled = (
   renaming: FileTreeOptions['renaming'] | undefined
 ): boolean => renaming != null && renaming !== false;
 

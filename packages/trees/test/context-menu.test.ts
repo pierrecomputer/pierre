@@ -53,6 +53,11 @@ beforeAll(async () => {
   ({ preactRenderer } = await import('../src/utils/preactRenderer'));
 });
 
+const flushMicrotasks = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 describe('context menu', () => {
   test('SSR output includes the header slot outlet', () => {
     const payload = preloadFileTree({
@@ -598,6 +603,141 @@ describe('context menu', () => {
     ]);
     expect(ft.getFiles()).toContain('source/index.ts');
     expect(ft.getFiles()).toContain('source/components/Button.tsx');
+  });
+
+  test('folder rename restores focus to the renamed folder (no flatten)', async () => {
+    const openContextRef: { current: ContextMenuOpenContext | null } = {
+      current: null,
+    };
+    const ft = new FileTree(
+      {
+        initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
+        flattenEmptyDirectories: false,
+        renaming: true,
+      },
+      {
+        onContextMenuOpen: (_item, context) => {
+          openContextRef.current = context;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+    await flushMicrotasks();
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const sourceFolderButton = Array.from(
+      shadowRoot?.querySelectorAll(
+        'button[data-type="item"][data-item-type="folder"]'
+      ) ?? []
+    ).find(
+      (button) => button.querySelector('[data-item-flattened-subitems]') == null
+    ) as HTMLButtonElement | undefined;
+    expect(sourceFolderButton).toBeDefined();
+    if (sourceFolderButton == null) {
+      throw new Error('Expected non-flattened source folder button');
+    }
+    sourceFolderButton.focus();
+    sourceFolderButton.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await flushMicrotasks();
+    openContextRef.current?.startRenaming?.();
+    await flushMicrotasks();
+
+    const tree = ft.handleRef.current?.tree;
+    expect(tree).not.toBeUndefined();
+    tree?.applySubStateUpdate('renamingValue', () => 'source');
+    tree?.completeRenaming();
+    await flushMicrotasks();
+
+    const handleAfter = ft.handleRef.current;
+    const renamedFolderId = handleAfter?.pathToId.get('source');
+    expect(renamedFolderId).toBeDefined();
+    if (renamedFolderId == null) {
+      throw new Error('Expected renamed folder ID');
+    }
+    const focusedRow = shadowRoot?.querySelector(
+      'button[data-type="item"][data-item-focused="true"]'
+    ) as HTMLButtonElement | null;
+    expect(focusedRow).not.toBeNull();
+    expect(tree?.getState().focusedItem).toBe(renamedFolderId);
+    expect(focusedRow?.dataset.itemId).toBe(renamedFolderId);
+    expect(ft.getFiles()).toContain('source/index.ts');
+  });
+
+  test('folder rename restores focus to the renamed folder (flattened)', async () => {
+    const openContextRef: { current: ContextMenuOpenContext | null } = {
+      current: null,
+    };
+    const ft = new FileTree(
+      {
+        initialFiles: ['src/utils/deep/index.ts'],
+        flattenEmptyDirectories: true,
+        renaming: true,
+      },
+      {
+        onContextMenuOpen: (_item, context) => {
+          openContextRef.current = context;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+    await flushMicrotasks();
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const sourceFolderButton = Array.from(
+      shadowRoot?.querySelectorAll(
+        'button[data-type="item"][data-item-type="folder"]'
+      ) ?? []
+    ).find(
+      (button) => button.querySelector('[data-item-flattened-subitems]') != null
+    ) as HTMLButtonElement | undefined;
+    expect(sourceFolderButton).toBeDefined();
+    if (sourceFolderButton == null) {
+      throw new Error('Expected flattened source folder button');
+    }
+    sourceFolderButton.focus();
+    sourceFolderButton.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await flushMicrotasks();
+    openContextRef.current?.startRenaming?.();
+    await flushMicrotasks();
+
+    const tree = ft.handleRef.current?.tree;
+    expect(tree).not.toBeUndefined();
+    tree?.applySubStateUpdate('renamingValue', () => 'renamed');
+    tree?.completeRenaming();
+    await flushMicrotasks();
+
+    const handleAfter = ft.handleRef.current;
+    const renamedFolderPath = 'src/utils/renamed';
+    const renamedFolderId =
+      handleAfter?.pathToId.get(`f::${renamedFolderPath}`) ??
+      handleAfter?.pathToId.get(renamedFolderPath);
+    expect(renamedFolderId).toBeDefined();
+    if (renamedFolderId == null) {
+      throw new Error('Expected renamed folder ID');
+    }
+    const focusedRow = shadowRoot?.querySelector(
+      'button[data-type="item"][data-item-focused="true"]'
+    ) as HTMLButtonElement | null;
+    expect(focusedRow).not.toBeNull();
+    expect(tree?.getState().focusedItem).toBe(renamedFolderId);
+    expect(focusedRow?.dataset.itemId).toBe(renamedFolderId);
+    expect(ft.getFiles()).toContain('src/utils/renamed/index.ts');
   });
 
   test('context menu close helper closes tree-managed open state', async () => {

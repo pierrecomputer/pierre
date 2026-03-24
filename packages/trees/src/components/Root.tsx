@@ -39,12 +39,13 @@ import {
   gitStatusFeature,
 } from '../features/gitStatusFeature';
 import { renamingFeature } from '../features/renamingFeature';
-import type {
-  FileTreeCallbacks,
-  FileTreeHandle,
-  FileTreeOptions,
-  FileTreeSelectionItem,
-  FileTreeStateConfig,
+import {
+  type FileTreeCallbacks,
+  type FileTreeHandle,
+  type FileTreeOptions,
+  type FileTreeSelectionItem,
+  type FileTreeStateConfig,
+  isRenamingEnabled,
 } from '../FileTree';
 import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoaderFromTreeData } from '../loader/sync';
@@ -104,6 +105,43 @@ const getFilesSignature = (files: string[]): string =>
 
 const EMPTY_ANCESTORS: string[] = [];
 
+function resolvePathToRenderedId(
+  path: string,
+  pathToId: Map<string, string>,
+  flattenEmptyDirectories: boolean
+): string | null {
+  if (path.startsWith(FLATTENED_PREFIX)) {
+    return pathToId.get(path) ?? null;
+  }
+  if (flattenEmptyDirectories) {
+    return pathToId.get(FLATTENED_PREFIX + path) ?? pathToId.get(path) ?? null;
+  }
+  return pathToId.get(path) ?? null;
+}
+
+function RenameInput({
+  ariaLabel,
+  isFlattened,
+  renameInputProps,
+}: {
+  ariaLabel: string;
+  isFlattened?: boolean;
+  renameInputProps: Record<string, unknown>;
+}): JSX.Element {
+  return (
+    <input
+      data-item-rename-input
+      {...(isFlattened === true
+        ? { 'data-item-flattened-rename-input': true }
+        : {})}
+      aria-label={ariaLabel}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      {...renameInputProps}
+    />
+  );
+}
+
 function FlattenedDirectoryName({
   tree,
   idToPath,
@@ -136,13 +174,10 @@ function FlattenedDirectoryName({
   if (segments.length === 0) {
     if (renameInputProps != null) {
       return (
-        <input
-          data-item-rename-input
-          data-item-flattened-rename-input
-          aria-label={`Rename ${fallbackName}`}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          {...renameInputProps}
+        <RenameInput
+          ariaLabel={`Rename ${fallbackName}`}
+          isFlattened
+          renameInputProps={renameInputProps}
         />
       );
     }
@@ -161,13 +196,10 @@ function FlattenedDirectoryName({
           <Fragment key={id}>
             <span data-item-flattened-subitem={id}>
               {isLast && renameInputProps != null ? (
-                <input
-                  data-item-rename-input
-                  data-item-flattened-rename-input
-                  aria-label={`Rename ${label}`}
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  {...renameInputProps}
+                <RenameInput
+                  ariaLabel={`Rename ${label}`}
+                  isFlattened
+                  renameInputProps={renameInputProps}
                 />
               ) : (
                 <Truncate>{label}</Truncate>
@@ -376,12 +408,9 @@ function TreeItemInner({
             renameInputProps={renameInputProps}
           />
         ) : renameInputProps != null ? (
-          <input
-            data-item-rename-input
-            aria-label={`Rename ${itemName}`}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            {...renameInputProps}
+          <RenameInput
+            ariaLabel={`Rename ${itemName}`}
+            renameInputProps={renameInputProps}
           />
         ) : (
           <MiddleTruncate minimumLength={5} split="extension">
@@ -428,7 +457,7 @@ export function Root({
     useLazyDataLoader,
     virtualize,
   } = fileTreeOptions;
-  const isRenamingEnabled = renaming != null && renaming !== false;
+  const renamingEnabled = isRenamingEnabled(renaming);
   const renamingConfig =
     renaming != null && renaming !== true && renaming !== false
       ? renaming
@@ -733,12 +762,12 @@ export function Root({
     if (isDnD) {
       base.push(dragAndDropFeature, keyboardDragAndDropFeature);
     }
-    if (isRenamingEnabled) {
+    if (renamingEnabled) {
       base.push(renamingFeature);
     }
     base.push(propMemoizationFeature);
     return base;
-  }, [isDnD, isRenamingEnabled]);
+  }, [isDnD, renamingEnabled]);
 
   // Keep a ref to current files so onDrop doesn't capture stale values
   const filesRef = useRef(files);
@@ -839,6 +868,12 @@ export function Root({
     sourcePath: string;
     destinationPath: string;
   } | null>(null);
+  // Rename-only: stores the renamed destination path so focus can be moved
+  // to the remapped item ID once files/pathToId have updated.
+  const pendingRenameFocusRestoreRef = useRef<{
+    destinationPath: string;
+    expectedFilesSignature: string;
+  } | null>(null);
 
   const onDropHandler = useCallback(
     (
@@ -937,7 +972,7 @@ export function Root({
       },
     },
     features,
-    ...(isRenamingEnabled && {
+    ...(renamingEnabled && {
       canRename: (item: ItemInstance<FileTreeNode>) => {
         const path = getSelectionPath(item.getItemData().path);
         if (lockedPathSet?.has(path) === true) {
@@ -969,6 +1004,14 @@ export function Root({
           };
         } else {
           pendingRenameExpandedRemapRef.current = null;
+        }
+        if (result.sourcePath !== result.destinationPath) {
+          pendingRenameFocusRestoreRef.current = {
+            destinationPath: result.destinationPath,
+            expectedFilesSignature: getFilesSignature(result.nextFiles),
+          };
+        } else {
+          pendingRenameFocusRestoreRef.current = null;
         }
         if (result.sourcePath === result.destinationPath) {
           return;
@@ -1108,43 +1151,74 @@ export function Root({
   // previously-expanded paths to new IDs and optionally expands a drop target
   // when the applied files match a pending drop result.
   useEffect(() => {
+    const filesSignature = getFilesSignature(files);
     const previousPaths = pendingExpandMigrationRef.current;
     const pendingDropTarget = pendingDropTargetExpandRef.current;
+    const pendingRenameFocus = pendingRenameFocusRestoreRef.current;
     const dropTarget =
       pendingDropTarget != null &&
-      pendingDropTarget.expectedFilesSignature === getFilesSignature(files)
+      pendingDropTarget.expectedFilesSignature === filesSignature
         ? pendingDropTarget.path
+        : null;
+    const renameFocusPath =
+      pendingRenameFocus != null &&
+      pendingRenameFocus.expectedFilesSignature === filesSignature
+        ? pendingRenameFocus.destinationPath
         : null;
     pendingExpandMigrationRef.current = null;
     pendingDropTargetExpandRef.current = null;
     pendingRenameExpandedRemapRef.current = null;
-
-    if (previousPaths == null && dropTarget == null) return;
-
-    const pathsToExpand = previousPaths != null ? [...previousPaths] : [];
-    if (dropTarget != null) {
-      pathsToExpand.push(dropTarget);
+    if (renameFocusPath != null) {
+      pendingRenameFocusRestoreRef.current = null;
     }
 
-    const expandIds = expandPathsWithAncestors(pathsToExpand, pathToId, {
-      flattenEmptyDirectories,
-    });
-
-    if (previousPaths != null) {
-      // Full replacement — re-map all expanded paths to new IDs.
-      tree.applySubStateUpdate('expandedItems', () => expandIds);
-    } else {
-      // Just adding the drop target — merge with existing expanded state.
-      const currentExpanded = tree.getState().expandedItems ?? [];
-      const currentSet = new Set(currentExpanded);
-      const newIds = expandIds.filter((id) => !currentSet.has(id));
-      if (newIds.length === 0) return;
-      tree.applySubStateUpdate('expandedItems', (prev) => [
-        ...(prev ?? []),
-        ...newIds,
-      ]);
+    if (
+      previousPaths == null &&
+      dropTarget == null &&
+      renameFocusPath == null
+    ) {
+      return;
     }
-    tree.rebuildTree();
+
+    if (previousPaths != null || dropTarget != null) {
+      const pathsToExpand = previousPaths != null ? [...previousPaths] : [];
+      if (dropTarget != null) {
+        pathsToExpand.push(dropTarget);
+      }
+
+      const expandIds = expandPathsWithAncestors(pathsToExpand, pathToId, {
+        flattenEmptyDirectories,
+      });
+
+      if (previousPaths != null) {
+        // Full replacement — re-map all expanded paths to new IDs.
+        tree.applySubStateUpdate('expandedItems', () => expandIds);
+      } else {
+        // Just adding the drop target — merge with existing expanded state.
+        const currentExpanded = tree.getState().expandedItems ?? [];
+        const currentSet = new Set(currentExpanded);
+        const newIds = expandIds.filter((id) => !currentSet.has(id));
+        if (newIds.length > 0) {
+          tree.applySubStateUpdate('expandedItems', (prev) => [
+            ...(prev ?? []),
+            ...newIds,
+          ]);
+        }
+      }
+      tree.rebuildTree();
+    }
+
+    if (renameFocusPath != null) {
+      const nextFocusedId = resolvePathToRenderedId(
+        renameFocusPath,
+        pathToId,
+        flattenEmptyDirectories === true
+      );
+      if (nextFocusedId != null) {
+        tree.applySubStateUpdate('focusedItem', nextFocusedId);
+        tree.updateDomFocus();
+      }
+    }
   }, [files, pathToId, tree, flattenEmptyDirectories]);
 
   // --- Selection change callback ---

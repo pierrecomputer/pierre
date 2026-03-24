@@ -7,6 +7,7 @@ import {
   type FileTreeSelectionItem,
   type FileTreeStateConfig,
   type GitStatusEntry,
+  isRenamingEnabled,
 } from '../../FileTree';
 import type { ContextMenuItem, ContextMenuOpenContext } from '../../types';
 import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
@@ -202,12 +203,11 @@ export function useFileTreeInstance({
               sp.onFilesChange?.(newFiles);
             },
           }),
-          ...(options.renaming != null &&
-            options.renaming !== false && {
-              _onRenameFiles: (newFiles: string[]) => {
-                sp.onFilesChange?.(newFiles);
-              },
-            }),
+          ...(isRenamingEnabled(options.renaming) && {
+            _onRenameFiles: (newFiles: string[]) => {
+              sp.onFilesChange?.(newFiles);
+            },
+          }),
         };
         if (Object.keys(controlledCallbacks).length > 0) {
           inst.setCallbacks(controlledCallbacks);
@@ -311,8 +311,7 @@ export function useFileTreeInstance({
           },
         }),
       ...(files !== undefined &&
-        options.renaming != null &&
-        options.renaming !== false && {
+        isRenamingEnabled(options.renaming) && {
           _onRenameFiles: (newFiles: string[]) => {
             onFilesChange?.(newFiles);
           },

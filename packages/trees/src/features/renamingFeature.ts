@@ -69,7 +69,9 @@ export const renamingFeature: FeatureImplementation = {
 
     getRenameInputProps: ({ tree }) => {
       const updateRenamingValue = (e: InputEvent) => {
-        tree.applySubStateUpdate('renamingValue', e.target?.value);
+        const next = e.target?.value;
+        if (next === tree.getState().renamingValue) return;
+        tree.applySubStateUpdate('renamingValue', next);
       };
       return {
         ref: (element: HTMLInputElement | null) => element?.focus(),

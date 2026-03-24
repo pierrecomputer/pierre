@@ -401,8 +401,10 @@
   }
 
   [data-item-rename-input] {
-    --trees-focus-ring-width: 2px;
-    width: 100%;
+    --trees-context-menu-width: calc(
+      (2 * var(--trees-item-padding-x)) + var(--trees-icon-width)
+    );
+    width: calc(100% - var(--trees-context-menu-width));
     min-width: 0;
     font-family: inherit;
     font-size: inherit;
@@ -411,21 +413,17 @@
     color: inherit;
     background-color: var(--trees-search-bg);
     border: 1px solid var(--trees-border-color);
-    border-radius: calc(var(--trees-border-radius) - 1px);
+    /* border-radius: calc(var(--trees-border-radius) - 1px);border-radius */
     padding-inline: 6px;
+    margin-right: 40px;
     outline: none;
-
-    &:focus-visible {
-      outline: var(--trees-focus-ring-width) solid var(--trees-focus-ring-color);
-      outline-offset: var(--trees-focus-ring-offset);
-    }
   }
 
-  [data-item-flattened-rename-input] {
+  /* [data-item-flattened-rename-input] {
     width: auto;
     min-width: 4ch;
     max-width: min(26ch, 100%);
-  }
+  } */
 
   [data-item-section='status'] {
     flex: 0 0 auto;
