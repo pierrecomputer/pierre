@@ -33,7 +33,9 @@ interface ScrollAnchor {
 }
 
 interface AdvancedVirtualizedBaseItem {
+  /** Absolute top offset of this item inside the scroll content. */
   top: number;
+  /** Total measured height reserved for this item. */
   height: number;
 }
 
@@ -41,10 +43,17 @@ interface AdvancedVirtualizedDiffItem<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   kind: 'diff';
+  /** Stable item identifier used for adding annotations (and maybe decorations
+   * in the future). */
   id: string;
+  /** Virtualized diff instance responsible for rendering this item. */
   instance: VirtualizedFileDiff<LAnnotation>;
+  /** Source diff payload used by the virtualized diff instance. */
   fileDiff: FileDiffMetadata;
+  /** Root <diffs-container> node currently mounted for this item, only exists
+   * when rendered. */
   element: HTMLElement | undefined;
+  /** Optional line annotations applied during render. */
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
@@ -52,10 +61,17 @@ interface AdvancedVirtualizedFileItem<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   kind: 'file';
+  /** Stable item identifier used for adding annotations (and maybe decorations
+   * in the future). */
   id: string;
+  /** Virtualized file instance responsible for rendering this item. */
   instance: VirtualizedFile<LAnnotation>;
+  /** Source file payload used by the virtualized file instance. */
   file: FileContents;
+  /** Root <diffs-container> node currently mounted for this item, only exists
+   * when rendered. */
   element: HTMLElement | undefined;
+  /** Optional line annotations applied during render. */
   annotations?: LineAnnotation<LAnnotation>[];
 }
 

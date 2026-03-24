@@ -679,21 +679,32 @@ export interface RenderWindow {
 }
 
 export interface VirtualWindowSpecs {
+  /** Absolute top edge of the active virtual window in scroll-space pixels. */
   top: number;
+  /** Absolute bottom edge of the active virtual window in scroll-space pixels. */
   bottom: number;
 }
 
 export interface VirtualFileMetrics {
+  /** Number of rendered lines per hunk chunk when virtualization batches line rendering. */
   hunkLineCount: number;
+  /** Estimated single-line row height used before a line is measured. */
   lineHeight: number;
+  /** Height reserved for the file or diff header region. */
   diffHeaderHeight: number;
+  /** Height reserved for each collapsed-context separator row. */
   hunkSeparatorHeight: number;
+  /** Vertical spacing used around hunks and file-level padding. You should not
+   * change this from the default if you aren't applying custom CSS */
   spacing: number;
 }
 
 export interface CodeViewerMetrics {
+  /** Top padding applied to the viewer's sticky container offset. */
   paddingTop: number;
+  /** Bottom padding added after the final rendered item in the viewer. */
   paddingBottom: number;
+  /** Vertical gap between virtualized items in the viewer. */
   gap: number;
 }
 
