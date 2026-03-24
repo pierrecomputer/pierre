@@ -436,12 +436,14 @@ export class FileDiff<LAnnotation = undefined> {
     }
     if (this.fileContainer?.shadowRoot != null) {
       // Manually help garbage collection
-      this.fileContainer.shadowRoot.innerHTML = '';
+      this.fileContainer.shadowRoot.textContent = '';
     }
     this.fileContainer = undefined;
+    this.lineAnnotations = [];
+    this.annotationCache.clear();
     // Manually help garbage collection
     if (this.pre != null) {
-      this.pre.innerHTML = '';
+      this.pre.textContent = '';
       this.pre = undefined;
     }
     this.codeUnified = undefined;
@@ -2085,7 +2087,7 @@ export class FileDiff<LAnnotation = undefined> {
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
     const pre = this.getOrCreatePreNode(container);
-    pre.innerHTML = '';
+    pre.textContent = '';
     pre.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
@@ -2093,7 +2095,7 @@ export class FileDiff<LAnnotation = undefined> {
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     this.errorWrapper ??= document.createElement('div');
     this.errorWrapper.dataset.errorWrapper = '';
-    this.errorWrapper.innerHTML = '';
+    this.errorWrapper.textContent = '';
     shadowRoot.appendChild(this.errorWrapper);
     const errorMessage = document.createElement('div');
     errorMessage.dataset.errorMessage = '';

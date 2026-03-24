@@ -97,7 +97,7 @@ function cleanupInstances(container: HTMLElement) {
     }
     instances.length = 0;
   }
-  container.innerHTML = '';
+  container.textContent = '';
   delete container.dataset.diff;
 }
 

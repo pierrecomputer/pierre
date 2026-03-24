@@ -139,7 +139,7 @@ export class FileStream {
       split: false,
       totalLines: 0,
     });
-    pre.innerHTML = '';
+    pre.textContent = '';
 
     this.pre = pre;
     this.code = getOrCreateCodeNode({ code: this.code, pre });

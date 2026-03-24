@@ -117,7 +117,8 @@ export class CodeViewer<LAnnotation = undefined> {
   constructor(
     private options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
     private metrics: VirtualFileMetrics = DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
-    private workerManager?: WorkerPoolManager | undefined
+    private workerManager?: WorkerPoolManager | undefined,
+    private isContainerManaged = false
   ) {
     this.stickyOffset.style.contain = 'layout size';
     this.stickyContainer.style.position = 'sticky';
@@ -240,7 +241,7 @@ export class CodeViewer<LAnnotation = undefined> {
             this,
             this.metrics,
             this.workerManager,
-            true
+            this.isContainerManaged
           ),
           top: this.scrollHeight,
           height: 0,
@@ -255,7 +256,7 @@ export class CodeViewer<LAnnotation = undefined> {
           this,
           this.metrics,
           this.workerManager,
-          true
+          this.isContainerManaged
         ),
         top: this.scrollHeight,
         height: 0,
@@ -739,9 +740,9 @@ function cleanRenderedItem<LAnnotation>(
   item.instance.cleanUp(true);
   item.element?.remove();
   if (item.element != null) {
-    item.element.innerHTML = '';
+    item.element.textContent = '';
     if (item.element.shadowRoot != null) {
-      item.element.shadowRoot.innerHTML = '';
+      item.element.shadowRoot.textContent = '';
     }
   }
   item.element = undefined;

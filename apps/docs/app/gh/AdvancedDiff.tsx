@@ -1,12 +1,39 @@
 'use client';
 
-import { CodeViewer, DEFAULT_THEMES, parsePatchFiles } from '@pierre/diffs';
+import {
+  CodeViewer,
+  DEFAULT_THEMES,
+  type DiffLineAnnotation,
+  parsePatchFiles,
+} from '@pierre/diffs';
 import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
 import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
 
 import styles from './advanced-diff.module.css';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
+
+interface CommentMetadata {
+  author: string;
+  message: string;
+}
+
+function renderAnnotation(
+  annotation: DiffLineAnnotation<CommentMetadata>
+): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText =
+    'margin: 8px; padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-muted); overflow: hidden; max-width: 600px;';
+  const author = document.createElement('strong');
+  author.style.cssText = 'font-size: 13px; display: block; margin-bottom: 4px;';
+  author.textContent = annotation.metadata.author;
+  const message = document.createElement('p');
+  message.style.cssText = 'margin: 0; font-size: 13px; white-space: normal;';
+  message.textContent = annotation.metadata.message;
+  wrapper.appendChild(author);
+  wrapper.appendChild(message);
+  return wrapper;
+}
 
 const unsafeCSS = `[data-diffs-header] {
   container-type: scroll-state;
@@ -52,7 +79,7 @@ export function AdvancedDiff() {
   const workerPool = useWorkerPool();
   const [fetching, setFetching] = useState(false);
   const [url, setURL] = useState(DEFAULT_PR_URL);
-  const codeViewerRef = useRef<CodeViewer>(null);
+  const codeViewerRef = useRef<CodeViewer<CommentMetadata>>(null);
   const lastLoadedURLRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const renderPullRequest = useStableCallback(async (input: string) => {
@@ -71,13 +98,14 @@ export function AdvancedDiff() {
         console.error('No valid container to run the virtualizer with');
         return undefined;
       }
-      codeViewerRef.current ??= new CodeViewer(
+      codeViewerRef.current ??= new CodeViewer<CommentMetadata>(
         {
           theme: DEFAULT_THEMES,
           diffStyle: 'split',
           overflow: 'wrap',
           enableLineSelection: true,
           unsafeCSS,
+          renderAnnotation,
         },
         undefined,
         workerPool
@@ -112,7 +140,35 @@ export function AdvancedDiff() {
       let fileIndex = 0;
       for (const patch of parsedPatches) {
         for (const fileDiff of patch.files) {
-          codeViewerRef.current.addCode({ id: `${fileIndex++}`, fileDiff });
+          const id = `${fileIndex++}`;
+          const annotations: DiffLineAnnotation<CommentMetadata>[] = [];
+
+          // Add fake annotations to the first 3 files, using actual
+          // line numbers from the first hunk so they land on visible lines
+          const firstHunk = fileDiff.hunks[0];
+          if (fileIndex <= 3 && firstHunk != null) {
+            annotations.push({
+              side: 'additions',
+              lineNumber: firstHunk.additionStart,
+              metadata: {
+                author: 'reviewerbot',
+                message: `This is a demo annotation on file #${fileIndex} (additions L${firstHunk.additionStart})`,
+              },
+            });
+            annotations.push({
+              side: 'deletions',
+              lineNumber: firstHunk.deletionStart,
+              metadata: {
+                author: 'nitpicker42',
+                message: `Why was this line changed? Looks fine to me.`,
+              },
+            });
+          }
+          codeViewerRef.current.addCode({
+            id,
+            fileDiff,
+            annotations: annotations.length > 0 ? annotations : undefined,
+          });
         }
       }
       console.timeEnd('-- computing layout');
@@ -147,7 +203,6 @@ export function AdvancedDiff() {
       const { current: currentTarget } = scrollRef;
       if (currentTarget == null) return;
       const { scrollTop } = currentTarget;
-      console.log(scrollTop);
       if (
         (scrollTop > 0 && scrollStateRef.current.isScrolled) ||
         (scrollTop <= 0 && !scrollStateRef.current.isScrolled)
