@@ -688,7 +688,7 @@ export interface VirtualFileMetrics {
   lineHeight: number;
   diffHeaderHeight: number;
   hunkSeparatorHeight: number;
-  fileGap: number;
+  spacing: number;
 }
 
 export interface CodeViewerMetrics {

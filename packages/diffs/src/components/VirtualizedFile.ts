@@ -201,14 +201,14 @@ export class VirtualizedFile<
       collapsed = false,
       overflow = 'scroll',
     } = this.options;
-    const { diffHeaderHeight, fileGap, lineHeight } = this.metrics;
+    const { diffHeaderHeight, spacing, lineHeight } = this.metrics;
     const lines = this.getOrCreateLineCache(this.file);
 
     // Header or initial padding
     if (!disableFileHeader) {
       this.height += diffHeaderHeight;
     } else {
-      this.height += fileGap;
+      this.height += spacing;
     }
     if (collapsed) {
       return;
@@ -227,7 +227,7 @@ export class VirtualizedFile<
 
     // Bottom padding
     if (lines.length > 0) {
-      this.height += fileGap;
+      this.height += spacing;
     }
 
     if (
@@ -364,12 +364,12 @@ export class VirtualizedFile<
     { top, bottom }: RenderWindow
   ): RenderRange {
     const { disableFileHeader = false, overflow = 'scroll' } = this.options;
-    const { diffHeaderHeight, fileGap, hunkLineCount, lineHeight } =
+    const { diffHeaderHeight, spacing, hunkLineCount, lineHeight } =
       this.metrics;
     const lines = this.getOrCreateLineCache(file);
     const lineCount = lines.length;
     const fileHeight = this.height;
-    const headerRegion = disableFileHeader ? fileGap : diffHeaderHeight;
+    const headerRegion = disableFileHeader ? spacing : diffHeaderHeight;
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -377,7 +377,7 @@ export class VirtualizedFile<
         startingLine: 0,
         totalLines: 0,
         bufferBefore: 0,
-        bufferAfter: fileHeight - headerRegion - fileGap,
+        bufferAfter: fileHeight - headerRegion - spacing,
       };
     }
 
@@ -499,7 +499,7 @@ export class VirtualizedFile<
         startingLine: 0,
         totalLines: 0,
         bufferBefore: 0,
-        bufferAfter: fileHeight - headerRegion - fileGap,
+        bufferAfter: fileHeight - headerRegion - spacing,
       };
     }
 
@@ -526,8 +526,8 @@ export class VirtualizedFile<
     const finalHunkIndex = startHunk + clampedTotalLines / hunkLineCount;
     const bufferAfter =
       finalHunkIndex < hunkOffsets.length
-        ? fileHeight - headerRegion - hunkOffsets[finalHunkIndex] - fileGap
-        : fileHeight - (absoluteLineTop - fileTop) - fileGap;
+        ? fileHeight - headerRegion - hunkOffsets[finalHunkIndex] - spacing
+        : fileHeight - (absoluteLineTop - fileTop) - spacing;
 
     return {
       startingLine,
