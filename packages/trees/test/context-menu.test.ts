@@ -366,6 +366,105 @@ describe('context menu', () => {
     expect(renamedValueRef.current).toBe('RENAMED.md');
   });
 
+  test('renaming feature seeds flattened folder rename with leaf basename', () => {
+    const tree = createTree<FileTreeNode>({
+      rootItemId: 'root',
+      dataLoader: generateSyncDataLoader(['src/utils/deep/index.ts'], {
+        flattenEmptyDirectories: true,
+      }),
+      getItemName: (item) => item.getItemData().name,
+      isItemFolder: (item) => item.getItemData()?.children?.direct != null,
+      features: [
+        syncDataLoaderFeature,
+        selectionFeature,
+        hotkeysCoreFeature,
+        renamingFeature,
+      ],
+    });
+    tree.setMounted(true);
+    tree.rebuildTree();
+
+    const flattenedFolder = tree
+      .getItems()
+      .find((item) => item.getItemData().flattens != null);
+    expect(flattenedFolder).toBeDefined();
+    if (flattenedFolder == null) {
+      throw new Error('Expected a flattened folder item');
+    }
+
+    flattenedFolder.startRenaming();
+    expect(tree.getRenamingValue()).toBe('deep');
+  });
+
+  test('flattened folder rename renders input only for the leaf segment', async () => {
+    const openContextRef: { current: ContextMenuOpenContext | null } = {
+      current: null,
+    };
+    const ft = new FileTree(
+      {
+        initialFiles: ['src/utils/deep/index.ts'],
+        flattenEmptyDirectories: true,
+        renaming: true,
+      },
+      {
+        onContextMenuOpen: (_item, context) => {
+          openContextRef.current = context;
+        },
+      }
+    );
+    const containerWrapper = document.createElement('div');
+    ft.render({ containerWrapper });
+
+    const shadowRoot = ft.getFileTreeContainer()?.shadowRoot;
+    const flattenedFolderButton = Array.from(
+      shadowRoot?.querySelectorAll(
+        'button[data-type="item"][data-item-type="folder"]'
+      ) ?? []
+    ).find(
+      (button) => button.querySelector('[data-item-flattened-subitems]') != null
+    ) as HTMLButtonElement | undefined;
+    expect(flattenedFolderButton).toBeDefined();
+    if (flattenedFolderButton == null) {
+      throw new Error('Expected a flattened folder row');
+    }
+    flattenedFolderButton.focus();
+    flattenedFolderButton.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'F10',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    await Promise.resolve();
+    openContextRef.current?.startRenaming?.();
+    await Promise.resolve();
+
+    const input = shadowRoot?.querySelector(
+      '[data-item-flattened-rename-input]'
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    if (input == null) {
+      throw new Error('Expected flattened rename input');
+    }
+    expect(input.value).toBe('deep');
+
+    const flattenedContainer = input.closest('[data-item-flattened-subitems]');
+    expect(flattenedContainer).not.toBeNull();
+    if (flattenedContainer == null) {
+      throw new Error('Expected flattened segments container');
+    }
+    const segments = flattenedContainer.querySelectorAll(
+      '[data-item-flattened-subitem]'
+    );
+    expect(segments.length).toBeGreaterThan(1);
+
+    const firstSegment = segments.item(0);
+    expect(firstSegment?.querySelector('[data-item-rename-input]')).toBeNull();
+    const lastSegment = segments.item(segments.length - 1);
+    expect(lastSegment?.querySelector('[data-item-rename-input]')).toBe(input);
+  });
+
   test('renaming.onRename is called for file rename', async () => {
     const renameEvents: Array<{
       sourcePath: string;

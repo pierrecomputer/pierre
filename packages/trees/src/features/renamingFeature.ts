@@ -2,12 +2,18 @@ import { makeStateUpdater } from '@headless-tree/core';
 import type { FeatureImplementation, ItemInstance } from '@headless-tree/core';
 
 import type { FileTreeNode } from '../types';
+import { getSelectionPath } from '../utils/getSelectionPath';
 
 type InputEvent = {
   target?: {
     value: string;
   };
 };
+
+function getLeafName(path: string): string {
+  const separatorIndex = path.lastIndexOf('/');
+  return separatorIndex < 0 ? path : path.slice(separatorIndex + 1);
+}
 
 export const renamingFeature: FeatureImplementation = {
   key: 'renaming',
@@ -56,8 +62,9 @@ export const renamingFeature: FeatureImplementation = {
       if (!item.canRename()) {
         return;
       }
+      const path = getSelectionPath(item.getItemData().path);
       tree.applySubStateUpdate('renamingItem', itemId);
-      tree.applySubStateUpdate('renamingValue', item.getItemName());
+      tree.applySubStateUpdate('renamingValue', getLeafName(path));
     },
 
     getRenameInputProps: ({ tree }) => {

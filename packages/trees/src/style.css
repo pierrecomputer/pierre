@@ -421,6 +421,12 @@
     }
   }
 
+  [data-item-flattened-rename-input] {
+    width: auto;
+    min-width: 4ch;
+    max-width: min(26ch, 100%);
+  }
+
   [data-item-section='status'] {
     flex: 0 0 auto;
     width: 12px;

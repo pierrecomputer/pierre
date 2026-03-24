@@ -104,9 +104,13 @@ export function renameFileTreePaths({
   const seenPaths = new Set<string>();
 
   if (!isFolder) {
+    const destinationPrefix = `${destinationPath}/`;
     let renamed = false;
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
+      if (file !== sourcePath && file.startsWith(destinationPrefix)) {
+        return { error: `"${destinationPath}" already exists.` };
+      }
       const nextFile = file === sourcePath ? destinationPath : file;
       if (seenPaths.has(nextFile)) {
         return { error: `"${destinationPath}" already exists.` };

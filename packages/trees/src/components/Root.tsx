@@ -109,11 +109,13 @@ function FlattenedDirectoryName({
   idToPath,
   flattens,
   fallbackName,
+  renameInputProps,
 }: {
   tree: TreeInstance<FileTreeNode>;
   idToPath: Map<string, string>;
   flattens: string[];
   fallbackName: string;
+  renameInputProps?: Record<string, unknown> | null;
 }): JSX.Element {
   'use no memo';
   const segments = useMemo(() => {
@@ -132,6 +134,18 @@ function FlattenedDirectoryName({
   }, [flattens, tree, idToPath]);
 
   if (segments.length === 0) {
+    if (renameInputProps != null) {
+      return (
+        <input
+          data-item-rename-input
+          data-item-flattened-rename-input
+          aria-label={`Rename ${fallbackName}`}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          {...renameInputProps}
+        />
+      );
+    }
     return (
       <span data-item-flattened-subitems>
         {fallbackName.replace(/\//g, ' / ')}
@@ -146,7 +160,18 @@ function FlattenedDirectoryName({
         return (
           <Fragment key={id}>
             <span data-item-flattened-subitem={id}>
-              <Truncate>{label}</Truncate>
+              {isLast && renameInputProps != null ? (
+                <input
+                  data-item-rename-input
+                  data-item-flattened-rename-input
+                  aria-label={`Rename ${label}`}
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  {...renameInputProps}
+                />
+              ) : (
+                <Truncate>{label}</Truncate>
+              )}
             </span>
             {!isLast ? ' / ' : ''}
           </Fragment>
@@ -342,20 +367,21 @@ function TreeItemInner({
         )}
       </div>
       <div data-item-section="content">
-        {renameInputProps != null ? (
+        {isFlattenedDirectory ? (
+          <FlattenedDirectoryName
+            tree={tree}
+            idToPath={idToPath}
+            flattens={flattens ?? []}
+            fallbackName={itemName}
+            renameInputProps={renameInputProps}
+          />
+        ) : renameInputProps != null ? (
           <input
             data-item-rename-input
             aria-label={`Rename ${itemName}`}
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             {...renameInputProps}
-          />
-        ) : isFlattenedDirectory ? (
-          <FlattenedDirectoryName
-            tree={tree}
-            idToPath={idToPath}
-            flattens={flattens ?? []}
-            fallbackName={itemName}
           />
         ) : (
           <MiddleTruncate minimumLength={5} split="extension">
