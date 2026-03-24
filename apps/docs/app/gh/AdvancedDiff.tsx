@@ -109,9 +109,10 @@ export function AdvancedDiff() {
       console.timeEnd('--  parsing patches');
 
       console.time('-- computing layout');
+      let fileIndex = 0;
       for (const patch of parsedPatches) {
         for (const fileDiff of patch.files) {
-          codeViewerRef.current.addFileOrDiff(fileDiff);
+          codeViewerRef.current.addCode({ id: `${fileIndex++}`, fileDiff });
         }
       }
       console.timeEnd('-- computing layout');
