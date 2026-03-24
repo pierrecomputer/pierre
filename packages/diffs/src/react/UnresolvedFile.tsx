@@ -67,6 +67,7 @@ export function UnresolvedFile<LAnnotation = undefined>({
   style,
   prerenderedHTML,
   renderAnnotation,
+  renderCustomHeader,
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
@@ -83,9 +84,11 @@ export function UnresolvedFile<LAnnotation = undefined>({
       hasConflictUtility: renderMergeConflictUtility != null,
       hasGutterRenderUtility:
         renderGutterUtility != null || renderHoverUtility != null,
+      hasCustomHeader: renderCustomHeader != null,
     });
   const children = renderDiffChildren({
     fileDiff,
+    renderCustomHeader,
     renderHeaderPrefix,
     renderHeaderMetadata,
     renderAnnotation,

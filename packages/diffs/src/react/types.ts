@@ -20,6 +20,7 @@ export interface DiffBasePropsReact<LAnnotation> {
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
+  renderCustomHeader?(props: RenderHeaderMetadataProps): ReactNode;
   renderHeaderPrefix?(props: RenderHeaderMetadataProps): ReactNode;
   renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
   renderGutterUtility?(
@@ -43,6 +44,7 @@ export interface FileProps<LAnnotation> {
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
+  renderCustomHeader?(file: FileContents): ReactNode;
   renderHeaderPrefix?(file: FileContents): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
   renderGutterUtility?(

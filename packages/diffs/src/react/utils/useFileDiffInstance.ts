@@ -19,7 +19,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
-import { noopRender as renderGutterUtility } from '../constants';
+import { noopRender } from '../constants';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -37,6 +37,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
   hasGutterRenderUtility: boolean;
+  hasCustomHeader: boolean;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -54,6 +55,7 @@ export function useFileDiffInstance<LAnnotation>({
   prerenderedHTML,
   metrics,
   hasGutterRenderUtility,
+  hasCustomHeader,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -69,7 +71,11 @@ export function useFileDiffInstance<LAnnotation>({
       }
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFileDiff(
-          mergeFileDiffOptions(options, hasGutterRenderUtility),
+          mergeFileDiffOptions({
+            hasCustomHeader,
+            hasGutterRenderUtility,
+            options,
+          }),
           simpleVirtualizer,
           metrics,
           poolManager,
@@ -77,7 +83,11 @@ export function useFileDiffInstance<LAnnotation>({
         );
       } else {
         instanceRef.current = new FileDiff(
-          mergeFileDiffOptions(options, hasGutterRenderUtility),
+          mergeFileDiffOptions({
+            hasCustomHeader,
+            hasGutterRenderUtility,
+            options,
+          }),
           poolManager,
           true
         );
@@ -104,7 +114,11 @@ export function useFileDiffInstance<LAnnotation>({
   useIsometricEffect(() => {
     const { current: instance } = instanceRef;
     if (instance == null) return;
-    const newOptions = mergeFileDiffOptions(options, hasGutterRenderUtility);
+    const newOptions = mergeFileDiffOptions({
+      hasCustomHeader,
+      hasGutterRenderUtility,
+      options,
+    });
     const forceRender = !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
     void instance.render({
@@ -128,12 +142,25 @@ export function useFileDiffInstance<LAnnotation>({
   return { ref, getHoveredLine };
 }
 
-function mergeFileDiffOptions<LAnnotation>(
-  options: FileDiffOptions<LAnnotation> | undefined,
-  hasGutterRenderUtility: boolean
-): FileDiffOptions<LAnnotation> | undefined {
-  if (hasGutterRenderUtility) {
-    return { ...options, renderGutterUtility };
+interface MergeFileDiffOptionsProps<LAnnotation> {
+  hasCustomHeader: boolean;
+  hasGutterRenderUtility: boolean;
+  options: FileDiffOptions<LAnnotation> | undefined;
+}
+
+function mergeFileDiffOptions<LAnnotation>({
+  options,
+  hasCustomHeader,
+  hasGutterRenderUtility,
+}: MergeFileDiffOptionsProps<LAnnotation>):
+  | FileDiffOptions<LAnnotation>
+  | undefined {
+  if (hasGutterRenderUtility || hasCustomHeader) {
+    return {
+      ...options,
+      renderCustomHeader: hasCustomHeader ? noopRender : undefined,
+      renderGutterUtility: hasGutterRenderUtility ? noopRender : undefined,
+    };
   }
   return options;
 }

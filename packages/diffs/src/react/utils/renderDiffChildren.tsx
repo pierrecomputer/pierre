@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import {
+  CUSTOM_HEADER_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
@@ -20,6 +21,7 @@ interface RenderDiffChildrenProps<LAnnotation, T> {
   actions?: (MergeConflictDiffAction | undefined)[];
   deletionFile?: FileContents;
   additionFile?: FileContents;
+  renderCustomHeader: DiffBasePropsReact<LAnnotation>['renderCustomHeader'];
   renderHeaderPrefix: DiffBasePropsReact<LAnnotation>['renderHeaderPrefix'];
   renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
@@ -39,6 +41,7 @@ export function renderDiffChildren<LAnnotation, T>({
   actions,
   deletionFile,
   additionFile,
+  renderCustomHeader,
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderAnnotation,
@@ -50,6 +53,11 @@ export function renderDiffChildren<LAnnotation, T>({
   getInstance,
 }: RenderDiffChildrenProps<LAnnotation, T>): ReactNode {
   const gutterUtility = renderGutterUtility ?? renderHoverUtility;
+  const customHeader = renderCustomHeader?.({
+    fileDiff,
+    deletionFile,
+    additionFile,
+  });
   const prefix = renderHeaderPrefix?.({
     fileDiff,
     deletionFile,
@@ -62,8 +70,16 @@ export function renderDiffChildren<LAnnotation, T>({
   });
   return (
     <>
-      {prefix != null && <div slot={HEADER_PREFIX_SLOT_ID}>{prefix}</div>}
-      {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
+      {customHeader != null ? (
+        <div slot={CUSTOM_HEADER_SLOT_ID}>{customHeader}</div>
+      ) : (
+        <>
+          {prefix != null && <div slot={HEADER_PREFIX_SLOT_ID}>{prefix}</div>}
+          {metadata != null && (
+            <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>
+          )}
+        </>
+      )}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
           <div key={index} slot={getLineAnnotationName(annotation)}>
