@@ -266,20 +266,20 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
-    const { diffHeaderHeight, fileGap, hunkSeparatorHeight } = this.metrics;
+    const { diffHeaderHeight, spacing, hunkSeparatorHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const separatorGap =
       hunkSeparators !== 'simple' &&
       hunkSeparators !== 'metadata' &&
       hunkSeparators !== 'line-info-basic'
-        ? fileGap
+        ? spacing
         : 0;
 
     // Header or initial padding
     if (!disableFileHeader) {
       this.height += diffHeaderHeight;
     } else if (hunkSeparators !== 'simple' && hunkSeparators !== 'metadata') {
-      this.height += fileGap;
+      this.height += spacing;
     }
     if (collapsed) {
       return;
@@ -329,7 +329,7 @@ export class VirtualizedFileDiff<
 
     // Bottom padding
     if (this.fileDiff.hunks.length > 0) {
-      this.height += fileGap;
+      this.height += spacing;
     }
 
     if (
@@ -570,7 +570,7 @@ export class VirtualizedFileDiff<
     } = this.options;
     const {
       diffHeaderHeight,
-      fileGap,
+      spacing,
       hunkLineCount,
       hunkSeparatorHeight,
       lineHeight,
@@ -580,7 +580,7 @@ export class VirtualizedFileDiff<
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
 
     // Calculate headerRegion before early returns
-    const headerRegion = disableFileHeader ? fileGap : diffHeaderHeight;
+    const headerRegion = disableFileHeader ? spacing : diffHeaderHeight;
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -593,7 +593,7 @@ export class VirtualizedFileDiff<
           headerRegion -
           // This last file gap represents the bottom padding that buffers
           // should not account for
-          fileGap,
+          spacing,
       };
     }
 
@@ -622,7 +622,7 @@ export class VirtualizedFileDiff<
       hunkSeparators === 'metadata' ||
       hunkSeparators === 'line-info-basic'
         ? 0
-        : fileGap;
+        : spacing;
 
     let absoluteLineTop = fileTop + headerRegion;
     let currentLine = 0;
@@ -735,7 +735,7 @@ export class VirtualizedFileDiff<
           fileHeight -
           headerRegion -
           // We gotta subtract the bottom padding off of the buffer
-          fileGap,
+          spacing,
       };
     }
 
@@ -767,12 +767,12 @@ export class VirtualizedFileDiff<
           headerRegion -
           hunkOffsets[finalHunkIndex] -
           // We gotta subtract the bottom padding off of the buffer
-          fileGap
+          spacing
         : // We stopped early, calculate from current position
           fileHeight -
           (absoluteLineTop - fileTop) -
           // We gotta subtract the bottom padding off of the buffer
-          fileGap;
+          spacing;
 
     return {
       startingLine,

@@ -66,7 +66,7 @@ export class AdvancedVirtualizedFileDiff<
     const {
       options: { disableFileHeader = false },
       fileDiff,
-      metrics: { diffHeaderHeight, fileGap, hunkSeparatorHeight, lineHeight },
+      metrics: { diffHeaderHeight, spacing, hunkSeparatorHeight, lineHeight },
     } = this;
 
     // Add header height
@@ -74,8 +74,8 @@ export class AdvancedVirtualizedFileDiff<
       this.unifiedHeight += diffHeaderHeight;
       this.splitHeight += diffHeaderHeight;
     } else {
-      this.unifiedHeight += fileGap;
-      this.splitHeight += fileGap;
+      this.unifiedHeight += spacing;
+      this.splitHeight += spacing;
     }
 
     // NOTE(amadeus): I wonder if it's worth shortcutting this? It might help
@@ -90,9 +90,9 @@ export class AdvancedVirtualizedFileDiff<
     const hunkCount = fileDiff.hunks.length;
     const [firstHunk] = fileDiff.hunks;
     if (firstHunk != null) {
-      let hunkSize = (hunkSeparatorHeight + fileGap * 2) * (hunkCount - 1);
+      let hunkSize = (hunkSeparatorHeight + spacing * 2) * (hunkCount - 1);
       if (firstHunk.additionStart > 1 || firstHunk.deletionStart > 1) {
-        hunkSize += hunkSeparatorHeight + fileGap;
+        hunkSize += hunkSeparatorHeight + spacing;
       }
       this.unifiedHeight += hunkSize;
       this.splitHeight += hunkSize;
@@ -100,8 +100,8 @@ export class AdvancedVirtualizedFileDiff<
 
     // If there are hunks of code, then we gotta render some bottom padding
     if (hunkCount > 0) {
-      this.unifiedHeight += fileGap;
-      this.splitHeight += fileGap;
+      this.unifiedHeight += spacing;
+      this.splitHeight += spacing;
     }
   }
 
@@ -126,7 +126,7 @@ export class AdvancedVirtualizedFileDiff<
     const { diffStyle = 'split', disableFileHeader = false } = this.options;
     const {
       diffHeaderHeight,
-      fileGap,
+      spacing,
       hunkLineCount,
       hunkSeparatorHeight,
       lineHeight,
@@ -153,7 +153,7 @@ export class AdvancedVirtualizedFileDiff<
       };
     }
 
-    const headerRegion = disableFileHeader ? fileGap : diffHeaderHeight;
+    const headerRegion = disableFileHeader ? spacing : diffHeaderHeight;
     let absoluteLineTop = fileTop + headerRegion;
     let currentLine = 0;
     const hunkOffsets: number[] = [];
@@ -162,9 +162,9 @@ export class AdvancedVirtualizedFileDiff<
     for (const hunk of this.fileDiff.hunks) {
       let hunkGap = 0;
       if (hunk.additionStart > 1 || hunk.deletionStart > 1) {
-        hunkGap = hunkSeparatorHeight + fileGap;
+        hunkGap = hunkSeparatorHeight + spacing;
         if (hunk !== this.fileDiff.hunks[0]) {
-          hunkGap += fileGap;
+          hunkGap += spacing;
         }
         absoluteLineTop += hunkGap;
       }
@@ -211,7 +211,7 @@ export class AdvancedVirtualizedFileDiff<
         ? fileHeight -
           headerRegion -
           hunkOffsets[finalHunkBufferOffset] -
-          fileGap // this is to account for bottom padding of the code container
+          spacing // this is to account for bottom padding of the code container
         : 0;
     return { startingLine, totalLines, bufferBefore, bufferAfter };
   }
