@@ -24,8 +24,11 @@ const INTERSECTION_OBSERVER_MARGIN = DEFAULT_OVERSCROLL_SIZE * 4;
 const INTERSECTION_OBSERVER_THRESHOLD = [0, 0.000001, 0.99999, 1];
 
 export interface VirtualizerConfig {
+  /** Extra pixels rendered above and below the viewport to reduce blanking during fast scrolls. */
   overscrollSize: number;
+  /** Margin used by IntersectionObserver to decide when items should be considered visible. */
   intersectionObserverMargin: number;
+  /** Enables noisy resize logs to help tune metrics and investigate scroll jitter. */
   resizeDebugging: boolean;
 }
 
