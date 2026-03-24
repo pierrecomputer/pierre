@@ -1878,14 +1878,133 @@ function ReactSSRCustomIcons({
 
 type ContextMenuDemoItem = { path: string; isFolder: boolean };
 
+type RenameContextMenuItemResult = { nextFiles: string[] } | { error: string };
+
+function splitFilePath(path: string): { parentPath: string; baseName: string } {
+  const separatorIndex = path.lastIndexOf('/');
+  if (separatorIndex < 0) {
+    return { parentPath: '', baseName: path };
+  }
+  return {
+    parentPath: path.slice(0, separatorIndex),
+    baseName: path.slice(separatorIndex + 1),
+  };
+}
+
+function joinFilePath(parentPath: string, baseName: string): string {
+  return parentPath === '' ? baseName : `${parentPath}/${baseName}`;
+}
+
+/**
+ * Renames a selected file/folder path by rewriting the in-memory file list.
+ */
+function renameContextMenuItemInFileList({
+  files,
+  item,
+  nextBasename,
+}: {
+  files: string[];
+  item: ContextMenuDemoItem;
+  nextBasename: string;
+}): RenameContextMenuItemResult {
+  const trimmedBasename = nextBasename.trim();
+  if (trimmedBasename.length === 0) {
+    return { error: 'Name cannot be empty.' };
+  }
+  if (trimmedBasename.includes('/')) {
+    return { error: 'Name cannot include "/".' };
+  }
+
+  const { parentPath, baseName } = splitFilePath(item.path);
+  if (trimmedBasename === baseName) {
+    return { nextFiles: files };
+  }
+
+  const destinationPath = joinFilePath(parentPath, trimmedBasename);
+  const nextFiles = new Array<string>(files.length);
+  const seenPaths = new Set<string>();
+
+  if (!item.isFolder) {
+    let renamed = false;
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
+      const nextFile = file === item.path ? destinationPath : file;
+      if (seenPaths.has(nextFile)) {
+        return { error: `"${destinationPath}" already exists.` };
+      }
+      seenPaths.add(nextFile);
+      nextFiles[index] = nextFile;
+      if (file === item.path) {
+        renamed = true;
+      }
+    }
+    if (!renamed) {
+      return { error: 'Could not find the selected file to rename.' };
+    }
+    return { nextFiles };
+  }
+
+  const sourcePrefix = `${item.path}/`;
+  const destinationPrefix = `${destinationPath}/`;
+  let renamedPathCount = 0;
+
+  for (let index = 0; index < files.length; index++) {
+    const file = files[index];
+    const isWithinRenamedFolder =
+      file === item.path || file.startsWith(sourcePrefix);
+    if (
+      !isWithinRenamedFolder &&
+      (file === destinationPath || file.startsWith(destinationPrefix))
+    ) {
+      return { error: `"${destinationPath}" already exists.` };
+    }
+
+    const nextFile = isWithinRenamedFolder
+      ? `${destinationPath}${file.slice(item.path.length)}`
+      : file;
+    if (seenPaths.has(nextFile)) {
+      return { error: `"${destinationPath}" already exists.` };
+    }
+
+    seenPaths.add(nextFile);
+    nextFiles[index] = nextFile;
+    if (isWithinRenamedFolder) {
+      renamedPathCount++;
+    }
+  }
+
+  if (renamedPathCount === 0) {
+    return { error: 'Cannot rename an empty folder in this demo.' };
+  }
+  return { nextFiles };
+}
+
 function TreeDemoContextMenu({
   item,
   onClose,
+  onRename,
 }: {
   item: ContextMenuDemoItem;
   onClose: () => void;
+  onRename?: (item: ContextMenuDemoItem, nextBasename: string) => void;
 }) {
   const itemType = item.isFolder ? 'Folder' : 'File';
+  const handleRenameSelect = () => {
+    if (onRename == null) {
+      onClose();
+      return;
+    }
+    const { baseName } = splitFilePath(item.path);
+    const nextBasename = window.prompt(
+      `Rename ${itemType.toLowerCase()}`,
+      baseName
+    );
+    if (nextBasename != null) {
+      onRename(item, nextBasename);
+    }
+    onClose();
+  };
+
   return (
     <DropdownMenu
       open
@@ -1918,7 +2037,9 @@ function TreeDemoContextMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onClose}>Open</DropdownMenuItem>
-        <DropdownMenuItem onSelect={onClose}>Rename</DropdownMenuItem>
+        <DropdownMenuItem onSelect={handleRenameSelect}>
+          Rename
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={onClose}
           className="text-destructive focus:text-destructive"
@@ -1935,16 +2056,18 @@ function renderVanillaContextMenuSlot({
   menuRootRef,
   item,
   onClose,
+  onRename,
 }: {
   slotElement: HTMLDivElement;
   menuRootRef: { current: ReactDomRoot | null };
   item: ContextMenuDemoItem;
   onClose: () => void;
+  onRename?: (item: ContextMenuDemoItem, nextBasename: string) => void;
 }): void {
   menuRootRef.current ??= createRoot(slotElement);
   slotElement.style.display = 'block';
   menuRootRef.current.render(
-    <TreeDemoContextMenu item={item} onClose={onClose} />
+    <TreeDemoContextMenu item={item} onClose={onClose} onRename={onRename} />
   );
 }
 
@@ -2183,6 +2306,33 @@ function VanillaSSRContextMenu({
   const instanceRef = useRef<FileTree | null>(null);
   const hasHydratedRef = useRef(false);
   const menuRootRef = useRef<ReactDomRoot | null>(null);
+  const [files, setFiles] = useState<string[]>(options.initialFiles);
+  const filesRef = useRef(files);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  const handleRename = useCallback(
+    (item: ContextMenuDemoItem, nextBasename: string) => {
+      const result = renameContextMenuItemInFileList({
+        files: filesRef.current,
+        item,
+        nextBasename,
+      });
+      if ('error' in result) {
+        window.alert(result.error);
+        return;
+      }
+      if (result.nextFiles === filesRef.current) {
+        return;
+      }
+      filesRef.current = result.nextFiles;
+      setFiles(result.nextFiles);
+      instanceRef.current?.setFiles(result.nextFiles);
+    },
+    []
+  );
 
   const ref = useCallback(
     (node: HTMLDivElement | null) => {
@@ -2207,20 +2357,24 @@ function VanillaSSRContextMenu({
         });
       };
 
-      const fileTree = new FileTree(options, {
-        ...stateConfig,
-        onContextMenuOpen: (item, context) => {
-          renderVanillaContextMenuSlot({
-            slotElement,
-            menuRootRef,
-            item,
-            onClose: context.close,
-          });
-        },
-        onContextMenuClose: () => {
-          closeMenu();
-        },
-      });
+      const fileTree = new FileTree(
+        { ...options, initialFiles: filesRef.current },
+        {
+          ...stateConfig,
+          onContextMenuOpen: (item, context) => {
+            renderVanillaContextMenuSlot({
+              slotElement,
+              menuRootRef,
+              item,
+              onClose: context.close,
+              onRename: handleRename,
+            });
+          },
+          onContextMenuClose: () => {
+            closeMenu();
+          },
+        }
+      );
 
       if (!hasHydratedRef.current) {
         fileTree.hydrate({
@@ -2244,7 +2398,7 @@ function VanillaSSRContextMenu({
         instanceRef.current = null;
       };
     },
-    [options, stateConfig]
+    [handleRename, options, stateConfig]
   );
 
   return (
@@ -2270,15 +2424,40 @@ function ReactSSRContextMenu({
   stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
+  const [files, setFiles] = useState<string[]>(() => initialFiles ?? []);
+
+  const handleRename = useCallback(
+    (item: ContextMenuDemoItem, nextBasename: string) => {
+      const result = renameContextMenuItemInFileList({
+        files,
+        item,
+        nextBasename,
+      });
+      if ('error' in result) {
+        window.alert(result.error);
+        return;
+      }
+      if (result.nextFiles !== files) {
+        setFiles(result.nextFiles);
+      }
+    },
+    [files]
+  );
+
   return (
     <FileTreeReact
       options={options}
-      initialFiles={initialFiles}
+      files={files}
+      onFilesChange={setFiles}
       prerenderedHTML={prerenderedHTML}
       initialExpandedItems={stateConfig?.initialExpandedItems}
       onSelection={stateConfig?.onSelection}
       renderContextMenu={(item, context) => (
-        <TreeDemoContextMenu item={item} onClose={context.close} />
+        <TreeDemoContextMenu
+          item={item}
+          onClose={context.close}
+          onRename={handleRename}
+        />
       )}
     />
   );
@@ -2291,56 +2470,84 @@ function ReactSSRContextMenu({
 function VirtualizedLinuxKernelCard() {
   const [mounted, setMounted] = useState(false);
   const menuRootRef = useRef<ReactDomRoot | null>(null);
+  const instanceRef = useRef<FileTree | null>(null);
+  const filesRef = useRef<string[]>(linuxKernelFiles);
 
-  const ref = useCallback((node: HTMLDivElement | null) => {
-    if (node == null) return;
-
-    const slotElement = document.createElement('div');
-    slotElement.setAttribute('slot', CONTEXT_MENU_SLOT_NAME);
-    slotElement.style.display = 'none';
-
-    const fileTree = new FileTree(
-      {
-        initialFiles: linuxKernelFiles,
-        virtualize: { threshold: 0 },
-        flattenEmptyDirectories: true,
-        sort: false,
-      },
-      {
-        initialExpandedItems: linuxKernelAllFolders,
-        onContextMenuOpen: (item, context) => {
-          renderVanillaContextMenuSlot({
-            slotElement,
-            menuRootRef,
-            item,
-            onClose: context.close,
-          });
-        },
-        onContextMenuClose: () => {
-          clearVanillaContextMenuSlot({
-            slotElement,
-            menuRootRef,
-          });
-        },
-      }
-    );
-    fileTree.render({ containerWrapper: node });
-
-    const container = fileTree.getFileTreeContainer();
-    if (container != null) {
-      container.appendChild(slotElement);
-    }
-
-    return () => {
-      clearVanillaContextMenuSlot({
-        slotElement,
-        menuRootRef,
-        unmount: true,
+  const handleRename = useCallback(
+    (item: ContextMenuDemoItem, nextBasename: string) => {
+      const result = renameContextMenuItemInFileList({
+        files: filesRef.current,
+        item,
+        nextBasename,
       });
-      slotElement.remove();
-      fileTree.cleanUp();
-    };
-  }, []);
+      if ('error' in result) {
+        window.alert(result.error);
+        return;
+      }
+      if (result.nextFiles === filesRef.current) {
+        return;
+      }
+      filesRef.current = result.nextFiles;
+      instanceRef.current?.setFiles(result.nextFiles);
+    },
+    []
+  );
+
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node == null) return;
+
+      const slotElement = document.createElement('div');
+      slotElement.setAttribute('slot', CONTEXT_MENU_SLOT_NAME);
+      slotElement.style.display = 'none';
+
+      const fileTree = new FileTree(
+        {
+          initialFiles: filesRef.current,
+          virtualize: { threshold: 0 },
+          flattenEmptyDirectories: true,
+          sort: false,
+        },
+        {
+          initialExpandedItems: linuxKernelAllFolders,
+          onContextMenuOpen: (item, context) => {
+            renderVanillaContextMenuSlot({
+              slotElement,
+              menuRootRef,
+              item,
+              onClose: context.close,
+              onRename: handleRename,
+            });
+          },
+          onContextMenuClose: () => {
+            clearVanillaContextMenuSlot({
+              slotElement,
+              menuRootRef,
+            });
+          },
+        }
+      );
+      fileTree.render({ containerWrapper: node });
+      instanceRef.current = fileTree;
+
+      const container = fileTree.getFileTreeContainer();
+      if (container != null) {
+        container.appendChild(slotElement);
+      }
+
+      return () => {
+        clearVanillaContextMenuSlot({
+          slotElement,
+          menuRootRef,
+          unmount: true,
+        });
+        slotElement.remove();
+        fileTree.cleanUp();
+        instanceRef.current = null;
+      };
+    },
+    [handleRename]
+  );
 
   return (
     <ExampleCard
