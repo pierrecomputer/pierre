@@ -8,8 +8,10 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
+  DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
+  LineAnnotation,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
@@ -37,23 +39,39 @@ interface AdvancedVirtualizedDiffItem<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   kind: 'diff';
+  id: string;
   instance: VirtualizedFileDiff<LAnnotation>;
   fileDiff: FileDiffMetadata;
   element: HTMLElement | undefined;
+  annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
 interface AdvancedVirtualizedFileItem<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   kind: 'file';
+  id: string;
   instance: VirtualizedFile<LAnnotation>;
   file: FileContents;
   element: HTMLElement | undefined;
+  annotations?: LineAnnotation<LAnnotation>[];
 }
 
 type AdvancedVirtualizedItem<LAnnotation> =
   | AdvancedVirtualizedDiffItem<LAnnotation>
   | AdvancedVirtualizedFileItem<LAnnotation>;
+
+export interface AddFileDiffInput<LAnnotation> {
+  id: string;
+  fileDiff: FileDiffMetadata;
+  annotations?: DiffLineAnnotation<LAnnotation>[];
+}
+
+export interface AddFileInput<LAnnotation> {
+  id: string;
+  file: FileContents;
+  annotations?: LineAnnotation<LAnnotation>[];
+}
 
 export class CodeViewer<LAnnotation = undefined> {
   static __STOP = false;
@@ -66,6 +84,8 @@ export class CodeViewer<LAnnotation = undefined> {
     resizeDebugging: false,
   };
   private items: AdvancedVirtualizedItem<LAnnotation>[] = [];
+  private idToItem: Map<string, AdvancedVirtualizedItem<LAnnotation>> =
+    new Map();
   private instanceToItem: Map<object, AdvancedVirtualizedItem<LAnnotation>> =
     new Map();
   private changedInstances: Set<
@@ -142,6 +162,7 @@ export class CodeViewer<LAnnotation = undefined> {
   public reset(): void {
     this.cleanAllRenderedItems();
     this.items.length = 0;
+    this.idToItem.clear();
     this.instanceToItem.clear();
     this.stickyContainer.textContent = '';
     this.stickyOffset.style.height = '';
@@ -203,11 +224,17 @@ export class CodeViewer<LAnnotation = undefined> {
     this.root.scrollTo({ top: clampedTop, behavior });
   }
 
-  public addFileOrDiff(fileOrDiff: FileContents | FileDiffMetadata): void {
+  public addCode(
+    input: AddFileDiffInput<LAnnotation> | AddFileInput<LAnnotation>
+  ): void {
+    if (this.idToItem.has(input.id)) {
+      throw new Error(`CodeViewer.addFileOrDiff: duplicate id "${input.id}"`);
+    }
     const item: AdvancedVirtualizedItem<LAnnotation> = (() => {
-      if (isFileDiffMetadata(fileOrDiff)) {
+      if ('fileDiff' in input) {
         return {
           kind: 'diff',
+          ...input,
           instance: new VirtualizedFileDiff<LAnnotation>(
             this.options,
             this,
@@ -215,7 +242,6 @@ export class CodeViewer<LAnnotation = undefined> {
             this.workerManager,
             true
           ),
-          fileDiff: fileOrDiff,
           top: this.scrollHeight,
           height: 0,
           element: undefined,
@@ -223,6 +249,7 @@ export class CodeViewer<LAnnotation = undefined> {
       }
       return {
         kind: 'file',
+        ...input,
         instance: new VirtualizedFile<LAnnotation>(
           this.options as unknown as FileOptions<LAnnotation>,
           this,
@@ -230,16 +257,41 @@ export class CodeViewer<LAnnotation = undefined> {
           this.workerManager,
           true
         ),
-        file: fileOrDiff,
         top: this.scrollHeight,
         height: 0,
         element: undefined,
       };
     })();
     this.items.push(item);
+    this.idToItem.set(item.id, item);
     this.instanceToItem.set(item.instance, item);
     item.height = prepareItemInstance(item);
     this.scrollHeight += item.height + this.metrics.fileGap;
+    this.scrollDirty = true;
+    this.render();
+  }
+
+  public setDiffAnnotations(
+    id: string,
+    annotations: DiffLineAnnotation<LAnnotation>[]
+  ): void {
+    const item = this.idToItem.get(id);
+    if (item == null || item.kind !== 'diff') {
+      throw new Error(`CodeViewer.setDiffAnnotations: invalid diff id "${id}"`);
+    }
+    item.annotations = annotations;
+    this.render();
+  }
+
+  public setFileAnnotations(
+    id: string,
+    annotations: LineAnnotation<LAnnotation>[]
+  ): void {
+    const item = this.idToItem.get(id);
+    if (item == null || item.kind !== 'file') {
+      throw new Error(`CodeViewer.setFileAnnotations: invalid file id "${id}"`);
+    }
+    item.annotations = annotations;
     this.scrollDirty = true;
     this.render();
   }
@@ -695,12 +747,6 @@ function cleanRenderedItem<LAnnotation>(
   item.element = undefined;
 }
 
-function isFileDiffMetadata(
-  value: FileContents | FileDiffMetadata
-): value is FileDiffMetadata {
-  return 'hunks' in value;
-}
-
 function prepareItemInstance<LAnnotation>(
   item: AdvancedVirtualizedItem<LAnnotation>
 ): number {
@@ -717,9 +763,17 @@ function onRender<LAnnotation>(
   fileContainer?: HTMLElement
 ): boolean {
   if (item.kind === 'diff') {
-    return item.instance.render({ fileContainer, fileDiff: item.fileDiff });
+    return item.instance.render({
+      fileContainer,
+      fileDiff: item.fileDiff,
+      lineAnnotations: item.annotations,
+    });
   } else {
-    return item.instance.render({ fileContainer, file: item.file });
+    return item.instance.render({
+      fileContainer,
+      file: item.file,
+      lineAnnotations: item.annotations,
+    });
   }
 }
 
