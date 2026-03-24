@@ -427,6 +427,8 @@ export interface RenderHeaderMetadataProps {
   fileDiff?: FileDiffMetadata;
 }
 
+export type FileHeaderRenderMode = 'default' | 'custom';
+
 export type RenderHeaderMetadataCallback = (
   props: RenderHeaderMetadataProps
 ) => Element | null | undefined | string | number;

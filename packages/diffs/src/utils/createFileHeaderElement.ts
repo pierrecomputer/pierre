@@ -1,10 +1,15 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
-import { HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID } from '../constants';
+import {
+  CUSTOM_HEADER_SLOT_ID,
+  HEADER_METADATA_SLOT_ID,
+  HEADER_PREFIX_SLOT_ID,
+} from '../constants';
 import type {
   ChangeTypes,
   FileContents,
   FileDiffMetadata,
+  FileHeaderRenderMode,
   ThemeTypes,
 } from '../types';
 import { getIconForType } from './getIconForType';
@@ -18,12 +23,14 @@ export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
   themeStyles: string;
   themeType: ThemeTypes;
+  mode?: FileHeaderRenderMode;
 }
 
 export function createFileHeaderElement({
   fileOrDiff,
   themeStyles,
   themeType,
+  mode = 'default',
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
@@ -36,12 +43,18 @@ export function createFileHeaderElement({
   return createHastElement({
     tagName: 'div',
     children: [
-      createHeaderElement({
-        name: fileOrDiff.name,
-        prevName: 'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
-        iconType: fileDiff?.type ?? 'file',
-      }),
-      createMetadataElement(fileDiff),
+      mode === 'custom'
+        ? createHastElement({
+            tagName: 'slot',
+            properties: { name: CUSTOM_HEADER_SLOT_ID },
+          })
+        : createHeaderElement({
+            name: fileOrDiff.name,
+            prevName:
+              'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
+            iconType: fileDiff?.type ?? 'file',
+          }),
+      ...(mode === 'custom' ? [] : [createMetadataElement(fileDiff)]),
     ],
     properties,
   });
