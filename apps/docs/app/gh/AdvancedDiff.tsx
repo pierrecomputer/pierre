@@ -99,6 +99,7 @@ export function AdvancedDiff() {
         return undefined;
       }
       codeViewerRef.current ??= new CodeViewer<CommentMetadata>(
+        undefined,
         {
           theme: DEFAULT_THEMES,
           diffStyle: 'split',

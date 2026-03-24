@@ -691,6 +691,12 @@ export interface VirtualFileMetrics {
   fileGap: number;
 }
 
+export interface CodeViewerMetrics {
+  paddingTop: number;
+  paddingBottom: number;
+  gap: number;
+}
+
 export interface SelectionPoint {
   lineNumber: number;
   side: SelectionSide | undefined;

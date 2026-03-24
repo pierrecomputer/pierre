@@ -1,5 +1,6 @@
 import {
   DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
+  DEFAULT_CODE_VIEWER_METRICS,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
 } from '../constants';
@@ -8,6 +9,7 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
+  CodeViewerMetrics,
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
@@ -94,7 +96,6 @@ export class CodeViewer<LAnnotation = undefined> {
   private scrollHeight = 0;
 
   private lastContainerHeight = -1;
-  private container: HTMLElement | undefined;
 
   private lastRenderedScrollY = -1;
   private scrollTop: number = 0;
@@ -111,10 +112,12 @@ export class CodeViewer<LAnnotation = undefined> {
   private root: HTMLElement | undefined;
   private resizeObserver: ResizeObserver | undefined;
 
+  private container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
   private stickyOffset = document.createElement('div');
 
   constructor(
+    private viewerMetrics: CodeViewerMetrics = DEFAULT_CODE_VIEWER_METRICS,
     private options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
     private metrics: VirtualFileMetrics = DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
     private workerManager?: WorkerPoolManager | undefined,
@@ -125,6 +128,9 @@ export class CodeViewer<LAnnotation = undefined> {
     this.stickyContainer.style.width = '100%';
     this.stickyContainer.style.contain = 'layout style contents';
     this.stickyContainer.style.isolation = 'isolate';
+    this.stickyContainer.style.display = 'flex';
+    this.stickyContainer.style.flexDirection = 'column';
+    this.stickyContainer.style.gap = `${this.viewerMetrics.gap}px`;
 
     // FIXME(amadeus): Remove me before release
     window.__INSTANCE = this;
@@ -144,7 +150,9 @@ export class CodeViewer<LAnnotation = undefined> {
       throw new Error('CodeViewer.setup: already setup');
     }
     this.root = root;
-    this.container = document.createElement('div');
+    this.container ??= document.createElement('div');
+    this.container.style.marginTop = `${this.viewerMetrics.paddingTop}px`;
+    this.container.style.marginBottom = `${this.viewerMetrics.paddingBottom}px`;
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
     this.root.appendChild(this.container);
@@ -231,6 +239,8 @@ export class CodeViewer<LAnnotation = undefined> {
     if (this.idToItem.has(input.id)) {
       throw new Error(`CodeViewer.addFileOrDiff: duplicate id "${input.id}"`);
     }
+    const itemTop =
+      this.items.length === 0 ? 0 : this.scrollHeight + this.viewerMetrics.gap;
     const item: AdvancedVirtualizedItem<LAnnotation> = (() => {
       if ('fileDiff' in input) {
         return {
@@ -243,7 +253,7 @@ export class CodeViewer<LAnnotation = undefined> {
             this.workerManager,
             this.isContainerManaged
           ),
-          top: this.scrollHeight,
+          top: itemTop,
           height: 0,
           element: undefined,
         };
@@ -258,7 +268,7 @@ export class CodeViewer<LAnnotation = undefined> {
           this.workerManager,
           this.isContainerManaged
         ),
-        top: this.scrollHeight,
+        top: itemTop,
         height: 0,
         element: undefined,
       };
@@ -267,7 +277,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.idToItem.set(item.id, item);
     this.instanceToItem.set(item.instance, item);
     item.height = prepareItemInstance(item);
-    this.scrollHeight += item.height + this.metrics.fileGap;
+    this.scrollHeight = itemTop + item.height;
     this.scrollDirty = true;
     this.render();
   }
@@ -442,9 +452,10 @@ export class CodeViewer<LAnnotation = undefined> {
     this.updateStickyPositioning();
     this.scrollFix(anchor);
 
-    if (this.lastContainerHeight !== this.scrollHeight) {
-      this.container.style.height = `${this.scrollHeight}px`;
-      this.lastContainerHeight = this.scrollHeight;
+    const totalScrollHeight = this.getScrollHeight();
+    if (this.lastContainerHeight !== totalScrollHeight) {
+      this.container.style.height = `${totalScrollHeight}px`;
+      this.lastContainerHeight = totalScrollHeight;
     }
 
     if (fitPerfectly) {
@@ -493,7 +504,10 @@ export class CodeViewer<LAnnotation = undefined> {
           item.height = item.instance.getVirtualizedHeight();
         }
       }
-      currentTop += item.instance.getVirtualizedHeight() + this.metrics.fileGap;
+      currentTop += item.instance.getVirtualizedHeight();
+      if (index < this.items.length - 1) {
+        currentTop += this.viewerMetrics.gap;
+      }
     }
 
     if (heightChanged && currentTop != null) {
@@ -529,7 +543,7 @@ export class CodeViewer<LAnnotation = undefined> {
     const randomOffset = ((Math.random() * this.metrics.lineHeight) >> 0) * -1;
     const stickyJitter =
       -Math.max(stickyContainerHeight + randomOffset, 0) + height;
-    this.stickyContainer.style.top = `${stickyJitter + this.metrics.fileGap}px`;
+    this.stickyContainer.style.top = `${stickyJitter}px`;
     this.stickyContainer.style.bottom = `${stickyJitter}px`;
   }
 
@@ -718,14 +732,18 @@ export class CodeViewer<LAnnotation = undefined> {
 
   private recomputeLayout(): void {
     let runningTop = 0;
+    let index = 0;
     for (const item of this.items) {
+      if (index++ > 0) {
+        runningTop += this.viewerMetrics.gap;
+      }
       item.top = runningTop;
       if (item.kind === 'diff') {
         item.height = item.instance.prepareVirtualizedItem(item.fileDiff);
       } else {
         item.height = item.instance.prepareVirtualizedItem(item.file);
       }
-      runningTop += item.height + this.metrics.fileGap;
+      runningTop += item.height;
     }
     if (runningTop !== this.scrollHeight) {
       this.scrollDirty = true;
