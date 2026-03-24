@@ -297,6 +297,7 @@ function TreeItemInner({
     <button
       data-type="item"
       data-item-type={hasChildren ? 'folder' : 'file'}
+      aria-label={itemName}
       {...selectionProps}
       {...searchMatchProps}
       {...focusedProps}

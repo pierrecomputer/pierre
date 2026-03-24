@@ -19,12 +19,9 @@ test.describe('file-tree git status attributes', () => {
       }
 
       const getItemButton = (label: string) =>
-        Array.from(root.querySelectorAll('button[data-type="item"]')).find(
-          (button) =>
-            button
-              .querySelector("[data-item-section='content']")
-              ?.textContent?.trim() === label
-        ) as HTMLButtonElement | undefined;
+        root.querySelector(`button[data-type="item"][aria-label="${label}"]`) as
+          | HTMLButtonElement
+          | undefined;
 
       const getStatusPayload = (label: string) => {
         const button = getItemButton(label);
