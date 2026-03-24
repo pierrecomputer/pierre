@@ -44,7 +44,7 @@ const unsafeCSS = `[data-diffs-header] {
 @container sticky-header scroll-state(stuck: top) {
   [data-diffs-header]::after {
     position: absolute;
-    bottom: 1px;
+    bottom: -1px;
     left: 0;
     width: 100%;
     height: 1px;
@@ -99,7 +99,7 @@ export function AdvancedDiff() {
         return undefined;
       }
       codeViewerRef.current ??= new CodeViewer<CommentMetadata>(
-        undefined,
+        { gap: 12, paddingBottom: 20, paddingTop: 1 },
         {
           theme: DEFAULT_THEMES,
           diffStyle: 'split',
@@ -265,7 +265,7 @@ export function AdvancedDiff() {
         </form>
       </div>
       <div ref={handleRef} className={styles.scrollContainer} />
-      <WorkerPoolStatus />
+      <WorkerPoolStatus scrollRef={scrollRef} />
     </>
   );
 }
