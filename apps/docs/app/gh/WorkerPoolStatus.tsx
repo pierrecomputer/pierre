@@ -3,7 +3,7 @@
 import { areWorkerStatsEqual, queueRender } from '@pierre/diffs';
 import { useWorkerPool } from '@pierre/diffs/react';
 import type { WorkerStats } from '@pierre/diffs/worker';
-import { useEffect, useState } from 'react';
+import { type RefObject, useEffect, useState } from 'react';
 
 class AutoScrollTester {
   static SPEED = 1000;
@@ -11,7 +11,10 @@ class AutoScrollTester {
   private running = false;
   private direction = 1;
 
-  constructor(private onStateChange?: (running: boolean) => unknown) {}
+  constructor(
+    private scrollRef: RefObject<HTMLDivElement | null>,
+    private onStateChange?: (running: boolean) => unknown
+  ) {}
 
   start() {
     if (this.running) return;
@@ -21,13 +24,14 @@ class AutoScrollTester {
   }
 
   render = () => {
-    if (!this.running) return;
-    const { scrollY, innerHeight } = window;
-    const { scrollHeight } = document.documentElement;
-    if (scrollY <= 0 || scrollY >= scrollHeight - innerHeight) {
+    if (!this.running || this.scrollRef.current == null) return;
+    const { scrollHeight, scrollTop } = this.scrollRef.current;
+    if (scrollTop <= 0 || scrollTop >= scrollHeight - innerHeight) {
       this.direction *= -1;
     }
-    window.scrollTo({ top: scrollY + AutoScrollTester.SPEED * this.direction });
+    this.scrollRef.current.scrollTo({
+      top: scrollTop + AutoScrollTester.SPEED * this.direction,
+    });
     queueRender(this.render);
   };
 
@@ -45,7 +49,11 @@ class AutoScrollTester {
   };
 }
 
-export function WorkerPoolStatus() {
+interface WorkerPoolStatusProps {
+  scrollRef: RefObject<HTMLDivElement | null>;
+}
+
+export function WorkerPoolStatus({ scrollRef }: WorkerPoolStatusProps) {
   const pool = useWorkerPool();
   const [stats, setStats] = useState<WorkerStats | undefined>(undefined);
   useEffect(() => {
@@ -63,7 +71,7 @@ export function WorkerPoolStatus() {
       });
     }
   }, [pool]);
-  return stats != null && <StatsDisplay stats={stats} />;
+  return stats != null && <StatsDisplay stats={stats} scrollRef={scrollRef} />;
 }
 
 interface StatItemProps {
@@ -84,11 +92,14 @@ function StatItem({ label, value }: StatItemProps) {
 
 interface StatsDisplayProps {
   stats: WorkerStats;
+  scrollRef: RefObject<HTMLDivElement | null>;
 }
 
-function StatsDisplay({ stats }: StatsDisplayProps) {
+function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
   const [isBrrt, setIsBrrt] = useState(false);
-  const [scrollTester] = useState(() => new AutoScrollTester(setIsBrrt));
+  const [scrollTester] = useState(
+    () => new AutoScrollTester(scrollRef, setIsBrrt)
+  );
 
   const getStatusColor = () => {
     if (stats.workersFailed) return 'bg-red-500';
