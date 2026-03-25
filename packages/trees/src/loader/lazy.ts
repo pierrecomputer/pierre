@@ -1,6 +1,5 @@
-import type { TreeDataLoader } from '@headless-tree/core';
-
 import { FLATTENED_PREFIX } from '../constants';
+import type { TreeDataLoader } from '../core';
 import type { FileTreeNode } from '../types';
 import { createIdMaps } from '../utils/createIdMaps';
 import { createLoaderUtils } from '../utils/createLoaderUtils';

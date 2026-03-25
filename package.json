@@ -8,7 +8,6 @@
     ],
     "catalog": {
       "@arethetypeswrong/core": "0.18.2",
-      "@headless-tree/core": "1.6.1",
       "@icons-pack/react-simple-icons": "13.8.0",
       "@octokit/app": "16.1.1",
       "@octokit/auth-app": "8.1.1",

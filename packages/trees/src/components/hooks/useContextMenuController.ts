@@ -1,10 +1,10 @@
-import type { TreeInstance } from '@headless-tree/core';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import {
   CONTEXT_MENU_SLOT_NAME,
   CONTEXT_MENU_TRIGGER_TYPE,
 } from '../../constants';
+import type { TreeInstance } from '../../core';
 import type { FileTreeCallbacks } from '../../FileTree';
 import type { FileTreeNode } from '../../types';
 import { getSelectionPath } from '../../utils/getSelectionPath';

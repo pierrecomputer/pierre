@@ -1,3 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
+import { FLATTENED_PREFIX } from '../src/constants';
 import {
   createTree,
   expandAllFeature,
@@ -6,10 +9,7 @@ import {
   selectionFeature,
   syncDataLoaderFeature,
   type TreeInstance,
-} from '@headless-tree/core';
-import { describe, expect, test } from 'bun:test';
-
-import { FLATTENED_PREFIX } from '../src/constants';
+} from '../src/core';
 import { dragAndDropFeature } from '../src/features/dragAndDropFeature';
 import { canDrop, getDragTarget } from '../src/features/dragAndDropUtils';
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';

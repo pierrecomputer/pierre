@@ -44,7 +44,6 @@
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
-    "@headless-tree/core": "catalog:",
     "preact": "catalog:",
     "preact-render-to-string": "catalog:"
   },

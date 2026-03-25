@@ -1,11 +1,10 @@
-import { type TreeInstance } from '@headless-tree/core';
-
 import { FileTreeContainerLoaded } from './components/web-components';
 import {
   FILE_TREE_TAG_NAME,
   FILE_TREE_UNSAFE_CSS_ATTRIBUTE,
   FLATTENED_PREFIX,
 } from './constants';
+import { type TreeInstance } from './core';
 import { SVGSpriteSheet } from './sprite';
 import type {
   ContextMenuItem,

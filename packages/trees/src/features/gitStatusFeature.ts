@@ -1,10 +1,5 @@
-import type {
-  FeatureImplementation,
-  TreeConfig,
-  TreeInstance,
-} from '@headless-tree/core';
-
 import { FLATTENED_PREFIX } from '../constants';
+import type { FeatureImplementation, TreeConfig, TreeInstance } from '../core';
 import type { FileTreeNode, GitStatus, GitStatusEntry } from '../types';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
 
@@ -190,7 +185,7 @@ export const gitStatusFeature: FeatureImplementation = {
   },
 };
 
-declare module '@headless-tree/core' {
+declare module '../core/types/core' {
   // oxlint-disable-next-line @typescript-oxlint/no-unused-vars
   interface ItemInstance<T> {
     getGitStatus(): GitStatus | null;

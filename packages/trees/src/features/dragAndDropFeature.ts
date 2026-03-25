@@ -3,9 +3,8 @@ import type {
   FeatureImplementation,
   ItemInstance,
   TreeInstance,
-} from '@headless-tree/core';
-import { makeStateUpdater } from '@headless-tree/core';
-
+} from '../core';
+import { makeStateUpdater } from '../core';
 import type {
   DndDataRef,
   DragLineData,

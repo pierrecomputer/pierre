@@ -1,10 +1,11 @@
+import { useEffect, useRef, useState } from 'preact/hooks';
+
 import {
   createTree,
   type TreeConfig,
   type TreeInstance,
   type TreeState,
-} from '@headless-tree/core';
-import { useEffect, useRef, useState } from 'preact/hooks';
+} from '../../core';
 
 export const useTree = <T>(config: TreeConfig<T>): TreeInstance<T> => {
   'use no memo';

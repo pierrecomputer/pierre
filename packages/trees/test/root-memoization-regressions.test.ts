@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 import {
   createTree,
   expandAllFeature,
@@ -6,9 +8,7 @@ import {
   selectionFeature,
   syncDataLoaderFeature,
   type TreeConfig,
-} from '@headless-tree/core';
-import { describe, expect, test } from 'bun:test';
-
+} from '../src/core';
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
 import { gitStatusFeature } from '../src/features/gitStatusFeature';
 import type { FileTreeSearchConfig } from '../src/FileTree';

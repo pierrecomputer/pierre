@@ -1,5 +1,4 @@
-import type { TreeDataLoader } from '@headless-tree/core';
-
+import type { TreeDataLoader } from '../core';
 import type { FileTreeData, FileTreeNode } from '../types';
 import { fileListToTree } from '../utils/fileListToTree';
 import type { DataLoaderOptions } from './index';

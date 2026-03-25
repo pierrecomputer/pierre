@@ -1,4 +1,4 @@
-import type { ItemInstance, SetStateFn } from '@headless-tree/core';
+import type { ItemInstance, SetStateFn } from '../core';
 
 export interface DndDataRef {
   lastDragCode?: string;

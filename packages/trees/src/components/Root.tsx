@@ -1,14 +1,3 @@
-/** @jsxImportSource preact */
-import {
-  expandAllFeature,
-  hotkeysCoreFeature,
-  type ItemInstance,
-  keyboardDragAndDropFeature,
-  propMemoizationFeature,
-  selectionFeature,
-  syncDataLoaderFeature,
-  type TreeInstance,
-} from '@headless-tree/core';
 import { Component, createElement, Fragment } from 'preact';
 import type { FunctionComponent, JSX } from 'preact';
 import {
@@ -25,6 +14,17 @@ import {
   FLATTENED_PREFIX,
   HEADER_SLOT_NAME,
 } from '../constants';
+/** @jsxImportSource preact */
+import {
+  expandAllFeature,
+  hotkeysCoreFeature,
+  type ItemInstance,
+  keyboardDragAndDropFeature,
+  propMemoizationFeature,
+  selectionFeature,
+  syncDataLoaderFeature,
+  type TreeInstance,
+} from '../core';
 import {
   contextMenuFeature,
   type ContextMenuRequest,

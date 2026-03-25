@@ -1,4 +1,4 @@
-import type { FeatureImplementation } from '@headless-tree/core';
+import type { FeatureImplementation } from '../core';
 
 export type ContextMenuRequest = {
   itemId: string;

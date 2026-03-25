@@ -1,6 +1,5 @@
 /* oxlint-disable typescript-oxlint/strict-boolean-expressions -- Ported from @headless-tree/core internals */
-import type { ItemInstance, TreeInstance } from '@headless-tree/core';
-
+import type { ItemInstance, TreeInstance } from '../core';
 import type { DragTarget } from './dragAndDropTypes';
 
 export enum ItemDropCategory {

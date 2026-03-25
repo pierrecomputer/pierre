@@ -1,12 +1,11 @@
-import { makeStateUpdater } from '@headless-tree/core';
+import { makeStateUpdater } from '../core';
 import type {
   FeatureImplementation,
   ItemInstance,
   SearchFeatureDataRef,
   TreeConfig,
   TreeInstance,
-} from '@headless-tree/core';
-
+} from '../core';
 import type { FileTreeSearchConfig, FileTreeSearchMode } from '../FileTree';
 import type { FileTreeNode } from '../types';
 import { getSelectionPath } from '../utils/getSelectionPath';

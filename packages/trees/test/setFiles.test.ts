@@ -1,12 +1,12 @@
+import { describe, expect, test } from 'bun:test';
+
 import {
   createTree,
   expandAllFeature,
   hotkeysCoreFeature,
   selectionFeature,
   syncDataLoaderFeature,
-} from '@headless-tree/core';
-import { describe, expect, test } from 'bun:test';
-
+} from '../src/core';
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
 import type { FileTreeNode } from '../src/types';
 import { expandPathsWithAncestors } from '../src/utils/expandPaths';

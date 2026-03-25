@@ -1,6 +1,6 @@
-import type { TreeDataLoader } from '@headless-tree/core';
 import { describe, expect, test } from 'bun:test';
 
+import type { TreeDataLoader } from '../src/core';
 import { generateLazyDataLoader } from '../src/loader/lazy';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';

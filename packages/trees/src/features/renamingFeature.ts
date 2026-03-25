@@ -1,6 +1,5 @@
-import { makeStateUpdater } from '@headless-tree/core';
-import type { FeatureImplementation, ItemInstance } from '@headless-tree/core';
-
+import { makeStateUpdater } from '../core';
+import type { FeatureImplementation, ItemInstance } from '../core';
 import type { FileTreeNode } from '../types';
 import { getSelectionPath } from '../utils/getSelectionPath';
 

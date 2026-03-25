@@ -213,3 +213,15 @@ bun run build
 Testing policy and E2E guidance:
 
 - `test/TESTING.md`
+
+# Credits and Acknolwedgements
+
+The core of this library's underlying tree implementation started as a hard fork
+of [@headless-tree/core](https://github.com/lukasbach/headless-tree) by
+[@lukasbach](https://github.com/lukasbach) under the MIT License (forked at
+1.6.1). This library is invaluable, and if you're interested in a headless tree
+implementation it is one of the best possible places to start. We opted to fork
+it only to meet some extreme customizations we wanted to make quickly for our
+specific use-cases. Ultimately, we hope to offer anything generalizable back
+upstream if it's desired. We have ported many of the tests from the library as
+well in an attempt to maintain as much compatibility for future collaboration.

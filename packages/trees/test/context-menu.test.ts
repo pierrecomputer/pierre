@@ -1,13 +1,13 @@
+import { beforeAll, describe, expect, test } from 'bun:test';
+// @ts-expect-error -- no @types/jsdom; only used in tests
+import { JSDOM } from 'jsdom';
+
 import {
   createTree,
   hotkeysCoreFeature,
   selectionFeature,
   syncDataLoaderFeature,
-} from '@headless-tree/core';
-import { beforeAll, describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
-import { JSDOM } from 'jsdom';
-
+} from '../src/core';
 import { renamingFeature } from '../src/features/renamingFeature';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { ContextMenuOpenContext } from '../src/types';

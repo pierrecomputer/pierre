@@ -1,3 +1,4 @@
+import { FLATTENED_PREFIX } from '../src/constants';
 import {
   createTree,
   expandAllFeature,
@@ -5,9 +6,7 @@ import {
   selectionFeature,
   syncDataLoaderFeature,
   type TreeDataLoader,
-} from '@headless-tree/core';
-
-import { FLATTENED_PREFIX } from '../src/constants';
+} from '../src/core';
 import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
 import {
   type GitStatusEntry,
