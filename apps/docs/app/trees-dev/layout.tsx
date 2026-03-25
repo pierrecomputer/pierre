@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import { readSettingsCookies } from './_components/readSettingsCookies';
 import { TreesDevSettingsProvider } from './_components/TreesDevSettingsProvider';
-import { TreesDevSidebar } from './_components/TreesDevSidebar';
+import { TreesDevShell } from './_components/TreesDevShell';
 
 export default async function TreesDevLayout({
   children,
@@ -22,12 +22,7 @@ export default async function TreesDevLayout({
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
       initialUseLazyDataLoader={useLazyDataLoader}
     >
-      <div className="flex min-h-screen">
-        <div className="hidden w-[220px] shrink-0 md:block">
-          <TreesDevSidebar />
-        </div>
-        <main className="min-w-0 flex-1 p-4 pb-[800px]">{children}</main>
-      </div>
+      <TreesDevShell>{children}</TreesDevShell>
     </TreesDevSettingsProvider>
   );
 }

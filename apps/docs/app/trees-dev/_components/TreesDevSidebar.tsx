@@ -21,7 +21,7 @@ const DEMO_PAGES = [
   { slug: 'virtualization', label: 'Virtualization' },
 ] as const;
 
-export function TreesDevSidebar() {
+export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const {
     flattenEmptyDirectories,
@@ -32,7 +32,10 @@ export function TreesDevSidebar() {
   } = useTreesDevSettings();
 
   return (
-    <nav className="sticky top-4 flex h-fit max-h-[calc(100vh-2rem)] flex-col gap-1 overflow-y-auto py-4 pl-4">
+    <nav
+      className="sticky top-4 flex h-fit max-h-[calc(100vh-2rem)] flex-col gap-1 overflow-y-auto py-4 pl-4"
+      onClick={onNavigate}
+    >
       <p className="text-muted-foreground px-3 pb-1 text-xs font-medium">
         Examples
       </p>
