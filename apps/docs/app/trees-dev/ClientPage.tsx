@@ -2371,7 +2371,7 @@ function VirtualizedLinuxKernelCard() {
           renaming: renamingOptions,
         },
         {
-          initialExpandedItems: linuxKernelAllFolders,
+          // initialExpandedItems: linuxKernelAllFolders,
           onContextMenuOpen: (item, context) => {
             renderVanillaContextMenuSlot({
               slotElement,

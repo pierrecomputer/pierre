@@ -1,7 +1,6 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return */
 import type { InstanceBuilder, InstanceTypeMap } from '../features/main/types';
 import type { FeatureImplementation } from './types/core';
-import { throwError } from './utilities/errors';
 
 const noop = () => {};
 
@@ -95,18 +94,19 @@ export const buildProxiedInstance: InstanceBuilder = (
         if (key === 'toJSON') {
           return {};
         }
+        const featureIndex = findPrevInstanceMethod(
+          features,
+          instanceType,
+          key,
+          features.length - 1
+        );
+
+        if (featureIndex === null) {
+          return undefined;
+        }
+
         // oxlint-disable-next-line typescript-eslint/no-explicit-any
         return (...args: any[]) => {
-          const featureIndex = findPrevInstanceMethod(
-            features,
-            instanceType,
-            key,
-            features.length - 1
-          );
-
-          if (featureIndex === null) {
-            throw throwError(`feature missing for method ${key}`);
-          }
           return invokeInstanceMethod(
             features,
             instanceType,

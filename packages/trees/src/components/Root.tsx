@@ -16,6 +16,7 @@ import {
   HEADER_SLOT_NAME,
 } from '../constants';
 import {
+  // buildProxiedInstance,
   expandAllFeature,
   hotkeysCoreFeature,
   type ItemInstance,
@@ -950,6 +951,8 @@ export function Root({
     ...gitStatusConfig,
     ...contextMenuFeatureConfig,
     rootItemId: 'root',
+    // TODO: consider if this ever makes sense to turn on for large trees
+    // instanceBuilder: buildProxiedInstance,
     dataLoader,
     getItemName: (item) => item.getItemData().name,
     isItemFolder: (item) => {
