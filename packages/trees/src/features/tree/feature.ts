@@ -225,10 +225,10 @@ export const treeFeature: FeatureImplementation<any> = {
       tree.applySubStateUpdate('focusedItem', itemId);
     },
     primaryAction: ({ tree, item }) => tree.getConfig().onPrimaryAction?.(item),
-    getParent: ({ tree, item }) =>
-      item.getItemMeta().parentId
-        ? tree.getItemInstance(item.getItemMeta().parentId)
-        : undefined,
+    getParent: ({ tree, item }) => {
+      const { parentId } = item.getItemMeta();
+      return parentId != null ? tree.getItemInstance(parentId) : undefined;
+    },
     getIndexInParent: ({ item }) => item.getItemMeta().posInSet,
     getChildren: ({ tree, itemId }) =>
       tree.retrieveChildrenIds(itemId).map((id) => tree.getItemInstance(id)),

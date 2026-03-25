@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { describe, expect, it, mock } from 'bun:test';
 
 import type { FeatureImplementation } from '../../src/core/types/core';
@@ -7,8 +6,10 @@ import { TestTree } from './test-utils/test-tree';
 
 const itemHandler = mock(() => {});
 const treeHandler = mock(() => {});
-const createItemValue = mock(() => {});
-const createTreeValue = mock(() => {});
+// oxlint-disable-next-line typescript-eslint/no-explicit-any
+const createItemValue: ReturnType<typeof mock<any>> = mock(() => {});
+// oxlint-disable-next-line typescript-eslint/no-explicit-any
+const createTreeValue: ReturnType<typeof mock<any>> = mock(() => {});
 
 const customFeature: FeatureImplementation = {
   itemInstance: {

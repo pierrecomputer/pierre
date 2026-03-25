@@ -100,7 +100,10 @@ export class TestTree<T = string> {
     });
   }
 
-  mockedHandler(handlerName: keyof TreeConfig<T>) {
+  mockedHandler(
+    handlerName: keyof TreeConfig<T>
+    // oxlint-disable-next-line typescript-eslint/no-explicit-any
+  ): ReturnType<typeof mock<any>> {
     const fn = mock(() => {});
     if (this.treeInstance != null) {
       // oxlint-disable-next-line typescript-eslint/no-unsafe-return

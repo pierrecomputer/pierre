@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { describe, expect, it, mock } from 'bun:test';
 
 import { propMemoizationFeature } from '../../src/features/prop-memoization/feature';

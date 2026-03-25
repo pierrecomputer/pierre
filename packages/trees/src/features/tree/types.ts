@@ -6,7 +6,7 @@ import type {
 
 export interface ItemMeta {
   itemId: string;
-  parentId: string;
+  parentId: string | null;
   level: number;
   index: number;
   setSize: number;

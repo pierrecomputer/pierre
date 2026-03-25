@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { describe, expect, it, mock } from 'bun:test';
 
 import { buildStaticInstance } from '../../src/core/build-static-instance';
@@ -7,11 +6,11 @@ import { TestTree } from './test-utils/test-tree';
 declare module '../../src/core/types/core' {
   // oxlint-disable-next-line eslint/no-unused-vars
   export interface TreeInstance<T> {
-    customHandler: (param1: number, param2: number) => void;
+    customHandler: (param1: number, param2: number) => number;
   }
   // oxlint-disable-next-line eslint/no-unused-vars
   export interface ItemInstance<T> {
-    customHandler: (param1: number, param2: number) => void;
+    customHandler: (param1: number, param2: number) => number;
   }
 }
 

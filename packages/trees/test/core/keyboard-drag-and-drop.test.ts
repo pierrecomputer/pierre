@@ -1,4 +1,3 @@
-// @ts-nocheck
 // @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 

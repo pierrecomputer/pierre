@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { expect, mock } from 'bun:test';
 
 import type { TreeState } from '../../../src/core/types/core';
