@@ -177,6 +177,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
+  protected appliedThemeStyles: string | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
 
@@ -464,6 +465,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.spriteSVG = undefined;
     this.lastRowCount = undefined;
     this.themeCSSStyle = undefined;
+    this.appliedThemeStyles = undefined;
 
     if (recycle) {
       this.hunksRenderer.recycle();
@@ -526,6 +528,7 @@ export class FileDiff<LAnnotation = undefined> {
         element.hasAttribute(THEME_CSS_ATTRIBUTE)
       ) {
         this.themeCSSStyle = element;
+        this.appliedThemeStyles = undefined;
         continue;
       }
       if (
@@ -922,6 +925,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.pre = undefined;
     this.spriteSVG = undefined;
     this.themeCSSStyle = undefined;
+    this.appliedThemeStyles = undefined;
     this.unsafeCSSStyle = undefined;
 
     this.lastRenderedHeaderHTML = undefined;
@@ -1255,12 +1259,25 @@ export class FileDiff<LAnnotation = undefined> {
     syncContainerThemeState(container, this.options.themeType ?? 'system');
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    const referenceNode =
+      this.unsafeCSSStyle?.parentNode === shadowRoot
+        ? this.unsafeCSSStyle
+        : null;
+    if (
+      this.themeCSSStyle?.parentNode === shadowRoot &&
+      this.appliedThemeStyles === themeStyles &&
+      this.themeCSSStyle.nextSibling === referenceNode
+    ) {
+      return;
+    }
     this.themeCSSStyle = upsertHostThemeStyle({
       shadowRoot,
       current: this.themeCSSStyle,
       themeStyles,
-      before: this.unsafeCSSStyle,
+      before: referenceNode,
     });
+    this.appliedThemeStyles =
+      this.themeCSSStyle != null ? themeStyles : undefined;
   }
 
   private applyHunksToDOM(

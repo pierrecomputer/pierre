@@ -14,7 +14,13 @@ export function syncContainerThemeState(
   themeType: ThemeTypes
 ): void {
   if (themeType === 'system') {
+    if (!container.hasAttribute('data-theme')) {
+      return;
+    }
     container.removeAttribute('data-theme');
+    return;
+  }
+  if (container.dataset.theme === themeType) {
     return;
   }
   container.dataset.theme = themeType;
