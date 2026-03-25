@@ -13,13 +13,6 @@ export interface ItemMeta {
   posInSet: number;
 }
 
-export interface TreeItemDataRef {
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  memoizedValues: Record<string, any>;
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  memoizedDeps: Record<string, any[] | undefined>;
-}
-
 export type TreeFeatureDef<T> = {
   state: {
     expandedItems: string[];

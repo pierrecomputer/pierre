@@ -1,5 +1,3 @@
-export interface ExpandAllDataRef {}
-
 export type ExpandAllFeatureDef = {
   state: {};
   config: {};

@@ -106,7 +106,6 @@ export const createTree = <T>(
   const hotkeyPresets = {} as HotkeysConfig<T>;
 
   const rebuildItemMeta = () => {
-    // TODO can we find a way to only run this for the changed substructure?
     itemInstances = [];
     itemMetaMap = {};
 
@@ -161,10 +160,7 @@ export const createTree = <T>(
     treeInstance: {
       getState: () => state,
       setState: (_opts, _updater) => {
-        // Not necessary, since I think the subupdate below keeps the state fresh anyways?
-        // state = typeof updater === "function" ? updater(state) : updater;
-        config.setState?.(state); // TODO this cant be right... This doesnt allow external state updates
-        // TODO this is never used, remove
+        config.setState?.(state);
       },
       setMounted: (_opts, isMounted) => {
         const ref = treeDataRef.current as TreeDataRef;
@@ -197,7 +193,6 @@ export const createTree = <T>(
           ref.waitingForMount.push(apply);
         }
       },
-      // TODO rebuildSubTree: (itemId: string) => void;
       rebuildTree: () => {
         const ref = treeDataRef.current as TreeDataRef;
         if (ref.isMounted === true) {

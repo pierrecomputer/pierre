@@ -8,7 +8,7 @@ import type { FileTreeNode, GitStatus, GitStatusEntry } from '../../types';
 import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
 import type { GitStatusConfig } from './types';
 
-export type { GitStatusEntry } from './types';
+export type { GitStatusEntry } from '../../types';
 
 type GitStatusCache = {
   gitStatusSignature: string;

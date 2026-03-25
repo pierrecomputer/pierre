@@ -21,7 +21,7 @@ const handler2 = mock(({ prev }: any, ...params: any[]) => prev?.(...params));
 
 const factory = TestTree.default({});
 
-describe('core-feature/prop-memoization', () => {
+describe('core/feature-composition', () => {
   factory.forSuits((tree) => {
     describe('rebuilds item instance', () => {
       it('rebuilds when explicitly invoked', () => {

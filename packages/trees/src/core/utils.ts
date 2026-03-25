@@ -1,9 +1,6 @@
 import type { SetStateFn, TreeState, Updater } from './types/core';
 
 // oxlint-disable-next-line typescript-eslint/no-explicit-any
-export type NoInfer<T> = [T][T extends any ? 0 : never];
-
-// oxlint-disable-next-line typescript-eslint/no-explicit-any
 export const memo = <D extends readonly any[], P extends readonly any[], R>(
   deps: (...args: [...P]) => [...D],
   fn: (...args: [...D]) => R
@@ -35,7 +32,7 @@ export const memo = <D extends readonly any[], P extends readonly any[], R>(
   };
 };
 
-export function functionalUpdate<T>(updater: Updater<T>, input: T): T {
+function functionalUpdate<T>(updater: Updater<T>, input: T): T {
   return typeof updater === 'function'
     ? (updater as (input: T) => T)(input)
     : updater;
@@ -71,5 +68,6 @@ export const poll = (fn: () => boolean, interval = 100, timeout = 1000) =>
     }, interval);
     clear = setTimeout(() => {
       clearInterval(i);
+      resolve();
     }, timeout);
   });

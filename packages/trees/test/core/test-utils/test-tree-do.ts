@@ -88,19 +88,6 @@ export class TestTreeDo<T = string> {
     return e;
   }
 
-  dragOverNotAllowed(itemId: string, event?: DragEvent) {
-    const e = event ?? TestTree.dragEvent();
-    (e.preventDefault as ReturnType<typeof mock>).mockClear();
-    this.itemProps(itemId).onDragOver(e);
-    this.itemProps(itemId).onDragOver(e);
-    this.itemProps(itemId).onDragOver(e);
-    expect(e.preventDefault).toHaveBeenCalledTimes(0);
-
-    this.consistentCalls(e.preventDefault);
-    this.consistentCalls(e.stopPropagation);
-    return e;
-  }
-
   dragLeave(itemId: string) {
     this.itemProps(itemId).onDragLeave({});
   }
