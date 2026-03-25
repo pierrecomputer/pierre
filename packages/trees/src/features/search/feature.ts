@@ -1,9 +1,9 @@
-import { makeStateUpdater } from '../../core';
 import type {
   FeatureImplementation,
   ItemInstance,
   TreeInstance,
-} from '../../core';
+} from '../../core/types/core';
+import { makeStateUpdater } from '../../core/utils';
 import type { FileTreeSearchConfig, FileTreeSearchMode } from '../../FileTree';
 import type { FileTreeNode } from '../../types';
 import { getSelectionPath } from '../../utils/getSelectionPath';

@@ -156,9 +156,6 @@ export function ClientPage({
         File Tree Examples
       </h1>
 
-      {/* Item State Preview */}
-      <ItemStatePreview />
-
       {/* Controls */}
       <div className="bg-background sticky top-0 z-50 -mx-4 mb-6">
         <div className="bg-muted p-4">
@@ -200,6 +197,9 @@ export function ClientPage({
           </div>
         </div>
       </div>
+
+      {/* Item State Preview */}
+      <ItemStatePreview />
 
       {/* Examples Grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

@@ -3,7 +3,7 @@ import type {
   FeatureImplementation,
   TreeConfig,
   TreeInstance,
-} from '../../core';
+} from '../../core/types/core';
 import type { FileTreeNode, GitStatus, GitStatusEntry } from '../../types';
 import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
 import type { GitStatusConfig } from './types';

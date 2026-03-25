@@ -1,16 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  createTree,
-  expandAllFeature,
-  hotkeysCoreFeature,
-  propMemoizationFeature,
-  selectionFeature,
-  syncDataLoaderFeature,
-  type TreeConfig,
-} from '../src/core';
+import { createTree } from '../src/core/create-tree';
+import type { TreeConfig } from '../src/core/types/core';
+import { expandAllFeature } from '../src/features/expand-all/feature';
 import { gitStatusFeature } from '../src/features/git-status/feature';
+import { hotkeysCoreFeature } from '../src/features/hotkeys-core/feature';
+import { propMemoizationFeature } from '../src/features/prop-memoization/feature';
 import { fileTreeSearchFeature } from '../src/features/search/feature';
+import { selectionFeature } from '../src/features/selection/feature';
+import { syncDataLoaderFeature } from '../src/features/sync-data-loader/feature';
 import type { FileTreeSearchConfig } from '../src/FileTree';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';

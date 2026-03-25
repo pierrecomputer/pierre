@@ -4,7 +4,7 @@ import {
   FILE_TREE_UNSAFE_CSS_ATTRIBUTE,
   FLATTENED_PREFIX,
 } from './constants';
-import { type TreeInstance } from './core';
+import type { TreeInstance } from './core/types/core';
 import { SVGSpriteSheet } from './sprite';
 import type {
   ContextMenuItem,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { TreeDataLoader } from '../src/core';
+import type { TreeDataLoader } from '../src/loader/types';
 import type { FileTreeNode } from '../src/types';
 
 export interface LoaderOptions {

@@ -1,5 +1,8 @@
-import { makeStateUpdater } from '../../core';
-import type { FeatureImplementation, ItemInstance } from '../../core';
+import type {
+  FeatureImplementation,
+  ItemInstance,
+} from '../../core/types/core';
+import { makeStateUpdater } from '../../core/utils';
 import type { FileTreeNode } from '../../types';
 import { getSelectionPath } from '../../utils/getSelectionPath';
 

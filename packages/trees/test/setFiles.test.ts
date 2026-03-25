@@ -1,13 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  createTree,
-  expandAllFeature,
-  hotkeysCoreFeature,
-  selectionFeature,
-  syncDataLoaderFeature,
-} from '../src/core';
+import { createTree } from '../src/core/create-tree';
+import { expandAllFeature } from '../src/features/expand-all/feature';
+import { hotkeysCoreFeature } from '../src/features/hotkeys-core/feature';
 import { fileTreeSearchFeature } from '../src/features/search/feature';
+import { selectionFeature } from '../src/features/selection/feature';
+import { syncDataLoaderFeature } from '../src/features/sync-data-loader/feature';
 import type { FileTreeNode } from '../src/types';
 import { expandPathsWithAncestors } from '../src/utils/expandPaths';
 import { buildMapsFromLoader, TEST_CONFIGS } from './test-config';

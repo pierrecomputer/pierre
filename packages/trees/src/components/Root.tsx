@@ -15,31 +15,27 @@ import {
   FLATTENED_PREFIX,
   HEADER_SLOT_NAME,
 } from '../constants';
-import {
-  // buildProxiedInstance,
-  expandAllFeature,
-  hotkeysCoreFeature,
-  type ItemInstance,
-  keyboardDragAndDropFeature,
-  propMemoizationFeature,
-  selectionFeature,
-  syncDataLoaderFeature,
-  type TreeInstance,
-} from '../core';
+import type { ItemInstance, TreeInstance } from '../core/types/core';
 import {
   contextMenuFeature,
   type ContextMenuRequest,
 } from '../features/context-menu/feature';
 import { dragAndDropFeature } from '../features/drag-and-drop/feature';
+import { expandAllFeature } from '../features/expand-all/feature';
 import {
   getGitStatusMap,
   gitStatusFeature,
 } from '../features/git-status/feature';
+import { hotkeysCoreFeature } from '../features/hotkeys-core/feature';
+import { keyboardDragAndDropFeature } from '../features/keyboard-drag-and-drop/feature';
+import { propMemoizationFeature } from '../features/prop-memoization/feature';
 import { renamingFeature } from '../features/renaming/feature';
 import {
   fileTreeSearchFeature,
   getSearchVisibleIdSet,
 } from '../features/search/feature';
+import { selectionFeature } from '../features/selection/feature';
+import { syncDataLoaderFeature } from '../features/sync-data-loader/feature';
 import {
   type FileTreeCallbacks,
   type FileTreeHandle,

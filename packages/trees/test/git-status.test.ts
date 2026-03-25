@@ -207,7 +207,7 @@ for (const cfg of TEST_CONFIGS) {
       try {
         const map = getGitStatusMap(
           ft.tree as unknown as ReturnType<
-            typeof import('../src/core').createTree<FileTreeNode>
+            typeof import('../src/core/create-tree').createTree<FileTreeNode>
           >
         );
         expect(map).not.toBeNull();
@@ -231,7 +231,7 @@ for (const cfg of TEST_CONFIGS) {
 
         const map = getGitStatusMap(
           ft.tree as unknown as ReturnType<
-            typeof import('../src/core').createTree<FileTreeNode>
+            typeof import('../src/core/create-tree').createTree<FileTreeNode>
           >
         );
         expect(map).not.toBeNull();
@@ -252,7 +252,7 @@ for (const cfg of TEST_CONFIGS) {
 
         const map = getGitStatusMap(
           ft.tree as unknown as ReturnType<
-            typeof import('../src/core').createTree<FileTreeNode>
+            typeof import('../src/core/create-tree').createTree<FileTreeNode>
           >
         );
         expect(map).not.toBeNull();
@@ -275,7 +275,7 @@ for (const cfg of TEST_CONFIGS) {
 
         const map = getGitStatusMap(
           ft.tree as unknown as ReturnType<
-            typeof import('../src/core').createTree<FileTreeNode>
+            typeof import('../src/core/create-tree').createTree<FileTreeNode>
           >
         );
         expect(map).not.toBeNull();
@@ -323,7 +323,7 @@ for (const cfg of TEST_CONFIGS) {
 
           const map = getGitStatusMap(
             ft.tree as unknown as ReturnType<
-              typeof import('../src/core').createTree<FileTreeNode>
+              typeof import('../src/core/create-tree').createTree<FileTreeNode>
             >
           );
           expect(map).not.toBeNull();
@@ -360,7 +360,7 @@ for (const cfg of TEST_CONFIGS) {
 
           const map = getGitStatusMap(
             ft.tree as unknown as ReturnType<
-              typeof import('../src/core').createTree<FileTreeNode>
+              typeof import('../src/core/create-tree').createTree<FileTreeNode>
             >
           );
           expect(map).not.toBeNull();
@@ -427,7 +427,7 @@ for (const cfg of TEST_CONFIGS) {
 
           const map = getGitStatusMap(
             ft.tree as unknown as ReturnType<
-              typeof import('../src/core').createTree<FileTreeNode>
+              typeof import('../src/core/create-tree').createTree<FileTreeNode>
             >
           );
           expect(map).not.toBeNull();

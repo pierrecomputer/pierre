@@ -1,4 +1,4 @@
-import type { FeatureImplementation } from '../../core';
+import type { FeatureImplementation } from '../../core/types/core';
 import type { ContextMenuFeatureConfig } from './types';
 
 export type { ContextMenuRequest } from './types';
