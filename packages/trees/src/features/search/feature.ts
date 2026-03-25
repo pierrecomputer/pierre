@@ -1,32 +1,14 @@
-import { makeStateUpdater } from '../core';
+import { makeStateUpdater } from '../../core';
 import type {
   FeatureImplementation,
   ItemInstance,
-  SearchFeatureDataRef,
-  TreeConfig,
   TreeInstance,
-} from '../core';
-import type { FileTreeSearchConfig, FileTreeSearchMode } from '../FileTree';
-import type { FileTreeNode } from '../types';
-import { getSelectionPath } from '../utils/getSelectionPath';
-
-type SearchIndex = {
-  orderedIds: string[];
-  indexById: Map<string, number>;
-  parentById: Map<string, string>;
-};
-
-type SearchCache<T> = {
-  search: string;
-  rootItemId: string;
-  dataLoader: TreeConfig<T>['dataLoader'];
-  matcher: (search: string, item: ItemInstance<T>) => boolean;
-  index: SearchIndex;
-  matchItems: ItemInstance<T>[];
-  matchIds: string[];
-  matchIdSet: Set<string>;
-  visibleIdSet: Set<string>;
-};
+} from '../../core';
+import type { FileTreeSearchConfig, FileTreeSearchMode } from '../../FileTree';
+import type { FileTreeNode } from '../../types';
+import { getSelectionPath } from '../../utils/getSelectionPath';
+import type { SearchCache, SearchIndex } from './types';
+import type { SearchFeatureDataRef } from './types';
 
 type FileTreeSearchDataRef<T> = SearchFeatureDataRef<T> & {
   previousExpandedItems?: string[] | null;

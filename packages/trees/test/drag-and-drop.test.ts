@@ -10,9 +10,9 @@ import {
   syncDataLoaderFeature,
   type TreeInstance,
 } from '../src/core';
-import { dragAndDropFeature } from '../src/features/dragAndDropFeature';
-import { canDrop, getDragTarget } from '../src/features/dragAndDropUtils';
-import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
+import { dragAndDropFeature } from '../src/features/drag-and-drop/feature';
+import { canDrop, getDragTarget } from '../src/features/drag-and-drop/utils';
+import { fileTreeSearchFeature } from '../src/features/search/feature';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';
 import { computeNewFilesAfterDrop } from '../src/utils/computeNewFilesAfterDrop';

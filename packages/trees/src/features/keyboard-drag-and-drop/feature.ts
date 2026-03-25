@@ -31,7 +31,7 @@ const getNextDragTarget = <T>(
 
     const targetCategory =
       targetedItem != null
-        ? getItemDropCategory(targetedItem)
+        ? getItemDropCategory(targetedItem as ItemInstance<unknown>)
         : ItemDropCategory.Item;
     const maxLevel = targetedItem?.getItemMeta().level ?? 0;
     const minLevel = targetedItem?.getItemBelow()?.getItemMeta().level ?? 0;
@@ -61,7 +61,8 @@ const getNextDragTarget = <T>(
 
   // moving upwards outside of an open folder
   const targetingExpandedFolder =
-    getItemDropCategory(dragTarget.item) === ItemDropCategory.ExpandedFolder;
+    getItemDropCategory(dragTarget.item as ItemInstance<unknown>) ===
+    ItemDropCategory.ExpandedFolder;
   if (targetingExpandedFolder && !isUp) {
     return {
       item: dragTarget.item,
@@ -101,7 +102,13 @@ const getNextValidDragTarget = <T>(
   const dataTransfer =
     tree.getDataRef<KDndDataRef>().current.kDndDataTransfer ?? null;
   if (nextTarget == null) return undefined;
-  if (canDrop(dataTransfer, nextTarget, tree)) {
+  if (
+    canDrop(
+      dataTransfer,
+      nextTarget as DragTarget<unknown>,
+      tree as TreeInstance<unknown>
+    )
+  ) {
     return nextTarget;
   }
   return getNextValidDragTarget(tree, isUp, nextTarget);

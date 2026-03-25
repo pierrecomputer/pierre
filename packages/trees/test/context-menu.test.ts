@@ -8,7 +8,7 @@ import {
   selectionFeature,
   syncDataLoaderFeature,
 } from '../src/core';
-import { renamingFeature } from '../src/features/renamingFeature';
+import { renamingFeature } from '../src/features/renaming/feature';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { ContextMenuOpenContext } from '../src/types';
 import type { FileTreeNode } from '../src/types';

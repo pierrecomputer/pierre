@@ -7,7 +7,7 @@ import {
   selectionFeature,
   syncDataLoaderFeature,
 } from '../src/core';
-import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
+import { fileTreeSearchFeature } from '../src/features/search/feature';
 import type { FileTreeNode } from '../src/types';
 import { expandPathsWithAncestors } from '../src/utils/expandPaths';
 import { buildMapsFromLoader, TEST_CONFIGS } from './test-config';

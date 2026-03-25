@@ -3,7 +3,7 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import {
   getGitStatusMap,
   type GitStatusEntry,
-} from '../src/features/gitStatusFeature';
+} from '../src/features/git-status/feature';
 import type { FileTreeNode } from '../src/types';
 import { getGitStatusSignature } from '../src/utils/getGitStatusSignature';
 import { createTestTree, TEST_CONFIGS } from './test-config';

@@ -1,14 +1,7 @@
-import type { FeatureImplementation } from '../core';
+import type { FeatureImplementation } from '../../core';
+import type { ContextMenuFeatureConfig } from './types';
 
-export type ContextMenuRequest = {
-  itemId: string;
-  anchorEl: HTMLElement | null;
-};
-
-type ContextMenuFeatureConfig = {
-  contextMenuEnabled?: boolean;
-  onContextMenuRequest?: (request: ContextMenuRequest) => void;
-};
+export type { ContextMenuRequest } from './types';
 
 export const contextMenuFeature: FeatureImplementation = {
   key: 'context-menu',

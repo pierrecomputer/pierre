@@ -3,14 +3,14 @@ import type {
   FeatureImplementation,
   ItemInstance,
   TreeInstance,
-} from '../core';
-import { makeStateUpdater } from '../core';
+} from '../../core';
+import { makeStateUpdater } from '../../core';
 import type {
   DndDataRef,
   DragLineData,
   DragTarget,
   TouchDndDataRef,
-} from './dragAndDropTypes';
+} from './types';
 import {
   canDrop,
   getDragCode,
@@ -19,7 +19,7 @@ import {
   isOrderedDragTarget,
   PlacementType,
   type TargetPlacement,
-} from './dragAndDropUtils';
+} from './utils';
 
 const LONG_PRESS_DELAY = 400;
 const LONG_PRESS_MOVE_THRESHOLD = 10;
@@ -503,7 +503,7 @@ export const dragAndDropFeature: FeatureImplementation = {
           if (config.createForeignDragObject && e.dataTransfer) {
             const { format, data, dropEffect, effectAllowed } =
               config.createForeignDragObject(items);
-            e.dataTransfer.setData(format, data);
+            e.dataTransfer.setData(format, data as string);
 
             if (dropEffect) e.dataTransfer.dropEffect = dropEffect;
             if (effectAllowed) e.dataTransfer.effectAllowed = effectAllowed;

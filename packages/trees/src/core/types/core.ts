@@ -1,5 +1,4 @@
 import type { AsyncDataLoaderFeatureDef } from '../../features/async-data-loader/types';
-import type { CheckboxesFeatureDef } from '../../features/checkboxes/types';
 import type { DragAndDropFeatureDef } from '../../features/drag-and-drop/types';
 import type { ExpandAllFeatureDef } from '../../features/expand-all/types';
 import {
@@ -60,7 +59,6 @@ export type RegisteredFeatures<T> =
   | MainFeatureDef<T>
   | TreeFeatureDef<T>
   | SelectionFeatureDef<T>
-  | CheckboxesFeatureDef<T>
   | DragAndDropFeatureDef<T>
   | KeyboardDragAndDropFeatureDef<T>
   | HotkeysCoreFeatureDef<T>

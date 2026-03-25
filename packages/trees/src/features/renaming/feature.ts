@@ -1,7 +1,7 @@
-import { makeStateUpdater } from '../core';
-import type { FeatureImplementation, ItemInstance } from '../core';
-import type { FileTreeNode } from '../types';
-import { getSelectionPath } from '../utils/getSelectionPath';
+import { makeStateUpdater } from '../../core';
+import type { FeatureImplementation, ItemInstance } from '../../core';
+import type { FileTreeNode } from '../../types';
+import { getSelectionPath } from '../../utils/getSelectionPath';
 
 type InputEvent = {
   target?: {

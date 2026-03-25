@@ -7,11 +7,11 @@ import {
   syncDataLoaderFeature,
   type TreeDataLoader,
 } from '../src/core';
-import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
 import {
   type GitStatusEntry,
   gitStatusFeature,
-} from '../src/features/gitStatusFeature';
+} from '../src/features/git-status/feature';
+import { fileTreeSearchFeature } from '../src/features/search/feature';
 import type { FileTreeSearchConfig } from '../src/FileTree';
 import type { FileTreeSearchMode } from '../src/FileTree';
 import { generateLazyDataLoader } from '../src/loader/lazy';

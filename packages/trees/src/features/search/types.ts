@@ -1,4 +1,8 @@
-import type { ItemInstance, SetStateFn } from '../../core/types/core';
+import type {
+  ItemInstance,
+  SetStateFn,
+  TreeConfig,
+} from '../../core/types/core';
 import type { HotkeysCoreDataRef } from '../hotkeys-core/types';
 
 // oxlint-disable-next-line typescript-eslint/no-explicit-any
@@ -38,4 +42,22 @@ export type SearchFeatureDef<T> = {
     | 'submitSearch'
     | 'nextSearchItem'
     | 'previousSearchItem';
+};
+
+export type SearchIndex = {
+  orderedIds: string[];
+  indexById: Map<string, number>;
+  parentById: Map<string, string>;
+};
+
+export type SearchCache<T> = {
+  search: string;
+  rootItemId: string;
+  dataLoader: TreeConfig<T>['dataLoader'];
+  matcher: (search: string, item: ItemInstance<T>) => boolean;
+  index: SearchIndex;
+  matchItems: ItemInstance<T>[];
+  matchIds: string[];
+  matchIdSet: Set<string>;
+  visibleIdSet: Set<string>;
 };

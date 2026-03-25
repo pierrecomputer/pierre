@@ -28,17 +28,17 @@ import {
 import {
   contextMenuFeature,
   type ContextMenuRequest,
-} from '../features/contextMenuFeature';
-import { dragAndDropFeature } from '../features/dragAndDropFeature';
-import {
-  fileTreeSearchFeature,
-  getSearchVisibleIdSet,
-} from '../features/fileTreeSearchFeature';
+} from '../features/context-menu/feature';
+import { dragAndDropFeature } from '../features/drag-and-drop/feature';
 import {
   getGitStatusMap,
   gitStatusFeature,
-} from '../features/gitStatusFeature';
-import { renamingFeature } from '../features/renamingFeature';
+} from '../features/git-status/feature';
+import { renamingFeature } from '../features/renaming/feature';
+import {
+  fileTreeSearchFeature,
+  getSearchVisibleIdSet,
+} from '../features/search/feature';
 import {
   type FileTreeCallbacks,
   type FileTreeHandle,

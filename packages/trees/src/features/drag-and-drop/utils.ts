@@ -1,4 +1,4 @@
-/* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
+/* oxlint-disable typescript-oxlint/strict-boolean-expressions -- Ported from @headless-tree/core internals */
 import type { ItemInstance, TreeInstance } from '../../core/types/core';
 import type { DragTarget } from './types';
 
@@ -27,28 +27,29 @@ export type TargetPlacement =
       reparentLevel: number;
     };
 
-export const isOrderedDragTarget = <T>(dragTarget: DragTarget<T>) =>
-  'childIndex' in dragTarget;
+export const isOrderedDragTarget = <T>(
+  dragTarget: DragTarget<T>
+): dragTarget is DragTarget<T> & {
+  childIndex: number;
+  insertionIndex: number;
+  dragLineIndex: number;
+  dragLineLevel: number;
+} => 'childIndex' in dragTarget;
 
 export const canDrop = (
   dataTransfer: DataTransfer | null,
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  target: DragTarget<any>,
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  tree: TreeInstance<any>
-) => {
+  target: DragTarget<unknown>,
+  tree: TreeInstance<unknown>
+): boolean => {
   const draggedItems = tree.getState().dnd?.draggedItems;
   const config = tree.getConfig();
 
-  if (
-    draggedItems != null &&
-    !(config.canDrop?.(draggedItems, target) ?? true)
-  ) {
+  if (draggedItems && !(config.canDrop?.(draggedItems, target) ?? true)) {
     return false;
   }
 
   if (
-    draggedItems != null &&
+    draggedItems &&
     draggedItems.some(
       (draggedItem) =>
         target.item.getId() === draggedItem.getId() ||
@@ -59,9 +60,9 @@ export const canDrop = (
   }
 
   if (
-    draggedItems == null &&
-    dataTransfer != null &&
-    config.canDropForeignDragObject != null &&
+    !draggedItems &&
+    dataTransfer &&
+    config.canDropForeignDragObject &&
     !config.canDropForeignDragObject(dataTransfer, target)
   ) {
     return false;
@@ -70,17 +71,15 @@ export const canDrop = (
   return true;
 };
 
-// oxlint-disable-next-line typescript-eslint/no-explicit-any
-export const getItemDropCategory = (item: ItemInstance<any>) => {
+export const getItemDropCategory = (
+  item: ItemInstance<unknown>
+): ItemDropCategory => {
   if (item.isExpanded()) {
     return ItemDropCategory.ExpandedFolder;
   }
 
   const parent = item.getParent();
-  if (
-    parent != null &&
-    item.getIndexInParent() === item.getItemMeta().setSize - 1
-  ) {
+  if (parent && item.getIndexInParent() === item.getItemMeta().setSize - 1) {
     return ItemDropCategory.LastInGroup;
   }
 
@@ -91,32 +90,37 @@ export const getInsertionIndex = <T>(
   children: ItemInstance<T>[],
   childIndex: number,
   draggedItems: ItemInstance<T>[] | undefined
-) => {
-  const numberOfDragItemsBeforeTarget =
-    children
-      .slice(0, childIndex)
-      .reduce(
-        (counter, child) =>
-          draggedItems?.some((i) => i.getId() === child.getId()) === true
-            ? ++counter
-            : counter,
-        0
-      ) ?? 0;
+): number => {
+  if (!draggedItems || draggedItems.length === 0) {
+    return childIndex;
+  }
+
+  const draggedIds = new Set<string>();
+  for (const draggedItem of draggedItems) {
+    draggedIds.add(draggedItem.getId());
+  }
+
+  const endIndex = Math.min(childIndex, children.length);
+  let numberOfDragItemsBeforeTarget = 0;
+  for (let i = 0; i < endIndex; i++) {
+    if (draggedIds.has(children[i].getId())) {
+      numberOfDragItemsBeforeTarget++;
+    }
+  }
+
   return childIndex - numberOfDragItemsBeforeTarget;
 };
 
+// oxlint-disable-next-line @typescript-oxlint/no-explicit-any
 export const getTargetPlacement = (
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  e: any,
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  item: ItemInstance<any>,
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  tree: TreeInstance<any>,
+  e: { clientX: number; clientY: number },
+  item: ItemInstance<unknown>,
+  tree: TreeInstance<unknown>,
   canMakeChild: boolean
 ): TargetPlacement => {
   const config = tree.getConfig();
 
-  if (config.canReorder !== true) {
+  if (!config.canReorder) {
     return canMakeChild
       ? { type: PlacementType.MakeChild }
       : { type: PlacementType.ReorderBelow };
@@ -166,10 +170,9 @@ export const getTargetPlacement = (
 };
 
 export const getDragCode = (
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  item: ItemInstance<any>,
+  item: ItemInstance<unknown>,
   placement: TargetPlacement
-) => {
+): string => {
   return [
     item.getId(),
     placement.type,
@@ -177,27 +180,21 @@ export const getDragCode = (
   ].join('__');
 };
 
-const getNthParent = (
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  item: ItemInstance<any>,
-  n: number
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-): ItemInstance<any> => {
+const getNthParent = <T>(item: ItemInstance<T>, n: number): ItemInstance<T> => {
   if (n === item.getItemMeta().level) {
     return item;
   }
   return getNthParent(item.getParent()!, n);
 };
 
-/** @param item refers to the bottom-most item of the container, at which bottom is being reparented on (e.g. root-1-2-6)  */
 export const getReparentTarget = <T>(
   item: ItemInstance<T>,
   reparentLevel: number,
   draggedItems: ItemInstance<T>[] | undefined
-) => {
+): DragTarget<T> => {
   const itemMeta = item.getItemMeta();
   const reparentedTarget = getNthParent(item, reparentLevel - 1);
-  const targetItemAbove = getNthParent(item, reparentLevel); // .getItemBelow()!;
+  const targetItemAbove = getNthParent(item, reparentLevel);
   const targetIndex = targetItemAbove.getIndexInParent() + 1;
 
   return {
@@ -214,51 +211,46 @@ export const getReparentTarget = <T>(
 };
 
 export const getDragTarget = (
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  e: any,
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  item: ItemInstance<any>,
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  tree: TreeInstance<any>,
+  e: { clientX: number; clientY: number; dataTransfer?: DataTransfer | null },
+  item: ItemInstance<unknown>,
+  tree: TreeInstance<unknown>,
   canReorder = tree.getConfig().canReorder
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-): DragTarget<any> => {
+): DragTarget<unknown> => {
   const draggedItems = tree.getState().dnd?.draggedItems;
-  const itemMeta = item.getItemMeta();
   const parent = item.getParent();
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  const itemTarget: DragTarget<any> = { item };
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  const parentTarget: DragTarget<any> | null =
-    parent != null ? { item: parent } : null;
+  const itemTarget: DragTarget<unknown> = { item };
+  const parentTarget: DragTarget<unknown> | null = parent
+    ? { item: parent }
+    : null;
   const canBecomeSibling =
-    parentTarget != null && canDrop(e.dataTransfer, parentTarget, tree);
+    parentTarget && canDrop(e.dataTransfer ?? null, parentTarget, tree);
 
-  const canMakeChild = canDrop(e.dataTransfer, itemTarget, tree);
+  const canMakeChild = canDrop(e.dataTransfer ?? null, itemTarget, tree);
   const placement = getTargetPlacement(e, item, tree, canMakeChild);
 
   if (
-    canReorder !== true &&
-    parent != null &&
+    !canReorder &&
+    parent &&
     canBecomeSibling &&
     placement.type !== PlacementType.MakeChild
   ) {
     if (
-      draggedItems?.some((item) => item.isDescendentOf(parent.getId())) === true
+      draggedItems?.some(
+        (draggedItem) =>
+          item.getId() === draggedItem.getId() ||
+          item.isDescendentOf(draggedItem.getId())
+      )
     ) {
-      // dropping on itself should be illegal, return item, canDrop will then return false
       return itemTarget;
     }
-    return parentTarget;
+    return parentTarget as DragTarget<unknown>;
   }
 
-  if (canReorder !== true && parent != null && !canBecomeSibling) {
-    // TODO! this breaks in story DND/Can Drop. Maybe move this logic into a composable DragTargetStrategy[] ?
+  if (!canReorder && parent && !canBecomeSibling) {
     return getDragTarget(e, parent, tree, false);
   }
 
-  if (parent == null) {
-    // Shouldn't happen, but if dropped "next" to root item, just drop it inside
+  if (!parent) {
     return itemTarget;
   }
 
@@ -277,13 +269,13 @@ export const getDragTarget = (
   const maybeAddOneForBelow =
     placement.type === PlacementType.ReorderAbove ? 0 : 1;
   const childIndex = item.getIndexInParent() + maybeAddOneForBelow;
+  const itemMeta = item.getItemMeta();
 
   return {
     item: parent,
     dragLineIndex: itemMeta.index + maybeAddOneForBelow,
     dragLineLevel: itemMeta.level,
     childIndex,
-    // TODO performance could be improved by computing this only when dragcode changed
     insertionIndex: getInsertionIndex(
       parent.getChildren(),
       childIndex,

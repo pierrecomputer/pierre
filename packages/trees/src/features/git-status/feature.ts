@@ -1,15 +1,14 @@
-import { FLATTENED_PREFIX } from '../constants';
-import type { FeatureImplementation, TreeConfig, TreeInstance } from '../core';
-import type { FileTreeNode, GitStatus, GitStatusEntry } from '../types';
-import { getGitStatusSignature } from '../utils/getGitStatusSignature';
+import { FLATTENED_PREFIX } from '../../constants';
+import type {
+  FeatureImplementation,
+  TreeConfig,
+  TreeInstance,
+} from '../../core';
+import type { FileTreeNode, GitStatus, GitStatusEntry } from '../../types';
+import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
+import type { GitStatusConfig } from './types';
 
-export type { GitStatusEntry } from '../types';
-
-type GitStatusConfig = {
-  gitStatus?: GitStatusEntry[];
-  gitStatusSignature?: string;
-  gitStatusPathToId?: Map<string, string>;
-};
+export type { GitStatusEntry } from './types';
 
 type GitStatusCache = {
   gitStatusSignature: string;
@@ -185,7 +184,7 @@ export const gitStatusFeature: FeatureImplementation = {
   },
 };
 
-declare module '../core/types/core' {
+declare module '../../core/types/core' {
   // oxlint-disable-next-line @typescript-oxlint/no-unused-vars
   interface ItemInstance<T> {
     getGitStatus(): GitStatus | null;

@@ -9,8 +9,8 @@ import {
   syncDataLoaderFeature,
   type TreeConfig,
 } from '../src/core';
-import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
-import { gitStatusFeature } from '../src/features/gitStatusFeature';
+import { gitStatusFeature } from '../src/features/git-status/feature';
+import { fileTreeSearchFeature } from '../src/features/search/feature';
 import type { FileTreeSearchConfig } from '../src/FileTree';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';

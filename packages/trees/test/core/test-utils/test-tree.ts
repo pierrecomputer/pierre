@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { beforeEach, describe, mock } from 'bun:test';
 
 import { buildProxiedInstance } from '../../../src/core/build-proxified-instance';

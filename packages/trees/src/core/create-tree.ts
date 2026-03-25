@@ -292,7 +292,6 @@ export const createTree = <T>(
         itemElementsMap[itemId] = element;
       },
       getElement: ({ itemId }) => itemElementsMap[itemId],
-      // eslint-disable-next-line no-return-assign
       getDataRef: ({ itemId }) => (itemDataRefs[itemId] ??= { current: {} }),
       getItemMeta: ({ itemId }) =>
         itemMetaMap[itemId] ?? {
