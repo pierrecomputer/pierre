@@ -1,15 +1,11 @@
 import { type FileContents, parseDiffFromFile } from '@pierre/diffs';
-import type {
-  PreloadFileDiffOptions,
-  PreloadMultiFileDiffOptions,
-} from '@pierre/diffs/ssr';
+import type { PreloadFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
-  oldFile: {
-    name: 'AppConfig.swift',
-    contents: `import Foundation
+const CUSTOM_HEADER_OLD_FILE: FileContents = {
+  name: 'AppConfig.swift',
+  contents: `import Foundation
 
 struct AppConfig {
     static let shared = AppConfig()
@@ -32,10 +28,11 @@ struct AppConfig {
     }
 }
 `,
-  },
-  newFile: {
-    name: 'AppConfig.swift',
-    contents: `import Foundation
+};
+
+const CUSTOM_HEADER_NEW_FILE: FileContents = {
+  name: 'AppConfig.swift',
+  contents: `import Foundation
 
 struct AppConfig {
     static let shared = AppConfig()
@@ -65,7 +62,10 @@ struct AppConfig {
     }
 }
 `,
-  },
+};
+
+export const CUSTOM_HEADER_EXAMPLE: PreloadFileDiffOptions<undefined> = {
+  fileDiff: parseDiffFromFile(CUSTOM_HEADER_OLD_FILE, CUSTOM_HEADER_NEW_FILE),
   options: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
     themeType: 'dark',
