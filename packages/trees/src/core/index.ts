@@ -18,10 +18,7 @@ export * from './features/prop-memoization/types';
 export * from './features/selection/feature';
 export * from './features/hotkeys-core/feature';
 export * from './features/sync-data-loader/feature';
-export * from './features/drag-and-drop/feature';
 export * from './features/keyboard-drag-and-drop/feature';
-export * from './features/search/feature';
-export * from './features/renaming/feature';
 export * from './features/expand-all/feature';
 export * from './features/prop-memoization/feature';
 
