@@ -51,7 +51,7 @@ import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
-import { wrapUnsafeCSS } from '../utils/cssWrappers';
+import { wrapThemeCSS, wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import {
@@ -177,7 +177,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
-  protected appliedThemeStyles: string | undefined;
+  protected appliedThemeCSS: string | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
 
@@ -465,7 +465,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.spriteSVG = undefined;
     this.lastRowCount = undefined;
     this.themeCSSStyle = undefined;
-    this.appliedThemeStyles = undefined;
+    this.appliedThemeCSS = undefined;
 
     if (recycle) {
       this.hunksRenderer.recycle();
@@ -528,7 +528,7 @@ export class FileDiff<LAnnotation = undefined> {
         element.hasAttribute(THEME_CSS_ATTRIBUTE)
       ) {
         this.themeCSSStyle = element;
-        this.appliedThemeStyles = undefined;
+        this.appliedThemeCSS = element.textContent ?? undefined;
         continue;
       }
       if (
@@ -925,7 +925,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.pre = undefined;
     this.spriteSVG = undefined;
     this.themeCSSStyle = undefined;
-    this.appliedThemeStyles = undefined;
+    this.appliedThemeCSS = undefined;
     this.unsafeCSSStyle = undefined;
 
     this.lastRenderedHeaderHTML = undefined;
@@ -1259,13 +1259,14 @@ export class FileDiff<LAnnotation = undefined> {
     syncContainerThemeState(container, this.options.themeType ?? 'system');
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    const wrappedThemeCSS = wrapThemeCSS(themeStyles);
     const referenceNode =
       this.unsafeCSSStyle?.parentNode === shadowRoot
         ? this.unsafeCSSStyle
         : null;
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
-      this.appliedThemeStyles === themeStyles &&
+      this.appliedThemeCSS === wrappedThemeCSS &&
       this.themeCSSStyle.nextSibling === referenceNode
     ) {
       return;
@@ -1276,8 +1277,8 @@ export class FileDiff<LAnnotation = undefined> {
       themeStyles,
       before: referenceNode,
     });
-    this.appliedThemeStyles =
-      this.themeCSSStyle != null ? themeStyles : undefined;
+    this.appliedThemeCSS =
+      this.themeCSSStyle != null ? wrappedThemeCSS : undefined;
   }
 
   private applyHunksToDOM(

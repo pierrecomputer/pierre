@@ -14,7 +14,10 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../types';
-import { createStyleElement } from '../utils/createStyleElement';
+import {
+  createStyleElement,
+  createThemeStyleElement,
+} from '../utils/createStyleElement';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
@@ -223,6 +226,9 @@ function processHunkResult<LAnnotation>(
   unsafeCSS: string | undefined
 ) {
   const children = [createStyleElement(hunkResult.css, true)];
+  if (hunkResult.themeStyles.trim() !== '') {
+    children.push(createThemeStyleElement(hunkResult.themeStyles));
+  }
   if (unsafeCSS != null) {
     children.push(createStyleElement(unsafeCSS));
   }
