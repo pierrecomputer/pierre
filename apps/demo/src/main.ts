@@ -560,22 +560,17 @@ function toggleTheme() {
   document.documentElement.dataset.themeType =
     pageTheme === 'dark' ? 'light' : 'dark';
 
-  for (const instance of diffInstances) {
-    const themeSetting = instance.options.themeType ?? 'system';
-    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
-  }
-
-  for (const instance of streamingInstances) {
-    const themeSetting = instance.options.themeType ?? 'system';
-    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
-  }
-
-  for (const instance of fileInstances) {
-    const themeSetting = instance.options.themeType ?? 'system';
-    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
+  for (const instances of [
+    diffInstances,
+    fileInstances,
+    streamingInstances,
+    conflictInstances,
+  ]) {
+    for (const instance of instances) {
+      const themeSetting = instance.options.themeType ?? 'system';
+      const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
+      instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
+    }
   }
 }
 
