@@ -21,7 +21,7 @@ import {
   type ContextMenuRequest,
 } from '../features/context-menu/feature';
 import { dragAndDropFeature } from '../features/drag-and-drop/feature';
-import { expandAllFeature } from '../features/expand-all/feature';
+// import { expandAllFeature } from '../features/expand-all/feature';
 import {
   getGitStatusMap,
   gitStatusFeature,
@@ -752,7 +752,7 @@ export function Root({
       selectionFeature,
       hotkeysCoreFeature,
       fileTreeSearchFeature,
-      expandAllFeature,
+      // expandAllFeature,
       gitStatusFeature,
       contextMenuFeature,
     ];
@@ -957,18 +957,18 @@ export function Root({
     },
     hotkeys: {
       // Begin the hotkey name with "custom" to satisfy the type checker
-      customExpandAll: {
-        hotkey: 'KeyQ',
-        handler: (_e, tree) => {
-          void tree.expandAll();
-        },
-      },
-      customCollapseAll: {
-        hotkey: 'KeyW',
-        handler: (_e, tree) => {
-          void tree.collapseAll();
-        },
-      },
+      // customExpandAll: {
+      //   hotkey: 'KeyQ',
+      //   handler: (_e, tree) => {
+      //     void tree.expandAll();
+      //   },
+      // },
+      // customCollapseAll: {
+      //   hotkey: 'KeyW',
+      //   handler: (_e, tree) => {
+      //     void tree.collapseAll();
+      //   },
+      // },
     },
     features,
     ...(renamingEnabled && {
