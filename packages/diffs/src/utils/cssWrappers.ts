@@ -16,3 +16,9 @@ export function wrapUnsafeCSS(unsafeCSS: string) {
   ${unsafeCSS}
 }`;
 }
+
+export function wrapThemeCSS(themeCSS: string) {
+  return `:host {
+  ${themeCSS}
+}`;
+}

@@ -37,6 +37,7 @@ export const DEFAULT_THEMES: ThemesType = {
   light: 'pierre-light',
 };
 
+export const THEME_CSS_ATTRIBUTE = 'data-theme-css';
 export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';
 export const CORE_CSS_ATTRIBUTE = 'data-core-css';
 

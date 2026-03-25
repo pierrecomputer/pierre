@@ -8,6 +8,7 @@ import {
   EMPTY_RENDER_RANGE,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
+  THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import {
@@ -53,6 +54,10 @@ import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import {
+  syncContainerThemeState,
+  upsertHostThemeStyle,
+} from '../utils/hostTheme';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -171,6 +176,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected codeAdditions: HTMLElement | undefined;
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
+  protected themeCSSStyle: HTMLStyleElement | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
 
@@ -366,6 +372,9 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.mergeOptions({ themeType });
     this.hunksRenderer.setThemeType(themeType);
+    if (this.fileContainer != null) {
+      syncContainerThemeState(this.fileContainer, themeType);
+    }
 
     if (this.headerElement != null) {
       if (themeType === 'system') {
@@ -454,6 +463,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
     this.lastRowCount = undefined;
+    this.themeCSSStyle = undefined;
 
     if (recycle) {
       this.hunksRenderer.recycle();
@@ -513,6 +523,13 @@ export class FileDiff<LAnnotation = undefined> {
       }
       if (
         element instanceof HTMLStyleElement &&
+        element.hasAttribute(THEME_CSS_ATTRIBUTE)
+      ) {
+        this.themeCSSStyle = element;
+        continue;
+      }
+      if (
+        element instanceof HTMLStyleElement &&
         element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
       ) {
         this.unsafeCSSStyle = element;
@@ -530,6 +547,10 @@ export class FileDiff<LAnnotation = undefined> {
     else {
       const { lineAnnotations, oldFile, newFile, fileDiff } = props;
       this.fileContainer = fileContainer;
+      syncContainerThemeState(
+        fileContainer,
+        this.options.themeType ?? 'system'
+      );
       delete this.pre.dataset.dehydrated;
 
       this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
@@ -674,6 +695,7 @@ export class FileDiff<LAnnotation = undefined> {
       disableErrorHandling = false,
       disableFileHeader = false,
       overflow = 'scroll',
+      themeType = 'system',
     } = this.options;
 
     if (disableFileHeader) {
@@ -689,6 +711,7 @@ export class FileDiff<LAnnotation = undefined> {
       fileContainer,
       containerWrapper
     );
+    syncContainerThemeState(fileContainer, themeType);
 
     if (collapsed) {
       this.removeRenderedCode();
@@ -699,6 +722,9 @@ export class FileDiff<LAnnotation = undefined> {
           this.fileDiff,
           EMPTY_RENDER_RANGE
         );
+        if (hunksResult != null) {
+          this.applyThemeState(fileContainer, hunksResult.themeStyles);
+        }
         if (hunksResult?.headerElement != null) {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
         }
@@ -748,6 +774,8 @@ export class FileDiff<LAnnotation = undefined> {
           }
           return false;
         }
+
+        this.applyThemeState(fileContainer, hunksResult.themeStyles);
 
         if (hunksResult.headerElement != null) {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
@@ -877,6 +905,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerCustom?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
+    this.themeCSSStyle?.remove();
     this.unsafeCSSStyle?.remove();
 
     this.bufferAfter = undefined;
@@ -892,6 +921,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerCustom = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
+    this.themeCSSStyle = undefined;
     this.unsafeCSSStyle = undefined;
 
     this.lastRenderedHeaderHTML = undefined;
@@ -1219,6 +1249,18 @@ export class FileDiff<LAnnotation = undefined> {
     }
     // Wrap in @layer unsafe to match SSR behavior
     this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
+  }
+
+  private applyThemeState(container: HTMLElement, themeStyles: string): void {
+    syncContainerThemeState(container, this.options.themeType ?? 'system');
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    this.themeCSSStyle = upsertHostThemeStyle({
+      shadowRoot,
+      current: this.themeCSSStyle,
+      themeStyles,
+      before: this.unsafeCSSStyle,
+    });
   }
 
   private applyHunksToDOM(
