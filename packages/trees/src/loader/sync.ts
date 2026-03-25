@@ -1,6 +1,6 @@
 import type { FileTreeData, FileTreeNode } from '../types';
 import { fileListToTree } from '../utils/fileListToTree';
-import type { DataLoaderOptions } from './index';
+import type { DataLoaderOptions } from './types';
 import type { TreeDataLoader } from './types';
 
 /**

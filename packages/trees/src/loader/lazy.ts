@@ -7,7 +7,7 @@ import {
   normalizeInputPath,
 } from '../utils/normalizeInputPath';
 import { defaultChildrenComparator, sortChildren } from '../utils/sortChildren';
-import type { DataLoaderOptions } from './index';
+import type { DataLoaderOptions } from './types';
 import type { TreeDataLoader } from './types';
 
 /**
