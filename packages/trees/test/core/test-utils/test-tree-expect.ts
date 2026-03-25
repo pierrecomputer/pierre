@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { expect, mock } from 'bun:test';
 
-import type { DragTarget } from '../../../src/core/features/drag-and-drop/types';
 import type { TreeState } from '../../../src/core/types/core';
+import type { DragTarget } from '../../../src/features/drag-and-drop/types';
 import type { TestTree as TestTreeType } from './test-tree';
 
 export class TestTreeExpect<T> {

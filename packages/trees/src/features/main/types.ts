@@ -7,7 +7,7 @@ import {
   type TreeInstance,
   type TreeState,
   type Updater,
-} from '../../types/core';
+} from '../../core/types/core';
 import type { ItemMeta } from '../tree/types';
 
 export interface TreeDataRef {

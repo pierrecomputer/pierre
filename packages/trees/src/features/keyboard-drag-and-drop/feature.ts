@@ -3,8 +3,8 @@ import {
   type FeatureImplementation,
   type ItemInstance,
   type TreeInstance,
-} from '../../types/core';
-import { makeStateUpdater } from '../../utils';
+} from '../../core/types/core';
+import { makeStateUpdater } from '../../core/utils';
 import type { DndDataRef, DragTarget } from '../drag-and-drop/types';
 import {
   canDrop,

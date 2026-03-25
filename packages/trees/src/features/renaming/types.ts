@@ -1,4 +1,4 @@
-import type { ItemInstance, SetStateFn } from '../../types/core';
+import type { ItemInstance, SetStateFn } from '../../core/types/core';
 
 export type RenamingFeatureDef<T> = {
   state: {

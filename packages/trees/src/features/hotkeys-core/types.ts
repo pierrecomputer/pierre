@@ -1,4 +1,4 @@
-import type { CustomHotkeysConfig, TreeInstance } from '../../types/core';
+import type { CustomHotkeysConfig, TreeInstance } from '../../core/types/core';
 
 export interface HotkeyConfig<T> {
   hotkey: string;

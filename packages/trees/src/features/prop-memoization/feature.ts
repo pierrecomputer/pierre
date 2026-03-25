@@ -1,4 +1,4 @@
-import type { FeatureImplementation } from '../../types/core';
+import type { FeatureImplementation } from '../../core/types/core';
 import type { PropMemoizationDataRef } from './types';
 
 const memoize = (

@@ -1,4 +1,8 @@
-import type { ItemInstance, SetStateFn, TreeInstance } from '../../types/core';
+import type {
+  ItemInstance,
+  SetStateFn,
+  TreeInstance,
+} from '../../core/types/core';
 
 export interface ItemMeta {
   itemId: string;

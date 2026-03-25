@@ -1,8 +1,8 @@
+import type { TreeDataRef } from '../features/main/types';
+import { treeFeature } from '../features/tree/feature';
+import type { ItemMeta } from '../features/tree/types';
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
 import { buildStaticInstance } from './build-static-instance';
-import type { TreeDataRef } from './features/main/types';
-import { treeFeature } from './features/tree/feature';
-import type { ItemMeta } from './features/tree/types';
 import {
   type FeatureImplementation,
   type HotkeysConfig,

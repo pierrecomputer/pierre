@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { expect, mock } from 'bun:test';
 
-import type { HotkeyConfig } from '../../../src/core/features/hotkeys-core/types';
 import type { HotkeyName } from '../../../src/core/types/core';
+import type { HotkeyConfig } from '../../../src/features/hotkeys-core/types';
 import type { TestTree as TestTreeType } from './test-tree';
 
 export class TestTreeDo<T = string> {

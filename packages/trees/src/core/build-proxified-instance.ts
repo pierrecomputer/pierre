@@ -1,5 +1,5 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return */
-import type { InstanceBuilder, InstanceTypeMap } from './features/main/types';
+import type { InstanceBuilder, InstanceTypeMap } from '../features/main/types';
 import type { FeatureImplementation } from './types/core';
 import { throwError } from './utilities/errors';
 

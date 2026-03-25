@@ -6,7 +6,7 @@ modified:
 
 - `src/core/*`
 - `src/test/core/*`
-- `src/features/{dragAndDropFeature,fileTreeSearchFeature,renamingFeature}`
+- `src/features/*`
 
 Original license for headless-tree:
 

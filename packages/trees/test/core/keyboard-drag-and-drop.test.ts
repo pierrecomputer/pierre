@@ -9,12 +9,12 @@ globalThis.CustomEvent = dom.window.CustomEvent;
 
 import { describe, expect, it, mock } from 'bun:test';
 
-import { isOrderedDragTarget } from '../../src/core/features/drag-and-drop/utils';
-import { keyboardDragAndDropFeature } from '../../src/core/features/keyboard-drag-and-drop/feature';
-import { AssistiveDndState } from '../../src/core/features/keyboard-drag-and-drop/types';
-import { propMemoizationFeature } from '../../src/core/features/prop-memoization/feature';
-import { selectionFeature } from '../../src/core/features/selection/feature';
+import { isOrderedDragTarget } from '../../src/features/drag-and-drop/utils';
 import { dragAndDropFeature } from '../../src/features/dragAndDropFeature';
+import { keyboardDragAndDropFeature } from '../../src/features/keyboard-drag-and-drop/feature';
+import { AssistiveDndState } from '../../src/features/keyboard-drag-and-drop/types';
+import { propMemoizationFeature } from '../../src/features/prop-memoization/feature';
+import { selectionFeature } from '../../src/features/selection/feature';
 import { TestTree } from './test-utils/test-tree';
 
 // Note: vitest used expect.addEqualityTesters for ItemInstance comparison.

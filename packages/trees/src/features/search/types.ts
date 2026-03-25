@@ -1,4 +1,4 @@
-import type { ItemInstance, SetStateFn } from '../../types/core';
+import type { ItemInstance, SetStateFn } from '../../core/types/core';
 import type { HotkeysCoreDataRef } from '../hotkeys-core/types';
 
 // oxlint-disable-next-line typescript-eslint/no-explicit-any

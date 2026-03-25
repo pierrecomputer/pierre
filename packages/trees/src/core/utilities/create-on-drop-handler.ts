@@ -1,5 +1,5 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return */
-import type { DragTarget } from '../features/drag-and-drop/types';
+import type { DragTarget } from '../../features/drag-and-drop/types';
 import type { ItemInstance } from '../types/core';
 import { insertItemsAtTarget } from './insert-items-at-target';
 import { removeItemsFromParents } from './remove-items-from-parents';

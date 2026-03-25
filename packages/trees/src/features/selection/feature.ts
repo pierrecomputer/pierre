@@ -1,6 +1,6 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
-import type { FeatureImplementation } from '../../types/core';
-import { makeStateUpdater } from '../../utils';
+import type { FeatureImplementation } from '../../core/types/core';
+import { makeStateUpdater } from '../../core/utils';
 import type { SelectionDataRef } from './types';
 
 export const selectionFeature: FeatureImplementation = {

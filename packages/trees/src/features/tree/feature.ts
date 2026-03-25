@@ -1,7 +1,7 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
-import type { FeatureImplementation } from '../../types/core';
-import { logWarning } from '../../utilities/errors';
-import { makeStateUpdater, poll } from '../../utils';
+import type { FeatureImplementation } from '../../core/types/core';
+import { logWarning } from '../../core/utilities/errors';
+import { makeStateUpdater, poll } from '../../core/utils';
 import type { ItemMeta } from './types';
 
 // oxlint-disable-next-line typescript-eslint/no-explicit-any

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { describe, expect, it, mock } from 'bun:test';
 
-import { propMemoizationFeature } from '../../src/core/features/prop-memoization/feature';
+import { propMemoizationFeature } from '../../src/features/prop-memoization/feature';
 import { TestTree } from './test-utils/test-tree';
 
 const factory = TestTree.default({}).withFeatures(propMemoizationFeature);

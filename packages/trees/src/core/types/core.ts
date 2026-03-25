@@ -1,19 +1,19 @@
-import type { AsyncDataLoaderFeatureDef } from '../features/async-data-loader/types';
-import type { CheckboxesFeatureDef } from '../features/checkboxes/types';
-import type { DragAndDropFeatureDef } from '../features/drag-and-drop/types';
-import type { ExpandAllFeatureDef } from '../features/expand-all/types';
+import type { AsyncDataLoaderFeatureDef } from '../../features/async-data-loader/types';
+import type { CheckboxesFeatureDef } from '../../features/checkboxes/types';
+import type { DragAndDropFeatureDef } from '../../features/drag-and-drop/types';
+import type { ExpandAllFeatureDef } from '../../features/expand-all/types';
 import {
   type HotkeyConfig,
   type HotkeysCoreFeatureDef,
-} from '../features/hotkeys-core/types';
-import type { KeyboardDragAndDropFeatureDef } from '../features/keyboard-drag-and-drop/types';
-import type { MainFeatureDef } from '../features/main/types';
-import type { PropMemoizationFeatureDef } from '../features/prop-memoization/types';
-import type { RenamingFeatureDef } from '../features/renaming/types';
-import type { SearchFeatureDef } from '../features/search/types';
-import type { SelectionFeatureDef } from '../features/selection/types';
-import type { SyncDataLoaderFeatureDef } from '../features/sync-data-loader/types';
-import type { TreeFeatureDef } from '../features/tree/types';
+} from '../../features/hotkeys-core/types';
+import type { KeyboardDragAndDropFeatureDef } from '../../features/keyboard-drag-and-drop/types';
+import type { MainFeatureDef } from '../../features/main/types';
+import type { PropMemoizationFeatureDef } from '../../features/prop-memoization/types';
+import type { RenamingFeatureDef } from '../../features/renaming/types';
+import type { SearchFeatureDef } from '../../features/search/types';
+import type { SelectionFeatureDef } from '../../features/selection/types';
+import type { SyncDataLoaderFeatureDef } from '../../features/sync-data-loader/types';
+import type { TreeFeatureDef } from '../../features/tree/types';
 
 export type Updater<T> = T | ((old: T) => T);
 export type SetStateFn<T> = (updaterOrValue: Updater<T>) => void;

@@ -1,4 +1,4 @@
-import type { SetStateFn } from '../../types/core';
+import type { SetStateFn } from '../../core/types/core';
 
 export enum CheckedState {
   Checked = 'checked',

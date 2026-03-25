@@ -1,4 +1,4 @@
-import type { SetStateFn } from '../../types/core';
+import type { SetStateFn } from '../../core/types/core';
 import type { SyncDataLoaderFeatureDef } from '../sync-data-loader/types';
 
 // oxlint-disable-next-line typescript-eslint/no-explicit-any

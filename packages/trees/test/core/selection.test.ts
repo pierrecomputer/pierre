@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
-import { propMemoizationFeature } from '../../src/core/features/prop-memoization/feature';
-import { selectionFeature } from '../../src/core/features/selection/feature';
+import { propMemoizationFeature } from '../../src/features/prop-memoization/feature';
+import { selectionFeature } from '../../src/features/selection/feature';
 import { TestTree } from './test-utils/test-tree';
 
 const factory = TestTree.default({}).withFeatures(

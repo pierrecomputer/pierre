@@ -1,5 +1,5 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
-import type { ItemInstance, TreeInstance } from '../../types/core';
+import type { ItemInstance, TreeInstance } from '../../core/types/core';
 import type { DragTarget } from './types';
 
 export enum ItemDropCategory {

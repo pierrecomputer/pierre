@@ -3,7 +3,7 @@ import {
   type FeatureImplementation,
   type HotkeysConfig,
   type TreeInstance,
-} from '../../types/core';
+} from '../../core/types/core';
 import type { HotkeyConfig, HotkeysCoreDataRef } from './types';
 
 const specialKeys: Record<string, RegExp> = {

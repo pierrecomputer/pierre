@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { Component, createElement, Fragment } from 'preact';
 import type { FunctionComponent, JSX } from 'preact';
 import {
@@ -14,7 +15,6 @@ import {
   FLATTENED_PREFIX,
   HEADER_SLOT_NAME,
 } from '../constants';
-/** @jsxImportSource preact */
 import {
   expandAllFeature,
   hotkeysCoreFeature,
