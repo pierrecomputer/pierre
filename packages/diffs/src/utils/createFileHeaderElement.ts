@@ -34,7 +34,7 @@ export function createFileHeaderElement({
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
-    'data-diffs-header': '',
+    'data-diffs-header': mode,
     'data-change-type': fileDiff?.type,
     'data-theme-type': themeType !== 'system' ? themeType : undefined,
     style: themeStyles,

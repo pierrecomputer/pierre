@@ -22,7 +22,11 @@ export async function preloadFile<LAnnotation = undefined>({
   options,
   annotations,
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
-  const fileRenderer = new FileRenderer<LAnnotation>(options);
+  const fileRenderer = new FileRenderer<LAnnotation>({
+    ...options,
+    headerRenderMode:
+      options?.renderCustomHeader != null ? 'custom' : 'default',
+  });
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {

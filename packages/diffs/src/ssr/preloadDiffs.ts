@@ -5,11 +5,11 @@ import {
 } from '../components/UnresolvedFile';
 import {
   DiffHunksRenderer,
+  type DiffHunksRendererOptions,
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
 import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type {
-  BaseDiffOptions,
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
@@ -237,9 +237,11 @@ function processHunkResult<LAnnotation>(
 
 function getHunksRendererOptions<LAnnotation>(
   options: FileDiffOptions<LAnnotation> | undefined
-): BaseDiffOptions {
+): DiffHunksRendererOptions {
   return {
     ...options,
+    headerRenderMode:
+      options?.renderCustomHeader != null ? 'custom' : 'default',
     hunkSeparators:
       typeof options?.hunkSeparators === 'function'
         ? 'custom'

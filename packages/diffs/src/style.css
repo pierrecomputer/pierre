@@ -1386,7 +1386,7 @@
     }
   }
 
-  [data-diffs-header] {
+  [data-diffs-header='default'] {
     position: relative;
     display: flex;
     flex-direction: row;
@@ -1429,19 +1429,19 @@
     flex-grow: 0;
   }
 
-  [data-diffs-header] [data-metadata] {
+  [data-diffs-header='default'] [data-metadata] {
     display: flex;
     align-items: center;
     gap: 1ch;
     white-space: nowrap;
   }
 
-  [data-diffs-header] [data-additions-count] {
+  [data-diffs-header='default'] [data-additions-count] {
     font-family: var(--diffs-font-family, var(--diffs-font-fallback));
     color: var(--diffs-addition-base);
   }
 
-  [data-diffs-header] [data-deletions-count] {
+  [data-diffs-header='default'] [data-deletions-count] {
     font-family: var(--diffs-font-family, var(--diffs-font-fallback));
     color: var(--diffs-deletion-base);
   }
