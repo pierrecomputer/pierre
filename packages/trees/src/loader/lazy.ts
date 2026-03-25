@@ -1,5 +1,4 @@
 import { FLATTENED_PREFIX } from '../constants';
-import type { TreeDataLoader } from '../core';
 import type { FileTreeNode } from '../types';
 import { createIdMaps } from '../utils/createIdMaps';
 import { createLoaderUtils } from '../utils/createLoaderUtils';
@@ -9,6 +8,7 @@ import {
 } from '../utils/normalizeInputPath';
 import { defaultChildrenComparator, sortChildren } from '../utils/sortChildren';
 import type { DataLoaderOptions } from './index';
+import type { TreeDataLoader } from './types';
 
 /**
  * Creates a lazy data loader that computes nodes on-demand.

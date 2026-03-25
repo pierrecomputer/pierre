@@ -1,4 +1,3 @@
-import type { AsyncDataLoaderFeatureDef } from '../../features/async-data-loader/types';
 import type { DragAndDropFeatureDef } from '../../features/drag-and-drop/types';
 import type { ExpandAllFeatureDef } from '../../features/expand-all/types';
 import {
@@ -11,8 +10,11 @@ import type { PropMemoizationFeatureDef } from '../../features/prop-memoization/
 import type { RenamingFeatureDef } from '../../features/renaming/types';
 import type { SearchFeatureDef } from '../../features/search/types';
 import type { SelectionFeatureDef } from '../../features/selection/types';
-import type { SyncDataLoaderFeatureDef } from '../../features/sync-data-loader/types';
 import type { TreeFeatureDef } from '../../features/tree/types';
+import type {
+  AsyncDataLoaderFeatureDef,
+  SyncDataLoaderFeatureDef,
+} from '../../loader/types';
 
 export type Updater<T> = T | ((old: T) => T);
 export type SetStateFn<T> = (updaterOrValue: Updater<T>) => void;

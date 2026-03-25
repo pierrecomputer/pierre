@@ -3,7 +3,7 @@ import { beforeEach, describe, mock } from 'bun:test';
 import { buildProxiedInstance } from '../../../src/core/build-proxified-instance';
 import { createTree } from '../../../src/core/create-tree';
 import type { TreeConfig, TreeInstance } from '../../../src/core/types/core';
-import { syncDataLoaderFeature } from '../../../src/features/sync-data-loader/feature';
+import { syncDataLoaderFeature } from '../../../src/loader/sync-data-loader-feature';
 import { TestTreeDo } from './test-tree-do';
 import { TestTreeExpect } from './test-tree-expect';
 
