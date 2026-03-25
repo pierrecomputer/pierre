@@ -1,10 +1,10 @@
 import { preloadFileTree } from '@pierre/trees/ssr';
 
-import { readSettingsCookies } from './_components/readSettingsCookies';
-import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from './demo-data';
-import { RenderingDemoClient } from './RenderingDemoClient';
+import { readSettingsCookies } from '../_components/readSettingsCookies';
+import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from '../demo-data';
+import { HeaderSlotDemoClient } from './HeaderSlotDemoClient';
 
-export default async function TreesDevIndexPage() {
+export default async function HeaderSlotPage() {
   const { flattenEmptyDirectories, useLazyDataLoader } =
     await readSettingsCookies();
   const fileTreeOptions = {
@@ -16,7 +16,7 @@ export default async function TreesDevIndexPage() {
   const mainSsr = preloadFileTree(fileTreeOptions, sharedDemoStateConfig);
 
   return (
-    <RenderingDemoClient
+    <HeaderSlotDemoClient
       preloadedFileTreeHtml={mainSsr.shadowHtml}
       preloadedFileTreeContainerHtml={mainSsr.html}
     />
