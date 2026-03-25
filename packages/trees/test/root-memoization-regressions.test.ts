@@ -1,4 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
+// @ts-expect-error -- no @types/jsdom; only used in tests
+import { JSDOM } from 'jsdom';
 
 import { createTree } from '../src/core/create-tree';
 import type { TreeConfig } from '../src/core/types/core';
@@ -12,6 +14,13 @@ import { syncDataLoaderFeature } from '../src/features/sync-data-loader/feature'
 import type { FileTreeSearchConfig } from '../src/FileTree';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';
+
+let FileTree: typeof import('../src/FileTree').FileTree;
+
+const flushMicrotasks = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
 
 const createSearchTree = (
   withPropMemoization: boolean,
@@ -44,6 +53,39 @@ const createSearchTree = (
   tree.rebuildTree();
   return tree;
 };
+
+beforeAll(async () => {
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+    pretendToBeVisual: true,
+  });
+
+  Object.assign(globalThis, {
+    window: dom.window,
+    document: dom.window.document,
+    HTMLElement: dom.window.HTMLElement,
+    KeyboardEvent: dom.window.KeyboardEvent,
+    MouseEvent: dom.window.MouseEvent,
+    HTMLTemplateElement: dom.window.HTMLTemplateElement,
+    HTMLDivElement: dom.window.HTMLDivElement,
+    HTMLStyleElement: dom.window.HTMLStyleElement,
+    HTMLSlotElement: dom.window.HTMLSlotElement,
+    HTMLInputElement: dom.window.HTMLInputElement,
+    SVGElement: dom.window.SVGElement,
+    navigator: dom.window.navigator,
+    Node: dom.window.Node,
+    Event: dom.window.Event,
+    MutationObserver: dom.window.MutationObserver,
+    customElements: dom.window.customElements,
+  });
+
+  class MockCSSStyleSheet {
+    cssRules: unknown[] = [];
+    replaceSync(_text: string) {}
+  }
+  Object.assign(globalThis, { CSSStyleSheet: MockCSSStyleSheet });
+
+  ({ FileTree } = await import('../src/FileTree'));
+});
 
 describe('Root memoization regressions', () => {
   test('search-open item click should close search with prop memoization enabled', () => {
@@ -83,16 +125,36 @@ describe('Root memoization regressions', () => {
     expect(hotkey?.isEnabled?.(tree)).toBe(true);
   });
 
-  test('TreeItem memo equality should track expanded/collapsed state', async () => {
-    const rootPath = new URL('../src/components/Root.tsx', import.meta.url);
-    const source = await Bun.file(rootPath).text();
+  test('folder rows update aria-expanded when expansion state changes', async () => {
+    const ft = new FileTree({
+      initialFiles: ['README.md', 'src/index.ts'],
+    });
+    const containerWrapper = document.createElement('div');
 
-    // Expansion state controls aria-expanded and chevron direction in row UI.
-    // Memo equality must include an expansion signal to avoid stale rows.
-    expect(source).toMatch(
-      /interface TreeItemProps[\s\S]*\bisExpanded:\s*boolean/
-    );
-    expect(source).toMatch(/prev\.isExpanded\s*===\s*next\.isExpanded/);
-    expect(source).toMatch(/<TreeItem[\s\S]*\bisExpanded=/);
+    ft.render({ containerWrapper });
+
+    const getFolderButton = () =>
+      ft
+        .getFileTreeContainer()
+        ?.shadowRoot?.querySelector<HTMLElement>(
+          '[data-item-type="folder"][aria-label="src"]'
+        );
+    const clickFolderButton = () => {
+      getFolderButton()?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true })
+      );
+    };
+
+    expect(getFolderButton()?.getAttribute('aria-expanded')).toBe('false');
+
+    clickFolderButton();
+    await flushMicrotasks();
+    expect(getFolderButton()?.getAttribute('aria-expanded')).toBe('true');
+
+    clickFolderButton();
+    await flushMicrotasks();
+    expect(getFolderButton()?.getAttribute('aria-expanded')).toBe('false');
+
+    ft.cleanUp();
   });
 });
