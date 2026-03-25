@@ -1,6 +1,6 @@
-import type { FeatureImplementation } from '../core/types/core';
-import { throwError } from '../core/utilities/errors';
-import { makeStateUpdater } from '../core/utils';
+import type { FeatureImplementation } from '../../core/types/core';
+import { throwError } from '../../core/utilities/errors';
+import { makeStateUpdater } from '../../core/utils';
 
 const undefErrorMessage = 'sync dataLoader returned undefined';
 const promiseErrorMessage = 'sync dataLoader returned promise';

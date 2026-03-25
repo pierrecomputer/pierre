@@ -1,6 +1,9 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions, typescript-eslint/no-misused-promises */
-import type { FeatureImplementation, TreeInstance } from '../core/types/core';
-import { makeStateUpdater } from '../core/utils';
+import type {
+  FeatureImplementation,
+  TreeInstance,
+} from '../../core/types/core';
+import { makeStateUpdater } from '../../core/utils';
 import type { AsyncDataLoaderDataRef } from './types';
 
 const getDataRef = <T>(tree: TreeInstance<T>) => {
