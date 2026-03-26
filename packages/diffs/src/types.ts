@@ -416,20 +416,14 @@ export interface PrePropertiesConfig extends Required<
   customProperties?: CustomPreProperties;
 }
 
-export interface RenderHeaderMetadataProps {
-  deletionFile?: FileContents;
-  additionFile?: FileContents;
-  fileDiff?: FileDiffMetadata;
-}
-
 export type FileHeaderRenderMode = 'default' | 'custom';
 
 export type RenderHeaderMetadataCallback = (
-  props: RenderHeaderMetadataProps
+  fileDiff: FileDiffMetadata
 ) => Element | null | undefined | string | number;
 
 export type RenderHeaderPrefixCallback = (
-  props: RenderHeaderMetadataProps
+  fileDiff: FileDiffMetadata
 ) => Element | null | undefined | string | number;
 
 export type RenderFileMetadata = (

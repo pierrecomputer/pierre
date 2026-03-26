@@ -1103,6 +1103,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;
+    const { fileDiff } = this;
     const headerHTML = toHtml(headerAST);
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');
@@ -1120,18 +1121,15 @@ export class FileDiff<LAnnotation = undefined> {
       this.lastRenderedHeaderHTML = headerHTML;
     }
 
-    if (this.isContainerManaged) return;
+    if (this.isContainerManaged || fileDiff == null) {
+      return;
+    }
 
     const { renderCustomHeader, renderHeaderPrefix, renderHeaderMetadata } =
       this.options;
 
     if (renderCustomHeader != null) {
-      const content =
-        renderCustomHeader({
-          deletionFile: this.deletionFile,
-          additionFile: this.additionFile,
-          fileDiff: this.fileDiff,
-        }) ?? undefined;
+      const content = renderCustomHeader(fileDiff) ?? undefined;
       this.headerCustom = this.upsertHeaderSlotElement(
         container,
         this.headerCustom,
@@ -1145,18 +1143,8 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
 
-    const prefix =
-      renderHeaderPrefix?.({
-        deletionFile: this.deletionFile,
-        additionFile: this.additionFile,
-        fileDiff: this.fileDiff,
-      }) ?? undefined;
-    const content =
-      renderHeaderMetadata?.({
-        deletionFile: this.deletionFile,
-        additionFile: this.additionFile,
-        fileDiff: this.fileDiff,
-      }) ?? undefined;
+    const prefix = renderHeaderPrefix?.(fileDiff) ?? undefined;
+    const content = renderHeaderMetadata?.(fileDiff) ?? undefined;
     this.headerPrefix = this.upsertHeaderSlotElement(
       container,
       this.headerPrefix,

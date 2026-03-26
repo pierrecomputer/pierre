@@ -258,9 +258,9 @@ interface ThreadMetadata {
 
   // Render custom content on the right side of the file header,
   // after the +/- line metrics.
-  // Props: { oldFile?, newFile?, fileDiff? }
-  renderHeaderMetadata={({ fileDiff }) => (
-    <span>{fileDiff?.newName}</span>
+  // Props: FileDiffMetadata
+  renderHeaderMetadata={(fileDiff) => (
+    <span>{fileDiff.name}</span>
   )}
 
   // ─────────────────────────────────────────────────────────────

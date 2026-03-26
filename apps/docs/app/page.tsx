@@ -99,7 +99,7 @@ async function FontStylesSection() {
 }
 
 async function CustomHeaderSection() {
-  const prerenderedDiff = await preloadFileDiff(CUSTOM_HEADER_EXAMPLE);
+  const prerenderedDiff = await preloadMultiFileDiff(CUSTOM_HEADER_EXAMPLE);
   return <CustomHeader prerenderedDiff={prerenderedDiff} />;
 }
 

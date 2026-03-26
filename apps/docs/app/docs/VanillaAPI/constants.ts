@@ -327,9 +327,9 @@ const instance = new FileDiff({
   // ─────────────────────────────────────────────────────────────
 
   // Render custom content in the file header (after +/- stats)
-  renderHeaderMetadata({ oldFile, newFile, fileDiff }) {
+  renderHeaderMetadata(fileDiff) {
     const span = document.createElement('span');
-    span.textContent = fileDiff?.newName ?? '';
+    span.textContent = fileDiff.name;
     return span;
   },
 

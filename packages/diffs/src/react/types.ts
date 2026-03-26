@@ -9,8 +9,8 @@ import type {
 import type {
   DiffLineAnnotation,
   FileContents,
+  FileDiffMetadata,
   LineAnnotation,
-  RenderHeaderMetadataProps,
   VirtualFileMetrics,
 } from '../types';
 
@@ -20,9 +20,9 @@ export interface DiffBasePropsReact<LAnnotation> {
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
-  renderCustomHeader?(props: RenderHeaderMetadataProps): ReactNode;
-  renderHeaderPrefix?(props: RenderHeaderMetadataProps): ReactNode;
-  renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
+  renderCustomHeader?(fileDiff: FileDiffMetadata): ReactNode;
+  renderHeaderPrefix?(fileDiff: FileDiffMetadata): ReactNode;
+  renderHeaderMetadata?(fileDiff: FileDiffMetadata): ReactNode;
   renderGutterUtility?(
     getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
   ): ReactNode;

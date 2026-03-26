@@ -14,7 +14,6 @@ import type {
 } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
-  FileContents,
   FileDiffMetadata,
   VirtualFileMetrics,
 } from '../../types';
@@ -28,9 +27,7 @@ const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface UseFileDiffInstanceProps<LAnnotation> {
-  oldFile?: FileContents;
-  newFile?: FileContents;
-  fileDiff?: FileDiffMetadata;
+  fileDiff: FileDiffMetadata;
   options: FileDiffOptions<LAnnotation> | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
@@ -46,8 +43,6 @@ interface UseFileDiffInstanceReturn {
 }
 
 export function useFileDiffInstance<LAnnotation>({
-  oldFile,
-  newFile,
   fileDiff,
   options,
   lineAnnotations,
@@ -94,8 +89,6 @@ export function useFileDiffInstance<LAnnotation>({
       }
       void instanceRef.current.hydrate({
         fileDiff,
-        oldFile,
-        newFile,
         fileContainer,
         lineAnnotations,
         prerenderedHTML,
@@ -124,8 +117,6 @@ export function useFileDiffInstance<LAnnotation>({
     void instance.render({
       forceRender,
       fileDiff,
-      oldFile,
-      newFile,
       lineAnnotations,
     });
     if (selectedLines !== undefined) {
