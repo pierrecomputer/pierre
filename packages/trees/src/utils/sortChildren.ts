@@ -119,19 +119,27 @@ export function sortChildren(
     // slice instead of scanning backwards with lastIndexOf. Flattened paths
     // (f:: prefix) still need the generic helper.
     const nameSliceStart = parentPathLength != null ? parentPathLength + 1 : -1;
+    const n = children.length;
+    const decorated: Array<{
+      path: string;
+      isFolder: boolean;
+      isDot: boolean;
+      lowerName: string;
+    }> = new Array(n);
 
-    const decorated = children.map((path) => {
+    for (let di = 0; di < n; di++) {
+      const path = children[di];
       const name =
         nameSliceStart > 0 && !isFlattenedPath(path)
           ? path.slice(nameSliceStart)
           : getNameFromPath(path);
-      return {
+      decorated[di] = {
         path,
         isFolder: isFolderPath(path, isFolder),
         isDot: name.charCodeAt(0) === 46,
         lowerName: name.toLowerCase(),
       };
-    });
+    }
 
     decorated.sort((a, b) => {
       if (a.isFolder !== b.isFolder) {
