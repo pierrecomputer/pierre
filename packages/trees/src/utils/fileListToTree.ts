@@ -41,7 +41,10 @@ interface FileListToTreeBuildState {
 
 interface FileListToTreeStageContext {
   isFolder: (path: string) => boolean;
-  sortChildrenArray: (children: string[]) => string[];
+  sortChildrenArray: (
+    children: string[],
+    parentPathLength?: number
+  ) => string[];
   utils: LoaderUtils;
 }
 
@@ -237,8 +240,11 @@ function createStageContext(
   sortComparator: ChildrenSortOption
 ): FileListToTreeStageContext {
   const isFolder = (path: string): boolean => folderChildren.has(path);
-  const sortChildrenArray = (children: string[]): string[] =>
-    sortChildren(children, isFolder, sortComparator);
+  const sortChildrenArray = (
+    children: string[],
+    parentPathLength?: number
+  ): string[] =>
+    sortChildren(children, isFolder, sortComparator, parentPathLength);
   const childrenArrayCache = new Map<string, string[]>();
   const getChildrenArray = (path: string): string[] => {
     const cached = childrenArrayCache.get(path);
@@ -295,7 +301,7 @@ function buildFlattenedNodes(
       const endpointChildren = folderChildren.get(flattenedEndpoint);
       const endpointDirectChildren =
         endpointChildren != null
-          ? sortChildrenArray([...endpointChildren])
+          ? sortChildrenArray([...endpointChildren], flattenedEndpoint.length)
           : [];
       const endpointFlattenedChildren = utils.buildFlattenedChildren(
         endpointDirectChildren
@@ -334,7 +340,10 @@ function buildFolderNodes(
   const { sortChildrenArray, utils } = context;
 
   for (const [path, children] of folderChildren) {
-    const directChildren = sortChildrenArray([...children]);
+    // Pass parent path length for fast name extraction. Root children don't
+    // have a "root/" prefix, so skip the hint for the root folder.
+    const parentLen = path === rootId ? undefined : path.length;
+    const directChildren = sortChildrenArray([...children], parentLen);
     const flattenedChildren = intermediateFolders.has(path)
       ? undefined
       : utils.buildFlattenedChildren(directChildren);

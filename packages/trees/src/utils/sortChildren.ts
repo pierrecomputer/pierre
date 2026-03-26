@@ -98,12 +98,16 @@ export const defaultChildrenComparator: ChildrenComparator = (
  * @param children - Array of child paths to sort
  * @param isFolder - Function to check if a path is a folder
  * @param comparator - Comparator function (defaults to semantic sort)
+ * @param parentPathLength - When provided, enables a fast name-extraction path
+ *   using `path.slice(parentPathLength + 1)` instead of a backward `lastIndexOf`
+ *   scan. Only valid for non-flattened children.
  * @returns New sorted array
  */
 export function sortChildren(
   children: string[],
   isFolder: (path: string) => boolean,
-  comparator: ChildrenSortOption = defaultChildrenComparator
+  comparator: ChildrenSortOption = defaultChildrenComparator,
+  parentPathLength?: number
 ): string[] {
   if (comparator === false) {
     // Preserve insertion order without paying Array.sort() cost.
@@ -111,8 +115,16 @@ export function sortChildren(
   }
 
   if (comparator === defaultChildrenComparator) {
+    // When parentPathLength is known, extract the child name via a direct
+    // slice instead of scanning backwards with lastIndexOf. Flattened paths
+    // (f:: prefix) still need the generic helper.
+    const nameSliceStart = parentPathLength != null ? parentPathLength + 1 : -1;
+
     const decorated = children.map((path) => {
-      const name = getNameFromPath(path);
+      const name =
+        nameSliceStart > 0 && !isFlattenedPath(path)
+          ? path.slice(nameSliceStart)
+          : getNameFromPath(path);
       return {
         path,
         isFolder: isFolderPath(path, isFolder),
