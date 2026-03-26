@@ -282,32 +282,23 @@ function hashTreeKeys(
   const { getIdForKey } = createIdMaps(rootId, { includeReverseMap: false });
   const hashedTree: Record<string, FileTreeNode> = {};
   const keys = Object.keys(tree);
-  const mappedKeys = new Map<string, string>();
-
-  for (const key of keys) {
-    mappedKeys.set(key, getIdForKey(key));
-  }
-
-  const mapKnownKey = (key: string): string => {
-    return mappedKeys.get(key) ?? getIdForKey(key);
-  };
 
   for (const key of keys) {
     const node = tree[key];
-    const mappedKey = mapKnownKey(key);
+    const mappedKey = getIdForKey(key);
 
     let children: FileTreeNode['children'];
     if (node.children != null) {
       const direct = new Array<string>(node.children.direct.length);
       for (let index = 0; index < node.children.direct.length; index += 1) {
-        direct[index] = mapKnownKey(node.children.direct[index]);
+        direct[index] = getIdForKey(node.children.direct[index]);
       }
 
       const flattenedSource = node.children.flattened;
       if (flattenedSource != null) {
         const flattened = new Array<string>(flattenedSource.length);
         for (let index = 0; index < flattenedSource.length; index += 1) {
-          flattened[index] = mapKnownKey(flattenedSource[index]);
+          flattened[index] = getIdForKey(flattenedSource[index]);
         }
         children = { direct, flattened };
       } else {
@@ -319,7 +310,7 @@ function hashTreeKeys(
     if (node.flattens != null) {
       flattens = new Array<string>(node.flattens.length);
       for (let index = 0; index < node.flattens.length; index += 1) {
-        flattens[index] = mapKnownKey(node.flattens[index]);
+        flattens[index] = getIdForKey(node.flattens[index]);
       }
     }
 
