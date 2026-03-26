@@ -18,12 +18,9 @@ export type FileListToTreeStageName =
   | 'buildFolderNodes'
   | 'hashTreeKeys';
 
-export type FileListToTreeStageTimings = Record<
-  FileListToTreeStageName,
-  number
->;
+type FileListToTreeStageTimings = Record<FileListToTreeStageName, number>;
 
-export interface FileListToTreeBenchmarkResult {
+interface FileListToTreeBenchmarkResult {
   tree: Record<string, FileTreeNode>;
   stageTimingsMs: FileListToTreeStageTimings;
 }
@@ -79,6 +76,10 @@ function createBuildState(rootId: string): FileListToTreeBuildState {
   };
 }
 
+/**
+ * Walks every file path segment-by-segment, creating file nodes and tracking
+ * parent-to-child folder relationships in a Map of Sets.
+ */
 function buildPathGraph(
   filePaths: string[],
   rootId: string
@@ -144,6 +145,12 @@ function createStageContext(
   };
 }
 
+/**
+ * Identifies single-child folder chains and creates flattened nodes that
+ * collapse them into one entry (e.g. "src/utils" instead of "src" > "utils").
+ * Returns the set of intermediate folders consumed by flattening so
+ * buildFolderNodes can skip them.
+ */
 function buildFlattenedNodes(
   state: FileListToTreeBuildState,
   context: FileListToTreeStageContext
@@ -197,6 +204,11 @@ function buildFlattenedNodes(
   return intermediateFolders;
 }
 
+/**
+ * Creates a FileTreeNode for every folder (including root), attaching sorted
+ * direct children and optional flattened children. Intermediate folders that
+ * were absorbed into a flattened node get their flattened children omitted.
+ */
 function buildFolderNodes(
   state: FileListToTreeBuildState,
   context: FileListToTreeStageContext,
@@ -213,13 +225,13 @@ function buildFolderNodes(
       ? undefined
       : utils.buildFlattenedChildren(directChildren);
 
-    const name =
-      path === rootId
-        ? rootName
-        : (() => {
-            const lastSlashIndex = path.lastIndexOf('/');
-            return lastSlashIndex >= 0 ? path.slice(lastSlashIndex + 1) : path;
-          })();
+    let name: string;
+    if (path === rootId) {
+      name = rootName;
+    } else {
+      const lastSlashIndex = path.lastIndexOf('/');
+      name = lastSlashIndex >= 0 ? path.slice(lastSlashIndex + 1) : path;
+    }
 
     tree[path] = {
       name,
@@ -232,6 +244,11 @@ function buildFolderNodes(
   }
 }
 
+/**
+ * Replaces human-readable path keys with deterministic hashed IDs and remaps
+ * all children/flattens references to use the same hashed IDs. Keys are sorted
+ * before hashing so collision resolution stays stable across runtimes.
+ */
 function hashTreeKeys(
   tree: Record<string, FileTreeNode>,
   rootId: string
@@ -277,25 +294,13 @@ function fileListToTreeInternal(
   const state = timeStage('buildPathGraph', recorder, () =>
     buildPathGraph(filePaths, rootId)
   );
-  let context: FileListToTreeStageContext | undefined;
-  const intermediateFolders = timeStage('buildFlattenedNodes', recorder, () => {
-    context = createStageContext(state.folderChildren, sortComparator);
-    return buildFlattenedNodes(state, context);
-  });
-
-  const resolvedContext = context;
-  if (resolvedContext == null) {
-    throw new Error('Expected fileListToTree stage context to be initialized');
-  }
+  const context = createStageContext(state.folderChildren, sortComparator);
+  const intermediateFolders = timeStage('buildFlattenedNodes', recorder, () =>
+    buildFlattenedNodes(state, context)
+  );
 
   timeStage('buildFolderNodes', recorder, () => {
-    buildFolderNodes(
-      state,
-      resolvedContext,
-      rootId,
-      rootName,
-      intermediateFolders
-    );
+    buildFolderNodes(state, context, rootId, rootName, intermediateFolders);
   });
 
   return timeStage('hashTreeKeys', recorder, () =>

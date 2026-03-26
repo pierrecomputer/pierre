@@ -22,6 +22,8 @@ const BENCHMARK_FIXTURE_PATH = resolve(
   import.meta.dir,
   '../fixtures/fileListToTree-monorepo-snapshot.txt'
 );
+// Cross-package dependency: this fixture lives in apps/docs because the dev
+// page also renders it. If that file moves, this path must be updated.
 const LINUX_KERNEL_FIXTURE_PATH = resolve(
   import.meta.dir,
   '../../../../apps/docs/app/trees-dev/linux-files.json'
