@@ -16,6 +16,9 @@ export interface FileListToTreeBenchmarkCase extends FileListShapeSummary {
   name: string;
   source: 'synthetic' | 'fixture';
   files: string[];
+  // Optional source-of-truth expanded folder paths for realism-sensitive
+  // workloads (e.g. trees-dev virtualization fixtures).
+  expandedFolders?: string[];
 }
 
 const BENCHMARK_FIXTURE_PATH = resolve(
@@ -287,12 +290,14 @@ export function describeFileListShape(files: string[]): FileListShapeSummary {
 function createCase(
   name: string,
   source: 'synthetic' | 'fixture',
-  files: string[]
+  files: string[],
+  expandedFolders?: string[]
 ): FileListToTreeBenchmarkCase {
   return {
     name,
     source,
     files,
+    ...(expandedFolders != null && { expandedFolders }),
     ...describeFileListShape(files),
   };
 }
@@ -303,6 +308,8 @@ export function getFileListToTreeBenchmarkCases(): FileListToTreeBenchmarkCase[]
   if (cachedCases != null) {
     return cachedCases;
   }
+
+  const linuxKernelFixture = readLinuxKernelFixture(LINUX_KERNEL_FIXTURE_PATH);
 
   cachedCases = [
     createCase('tiny-flat', 'synthetic', buildTinyFlatFiles()),
@@ -323,7 +330,8 @@ export function getFileListToTreeBenchmarkCases(): FileListToTreeBenchmarkCase[]
     createCase(
       'fixture-linux-kernel-files',
       'fixture',
-      readLinuxKernelFixture(LINUX_KERNEL_FIXTURE_PATH).files
+      linuxKernelFixture.files,
+      linuxKernelFixture.folders
     ),
     createCase(
       'fixture-pierrejs-repo-snapshot',

@@ -1,16 +1,29 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import type { FileTreeData } from '../src/types';
 import {
   benchmarkFileListToTreeStages,
   type FileListToTreeStageName,
 } from '../src/utils/fileListToTree';
 import {
+  type BenchmarkEnvironment,
+  calculateDeltaPercent,
+  formatMs,
+  formatSignedMs,
+  formatSignedPercent,
+  getEnvironment,
+  parseNonNegativeInteger,
+  parsePositiveInteger,
+  printTable,
+  summarizeSamples,
+  type TimingSummary,
+} from './lib/benchmarkUtils';
+import {
   type FileListToTreeBenchmarkCase,
   filterBenchmarkCases,
   getFileListToTreeBenchmarkCases,
 } from './lib/fileListToTreeBenchmarkData';
+import { checksumFileTreeData } from './lib/treeBenchmarkChecksums';
 
 interface BenchmarkConfig {
   runs: number;
@@ -18,22 +31,6 @@ interface BenchmarkConfig {
   outputJson: boolean;
   caseFilters: string[];
   comparePath?: string;
-}
-
-interface BenchmarkEnvironment {
-  bunVersion: string;
-  platform: string;
-  arch: string;
-}
-
-interface TimingSummary {
-  runs: number;
-  meanMs: number;
-  medianMs: number;
-  p95Ms: number;
-  minMs: number;
-  maxMs: number;
-  stdDevMs: number;
 }
 
 interface CaseSummary extends TimingSummary {
@@ -121,26 +118,6 @@ const STAGE_ORDER: FileListToTreeStageName[] = [
   'hashTreeKeys',
 ];
 
-function parsePositiveInteger(value: string, flagName: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(
-      `Invalid ${flagName} value '${value}'. Expected a positive integer.`
-    );
-  }
-  return parsed;
-}
-
-function parseNonNegativeInteger(value: string, flagName: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error(
-      `Invalid ${flagName} value '${value}'. Expected a non-negative integer.`
-    );
-  }
-  return parsed;
-}
-
 function printHelpAndExit(): never {
   console.log('Usage: bun ws trees benchmark -- [options]');
   console.log('');
@@ -209,136 +186,6 @@ function parseArgs(argv: string[]): BenchmarkConfig {
   return config;
 }
 
-function percentile(sortedValues: number[], percentileRank: number): number {
-  if (sortedValues.length === 0) {
-    return 0;
-  }
-
-  const rank = (sortedValues.length - 1) * percentileRank;
-  const lowerIndex = Math.floor(rank);
-  const upperIndex = Math.ceil(rank);
-  const lower = sortedValues[lowerIndex] ?? sortedValues[0] ?? 0;
-  const upper =
-    sortedValues[upperIndex] ?? sortedValues[sortedValues.length - 1] ?? lower;
-  if (lowerIndex === upperIndex) {
-    return lower;
-  }
-
-  const interpolation = rank - lowerIndex;
-  return lower + (upper - lower) * interpolation;
-}
-
-function summarizeSamples(samples: number[]): TimingSummary {
-  if (samples.length === 0) {
-    return {
-      runs: 0,
-      meanMs: 0,
-      medianMs: 0,
-      p95Ms: 0,
-      minMs: 0,
-      maxMs: 0,
-      stdDevMs: 0,
-    };
-  }
-
-  const sortedSamples = [...samples].sort((left, right) => left - right);
-  const total = samples.reduce((sum, value) => sum + value, 0);
-  const mean = total / samples.length;
-  const variance =
-    samples.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
-    samples.length;
-
-  return {
-    runs: samples.length,
-    meanMs: mean,
-    medianMs: percentile(sortedSamples, 0.5),
-    p95Ms: percentile(sortedSamples, 0.95),
-    minMs: sortedSamples[0] ?? 0,
-    maxMs: sortedSamples[sortedSamples.length - 1] ?? 0,
-    stdDevMs: Math.sqrt(variance),
-  };
-}
-
-function formatMs(value: number): string {
-  return value.toFixed(3);
-}
-
-function formatSignedMs(value: number): string {
-  const prefix = value > 0 ? '+' : '';
-  return `${prefix}${value.toFixed(3)}`;
-}
-
-function formatSignedPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return value > 0 ? '+inf%' : value < 0 ? '-inf%' : '0.0%';
-  }
-
-  const prefix = value > 0 ? '+' : '';
-  return `${prefix}${value.toFixed(1)}%`;
-}
-
-function checksumTree(tree: FileTreeData): number {
-  let checksum = 0;
-
-  for (const [id, node] of Object.entries(tree)) {
-    checksum += id.length;
-    checksum += node.name.length;
-    checksum += node.path.length;
-
-    if (node.children != null) {
-      checksum += node.children.direct.length;
-      for (const child of node.children.direct) {
-        checksum += child.length;
-      }
-      if (node.children.flattened != null) {
-        checksum += node.children.flattened.length;
-        for (const child of node.children.flattened) {
-          checksum += child.length;
-        }
-      }
-    }
-
-    if (node.flattens != null) {
-      checksum += node.flattens.length;
-      for (const path of node.flattens) {
-        checksum += path.length;
-      }
-    }
-  }
-
-  return checksum;
-}
-
-function printTable(rows: Record<string, string>[], headers: string[]): void {
-  const widths = headers.map((header) => {
-    const valueWidth = rows.reduce(
-      (max, row) => Math.max(max, row[header]?.length ?? 0),
-      header.length
-    );
-    return valueWidth;
-  });
-
-  const formatRow = (row: Record<string, string>) =>
-    headers
-      .map((header, index) => (row[header] ?? '').padEnd(widths[index]))
-      .join('  ')
-      .trimEnd();
-
-  const headerRow = Object.fromEntries(
-    headers.map((header) => [header, header])
-  );
-  console.log(formatRow(headerRow));
-  console.log(
-    widths
-      .map((width) => '-'.repeat(width))
-      .join('  ')
-      .trimEnd()
-  );
-  for (const row of rows) {
-    console.log(formatRow(row));
-  }
-}
-
 function createStageSampleStorage(): Record<FileListToTreeStageName, number[]> {
   return {
     buildPathGraph: [],
@@ -346,22 +193,6 @@ function createStageSampleStorage(): Record<FileListToTreeStageName, number[]> {
     buildFolderNodes: [],
     hashTreeKeys: [],
   };
-}
-
-function getEnvironment(): BenchmarkEnvironment {
-  return {
-    bunVersion: Bun.version,
-    platform: process.platform,
-    arch: process.arch,
-  };
-}
-
-function calculateDeltaPercent(current: number, baseline: number): number {
-  if (baseline === 0) {
-    return current === 0 ? 0 : Number.POSITIVE_INFINITY;
-  }
-
-  return ((current - baseline) / baseline) * 100;
 }
 
 // Benchmarks only stay comparable when the output payload has the same shape.
@@ -608,7 +439,7 @@ function main() {
     const startTime = performance.now();
     const result = benchmarkFileListToTreeStages(caseConfig.files);
     const elapsedMs = performance.now() - startTime;
-    const resultChecksum = checksumTree(result.tree);
+    const resultChecksum = checksumFileTreeData(result.tree);
     const existingChecksum = caseChecksums[caseIndex];
 
     if (existingChecksum == null) {

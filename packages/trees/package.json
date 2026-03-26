@@ -35,6 +35,8 @@
   "scripts": {
     "build": "tsdown --clean",
     "benchmark": "bun run ./scripts/benchmarkFileListToTree.ts",
+    "benchmark:file-list-to-tree": "bun run ./scripts/benchmarkFileListToTree.ts",
+    "benchmark:core": "bun run ./scripts/benchmarkTreeCorePrimitives.ts",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
     "coverage": "bun test --coverage",

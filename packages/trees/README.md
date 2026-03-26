@@ -206,6 +206,7 @@ From `packages/trees`:
 ```bash
 bun test
 bun run benchmark
+bun run benchmark:core
 bun run test:e2e
 bun run tsc
 bun run build
@@ -264,6 +265,41 @@ bun ws trees benchmark -- --case=linux --compare tmp/fileListToTree-baseline.jso
 `--compare` matches cases by name, reports median deltas, and flags checksum
 mismatches. That makes it useful both for performance regressions and for
 catching accidental behavior changes while refactoring.
+
+For core tree primitive profiling, use the dedicated benchmark runner:
+
+```bash
+bun ws trees benchmark:core
+```
+
+If you care most about large datasets, run a filtered large-shape subset:
+
+```bash
+bun ws trees benchmark:core -- --case=large-wide --case=large-monorepo --case=linux
+```
+
+This benchmark isolates core tree costs by preparing fixture-backed tree data up
+front and timing only primitive calls. The `createTree` timing reflects the real
+initialization path (`createTree` + `setMounted(true)` + initial `rebuildTree`).
+`rebuildTree` can run either as unchanged hot rebuilds or as changed-state
+rebuilds via `--rebuild-mode=expanded-copy`.
+
+To better mirror the trees-dev virtualization workload, benchmark cases are
+built with `sort: false` and `flattenEmptyDirectories: true`.
+
+It also supports `--json`, `--compare`, and `--case` filters, plus:
+
+- `--create-iterations` to batch multiple create+mount+initial-rebuild calls per
+  measured sample
+- `--rebuild-iterations` to batch multiple `rebuildTree` calls per measured
+  sample
+- `--rebuild-mode` to choose unchanged rebuilds or a changed-state mode
+  (`expanded-copy`) with stronger update-path signal
+- `--feature-profile` to switch between `virtualized-card` realism,
+  `root-default`, and `minimal` core-only feature overhead
+
+Those batching flags improve confidence for fast operations by reducing timer
+jitter while still reporting per-call milliseconds.
 
 # Credits and Acknolwedgements
 
