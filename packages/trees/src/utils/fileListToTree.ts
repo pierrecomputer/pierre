@@ -1,7 +1,7 @@
 import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
-import { createIdMaps } from './createIdMaps';
 import { createLoaderUtils, type LoaderUtils } from './createLoaderUtils';
+import { hashId } from './hashId';
 import type { ChildrenSortOption } from './sortChildren';
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
 
@@ -294,7 +294,28 @@ function hashTreeKeys(
   tree: Record<string, FileTreeNode>,
   rootId: string
 ): Record<string, FileTreeNode> {
-  const { getIdForKey } = createIdMaps(rootId, { includeReverseMap: false });
+  const idByKey = new Map<string, string>([[rootId, rootId]]);
+  const usedIds = new Set<string>([rootId]);
+
+  const getIdForKey = (key: string): string => {
+    const existing = idByKey.get(key);
+    if (existing != null) {
+      return existing;
+    }
+
+    const base = hashId(key);
+    let id = `n${base}`;
+    let suffix = 0;
+    while (usedIds.has(id)) {
+      suffix += 1;
+      id = `n${base}${suffix.toString(36)}`;
+    }
+
+    usedIds.add(id);
+    idByKey.set(key, id);
+    return id;
+  };
+
   const hashedTree: Record<string, FileTreeNode> = {};
   const keys = Object.keys(tree);
 
