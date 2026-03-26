@@ -100,5 +100,30 @@ export function sortChildren(
     // Preserve insertion order without paying Array.sort() cost.
     return [...children];
   }
+
+  if (comparator === defaultChildrenComparator) {
+    const decorated = children.map((path) => {
+      const name = getNameFromPath(path);
+      return {
+        path,
+        isFolder: isFolderPath(path, isFolder),
+        isDot: name.startsWith('.'),
+        lowerName: name.toLowerCase(),
+      };
+    });
+
+    decorated.sort((a, b) => {
+      if (a.isFolder !== b.isFolder) {
+        return a.isFolder ? -1 : 1;
+      }
+      if (a.isDot !== b.isDot) {
+        return a.isDot ? -1 : 1;
+      }
+      return a.lowerName.localeCompare(b.lowerName);
+    });
+
+    return decorated.map((entry) => entry.path);
+  }
+
   return [...children].sort((a, b) => comparator(a, b, isFolder));
 }

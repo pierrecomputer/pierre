@@ -51,9 +51,23 @@ benchmark workload (`bun ws trees benchmark`).
 
 - **Baseline** (`total_ms=251.52`): `buildPathGraph` + `hashTreeKeys` dominate.
 - ✅ **Kept**: fast-path for already-normalized input paths in `buildPathGraph`
-  (fallback to `normalizeInputPath` for edge cases), plus lower-overhead
-  remapping loops in `hashTreeKeys`. Best so far: `total_ms=218.41`.
-- ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks)
-  regressed overall runtime.
-- ❌ **Discarded**: caching sorted children between flatten/folder stages
-  slightly helped those stages but worsened aggregate runtime.
+  (initially with fallback normalization), plus lower-overhead remapping loops
+  in `hashTreeKeys`.
+- ✅ **Kept**: switched `hashId` to a lightweight FNV-1a variant.
+- ✅ **Kept**: made reverse lookup optional in `createIdMaps` and disabled it
+  for `fileListToTree` hash pass (`includeReverseMap: false`).
+- ✅ **Kept**: removed key sorting in `hashTreeKeys` (uses deterministic object
+  key insertion order for fixed inputs).
+- ✅ **Kept**: removed normalize fallback from path ingestion and instead
+  skipped empty path segments inline while scanning.
+- ✅ **Kept**: mutated node children/flattens arrays in-place during hash remap
+  instead of allocating replacement arrays/objects.
+- ✅ **Kept**: stability rerun with no code changes confirmed lower noise-floor
+  best. **Current best:** `total_ms=162.13`.
+- ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks).
+- ❌ **Discarded**: caching sorted children between flatten/folder stages.
+- ❌ **Discarded**: `path.split('/')` based parsing.
+- ❌ **Discarded**: replacing `localeCompare` with raw lexical compare.
+- ❌ **Discarded**: object-based mapped-key cache in `hashTreeKeys`.
+- ❌ **Discarded**: trimming trailing slash in preprocessing.
+- ❌ **Discarded**: null-prototype tree records (`Object.create(null)`).
