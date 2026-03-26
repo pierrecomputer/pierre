@@ -105,7 +105,7 @@ function buildPathGraph(
 ): FileListToTreeBuildState {
   const state = createBuildState(rootId);
   const { tree, folderChildren } = state;
-  const rootChildren = folderChildren.get(rootId);
+  const rootChildren = folderChildren.get(rootId)!;
 
   for (const filePath of filePaths) {
     const normalizedPath = resolvePathGraphInput(filePath);
@@ -113,6 +113,7 @@ function buildPathGraph(
 
     const { isDirectory, path } = normalizedPath;
     let currentPath: string | undefined;
+    let parentChildren = rootChildren;
     let segmentStart = 0;
 
     while (segmentStart < path.length) {
@@ -129,25 +130,19 @@ function buildPathGraph(
 
       const part = path.slice(segmentStart, segmentEnd);
       const isFile = !isDirectory && nextSlashIndex === -1;
-      const parentPath = currentPath ?? rootId;
       currentPath = currentPath != null ? `${currentPath}/${part}` : part;
 
-      let parentChildren: Set<string> | undefined;
-      if (parentPath === rootId) {
-        parentChildren = rootChildren;
-      } else {
-        parentChildren = folderChildren.get(parentPath);
-      }
-      if (parentChildren == null) {
-        parentChildren = new Set<string>();
-        folderChildren.set(parentPath, parentChildren);
-      }
       parentChildren.add(currentPath);
 
       if (isFile) {
         tree[currentPath] ??= { name: part, path: currentPath };
-      } else if (!folderChildren.has(currentPath)) {
-        folderChildren.set(currentPath, new Set());
+      } else {
+        let nextParentChildren = folderChildren.get(currentPath);
+        if (nextParentChildren == null) {
+          nextParentChildren = new Set<string>();
+          folderChildren.set(currentPath, nextParentChildren);
+        }
+        parentChildren = nextParentChildren;
       }
 
       if (nextSlashIndex === -1) {
