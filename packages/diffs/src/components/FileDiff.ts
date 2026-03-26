@@ -177,6 +177,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected themeCSSStyle: HTMLStyleElement | undefined;
   protected appliedThemeCSS: AppliedThemeStyleCache | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
+  protected appliedUnsafeCSS: string | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
 
   protected headerElement: HTMLElement | undefined;
@@ -446,6 +447,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.lastRowCount = undefined;
     this.themeCSSStyle = undefined;
     this.appliedThemeCSS = undefined;
+    this.unsafeCSSStyle = undefined;
+    this.appliedUnsafeCSS = undefined;
 
     if (recycle) {
       this.hunksRenderer.recycle();
@@ -467,7 +470,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
-    const { overflow = 'scroll', diffStyle = 'split' } = this.options;
+    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
     const { fileContainer, prerenderedHTML, preventEmit = false } = props;
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
@@ -508,10 +511,6 @@ export class FileDiff<LAnnotation = undefined> {
         element.hasAttribute(THEME_CSS_ATTRIBUTE)
       ) {
         this.themeCSSStyle = element;
-        this.appliedThemeCSS = {
-          themeStyles: this.themeCSSStyle.textContent,
-          themeType: this.options.themeType ?? 'system',
-        };
         continue;
       }
       if (
@@ -519,6 +518,7 @@ export class FileDiff<LAnnotation = undefined> {
         element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
       ) {
         this.unsafeCSSStyle = element;
+        this.appliedUnsafeCSS = element.textContent;
         continue;
       }
     }
@@ -909,6 +909,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.themeCSSStyle = undefined;
     this.appliedThemeCSS = undefined;
     this.unsafeCSSStyle = undefined;
+    this.appliedUnsafeCSS = undefined;
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
@@ -1219,22 +1220,36 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   protected injectUnsafeCSS(): void {
-    if (this.fileContainer?.shadowRoot == null) {
+    const { unsafeCSS } = this.options;
+    const shadowRoot = this.fileContainer?.shadowRoot;
+    if (shadowRoot == null) {
       return;
     }
-    const { unsafeCSS } = this.options;
 
     if (unsafeCSS == null || unsafeCSS === '') {
+      if (this.unsafeCSSStyle != null) {
+        this.unsafeCSSStyle.remove();
+        this.unsafeCSSStyle = undefined;
+      }
+      this.appliedUnsafeCSS = undefined;
+      return;
+    }
+
+    if (
+      this.unsafeCSSStyle?.parentNode === shadowRoot &&
+      this.appliedUnsafeCSS === unsafeCSS
+    ) {
       return;
     }
 
     // Create or update the style element
-    if (this.unsafeCSSStyle == null) {
-      this.unsafeCSSStyle = createUnsafeCSSStyleNode();
-      this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
+    this.unsafeCSSStyle ??= createUnsafeCSSStyleNode();
+    if (this.unsafeCSSStyle.parentNode !== shadowRoot) {
+      shadowRoot.appendChild(this.unsafeCSSStyle);
     }
     // Wrap in @layer unsafe to match SSR behavior
-    this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
+    this.unsafeCSSStyle.textContent = wrapUnsafeCSS(unsafeCSS);
+    this.appliedUnsafeCSS = unsafeCSS;
   }
 
   private applyThemeState(
