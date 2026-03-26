@@ -372,10 +372,21 @@ function hashTreeKeys(
   tree: Record<string, FileTreeNode>,
   rootId: string
 ): Record<string, FileTreeNode> {
-  // Resolve a path key to its hashed ID. Stores the result on the node via
-  // a Symbol property so repeated lookups (child references) skip the hash.
+  // Compute and cache an ID on a node. Used for child/flattens references
+  // where we need to look up the target node by its path key.
   const resolveId = (key: string): string => {
     const node = tree[key];
+    const cached = (node as Record<symbol, string>)[NODE_ID];
+    if (cached != null) return cached;
+
+    const id = key === rootId ? rootId : `n${hashId(key)}`;
+    (node as Record<symbol, string>)[NODE_ID] = id;
+    return id;
+  };
+
+  // Compute and cache an ID on a node we already hold a reference to.
+  // Avoids the redundant tree[key] property lookup that resolveId would do.
+  const assignId = (key: string, node: FileTreeNode): string => {
     const cached = (node as Record<symbol, string>)[NODE_ID];
     if (cached != null) return cached;
 
@@ -388,7 +399,7 @@ function hashTreeKeys(
 
   for (const key of Object.keys(tree)) {
     const node = tree[key];
-    const mappedKey = resolveId(key);
+    const mappedKey = assignId(key, node);
 
     const children = node.children;
     if (children != null) {
