@@ -395,7 +395,7 @@ function hashTreeKeys(
     return id;
   };
 
-  const hashedTree: Record<string, FileTreeNode> = {};
+  const hashedTree: Record<string, FileTreeNode> = Object.create(null);
   const keys = Object.keys(tree);
 
   for (const key of keys) {
