@@ -76,6 +76,33 @@ function createBuildState(rootId: string): FileListToTreeBuildState {
   };
 }
 
+interface PathGraphInput {
+  isDirectory: boolean;
+  path: string;
+}
+
+/**
+ * Fast-paths already-normalized paths to avoid repeatedly scanning and slicing
+ * common benchmark inputs. Falls back to normalizeInputPath for edge cases
+ * like duplicate separators or leading separators.
+ */
+function resolvePathGraphInput(filePath: string): PathGraphInput | null {
+  if (filePath.length === 0) {
+    return null;
+  }
+
+  const isDirectory = filePath.charCodeAt(filePath.length - 1) === 47;
+  const hasLeadingSlash = filePath.charCodeAt(0) === 47;
+  const hasDuplicateSlash = filePath.includes('//');
+
+  if (!hasLeadingSlash && !hasDuplicateSlash) {
+    const path = isDirectory ? filePath.slice(0, -1) : filePath;
+    return path.length === 0 ? null : { isDirectory, path };
+  }
+
+  return normalizeInputPath(filePath);
+}
+
 /**
  * Walks every file path segment-by-segment, creating file nodes and tracking
  * parent-to-child folder relationships in a Map of Sets.
@@ -88,7 +115,7 @@ function buildPathGraph(
   const { tree, folderChildren } = state;
 
   for (const filePath of filePaths) {
-    const normalizedPath = normalizeInputPath(filePath);
+    const normalizedPath = resolvePathGraphInput(filePath);
     if (normalizedPath == null) continue;
 
     const { isDirectory, path } = normalizedPath;
@@ -105,7 +132,7 @@ function buildPathGraph(
 
       let parentChildren = folderChildren.get(parentPath);
       if (parentChildren == null) {
-        parentChildren = new Set();
+        parentChildren = new Set<string>();
         folderChildren.set(parentPath, parentChildren);
       }
       parentChildren.add(currentPath);
@@ -254,27 +281,54 @@ function hashTreeKeys(
   rootId: string
 ): Record<string, FileTreeNode> {
   const { getIdForKey } = createIdMaps(rootId);
-  const mapKey = (key: string) => getIdForKey(key);
   const hashedTree: Record<string, FileTreeNode> = {};
   const keys = Object.keys(tree).sort();
+  const mappedKeys = new Map<string, string>();
+
+  for (const key of keys) {
+    mappedKeys.set(key, getIdForKey(key));
+  }
+
+  const mapKnownKey = (key: string): string => {
+    return mappedKeys.get(key) ?? getIdForKey(key);
+  };
 
   for (const key of keys) {
     const node = tree[key];
-    const mappedKey = mapKey(key);
-    const nextNode: FileTreeNode = {
-      ...node,
-      ...(node.children != null && {
-        children: {
-          direct: node.children.direct.map(mapKey),
-          ...(node.children.flattened != null && {
-            flattened: node.children.flattened.map(mapKey),
-          }),
-        },
-      }),
-      ...(node.flattens != null && { flattens: node.flattens.map(mapKey) }),
-    };
+    const mappedKey = mapKnownKey(key);
 
-    hashedTree[mappedKey] = nextNode;
+    let children: FileTreeNode['children'];
+    if (node.children != null) {
+      const direct = new Array<string>(node.children.direct.length);
+      for (let index = 0; index < node.children.direct.length; index += 1) {
+        direct[index] = mapKnownKey(node.children.direct[index]);
+      }
+
+      const flattenedSource = node.children.flattened;
+      if (flattenedSource != null) {
+        const flattened = new Array<string>(flattenedSource.length);
+        for (let index = 0; index < flattenedSource.length; index += 1) {
+          flattened[index] = mapKnownKey(flattenedSource[index]);
+        }
+        children = { direct, flattened };
+      } else {
+        children = { direct };
+      }
+    }
+
+    let flattens: string[] | undefined;
+    if (node.flattens != null) {
+      flattens = new Array<string>(node.flattens.length);
+      for (let index = 0; index < node.flattens.length; index += 1) {
+        flattens[index] = mapKnownKey(node.flattens[index]);
+      }
+    }
+
+    hashedTree[mappedKey] = {
+      ...node,
+      ...(children != null && { children }),
+      ...(flattens != null && { flattens }),
+    };
   }
 
   return hashedTree;
