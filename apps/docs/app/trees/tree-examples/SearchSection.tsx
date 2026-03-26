@@ -48,8 +48,9 @@ const expandMatchesPrerenderedHTML = createSearchPrerenderedHTML(
 
 export function SearchSection() {
   return (
-    <TreeExampleSection id="search">
+    <TreeExampleSection>
       <FeatureHeader
+        id="search"
         title="Search and filter by name"
         description={
           <>

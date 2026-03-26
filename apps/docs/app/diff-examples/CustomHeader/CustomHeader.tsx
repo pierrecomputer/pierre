@@ -35,8 +35,9 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
   }
 
   return (
-    <div className="scroll-mt-20 space-y-5" id="custom-header">
+    <div className="space-y-5">
       <FeatureHeader
+        id="custom-header"
         title="Custom headers"
         description={
           <>

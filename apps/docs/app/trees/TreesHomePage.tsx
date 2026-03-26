@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { HeadingAnchors } from '../docs/HeadingAnchors';
 import { Hero } from '../Hero';
 import type { ProductId } from '../product-config';
 import {
@@ -31,6 +32,7 @@ export default function TreesHomePage() {
       <Header className="-mb-[1px]" />
       <Hero productId={PRODUCT_ID} />
 
+      <HeadingAnchors />
       <section className="space-y-12 pb-8">
         <FlatteningSection />
         <GitStatusSection />

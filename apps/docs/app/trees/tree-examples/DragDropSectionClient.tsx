@@ -44,8 +44,9 @@ export function DragDropSectionClient({
   }, []);
 
   return (
-    <TreeExampleSection id="drag-drop">
+    <TreeExampleSection>
       <FeatureHeader
+        id="drag-drop"
         title="Drag and drop"
         description={
           <>

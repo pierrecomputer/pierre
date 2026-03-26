@@ -15,8 +15,9 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
   const [newFile, setNewFile] = useState(prerenderedDiff.newFile);
 
   return (
-    <div className="scroll-mt-20 space-y-5" id="arbitrary">
+    <div className="space-y-5">
       <FeatureHeader
+        id="arbitrary"
         title="Diff arbitrary files"
         description={
           <>

@@ -87,8 +87,9 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
   );
 
   return (
-    <div className="scroll-mt-20 space-y-5" id="annotations">
+    <div className="space-y-5">
       <FeatureHeader
+        id="annotations"
         title="Comments & Annotations"
         description={
           <>

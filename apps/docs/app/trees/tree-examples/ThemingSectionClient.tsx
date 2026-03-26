@@ -180,8 +180,9 @@ export function ThemingSectionClient({
   }, [effectiveTheme, loadTheme]);
 
   return (
-    <TreeExampleSection id="theming">
+    <TreeExampleSection>
       <FeatureHeader
+        id="theming"
         title="Use Shiki themes"
         description={
           <>

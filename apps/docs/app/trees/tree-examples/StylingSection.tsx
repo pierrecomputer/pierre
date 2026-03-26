@@ -100,8 +100,9 @@ const synthwavePrerenderedHTML = preloadFileTree(
 
 export function StylingSection() {
   return (
-    <TreeExampleSection id="styling">
+    <TreeExampleSection>
       <FeatureHeader
+        id="styling"
         title="Style with CSS variables"
         description={
           <>

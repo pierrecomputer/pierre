@@ -71,9 +71,10 @@ export function DiffStyles({
   );
 
   return (
-    <div className="scroll-mt-20 space-y-5" id="styles">
+    <div className="space-y-5">
       <div className="space-y-4">
         <FeatureHeader
+          id="styles"
           title="Choose how changes are styled"
           description="Your diffs, your choice. Render changed lines with classic diff indicators (+/–), full-width background colors, or vertical bars. You can even highlight inline changes—character or word based—and toggle line wrapping, hide numbers, and more."
         />

@@ -75,8 +75,9 @@ const remappedPrerenderedHTML = preloadFileTree(
 
 export function CustomIconsSection() {
   return (
-    <TreeExampleSection id="custom-icons">
+    <TreeExampleSection>
       <FeatureHeader
+        id="custom-icons"
         title="Custom icons"
         description={
           <>

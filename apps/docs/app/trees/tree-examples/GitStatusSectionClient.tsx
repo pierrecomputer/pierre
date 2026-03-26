@@ -59,8 +59,9 @@ export function GitStatusSectionClient({
   } as CSSProperties;
 
   return (
-    <TreeExampleSection id="git-status">
+    <TreeExampleSection>
       <FeatureHeader
+        id="git-status"
         title="Show Git status on files"
         description={
           <>

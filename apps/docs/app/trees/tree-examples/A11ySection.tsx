@@ -33,8 +33,9 @@ const KEYBOARD_SHORTCUTS: { key: string; description: string }[] = [
 
 export function A11ySection() {
   return (
-    <TreeExampleSection id="a11y">
+    <TreeExampleSection>
       <FeatureHeader
+        id="a11y"
         title="Accessible from the jump"
         description="With built-in keyboard navigation, focus management, and ARIA roles (tree, treeitem, group), Trees are immediately accessible to all users. We've designed Trees to meet WCAG 2.1 expectations."
       />

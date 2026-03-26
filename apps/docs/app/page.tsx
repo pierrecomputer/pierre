@@ -26,6 +26,7 @@ import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
 import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
 import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
 import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
+import { HeadingAnchors } from './docs/HeadingAnchors';
 import { Hero } from './Hero';
 import type { ProductId } from './product-config';
 import Footer from '@/components/Footer';
@@ -41,6 +42,7 @@ export default function Home() {
       <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
         <Header className="-mb-[1px]" />
         <Hero productId={PRODUCT_ID} />
+        <HeadingAnchors />
         <section className="space-y-12 pb-8">
           <SplitUnifiedSection />
           <ShikiThemesSection />

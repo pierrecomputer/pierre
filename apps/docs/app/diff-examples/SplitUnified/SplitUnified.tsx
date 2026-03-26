@@ -19,8 +19,9 @@ export function SplitUnified({
     options?.diffStyle ?? 'split'
   );
   return (
-    <div className="scroll-mt-20 space-y-5" id="layout">
+    <div className="space-y-5">
       <FeatureHeader
+        id="layout"
         title="Diff layout styles"
         description="Choose from stacked (unified) or split (side-by-side). Both use CSS Grid and Shadow DOM under the hood, meaning fewer DOM nodes and faster rendering."
       />

@@ -41,8 +41,9 @@ const flattenedPrerenderedHTML = preloadFileTree(
 
 export function FlatteningSection() {
   return (
-    <TreeExampleSection id="flatten">
+    <TreeExampleSection>
       <FeatureHeader
+        id="flatten"
         title="Flatten empty directories"
         description={
           <>

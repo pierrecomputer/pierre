@@ -209,8 +209,9 @@ export function VirtualizationSection() {
   const { files, expandedItems } = virtualizationDemoData;
 
   return (
-    <TreeExampleSection id="virtualization">
+    <TreeExampleSection>
       <FeatureHeader
+        id="virtualization"
         title="Virtualized rendering"
         description={
           <>
