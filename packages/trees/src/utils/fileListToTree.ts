@@ -362,44 +362,44 @@ function buildFolderNodes(
  * Replaces human-readable path keys with deterministic hashed IDs and remaps
  * all children/flattens references to use the same hashed IDs.
  */
+// Symbol used to cache hashed IDs directly on tree nodes. Symbol properties
+// are invisible to Object.keys / Object.entries / JSON.stringify, so they
+// don't leak into the public output while giving O(1) identity-based access
+// that's faster than a string-keyed Map lookup.
+const NODE_ID: unique symbol = Symbol('id');
+
 function hashTreeKeys(
   tree: Record<string, FileTreeNode>,
   rootId: string
 ): Record<string, FileTreeNode> {
-  const idByKey = new Map<string, string>([[rootId, rootId]]);
+  // Resolve a path key to its hashed ID. Stores the result on the node via
+  // a Symbol property so repeated lookups (child references) skip the hash.
+  const resolveId = (key: string): string => {
+    const node = tree[key];
+    const cached = (node as Record<symbol, string>)[NODE_ID];
+    if (cached != null) return cached;
 
-  // Collision detection via usedIds Set is intentionally omitted. FNV-1a on
-  // typical file paths has an expected collision rate of ~0.03% for 15K keys
-  // (birthday paradox over 2^32 hash space). This saves ~30K Set operations
-  // per tree conversion while keeping IDs deterministic and content-based.
-  const getIdForKey = (key: string): string => {
-    const existing = idByKey.get(key);
-    if (existing != null) {
-      return existing;
-    }
-
-    const id = `n${hashId(key)}`;
-    idByKey.set(key, id);
+    const id = key === rootId ? rootId : `n${hashId(key)}`;
+    (node as Record<symbol, string>)[NODE_ID] = id;
     return id;
   };
 
   const hashedTree: Record<string, FileTreeNode> = Object.create(null);
-  const keys = Object.keys(tree);
 
-  for (const key of keys) {
+  for (const key of Object.keys(tree)) {
     const node = tree[key];
-    const mappedKey = getIdForKey(key);
+    const mappedKey = resolveId(key);
 
     const children = node.children;
     if (children != null) {
       for (let index = 0; index < children.direct.length; index += 1) {
-        children.direct[index] = getIdForKey(children.direct[index]);
+        children.direct[index] = resolveId(children.direct[index]);
       }
 
       const flattened = children.flattened;
       if (flattened != null) {
         for (let index = 0; index < flattened.length; index += 1) {
-          flattened[index] = getIdForKey(flattened[index]);
+          flattened[index] = resolveId(flattened[index]);
         }
       }
     }
@@ -407,7 +407,7 @@ function hashTreeKeys(
     const flattens = node.flattens;
     if (flattens != null) {
       for (let index = 0; index < flattens.length; index += 1) {
-        flattens[index] = getIdForKey(flattens[index]);
+        flattens[index] = resolveId(flattens[index]);
       }
     }
 
