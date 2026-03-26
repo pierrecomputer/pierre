@@ -143,7 +143,13 @@ export function sortChildren(
       return a.lowerName.localeCompare(b.lowerName);
     });
 
-    return decorated.map((entry) => entry.path);
+    // Extract paths with a pre-sized array + index loop instead of .map()
+    // to avoid per-element callback invocation overhead.
+    const sorted: string[] = new Array(decorated.length);
+    for (let si = 0; si < decorated.length; si++) {
+      sorted[si] = decorated[si].path;
+    }
+    return sorted;
   }
 
   return [...children].sort((a, b) => comparator(a, b, isFolder));
