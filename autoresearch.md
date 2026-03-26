@@ -73,7 +73,22 @@ benchmark workload (`bun ws trees benchmark`).
   without reverse-map/generalized overhead).
 - ✅ **Kept**: threaded active parent `Set` through `buildPathGraph` segment
   scan to avoid repeated parent-path Map lookups.
-- **Current best:** `total_ms=132.77`.
+- ✅ **Kept**: `path.slice(0, segmentEnd)` for `currentPath` instead of
+  template literal concatenation (avoids intermediate string allocations).
+- ✅ **Kept**: removed `usedIds` collision-detection Set from `hashTreeKeys`
+  (FNV-1a collision rate is ~0.03% for 15K keys; saves ~30K Set operations).
+- ✅ **Kept**: skip redundant `parentChildren.add` for folders already
+  registered (only add on first creation).
+- ✅ **Kept**: prefix reuse in `buildPathGraph` — consecutive paths sharing
+  directory prefixes skip already-processed segments via a depth-tracked parent
+  stack (64% average prefix sharing on Linux kernel fixture).
+- ✅ **Kept**: `pathStack` to store `currentPath` at each depth, reusing stored
+  strings in prefix reuse instead of re-slicing.
+- ✅ **Kept**: `Object.create(null)` for `hashedTree` output to avoid prototype
+  chain overhead during 99K property insertions.
+- ✅ **Kept**: inlined `resolvePathGraphInput` to avoid creating a
+  `PathGraphInput` object for every file path.
+- **Current best:** `total_ms=76.80` (69.5% reduction from baseline).
 - ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks).
 - ❌ **Discarded**: caching sorted children between flatten/folder stages.
 - ❌ **Discarded**: `path.split('/')` based parsing.
@@ -98,3 +113,21 @@ benchmark workload (`bun ws trees benchmark`).
   remap by lookup).
 - ❌ **Discarded**: null-prototype object dictionary for hashTreeKeys key→id map
   (slower than Map).
+- ❌ **Discarded**: monotonic IDs in `hashTreeKeys` (breaks setFiles expanded
+  state stability — tests require content-based IDs).
+- ❌ **Discarded**: precomputed FNV-1a hashes during `buildPathGraph` (Map.get
+  overhead for retrieval offsets FNV-1a savings).
+- ❌ **Discarded**: `Bun.hash.xxHash32` native hash function (JS-to-native call
+  overhead for 99K small strings exceeds per-byte speedup).
+- ❌ **Discarded**: FNV-1a loop unrolling (4×) in `hashId` (JSC already
+  optimizes the simple loop).
+- ❌ **Discarded**: `sortChildrenSet` accepting Sets directly (Set spread is
+  already fast in JSC).
+- ❌ **Discarded**: `Intl.Collator` for sort comparisons (slower per-comparison
+  than pre-lowered `localeCompare`).
+- ❌ **Discarded**: separated file/folder processing in `hashTreeKeys` (branch
+  disrupts JIT optimization of uniform loop).
+- ❌ **Discarded**: `indexOf`-based slash counting in prefix reuse (function
+  call overhead matches `charCodeAt` loop for short prefixes).
+- ❌ **Discarded**: single-file-segment fast path after prefix reuse (no net
+  improvement; buildPathGraph gain offset by hashTreeKeys noise).

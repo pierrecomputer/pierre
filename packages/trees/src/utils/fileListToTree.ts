@@ -1,8 +1,18 @@
 import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
 import { createLoaderUtils, type LoaderUtils } from './createLoaderUtils';
-import { hashId } from './hashId';
 import type { ChildrenSortOption } from './sortChildren';
+
+// FNV-1a hash inlined here (not imported from ./hashId) so the JIT compiler
+// can inline it into getIdForKey without cross-module barriers.
+const hashId = (input: string): string => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+};
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
 
 export interface FileListToTreeOptions {
