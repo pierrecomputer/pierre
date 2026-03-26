@@ -13,10 +13,19 @@ export type ChildrenComparator = (
 
 export type ChildrenSortOption = ChildrenComparator | false;
 
+const FLATTENED_PREFIX_LENGTH = FLATTENED_PREFIX.length;
+
+function isFlattenedPath(path: string): boolean {
+  return (
+    path.length >= FLATTENED_PREFIX_LENGTH &&
+    path.charCodeAt(0) === 102 &&
+    path.charCodeAt(1) === 58 &&
+    path.charCodeAt(2) === 58
+  );
+}
+
 function stripFlattenedPrefix(path: string): string {
-  return path.startsWith(FLATTENED_PREFIX)
-    ? path.slice(FLATTENED_PREFIX.length)
-    : path;
+  return isFlattenedPath(path) ? path.slice(FLATTENED_PREFIX_LENGTH) : path;
 }
 
 /**
@@ -33,7 +42,7 @@ function isFolderPath(
   path: string,
   isFolder: (path: string) => boolean
 ): boolean {
-  if (path.startsWith(FLATTENED_PREFIX)) {
+  if (isFlattenedPath(path)) {
     return true; // Flattened nodes are always folders
   }
   return isFolder(path);
@@ -71,8 +80,8 @@ export const defaultChildrenComparator: ChildrenComparator = (
   const aName = getNameFromPath(a);
   const bName = getNameFromPath(b);
 
-  const aIsDot = aName.startsWith('.');
-  const bIsDot = bName.startsWith('.');
+  const aIsDot = aName.charCodeAt(0) === 46;
+  const bIsDot = bName.charCodeAt(0) === 46;
 
   // Dot-prefixed before others
   if (aIsDot !== bIsDot) {
@@ -107,7 +116,7 @@ export function sortChildren(
       return {
         path,
         isFolder: isFolderPath(path, isFolder),
-        isDot: name.startsWith('.'),
+        isDot: name.charCodeAt(0) === 46,
         lowerName: name.toLowerCase(),
       };
     });

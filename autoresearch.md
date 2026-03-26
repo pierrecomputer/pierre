@@ -67,7 +67,7 @@ benchmark workload (`bun ws trees benchmark`).
 - ✅ **Kept**: default comparator fast path in `sortChildren` using
   decorate-sort-undecorate with precomputed sort keys.
 - ✅ **Kept**: cached/reused root child set lookup in `buildPathGraph`.
-- **Current best:** `total_ms=152.96`.
+- **Current best:** `total_ms=152.71`.
 - ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks).
 - ❌ **Discarded**: caching sorted children between flatten/folder stages.
 - ❌ **Discarded**: `path.split('/')` based parsing.
