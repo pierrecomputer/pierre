@@ -109,8 +109,10 @@ function buildPathGraph(
 
   // Track the previous path's folder-depth stack so consecutive paths that
   // share a directory prefix can skip re-scanning those segments. For each
-  // depth d, parentStack[d] holds the children Set of the folder at depth d.
+  // depth d, parentStack[d] holds the children Set and pathStack[d] holds
+  // the folder path string at that depth (reused to avoid re-slicing).
   const parentStack: Array<Set<string>> = [rootChildren];
+  const pathStack: string[] = [rootId];
   let prevPath = '';
   let prevDepth = 0;
 
@@ -175,7 +177,7 @@ function buildPathGraph(
     if (reuseDepth > 0) {
       segmentStart = commonPrefixLen;
       parentChildren = parentStack[reuseDepth];
-      currentPath = path.slice(0, commonPrefixLen - 1); // strip trailing '/'
+      currentPath = pathStack[reuseDepth]; // reuse stored path (no allocation)
       currentDepth = reuseDepth;
     } else {
       segmentStart = 0;
@@ -225,6 +227,7 @@ function buildPathGraph(
         }
         currentDepth++;
         parentStack[currentDepth] = nextParentChildren;
+        pathStack[currentDepth] = currentPath;
         parentChildren = nextParentChildren;
       }
 
