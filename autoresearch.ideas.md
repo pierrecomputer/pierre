@@ -4,43 +4,30 @@
   Map/Set operations during buildPathGraph (folderChildren keyed by number,
   parentChildren as Set<number>). Convert to path-based string keys only when
   emitting final tree nodes. Would eliminate string hashing overhead for ~200K+
-  Map/Set operations. Major refactor; needs path→numericId Map plus
-  idToPath array.
+  Map/Set operations. Major refactor; needs path→numericId Map plus idToPath
+  array. Estimated savings: ~5-8ms from faster Map/Set ops.
 
-- **Segment-level trie for folder children**: Instead of Map<string, Set<string>>
-  for folderChildren, use a trie where each node stores just its segment name.
-  Full paths are reconstructed on demand. Avoids full-path string keys in all
-  internal lookups. Very complex but could reduce string operation overhead
-  significantly.
+- **Incremental FNV-1a during buildPathGraph with Symbol storage**: Compute hash
+  values incrementally during segment scanning (extending from prefix hash via
+  hashStack). Store the raw hash number on each node via a Symbol property.
+  hashTreeKeys would then only need toString(36) + template literal per key,
+  avoiding the full FNV-1a loop. Estimated savings: ~4ms from fewer character
+  hash ops. Complex interaction with prefix reuse.
 
 ## Evaluated / Exhausted Approaches
 
-- ❌ **Precomputed hashes during buildPathGraph**: Map.get overhead for storing/
-  retrieving precomputed hashes offset the FNV-1a savings. The internal string
-  hash for Map lookup costs comparable time to the FNV-1a loop itself.
-
-- ❌ **Monotonic IDs**: 16ms faster hashTreeKeys but breaks setFiles expanded
-  state tracking (tests rely on content-based ID stability across file changes).
-
-- ❌ **Native hash functions (Bun.hash.xxHash32)**: JS-to-native call overhead
-  for 99K small strings exceeds per-byte speedup. FNV-1a in JIT-compiled JS is
-  faster for many small-string calls.
-
-- ❌ **Loop unrolling in hashId**: JSC already optimizes the simple loop. 4×
-  unrolling showed no measurable improvement.
-
-- ❌ **Intl.Collator for sorting**: Slower per-comparison than pre-lowered
-  localeCompare. The O(n) toLowerCase savings don't offset O(n log n) slower
-  comparisons.
-
-- ❌ **sortChildren fast paths (small arrays)**: Negligible savings. Decorated
-  sort is efficient even for 1-2 element arrays.
-
-- ❌ **Two-pass hashTreeKeys**: Pre-computing all IDs then remapping adds an
-  extra Map.get per key without saving work. Run 42 regressed ~7ms.
-
-- ❌ **Pre-sorting input paths**: Sort cost (~23ms) exceeds prefix-sharing gains.
-  Linux kernel fixture already has 64.4% natural locality.
-
-- ❌ **Cached/reused sorted children arrays**: Tried 5 times (runs 5, 30, 36,
-  43, and others). Cache management overhead consistently outweighs savings.
+- ❌ Precomputed hashes via Map (Map.get offsets savings)
+- ❌ Monotonic IDs (breaks expanded state stability)
+- ❌ Native hash functions / Bun.hash (JS-native call overhead)
+- ❌ FNV-1a loop unrolling (JSC already optimizes)
+- ❌ Intl.Collator for sorting (slower per-comparison)
+- ❌ sortChildren fast paths for small arrays (negligible)
+- ❌ Two-pass hashTreeKeys (extra Map.get per key)
+- ❌ Pre-sorting input paths (sort cost > sharing gains)
+- ❌ Cached/reused sorted children arrays (5 attempts, always regressed)
+- ❌ Segment-level trie (too complex for uncertain gain)
+- ❌ TextEncoder+Uint8Array hashing (encodeInto overhead)
+- ❌ sortChildrenSet accepting Sets directly (spread is fast)
+- ❌ Parallel-array sort (no benefit vs decorated objects in JSC)
+- ❌ Object.fromEntries batch output (tuple alloc offsets benefit)
+- ❌ Separated file/folder loops in hashTreeKeys (breaks JIT monomorphism)

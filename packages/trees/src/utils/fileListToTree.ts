@@ -106,6 +106,11 @@ function buildPathGraph(
   // the folder path string at that depth (reused to avoid re-slicing).
   const parentStack: Array<Set<string>> = [rootChildren];
   const pathStack: string[] = [rootId];
+  // Incremental FNV-1a hash state at each folder depth. Allows extending the
+  // hash with only the divergent suffix characters instead of rehashing the
+  // full path in hashTreeKeys. The final hashed ID string is stored on each
+  // node via the NODE_ID symbol during construction.
+  const hashStack: number[] = [0];
   let prevPath = '';
   let prevDepth = 0;
 
@@ -158,16 +163,26 @@ function buildPathGraph(
     let currentDepth: number;
     let hasEmptySegment = false;
 
+    let hashValue: number;
+    // Whether the next real segment needs a '/' separator in the hash.
+    // True when resuming from a prefix (separator between prefix and suffix);
+    // false at the start of a fresh path (first segment has no separator).
+    let hashNeedsSep: boolean;
+
     if (reuseDepth > 0) {
       segmentStart = commonPrefixLen;
       parentChildren = parentStack[reuseDepth];
       currentPath = pathStack[reuseDepth]; // reuse stored path (no allocation)
       currentDepth = reuseDepth;
+      hashValue = hashStack[reuseDepth]; // reuse stored hash state
+      hashNeedsSep = true;
     } else {
       segmentStart = 0;
       parentChildren = rootChildren;
       currentPath = undefined;
       currentDepth = 0;
+      hashValue = 0x811c9dc5; // FNV-1a offset basis
+      hashNeedsSep = false;
     }
 
     while (segmentStart < path.length) {
@@ -196,12 +211,30 @@ function buildPathGraph(
         currentPath = path.slice(0, segmentEnd);
       }
 
+      // Extend the running FNV-1a hash with '/' separator + segment characters.
+      // This produces the same value as hashId(currentPath) but avoids
+      // reprocessing the entire prefix for each deeper level.
+      if (hashNeedsSep) {
+        hashValue ^= 47; // '/'
+        hashValue = Math.imul(hashValue, 0x01000193);
+      }
+      hashNeedsSep = true;
+      for (let hi = segmentStart; hi < segmentEnd; hi++) {
+        hashValue ^= path.charCodeAt(hi);
+        hashValue = Math.imul(hashValue, 0x01000193);
+      }
+
       if (isFile) {
         parentChildren.add(currentPath);
-        tree[currentPath] ??= {
-          name: path.slice(segmentStart, segmentEnd),
-          path: currentPath,
-        };
+        if (tree[currentPath] == null) {
+          const node: FileTreeNode = {
+            name: path.slice(segmentStart, segmentEnd),
+            path: currentPath,
+          };
+          (node as Record<symbol, string>)[NODE_ID] =
+            `n${(hashValue >>> 0).toString(36)}`;
+          tree[currentPath] = node;
+        }
       } else {
         let nextParentChildren = folderChildren.get(currentPath);
         if (nextParentChildren == null) {
@@ -212,6 +245,7 @@ function buildPathGraph(
         currentDepth++;
         parentStack[currentDepth] = nextParentChildren;
         pathStack[currentDepth] = currentPath;
+        hashStack[currentDepth] = hashValue;
         parentChildren = nextParentChildren;
       }
 
