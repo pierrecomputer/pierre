@@ -1,7 +1,7 @@
 import rawStyles from '../style.css';
 import type { ThemeTypes } from '../types';
 
-export const LAYER_ORDER = `@layer base, theme, rendered, unsafe;`;
+const LAYER_ORDER = `@layer base, theme, rendered, unsafe;`;
 
 export function wrapCoreCSS(mainCSS: string) {
   return `${LAYER_ORDER}

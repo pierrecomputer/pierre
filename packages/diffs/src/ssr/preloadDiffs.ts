@@ -230,11 +230,9 @@ function processHunkResult<LAnnotation>(
   themeType: 'system' | 'light' | 'dark'
 ) {
   const children = [createStyleElement(hunkResult.css, true)];
-  if (hunkResult.themeStyles.trim() !== '') {
-    children.push(
-      createThemeStyleElement(wrapThemeCSS(hunkResult.themeStyles, themeType))
-    );
-  }
+  children.push(
+    createThemeStyleElement(wrapThemeCSS(hunkResult.themeStyles, themeType))
+  );
   if (unsafeCSS != null) {
     children.push(createStyleElement(unsafeCSS));
   }

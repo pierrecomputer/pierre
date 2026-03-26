@@ -99,8 +99,11 @@ async function FontStylesSection() {
 }
 
 async function CustomHeaderSection() {
-  const prerenderedDiff = await preloadMultiFileDiff(CUSTOM_HEADER_EXAMPLE);
-  return <CustomHeader prerenderedDiff={prerenderedDiff} />;
+  return (
+    <CustomHeader
+      prerenderedDiff={await preloadMultiFileDiff(CUSTOM_HEADER_EXAMPLE)}
+    />
+  );
 }
 
 async function CustomHunkSeparatorsSection() {
