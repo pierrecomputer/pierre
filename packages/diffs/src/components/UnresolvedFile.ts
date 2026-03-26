@@ -1,4 +1,4 @@
-import { DEFAULT_THEMES } from '../constants';
+import { DEFAULT_THEMES, UNSAFE_CSS_ATTRIBUTE } from '../constants';
 import type { MergeConflictActionTarget } from '../managers/InteractionManager';
 import { pluckInteractionOptions } from '../managers/InteractionManager';
 import type { HunksRenderResult } from '../renderers/DiffHunksRenderer';
@@ -24,6 +24,7 @@ import {
   type MergeConflictDiffAction,
   parseMergeConflictDiffFromFile,
 } from '../utils/parseMergeConflictDiffFromFile';
+import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { resolveConflict as resolveConflictDiff } from '../utils/resolveConflict';
 import { splitFileContents } from '../utils/splitFileContents';
 import type { WorkerPoolManager } from '../worker';
@@ -340,8 +341,9 @@ export class UnresolvedFile<
       actions,
       markerRows,
       lineAnnotations,
+      fileContainer,
+      prerenderedHTML,
       preventEmit = false,
-      ...rest
     } = props;
     const source = this.getOrComputeDiff({
       file,
@@ -349,16 +351,76 @@ export class UnresolvedFile<
       actions,
       markerRows,
     });
+    const { overflow = 'scroll' } = this.options;
     if (source == null) {
       return;
     }
+    prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
+    for (const element of fileContainer.shadowRoot?.children ?? []) {
+      if (element instanceof SVGElement) {
+        this.spriteSVG = element;
+        continue;
+      }
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+      if (element instanceof HTMLPreElement) {
+        this.pre = element;
+        for (const code of element.children) {
+          if (
+            !(code instanceof HTMLElement) ||
+            code.tagName.toLowerCase() !== 'code'
+          ) {
+            continue;
+          }
+          if ('deletions' in code.dataset) {
+            this.codeDeletions = code;
+          }
+          if ('additions' in code.dataset) {
+            this.codeAdditions = code;
+          }
+          if ('unified' in code.dataset) {
+            this.codeUnified = code;
+          }
+        }
+        continue;
+      }
+      if ('diffsHeader' in element.dataset) {
+        this.headerElement = element;
+        continue;
+      }
+      if (
+        element instanceof HTMLStyleElement &&
+        element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
+      ) {
+        this.unsafeCSSStyle = element;
+        continue;
+      }
+    }
+    if (this.pre != null) {
+      this.syncCodeNodesFromPre(this.pre);
+    }
     this.setActiveMergeConflictState(source.actions, source.markerRows);
-    super.hydrate({
-      ...rest,
-      fileDiff: source.fileDiff,
-      lineAnnotations,
-      preventEmit: true,
-    });
+    // If we have no pre tag, then we should render
+    if (this.pre == null) {
+      this.render({ ...props, preventEmit: true });
+    }
+    // Otherwise orchestrate our setup
+    else {
+      this.fileContainer = fileContainer;
+      delete this.pre.dataset.dehydrated;
+
+      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+      this.fileDiff = source.fileDiff;
+
+      this.hunksRenderer.hydrate(this.fileDiff);
+      this.renderAnnotations();
+      this.renderGutterUtility();
+      this.injectUnsafeCSS();
+      this.interactionManager.setup(this.pre);
+      this.resizeManager.setup(this.pre, overflow === 'wrap');
+    }
+
     this.renderMergeConflictActionSlots();
     if (!preventEmit) {
       this.emitPostRender();

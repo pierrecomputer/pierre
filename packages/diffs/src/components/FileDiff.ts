@@ -940,7 +940,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private renderAnnotations(): void {
+  protected renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       for (const { element } of this.annotationCache.values()) {
         element.remove();
@@ -984,7 +984,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private renderGutterUtility() {
+  protected renderGutterUtility(): void {
     const renderGutterUtility =
       this.options.renderGutterUtility ?? this.options.renderHoverUtility;
     if (this.fileContainer == null || renderGutterUtility == null) {
@@ -1065,7 +1065,7 @@ export class FileDiff<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private syncCodeNodesFromPre(pre: HTMLPreElement): void {
+  protected syncCodeNodesFromPre(pre: HTMLPreElement): void {
     this.codeUnified = undefined;
     this.codeDeletions = undefined;
     this.codeAdditions = undefined;
@@ -1150,7 +1150,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private injectUnsafeCSS(): void {
+  protected injectUnsafeCSS(): void {
     if (this.fileContainer?.shadowRoot == null) {
       return;
     }
