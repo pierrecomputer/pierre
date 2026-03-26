@@ -40,6 +40,7 @@ export function useTreeStateConfig({
   stateConfig,
   flattenEmptyDirectories,
 }: UseTreeStateConfigArgs): TreeConfigStateSlice {
+  'use no memo';
   return useMemo<TreeConfigStateSlice>(() => {
     // Maps a single path-or-id reference to an internal tree node ID.
     const mapId = (item: string): string => {

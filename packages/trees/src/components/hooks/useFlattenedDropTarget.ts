@@ -23,6 +23,7 @@ export interface UseFlattenedDropTargetResult {
 export function useFlattenedDropTarget(treeRef: {
   current: TreeInstance<FileTreeNode> | null;
 }): UseFlattenedDropTargetResult {
+  'use no memo';
   const flattenedDropSubfolderIdRef = useRef<string | null>(null);
   const flattenedHighlightRef = useRef<HTMLElement | null>(null);
 

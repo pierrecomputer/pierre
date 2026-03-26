@@ -45,6 +45,9 @@ function VirtualizedLinuxKernelCard() {
 
       const fileTree = new FileTree(
         {
+          // TODO: this shouldnt be in a different place than
+          // initialExpandedItems (this should probably move to
+          // the state config)
           initialFiles: linuxKernelFiles,
           virtualize: { threshold: 0 },
           flattenEmptyDirectories: true,
@@ -52,6 +55,7 @@ function VirtualizedLinuxKernelCard() {
           renaming: renamingOptions,
         },
         {
+          initialExpandedItems: linuxKernelAllFolders,
           onContextMenuOpen: (item, context) => {
             renderVanillaContextMenuSlot({
               slotElement,

@@ -80,6 +80,7 @@ export function useExpansionMigration({
   pendingRenameExpandedRemapRef,
   pendingRenameFocusRestoreRef,
 }: UseExpansionMigrationArgs): void {
+  'use no memo';
   // Keep the previous idToPath so we can translate stale expanded IDs -> paths
   // when files change (DnD or controlled update).
   const prevIdToPathRef = useRef<Map<string, string>>(idToPath);

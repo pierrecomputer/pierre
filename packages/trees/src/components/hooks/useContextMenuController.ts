@@ -56,6 +56,7 @@ export function useContextMenuController({
   files,
   idToPath,
 }: UseContextMenuControllerArgs): UseContextMenuControllerResult {
+  'use no memo';
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(
     null
   );

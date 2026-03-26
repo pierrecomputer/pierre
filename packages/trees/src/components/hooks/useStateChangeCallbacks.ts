@@ -27,6 +27,7 @@ export function useStateChangeCallbacks({
   pathToId,
   flattenEmptyDirectories,
 }: UseStateChangeCallbacksArgs): { selectionSnapshot: string } {
+  'use no memo';
   // --- Selection change callback ---
   const selectionSnapshotRef = useRef<string | null>(null);
   const selectionSnapshot = tree.getState().selectedItems?.join('|') ?? '';
