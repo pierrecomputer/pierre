@@ -107,15 +107,82 @@ function buildPathGraph(
   const { tree, folderChildren } = state;
   const rootChildren = folderChildren.get(rootId)!;
 
+  // Track the previous path's folder-depth stack so consecutive paths that
+  // share a directory prefix can skip re-scanning those segments. For each
+  // depth d, parentStack[d] holds the children Set of the folder at depth d.
+  const parentStack: Array<Set<string>> = [rootChildren];
+  let prevPath = '';
+  let prevDepth = 0;
+
   for (const filePath of filePaths) {
     const normalizedPath = resolvePathGraphInput(filePath);
     if (normalizedPath == null) continue;
 
     const { isDirectory, path } = normalizedPath;
+
+    // Compute the shared directory-prefix length with the previous path.
+    let commonPrefixLen = 0;
+    if (prevPath.length > 0) {
+      const scanLimit = Math.min(path.length, prevPath.length);
+      while (
+        commonPrefixLen < scanLimit &&
+        path.charCodeAt(commonPrefixLen) ===
+          prevPath.charCodeAt(commonPrefixLen)
+      ) {
+        commonPrefixLen++;
+      }
+      // Retreat to the last '/' so we land on a complete segment boundary.
+      while (
+        commonPrefixLen > 0 &&
+        path.charCodeAt(commonPrefixLen - 1) !== 47
+      ) {
+        commonPrefixLen--;
+      }
+    }
+
+    // Count complete folder segments in the common prefix and verify there
+    // are no empty segments (double slashes) which would make reuse unsafe.
+    let reuseDepth = 0;
+    if (commonPrefixLen > 0) {
+      let prevCharWasSlash = false;
+      for (let i = 0; i < commonPrefixLen; i++) {
+        if (path.charCodeAt(i) === 47) {
+          if (prevCharWasSlash) {
+            // Double slash in prefix: bail out of reuse.
+            reuseDepth = 0;
+            commonPrefixLen = 0;
+            break;
+          }
+          reuseDepth++;
+          prevCharWasSlash = true;
+        } else {
+          prevCharWasSlash = false;
+        }
+      }
+      if (reuseDepth > prevDepth) {
+        reuseDepth = 0;
+        commonPrefixLen = 0;
+      }
+    }
+
+    // Either resume from the deepest shared folder or start from root.
+    let segmentStart: number;
+    let parentChildren: Set<string>;
     let currentPath: string | undefined;
-    let parentChildren = rootChildren;
-    let segmentStart = 0;
+    let currentDepth: number;
     let hasEmptySegment = false;
+
+    if (reuseDepth > 0) {
+      segmentStart = commonPrefixLen;
+      parentChildren = parentStack[reuseDepth];
+      currentPath = path.slice(0, commonPrefixLen - 1); // strip trailing '/'
+      currentDepth = reuseDepth;
+    } else {
+      segmentStart = 0;
+      parentChildren = rootChildren;
+      currentPath = undefined;
+      currentDepth = 0;
+    }
 
     while (segmentStart < path.length) {
       const nextSlashIndex = path.indexOf('/', segmentStart);
@@ -152,13 +219,12 @@ function buildPathGraph(
       } else {
         let nextParentChildren = folderChildren.get(currentPath);
         if (nextParentChildren == null) {
-          // First encounter of this folder: register as child of parent.
-          // Subsequent encounters from other paths skip the Set.add since
-          // the folder was already registered with its parent.
           parentChildren.add(currentPath);
           nextParentChildren = new Set<string>();
           folderChildren.set(currentPath, nextParentChildren);
         }
+        currentDepth++;
+        parentStack[currentDepth] = nextParentChildren;
         parentChildren = nextParentChildren;
       }
 
@@ -167,6 +233,9 @@ function buildPathGraph(
       }
       segmentStart = nextSlashIndex + 1;
     }
+
+    prevPath = path;
+    prevDepth = currentDepth;
   }
 
   return state;
