@@ -143,9 +143,8 @@ function buildPathGraph(
         currentPath = path.slice(0, segmentEnd);
       }
 
-      parentChildren.add(currentPath);
-
       if (isFile) {
+        parentChildren.add(currentPath);
         tree[currentPath] ??= {
           name: path.slice(segmentStart, segmentEnd),
           path: currentPath,
@@ -153,6 +152,10 @@ function buildPathGraph(
       } else {
         let nextParentChildren = folderChildren.get(currentPath);
         if (nextParentChildren == null) {
+          // First encounter of this folder: register as child of parent.
+          // Subsequent encounters from other paths skip the Set.add since
+          // the folder was already registered with its parent.
+          parentChildren.add(currentPath);
           nextParentChildren = new Set<string>();
           folderChildren.set(currentPath, nextParentChildren);
         }
