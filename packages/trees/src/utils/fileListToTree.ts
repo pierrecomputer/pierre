@@ -280,7 +280,7 @@ function hashTreeKeys(
   tree: Record<string, FileTreeNode>,
   rootId: string
 ): Record<string, FileTreeNode> {
-  const { getIdForKey } = createIdMaps(rootId);
+  const { getIdForKey } = createIdMaps(rootId, { includeReverseMap: false });
   const hashedTree: Record<string, FileTreeNode> = {};
   const keys = Object.keys(tree).sort();
   const mappedKeys = new Map<string, string>();

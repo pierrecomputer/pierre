@@ -5,9 +5,17 @@ export type IdMaps = {
   getKeyForId: (id: string) => string | undefined;
 };
 
-export const createIdMaps = (rootId: string): IdMaps => {
+interface CreateIdMapsOptions {
+  includeReverseMap?: boolean;
+}
+
+export const createIdMaps = (
+  rootId: string,
+  options: CreateIdMapsOptions = {}
+): IdMaps => {
+  const includeReverseMap = options.includeReverseMap ?? true;
   const idByKey = new Map<string, string>();
-  const keyById = new Map<string, string>();
+  const keyById = includeReverseMap ? new Map<string, string>() : undefined;
   const usedIds = new Set<string>([rootId]);
 
   const getIdForKey = (key: string): string => {
@@ -30,7 +38,9 @@ export const createIdMaps = (rootId: string): IdMaps => {
 
     usedIds.add(id);
     idByKey.set(key, id);
-    keyById.set(id, key);
+    if (keyById != null) {
+      keyById.set(id, key);
+    }
     return id;
   };
 
@@ -38,11 +48,13 @@ export const createIdMaps = (rootId: string): IdMaps => {
     if (id === rootId) {
       return rootId;
     }
-    return keyById.get(id);
+    return keyById?.get(id);
   };
 
   idByKey.set(rootId, rootId);
-  keyById.set(rootId, rootId);
+  if (keyById != null) {
+    keyById.set(rootId, rootId);
+  }
 
   return { getIdForKey, getKeyForId };
 };
