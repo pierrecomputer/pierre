@@ -113,45 +113,38 @@ function buildPathGraph(
     if (path.length === 0) continue;
     const isDirectory = path.charCodeAt(path.length - 1) === 47;
 
-    // Compute the shared directory-prefix length with the previous path.
+    // Single-pass prefix comparison that simultaneously compares characters,
+    // counts segment boundaries (slashes), detects double slashes, and tracks
+    // the position of the last complete segment boundary. This replaces three
+    // separate loops (compare, back-up, count) with one unified scan.
     let commonPrefixLen = 0;
+    let reuseDepth = 0;
     if (prevPath.length > 0) {
       const scanLimit = Math.min(path.length, prevPath.length);
-      while (
-        commonPrefixLen < scanLimit &&
-        path.charCodeAt(commonPrefixLen) ===
-          prevPath.charCodeAt(commonPrefixLen)
-      ) {
-        commonPrefixLen++;
-      }
-      // Retreat to the last '/' so we land on a complete segment boundary.
-      while (
-        commonPrefixLen > 0 &&
-        path.charCodeAt(commonPrefixLen - 1) !== 47
-      ) {
-        commonPrefixLen--;
-      }
-    }
-
-    // Count complete folder segments in the common prefix and verify there
-    // are no empty segments (double slashes) which would make reuse unsafe.
-    let reuseDepth = 0;
-    if (commonPrefixLen > 0) {
+      let lastSlashPos = 0;
       let prevCharWasSlash = false;
-      for (let i = 0; i < commonPrefixLen; i++) {
-        if (path.charCodeAt(i) === 47) {
+      let ci = 0;
+
+      while (ci < scanLimit) {
+        const c = path.charCodeAt(ci);
+        if (c !== prevPath.charCodeAt(ci)) break;
+        ci++;
+        if (c === 47) {
           if (prevCharWasSlash) {
-            // Double slash in prefix: bail out of reuse.
+            // Double slash: reuse is unsafe.
             reuseDepth = 0;
-            commonPrefixLen = 0;
+            lastSlashPos = 0;
             break;
           }
           reuseDepth++;
+          lastSlashPos = ci; // position right after the '/'
           prevCharWasSlash = true;
         } else {
           prevCharWasSlash = false;
         }
       }
+
+      commonPrefixLen = lastSlashPos; // snap to segment boundary
       if (reuseDepth > prevDepth) {
         reuseDepth = 0;
         commonPrefixLen = 0;
