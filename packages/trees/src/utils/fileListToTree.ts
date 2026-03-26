@@ -288,38 +288,28 @@ function hashTreeKeys(
     const node = tree[key];
     const mappedKey = getIdForKey(key);
 
-    let children: FileTreeNode['children'];
-    if (node.children != null) {
-      const direct = new Array<string>(node.children.direct.length);
-      for (let index = 0; index < node.children.direct.length; index += 1) {
-        direct[index] = getIdForKey(node.children.direct[index]);
+    const children = node.children;
+    if (children != null) {
+      for (let index = 0; index < children.direct.length; index += 1) {
+        children.direct[index] = getIdForKey(children.direct[index]);
       }
 
-      const flattenedSource = node.children.flattened;
-      if (flattenedSource != null) {
-        const flattened = new Array<string>(flattenedSource.length);
-        for (let index = 0; index < flattenedSource.length; index += 1) {
-          flattened[index] = getIdForKey(flattenedSource[index]);
+      const flattened = children.flattened;
+      if (flattened != null) {
+        for (let index = 0; index < flattened.length; index += 1) {
+          flattened[index] = getIdForKey(flattened[index]);
         }
-        children = { direct, flattened };
-      } else {
-        children = { direct };
       }
     }
 
-    let flattens: string[] | undefined;
-    if (node.flattens != null) {
-      flattens = new Array<string>(node.flattens.length);
-      for (let index = 0; index < node.flattens.length; index += 1) {
-        flattens[index] = getIdForKey(node.flattens[index]);
+    const flattens = node.flattens;
+    if (flattens != null) {
+      for (let index = 0; index < flattens.length; index += 1) {
+        flattens[index] = getIdForKey(flattens[index]);
       }
     }
 
-    hashedTree[mappedKey] = {
-      ...node,
-      ...(children != null && { children }),
-      ...(flattens != null && { flattens }),
-    };
+    hashedTree[mappedKey] = node;
   }
 
   return hashedTree;
