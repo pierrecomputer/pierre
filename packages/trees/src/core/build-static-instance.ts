@@ -13,7 +13,16 @@ export const buildStaticInstance: InstanceBuilder = (
       // Loop goes in forward order, each features overwrite previous ones and wraps those in a prev() fn
       const definition = features[i][instanceType];
       if (definition == null) continue featureLoop;
-      methodLoop: for (const [key, method] of Object.entries(definition)) {
+
+      // Iterate with `for...in` to avoid allocating an `Object.entries` array
+      // for every instance finalization (hot when building very large trees).
+      const keyedDefinition = definition as Record<
+        string,
+        ((...args: any[]) => unknown) | undefined
+      >;
+      methodLoop: for (const key in keyedDefinition) {
+        if (!Object.hasOwn(keyedDefinition, key)) continue methodLoop;
+        const method = keyedDefinition[key];
         if (method == null) continue methodLoop;
         const prev = instance[key];
         // oxlint-disable-next-line typescript-eslint/no-explicit-any
