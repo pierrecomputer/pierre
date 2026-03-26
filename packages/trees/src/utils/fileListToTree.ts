@@ -105,6 +105,7 @@ function buildPathGraph(
 ): FileListToTreeBuildState {
   const state = createBuildState(rootId);
   const { tree, folderChildren } = state;
+  const rootChildren = folderChildren.get(rootId);
 
   for (const filePath of filePaths) {
     const normalizedPath = resolvePathGraphInput(filePath);
@@ -131,7 +132,12 @@ function buildPathGraph(
       const parentPath = currentPath ?? rootId;
       currentPath = currentPath != null ? `${currentPath}/${part}` : part;
 
-      let parentChildren = folderChildren.get(parentPath);
+      let parentChildren: Set<string> | undefined;
+      if (parentPath === rootId) {
+        parentChildren = rootChildren;
+      } else {
+        parentChildren = folderChildren.get(parentPath);
+      }
       if (parentChildren == null) {
         parentChildren = new Set<string>();
         folderChildren.set(parentPath, parentChildren);
