@@ -124,27 +124,40 @@ function CustomHeaderComponent({
   }, [fileDiff]);
 
   return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-3 px-2 py-1.5 text-white">
+    <div
+      className={`flex w-full flex-wrap items-center justify-between gap-3 p-2 text-white ${collapsed ? '' : 'mb-2 border-b border-white/25 '}`}
+    >
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? 'Expand file' : 'Collapse file'}
           aria-pressed={collapsed}
-          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-white/10 bg-white/5 text-white/70 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+          className={`inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-sm text-white/70 transition ${collapsed ? 'bg-white/15 hover:bg-white/20' : 'bg-[#F05138] hover:bg-[#F05138]/80 '}`}
         >
           <IconChevronSm
-            className={`transition-transform ${collapsed ? '-rotate-90' : ''}`}
+            className={`transition-transform ${collapsed ? 'block -rotate-90' : 'hidden'}`}
           />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="none"
+            viewBox="0 0 16 16"
+            className={`${collapsed ? 'hidden' : 'block'} text-white`}
+          >
+            <path
+              fill="currentColor"
+              d="M9.626 1c6.154 4.351 4.163 9.15 4.163 9.15s1.75 2.053 1.043 3.85c0 0-.722-1.258-1.933-1.258-1.166 0-1.852 1.258-4.2 1.258C3.473 14 1 9.46 1 9.46c4.71 3.221 7.926.94 7.926.94C6.804 9.117 2.29 2.993 2.29 2.993 6.22 6.473 7.919 7.39 7.919 7.39c-1.013-.872-3.857-5.132-3.857-5.132 2.275 2.396 6.796 5.739 6.796 5.739C12.14 4.297 9.626 1 9.626 1"
+            />
+          </svg>
         </button>
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center">
-            <span
-              className="truncate font-mono text-sm"
-              style={{ color: 'var(--diff-fg)' }}
-            >
-              AppConfig.swift
-            </span>
+          <div
+            className="-mb-0.5 truncate text-sm font-medium"
+            style={{ color: 'var(--diff-fg)' }}
+          >
+            AppConfig.swift
           </div>
           <div
             className="flex flex-wrap items-center gap-x-1 text-xs"
@@ -161,20 +174,18 @@ function CustomHeaderComponent({
       </div>
       <div className="flex items-center gap-2">
         <span
-          className="rounded-md border px-2.5 py-0.5 text-[11px] font-medium"
+          className="rounded-md px-2 py-0.5 text-[11px] font-medium"
           style={{
             color: 'var(--diffs-deletion-base)',
-            borderColor: 'var(--diffs-deletion-base)',
             backgroundColor: 'var(--diffs-bg-deletion)',
           }}
         >
           {deletions} deletions
         </span>
         <span
-          className="rounded-md border px-2.5 py-0.5 text-[11px] font-medium"
+          className="rounded-md px-2 py-0.5 text-[11px] font-medium"
           style={{
             color: 'var(--diffs-addition-base)',
-            borderColor: 'var(--diffs-addition-base)',
             backgroundColor: 'var(--diffs-bg-addition)',
           }}
         >
