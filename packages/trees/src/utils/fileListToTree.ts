@@ -273,8 +273,7 @@ function buildFolderNodes(
 
 /**
  * Replaces human-readable path keys with deterministic hashed IDs and remaps
- * all children/flattens references to use the same hashed IDs. Keys are sorted
- * before hashing so collision resolution stays stable across runtimes.
+ * all children/flattens references to use the same hashed IDs.
  */
 function hashTreeKeys(
   tree: Record<string, FileTreeNode>,
@@ -282,7 +281,7 @@ function hashTreeKeys(
 ): Record<string, FileTreeNode> {
   const { getIdForKey } = createIdMaps(rootId, { includeReverseMap: false });
   const hashedTree: Record<string, FileTreeNode> = {};
-  const keys = Object.keys(tree).sort();
+  const keys = Object.keys(tree);
   const mappedKeys = new Map<string, string>();
 
   for (const key of keys) {
