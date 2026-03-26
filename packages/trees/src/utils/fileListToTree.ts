@@ -2,7 +2,6 @@ import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
 import { createIdMaps } from './createIdMaps';
 import { createLoaderUtils, type LoaderUtils } from './createLoaderUtils';
-import { normalizeInputPath } from './normalizeInputPath';
 import type { ChildrenSortOption } from './sortChildren';
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
 
@@ -82,25 +81,18 @@ interface PathGraphInput {
 }
 
 /**
- * Fast-paths already-normalized paths to avoid repeatedly scanning and slicing
- * common benchmark inputs. Falls back to normalizeInputPath for edge cases
- * like duplicate separators or leading separators.
+ * Prepares file path input for graph building while preserving normalization
+ * behavior (ignored empty segments and trailing slash directory markers).
  */
 function resolvePathGraphInput(filePath: string): PathGraphInput | null {
   if (filePath.length === 0) {
     return null;
   }
 
-  const isDirectory = filePath.charCodeAt(filePath.length - 1) === 47;
-  const hasLeadingSlash = filePath.charCodeAt(0) === 47;
-  const hasDuplicateSlash = filePath.includes('//');
-
-  if (!hasLeadingSlash && !hasDuplicateSlash) {
-    const path = isDirectory ? filePath.slice(0, -1) : filePath;
-    return path.length === 0 ? null : { isDirectory, path };
-  }
-
-  return normalizeInputPath(filePath);
+  return {
+    isDirectory: filePath.charCodeAt(filePath.length - 1) === 47,
+    path: filePath,
+  };
 }
 
 /**
@@ -125,6 +117,15 @@ function buildPathGraph(
     while (segmentStart < path.length) {
       const nextSlashIndex = path.indexOf('/', segmentStart);
       const segmentEnd = nextSlashIndex === -1 ? path.length : nextSlashIndex;
+
+      if (segmentEnd === segmentStart) {
+        if (nextSlashIndex === -1) {
+          break;
+        }
+        segmentStart = nextSlashIndex + 1;
+        continue;
+      }
+
       const part = path.slice(segmentStart, segmentEnd);
       const isFile = !isDirectory && nextSlashIndex === -1;
       const parentPath = currentPath ?? rootId;
