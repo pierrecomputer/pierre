@@ -37,6 +37,9 @@ interface FileListToTreeBenchmarkResult {
 interface FileListToTreeBuildState {
   tree: Record<string, FileTreeNode>;
   folderChildren: Map<string, Set<string>>;
+  /** Ordered list of [key, node] pairs in insertion order, enabling
+   *  hashTreeKeys to iterate without Object.keys + tree[key] lookups. */
+  treeEntries: Array<[string, FileTreeNode]>;
 }
 
 interface FileListToTreeStageContext {
@@ -85,6 +88,7 @@ function createBuildState(rootId: string): FileListToTreeBuildState {
   return {
     tree: {},
     folderChildren,
+    treeEntries: [],
   };
 }
 
@@ -234,6 +238,7 @@ function buildPathGraph(
           (node as Record<symbol, string>)[NODE_ID] =
             `n${(hashValue >>> 0).toString(36)}`;
           tree[currentPath] = node;
+          state.treeEntries.push([currentPath, node]);
         }
       } else {
         let nextParentChildren = folderChildren.get(currentPath);
@@ -334,7 +339,7 @@ function buildFlattenedNodes(
         endpointDirectChildren
       );
 
-      tree[flattenedKey] = {
+      const flatNode: FileTreeNode = {
         name: flattenedName,
         path: flattenedKey,
         flattens: flattenedFolders,
@@ -345,6 +350,8 @@ function buildFlattenedNodes(
           }),
         },
       };
+      tree[flattenedKey] = flatNode;
+      state.treeEntries.push([flattenedKey, flatNode]);
     }
   }
 
@@ -383,7 +390,7 @@ function buildFolderNodes(
       name = lastSlashIndex >= 0 ? path.slice(lastSlashIndex + 1) : path;
     }
 
-    tree[path] = {
+    const folderNode: FileTreeNode = {
       name,
       path,
       children: {
@@ -391,6 +398,8 @@ function buildFolderNodes(
         ...(flattenedChildren != null && { flattened: flattenedChildren }),
       },
     };
+    tree[path] = folderNode;
+    state.treeEntries.push([path, folderNode]);
   }
 }
 
@@ -406,10 +415,11 @@ const NODE_ID: unique symbol = Symbol('id');
 
 function hashTreeKeys(
   tree: Record<string, FileTreeNode>,
+  treeEntries: Array<[string, FileTreeNode]>,
   rootId: string
 ): Record<string, FileTreeNode> {
-  // Compute and cache an ID on a node. Used for child/flattens references
-  // where we need to look up the target node by its path key.
+  // Resolve a path key to its hashed ID via the target node's cached
+  // NODE_ID symbol. For child/flattens references where we only have a key.
   const resolveId = (key: string): string => {
     const node = tree[key];
     const cached = (node as Record<symbol, string>)[NODE_ID];
@@ -420,22 +430,22 @@ function hashTreeKeys(
     return id;
   };
 
-  // Compute and cache an ID on a node we already hold a reference to.
-  // Avoids the redundant tree[key] property lookup that resolveId would do.
-  const assignId = (key: string, node: FileTreeNode): string => {
-    const cached = (node as Record<symbol, string>)[NODE_ID];
-    if (cached != null) return cached;
-
-    const id = key === rootId ? rootId : `n${hashId(key)}`;
-    (node as Record<symbol, string>)[NODE_ID] = id;
-    return id;
-  };
-
   const hashedTree: Record<string, FileTreeNode> = Object.create(null);
 
-  for (const key of Object.keys(tree)) {
-    const node = tree[key];
-    const mappedKey = assignId(key, node);
+  // Iterate the pre-built entries array instead of Object.keys(tree) +
+  // tree[key] lookups. This avoids one ~99K array allocation and ~99K
+  // redundant hash-table property accesses.
+  for (let ei = 0; ei < treeEntries.length; ei++) {
+    const entry = treeEntries[ei];
+    const key = entry[0];
+    const node = entry[1];
+
+    // Read cached ID (pre-computed for files, compute for folders/flattened).
+    let mappedKey = (node as Record<symbol, string>)[NODE_ID];
+    if (mappedKey == null) {
+      mappedKey = key === rootId ? rootId : `n${hashId(key)}`;
+      (node as Record<symbol, string>)[NODE_ID] = mappedKey;
+    }
 
     const children = node.children;
     if (children != null) {
@@ -488,7 +498,7 @@ function fileListToTreeInternal(
   });
 
   return timeStage('hashTreeKeys', recorder, () =>
-    hashTreeKeys(state.tree, rootId)
+    hashTreeKeys(state.tree, state.treeEntries, rootId)
   );
 }
 
