@@ -115,12 +115,14 @@ function buildPathGraph(
     let currentPath: string | undefined;
     let parentChildren = rootChildren;
     let segmentStart = 0;
+    let hasEmptySegment = false;
 
     while (segmentStart < path.length) {
       const nextSlashIndex = path.indexOf('/', segmentStart);
       const segmentEnd = nextSlashIndex === -1 ? path.length : nextSlashIndex;
 
       if (segmentEnd === segmentStart) {
+        hasEmptySegment = true;
         if (nextSlashIndex === -1) {
           break;
         }
@@ -128,14 +130,26 @@ function buildPathGraph(
         continue;
       }
 
-      const part = path.slice(segmentStart, segmentEnd);
       const isFile = !isDirectory && nextSlashIndex === -1;
-      currentPath = currentPath != null ? `${currentPath}/${part}` : part;
+
+      // For normalized paths (no empty segments), extract currentPath as a
+      // prefix slice of the original string instead of concatenating
+      // `${currentPath}/${part}`. This avoids creating an intermediate segment
+      // string and a new concatenated string on every folder level.
+      if (hasEmptySegment) {
+        const part = path.slice(segmentStart, segmentEnd);
+        currentPath = currentPath != null ? `${currentPath}/${part}` : part;
+      } else {
+        currentPath = path.slice(0, segmentEnd);
+      }
 
       parentChildren.add(currentPath);
 
       if (isFile) {
-        tree[currentPath] ??= { name: part, path: currentPath };
+        tree[currentPath] ??= {
+          name: path.slice(segmentStart, segmentEnd),
+          path: currentPath,
+        };
       } else {
         let nextParentChildren = folderChildren.get(currentPath);
         if (nextParentChildren == null) {

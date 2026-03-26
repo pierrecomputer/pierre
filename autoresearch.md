@@ -67,7 +67,13 @@ benchmark workload (`bun ws trees benchmark`).
 - ✅ **Kept**: default comparator fast path in `sortChildren` using
   decorate-sort-undecorate with precomputed sort keys.
 - ✅ **Kept**: cached/reused root child set lookup in `buildPathGraph`.
-- **Current best:** `total_ms=143.55`.
+- ✅ **Kept**: charCode-based flattened/dot detection in `sortChildren` hot
+  path.
+- ✅ **Kept**: inlined hashTreeKeys-specific key→id mapper (mirrors createIdMaps
+  without reverse-map/generalized overhead).
+- ✅ **Kept**: threaded active parent `Set` through `buildPathGraph` segment
+  scan to avoid repeated parent-path Map lookups.
+- **Current best:** `total_ms=132.77`.
 - ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks).
 - ❌ **Discarded**: caching sorted children between flatten/folder stages.
 - ❌ **Discarded**: `path.split('/')` based parsing.
@@ -86,3 +92,9 @@ benchmark workload (`bun ws trees benchmark`).
 - ❌ **Discarded**: heavier flattened-chain cache object in `createLoaderUtils`.
 - ❌ **Discarded**: single-pass inlined flattened/name detection rewrite inside
   `sortChildren` fast path.
+- ❌ **Discarded**: reusing cached children arrays in flattened/folder node
+  sorting (consistently regressed, sometimes severely).
+- ❌ **Discarded**: two-pass hashTreeKeys remap (precompute all key IDs, then
+  remap by lookup).
+- ❌ **Discarded**: null-prototype object dictionary for hashTreeKeys key→id map
+  (slower than Map).
