@@ -326,7 +326,16 @@ const instance = new FileDiff({
   // RENDER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
-  // Render custom content in the file header (after +/- stats)
+  // Diff header render callbacks receive FileDiffMetadata directly.
+  // This includes renderCustomHeader, renderHeaderPrefix, and
+  // renderHeaderMetadata.
+  // renderHeaderPrefix renders at the beginning of the built-in header,
+  // before the filename and icon.
+  // renderHeaderMetadata renders at the end of the built-in header,
+  // after the +/- line metrics.
+  // renderCustomHeader replaces the built-in header content entirely.
+  //
+  // Render custom content at the end of the built-in header.
   renderHeaderMetadata(fileDiff) {
     const span = document.createElement('span');
     span.textContent = fileDiff.name;

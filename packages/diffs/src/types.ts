@@ -420,16 +420,15 @@ export type FileHeaderRenderMode = 'default' | 'custom';
 
 export type RenderHeaderMetadataCallback = (
   fileDiff: FileDiffMetadata
-) => Element | null | undefined | string | number;
+) => Element | string | number | null | undefined;
 
 export type RenderHeaderPrefixCallback = (
   fileDiff: FileDiffMetadata
-) => Element | null | undefined | string | number;
+) => Element | string | number | null | undefined;
 
 export type RenderFileMetadata = (
   file: FileContents
-  // REVIEW: We should add the instance as an argument
-) => Element | null | undefined | string | number;
+) => Element | string | number | null | undefined;
 
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 
