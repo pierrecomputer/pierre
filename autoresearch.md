@@ -63,7 +63,11 @@ benchmark workload (`bun ws trees benchmark`).
 - ✅ **Kept**: mutated node children/flattens arrays in-place during hash remap
   instead of allocating replacement arrays/objects.
 - ✅ **Kept**: stability rerun with no code changes confirmed lower noise-floor
-  best. **Current best:** `total_ms=162.13`.
+  best.
+- ✅ **Kept**: default comparator fast path in `sortChildren` using
+  decorate-sort-undecorate with precomputed sort keys.
+- ✅ **Kept**: cached/reused root child set lookup in `buildPathGraph`.
+- **Current best:** `total_ms=152.96`.
 - ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks).
 - ❌ **Discarded**: caching sorted children between flatten/folder stages.
 - ❌ **Discarded**: `path.split('/')` based parsing.
@@ -71,3 +75,10 @@ benchmark workload (`bun ws trees benchmark`).
 - ❌ **Discarded**: object-based mapped-key cache in `hashTreeKeys`.
 - ❌ **Discarded**: trimming trailing slash in preprocessing.
 - ❌ **Discarded**: null-prototype tree records (`Object.create(null)`).
+- ❌ **Discarded**: replacing `Object.keys` iteration with `for..in` in
+  `hashTreeKeys`.
+- ❌ **Discarded**: array-first child accumulation with post-build dedupe (in
+  place of `Set.add` per edge).
+- ❌ **Discarded**: pre-hashing references during folder/flatten stages to
+  shrink `hashTreeKeys` (made `buildFolderNodes` much slower).
+- ❌ **Discarded**: additional root-branch restructuring in `buildPathGraph`.

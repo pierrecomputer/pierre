@@ -167,9 +167,17 @@ function createStageContext(
   const isFolder = (path: string): boolean => folderChildren.has(path);
   const sortChildrenArray = (children: string[]): string[] =>
     sortChildren(children, isFolder, sortComparator);
+  const childrenArrayCache = new Map<string, string[]>();
   const getChildrenArray = (path: string): string[] => {
+    const cached = childrenArrayCache.get(path);
+    if (cached != null) {
+      return cached;
+    }
+
     const children = folderChildren.get(path);
-    return children != null ? [...children] : [];
+    const childArray = children != null ? [...children] : [];
+    childrenArrayCache.set(path, childArray);
+    return childArray;
   };
 
   return {
