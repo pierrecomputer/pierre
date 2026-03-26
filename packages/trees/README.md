@@ -205,6 +205,7 @@ From `packages/trees`:
 
 ```bash
 bun test
+bun run benchmark
 bun run test:e2e
 bun run tsc
 bun run build
@@ -213,6 +214,56 @@ bun run build
 Testing policy and E2E guidance:
 
 - `test/TESTING.md`
+
+## Benchmarking
+
+The `trees` package includes a dedicated `fileListToTree` benchmark runner:
+
+```bash
+bun ws trees benchmark
+```
+
+Use `--case` to focus on a subset while iterating locally:
+
+```bash
+bun ws trees benchmark -- --case=deep
+bun ws trees benchmark -- --case=linux --runs=10 --warmup-runs=2
+```
+
+The default suite mixes synthetic shapes with two real fixtures so changes are
+measured against both controlled and realistic inputs:
+
+- `tiny-flat`, `small-mixed`, `medium-balanced`, `large-wide`,
+  `large-deep-chain`, `large-monorepo-shaped`, and `explicit-directories`
+- `fixture-linux-kernel-files`, loaded from
+  `apps/docs/app/trees-dev/linux-files.json`
+- `fixture-pierrejs-repo-snapshot`, a fixed snapshot of this repo at
+  `packages/trees/scripts/fixtures/fileListToTree-monorepo-snapshot.txt`
+
+The benchmark records:
+
+- end-to-end `fileListToTree` timing
+- stage timings for `buildPathGraph`, `buildFlattenedNodes`, `buildFolderNodes`,
+  and `hashTreeKeys`
+- a deterministic checksum per case so behavior changes are visible alongside
+  timing changes
+
+Use `--json` when you want machine-readable output or a saved baseline:
+
+```bash
+bun ws trees benchmark -- --json > tmp/fileListToTree-baseline.json
+```
+
+Use `--compare` to run the current code against a saved JSON baseline:
+
+```bash
+bun ws trees benchmark -- --compare tmp/fileListToTree-baseline.json
+bun ws trees benchmark -- --case=linux --compare tmp/fileListToTree-baseline.json --json
+```
+
+`--compare` matches cases by name, reports median deltas, and flags checksum
+mismatches. That makes it useful both for performance regressions and for
+catching accidental behavior changes while refactoring.
 
 # Credits and Acknolwedgements
 
