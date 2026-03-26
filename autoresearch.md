@@ -49,4 +49,11 @@ benchmark workload (`bun ws trees benchmark`).
 
 ## What's Been Tried
 
-- Baseline pending.
+- **Baseline** (`total_ms=251.52`): `buildPathGraph` + `hashTreeKeys` dominate.
+- ✅ **Kept**: fast-path for already-normalized input paths in `buildPathGraph`
+  (fallback to `normalizeInputPath` for edge cases), plus lower-overhead
+  remapping loops in `hashTreeKeys`. Best so far: `total_ms=218.41`.
+- ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks)
+  regressed overall runtime.
+- ❌ **Discarded**: caching sorted children between flatten/folder stages
+  slightly helped those stages but worsened aggregate runtime.
