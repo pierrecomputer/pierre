@@ -36,8 +36,8 @@ export function createPreWrapperProperties({
         ? diffIndicators
         : undefined,
     tabIndex: 0,
+    style: `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`,
   };
-  properties.style += `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`;
 
   return properties;
 }
