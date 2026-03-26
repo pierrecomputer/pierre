@@ -74,8 +74,6 @@ exports[`createFileHeaderElement renders default file header AST 1`] = `
   "properties": {
     "data-change-type": undefined,
     "data-diffs-header": "default",
-    "data-theme-type": "light",
-    "style": "--test: 1;",
   },
   "tagName": "div",
   "type": "element",
@@ -97,8 +95,6 @@ exports[`createFileHeaderElement renders custom file header AST 1`] = `
   "properties": {
     "data-change-type": undefined,
     "data-diffs-header": "custom",
-    "data-theme-type": "light",
-    "style": "--test: 1;",
   },
   "tagName": "div",
   "type": "element",

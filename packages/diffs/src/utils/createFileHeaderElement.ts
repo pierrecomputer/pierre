@@ -10,7 +10,6 @@ import type {
   FileContents,
   FileDiffMetadata,
   FileHeaderRenderMode,
-  ThemeTypes,
 } from '../types';
 import { getIconForType } from './getIconForType';
 import {
@@ -21,23 +20,17 @@ import {
 
 export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
-  themeStyles: string;
-  themeType: ThemeTypes;
   mode: FileHeaderRenderMode;
 }
 
 export function createFileHeaderElement({
   fileOrDiff,
-  themeStyles,
-  themeType,
   mode,
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-diffs-header': mode,
     'data-change-type': fileDiff?.type,
-    'data-theme-type': themeType !== 'system' ? themeType : undefined,
-    style: themeStyles,
   };
 
   return createHastElement({

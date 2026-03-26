@@ -22,6 +22,7 @@ import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
+  AppliedThemeStyleCache,
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
@@ -40,10 +41,7 @@ import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapThemeCSS, wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
-import {
-  syncContainerThemeState,
-  upsertHostThemeStyle,
-} from '../utils/hostTheme';
+import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
@@ -125,7 +123,7 @@ export class File<LAnnotation = undefined> {
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
-  protected appliedThemeCSS: string | undefined;
+  protected appliedThemeCSS: AppliedThemeStyleCache | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
   protected errorWrapper: HTMLElement | undefined;
@@ -192,35 +190,16 @@ export class File<LAnnotation = undefined> {
   }
 
   public setThemeType(themeType: ThemeTypes): void {
-    const currentThemeType = this.options.themeType ?? 'system';
-    if (currentThemeType === themeType) {
+    if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
     this.mergeOptions({ themeType });
-    this.fileRenderer.setThemeType(themeType);
-    if (this.fileContainer != null) {
-      syncContainerThemeState(this.fileContainer, themeType);
-    }
-
-    if (this.headerElement != null) {
-      if (themeType === 'system') {
-        delete this.headerElement.dataset.themeType;
-      } else {
-        this.headerElement.dataset.themeType = themeType;
-      }
-    }
-
-    // Update pre element theme mode
-    if (this.pre != null) {
-      switch (themeType) {
-        case 'system':
-          delete this.pre.dataset.themeType;
-          break;
-        case 'light':
-        case 'dark':
-          this.pre.dataset.themeType = themeType;
-          break;
-      }
+    if (this.fileContainer != null && this.appliedThemeCSS != null) {
+      this.applyThemeState(
+        this.fileContainer,
+        this.appliedThemeCSS.themeStyles,
+        themeType
+      );
     }
   }
 
@@ -297,7 +276,10 @@ export class File<LAnnotation = undefined> {
         element.hasAttribute(THEME_CSS_ATTRIBUTE)
       ) {
         this.themeCSSStyle = element;
-        this.appliedThemeCSS = element.textContent ?? undefined;
+        this.appliedThemeCSS = {
+          themeStyles: this.themeCSSStyle.textContent,
+          themeType: this.options.themeType ?? 'system',
+        };
         continue;
       }
       if (
@@ -320,9 +302,8 @@ export class File<LAnnotation = undefined> {
     // Otherwise orchestrate our setup
     else {
       const { file, lineAnnotations } = props;
-      const { overflow = 'scroll', themeType = 'system' } = this.options;
+      const { overflow = 'scroll' } = this.options;
       this.fileContainer = fileContainer;
-      syncContainerThemeState(fileContainer, themeType);
       delete this.pre.dataset.dehydrated;
 
       this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
@@ -406,7 +387,6 @@ export class File<LAnnotation = undefined> {
       fileContainer,
       containerWrapper
     );
-    syncContainerThemeState(fileContainer, this.options.themeType ?? 'system');
 
     if (collapsed) {
       this.removeRenderedCode();
@@ -418,7 +398,11 @@ export class File<LAnnotation = undefined> {
           EMPTY_RENDER_RANGE
         );
         if (fileResult != null) {
-          this.applyThemeState(fileContainer, fileResult.themeStyles);
+          this.applyThemeState(
+            fileContainer,
+            fileResult.themeStyles,
+            this.options.themeType ?? 'system'
+          );
         }
         if (fileResult?.headerAST != null) {
           this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
@@ -456,7 +440,11 @@ export class File<LAnnotation = undefined> {
           }
           return false;
         }
-        this.applyThemeState(fileContainer, fileResult.themeStyles);
+        this.applyThemeState(
+          fileContainer,
+          fileResult.themeStyles,
+          this.options.themeType ?? 'system'
+        );
         if (fileResult.headerAST != null) {
           this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
         }
@@ -674,30 +662,27 @@ export class File<LAnnotation = undefined> {
     this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
   }
 
-  private applyThemeState(container: HTMLElement, themeStyles: string): void {
-    syncContainerThemeState(container, this.options.themeType ?? 'system');
+  private applyThemeState(
+    container: HTMLElement,
+    themeStyles: string,
+    themeType: ThemeTypes
+  ): void {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
-    const wrappedThemeCSS = wrapThemeCSS(themeStyles);
-    const referenceNode =
-      this.unsafeCSSStyle?.parentNode === shadowRoot
-        ? this.unsafeCSSStyle
-        : null;
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
-      this.appliedThemeCSS === wrappedThemeCSS &&
-      this.themeCSSStyle.nextSibling === referenceNode
+      this.appliedThemeCSS?.themeStyles === themeStyles &&
+      this.appliedThemeCSS.themeType === themeType
     ) {
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
       shadowRoot,
-      current: this.themeCSSStyle,
-      themeStyles,
-      before: referenceNode,
+      currentNode: this.themeCSSStyle,
+      themeCSS: wrapThemeCSS(themeStyles, themeType),
     });
     this.appliedThemeCSS =
-      this.themeCSSStyle != null ? wrappedThemeCSS : undefined;
+      this.themeCSSStyle != null ? { themeStyles, themeType } : undefined;
   }
 
   private applyFullRender(result: FileRenderResult, pre: HTMLPreElement): void {
@@ -1121,20 +1106,14 @@ export class File<LAnnotation = undefined> {
 
   private applyPreNodeAttributes(
     pre: HTMLPreElement,
-    { totalLines, themeStyles, baseThemeType }: FileRenderResult
+    { totalLines }: FileRenderResult
   ): void {
-    const {
-      overflow = 'scroll',
-      themeType = 'system',
-      disableLineNumbers = false,
-    } = this.options;
+    const { overflow = 'scroll', disableLineNumbers = false } = this.options;
     const preProperties: PrePropertiesConfig = {
       type: 'file',
       split: false,
-      themeStyles,
       overflow,
       disableLineNumbers,
-      themeType: baseThemeType ?? themeType,
       diffIndicators: 'none',
       disableBackground: true,
       totalLines,

@@ -28,6 +28,7 @@ import {
 } from '../renderers/DiffHunksRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
+  AppliedThemeStyleCache,
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -54,10 +55,7 @@ import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapThemeCSS, wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
-import {
-  syncContainerThemeState,
-  upsertHostThemeStyle,
-} from '../utils/hostTheme';
+import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -177,7 +175,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
-  protected appliedThemeCSS: string | undefined;
+  protected appliedThemeCSS: AppliedThemeStyleCache | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
 
@@ -372,30 +370,12 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
-    this.hunksRenderer.setThemeType(themeType);
-    if (this.fileContainer != null) {
-      syncContainerThemeState(this.fileContainer, themeType);
-    }
-
-    if (this.headerElement != null) {
-      if (themeType === 'system') {
-        delete this.headerElement.dataset.themeType;
-      } else {
-        this.headerElement.dataset.themeType = themeType;
-      }
-    }
-
-    // Update pre element theme mode
-    if (this.pre != null) {
-      switch (themeType) {
-        case 'system':
-          delete this.pre.dataset.themeType;
-          break;
-        case 'light':
-        case 'dark':
-          this.pre.dataset.themeType = themeType;
-          break;
-      }
+    if (this.fileContainer != null && this.appliedThemeCSS != null) {
+      this.applyThemeState(
+        this.fileContainer,
+        this.appliedThemeCSS.themeStyles,
+        themeType
+      );
     }
   }
 
@@ -528,7 +508,10 @@ export class FileDiff<LAnnotation = undefined> {
         element.hasAttribute(THEME_CSS_ATTRIBUTE)
       ) {
         this.themeCSSStyle = element;
-        this.appliedThemeCSS = element.textContent ?? undefined;
+        this.appliedThemeCSS = {
+          themeStyles: this.themeCSSStyle.textContent,
+          themeType: this.options.themeType ?? 'system',
+        };
         continue;
       }
       if (
@@ -550,10 +533,6 @@ export class FileDiff<LAnnotation = undefined> {
     else {
       const { lineAnnotations, oldFile, newFile, fileDiff } = props;
       this.fileContainer = fileContainer;
-      syncContainerThemeState(
-        fileContainer,
-        this.options.themeType ?? 'system'
-      );
       delete this.pre.dataset.dehydrated;
 
       this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
@@ -714,7 +693,6 @@ export class FileDiff<LAnnotation = undefined> {
       fileContainer,
       containerWrapper
     );
-    syncContainerThemeState(fileContainer, themeType);
 
     if (collapsed) {
       this.removeRenderedCode();
@@ -726,7 +704,11 @@ export class FileDiff<LAnnotation = undefined> {
           EMPTY_RENDER_RANGE
         );
         if (hunksResult != null) {
-          this.applyThemeState(fileContainer, hunksResult.themeStyles);
+          this.applyThemeState(
+            fileContainer,
+            hunksResult.themeStyles,
+            themeType
+          );
         }
         if (hunksResult?.headerElement != null) {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
@@ -778,7 +760,7 @@ export class FileDiff<LAnnotation = undefined> {
           return false;
         }
 
-        this.applyThemeState(fileContainer, hunksResult.themeStyles);
+        this.applyThemeState(fileContainer, hunksResult.themeStyles, themeType);
 
         if (hunksResult.headerElement != null) {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
@@ -1255,30 +1237,27 @@ export class FileDiff<LAnnotation = undefined> {
     this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
   }
 
-  private applyThemeState(container: HTMLElement, themeStyles: string): void {
-    syncContainerThemeState(container, this.options.themeType ?? 'system');
+  private applyThemeState(
+    container: HTMLElement,
+    themeStyles: string,
+    themeType: ThemeTypes
+  ): void {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
-    const wrappedThemeCSS = wrapThemeCSS(themeStyles);
-    const referenceNode =
-      this.unsafeCSSStyle?.parentNode === shadowRoot
-        ? this.unsafeCSSStyle
-        : null;
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
-      this.appliedThemeCSS === wrappedThemeCSS &&
-      this.themeCSSStyle.nextSibling === referenceNode
+      this.appliedThemeCSS?.themeStyles === themeStyles &&
+      this.appliedThemeCSS.themeType === themeType
     ) {
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
       shadowRoot,
-      current: this.themeCSSStyle,
-      themeStyles,
-      before: referenceNode,
+      currentNode: this.themeCSSStyle,
+      themeCSS: wrapThemeCSS(themeStyles, themeType),
     });
     this.appliedThemeCSS =
-      this.themeCSSStyle != null ? wrappedThemeCSS : undefined;
+      this.themeCSSStyle != null ? { themeStyles, themeType } : undefined;
   }
 
   private applyHunksToDOM(
@@ -1993,13 +1972,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected applyPreNodeAttributes(
     pre: HTMLPreElement,
-    {
-      themeStyles,
-      baseThemeType,
-      additionsContentAST,
-      deletionsContentAST,
-      totalLines,
-    }: HunksRenderResult,
+    { additionsContentAST, deletionsContentAST, totalLines }: HunksRenderResult,
     customProperties?: CustomPreProperties
   ): void {
     const {
@@ -2007,7 +1980,6 @@ export class FileDiff<LAnnotation = undefined> {
       disableBackground = false,
       disableLineNumbers = false,
       overflow = 'scroll',
-      themeType = 'system',
       diffStyle = 'split',
     } = this.options;
     const preProperties: PrePropertiesConfig = {
@@ -2020,8 +1992,6 @@ export class FileDiff<LAnnotation = undefined> {
         diffStyle === 'unified'
           ? false
           : additionsContentAST != null && deletionsContentAST != null,
-      themeStyles,
-      themeType: baseThemeType ?? themeType,
       totalLines,
       customProperties,
     };

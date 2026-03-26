@@ -21,7 +21,6 @@ import type {
   RenderRange,
   SupportedLanguages,
   ThemedFileResult,
-  ThemeTypes,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
@@ -62,7 +61,6 @@ export interface FileRenderResult {
   css: string;
   totalLines: number;
   themeStyles: string;
-  baseThemeType: 'light' | 'dark' | undefined;
   rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
@@ -104,16 +102,8 @@ export class FileRenderer<LAnnotation = undefined> {
     this.options = options;
   }
 
-  private mergeOptions(options: Partial<FileRendererOptions>): void {
+  public mergeOptions(options: Partial<FileRendererOptions>): void {
     this.options = { ...this.options, ...options };
-  }
-
-  public setThemeType(themeType: ThemeTypes): void {
-    const currentThemeType = this.options.themeType ?? 'system';
-    if (currentThemeType === themeType) {
-      return;
-    }
-    this.mergeOptions({ themeType });
   }
 
   public setLineAnnotations(
@@ -341,7 +331,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private processFileResult(
     file: FileContents,
     renderRange: RenderRange,
-    { code, themeStyles, baseThemeType }: ThemedFileResult
+    { code, themeStyles }: ThemedFileResult
   ): FileRenderResult {
     const { disableFileHeader = false } = this.options;
     const contentArray: ElementContent[] = [];
@@ -400,31 +390,22 @@ export class FileRenderer<LAnnotation = undefined> {
     return {
       gutterAST: gutter.children ?? [],
       contentAST: contentArray,
-      preAST: this.createPreElement(lines.length, themeStyles, baseThemeType),
-      headerAST: !disableFileHeader
-        ? this.renderHeader(file, themeStyles, baseThemeType)
-        : undefined,
+      preAST: this.createPreElement(lines.length),
+      headerAST: !disableFileHeader ? this.renderHeader(file) : undefined,
       totalLines: lines.length,
       rowCount,
       themeStyles: themeStyles,
-      baseThemeType: baseThemeType,
       bufferBefore: renderRange.bufferBefore,
       bufferAfter: renderRange.bufferAfter,
       css: '',
     };
   }
 
-  private renderHeader(
-    file: FileContents,
-    themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined
-  ) {
-    const { headerRenderMode = 'default', themeType = 'system' } = this.options;
+  private renderHeader(file: FileContents) {
+    const { headerRenderMode = 'default' } = this.options;
     return createFileHeaderElement({
       fileOrDiff: file,
       mode: headerRenderMode,
-      themeStyles,
-      themeType: baseThemeType ?? themeType,
     });
   }
 
@@ -510,24 +491,14 @@ export class FileRenderer<LAnnotation = undefined> {
     console.error(error);
   }
 
-  private createPreElement(
-    totalLines: number,
-    themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined
-  ): HASTElement {
-    const {
-      disableLineNumbers = false,
-      overflow = 'scroll',
-      themeType = 'system',
-    } = this.options;
+  private createPreElement(totalLines: number): HASTElement {
+    const { disableLineNumbers = false, overflow = 'scroll' } = this.options;
     return createPreElement({
       type: 'file',
       diffIndicators: 'none',
       disableBackground: true,
       disableLineNumbers,
       overflow,
-      themeStyles,
-      themeType: baseThemeType ?? themeType,
       split: false,
       totalLines,
     });

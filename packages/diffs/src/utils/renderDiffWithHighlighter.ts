@@ -59,13 +59,6 @@ export function renderDiffWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
-  const baseThemeType = (() => {
-    const theme = options.theme ?? DEFAULT_THEMES;
-    if (typeof theme === 'string') {
-      return highlighter.getTheme(theme).type;
-    }
-    return undefined;
-  })();
   const themeStyles = getHighlighterThemeStyles({
     theme: options.theme,
     highlighter,
@@ -243,7 +236,7 @@ export function renderDiffWithHighlighter(
     }
   }
 
-  return { code, themeStyles, baseThemeType };
+  return { code, themeStyles };
 }
 
 interface ProcessLineDiffProps {

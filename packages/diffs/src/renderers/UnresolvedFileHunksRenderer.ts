@@ -168,17 +168,11 @@ export class UnresolvedFileHunksRenderer<
 
   protected override createPreElement(
     split: boolean,
-    totalLines: number,
-    themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined
+    totalLines: number
   ): HASTElement {
-    return super.createPreElement(
-      split,
-      totalLines,
-      themeStyles,
-      baseThemeType,
-      { 'data-has-merge-conflict': '' }
-    );
+    return super.createPreElement(split, totalLines, {
+      'data-has-merge-conflict': '',
+    });
   }
 
   protected override getUnifiedLineDecoration({

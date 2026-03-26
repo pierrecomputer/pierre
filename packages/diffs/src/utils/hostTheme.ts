@@ -1,59 +1,29 @@
 import { THEME_CSS_ATTRIBUTE } from '../constants';
-import type { ThemeTypes } from '../types';
-import { wrapThemeCSS } from './cssWrappers';
 
 interface UpsertHostThemeStyleProps {
   shadowRoot: ShadowRoot;
-  current: HTMLStyleElement | undefined;
-  themeStyles: string;
-  before?: ChildNode | null;
+  currentNode: HTMLStyleElement | undefined;
+  themeCSS: string;
 }
 
-export function syncContainerThemeState(
-  container: HTMLElement,
-  themeType: ThemeTypes
-): void {
-  if (themeType === 'system') {
-    if (!container.hasAttribute('data-theme')) {
-      return;
-    }
-    container.removeAttribute('data-theme');
-    return;
-  }
-  if (container.dataset.theme === themeType) {
-    return;
-  }
-  container.dataset.theme = themeType;
-}
-
-// Keep the host theme style stable so renderers can migrate off inline theme
-// styles without rebuilding the rest of the shadow DOM during the transition.
+// Keep the host theme style stable so renderers can update the host-scoped theme
+// CSS without rebuilding the rest of the shadow DOM.
 export function upsertHostThemeStyle({
   shadowRoot,
-  current,
-  themeStyles,
-  before,
+  currentNode,
+  themeCSS,
 }: UpsertHostThemeStyleProps): HTMLStyleElement | undefined {
-  if (themeStyles.trim() === '') {
-    current?.remove();
+  if (themeCSS.trim() === '') {
+    currentNode?.remove();
     return undefined;
   }
 
-  const element = current ?? createHostThemeStyleNode();
-  const wrappedThemeCSS = wrapThemeCSS(themeStyles);
-  const referenceNode =
-    before != null && before.parentNode === shadowRoot ? before : null;
-
-  if (
-    element.parentNode !== shadowRoot ||
-    element.nextSibling !== referenceNode
-  ) {
-    shadowRoot.insertBefore(element, referenceNode);
+  currentNode ??= createHostThemeStyleNode();
+  currentNode.textContent = themeCSS;
+  if (currentNode.parentNode !== shadowRoot) {
+    shadowRoot.appendChild(currentNode);
   }
-  if (element.textContent !== wrappedThemeCSS) {
-    element.textContent = wrappedThemeCSS;
-  }
-  return element;
+  return currentNode;
 }
 
 export function createHostThemeStyleNode(): HTMLStyleElement {

@@ -18,6 +18,7 @@ import {
   createStyleElement,
   createThemeStyleElement,
 } from '../utils/createStyleElement';
+import { wrapThemeCSS } from '../utils/cssWrappers';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
@@ -56,7 +57,8 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
     processHunkResult(
       await renderer.asyncRender(fileDiff),
       renderer,
-      options?.unsafeCSS
+      options?.unsafeCSS,
+      options?.themeType ?? 'system'
     )
   );
 }
@@ -81,7 +83,8 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
     processHunkResult(
       await renderer.asyncRender(fileDiff),
       renderer,
-      options?.unsafeCSS
+      options?.unsafeCSS,
+      options?.themeType ?? 'system'
     )
   );
 }
@@ -223,11 +226,14 @@ function processHunkResult<LAnnotation>(
   renderer:
     | DiffHunksRenderer<LAnnotation>
     | UnresolvedFileHunksRenderer<LAnnotation>,
-  unsafeCSS: string | undefined
+  unsafeCSS: string | undefined,
+  themeType: 'system' | 'light' | 'dark'
 ) {
   const children = [createStyleElement(hunkResult.css, true)];
   if (hunkResult.themeStyles.trim() !== '') {
-    children.push(createThemeStyleElement(hunkResult.themeStyles));
+    children.push(
+      createThemeStyleElement(wrapThemeCSS(hunkResult.themeStyles, themeType))
+    );
   }
   if (unsafeCSS != null) {
     children.push(createStyleElement(unsafeCSS));

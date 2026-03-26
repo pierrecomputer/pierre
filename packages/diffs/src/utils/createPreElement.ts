@@ -16,8 +16,6 @@ export function createPreWrapperProperties({
   disableLineNumbers,
   overflow,
   split,
-  themeType,
-  themeStyles,
   totalLines,
   type,
   customProperties,
@@ -37,10 +35,6 @@ export function createPreWrapperProperties({
       diffIndicators === 'bars' || diffIndicators === 'classic'
         ? diffIndicators
         : undefined,
-    'data-theme-type': themeType !== 'system' ? themeType : undefined,
-    // NOTE(amadeus): Alex, here we would probably set a class property
-    // instead, when that's working and supported
-    style: themeStyles,
     tabIndex: 0,
   };
   properties.style += `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`;

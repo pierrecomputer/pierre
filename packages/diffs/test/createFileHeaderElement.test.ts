@@ -10,8 +10,6 @@ describe('createFileHeaderElement', () => {
         contents: 'export {}\n',
       },
       mode: 'default',
-      themeStyles: '--test: 1;',
-      themeType: 'light',
     });
 
     expect(header).toMatchSnapshot();
@@ -24,8 +22,6 @@ describe('createFileHeaderElement', () => {
         contents: 'export {}\n',
       },
       mode: 'custom',
-      themeStyles: '--test: 1;',
-      themeType: 'light',
     });
 
     expect(header).toMatchSnapshot();

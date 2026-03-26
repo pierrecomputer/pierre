@@ -407,16 +407,11 @@ export type CustomPreProperties = Record<string, string | number | undefined>;
 export interface PrePropertiesConfig extends Required<
   Pick<
     BaseDiffOptions,
-    | 'diffIndicators'
-    | 'disableBackground'
-    | 'disableLineNumbers'
-    | 'overflow'
-    | 'themeType'
+    'diffIndicators' | 'disableBackground' | 'disableLineNumbers' | 'overflow'
   >
 > {
   type: 'diff' | 'file';
   split: boolean;
-  themeStyles: string;
   totalLines: number;
   customProperties?: CustomPreProperties;
 }
@@ -577,7 +572,6 @@ export type ExpansionDirections = 'up' | 'down' | 'both';
 export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
-  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface RenderDiffFilesResult {
@@ -588,7 +582,6 @@ export interface RenderDiffFilesResult {
 export interface ThemedDiffResult {
   code: RenderDiffFilesResult;
   themeStyles: string;
-  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface HunkExpansionRegion {
@@ -716,4 +709,9 @@ export interface ProcessFileConflictData {
 
   /** Hunk-content index that anchors the end marker row. */
   endMarkerContentIndex: number;
+}
+
+export interface AppliedThemeStyleCache {
+  themeStyles: string;
+  themeType: ThemeTypes;
 }

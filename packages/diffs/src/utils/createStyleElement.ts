@@ -5,7 +5,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
-import { wrapCoreCSS, wrapThemeCSS, wrapUnsafeCSS } from './cssWrappers';
+import { wrapCoreCSS, wrapUnsafeCSS } from './cssWrappers';
 import { createHastElement, createTextNodeElement } from './hast_utils';
 
 export function createStyleElement(
@@ -29,7 +29,7 @@ export function createStyleElement(
 export function createThemeStyleElement(content: string): HASTElement {
   return createHastElement({
     tagName: 'style',
-    children: [createTextNodeElement(wrapThemeCSS(content))],
+    children: [createTextNodeElement(content)],
     properties: {
       [THEME_CSS_ATTRIBUTE]: '',
     },

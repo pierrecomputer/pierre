@@ -9,8 +9,6 @@ export function setPreNodeProperties(
     disableLineNumbers,
     overflow,
     split,
-    themeStyles,
-    themeType,
     totalLines,
     customProperties,
   }: PrePropertiesConfig
@@ -31,11 +29,6 @@ export function setPreNodeProperties(
   } else {
     pre.setAttribute('data-file', '');
     pre.removeAttribute('data-diff');
-  }
-  if (themeType === 'system') {
-    pre.removeAttribute('data-theme-type');
-  } else {
-    pre.setAttribute('data-theme-type', themeType);
   }
   switch (diffIndicators) {
     case 'bars':
@@ -63,8 +56,6 @@ export function setPreNodeProperties(
   }
   pre.setAttribute('data-overflow', overflow);
   pre.tabIndex = 0;
-  // Set theme color custom properties as inline styles on pre element
-  pre.style = themeStyles;
   // Set CSS custom property for line number column width
   pre.style.setProperty(
     '--diffs-min-number-column-width-default',

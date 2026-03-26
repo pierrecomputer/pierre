@@ -35,7 +35,6 @@ import type {
   RenderRange,
   SupportedLanguages,
   ThemedDiffResult,
-  ThemeTypes,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
@@ -112,7 +111,10 @@ export interface DiffHunksRendererOptions extends BaseDiffOptions {
   headerRenderMode?: FileHeaderRenderMode;
 }
 
-export interface DiffHunksRendererOptionsWithDefaults extends BaseDiffOptionsWithDefaults {
+export interface DiffHunksRendererOptionsWithDefaults extends Omit<
+  BaseDiffOptionsWithDefaults,
+  'themeType'
+> {
   headerRenderMode: FileHeaderRenderMode;
 }
 
@@ -185,7 +187,6 @@ export interface HunksRenderResult {
   headerElement: HASTElement | undefined;
   totalLines: number;
   themeStyles: string;
-  baseThemeType: 'light' | 'dark' | undefined;
   rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
@@ -239,15 +240,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.options = options;
   }
 
-  private mergeOptions(options: Partial<DiffHunksRendererOptions>) {
+  public mergeOptions(options: Partial<DiffHunksRendererOptions>): void {
     this.options = { ...this.options, ...options };
-  }
-
-  public setThemeType(themeType: ThemeTypes): void {
-    if (this.getOptionsWithDefaults().themeType === themeType) {
-      return;
-    }
-    this.mergeOptions({ themeType });
   }
 
   public expandHunk(
@@ -354,7 +348,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength = 1000,
       overflow = 'scroll',
       theme = DEFAULT_THEMES,
-      themeType = 'system',
       headerRenderMode = 'default',
       tokenizeMaxLineLength = 1000,
       useCSSClasses = false,
@@ -375,7 +368,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength,
       overflow,
       theme: this.workerManager?.getDiffRenderOptions().theme ?? theme,
-      themeType,
       headerRenderMode,
       tokenizeMaxLineLength,
       useCSSClasses,
@@ -559,26 +551,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   protected createPreElement(
     split: boolean,
     totalLines: number,
-    themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined,
     customProperties?: CustomPreProperties
   ): HASTElement {
-    const {
-      diffIndicators,
-      disableBackground,
-      disableLineNumbers,
-      overflow,
-      themeType,
-    } = this.getOptionsWithDefaults();
+    const { diffIndicators, disableBackground, disableLineNumbers, overflow } =
+      this.getOptionsWithDefaults();
     return createPreElement({
       type: 'diff',
       diffIndicators,
       disableBackground,
       disableLineNumbers,
       overflow,
-      themeStyles,
       split,
-      themeType: baseThemeType ?? themeType,
       totalLines,
       customProperties,
     });
@@ -652,7 +635,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private processDiffResult(
     fileDiff: FileDiffMetadata,
     renderRange: RenderRange,
-    { code, themeStyles, baseThemeType }: ThemedDiffResult
+    { code, themeStyles }: ThemedDiffResult
   ): HunksRenderResult {
     const {
       diffStyle,
@@ -1111,9 +1094,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const preNode = this.createPreElement(
       deletionsContentAST != null && additionsContentAST != null,
-      totalLines,
-      themeStyles,
-      baseThemeType
+      totalLines
     );
 
     return {
@@ -1133,9 +1114,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkData,
       preNode,
       themeStyles,
-      baseThemeType,
       headerElement: !disableFileHeader
-        ? this.renderHeader(this.diff, themeStyles, baseThemeType)
+        ? this.renderHeader(this.diff)
         : undefined,
       totalLines,
       rowCount: context.rowCount,
@@ -1320,17 +1300,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { deletionSpan, additionSpan };
   }
 
-  private renderHeader(
-    diff: FileDiffMetadata,
-    themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined
-  ): HASTElement {
-    const { headerRenderMode, themeType } = this.getOptionsWithDefaults();
+  private renderHeader(diff: FileDiffMetadata): HASTElement {
+    const { headerRenderMode } = this.getOptionsWithDefaults();
     return createFileHeaderElement({
       fileOrDiff: diff,
       mode: headerRenderMode,
-      themeStyles,
-      themeType: baseThemeType ?? themeType,
     });
   }
 }
