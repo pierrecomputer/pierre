@@ -75,26 +75,6 @@ function createBuildState(rootId: string): FileListToTreeBuildState {
   };
 }
 
-interface PathGraphInput {
-  isDirectory: boolean;
-  path: string;
-}
-
-/**
- * Prepares file path input for graph building while preserving normalization
- * behavior (ignored empty segments and trailing slash directory markers).
- */
-function resolvePathGraphInput(filePath: string): PathGraphInput | null {
-  if (filePath.length === 0) {
-    return null;
-  }
-
-  return {
-    isDirectory: filePath.charCodeAt(filePath.length - 1) === 47,
-    path: filePath,
-  };
-}
-
 /**
  * Walks every file path segment-by-segment, creating file nodes and tracking
  * parent-to-child folder relationships in a Map of Sets.
@@ -116,11 +96,9 @@ function buildPathGraph(
   let prevPath = '';
   let prevDepth = 0;
 
-  for (const filePath of filePaths) {
-    const normalizedPath = resolvePathGraphInput(filePath);
-    if (normalizedPath == null) continue;
-
-    const { isDirectory, path } = normalizedPath;
+  for (const path of filePaths) {
+    if (path.length === 0) continue;
+    const isDirectory = path.charCodeAt(path.length - 1) === 47;
 
     // Compute the shared directory-prefix length with the previous path.
     let commonPrefixLen = 0;
