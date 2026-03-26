@@ -67,7 +67,7 @@ benchmark workload (`bun ws trees benchmark`).
 - ✅ **Kept**: default comparator fast path in `sortChildren` using
   decorate-sort-undecorate with precomputed sort keys.
 - ✅ **Kept**: cached/reused root child set lookup in `buildPathGraph`.
-- **Current best:** `total_ms=152.71`.
+- **Current best:** `total_ms=143.55`.
 - ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks).
 - ❌ **Discarded**: caching sorted children between flatten/folder stages.
 - ❌ **Discarded**: `path.split('/')` based parsing.
@@ -82,3 +82,7 @@ benchmark workload (`bun ws trees benchmark`).
 - ❌ **Discarded**: pre-hashing references during folder/flatten stages to
   shrink `hashTreeKeys` (made `buildFolderNodes` much slower).
 - ❌ **Discarded**: additional root-branch restructuring in `buildPathGraph`.
+- ❌ **Discarded**: swapping FNV-1a `hashId` for a shift-add rolling hash.
+- ❌ **Discarded**: heavier flattened-chain cache object in `createLoaderUtils`.
+- ❌ **Discarded**: single-pass inlined flattened/name detection rewrite inside
+  `sortChildren` fast path.
