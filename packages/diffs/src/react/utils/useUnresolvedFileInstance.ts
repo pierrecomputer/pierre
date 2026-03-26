@@ -16,7 +16,6 @@ import type {
   GetHoveredLineResult,
   SelectedLineRange,
 } from '../../managers/InteractionManager';
-import type { UnresolvedFileHunksRendererOptions } from '../../renderers/UnresolvedFileHunksRenderer';
 import type {
   DiffLineAnnotation,
   FileContents,
@@ -170,7 +169,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
 }
 
 function mergeUnresolvedOptions<LAnnotation>(
-  options: UnresolvedFileHunksRendererOptions | undefined,
+  options: UnresolvedFileReactOptions<LAnnotation> | undefined,
   onMergeConflictAction: UnresolvedFileOptions<LAnnotation>['onMergeConflictAction'],
   hasConflictUtility: boolean,
   hasGutterRenderUtility: boolean
