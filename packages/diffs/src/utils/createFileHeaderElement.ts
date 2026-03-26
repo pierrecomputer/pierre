@@ -90,7 +90,12 @@ function createHeaderElement({
   children.push(
     createHastElement({
       tagName: 'div',
-      children: [createTextNodeElement(name)],
+      children: [
+        createHastElement({
+          tagName: 'bdi',
+          children: [createTextNodeElement(name)],
+        }),
+      ],
       properties: { 'data-title': '' },
     })
   );

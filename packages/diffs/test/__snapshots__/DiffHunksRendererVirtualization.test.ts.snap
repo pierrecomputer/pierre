@@ -45,8 +45,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -29247,8 +29254,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -58214,8 +58228,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -87544,8 +87565,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -90339,8 +90367,15 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -91588,8 +91623,15 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {

@@ -2624,8 +2624,15 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
           {
             "children": [
               {
-                "type": "text",
-                "value": "/Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "/Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {

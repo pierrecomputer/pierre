@@ -25,7 +25,8 @@ interface CreateHastElementProps {
     | 'svg'
     | 'use'
     | 'style'
-    | 'template';
+    | 'template'
+    | 'bdi';
   children?: ElementContent[];
   properties?: Properties;
 }
