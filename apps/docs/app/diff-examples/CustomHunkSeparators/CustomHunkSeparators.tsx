@@ -226,6 +226,7 @@ export function CustomHunkSeparators({
     <div className="space-y-4">
       {showHeader && (
         <FeatureHeader
+          id="hunk-separators"
           title="Custom hunk separators"
           description="Swap between the prebuilt hunk separator styles to preview how collapsed chunks are displayed."
         />

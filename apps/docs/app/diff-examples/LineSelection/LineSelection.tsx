@@ -38,6 +38,7 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
   return (
     <div className="space-y-5">
       <FeatureHeader
+        id="line-selection"
         title="Line selection"
         description={
           <>
