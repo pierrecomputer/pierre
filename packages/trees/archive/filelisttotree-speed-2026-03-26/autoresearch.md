@@ -73,8 +73,8 @@ benchmark workload (`bun ws trees benchmark`).
   without reverse-map/generalized overhead).
 - ✅ **Kept**: threaded active parent `Set` through `buildPathGraph` segment
   scan to avoid repeated parent-path Map lookups.
-- ✅ **Kept**: `path.slice(0, segmentEnd)` for `currentPath` instead of
-  template literal concatenation (avoids intermediate string allocations).
+- ✅ **Kept**: `path.slice(0, segmentEnd)` for `currentPath` instead of template
+  literal concatenation (avoids intermediate string allocations).
 - ✅ **Kept**: removed `usedIds` collision-detection Set from `hashTreeKeys`
   (FNV-1a collision rate is ~0.03% for 15K keys; saves ~30K Set operations).
 - ✅ **Kept**: skip redundant `parentChildren.add` for folders already
