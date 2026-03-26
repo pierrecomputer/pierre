@@ -88,7 +88,20 @@ benchmark workload (`bun ws trees benchmark`).
   chain overhead during 99K property insertions.
 - ✅ **Kept**: inlined `resolvePathGraphInput` to avoid creating a
   `PathGraphInput` object for every file path.
-- **Current best:** `total_ms=76.80` (69.5% reduction from baseline).
+- ✅ **Kept**: Symbol-property (`NODE_ID`) ID caching on tree nodes, replacing
+  the `idByKey` Map in `hashTreeKeys` with direct O(1) property access.
+- ✅ **Kept**: split `resolveId` into `assignId` (takes node directly) for tree
+  keys, eliminating ~99K redundant `tree[key]` lookups.
+- ✅ **Kept**: passed `parentPathLength` to `sortChildren` for fast name
+  extraction via `path.slice(parentLen+1)` instead of backward `lastIndexOf`.
+- ✅ **Kept**: fused prefix comparison, slash counting, double-slash detection,
+  and boundary back-up into one single character-scan loop.
+- ✅ **Kept**: incremental FNV-1a hash during `buildPathGraph` with `hashStack`
+  for prefix reuse — file node IDs are pre-computed via `NODE_ID` symbol,
+  eliminating ~93K `hashId` calls from `hashTreeKeys`.
+- ✅ **Kept**: inlined `hashId` function into `fileListToTree.ts` for JIT
+  cross-function inlining.
+- **Current best:** `total_ms=63.48` (74.8% reduction from baseline).
 - ❌ **Discarded**: micro-optimizations (template/string/object-spread tweaks).
 - ❌ **Discarded**: caching sorted children between flatten/folder stages.
 - ❌ **Discarded**: `path.split('/')` based parsing.
