@@ -78,7 +78,12 @@ function createHeaderElement({
     children.push(
       createHastElement({
         tagName: 'div',
-        children: [createTextNodeElement(prevName)],
+        children: [
+          createHastElement({
+            tagName: 'bdi',
+            children: [createTextNodeElement(prevName)],
+          }),
+        ],
         properties: {
           'data-prev-name': '',
         },
