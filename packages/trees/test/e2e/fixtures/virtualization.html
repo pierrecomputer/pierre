@@ -128,6 +128,9 @@
       const MEASURE_NAME = 'trees-dev-virtualized-render-measure';
       const START_TRACE_LABEL = 'trees-dev-virtualized-render-trace-start';
       const END_TRACE_LABEL = 'trees-dev-virtualized-render-trace-end';
+      const searchParams = new URLSearchParams(window.location.search);
+      const instrumentationEnabled =
+        searchParams.get('instrumentation') !== '0';
 
       const mount = document.querySelector('[data-profile-mount]');
       const renderButton = document.querySelector(
@@ -208,21 +211,27 @@
         performance.clearMarks(START_MARK_NAME);
         performance.clearMarks(END_MARK_NAME);
         performance.clearMeasures(MEASURE_NAME);
-        const benchmark = createBenchmarkInstrumentation();
+        const benchmark = instrumentationEnabled
+          ? createBenchmarkInstrumentation()
+          : null;
 
         const renderStartTime = performance.now();
-        const heapBefore = benchmark.readHeapSnapshot();
+        const heapBefore = benchmark?.readHeapSnapshot() ?? null;
         performance.mark(START_MARK_NAME);
         console.timeStamp(START_TRACE_LABEL);
         resultLabel.textContent = 'Rendering…';
 
         const fileTree = new FileTree(
-          {
+          benchmark?.attach({
             initialFiles: linuxKernelFiles,
             virtualize: { threshold: 0 },
             flattenEmptyDirectories: true,
             sort: false,
-            __benchmarkInstrumentation: benchmark.instrumentation,
+          }) ?? {
+            initialFiles: linuxKernelFiles,
+            virtualize: { threshold: 0 },
+            flattenEmptyDirectories: true,
+            sort: false,
           },
           {
             initialExpandedItems: linuxKernelAllFolders,
@@ -232,7 +241,7 @@
 
         const { renderedItemCount } = await waitForTreeHost();
         await waitForPaint();
-        const heapAfter = benchmark.readHeapSnapshot();
+        const heapAfter = benchmark?.readHeapSnapshot() ?? null;
 
         performance.mark(END_MARK_NAME);
         console.timeStamp(END_TRACE_LABEL);
@@ -253,7 +262,11 @@
         const longestLongTaskMs = renderLongTasks.reduce((longest, entry) => {
           return Math.max(longest, entry.duration);
         }, 0);
-        const instrumentation = benchmark.summarize(heapBefore, heapAfter);
+        const instrumentation = benchmark?.summarize(heapBefore, heapAfter) ?? {
+          phases: [],
+          counters: {},
+          heap: null,
+        };
         instrumentation.counters['workload.renderedRows'] = renderedItemCount;
 
         window.__treesDevVirtualizationProfile = {

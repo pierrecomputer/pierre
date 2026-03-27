@@ -1,4 +1,7 @@
-import type { BenchmarkInstrumentation } from '../../../src/internal/benchmarkInstrumentation';
+import {
+  attachBenchmarkInstrumentation,
+  type BenchmarkInstrumentation,
+} from '../../../src/internal/benchmarkInstrumentation';
 
 interface BenchmarkPhaseAggregate {
   totalMs: number;
@@ -41,6 +44,7 @@ const now = (): number => {
 };
 
 export function createBenchmarkInstrumentation(): {
+  attach: <TValue extends object>(value: TValue) => TValue;
   instrumentation: BenchmarkInstrumentation;
   readHeapSnapshot: () => HeapSnapshot | null;
   summarize: (
@@ -120,6 +124,7 @@ export function createBenchmarkInstrumentation(): {
   };
 
   return {
+    attach: (value) => attachBenchmarkInstrumentation(value, instrumentation),
     instrumentation,
     readHeapSnapshot,
     summarize,

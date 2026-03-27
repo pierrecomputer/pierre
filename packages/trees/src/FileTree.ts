@@ -7,7 +7,8 @@ import {
 } from './constants';
 import type { TreeInstance } from './core/types/core';
 import {
-  type BenchmarkInstrumentation,
+  getBenchmarkInstrumentation,
+  inheritBenchmarkInstrumentation,
   withBenchmarkPhase,
 } from './internal/benchmarkInstrumentation';
 import { SVGSpriteSheet } from './sprite';
@@ -145,8 +146,6 @@ export interface FileTreeOptions {
    *  `threshold` is the minimum item count to activate virtualization. */
   virtualize?: { threshold: number } | false;
   icons?: FileTreeIconConfig;
-  /** Internal benchmark hook surface used by the standalone profiling fixture. */
-  __benchmarkInstrumentation?: BenchmarkInstrumentation;
 }
 
 export interface FileTreeStateConfig {
@@ -284,7 +283,6 @@ export class FileTree {
     const ids = expandPathsWithAncestors(items, handle.pathToId, {
       flattenEmptyDirectories: this.options.flattenEmptyDirectories,
       cache: this.expandPathsCache,
-      __benchmarkInstrumentation: this.options.__benchmarkInstrumentation,
     });
     const flattenEmptyDirectories =
       this.options.flattenEmptyDirectories === true;
@@ -424,7 +422,10 @@ export class FileTree {
   // --- Git status ---
 
   setGitStatus(entries: GitStatusEntry[] | undefined): void {
-    this.options = { ...this.options, gitStatus: entries };
+    this.options = inheritBenchmarkInstrumentation(this.options, {
+      ...this.options,
+      gitStatus: entries,
+    });
     this.rerender();
   }
 
@@ -438,7 +439,10 @@ export class FileTree {
     if (this.options.initialFiles === files) {
       return;
     }
-    this.options = { ...this.options, initialFiles: files };
+    this.options = inheritBenchmarkInstrumentation(this.options, {
+      ...this.options,
+      initialFiles: files,
+    });
     this.callbacksRef.current.onFilesChange?.(files);
     this.rerender();
   }
@@ -520,13 +524,16 @@ export class FileTree {
     const nextFiles = state?.files;
     const stateFilesChanged =
       nextFiles !== undefined && this.options.initialFiles !== nextFiles;
-    this.options = {
+    this.options = inheritBenchmarkInstrumentation(this.options, {
       ...this.options,
       ...options,
       ...(nextFiles !== undefined && { initialFiles: nextFiles }),
-    };
+    });
     if (state != null) {
-      this.stateConfig = { ...this.stateConfig, ...state };
+      this.stateConfig = inheritBenchmarkInstrumentation(this.options, {
+        ...this.stateConfig,
+        ...state,
+      });
     }
 
     const hasContextMenu = this.callbacksRef.current.onContextMenuOpen != null;
@@ -816,7 +823,7 @@ export class FileTree {
       containerWrapper?.clientHeight ?? fileTreeContainer.clientHeight;
 
     withBenchmarkPhase(
-      this.options.__benchmarkInstrumentation,
+      getBenchmarkInstrumentation(this.options),
       'fileTree.render.mount',
       () =>
         preactRenderRoot(
@@ -856,7 +863,10 @@ export class FileTree {
 
     if (discoveredId != null && this.__id !== discoveredId) {
       this.__id = discoveredId;
-      this.options = { ...this.options, id: discoveredId };
+      this.options = inheritBenchmarkInstrumentation(this.options, {
+        ...this.options,
+        id: discoveredId,
+      });
     }
 
     this.fileTreeContainer = fileTreeContainer;

@@ -1,6 +1,7 @@
 import { FLATTENED_PREFIX } from '../constants';
 import {
   type BenchmarkInstrumentation,
+  getBenchmarkInstrumentation,
   setBenchmarkCounter,
   withBenchmarkPhase,
 } from '../internal/benchmarkInstrumentation';
@@ -24,7 +25,6 @@ export interface FileListToTreeOptions {
   rootId?: string;
   rootName?: string;
   sortComparator?: ChildrenSortOption;
-  __benchmarkInstrumentation?: BenchmarkInstrumentation;
 }
 
 export interface FileListToTreeBuildState {
@@ -496,8 +496,8 @@ function fileListToTreeInternal(
     rootId = ROOT_ID,
     rootName = ROOT_ID,
     sortComparator = defaultChildrenComparator,
-    __benchmarkInstrumentation: instrumentation,
   } = options;
+  const instrumentation = getBenchmarkInstrumentation(options) ?? undefined;
 
   const state = withBenchmarkPhase(
     instrumentation,

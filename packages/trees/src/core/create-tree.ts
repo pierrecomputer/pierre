@@ -2,6 +2,7 @@ import type { TreeDataRef } from '../features/main/types';
 import { treeFeature } from '../features/tree/feature';
 import type { ItemMeta } from '../features/tree/types';
 import {
+  getBenchmarkInstrumentation,
   setBenchmarkCounter,
   withBenchmarkPhase,
 } from '../internal/benchmarkInstrumentation';
@@ -67,6 +68,7 @@ const sortFeatures = (features: FeatureImplementation[] = []) =>
 export const createTree = <T>(
   initialConfig: TreeConfig<T>
 ): TreeInstance<T> => {
+  const benchmarkInstrumentation = getBenchmarkInstrumentation(initialConfig);
   const buildInstance = initialConfig.instanceBuilder ?? buildStaticInstance;
   const additionalFeatures = [
     treeFeature,
@@ -151,39 +153,35 @@ export const createTree = <T>(
   };
 
   const rebuildItemMeta = () => {
-    withBenchmarkPhase(
-      config.__benchmarkInstrumentation,
-      'core.rebuildItemMeta',
-      () => {
-        itemInstances = null;
-        itemMetaMap = {};
+    withBenchmarkPhase(benchmarkInstrumentation, 'core.rebuildItemMeta', () => {
+      itemInstances = null;
+      itemMetaMap = {};
 
-        rebuildRootItemInstance();
-        itemMetaMap[config.rootItemId] = {
-          itemId: config.rootItemId,
-          index: -1,
-          parentId: null!,
-          level: -1,
-          posInSet: 0,
-          setSize: 1,
-        };
+      rebuildRootItemInstance();
+      itemMetaMap[config.rootItemId] = {
+        itemId: config.rootItemId,
+        index: -1,
+        parentId: null!,
+        level: -1,
+        posInSet: 0,
+        setSize: 1,
+      };
 
-        const nextVisibleItemIds: string[] = [];
-        for (const item of treeInstance.getItemsMeta()) {
-          itemMetaMap[item.itemId] = item;
-          nextVisibleItemIds.push(item.itemId);
-        }
-
-        visibleItemIds = nextVisibleItemIds;
-        (treeDataRef.current as TreeDataRef).visibleItemIds = visibleItemIds;
-        setBenchmarkCounter(
-          config.__benchmarkInstrumentation,
-          'workload.visibleItemMeta',
-          visibleItemIds.length
-        );
-        rebuildScheduled = false;
+      const nextVisibleItemIds: string[] = [];
+      for (const item of treeInstance.getItemsMeta()) {
+        itemMetaMap[item.itemId] = item;
+        nextVisibleItemIds.push(item.itemId);
       }
-    );
+
+      visibleItemIds = nextVisibleItemIds;
+      (treeDataRef.current as TreeDataRef).visibleItemIds = visibleItemIds;
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.visibleItemMeta',
+        visibleItemIds.length
+      );
+      rebuildScheduled = false;
+    });
   };
 
   // oxlint-disable-next-line typescript-eslint/no-explicit-any

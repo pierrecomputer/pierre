@@ -13,7 +13,6 @@ import type { SearchFeatureDef } from '../../features/search/types';
 import type { SelectionFeatureDef } from '../../features/selection/types';
 import type { SyncDataLoaderFeatureDef } from '../../features/sync-data-loader/types';
 import type { TreeFeatureDef } from '../../features/tree/types';
-import type { BenchmarkInstrumentation } from '../../internal/benchmarkInstrumentation';
 
 export type Updater<T> = T | ((old: T) => T);
 export type SetStateFn<T> = (updaterOrValue: Updater<T>) => void;
@@ -74,9 +73,7 @@ type TreeStateType<T> = MergedFeatures<RegisteredFeatures<T>>['state'];
 export interface TreeState<T> extends TreeStateType<T> {}
 
 type TreeConfigType<T> = MergedFeatures<RegisteredFeatures<T>>['config'];
-export interface TreeConfig<T> extends TreeConfigType<T> {
-  __benchmarkInstrumentation?: BenchmarkInstrumentation;
-}
+export interface TreeConfig<T> extends TreeConfigType<T> {}
 
 type TreeInstanceType<T> = MergedFeatures<
   RegisteredFeatures<T>

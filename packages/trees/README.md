@@ -386,8 +386,14 @@ bun ws trees profile:virtualization -- --no-build --no-server
 # Run multiple benchmark passes and print per-run + aggregate tables
 bun ws trees profile:virtualization -- --runs 5
 
+# Discard warm-up runs before measuring the reported runs
+bun ws trees profile:virtualization -- --warmup-runs 2 --runs 8
+
 # Add function call counts to the bottom-up CPU table
 bun ws trees profile:virtualization -- --call-counts
+
+# Compare the hidden benchmark hook surface with the collector disabled
+bun ws trees profile:virtualization -- --instrumentation off --runs 5
 
 # Emit raw machine-readable runs only
 bun ws trees profile:virtualization -- --runs 5 --json
@@ -400,12 +406,15 @@ Flags:
   fixture
 - `--timeout <ms>` to change navigation/render/trace timeout behavior
 - `--runs <count>` to execute the benchmark multiple times sequentially
+- `--warmup-runs <count>` to run and discard warm-up passes before reporting
+- `--instrumentation <mode>` to run the fixture collector in `on` or `off` mode
 - `--call-counts` to run a second precise-coverage pass and annotate bottom-up
   functions with invocation counts
 - `--trace-out <path>` to choose the trace output location
 - `--no-build` to skip rebuilding `dist/`
 - `--no-server` to assume the fixture server is already running
-- `--json` to emit `{ "runs": [...] }` without a human summary
+- `--json` to emit `{ "runs": [...], "summary": { ... } }` without a human
+  summary
 
 Trace files are written to the system temp directory by default. For multi-run
 benchmarks the command appends `-run-N` to the trace filename so each run keeps
@@ -414,6 +423,59 @@ its own trace.
 `--call-counts` is intentionally not enabled by default. It uses Chrome precise
 coverage, which runs as a separate auxiliary pass so the timed benchmark run is
 not perturbed.
+
+The JSON `summary` block includes the same aggregate metrics that power the
+human-readable multi-run table. Each metric reports:
+
+- `availableRuns`
+- `totalMs`
+- `averageMs`
+- `medianMs`
+- `p95Ms`
+
+### Instrumentation overhead
+
+We measured the cost of the benchmark phase/counter hooks on March 27, 2026 so
+future refactors do not need to re-run this comparison unless the hook surface
+changes materially.
+
+Method:
+
+- 16 runs per case against the same real Chrome instance and Linux fixture
+- drop the first run as warm-up, summarize the remaining 15 runs
+- compare three cases:
+  - pre-phase-instrumentation baseline at commit `5de4dd18`
+  - current runtime hook surface with fixture instrumentation disabled via
+    `--instrumentation off`
+  - current runtime hook surface with fixture instrumentation enabled
+
+Click-to-render-ready results:
+
+| Case                                      |   Average |    Median |       P95 |
+| ----------------------------------------- | --------: | --------: | --------: |
+| Pre-instrumentation baseline (`5de4dd18`) | 880.62 ms | 879.75 ms | 890.30 ms |
+| Current code, instrumentation disabled    | 877.72 ms | 876.49 ms | 887.54 ms |
+| Current code, instrumentation enabled     | 879.74 ms | 879.19 ms | 887.74 ms |
+
+Takeaways:
+
+- The remaining runtime hook surface did not show a measurable slowdown. In this
+  sample it was about `2.9 ms` faster than the old baseline, which should be
+  treated as noise rather than a true speedup.
+- Enabling the collector added about `2.0 ms` average to click-to-render-ready,
+  or roughly `0.2%` on an ~`880 ms` render.
+- Net of both effects, the fully instrumented current build was still within
+  about `1 ms` of the old baseline on average.
+
+Bundle-size impact of the current injected-hook design:
+
+- about `5.0 KB` uncompressed across the touched runtime modules
+- plus a `580 B` `dist/internal/benchmarkInstrumentation.js` bridge module
+
+This comparison was run after the injection refactor at commit `53441cfe`, which
+keeps the real collector implementation in
+`test/e2e/fixtures/benchmarkInstrumentation.ts` and leaves only the optional
+hook surface in `src/`.
 
 # Credits and Acknolwedgements
 

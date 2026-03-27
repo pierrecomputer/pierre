@@ -1,5 +1,5 @@
 import {
-  type BenchmarkInstrumentation,
+  getBenchmarkInstrumentation,
   setBenchmarkCounter,
   withBenchmarkPhase,
 } from '../internal/benchmarkInstrumentation';
@@ -135,7 +135,6 @@ export function isOrphanedPathForExpandedSet(
 export interface ExpandPathsOptions {
   flattenEmptyDirectories?: boolean;
   cache?: Map<string, string[]>;
-  __benchmarkInstrumentation?: BenchmarkInstrumentation;
 }
 
 // Resolves each ancestor segment in a path using a shared cache so expanding a
@@ -198,8 +197,12 @@ export function expandPathsWithAncestors(
   pathToId: Map<string, string>,
   options?: ExpandPathsOptions
 ): string[] {
+  const benchmarkInstrumentation =
+    getBenchmarkInstrumentation(options) ??
+    getBenchmarkInstrumentation(pathToId);
+
   return withBenchmarkPhase(
-    options?.__benchmarkInstrumentation,
+    benchmarkInstrumentation,
     'expandPathsWithAncestors',
     () => {
       const cache = options?.cache;
@@ -225,12 +228,12 @@ export function expandPathsWithAncestors(
       }
 
       setBenchmarkCounter(
-        options?.__benchmarkInstrumentation,
+        benchmarkInstrumentation,
         'workload.expandPathsInputCount',
         paths.length
       );
       setBenchmarkCounter(
-        options?.__benchmarkInstrumentation,
+        benchmarkInstrumentation,
         'workload.expandPathsResolvedIds',
         ids.size
       );

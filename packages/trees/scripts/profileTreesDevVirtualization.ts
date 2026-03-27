@@ -9,6 +9,8 @@ interface ProfileConfig {
   url: string;
   timeoutMs: number;
   runs: number;
+  warmupRuns: number;
+  instrumentationMode: 'on' | 'off';
   includeCallCounts: boolean;
   outputJson: boolean;
   traceOutputPath: string;
@@ -88,7 +90,7 @@ interface TraceSummary {
   mainThreadBusyMs: number | null;
   longestTaskMs: number | null;
   topLevelTaskCount: number | null;
-  scriptingMs: number | null;
+  overlappingScriptingSlicesMs: number | null;
   gcMs: number | null;
   styleLayoutMs: number | null;
   paintCompositeMs: number | null;
@@ -158,6 +160,20 @@ interface AggregateMetricSummary {
   averageMs: number | null;
   medianMs: number | null;
   p95Ms: number | null;
+}
+
+type AggregateMetricKey =
+  | 'renderReadyMs'
+  | 'clickDispatchMs'
+  | 'clickToRenderReadyMs'
+  | 'traceWindowMs'
+  | 'mainThreadBusyMs'
+  | 'longestTopLevelTaskMs'
+  | 'sampledCpuTimeMs';
+
+interface JsonAggregateSummary {
+  measuredRuns: number;
+  metrics: Record<AggregateMetricKey, AggregateMetricSummary>;
 }
 
 interface InspectVersionResponse {
@@ -247,6 +263,7 @@ const DEFAULT_URL =
   'http://127.0.0.1:9221/test/e2e/fixtures/virtualization.html';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RUN_COUNT = 1;
+const DEFAULT_WARMUP_RUN_COUNT = 0;
 const DEFAULT_TRACE_OUTPUT_DIR = resolve(tmpdir(), 'pierrejs-trees-traces');
 const DEFAULT_TRACE_OUTPUT_EXAMPLE_PATH = resolve(
   DEFAULT_TRACE_OUTPUT_DIR,
@@ -328,6 +345,47 @@ const TREE_BUILD_PHASE_ORDER = [
   'fileListToTree.folderNodes',
   'fileListToTree.hashKeys',
 ] as const;
+const AGGREGATE_METRIC_DEFINITIONS: Array<{
+  key: AggregateMetricKey;
+  label: string;
+  select: (result: ProfileResult) => number | null;
+}> = [
+  {
+    key: 'renderReadyMs',
+    label: 'Render ready',
+    select: (result) => result.renderDurationMs,
+  },
+  {
+    key: 'clickDispatchMs',
+    label: 'Click dispatch task',
+    select: (result) => result.trace.clickDispatchMs,
+  },
+  {
+    key: 'clickToRenderReadyMs',
+    label: 'Click-to-render-ready',
+    select: (result) => result.trace.clickToRenderReadyMs,
+  },
+  {
+    key: 'traceWindowMs',
+    label: 'Trace window',
+    select: (result) => result.trace.windowDurationMs,
+  },
+  {
+    key: 'mainThreadBusyMs',
+    label: 'Main-thread busy',
+    select: (result) => result.trace.mainThreadBusyMs,
+  },
+  {
+    key: 'longestTopLevelTaskMs',
+    label: 'Longest top-level task',
+    select: (result) => result.trace.longestTaskMs,
+  },
+  {
+    key: 'sampledCpuTimeMs',
+    label: 'Sampled CPU time',
+    select: (result) => result.cpuProfile.sampledMs,
+  },
+];
 const INTEGER_FORMATTER = new Intl.NumberFormat('en-US');
 
 function printHelpAndExit(): never {
@@ -349,6 +407,12 @@ function printHelpAndExit(): never {
   );
   console.log(
     `  --runs <count>         Number of benchmark runs to execute (default: ${DEFAULT_RUN_COUNT})`
+  );
+  console.log(
+    `  --warmup-runs <count>  Number of warm-up runs to discard before reporting (default: ${DEFAULT_WARMUP_RUN_COUNT})`
+  );
+  console.log(
+    '  --instrumentation <mode> Benchmark fixture instrumentation mode: on or off'
   );
   console.log(
     '  --call-counts         Run a second precise-coverage pass to annotate bottom-up functions with invocation counts'
@@ -373,6 +437,23 @@ function parsePositiveInteger(value: string, flag: string): number {
     throw new Error(`Invalid ${flag} value '${value}'`);
   }
   return parsed;
+}
+
+function parseNonNegativeInteger(value: string, flag: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid ${flag} value '${value}'`);
+  }
+  return parsed;
+}
+
+function parseInstrumentationMode(value: string): 'on' | 'off' {
+  if (value === 'on' || value === 'off') {
+    return value;
+  }
+  throw new Error(
+    `Invalid --instrumentation value '${value}'. Expected 'on' or 'off'.`
+  );
 }
 
 function createTraceRunId(): string {
@@ -410,12 +491,26 @@ function createRunTraceOutputPath(
   return `${traceOutputPath.slice(0, extensionIndex)}${runSuffix}${traceOutputPath.slice(extensionIndex)}`;
 }
 
+function createInstrumentedProfileUrl(
+  url: string,
+  instrumentationMode: 'on' | 'off'
+): string {
+  const parsedUrl = new URL(url);
+  parsedUrl.searchParams.set(
+    'instrumentation',
+    instrumentationMode === 'on' ? '1' : '0'
+  );
+  return parsedUrl.toString();
+}
+
 function parseArgs(argv: string[]): ProfileConfig {
   const config: ProfileConfig = {
     browserUrl: DEFAULT_BROWSER_URL,
     url: DEFAULT_URL,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     runs: DEFAULT_RUN_COUNT,
+    warmupRuns: DEFAULT_WARMUP_RUN_COUNT,
+    instrumentationMode: 'on',
     includeCallCounts: false,
     outputJson: false,
     traceOutputPath: createDefaultTraceOutputPath(),
@@ -455,6 +550,8 @@ function parseArgs(argv: string[]): ProfileConfig {
       flag === '--url' ||
       flag === '--timeout' ||
       flag === '--runs' ||
+      flag === '--warmup-runs' ||
+      flag === '--instrumentation' ||
       flag === '--trace-out'
     ) {
       const value = inlineValue ?? argv[index + 1];
@@ -473,6 +570,10 @@ function parseArgs(argv: string[]): ProfileConfig {
         config.timeoutMs = parsePositiveInteger(value, '--timeout');
       } else if (flag === '--runs') {
         config.runs = parsePositiveInteger(value, '--runs');
+      } else if (flag === '--warmup-runs') {
+        config.warmupRuns = parseNonNegativeInteger(value, '--warmup-runs');
+      } else if (flag === '--instrumentation') {
+        config.instrumentationMode = parseInstrumentationMode(value);
       } else {
         config.traceOutputPath = resolve(process.cwd(), value);
       }
@@ -781,6 +882,10 @@ async function waitForUrl(url: string, timeoutMs: number): Promise<void> {
 async function startFixtureServerIfNeeded(
   config: ProfileConfig
 ): Promise<Bun.Subprocess | null> {
+  const profileUrl = createInstrumentedProfileUrl(
+    config.url,
+    config.instrumentationMode
+  );
   if (!config.ensureBuild && !config.ensureServer) {
     return null;
   }
@@ -793,7 +898,7 @@ async function startFixtureServerIfNeeded(
     return null;
   }
 
-  if (await isUrlReachable(config.url, 1_000)) {
+  if (await isUrlReachable(profileUrl, 1_000)) {
     return null;
   }
 
@@ -809,7 +914,7 @@ async function startFixtureServerIfNeeded(
   });
 
   try {
-    await waitForUrl(config.url, config.timeoutMs);
+    await waitForUrl(profileUrl, config.timeoutMs);
     return serverProcess;
   } catch (error) {
     serverProcess.kill();
@@ -1032,7 +1137,7 @@ function createUnavailableTraceSummary(): TraceSummary {
     mainThreadBusyMs: null,
     longestTaskMs: null,
     topLevelTaskCount: null,
-    scriptingMs: null,
+    overlappingScriptingSlicesMs: null,
     gcMs: null,
     styleLayoutMs: null,
     paintCompositeMs: null,
@@ -1627,7 +1732,7 @@ function summarizeTrace(
         0
       );
     }).length,
-    scriptingMs: Number(
+    overlappingScriptingSlicesMs: Number(
       (sumNamedEventsUs(SCRIPT_EVENT_NAMES) / 1000).toFixed(3)
     ),
     gcMs: Number((sumNamedEventsUs(GC_EVENT_NAMES) / 1000).toFixed(3)),
@@ -2197,9 +2302,9 @@ async function collectFunctionCallCounts(
 
 function writeTraceIfAvailable(
   trace: TraceFile | null,
-  traceOutputPath: string
+  traceOutputPath: string | null
 ): string | null {
-  if (trace == null) {
+  if (trace == null || traceOutputPath == null) {
     return null;
   }
 
@@ -2211,8 +2316,12 @@ function writeTraceIfAvailable(
 async function profileVirtualizedRender(
   config: ProfileConfig,
   runNumber: number,
-  traceOutputPath: string
+  traceOutputPath: string | null
 ): Promise<ProfileResult> {
+  const profileUrl = createInstrumentedProfileUrl(
+    config.url,
+    config.instrumentationMode
+  );
   const version = await fetchJson<InspectVersionResponse>(
     `${config.browserUrl}/json/version`,
     undefined,
@@ -2226,7 +2335,7 @@ async function profileVirtualizedRender(
 
   const target = await createPageTarget(
     config.browserUrl,
-    config.url,
+    profileUrl,
     config.timeoutMs
   );
   const cdp = await CdpClient.connect(
@@ -2237,7 +2346,7 @@ async function profileVirtualizedRender(
   try {
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
-    await navigateToFixture(cdp, config.url, config.timeoutMs);
+    await navigateToFixture(cdp, profileUrl, config.timeoutMs);
 
     const { pageSummary, trace, cpuProfile } = await collectProfilingArtifacts(
       cdp,
@@ -2248,13 +2357,13 @@ async function profileVirtualizedRender(
       }
     );
     const callCountsByFunction = config.includeCallCounts
-      ? await collectFunctionCallCounts(cdp, config.url, config.timeoutMs)
+      ? await collectFunctionCallCounts(cdp, profileUrl, config.timeoutMs)
       : null;
 
     return {
       runNumber,
       browserUrl: config.browserUrl,
-      url: config.url,
+      url: profileUrl,
       traceOutputPath: writeTraceIfAvailable(trace, traceOutputPath),
       renderedItemCount: pageSummary.renderedItemCount,
       renderDurationMs: Number(pageSummary.renderDurationMs.toFixed(3)),
@@ -2501,29 +2610,10 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
 }
 
 function printAggregateHumanSummary(results: ProfileResult[]): void {
-  const aggregateRows = [
-    summarizeAggregateMetric('Render ready', results, (result) => {
-      return result.renderDurationMs;
-    }),
-    summarizeAggregateMetric('Click dispatch task', results, (result) => {
-      return result.trace.clickDispatchMs;
-    }),
-    summarizeAggregateMetric('Click-to-render-ready', results, (result) => {
-      return result.trace.clickToRenderReadyMs;
-    }),
-    summarizeAggregateMetric('Trace window', results, (result) => {
-      return result.trace.windowDurationMs;
-    }),
-    summarizeAggregateMetric('Main-thread busy', results, (result) => {
-      return result.trace.mainThreadBusyMs;
-    }),
-    summarizeAggregateMetric('Longest top-level task', results, (result) => {
-      return result.trace.longestTaskMs;
-    }),
-    summarizeAggregateMetric('Sampled CPU time', results, (result) => {
-      return result.cpuProfile.sampledMs;
-    }),
-  ];
+  const aggregateSummary = createJsonAggregateSummary(results);
+  const aggregateRows = AGGREGATE_METRIC_DEFINITIONS.map((definition) => {
+    return aggregateSummary.metrics[definition.key];
+  });
 
   console.log('Aggregate Summary');
   console.log(
@@ -2545,7 +2635,26 @@ function printAggregateHumanSummary(results: ProfileResult[]): void {
   );
 }
 
-function printRunsHumanSummary(results: ProfileResult[]): void {
+function createJsonAggregateSummary(
+  results: ProfileResult[]
+): JsonAggregateSummary {
+  const metrics = Object.fromEntries(
+    AGGREGATE_METRIC_DEFINITIONS.map((definition) => [
+      definition.key,
+      summarizeAggregateMetric(definition.label, results, definition.select),
+    ])
+  ) as Record<AggregateMetricKey, AggregateMetricSummary>;
+
+  return {
+    measuredRuns: results.length,
+    metrics,
+  };
+}
+
+function printRunsHumanSummary(
+  results: ProfileResult[],
+  config: Pick<ProfileConfig, 'instrumentationMode' | 'warmupRuns'>
+): void {
   if (results.length === 0) {
     return;
   }
@@ -2554,6 +2663,8 @@ function printRunsHumanSummary(results: ProfileResult[]): void {
     ['Browser', results[0].browserUrl],
     ['URL', results[0].url],
     ['Runs', String(results.length)],
+    ['Warmup runs', String(config.warmupRuns)],
+    ['Instrumentation', config.instrumentationMode],
   ];
 
   console.log('Run Info');
@@ -2584,6 +2695,20 @@ async function main(): Promise<void> {
   try {
     serverProcess = await startFixtureServerIfNeeded(config);
     const results: ProfileResult[] = [];
+    for (
+      let warmupRunNumber = 1;
+      warmupRunNumber <= config.warmupRuns;
+      warmupRunNumber += 1
+    ) {
+      await profileVirtualizedRender(
+        {
+          ...config,
+          includeCallCounts: false,
+        },
+        warmupRunNumber,
+        null
+      );
+    }
     for (let runNumber = 1; runNumber <= config.runs; runNumber += 1) {
       const traceOutputPath = createRunTraceOutputPath(
         config.traceOutputPath,
@@ -2599,9 +2724,18 @@ async function main(): Promise<void> {
     }
 
     if (config.outputJson) {
-      console.log(JSON.stringify({ runs: results }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            runs: results,
+            summary: createJsonAggregateSummary(results),
+          },
+          null,
+          2
+        )
+      );
     } else {
-      printRunsHumanSummary(results);
+      printRunsHumanSummary(results, config);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
