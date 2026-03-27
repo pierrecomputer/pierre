@@ -21,20 +21,7 @@ export interface FileListToTreeOptions {
   sortComparator?: ChildrenSortOption;
 }
 
-export type FileListToTreeStageName =
-  | 'buildPathGraph'
-  | 'buildFlattenedNodes'
-  | 'buildFolderNodes'
-  | 'hashTreeKeys';
-
-type FileListToTreeStageTimings = Record<FileListToTreeStageName, number>;
-
-interface FileListToTreeBenchmarkResult {
-  tree: Record<string, FileTreeNode>;
-  stageTimingsMs: FileListToTreeStageTimings;
-}
-
-interface FileListToTreeBuildState {
+export interface FileListToTreeBuildState {
   /** Map-based tree for fast has/get/set during construction (~37% faster
    *  than plain-object property access for 99K string-keyed entries). */
   tree: Map<string, FileTreeNode>;
@@ -44,7 +31,7 @@ interface FileListToTreeBuildState {
   treeEntries: Array<[string, FileTreeNode]>;
 }
 
-interface FileListToTreeStageContext {
+export interface FileListToTreeBuildContext {
   isFolder: (path: string) => boolean;
   sortChildrenArray: (
     children: string[],
@@ -53,36 +40,7 @@ interface FileListToTreeStageContext {
   utils: LoaderUtils;
 }
 
-type FileListToTreeStageRecorder = (
-  stage: FileListToTreeStageName,
-  elapsedMs: number
-) => void;
-
 const ROOT_ID = 'root';
-
-function createStageTimings(): FileListToTreeStageTimings {
-  return {
-    buildPathGraph: 0,
-    buildFlattenedNodes: 0,
-    buildFolderNodes: 0,
-    hashTreeKeys: 0,
-  };
-}
-
-function timeStage<T>(
-  stage: FileListToTreeStageName,
-  recorder: FileListToTreeStageRecorder | undefined,
-  run: () => T
-): T {
-  if (recorder == null) {
-    return run();
-  }
-
-  const startTime = performance.now();
-  const result = run();
-  recorder(stage, performance.now() - startTime);
-  return result;
-}
 
 function createBuildState(rootId: string): FileListToTreeBuildState {
   const folderChildren = new Map<string, Set<string>>();
@@ -98,7 +56,7 @@ function createBuildState(rootId: string): FileListToTreeBuildState {
  * Walks every file path segment-by-segment, creating file nodes and tracking
  * parent-to-child folder relationships in a Map of Sets.
  */
-function buildPathGraph(
+export function buildFileListToTreePathGraph(
   filePaths: string[],
   rootId: string
 ): FileListToTreeBuildState {
@@ -269,10 +227,10 @@ function buildPathGraph(
   return state;
 }
 
-function createStageContext(
+export function createFileListToTreeBuildContext(
   folderChildren: Map<string, Set<string>>,
   sortComparator: ChildrenSortOption
-): FileListToTreeStageContext {
+): FileListToTreeBuildContext {
   const isFolder = (path: string): boolean => folderChildren.has(path);
   const sortChildrenArray = (
     children: string[],
@@ -307,9 +265,9 @@ function createStageContext(
  * Returns the set of intermediate folders consumed by flattening so
  * buildFolderNodes can skip them.
  */
-function buildFlattenedNodes(
+export function buildFileListToTreeFlattenedNodes(
   state: FileListToTreeBuildState,
-  context: FileListToTreeStageContext
+  context: FileListToTreeBuildContext
 ): Set<string> {
   const intermediateFolders = new Set<string>();
   const { tree, folderChildren } = state;
@@ -367,9 +325,9 @@ function buildFlattenedNodes(
  * direct children and optional flattened children. Intermediate folders that
  * were absorbed into a flattened node get their flattened children omitted.
  */
-function buildFolderNodes(
+export function buildFileListToTreeFolderNodes(
   state: FileListToTreeBuildState,
-  context: FileListToTreeStageContext,
+  context: FileListToTreeBuildContext,
   rootId: string,
   rootName: string,
   intermediateFolders: Set<string>
@@ -417,7 +375,7 @@ function buildFolderNodes(
 // that's faster than a string-keyed Map lookup.
 const NODE_ID: unique symbol = Symbol('id');
 
-function hashTreeKeys(
+export function hashFileListToTreeKeys(
   tree: Map<string, FileTreeNode>,
   treeEntries: Array<[string, FileTreeNode]>,
   rootId: string
@@ -480,8 +438,7 @@ function hashTreeKeys(
 
 function fileListToTreeInternal(
   filePaths: string[],
-  options: FileListToTreeOptions,
-  recorder?: FileListToTreeStageRecorder
+  options: FileListToTreeOptions
 ): Record<string, FileTreeNode> {
   const {
     rootId = ROOT_ID,
@@ -489,21 +446,22 @@ function fileListToTreeInternal(
     sortComparator = defaultChildrenComparator,
   } = options;
 
-  const state = timeStage('buildPathGraph', recorder, () =>
-    buildPathGraph(filePaths, rootId)
+  const state = buildFileListToTreePathGraph(filePaths, rootId);
+  const context = createFileListToTreeBuildContext(
+    state.folderChildren,
+    sortComparator
   );
-  const context = createStageContext(state.folderChildren, sortComparator);
-  const intermediateFolders = timeStage('buildFlattenedNodes', recorder, () =>
-    buildFlattenedNodes(state, context)
+  const intermediateFolders = buildFileListToTreeFlattenedNodes(state, context);
+
+  buildFileListToTreeFolderNodes(
+    state,
+    context,
+    rootId,
+    rootName,
+    intermediateFolders
   );
 
-  timeStage('buildFolderNodes', recorder, () => {
-    buildFolderNodes(state, context, rootId, rootName, intermediateFolders);
-  });
-
-  return timeStage('hashTreeKeys', recorder, () =>
-    hashTreeKeys(state.tree, state.treeEntries, rootId)
-  );
+  return hashFileListToTreeKeys(state.tree, state.treeEntries, rootId);
 }
 
 /**
@@ -523,28 +481,4 @@ export function fileListToTree(
   options: FileListToTreeOptions = {}
 ): Record<string, FileTreeNode> {
   return fileListToTreeInternal(filePaths, options);
-}
-
-/**
- * Runs fileListToTree and captures stage timings for the benchmark CLI.
- * This is intentionally kept off the package public surface by remaining an
- * internal module export rather than a root export.
- */
-export function benchmarkFileListToTreeStages(
-  filePaths: string[],
-  options: FileListToTreeOptions = {}
-): FileListToTreeBenchmarkResult {
-  const stageTimingsMs = createStageTimings();
-  const tree = fileListToTreeInternal(
-    filePaths,
-    options,
-    (stage, elapsedMs) => {
-      stageTimingsMs[stage] = elapsedMs;
-    }
-  );
-
-  return {
-    tree,
-    stageTimingsMs,
-  };
 }

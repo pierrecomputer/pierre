@@ -3,8 +3,9 @@ import { resolve } from 'node:path';
 
 import {
   benchmarkFileListToTreeStages,
+  FILE_LIST_TO_TREE_STAGE_ORDER,
   type FileListToTreeStageName,
-} from '../src/utils/fileListToTree';
+} from './lib/benchmarkFileListToTreeStages';
 import {
   type BenchmarkEnvironment,
   calculateDeltaPercent,
@@ -110,13 +111,6 @@ const DEFAULT_CONFIG: BenchmarkConfig = {
   outputJson: false,
   caseFilters: [],
 };
-
-const STAGE_ORDER: FileListToTreeStageName[] = [
-  'buildPathGraph',
-  'buildFlattenedNodes',
-  'buildFolderNodes',
-  'hashTreeKeys',
-];
 
 function printHelpAndExit(): never {
   console.log('Usage: bun ws trees benchmark -- [options]');
@@ -300,7 +294,7 @@ function buildComparison(
     return {
       name: currentSummary.name,
       stages: Object.fromEntries(
-        STAGE_ORDER.map((stage) => {
+        FILE_LIST_TO_TREE_STAGE_ORDER.map((stage) => {
           const currentStage = currentStageSummary.stages[stage];
           const baselineStage = baselineStageSummary.stages[stage];
           if (currentStage == null || baselineStage == null) {
@@ -474,7 +468,7 @@ function main() {
         caseIndex
       );
       totalSamples[caseIndex].push(elapsedMs);
-      for (const stage of STAGE_ORDER) {
+      for (const stage of FILE_LIST_TO_TREE_STAGE_ORDER) {
         stageSamples[caseIndex][stage].push(stageTimingsMs[stage]);
       }
     }
@@ -505,7 +499,7 @@ function main() {
     (caseConfig, index) => ({
       name: caseConfig.name,
       stages: Object.fromEntries(
-        STAGE_ORDER.map((stage) => [
+        FILE_LIST_TO_TREE_STAGE_ORDER.map((stage) => [
           stage,
           summarizeSamples(stageSamples[index][stage]),
         ])
