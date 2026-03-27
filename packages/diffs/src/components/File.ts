@@ -109,6 +109,11 @@ interface ColumnElements {
   content: HTMLElement;
 }
 
+interface HydrationSetup<LAnnotation> {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+}
+
 let instanceId = -1;
 
 export class File<LAnnotation = undefined> {
@@ -262,8 +267,32 @@ export class File<LAnnotation = undefined> {
   }
 
   public hydrate(props: FileHydrateProps<LAnnotation>): void {
-    const { overflow = 'scroll' } = this.options;
-    const { fileContainer, prerenderedHTML, preventEmit = false } = props;
+    const {
+      fileContainer,
+      prerenderedHTML,
+      preventEmit = false,
+      file,
+      lineAnnotations,
+    } = props;
+    this.hydrateElements(fileContainer, prerenderedHTML);
+    // If we have no pre tag and header tag, then something probably didn't
+    // pre-render and we should kick off a render.
+    if (this.pre == null && this.headerElement == null) {
+      this.render({ ...props, preventEmit: true });
+    }
+    // Otherwise orchestrate our setup.
+    else {
+      this.hydrationSetup({ file, lineAnnotations });
+    }
+    if (!preventEmit) {
+      this.emitPostRender();
+    }
+  }
+
+  protected hydrateElements(
+    fileContainer: HTMLElement,
+    prerenderedHTML: string | undefined
+  ): void {
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
       fileContainer.shadowRoot?.children ?? []
@@ -301,28 +330,34 @@ export class File<LAnnotation = undefined> {
         continue;
       }
     }
-    // If we have no pre tag, then we should render
-    if (this.pre == null) {
-      this.render({ ...props, preventEmit: true });
+    if (this.pre != null) {
+      this.syncCodeNodeFromPre(this.pre);
+      this.pre.removeAttribute('data-dehydrated');
     }
-    // Otherwise orchestrate our setup
-    else {
-      const { file, lineAnnotations } = props;
-      this.fileContainer = fileContainer;
-      delete this.pre.dataset.dehydrated;
+    this.fileContainer = fileContainer;
+  }
 
-      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
-      this.file = file;
-      this.fileRenderer.hydrate(file);
-      this.renderAnnotations();
-      this.renderGutterUtility();
-      this.injectUnsafeCSS();
-      this.interactionManager.setup(this.pre);
-      this.resizeManager.setup(this.pre, overflow === 'wrap');
+  protected hydrationSetup({
+    file,
+    lineAnnotations,
+  }: HydrationSetup<LAnnotation>): void {
+    const { overflow = 'scroll' } = this.options;
+    this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    this.file = file;
+    this.fileRenderer.setOptions({
+      ...this.options,
+      headerRenderMode:
+        this.options.renderCustomHeader != null ? 'custom' : 'default',
+    });
+    if (this.pre == null) {
+      return;
     }
-    if (!preventEmit) {
-      this.emitPostRender();
-    }
+    this.fileRenderer.hydrate(file);
+    this.renderAnnotations();
+    this.renderGutterUtility();
+    this.injectUnsafeCSS();
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, overflow === 'wrap');
   }
 
   public getOrCreateLineCache(
@@ -1128,6 +1163,19 @@ export class File<LAnnotation = undefined> {
     this.placeHolder = undefined;
 
     return this.pre;
+  }
+
+  private syncCodeNodeFromPre(pre: HTMLPreElement): void {
+    this.code = undefined;
+    for (const child of Array.from(pre.children)) {
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      if (child.hasAttribute('data-code')) {
+        this.code = child;
+        return;
+      }
+    }
   }
 
   private applyPreNodeAttributes(

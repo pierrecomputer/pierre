@@ -157,6 +157,13 @@ interface ApplyPartialRenderProps {
   renderRange: RenderRange | undefined;
 }
 
+interface HydrationSetup<LAnnotation> {
+  fileDiff: FileDiffMetadata | undefined;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  oldFile?: FileContents;
+  newFile?: FileContents;
+}
+
 let instanceId = -1;
 
 export class FileDiff<LAnnotation = undefined> {
@@ -476,8 +483,39 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
-    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
-    const { fileContainer, prerenderedHTML, preventEmit = false } = props;
+    const {
+      fileContainer,
+      prerenderedHTML,
+      preventEmit = false,
+      lineAnnotations,
+      oldFile,
+      newFile,
+      fileDiff,
+    } = props;
+    this.hydrateElements(fileContainer, prerenderedHTML);
+    // If we have no pre tag and header tag, then something probably didn't
+    // pre-render and we should kick off a render.
+    if (this.pre == null && this.headerElement == null) {
+      this.render({ ...props, preventEmit: true });
+    }
+    // Otherwise orchestrate our setup
+    else {
+      this.hydrationSetup({
+        fileDiff,
+        oldFile,
+        newFile,
+        lineAnnotations,
+      });
+    }
+    if (!preventEmit) {
+      this.emitPostRender();
+    }
+  }
+
+  protected hydrateElements(
+    fileContainer: HTMLElement,
+    prerenderedHTML: string | undefined
+  ): void {
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
       if (element instanceof SVGElement) {
@@ -530,44 +568,47 @@ export class FileDiff<LAnnotation = undefined> {
     }
     if (this.pre != null) {
       this.syncCodeNodesFromPre(this.pre);
+      this.pre.removeAttribute('data-dehydrated');
     }
-    // If we have no pre tag, then we should render
+    this.fileContainer = fileContainer;
+  }
+
+  protected hydrationSetup({
+    fileDiff,
+    oldFile,
+    newFile,
+    lineAnnotations,
+  }: HydrationSetup<LAnnotation>): void {
+    // It's possible we are hydrating a pure-rename and therefore there will be
+    // no pre element
+    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
+    this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    this.additionFile = newFile;
+    this.deletionFile = oldFile;
+    this.fileDiff =
+      fileDiff ??
+      (oldFile != null && newFile != null
+        ? parseDiffFromFile(oldFile, newFile)
+        : undefined);
+
     if (this.pre == null) {
-      this.render({ ...props, preventEmit: true });
+      return;
     }
-    // Otherwise orchestrate our setup
-    else {
-      const { lineAnnotations, oldFile, newFile, fileDiff } = props;
-      this.fileContainer = fileContainer;
-      delete this.pre.dataset.dehydrated;
 
-      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
-      this.additionFile = newFile;
-      this.deletionFile = oldFile;
-      this.fileDiff =
-        fileDiff ??
-        (oldFile != null && newFile != null
-          ? parseDiffFromFile(oldFile, newFile)
-          : undefined);
-
-      this.hunksRenderer.hydrate(this.fileDiff);
-      // FIXME(amadeus): not sure how to handle this yet...
-      // this.renderSeparators();
-      this.renderAnnotations();
-      this.renderGutterUtility();
-      this.injectUnsafeCSS();
-      this.interactionManager.setup(this.pre);
-      this.resizeManager.setup(this.pre, overflow === 'wrap');
-      if (overflow === 'scroll' && diffStyle === 'split') {
-        this.scrollSyncManager.setup(
-          this.pre,
-          this.codeDeletions,
-          this.codeAdditions
-        );
-      }
-    }
-    if (!preventEmit) {
-      this.emitPostRender();
+    this.hunksRenderer.hydrate(this.fileDiff);
+    // FIXME(amadeus): not sure how to handle this yet...
+    // this.renderSeparators();
+    this.renderAnnotations();
+    this.renderGutterUtility();
+    this.injectUnsafeCSS();
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    if (overflow === 'scroll' && diffStyle === 'split') {
+      this.scrollSyncManager.setup(
+        this.pre,
+        this.codeDeletions,
+        this.codeAdditions
+      );
     }
   }
 
@@ -1098,11 +1139,11 @@ export class FileDiff<LAnnotation = undefined> {
       if (!(child instanceof HTMLElement)) {
         continue;
       }
-      if ('unified' in child.dataset) {
+      if (child.hasAttribute('data-unified')) {
         this.codeUnified = child;
-      } else if ('deletions' in child.dataset) {
+      } else if (child.hasAttribute('data-deletions')) {
         this.codeDeletions = child;
-      } else if ('additions' in child.dataset) {
+      } else if (child.hasAttribute('data-additions')) {
         this.codeAdditions = child;
       }
     }
