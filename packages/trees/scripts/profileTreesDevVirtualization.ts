@@ -13,6 +13,7 @@ interface ProfileConfig {
   warmupRuns: number;
   instrumentationMode: 'on' | 'off';
   includeCallCounts: boolean;
+  showDominantTraceEvents: boolean;
   outputJson: boolean;
   comparePath?: string;
   traceOutputPath: string;
@@ -208,6 +209,7 @@ interface ProfileConfigSummary {
   warmupRuns: number;
   instrumentationMode: 'on' | 'off';
   includeCallCounts: boolean;
+  showDominantTraceEvents: boolean;
 }
 
 interface MetricComparisonSummary {
@@ -515,6 +517,9 @@ function printHelpAndExit(): never {
     '  --call-counts         Run a second precise-coverage pass to annotate bottom-up functions with invocation counts'
   );
   console.log(
+    '  --dominant-trace-events Show the lower-signal dominant trace event table in human output'
+  );
+  console.log(
     `  --trace-out <path>     Where to save the Chrome trace JSON when tracing succeeds (default: ${DEFAULT_TRACE_OUTPUT_EXAMPLE_PATH})`
   );
   console.log(
@@ -642,6 +647,7 @@ function parseArgs(argv: string[]): ProfileConfig {
     warmupRuns: DEFAULT_WARMUP_RUN_COUNT,
     instrumentationMode: 'on',
     includeCallCounts: false,
+    showDominantTraceEvents: false,
     outputJson: false,
     traceOutputPath: createDefaultTraceOutputPath(),
     ensureBuild: true,
@@ -661,6 +667,11 @@ function parseArgs(argv: string[]): ProfileConfig {
 
     if (rawArg === '--call-counts') {
       config.includeCallCounts = true;
+      continue;
+    }
+
+    if (rawArg === '--dominant-trace-events') {
+      config.showDominantTraceEvents = true;
       continue;
     }
 
@@ -874,6 +885,7 @@ function createProfileConfigSummary(
     warmupRuns: config.warmupRuns,
     instrumentationMode: config.instrumentationMode,
     includeCallCounts: config.includeCallCounts,
+    showDominantTraceEvents: config.showDominantTraceEvents,
   };
 }
 
@@ -2711,7 +2723,11 @@ async function profileVirtualizedRender(
   }
 }
 
-function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
+function printRunHumanSummary(
+  result: ProfileResult,
+  totalRuns: number,
+  showDominantTraceEvents: boolean
+): void {
   const summaryRows = [['Visible rows', String(result.renderedItemCount)]];
 
   if (result.visibleRowsReadyMs != null) {
@@ -2829,9 +2845,13 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
     );
   }
 
-  if (result.trace.available && result.trace.dominantEvents.length > 0) {
+  if (
+    showDominantTraceEvents &&
+    result.trace.available &&
+    result.trace.dominantEvents.length > 0
+  ) {
     console.log('');
-    console.log('Dominant Trace Events');
+    console.log('Dominant Trace Events (Lower Signal)');
     console.log(
       createTable(
         ['Event', 'Time', 'Window %'],
@@ -3087,6 +3107,7 @@ function createLegacyConfigSummaryFromRuns(
     warmupRuns: 0,
     instrumentationMode: inferInstrumentationModeFromUrl(firstRun?.url ?? ''),
     includeCallCounts,
+    showDominantTraceEvents: false,
   };
 }
 
@@ -3147,6 +3168,9 @@ function normalizeProfileBenchmarkOutput(
           rawConfig.instrumentationMode ?? fallbackConfig.instrumentationMode,
         includeCallCounts:
           rawConfig.includeCallCounts ?? fallbackConfig.includeCallCounts,
+        showDominantTraceEvents:
+          rawConfig.showDominantTraceEvents ??
+          fallbackConfig.showDominantTraceEvents,
       },
       workloads,
     };
@@ -3299,7 +3323,11 @@ function printWorkloadHumanSummary(
 
   for (const [index, result] of workloadOutput.runs.entries()) {
     console.log('');
-    printRunHumanSummary(result, workloadOutput.runs.length);
+    printRunHumanSummary(
+      result,
+      workloadOutput.runs.length,
+      config.showDominantTraceEvents
+    );
     if (index < workloadOutput.runs.length - 1) {
       console.log('');
     }
@@ -3429,6 +3457,10 @@ function printRunsHumanSummary(output: ProfileBenchmarkOutput): void {
     ['Warmup runs/workload', String(output.config.warmupRuns)],
     ['Instrumentation', output.config.instrumentationMode],
     ['Call counts', output.config.includeCallCounts ? 'on' : 'off'],
+    [
+      'Dominant trace events',
+      output.config.showDominantTraceEvents ? 'on (lower-signal)' : 'hidden',
+    ],
   ];
 
   console.log('Benchmark');

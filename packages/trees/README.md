@@ -371,11 +371,14 @@ The human-readable output includes:
 - visible-rows-ready and post-paint-ready timing
 - click-dispatch and click-to-render timing
 - trace-window timing, busy time, and coarse render buckets
-- inclusive/self phase tables for the major subsystems and tree-build stages
+- nested phase tables with `Total` and `Own` time for the major subsystems and
+  tree-build stages
 - workload counters beside those phase timings
-- dominant trace events
 - a bottom-up sampled CPU table with `self` and `total` time
 - optional function invocation counts from an auxiliary precise-coverage pass
+
+An optional dominant-trace-events table can also be shown with a flag, but it is
+lower signal than the phase and bottom-up CPU sections and is hidden by default.
 
 Fixture workloads:
 
@@ -410,6 +413,9 @@ bun ws trees profile:virtualization -- --workload pierre-snapshot --workload lin
 # Add function call counts to the bottom-up CPU table
 bun ws trees profile:virtualization -- --call-counts
 
+# Show the lower-signal dominant trace event table
+bun ws trees profile:virtualization -- --dominant-trace-events
+
 # Compare the hidden benchmark hook surface with the collector disabled
 bun ws trees profile:virtualization -- --instrumentation off --runs 5
 
@@ -433,6 +439,8 @@ Flags:
 - `--instrumentation <mode>` to run the fixture collector in `on` or `off` mode
 - `--call-counts` to run a second precise-coverage pass and annotate bottom-up
   functions with invocation counts
+- `--dominant-trace-events` to show the lower-signal dominant trace event table
+  in human output
 - `--trace-out <path>` to choose the trace output location
 - `--compare <path>` to compare the current benchmark run against a saved
   `--json` output
@@ -448,6 +456,10 @@ in each trace filename.
 `--call-counts` is intentionally not enabled by default. It uses Chrome precise
 coverage, which runs as a separate auxiliary pass so the timed benchmark run is
 not perturbed.
+
+`--dominant-trace-events` is also off by default. Those event-name aggregates
+are useful for occasional trace debugging, but they are easier to over-interpret
+than the phase tables and bottom-up CPU output.
 
 `Visible rows ready` is the time until the first virtualized rows are present in
 the shadow DOM. `Post-paint ready` adds the extra double-`requestAnimationFrame`
