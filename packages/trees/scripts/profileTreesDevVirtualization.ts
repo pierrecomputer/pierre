@@ -69,7 +69,26 @@ interface TraceSummary {
   gcMs: number | null;
   styleLayoutMs: number | null;
   paintCompositeMs: number | null;
-  dominantEvents: Array<{ name: string; durationMs: number }>;
+  dominantEvents: Array<{
+    name: string;
+    durationMs: number;
+    percentOfWindow: number | null;
+  }>;
+}
+
+interface BottomUpFunctionSummary {
+  name: string;
+  selfMs: number;
+  totalMs: number;
+  selfPercent: number | null;
+  totalPercent: number | null;
+}
+
+interface CpuProfileSummary {
+  available: boolean;
+  sampleCount: number | null;
+  sampledMs: number | null;
+  bottomUpFunctions: BottomUpFunctionSummary[];
 }
 
 interface ProfileResult {
@@ -82,6 +101,7 @@ interface ProfileResult {
   longTaskTotalMs: number | null;
   longestLongTaskMs: number | null;
   trace: TraceSummary;
+  cpuProfile: CpuProfileSummary;
 }
 
 interface InspectVersionResponse {
@@ -93,6 +113,27 @@ interface InspectVersionResponse {
 interface NewTargetResponse {
   id: string;
   webSocketDebuggerUrl: string;
+}
+
+interface CpuProfileNodeCallFrame {
+  functionName: string;
+  url: string;
+  lineNumber?: number;
+  columnNumber?: number;
+}
+
+interface CpuProfileNode {
+  id: number;
+  callFrame: CpuProfileNodeCallFrame;
+  children?: number[];
+}
+
+interface CpuProfile {
+  nodes: CpuProfileNode[];
+  startTime: number;
+  endTime: number;
+  samples?: number[];
+  timeDeltas?: number[];
 }
 
 interface RuntimeEvaluateResult<TValue> {
@@ -144,6 +185,8 @@ const END_TRACE_LABEL = 'trees-dev-virtualized-render-trace-end';
 const MEASURE_NAME = 'trees-dev-virtualized-render-measure';
 const TRACE_START_SETTLE_MS = 200;
 const TRACE_COMPLETION_TIMEOUT_MS = 30_000;
+const CPU_PROFILE_SAMPLING_INTERVAL_US = 1_000;
+const BOTTOM_UP_FUNCTION_LIMIT = 8;
 const TRACE_CATEGORIES = [
   'blink.user_timing',
   'devtools.timeline',
@@ -181,6 +224,21 @@ const PAINT_EVENT_NAMES = new Set([
   'CompositeLayers',
 ]);
 const CLICK_EVENT_TYPES = new Set(['click', 'DOMActivate']);
+const CPU_PROFILE_IGNORED_FUNCTION_NAMES = new Set([
+  '(root)',
+  '(program)',
+  '(idle)',
+  '(garbage collector)',
+]);
+const DOMINANT_EVENT_IGNORED_PREFIXES = ['V8.GC_'];
+const INTERNAL_CPU_PROFILE_URL_SNIPPETS = [
+  '/node_modules/',
+  '/.vite/deps/',
+  'extensions::',
+  'native ',
+  'node:',
+  'inspector://',
+];
 
 function printHelpAndExit(): never {
   console.log('Usage: bun ws trees profile:virtualization -- [options]');
@@ -305,6 +363,74 @@ function formatMs(value: number | null): string {
     return 'n/a';
   }
   return `${value.toFixed(2)} ms`;
+}
+
+function formatPercent(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+  return `${value.toFixed(1)}%`;
+}
+
+type TableAlignment = 'left' | 'right';
+
+interface TableOptions {
+  alignments?: TableAlignment[];
+  maxWidths?: number[];
+}
+
+function truncateText(value: string, maxWidth: number | undefined): string {
+  if (maxWidth == null || value.length <= maxWidth) {
+    return value;
+  }
+  if (maxWidth <= 3) {
+    return value.slice(0, maxWidth);
+  }
+  return `${value.slice(0, maxWidth - 3)}...`;
+}
+
+function padTableCell(
+  value: string,
+  width: number,
+  alignment: TableAlignment
+): string {
+  return alignment === 'right' ? value.padStart(width) : value.padEnd(width);
+}
+
+function createTable(
+  headers: string[],
+  rows: string[][],
+  options: TableOptions = {}
+): string {
+  const alignments = options.alignments ?? [];
+  const normalizedHeaders = headers.map((header, index) =>
+    truncateText(header, options.maxWidths?.[index])
+  );
+  const normalizedRows = rows.map((row) =>
+    row.map((value, index) => truncateText(value, options.maxWidths?.[index]))
+  );
+  const widths = normalizedHeaders.map((header, index) => {
+    return Math.max(
+      header.length,
+      ...normalizedRows.map((row) => row[index]?.length ?? 0)
+    );
+  });
+  const border = `+${widths.map((width) => '-'.repeat(width + 2)).join('+')}+`;
+  const formatRow = (row: string[]): string => {
+    return `| ${row
+      .map((value, index) =>
+        padTableCell(value, widths[index], alignments[index] ?? 'left')
+      )
+      .join(' | ')} |`;
+  };
+
+  return [
+    border,
+    formatRow(normalizedHeaders),
+    border,
+    ...normalizedRows.map((row) => formatRow(row)),
+    border,
+  ].join('\n');
 }
 
 function decodeOutput(output: Uint8Array): string {
@@ -931,13 +1057,17 @@ function summarizeEventsByName(
   events: TraceEvent[],
   window: TraceWindow,
   ignoredNames: Set<string>
-): Array<{ name: string; durationMs: number }> {
+): Array<{ name: string; durationMs: number; percentOfWindow: number | null }> {
   const totalsByName = new Map<string, number>();
+  const windowDurationUs = window.endTs - window.startTs;
 
   for (const event of events) {
     if (
       event.name === '' ||
       ignoredNames.has(event.name) ||
+      DOMINANT_EVENT_IGNORED_PREFIXES.some((prefix) =>
+        event.name.startsWith(prefix)
+      ) ||
       typeof event.ts !== 'number' ||
       typeof event.dur !== 'number'
     ) {
@@ -964,9 +1094,210 @@ function summarizeEventsByName(
     .map(([name, durationUs]) => ({
       name,
       durationMs: durationUs / 1000,
+      percentOfWindow:
+        windowDurationUs <= 0
+          ? null
+          : Number(((durationUs / windowDurationUs) * 100).toFixed(1)),
     }))
     .sort((left, right) => right.durationMs - left.durationMs)
     .slice(0, 5);
+}
+
+function formatSourcePath(url: string | undefined): string | null {
+  if (url == null || url === '') {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    const segments = parsedUrl.pathname.split('/').filter(Boolean);
+    if (segments.length === 0) {
+      return parsedUrl.pathname;
+    }
+    return segments.slice(-2).join('/');
+  } catch {
+    return url;
+  }
+}
+
+function formatCallFrameLabel(callFrame: CpuProfileNodeCallFrame): string {
+  const functionName =
+    callFrame.functionName.trim() === ''
+      ? '(anonymous)'
+      : callFrame.functionName;
+  const sourcePath = formatSourcePath(callFrame.url);
+  if (sourcePath == null) {
+    return functionName;
+  }
+
+  const lineNumber =
+    typeof callFrame.lineNumber === 'number' ? callFrame.lineNumber + 1 : null;
+  return lineNumber == null
+    ? `${functionName} [${sourcePath}]`
+    : `${functionName} [${sourcePath}:${lineNumber}]`;
+}
+
+function isInternalCpuProfileFrame(
+  callFrame: CpuProfileNodeCallFrame
+): boolean {
+  return INTERNAL_CPU_PROFILE_URL_SNIPPETS.some((snippet) =>
+    callFrame.url.includes(snippet)
+  );
+}
+
+function createUnavailableCpuProfileSummary(): CpuProfileSummary {
+  return {
+    available: false,
+    sampleCount: null,
+    sampledMs: null,
+    bottomUpFunctions: [],
+  };
+}
+
+function summarizeCpuProfile(profile: CpuProfile | null): CpuProfileSummary {
+  if (
+    profile == null ||
+    profile.samples == null ||
+    profile.timeDeltas == null ||
+    profile.samples.length === 0 ||
+    profile.timeDeltas.length === 0
+  ) {
+    return createUnavailableCpuProfileSummary();
+  }
+
+  const sampleCount = Math.min(
+    profile.samples.length,
+    profile.timeDeltas.length
+  );
+  if (sampleCount === 0) {
+    return createUnavailableCpuProfileSummary();
+  }
+
+  const nodeById = new Map<number, CpuProfileNode>();
+  const parentById = new Map<number, number>();
+  for (const node of profile.nodes) {
+    nodeById.set(node.id, node);
+    for (const childId of node.children ?? []) {
+      parentById.set(childId, node.id);
+    }
+  }
+
+  const totalsByFrame = new Map<
+    string,
+    {
+      name: string;
+      selfUs: number;
+      totalUs: number;
+      isInternal: boolean;
+      isAnonymousWithoutSource: boolean;
+    }
+  >();
+
+  const addDuration = (
+    nodeId: number | undefined,
+    durationUs: number,
+    kind: 'self' | 'total'
+  ): void => {
+    if (nodeId == null || durationUs <= 0) {
+      return;
+    }
+
+    const node = nodeById.get(nodeId);
+    if (node == null) {
+      return;
+    }
+
+    const functionName = node.callFrame.functionName.trim();
+    if (CPU_PROFILE_IGNORED_FUNCTION_NAMES.has(functionName)) {
+      return;
+    }
+
+    const key = JSON.stringify([
+      functionName,
+      node.callFrame.url,
+      node.callFrame.lineNumber ?? null,
+      node.callFrame.columnNumber ?? null,
+    ]);
+    const existingEntry = totalsByFrame.get(key) ?? {
+      name: formatCallFrameLabel(node.callFrame),
+      selfUs: 0,
+      totalUs: 0,
+      isInternal: isInternalCpuProfileFrame(node.callFrame),
+      isAnonymousWithoutSource:
+        functionName === '' &&
+        (node.callFrame.url == null || node.callFrame.url === ''),
+    };
+
+    if (kind === 'self') {
+      existingEntry.selfUs += durationUs;
+    }
+    existingEntry.totalUs += durationUs;
+    totalsByFrame.set(key, existingEntry);
+  };
+
+  let sampledUs = 0;
+  for (let index = 0; index < sampleCount; index += 1) {
+    const leafNodeId = profile.samples[index];
+    const durationUs = profile.timeDeltas[index] ?? 0;
+    if (durationUs <= 0) {
+      continue;
+    }
+
+    sampledUs += durationUs;
+    addDuration(leafNodeId, durationUs, 'self');
+
+    const visitedNodeIds = new Set<number>();
+    let currentNodeId: number | undefined = leafNodeId;
+    while (currentNodeId != null && !visitedNodeIds.has(currentNodeId)) {
+      visitedNodeIds.add(currentNodeId);
+      addDuration(currentNodeId, durationUs, 'total');
+      currentNodeId = parentById.get(currentNodeId);
+    }
+  }
+
+  const sampledMs = Number((sampledUs / 1000).toFixed(3));
+  const allFunctions = [...totalsByFrame.values()]
+    .map((entry) => ({
+      name: entry.name,
+      selfMs: Number((entry.selfUs / 1000).toFixed(3)),
+      totalMs: Number((entry.totalUs / 1000).toFixed(3)),
+      selfPercent:
+        sampledUs <= 0
+          ? null
+          : Number(((entry.selfUs / sampledUs) * 100).toFixed(1)),
+      totalPercent:
+        sampledUs <= 0
+          ? null
+          : Number(((entry.totalUs / sampledUs) * 100).toFixed(1)),
+      isInternal: entry.isInternal,
+      isAnonymousWithoutSource: entry.isAnonymousWithoutSource,
+    }))
+    .sort((left, right) => {
+      if (right.selfMs !== left.selfMs) {
+        return right.selfMs - left.selfMs;
+      }
+      return right.totalMs - left.totalMs;
+    });
+  const preferredFunctions = allFunctions.filter((entry) => {
+    return !entry.isInternal && !entry.isAnonymousWithoutSource;
+  });
+  const selectedFunctions =
+    preferredFunctions.length > 0 ? preferredFunctions : allFunctions;
+
+  return {
+    available: totalsByFrame.size > 0,
+    sampleCount,
+    sampledMs,
+    bottomUpFunctions: selectedFunctions
+      .map(
+        ({
+          isInternal: _isInternal,
+          isAnonymousWithoutSource: _isAnonymousWithoutSource,
+          ...entry
+        }) => entry
+      )
+      .slice(0, BOTTOM_UP_FUNCTION_LIMIT),
+  };
 }
 
 function summarizeTrace(
@@ -1097,6 +1428,23 @@ function startTrace(cdp: CdpClient): Promise<TraceFile> {
       await Bun.sleep(TRACE_START_SETTLE_MS);
       return traceComplete;
     });
+}
+
+async function startCpuProfile(cdp: CdpClient): Promise<void> {
+  await cdp.send('Profiler.enable');
+  await cdp.send('Profiler.setSamplingInterval', {
+    interval: CPU_PROFILE_SAMPLING_INTERVAL_US,
+  });
+  await cdp.send('Profiler.start');
+}
+
+async function stopCpuProfile(cdp: CdpClient): Promise<CpuProfile | null> {
+  try {
+    const response = await cdp.send<{ profile?: CpuProfile }>('Profiler.stop');
+    return response.profile ?? null;
+  } finally {
+    await cdp.send('Profiler.disable').catch(() => {});
+  }
 }
 
 async function navigateToFixture(
@@ -1240,12 +1588,17 @@ async function clickRenderButton(cdp: CdpClient): Promise<void> {
   });
 }
 
-async function tryCollectTrace(
+async function collectProfilingArtifacts(
   cdp: CdpClient,
   timeoutMs: number,
   action: () => Promise<PageRenderSummary>
-): Promise<{ pageSummary: PageRenderSummary; trace: TraceFile | null }> {
+): Promise<{
+  pageSummary: PageRenderSummary;
+  trace: TraceFile | null;
+  cpuProfile: CpuProfile | null;
+}> {
   let tracePromise: Promise<TraceFile> | null = null;
+  let cpuProfileStarted = false;
 
   try {
     tracePromise = startTrace(cdp);
@@ -1253,10 +1606,36 @@ async function tryCollectTrace(
     tracePromise = null;
   }
 
-  const pageSummary = await action();
+  try {
+    await startCpuProfile(cdp);
+    cpuProfileStarted = true;
+  } catch {
+    cpuProfileStarted = false;
+  }
+
+  let pageSummary: PageRenderSummary | null = null;
+  let actionError: unknown = null;
+  try {
+    pageSummary = await action();
+  } catch (error) {
+    actionError = error;
+  }
+
+  let cpuProfile: CpuProfile | null = null;
+  if (cpuProfileStarted) {
+    try {
+      cpuProfile = await stopCpuProfile(cdp);
+    } catch {
+      cpuProfile = null;
+    }
+  }
+
+  if (actionError != null || pageSummary == null) {
+    throw actionError ?? new Error('Failed to collect the render summary.');
+  }
 
   if (tracePromise == null) {
-    return { pageSummary, trace: null };
+    return { pageSummary, trace: null, cpuProfile };
   }
 
   try {
@@ -1266,9 +1645,9 @@ async function tryCollectTrace(
       Math.max(timeoutMs, TRACE_COMPLETION_TIMEOUT_MS),
       'Timed out waiting for trace completion'
     );
-    return { pageSummary, trace };
+    return { pageSummary, trace, cpuProfile };
   } catch {
-    return { pageSummary, trace: null };
+    return { pageSummary, trace: null, cpuProfile };
   }
 }
 
@@ -1314,7 +1693,7 @@ async function profileVirtualizedRender(
     await cdp.send('Runtime.enable');
     await navigateToFixture(cdp, config.url, config.timeoutMs);
 
-    const { pageSummary, trace } = await tryCollectTrace(
+    const { pageSummary, trace, cpuProfile } = await collectProfilingArtifacts(
       cdp,
       config.timeoutMs,
       async () => {
@@ -1340,6 +1719,7 @@ async function profileVirtualizedRender(
           ? null
           : Number(pageSummary.longestLongTaskMs.toFixed(3)),
       trace: summarizeTrace(trace, pageSummary),
+      cpuProfile: summarizeCpuProfile(cpuProfile),
     };
   } finally {
     cdp.close();
@@ -1348,54 +1728,127 @@ async function profileVirtualizedRender(
 }
 
 function printHumanSummary(result: ProfileResult): void {
-  console.log(`Browser: ${result.browserUrl}`);
-  console.log(`URL: ${result.url}`);
-  console.log(`Rendered rows in initial window: ${result.renderedItemCount}`);
-  console.log(
-    `Page-measured render ready: ${formatMs(result.renderDurationMs)}`
-  );
+  const runInfoRows = [
+    ['Browser', result.browserUrl],
+    ['URL', result.url],
+    ['Trace file', result.traceOutputPath ?? 'not saved'],
+  ];
+  const summaryRows = [['Visible rows', String(result.renderedItemCount)]];
+
+  summaryRows.push(['Render ready', formatMs(result.renderDurationMs)]);
 
   if (result.trace.available) {
     if (result.trace.clickDispatchMs != null) {
-      console.log(
-        `Click dispatch task: ${formatMs(result.trace.clickDispatchMs)}`
-      );
+      summaryRows.push([
+        'Click dispatch task',
+        formatMs(result.trace.clickDispatchMs),
+      ]);
     }
     if (result.trace.clickToRenderReadyMs != null) {
-      console.log(
-        `Click-to-render-ready: ${formatMs(result.trace.clickToRenderReadyMs)}`
-      );
+      summaryRows.push([
+        'Click-to-render-ready',
+        formatMs(result.trace.clickToRenderReadyMs),
+      ]);
     }
-    console.log(`Trace window: ${formatMs(result.trace.windowDurationMs)}`);
-    console.log(
-      `Main-thread busy time: ${formatMs(result.trace.mainThreadBusyMs)}`
-    );
-    console.log(
-      `Longest top-level task: ${formatMs(result.trace.longestTaskMs)}`
-    );
-    console.log(
-      `Top-level task count: ${result.trace.topLevelTaskCount ?? 'n/a'}`
-    );
-    console.log(`Scripting time: ${formatMs(result.trace.scriptingMs)}`);
-    console.log(`GC time: ${formatMs(result.trace.gcMs)}`);
-    console.log(`Style/layout time: ${formatMs(result.trace.styleLayoutMs)}`);
-    console.log(
-      `Paint/composite time: ${formatMs(result.trace.paintCompositeMs)}`
-    );
-
-    if (result.trace.dominantEvents.length > 0) {
-      console.log(
-        `Dominant trace events: ${result.trace.dominantEvents
-          .map((event) => `${event.name} (${event.durationMs.toFixed(2)} ms)`)
-          .join(', ')}`
-      );
-    }
+    summaryRows.push(['Trace window', formatMs(result.trace.windowDurationMs)]);
+    summaryRows.push([
+      'Main-thread busy',
+      formatMs(result.trace.mainThreadBusyMs),
+    ]);
+    summaryRows.push([
+      'Longest top-level task',
+      formatMs(result.trace.longestTaskMs),
+    ]);
+    summaryRows.push([
+      'Top-level task count',
+      String(result.trace.topLevelTaskCount ?? 'n/a'),
+    ]);
+    summaryRows.push(['Scripting time', formatMs(result.trace.scriptingMs)]);
+    summaryRows.push(['GC time', formatMs(result.trace.gcMs)]);
+    summaryRows.push([
+      'Style/layout time',
+      formatMs(result.trace.styleLayoutMs),
+    ]);
+    summaryRows.push([
+      'Paint/composite time',
+      formatMs(result.trace.paintCompositeMs),
+    ]);
   } else {
-    console.log('Trace summary: unavailable');
+    summaryRows.push(['Trace summary', 'unavailable']);
   }
 
-  if (result.traceOutputPath != null) {
-    console.log(`Trace saved to: ${result.traceOutputPath}`);
+  console.log('Run Info');
+  console.log(
+    createTable(['Field', 'Value'], runInfoRows, {
+      maxWidths: [16, 96],
+    })
+  );
+  console.log('');
+
+  console.log('Render Summary');
+  console.log(
+    createTable(['Metric', 'Value'], summaryRows, {
+      alignments: ['left', 'right'],
+      maxWidths: [28, 18],
+    })
+  );
+
+  if (result.trace.available && result.trace.dominantEvents.length > 0) {
+    console.log('');
+    console.log('Dominant Trace Events');
+    console.log(
+      createTable(
+        ['Event', 'Time', 'Window %'],
+        result.trace.dominantEvents.map((event) => [
+          event.name,
+          formatMs(event.durationMs),
+          formatPercent(event.percentOfWindow),
+        ]),
+        {
+          alignments: ['left', 'right', 'right'],
+          maxWidths: [42, 12, 10],
+        }
+      )
+    );
+  }
+
+  if (result.cpuProfile.available) {
+    console.log('');
+    console.log('CPU Summary');
+    console.log(
+      createTable(
+        ['Metric', 'Value'],
+        [
+          ['Sampled CPU time', formatMs(result.cpuProfile.sampledMs)],
+          ['Samples', String(result.cpuProfile.sampleCount ?? 'n/a')],
+        ],
+        {
+          alignments: ['left', 'right'],
+          maxWidths: [24, 18],
+        }
+      )
+    );
+
+    if (result.cpuProfile.bottomUpFunctions.length > 0) {
+      console.log('');
+      console.log('Bottom-Up CPU');
+      console.log(
+        createTable(
+          ['Function', 'Self', 'Self %', 'Total', 'Total %'],
+          result.cpuProfile.bottomUpFunctions.map((functionSummary) => [
+            functionSummary.name,
+            formatMs(functionSummary.selfMs),
+            formatPercent(functionSummary.selfPercent),
+            formatMs(functionSummary.totalMs),
+            formatPercent(functionSummary.totalPercent),
+          ]),
+          {
+            alignments: ['left', 'right', 'right', 'right', 'right'],
+            maxWidths: [78, 12, 9, 12, 9],
+          }
+        )
+      );
+    }
   }
 }
 
