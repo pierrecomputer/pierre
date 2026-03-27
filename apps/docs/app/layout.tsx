@@ -12,6 +12,7 @@ import {
 import localFont from 'next/font/local';
 
 import './globals.css';
+import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { Toaster } from '@/components/ui/sonner';
 
 const inter = Inter({
@@ -108,6 +109,7 @@ export default function RootLayout({
             data-theme="light"
           ></div>
         </ThemeProvider>
+        <PreloadHighlighter />
       </body>
     </html>
   );

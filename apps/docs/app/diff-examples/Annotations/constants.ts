@@ -1,4 +1,5 @@
 import {
+  DEFAULT_THEMES,
   type DiffLineAnnotation,
   type FileContents,
   parseDiffFromFile,
@@ -69,7 +70,8 @@ def verify_token(token: str) -> Optional[dict]:
 `,
     },
     options: {
-      theme: 'pierre-dark',
+      theme: DEFAULT_THEMES,
+      themeType: 'dark',
       diffStyle: 'unified',
       unsafeCSS: CustomScrollbarCSS,
     },
@@ -141,7 +143,8 @@ export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<AcceptRejectMetadata>
   {
     fileDiff: parseDiffFromFile(ACCEPT_REJECT_OLD_FILE, ACCEPT_REJECT_NEW_FILE),
     options: {
-      theme: 'pierre-dark',
+      theme: DEFAULT_THEMES,
+      themeType: 'dark',
       diffStyle: 'unified',
     },
     annotations: ACCEPT_REJECT_ANNOTATIONS,

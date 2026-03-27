@@ -1,3 +1,4 @@
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -118,7 +119,7 @@ public:
 `,
   },
   options: {
-    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'split',
     disableBackground: false,

@@ -1,3 +1,4 @@
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -37,7 +38,7 @@ fn add(a: i32, b: i32) -> i32 {
   },
   options: {
     diffStyle: 'split',
-    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    theme: DEFAULT_THEMES,
     unsafeCSS: CustomScrollbarCSS,
     enableLineSelection: true,
   },

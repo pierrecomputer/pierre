@@ -35,30 +35,33 @@ import type { ProductId } from './product-config';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
+import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 
 const PRODUCT_ID: ProductId = 'diffs';
 
 export default function Home() {
   return (
-    <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
-      <Header className="-mb-[1px]" />
-      <Hero productId={PRODUCT_ID} />
-      <section className="space-y-12 pb-8">
-        <SplitUnifiedSection />
-        <ShikiThemesSection />
-        <DiffStylesSection />
-        <FontStylesSection />
-        <CustomHunkSeparatorsSection />
-        <CustomHeaderSection />
-        <MergeConflictSection />
-        <AnnotationsSection />
-        <AcceptRejectSection />
-        <LineSelectionSection />
-        <ArbitraryFilesSection />
-      </section>
-      <PierreCompanySection />
-      <Footer />
-    </div>
+    <WorkerPoolContext>
+      <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
+        <Header className="-mb-[1px]" />
+        <Hero productId={PRODUCT_ID} />
+        <section className="space-y-12 pb-8">
+          <SplitUnifiedSection />
+          <ShikiThemesSection />
+          <DiffStylesSection />
+          <FontStylesSection />
+          <CustomHunkSeparatorsSection />
+          <CustomHeaderSection />
+          <MergeConflictSection />
+          <AnnotationsSection />
+          <AcceptRejectSection />
+          <LineSelectionSection />
+          <ArbitraryFilesSection />
+        </section>
+        <PierreCompanySection />
+        <Footer />
+      </div>
+    </WorkerPoolContext>
   );
 }
 

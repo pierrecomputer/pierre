@@ -15,7 +15,9 @@ interface SplitUnifiedProps {
 export function SplitUnified({
   prerenderedDiff: { options, ...props },
 }: SplitUnifiedProps) {
-  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
+  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
+    options?.diffStyle ?? 'split'
+  );
   return (
     <div className="scroll-mt-20 space-y-5" id="layout">
       <FeatureHeader
@@ -39,10 +41,7 @@ export function SplitUnified({
       <MultiFileDiff
         {...props}
         className="diff-container"
-        options={{
-          theme: options?.theme ?? 'pierre-dark',
-          diffStyle,
-        }}
+        options={{ ...options, diffStyle }}
       />
     </div>
   );

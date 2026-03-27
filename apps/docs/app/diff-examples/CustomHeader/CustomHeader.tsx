@@ -72,31 +72,23 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
               }
             : undefined
         }
-        renderHeaderPrefix={
-          headerMode === 'metadata'
-            ? () => {
-                return (
-                  <HeaderPrefix
-                    toggleCollapsed={toggleCollapsed}
-                    collapsed={collapsed}
-                  />
-                );
-              }
-            : undefined
-        }
-        renderHeaderMetadata={
-          headerMode === 'metadata'
-            ? () => {
-                return (
-                  <ViewedButton
-                    isViewed={isViewed}
-                    onClick={toggleViewed}
-                    className="mr-[-8px]"
-                  />
-                );
-              }
-            : undefined
-        }
+        renderHeaderPrefix={() => {
+          return (
+            <HeaderPrefix
+              toggleCollapsed={toggleCollapsed}
+              collapsed={collapsed}
+            />
+          );
+        }}
+        renderHeaderMetadata={() => {
+          return (
+            <ViewedButton
+              isViewed={isViewed}
+              onClick={toggleViewed}
+              className="mr-[-8px]"
+            />
+          );
+        }}
       />
     </div>
   );

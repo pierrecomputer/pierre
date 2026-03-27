@@ -1,4 +1,4 @@
-import { type FileContents } from '@pierre/diffs';
+import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -68,7 +68,7 @@ export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   oldFile: CUSTOM_HEADER_OLD_FILE,
   newFile: CUSTOM_HEADER_NEW_FILE,
   options: {
-    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'split',
     disableBackground: false,

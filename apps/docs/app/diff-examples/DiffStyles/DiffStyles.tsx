@@ -52,13 +52,14 @@ const diffStyleOptions = [
 interface DiffStylesProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
+
 export function DiffStyles({
   prerenderedDiff: { options, ...props },
 }: DiffStylesProps) {
   const [diffIndicators, setDiffStyle] = useState<'classic' | 'bars' | 'none'>(
     'bars'
   );
-  const [lineDiffStyle, setLineDiffStyle] = useState<
+  const [lineDiffType, setLineDiffType] = useState<
     'word-alt' | 'word' | 'char' | 'none'
   >('word-alt');
   const [disableBackground, setDisableBackground] = useState(false);
@@ -110,8 +111,8 @@ export function DiffStyles({
               >
                 <IconCodeStyleInline />
                 {}
-                {diffStyleOptions.find((opt) => opt.value === lineDiffStyle)
-                  ?.label ?? lineDiffStyle}
+                {diffStyleOptions.find((opt) => opt.value === lineDiffType)
+                  ?.label ?? lineDiffType}
                 <IconChevronSm className="text-muted-foreground ml-auto" />
               </Button>
             </DropdownMenuTrigger>
@@ -123,11 +124,11 @@ export function DiffStyles({
               {diffStyleOptions.map((option) => (
                 <DropdownMenuItem
                   key={option.value}
-                  onClick={() => setLineDiffStyle(option.value)}
-                  selected={lineDiffStyle === option.value}
+                  onClick={() => setLineDiffType(option.value)}
+                  selected={lineDiffType === option.value}
                   className="flex items-start gap-2 py-2"
                 >
-                  {lineDiffStyle === option.value ? (
+                  {lineDiffType === option.value ? (
                     <IconCheck className="mt-[1px]" />
                   ) : (
                     <div className="h-4 w-4" />
@@ -213,14 +214,14 @@ export function DiffStyles({
         className="diff-container"
         options={{
           ...options,
-          theme: 'pierre-dark',
-          diffStyle: 'split',
           diffIndicators,
           disableBackground,
-          overflow: overflow,
-          lineDiffType: lineDiffStyle,
+          overflow,
+          lineDiffType,
           disableLineNumbers,
         }}
+        // Because we need to change lineDiffType, we can't use the WorkerPool
+        disableWorkerPool
       />
     </div>
   );
