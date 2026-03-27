@@ -353,6 +353,28 @@ describe('diffAcceptRejectHunk', () => {
     });
   });
 
+  test('object input without changeIndex resolves the full hunk', () => {
+    const diff = createFixture();
+    const earlierHunks = [snapshotHunk(diff, 0), snapshotHunk(diff, 1)];
+    const resolvedSnapshot = snapshotHunk(diff, 2);
+    const trailingHunk = snapshotHunk(diff, 3);
+
+    const result = diffAcceptRejectHunk(diff, 2, { type: 'accept' });
+
+    assertUnresolvedHunkMatchesSnapshot(result, 0, earlierHunks[0]);
+    assertUnresolvedHunkMatchesSnapshot(result, 1, earlierHunks[1]);
+    assertResolvedHunkMatchesExpected(
+      result,
+      2,
+      getResolvedLines(resolvedSnapshot, 'accept')
+    );
+    assertUnresolvedHunkMatchesSnapshot(result, 3, trailingHunk);
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
   test('reject keeps later hunk indices accurate after resolving a replacement hunk', () => {
     const diff = createFixture();
     const earlierHunks = [snapshotHunk(diff, 0), snapshotHunk(diff, 1)];

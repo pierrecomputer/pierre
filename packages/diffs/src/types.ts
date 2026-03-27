@@ -837,7 +837,8 @@ export type ConflictResolverTypes = 'current' | 'incoming' | 'both';
 
 export interface DiffAcceptRejectHunkConfig {
   type: DiffAcceptRejectHunkType;
-  changeIndex: number;
+  changeIndex?: number;
+  trimContextLines?: boolean | number;
 }
 
 /**

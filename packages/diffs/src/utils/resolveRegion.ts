@@ -11,6 +11,7 @@ interface RegionResolutionTarget {
   endContentIndex: number;
   resolution: 'deletions' | 'additions' | 'both';
   indexesToDelete?: Set<number>;
+  trimContextLines?: number;
 }
 
 interface CursorState {
