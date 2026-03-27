@@ -46,7 +46,7 @@ import {
 import {
   setBenchmarkCounter,
   withBenchmarkPhase,
-} from '../internal/benchmarkProfile';
+} from '../internal/benchmarkInstrumentation';
 import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoaderFromTreeData } from '../loader/sync';
 import type { SVGSpriteNames } from '../sprite';
@@ -101,6 +101,7 @@ export function Root({
 }: FileTreeRootProps): JSX.Element {
   'use no memo';
   const {
+    __benchmarkInstrumentation: benchmarkInstrumentation,
     initialFiles: files,
     flattenEmptyDirectories,
     fileTreeSearchMode,
@@ -168,17 +169,20 @@ export function Root({
 
   const treeData = useMemo(
     () =>
-      withBenchmarkPhase('root.fileListToTree', () =>
-        fileListToTree(files, { sortComparator })
+      withBenchmarkPhase(benchmarkInstrumentation, 'root.fileListToTree', () =>
+        fileListToTree(files, {
+          sortComparator,
+          __benchmarkInstrumentation: benchmarkInstrumentation,
+        })
       ),
-    [files, sortComparator]
+    [benchmarkInstrumentation, files, sortComparator]
   );
 
   // Build the hot path->id map with a direct for-in scan and answer id->path
   // lookups straight from treeData so we do not duplicate the whole tree into a
   // second Map on every fresh mount.
   const pathToId = useMemo(() => {
-    return withBenchmarkPhase('root.pathToId', () => {
+    return withBenchmarkPhase(benchmarkInstrumentation, 'root.pathToId', () => {
       const next = new Map<string, string>();
       for (const id in treeData) {
         const node = treeData[id];
@@ -186,10 +190,14 @@ export function Root({
           next.set(node.path, id);
         }
       }
-      setBenchmarkCounter('workload.pathToIdEntries', next.size);
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.pathToIdEntries',
+        next.size
+      );
       return next;
     });
-  }, [treeData]);
+  }, [benchmarkInstrumentation, treeData]);
   const idToPath = useMemo<Pick<Map<string, string>, 'get' | 'has'>>(
     () => ({
       get: (id: string) => treeData[id]?.path,
@@ -209,11 +217,12 @@ export function Root({
     pathToId,
     stateConfig,
     flattenEmptyDirectories,
+    benchmarkInstrumentation,
   });
 
   const dataLoader = useMemo(
     () =>
-      withBenchmarkPhase('root.dataLoader', () =>
+      withBenchmarkPhase(benchmarkInstrumentation, 'root.dataLoader', () =>
         useLazyDataLoader === true
           ? generateLazyDataLoader(files, {
               flattenEmptyDirectories,
@@ -224,6 +233,7 @@ export function Root({
             })
       ),
     [
+      benchmarkInstrumentation,
       files,
       flattenEmptyDirectories,
       sortComparator,
@@ -358,6 +368,7 @@ export function Root({
     ...searchModeConfig,
     ...gitStatusConfig,
     ...contextMenuFeatureConfig,
+    __benchmarkInstrumentation: benchmarkInstrumentation,
     rootItemId: 'root',
     // TODO: consider if this ever makes sense to turn on for large trees
     // instanceBuilder: buildProxiedInstance,
@@ -638,8 +649,16 @@ export function Root({
           visibleIdSet != null
             ? allItemIds.filter((itemId) => visibleIdSet.has(itemId))
             : allItemIds;
-        setBenchmarkCounter('workload.visibleItemIds', allItemIds.length);
-        setBenchmarkCounter('workload.renderItemIds', itemIds.length);
+        setBenchmarkCounter(
+          benchmarkInstrumentation,
+          'workload.visibleItemIds',
+          allItemIds.length
+        );
+        setBenchmarkCounter(
+          benchmarkInstrumentation,
+          'workload.renderItemIds',
+          itemIds.length
+        );
         const draggedItemIdSet = isDnD
           ? new Set(
               (tree.getState().dnd?.draggedItems ?? []).map(

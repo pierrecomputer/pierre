@@ -6,7 +6,10 @@ import {
   FLATTENED_PREFIX,
 } from './constants';
 import type { TreeInstance } from './core/types/core';
-import { withBenchmarkPhase } from './internal/benchmarkProfile';
+import {
+  type BenchmarkInstrumentation,
+  withBenchmarkPhase,
+} from './internal/benchmarkInstrumentation';
 import { SVGSpriteSheet } from './sprite';
 import type {
   ContextMenuItem,
@@ -142,6 +145,8 @@ export interface FileTreeOptions {
    *  `threshold` is the minimum item count to activate virtualization. */
   virtualize?: { threshold: number } | false;
   icons?: FileTreeIconConfig;
+  /** Internal benchmark hook surface used by the standalone profiling fixture. */
+  __benchmarkInstrumentation?: BenchmarkInstrumentation;
 }
 
 export interface FileTreeStateConfig {
@@ -279,6 +284,7 @@ export class FileTree {
     const ids = expandPathsWithAncestors(items, handle.pathToId, {
       flattenEmptyDirectories: this.options.flattenEmptyDirectories,
       cache: this.expandPathsCache,
+      __benchmarkInstrumentation: this.options.__benchmarkInstrumentation,
     });
     const flattenEmptyDirectories =
       this.options.flattenEmptyDirectories === true;
@@ -809,11 +815,14 @@ export class FileTree {
     const initialViewportHeight =
       containerWrapper?.clientHeight ?? fileTreeContainer.clientHeight;
 
-    withBenchmarkPhase('fileTree.render.mount', () =>
-      preactRenderRoot(
-        divWrapper,
-        this.buildRootProps({ initialViewportHeight })
-      )
+    withBenchmarkPhase(
+      this.options.__benchmarkInstrumentation,
+      'fileTree.render.mount',
+      () =>
+        preactRenderRoot(
+          divWrapper,
+          this.buildRootProps({ initialViewportHeight })
+        )
     );
   }
 

@@ -116,6 +116,7 @@
 
     <script type="module">
       import { FileTree } from '/dist/index.js';
+      import { createBenchmarkInstrumentation } from './benchmarkInstrumentation.ts';
       import {
         linuxKernelAllFolders,
         linuxKernelFiles,
@@ -127,7 +128,6 @@
       const MEASURE_NAME = 'trees-dev-virtualized-render-measure';
       const START_TRACE_LABEL = 'trees-dev-virtualized-render-trace-start';
       const END_TRACE_LABEL = 'trees-dev-virtualized-render-trace-end';
-      const BENCHMARK_PROFILE_KEY = '__PIERRE_TREES_BENCHMARK_PROFILE__';
 
       const mount = document.querySelector('[data-profile-mount]');
       const renderButton = document.querySelector(
@@ -172,59 +172,6 @@
       longTaskObserver?.observe({ type: 'longtask', buffered: true });
 
       const formatMs = (value) => `${value.toFixed(1)} ms`;
-      const createBenchmarkCollector = () => ({
-        enabled: true,
-        phases: {},
-        counters: {},
-      });
-      const readHeapSnapshot = () => {
-        const memory = performance.memory;
-        if (memory == null) {
-          return null;
-        }
-
-        return {
-          usedJSHeapSize: memory.usedJSHeapSize,
-          totalJSHeapSize: memory.totalJSHeapSize,
-          jsHeapSizeLimit: memory.jsHeapSizeLimit,
-        };
-      };
-      const readBenchmarkInstrumentation = (heapBefore, heapAfter) => {
-        const collector = window[BENCHMARK_PROFILE_KEY];
-        if (collector == null || typeof collector !== 'object') {
-          return {
-            phases: [],
-            counters: {},
-            heap: null,
-          };
-        }
-
-        collector.enabled = false;
-        const phases = Object.entries(collector.phases ?? {}).map(
-          ([name, aggregate]) => ({
-            name,
-            durationMs:
-              typeof aggregate?.totalMs === 'number' ? aggregate.totalMs : 0,
-            count: typeof aggregate?.count === 'number' ? aggregate.count : 0,
-          })
-        );
-
-        return {
-          phases,
-          counters: collector.counters ?? {},
-          heap:
-            heapBefore == null || heapAfter == null
-              ? null
-              : {
-                  usedJSHeapSizeBeforeBytes: heapBefore.usedJSHeapSize,
-                  usedJSHeapSizeAfterBytes: heapAfter.usedJSHeapSize,
-                  usedJSHeapSizeDeltaBytes:
-                    heapAfter.usedJSHeapSize - heapBefore.usedJSHeapSize,
-                  totalJSHeapSizeAfterBytes: heapAfter.totalJSHeapSize,
-                  jsHeapSizeLimitBytes: heapAfter.jsHeapSizeLimit,
-                },
-        };
-      };
 
       const waitForTreeHost = async () => {
         const started = performance.now();
@@ -261,10 +208,10 @@
         performance.clearMarks(START_MARK_NAME);
         performance.clearMarks(END_MARK_NAME);
         performance.clearMeasures(MEASURE_NAME);
-        window[BENCHMARK_PROFILE_KEY] = createBenchmarkCollector();
+        const benchmark = createBenchmarkInstrumentation();
 
         const renderStartTime = performance.now();
-        const heapBefore = readHeapSnapshot();
+        const heapBefore = benchmark.readHeapSnapshot();
         performance.mark(START_MARK_NAME);
         console.timeStamp(START_TRACE_LABEL);
         resultLabel.textContent = 'Rendering…';
@@ -275,6 +222,7 @@
             virtualize: { threshold: 0 },
             flattenEmptyDirectories: true,
             sort: false,
+            __benchmarkInstrumentation: benchmark.instrumentation,
           },
           {
             initialExpandedItems: linuxKernelAllFolders,
@@ -284,7 +232,7 @@
 
         const { renderedItemCount } = await waitForTreeHost();
         await waitForPaint();
-        const heapAfter = readHeapSnapshot();
+        const heapAfter = benchmark.readHeapSnapshot();
 
         performance.mark(END_MARK_NAME);
         console.timeStamp(END_TRACE_LABEL);
@@ -305,10 +253,7 @@
         const longestLongTaskMs = renderLongTasks.reduce((longest, entry) => {
           return Math.max(longest, entry.duration);
         }, 0);
-        const instrumentation = readBenchmarkInstrumentation(
-          heapBefore,
-          heapAfter
-        );
+        const instrumentation = benchmark.summarize(heapBefore, heapAfter);
         instrumentation.counters['workload.renderedRows'] = renderedItemCount;
 
         window.__treesDevVirtualizationProfile = {

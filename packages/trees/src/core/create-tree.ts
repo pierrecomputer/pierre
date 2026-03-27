@@ -4,7 +4,7 @@ import type { ItemMeta } from '../features/tree/types';
 import {
   setBenchmarkCounter,
   withBenchmarkPhase,
-} from '../internal/benchmarkProfile';
+} from '../internal/benchmarkInstrumentation';
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
 import { buildStaticInstance } from './build-static-instance';
 import {
@@ -151,31 +151,39 @@ export const createTree = <T>(
   };
 
   const rebuildItemMeta = () => {
-    withBenchmarkPhase('core.rebuildItemMeta', () => {
-      itemInstances = null;
-      itemMetaMap = {};
+    withBenchmarkPhase(
+      config.__benchmarkInstrumentation,
+      'core.rebuildItemMeta',
+      () => {
+        itemInstances = null;
+        itemMetaMap = {};
 
-      rebuildRootItemInstance();
-      itemMetaMap[config.rootItemId] = {
-        itemId: config.rootItemId,
-        index: -1,
-        parentId: null!,
-        level: -1,
-        posInSet: 0,
-        setSize: 1,
-      };
+        rebuildRootItemInstance();
+        itemMetaMap[config.rootItemId] = {
+          itemId: config.rootItemId,
+          index: -1,
+          parentId: null!,
+          level: -1,
+          posInSet: 0,
+          setSize: 1,
+        };
 
-      const nextVisibleItemIds: string[] = [];
-      for (const item of treeInstance.getItemsMeta()) {
-        itemMetaMap[item.itemId] = item;
-        nextVisibleItemIds.push(item.itemId);
+        const nextVisibleItemIds: string[] = [];
+        for (const item of treeInstance.getItemsMeta()) {
+          itemMetaMap[item.itemId] = item;
+          nextVisibleItemIds.push(item.itemId);
+        }
+
+        visibleItemIds = nextVisibleItemIds;
+        (treeDataRef.current as TreeDataRef).visibleItemIds = visibleItemIds;
+        setBenchmarkCounter(
+          config.__benchmarkInstrumentation,
+          'workload.visibleItemMeta',
+          visibleItemIds.length
+        );
+        rebuildScheduled = false;
       }
-
-      visibleItemIds = nextVisibleItemIds;
-      (treeDataRef.current as TreeDataRef).visibleItemIds = visibleItemIds;
-      setBenchmarkCounter('workload.visibleItemMeta', visibleItemIds.length);
-      rebuildScheduled = false;
-    });
+    );
   };
 
   // oxlint-disable-next-line typescript-eslint/no-explicit-any
