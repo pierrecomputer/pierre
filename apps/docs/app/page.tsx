@@ -51,23 +51,11 @@ export default function Home() {
         <CustomHunkSeparatorsSection />
         <CustomHeaderSection />
         <MergeConflictSection />
-        {/* <PrebuiltReact /> */}
         <AnnotationsSection />
         <AcceptRejectSection />
         <LineSelectionSection />
         <ArbitraryFilesSection />
       </section>
-
-      {/* TODO: add this back once we add the migration APIs
-
-      <section className="max-w-4xl mx-auto px-8 py-12 space-y-4">
-        <h2 className="text-3xl font-bold">Migrate to @pierre/diffs</h2>
-        <p className="text-muted-foreground">
-          Already using git-diff-viewer? Learn how to migrate your diff
-          rendering to @pierre/diffs.
-        </p>
-      </section> */}
-
       <PierreCompanySection />
       <Footer />
     </div>
@@ -109,9 +97,13 @@ async function CustomHeaderSection() {
 async function CustomHunkSeparatorsSection() {
   return (
     <CustomHunkSeparators
-      prerenderedDiff={await preloadMultiFileDiff(
-        CUSTOM_HUNK_SEPARATORS_EXAMPLE
-      )}
+      prerenderedDiff={await preloadMultiFileDiff({
+        ...CUSTOM_HUNK_SEPARATORS_EXAMPLE,
+        options: {
+          ...CUSTOM_HUNK_SEPARATORS_EXAMPLE.options,
+          themeType: 'dark',
+        },
+      })}
     />
   );
 }

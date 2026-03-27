@@ -61,7 +61,7 @@ export const CUSTOM_HUNK_SEPARATORS_EXAMPLE: PreloadMultiFileDiffOptions<undefin
       contents: createTaskSummarySource('new'),
     },
     options: {
-      theme: 'pierre-dark',
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
       diffStyle: 'split',
       expansionLineCount: 5,
       hunkSeparators: 'line-info',
