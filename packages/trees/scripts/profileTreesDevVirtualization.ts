@@ -9,6 +9,7 @@ interface ProfileConfig {
   url: string;
   timeoutMs: number;
   runs: number;
+  includeCallCounts: boolean;
   outputJson: boolean;
   traceOutputPath: string;
   ensureBuild: boolean;
@@ -83,6 +84,7 @@ interface BottomUpFunctionSummary {
   totalMs: number;
   selfPercent: number | null;
   totalPercent: number | null;
+  callCount: number | null;
 }
 
 interface CpuProfileSummary {
@@ -143,6 +145,23 @@ interface CpuProfile {
   endTime: number;
   samples?: number[];
   timeDeltas?: number[];
+}
+
+interface CoverageRange {
+  startOffset: number;
+  endOffset: number;
+  count: number;
+}
+
+interface FunctionCoverage {
+  functionName: string;
+  ranges: CoverageRange[];
+}
+
+interface ScriptCoverage {
+  scriptId: string;
+  url: string;
+  functions: FunctionCoverage[];
 }
 
 interface RuntimeEvaluateResult<TValue> {
@@ -271,6 +290,9 @@ function printHelpAndExit(): never {
     `  --runs <count>         Number of benchmark runs to execute (default: ${DEFAULT_RUN_COUNT})`
   );
   console.log(
+    '  --call-counts         Run a second precise-coverage pass to annotate bottom-up functions with invocation counts'
+  );
+  console.log(
     `  --trace-out <path>     Where to save the Chrome trace JSON when tracing succeeds (default: ${DEFAULT_TRACE_OUTPUT_EXAMPLE_PATH})`
   );
   console.log(
@@ -333,6 +355,7 @@ function parseArgs(argv: string[]): ProfileConfig {
     url: DEFAULT_URL,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     runs: DEFAULT_RUN_COUNT,
+    includeCallCounts: false,
     outputJson: false,
     traceOutputPath: createDefaultTraceOutputPath(),
     ensureBuild: true,
@@ -347,6 +370,11 @@ function parseArgs(argv: string[]): ProfileConfig {
 
     if (rawArg === '--json') {
       config.outputJson = true;
+      continue;
+    }
+
+    if (rawArg === '--call-counts') {
+      config.includeCallCounts = true;
       continue;
     }
 
@@ -1211,6 +1239,10 @@ function isInternalCpuProfileFrame(
   );
 }
 
+function createFunctionKey(functionName: string, url: string): string {
+  return JSON.stringify([functionName.trim(), url]);
+}
+
 function createUnavailableCpuProfileSummary(): CpuProfileSummary {
   return {
     available: false,
@@ -1220,7 +1252,37 @@ function createUnavailableCpuProfileSummary(): CpuProfileSummary {
   };
 }
 
-function summarizeCpuProfile(profile: CpuProfile | null): CpuProfileSummary {
+function buildFunctionCallCountMap(
+  scripts: ScriptCoverage[]
+): Map<string, number | null> {
+  const totals = new Map<string, number>();
+  const ambiguousKeys = new Set<string>();
+
+  for (const script of scripts) {
+    for (const fn of script.functions) {
+      const key = createFunctionKey(fn.functionName, script.url);
+      if (totals.has(key)) {
+        ambiguousKeys.add(key);
+      }
+
+      const callCount = fn.ranges.reduce((maxCount, range) => {
+        return Math.max(maxCount, range.count);
+      }, 0);
+      totals.set(key, (totals.get(key) ?? 0) + callCount);
+    }
+  }
+
+  const result = new Map<string, number | null>();
+  for (const [key, count] of totals.entries()) {
+    result.set(key, ambiguousKeys.has(key) ? null : count);
+  }
+  return result;
+}
+
+function summarizeCpuProfile(
+  profile: CpuProfile | null,
+  callCountsByFunction: Map<string, number | null> | null
+): CpuProfileSummary {
   if (
     profile == null ||
     profile.samples == null ||
@@ -1256,6 +1318,7 @@ function summarizeCpuProfile(profile: CpuProfile | null): CpuProfileSummary {
       totalUs: number;
       isInternal: boolean;
       isAnonymousWithoutSource: boolean;
+      callCount: number | null;
     }
   >();
 
@@ -1292,6 +1355,10 @@ function summarizeCpuProfile(profile: CpuProfile | null): CpuProfileSummary {
       isAnonymousWithoutSource:
         functionName === '' &&
         (node.callFrame.url == null || node.callFrame.url === ''),
+      callCount:
+        callCountsByFunction?.get(
+          createFunctionKey(node.callFrame.functionName, node.callFrame.url)
+        ) ?? null,
     };
 
     if (kind === 'self') {
@@ -1335,6 +1402,7 @@ function summarizeCpuProfile(profile: CpuProfile | null): CpuProfileSummary {
         sampledUs <= 0
           ? null
           : Number(((entry.totalUs / sampledUs) * 100).toFixed(1)),
+      callCount: entry.callCount,
       isInternal: entry.isInternal,
       isAnonymousWithoutSource: entry.isAnonymousWithoutSource,
     }))
@@ -1509,6 +1577,28 @@ async function stopCpuProfile(cdp: CdpClient): Promise<CpuProfile | null> {
     const response = await cdp.send<{ profile?: CpuProfile }>('Profiler.stop');
     return response.profile ?? null;
   } finally {
+    await cdp.send('Profiler.disable').catch(() => {});
+  }
+}
+
+async function startPreciseCoverage(cdp: CdpClient): Promise<void> {
+  await cdp.send('Profiler.enable');
+  await cdp.send('Profiler.startPreciseCoverage', {
+    callCount: true,
+    detailed: false,
+  });
+}
+
+async function stopPreciseCoverage(
+  cdp: CdpClient
+): Promise<ScriptCoverage[] | null> {
+  try {
+    const response = await cdp.send<{ result?: ScriptCoverage[] }>(
+      'Profiler.takePreciseCoverage'
+    );
+    return response.result ?? null;
+  } finally {
+    await cdp.send('Profiler.stopPreciseCoverage').catch(() => {});
     await cdp.send('Profiler.disable').catch(() => {});
   }
 }
@@ -1717,6 +1807,28 @@ async function collectProfilingArtifacts(
   }
 }
 
+async function collectFunctionCallCounts(
+  cdp: CdpClient,
+  url: string,
+  timeoutMs: number
+): Promise<Map<string, number | null> | null> {
+  try {
+    await navigateToFixture(cdp, url, timeoutMs);
+    await startPreciseCoverage(cdp);
+    await clickRenderButton(cdp);
+    await waitForProfileSummary(cdp, timeoutMs);
+    const coverage = await stopPreciseCoverage(cdp);
+    if (coverage == null) {
+      return null;
+    }
+    return buildFunctionCallCountMap(coverage);
+  } catch {
+    await cdp.send('Profiler.stopPreciseCoverage').catch(() => {});
+    await cdp.send('Profiler.disable').catch(() => {});
+    return null;
+  }
+}
+
 function writeTraceIfAvailable(
   trace: TraceFile | null,
   traceOutputPath: string
@@ -1769,6 +1881,9 @@ async function profileVirtualizedRender(
         return await waitForProfileSummary(cdp, config.timeoutMs);
       }
     );
+    const callCountsByFunction = config.includeCallCounts
+      ? await collectFunctionCallCounts(cdp, config.url, config.timeoutMs)
+      : null;
 
     return {
       runNumber,
@@ -1787,7 +1902,7 @@ async function profileVirtualizedRender(
           ? null
           : Number(pageSummary.longestLongTaskMs.toFixed(3)),
       trace: summarizeTrace(trace, pageSummary),
-      cpuProfile: summarizeCpuProfile(cpuProfile),
+      cpuProfile: summarizeCpuProfile(cpuProfile, callCountsByFunction),
     };
   } finally {
     cdp.close();
@@ -1868,6 +1983,9 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
   }
 
   if (result.cpuProfile.available) {
+    const hasCallCounts = result.cpuProfile.bottomUpFunctions.some(
+      (functionSummary) => functionSummary.callCount != null
+    );
     console.log('');
     console.log('CPU Summary');
     console.log(
@@ -1876,6 +1994,7 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
         [
           ['Sampled CPU time', formatMs(result.cpuProfile.sampledMs)],
           ['Samples', String(result.cpuProfile.sampleCount ?? 'n/a')],
+          ...(hasCallCounts ? [['Call counts', 'auxiliary pass']] : []),
         ],
         {
           alignments: ['left', 'right'],
@@ -1889,17 +2008,34 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
       console.log('Bottom-Up CPU');
       console.log(
         createTable(
-          ['Function', 'Self', 'Self %', 'Total', 'Total %'],
-          result.cpuProfile.bottomUpFunctions.map((functionSummary) => [
-            functionSummary.name,
-            formatMs(functionSummary.selfMs),
-            formatPercent(functionSummary.selfPercent),
-            formatMs(functionSummary.totalMs),
-            formatPercent(functionSummary.totalPercent),
-          ]),
+          hasCallCounts
+            ? ['Function', 'Calls', 'Self', 'Self %', 'Total', 'Total %']
+            : ['Function', 'Self', 'Self %', 'Total', 'Total %'],
+          result.cpuProfile.bottomUpFunctions.map((functionSummary) => {
+            const baseRow = [
+              functionSummary.name,
+              formatMs(functionSummary.selfMs),
+              formatPercent(functionSummary.selfPercent),
+              formatMs(functionSummary.totalMs),
+              formatPercent(functionSummary.totalPercent),
+            ];
+            return hasCallCounts
+              ? [
+                  functionSummary.name,
+                  functionSummary.callCount == null
+                    ? 'n/a'
+                    : String(functionSummary.callCount),
+                  ...baseRow.slice(1),
+                ]
+              : baseRow;
+          }),
           {
-            alignments: ['left', 'right', 'right', 'right', 'right'],
-            maxWidths: [78, 12, 9, 12, 9],
+            alignments: hasCallCounts
+              ? ['left', 'right', 'right', 'right', 'right', 'right']
+              : ['left', 'right', 'right', 'right', 'right'],
+            maxWidths: hasCallCounts
+              ? [68, 10, 12, 9, 12, 9]
+              : [78, 12, 9, 12, 9],
           }
         )
       );

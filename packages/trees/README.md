@@ -372,6 +372,7 @@ The human-readable output includes:
 - trace-window timing, busy time, and coarse render buckets
 - dominant trace events
 - a bottom-up sampled CPU table with `self` and `total` time
+- optional function invocation counts from an auxiliary precise-coverage pass
 
 Useful examples:
 
@@ -385,6 +386,9 @@ bun ws trees profile:virtualization -- --no-build --no-server
 # Run multiple benchmark passes and print per-run + aggregate tables
 bun ws trees profile:virtualization -- --runs 5
 
+# Add function call counts to the bottom-up CPU table
+bun ws trees profile:virtualization -- --call-counts
+
 # Emit raw machine-readable runs only
 bun ws trees profile:virtualization -- --runs 5 --json
 ```
@@ -396,6 +400,8 @@ Flags:
   fixture
 - `--timeout <ms>` to change navigation/render/trace timeout behavior
 - `--runs <count>` to execute the benchmark multiple times sequentially
+- `--call-counts` to run a second precise-coverage pass and annotate bottom-up
+  functions with invocation counts
 - `--trace-out <path>` to choose the trace output location
 - `--no-build` to skip rebuilding `dist/`
 - `--no-server` to assume the fixture server is already running
@@ -404,6 +410,10 @@ Flags:
 Trace files are written to the system temp directory by default. For multi-run
 benchmarks the command appends `-run-N` to the trace filename so each run keeps
 its own trace.
+
+`--call-counts` is intentionally not enabled by default. It uses Chrome precise
+coverage, which runs as a separate auxiliary pass so the timed benchmark run is
+not perturbed.
 
 # Credits and Acknolwedgements
 
