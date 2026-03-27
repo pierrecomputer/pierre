@@ -47,11 +47,14 @@ export function WorkerPoolContextProvider({
   // We use insertion effect for the instance counting to essentially debounce
   // potentially conflicting mount/unmounts
   useInsertionEffect(() => {
-    instanceCount++;
-    return () => {
-      instanceCount--;
-    };
-  }, []);
+    if (poolManager != null) {
+      instanceCount++;
+      return () => {
+        instanceCount--;
+      };
+    }
+    return undefined;
+  }, [poolManager]);
   useEffect(() => {
     return () => {
       if (instanceCount === 0) {

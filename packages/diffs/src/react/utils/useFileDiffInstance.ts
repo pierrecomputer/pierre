@@ -35,6 +35,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   metrics?: VirtualFileMetrics;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
+  disableWorkerPool: boolean;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -51,6 +52,7 @@ export function useFileDiffInstance<LAnnotation>({
   metrics,
   hasGutterRenderUtility,
   hasCustomHeader,
+  disableWorkerPool,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -73,7 +75,7 @@ export function useFileDiffInstance<LAnnotation>({
           }),
           simpleVirtualizer,
           metrics,
-          poolManager,
+          !disableWorkerPool ? poolManager : undefined,
           true
         );
       } else {
@@ -83,7 +85,7 @@ export function useFileDiffInstance<LAnnotation>({
             hasGutterRenderUtility,
             options,
           }),
-          poolManager,
+          !disableWorkerPool ? poolManager : undefined,
           true
         );
       }

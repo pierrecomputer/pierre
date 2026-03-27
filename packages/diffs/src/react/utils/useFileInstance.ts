@@ -35,6 +35,7 @@ interface UseFileInstanceProps<LAnnotation> {
   metrics?: VirtualFileMetrics;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
+  disableWorkerPool: boolean;
 }
 
 interface UseFileInstanceReturn {
@@ -51,6 +52,7 @@ export function useFileInstance<LAnnotation>({
   metrics,
   hasGutterRenderUtility,
   hasCustomHeader,
+  disableWorkerPool,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -73,7 +75,7 @@ export function useFileInstance<LAnnotation>({
           }),
           simpleVirtualizer,
           metrics,
-          poolManager,
+          !disableWorkerPool ? poolManager : undefined,
           true
         );
       } else {
@@ -83,7 +85,7 @@ export function useFileInstance<LAnnotation>({
             hasGutterRenderUtility,
             options,
           }),
-          poolManager,
+          !disableWorkerPool ? poolManager : undefined,
           true
         );
       }

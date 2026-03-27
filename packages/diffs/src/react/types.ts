@@ -59,4 +59,5 @@ export interface FileProps<LAnnotation> {
   className?: string;
   style?: CSSProperties;
   prerenderedHTML?: string;
+  disableWorkerPool?: boolean;
 }

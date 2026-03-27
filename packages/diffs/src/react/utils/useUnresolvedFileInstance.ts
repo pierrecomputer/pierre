@@ -45,6 +45,7 @@ interface UseUnresolvedFileInstanceProps<LAnnotation> {
   hasConflictUtility: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
+  disableWorkerPool: boolean;
 }
 
 interface UseUnresolvedFileInstanceReturn<LAnnotation> {
@@ -65,6 +66,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
   hasConflictUtility,
   hasGutterRenderUtility,
   hasCustomHeader,
+  disableWorkerPool,
 }: UseUnresolvedFileInstanceProps<LAnnotation>): UseUnresolvedFileInstanceReturn<LAnnotation> {
   const [{ fileDiff, actions, markerRows }, setState] = useState(() => {
     const { fileDiff, actions, markerRows } = parseMergeConflictDiffFromFile(
@@ -113,7 +115,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
           onMergeConflictAction,
           options,
         }),
-        poolManager,
+        !disableWorkerPool ? poolManager : undefined,
         true
       );
       void instanceRef.current.hydrate({
