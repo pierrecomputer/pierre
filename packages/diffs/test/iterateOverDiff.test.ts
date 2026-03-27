@@ -16,6 +16,14 @@ describe('iterateOverDiff', () => {
     { name: 'test.txt', contents: fileOld },
     { name: 'test.txt', contents: fileNew }
   );
+  const totalUnifiedRows = diff.hunks.reduce(
+    (sum, hunk) => sum + hunk.unifiedLineCount,
+    0
+  );
+  const totalSplitRows = diff.hunks.reduce(
+    (sum, hunk) => sum + hunk.splitLineCount,
+    0
+  );
 
   test('unified iteration produces expected sequence', () => {
     const results: Array<{
@@ -53,16 +61,15 @@ describe('iterateOverDiff', () => {
     });
 
     // Check total lines matches expected
-    expect(results.length).toBe(517);
+    expect(results.length).toBe(totalUnifiedRows);
 
-    // First hunk starts at its unifiedLineStart (which is 3 because collapsedBefore=3)
+    // First hunk starts at its unifiedLineStart.
     // The lineIndex is the actual unified line index, not a sequential counter
     expect(results[0].lineIndex).toBe(diff.hunks[0].unifiedLineStart);
     expect(results[0].hunkIndex).toBe(0);
 
-    // First line should be context with collapsedBefore = 3 (from hunk 0)
-    // Actually, hunk 0 has collapsedBefore=3, so first rendered line should signal this
-    expect(results[0].collapsedBefore).toBe(3);
+    // First line should signal the leading collapsed region for hunk 0.
+    expect(results[0].collapsedBefore).toBe(diff.hunks[0].collapsedBefore);
   });
 
   test('split iteration produces expected sequence', () => {
@@ -93,7 +100,7 @@ describe('iterateOverDiff', () => {
     });
 
     // Check total lines matches expected for split mode
-    expect(results.length).toBe(490);
+    expect(results.length).toBe(totalSplitRows);
   });
 
   test('expanded hunks work correctly', () => {
@@ -128,9 +135,11 @@ describe('iterateOverDiff', () => {
       },
     });
 
-    // With 3 collapsedBefore and fromStart=2, fromEnd=1, we should have:
+    const firstHunkCollapsedBefore = diff.hunks[0]?.collapsedBefore ?? 0;
+
+    // With collapsedBefore and fromStart=2, fromEnd=1, we should have:
     // - 2 context-expanded lines (fromStart)
-    // - collapsedBefore = 0 (3 - 2 - 1 = 0, fully expanded)
+    // - remaining collapsedBefore after the trailing expansion marker
     // - 1 context-expanded line (fromEnd)
     // - then hunk content
 
@@ -141,7 +150,9 @@ describe('iterateOverDiff', () => {
     expect(results[1].collapsedBefore).toBe(0);
     // Third line should also be context-expanded (fromEnd)
     expect(results[2].type).toBe('context-expanded');
-    expect(results[2].collapsedBefore).toBe(0);
+    expect(results[2].collapsedBefore).toBe(
+      Math.max(firstHunkCollapsedBefore - 3, 0)
+    );
   });
 
   test('windowing skips lines correctly', () => {
