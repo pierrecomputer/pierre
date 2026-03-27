@@ -131,6 +131,56 @@ export interface ExpandPathsOptions {
   cache?: Map<string, string[]>;
 }
 
+// Resolves each ancestor segment in a path using a shared cache so expanding a
+// large folder set does not repeatedly rebuild the same prefix strings.
+function resolveAncestorIdsForPath(
+  path: string,
+  pathToId: Map<string, string>,
+  flatten: boolean,
+  ancestorIdCache: Map<string, string | null>
+): string[] {
+  const resolvedIds: string[] = [];
+  let segmentStart = 0;
+
+  while (true) {
+    const slashIndex = path.indexOf('/', segmentStart);
+    const endIndex = slashIndex === -1 ? path.length : slashIndex;
+    const ancestor = path.slice(0, endIndex);
+
+    if (ancestor.length > 0) {
+      if (ancestorIdCache.has(ancestor)) {
+        const cachedId = ancestorIdCache.get(ancestor);
+        if (cachedId != null) {
+          resolvedIds.push(cachedId);
+        }
+      } else {
+        let resolvedId: string | null;
+        if (flatten) {
+          // Prefer the flattened (f::) ID when it exists — that's the actual
+          // item headless-tree renders. Adding both the regular AND flattened
+          // IDs causes controlled-state round-trips to re-add IDs that the
+          // tree's built-in collapse removed.
+          resolvedId =
+            pathToId.get('f::' + ancestor) ?? pathToId.get(ancestor) ?? null;
+        } else {
+          // Without flattening, only use regular IDs — f:: nodes are not
+          // rendered and would create an ID mismatch in headless-tree.
+          resolvedId = pathToId.get(ancestor) ?? null;
+        }
+        ancestorIdCache.set(ancestor, resolvedId);
+        if (resolvedId != null) {
+          resolvedIds.push(resolvedId);
+        }
+      }
+    }
+
+    if (slashIndex === -1) {
+      return resolvedIds;
+    }
+    segmentStart = slashIndex + 1;
+  }
+}
+
 /**
  * Given a list of file/folder paths, returns the IDs of all those paths
  * plus every ancestor directory. This handles both regular and flattened
@@ -144,36 +194,18 @@ export function expandPathsWithAncestors(
   const cache = options?.cache;
   const flatten = options?.flattenEmptyDirectories !== false;
   const ids = new Set<string>();
+  const ancestorIdCache = new Map<string, string | null>();
+
   for (const path of paths) {
     let expanded = cache?.get(path);
     if (expanded == null) {
-      const parts = path.split('/');
-      const next: string[] = [];
-      for (let i = 1; i <= parts.length; i++) {
-        const ancestor = parts.slice(0, i).join('/');
-        if (flatten) {
-          // Prefer the flattened (f::) ID when it exists — that's the actual
-          // item headless-tree renders. Adding both the regular AND flattened
-          // IDs causes controlled-state round-trips to re-add IDs that the
-          // tree's built-in collapse removed.
-          const flatId = pathToId.get('f::' + ancestor);
-          if (flatId != null) {
-            next.push(flatId);
-          } else {
-            const id = pathToId.get(ancestor);
-            if (id != null) next.push(id);
-          }
-        } else {
-          // Without flattening, only use regular IDs — f:: nodes are not
-          // rendered and would create an ID mismatch in headless-tree.
-          const id = pathToId.get(ancestor);
-          if (id != null) next.push(id);
-        }
-      }
-      expanded = next;
-      if (cache != null) {
-        cache.set(path, expanded);
-      }
+      expanded = resolveAncestorIdsForPath(
+        path,
+        pathToId,
+        flatten,
+        ancestorIdCache
+      );
+      cache?.set(path, expanded);
     }
 
     for (const id of expanded) {

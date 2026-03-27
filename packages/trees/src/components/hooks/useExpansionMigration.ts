@@ -47,7 +47,7 @@ export interface UseExpansionMigrationArgs {
   tree: TreeInstance<FileTreeNode>;
   files: string[];
   pathToId: Map<string, string>;
-  idToPath: Map<string, string>;
+  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
   flattenEmptyDirectories: boolean | undefined;
   pendingDropTargetExpandRef: { current: PendingDropTarget | null };
   pendingRenameExpandedRemapRef: {
@@ -83,7 +83,9 @@ export function useExpansionMigration({
   'use no memo';
   // Keep the previous idToPath so we can translate stale expanded IDs -> paths
   // when files change (DnD or controlled update).
-  const prevIdToPathRef = useRef<Map<string, string>>(idToPath);
+  const prevIdToPathRef = useRef<Pick<Map<string, string>, 'get' | 'has'>>(
+    idToPath
+  );
 
   // Detect stale expanded IDs when the file list changes. Flattened chains
   // may break or form, causing node IDs to change. We snapshot the expanded

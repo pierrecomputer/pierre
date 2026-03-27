@@ -27,6 +27,7 @@ import {
 } from '../features/git-status/feature';
 import { hotkeysCoreFeature } from '../features/hotkeys-core/feature';
 import { keyboardDragAndDropFeature } from '../features/keyboard-drag-and-drop/feature';
+import type { TreeDataRef } from '../features/main/types';
 import { propMemoizationFeature } from '../features/prop-memoization/feature';
 import { renamingFeature } from '../features/renaming/feature';
 import {
@@ -73,15 +74,26 @@ export interface FileTreeRootProps {
   stateConfig?: FileTreeStateConfig;
   handleRef?: { current: FileTreeHandle | null };
   callbacksRef?: { current: FileTreeCallbacks };
+  initialViewportHeight?: number | null;
 }
 
 const EMPTY_ANCESTORS: string[] = [];
+
+// Reuses the last rebuild's visible ID list so virtualized rendering can size
+// and slice the tree without forcing core to instantiate every visible item.
+function getVisibleItemIds(tree: TreeInstance<FileTreeNode>): string[] {
+  return (
+    tree.getDataRef<TreeDataRef>().current.visibleItemIds ??
+    tree.getItems().map((item) => item.getId())
+  );
+}
 
 export function Root({
   fileTreeOptions,
   stateConfig,
   handleRef,
   callbacksRef,
+  initialViewportHeight,
 }: FileTreeRootProps): JSX.Element {
   'use no memo';
   const {
@@ -155,16 +167,26 @@ export function Root({
     [files, sortComparator]
   );
 
-  // Build path<->id maps from treeData
-  const { pathToId, idToPath } = useMemo(() => {
-    const p2i = new Map<string, string>();
-    const i2p = new Map<string, string>();
-    for (const [id, node] of Object.entries(treeData)) {
-      p2i.set(node.path, id);
-      i2p.set(id, node.path);
+  // Build the hot path->id map with a direct for-in scan and answer id->path
+  // lookups straight from treeData so we do not duplicate the whole tree into a
+  // second Map on every fresh mount.
+  const pathToId = useMemo(() => {
+    const next = new Map<string, string>();
+    for (const id in treeData) {
+      const node = treeData[id];
+      if (node != null) {
+        next.set(node.path, id);
+      }
     }
-    return { pathToId: p2i, idToPath: i2p };
+    return next;
   }, [treeData]);
+  const idToPath = useMemo<Pick<Map<string, string>, 'get' | 'has'>>(
+    () => ({
+      get: (id: string) => treeData[id]?.path,
+      has: (id: string) => treeData[id] != null,
+    }),
+    [treeData]
+  );
 
   const ancestorChainsCacheRef = useRef<Map<string, string[]>>(new Map());
   const prevIdToPathForCacheRef = useRef(idToPath);
@@ -174,7 +196,6 @@ export function Root({
   }
 
   const restTreeConfig = useTreeStateConfig({
-    treeData,
     pathToId,
     stateConfig,
     flattenEmptyDirectories,
@@ -598,19 +619,28 @@ export function Root({
         </div>
       ) : null}
       {(() => {
-        const allItems = tree.getItems();
         const visibleIdSet = getSearchVisibleIdSet(tree);
         const gitStatusMap = getGitStatusMap(tree);
-        const items =
+        const allItemIds = getVisibleItemIds(tree);
+        const itemIds =
           visibleIdSet != null
-            ? allItems.filter((item) => visibleIdSet.has(item.getId()))
-            : allItems;
+            ? allItemIds.filter((itemId) => visibleIdSet.has(itemId))
+            : allItemIds;
+        const draggedItemIdSet = isDnD
+          ? new Set(
+              (tree.getState().dnd?.draggedItems ?? []).map(
+                (item: ItemInstance<FileTreeNode>) => item.getId()
+              )
+            )
+          : null;
 
         const renderItemAtIndex = (index: number) => {
-          const item = items[index];
-          if (item == null) {
+          const itemId = itemIds[index];
+          if (itemId == null) {
             return null;
           }
+
+          const item = tree.getItemInstance(itemId);
           const itemData = item.getItemData();
           const itemMeta = item.getItemMeta();
           const hasChildren = itemData?.children?.direct != null;
@@ -627,25 +657,19 @@ export function Root({
           const isFocused = hasFocusedItem && item.isFocused();
           const isDragTarget = isDnD && item.isUnorderedDragTarget?.() === true;
           const isRenaming = item.isRenaming?.() === true;
-          const isDragging =
-            isDnD &&
-            tree
-              .getState()
-              .dnd?.draggedItems?.some(
-                (d: ItemInstance<FileTreeNode>) => d.getId() === item.getId()
-              ) === true;
-          const itemGitStatus = gitStatusMap?.statusById.get(item.getId());
+          const isDragging = draggedItemIdSet?.has(itemId) === true;
+          const itemGitStatus = gitStatusMap?.statusById.get(itemId);
           const itemContainsGitChange =
             hasChildren &&
-            (gitStatusMap?.foldersWithChanges.has(item.getId()) ?? false);
-          const ancestors = getAncestors(item.getId());
+            (gitStatusMap?.foldersWithChanges.has(itemId) ?? false);
+          const ancestors = getAncestors(itemId);
 
           return (
             <TreeItem
-              key={item.getId()}
+              key={itemId}
               item={item}
               tree={tree}
-              itemId={item.getId()}
+              itemId={itemId}
               hasChildren={hasChildren}
               isExpanded={isExpanded}
               itemName={itemName}
@@ -697,23 +721,22 @@ export function Root({
 
         if (
           shouldVirtualize &&
-          items.length > 0 &&
-          items.length >= virtualizeThreshold
+          itemIds.length > 0 &&
+          itemIds.length >= virtualizeThreshold
         ) {
           const focusedIndex =
-            focusedItemId != null
-              ? items.findIndex((item) => item.getId() === focusedItemId)
-              : null;
+            focusedItemId != null ? itemIds.indexOf(focusedItemId) : null;
           return (
             <div data-file-tree-virtualized-scroll="true">
               <VirtualizedList
-                itemCount={items.length}
+                itemCount={itemIds.length}
                 renderItem={renderItemAtIndex}
                 scrollToIndex={
                   focusedIndex != null && focusedIndex >= 0
                     ? focusedIndex
                     : null
                 }
+                initialViewportHeight={initialViewportHeight}
               />
               {contextMenuTrigger}
             </div>
@@ -722,7 +745,7 @@ export function Root({
 
         return (
           <>
-            {items.map((_, i) => renderItemAtIndex(i))}
+            {itemIds.map((_, i) => renderItemAtIndex(i))}
             {contextMenuTrigger}
           </>
         );

@@ -25,7 +25,7 @@ export interface UseContextMenuControllerArgs {
   isContextMenuEnabled: boolean;
   callbacksRef?: { current: FileTreeCallbacks };
   files: string[];
-  idToPath: Map<string, string>;
+  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
 }
 
 export interface UseContextMenuControllerResult {

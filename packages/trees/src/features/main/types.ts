@@ -13,6 +13,12 @@ import type { ItemMeta } from '../tree/types';
 export interface TreeDataRef {
   isMounted?: boolean;
   waitingForMount?: (() => void)[];
+  /**
+   * Cached visible item IDs from the latest rebuild. Virtualized renderers can
+   * use this to size and slice the visible tree without materializing every
+   * item instance up front.
+   */
+  visibleItemIds?: string[];
 }
 
 export type InstanceTypeMap = {

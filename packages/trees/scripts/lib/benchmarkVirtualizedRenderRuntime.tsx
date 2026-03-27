@@ -3,6 +3,7 @@ import type { JSX } from 'preact';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 
 import type { ItemInstance, TreeInstance } from '../../src/core/types/core';
+import type { TreeDataRef } from '../../src/features/main/types';
 import type { FileTreeOptions, FileTreeStateConfig } from '../../src/FileTree';
 import type { SVGSpriteNames } from '../../src/sprite';
 import type { FileTreeNode } from '../../src/types';
@@ -10,6 +11,15 @@ import type { ChildrenSortOption } from '../../src/utils/sortChildren';
 
 const DEFAULT_ITEM_HEIGHT = 30;
 const EMPTY_ANCESTORS: string[] = [];
+
+// Reuses the last rebuild's visible ID list so the benchmark mirrors the real
+// virtualized path without forcing full item-instance materialization first.
+function getVisibleItemIds(tree: TreeInstance<FileTreeNode>): string[] {
+  return (
+    tree.getDataRef<TreeDataRef>().current.visibleItemIds ??
+    tree.getItems().map((item) => item.getId())
+  );
+}
 
 export interface BenchmarkVirtualRange {
   start: number;
@@ -366,32 +376,32 @@ function createBenchmarkVirtualizedRoot(
     const containerProps = tree.getContainerProps();
     const visibleIdSet = runtime.getSearchVisibleIdSet(tree);
     const gitStatusMap = runtime.getGitStatusMap(tree);
-    const allItems = tree.getItems();
-    const items =
+    const allItemIds = getVisibleItemIds(tree);
+    const itemIds =
       visibleIdSet != null
-        ? allItems.filter((item) => visibleIdSet.has(item.getId()))
-        : allItems;
+        ? allItemIds.filter((itemId) => visibleIdSet.has(itemId))
+        : allItemIds;
 
     const renderItemAtIndex = (index: number) => {
-      const item = items[index];
-      if (item == null) {
+      const itemId = itemIds[index];
+      if (itemId == null) {
         return null;
       }
 
+      const item = tree.getItemInstance(itemId);
       const itemData = item.getItemData();
       const itemMeta = item.getItemMeta();
       const hasChildren = itemData?.children?.direct != null;
-      const itemGitStatus = gitStatusMap?.statusById.get(item.getId());
+      const itemGitStatus = gitStatusMap?.statusById.get(itemId);
       const itemContainsGitChange =
-        hasChildren &&
-        (gitStatusMap?.foldersWithChanges.has(item.getId()) ?? false);
+        hasChildren && (gitStatusMap?.foldersWithChanges.has(itemId) ?? false);
 
       return (
         <runtime.TreeItem
-          key={item.getId()}
+          key={itemId}
           item={item}
           tree={tree}
-          itemId={item.getId()}
+          itemId={itemId}
           hasChildren={hasChildren}
           isExpanded={hasChildren && item.isExpanded()}
           itemName={item.getItemName()}
@@ -409,7 +419,7 @@ function createBenchmarkVirtualizedRoot(
           containsGitChange={itemContainsGitChange ?? false}
           flattens={itemData?.flattens}
           idToPath={idToPath}
-          ancestors={getAncestors(item.getId())}
+          ancestors={getAncestors(itemId)}
           treeDomId={treeDomId}
           remapIcon={remapIcon}
           detectFlattenedSubfolder={() => {}}
@@ -425,11 +435,11 @@ function createBenchmarkVirtualizedRoot(
         data-file-tree-virtualized-root={shouldVirtualize ? 'true' : undefined}
       >
         {shouldVirtualize &&
-        items.length > 0 &&
-        items.length >= virtualizeThreshold ? (
+        itemIds.length > 0 &&
+        itemIds.length >= virtualizeThreshold ? (
           <div data-file-tree-virtualized-scroll="true">
             <StaticBenchmarkVirtualizedList
-              itemCount={items.length}
+              itemCount={itemIds.length}
               renderItem={renderItemAtIndex}
               range={virtualizedRenderWindow.range}
               itemHeight={virtualizedRenderWindow.itemHeight}
@@ -437,7 +447,7 @@ function createBenchmarkVirtualizedRoot(
             />
           </div>
         ) : (
-          items.map((_, index) => renderItemAtIndex(index))
+          itemIds.map((_, index) => renderItemAtIndex(index))
         )}
       </div>
     );

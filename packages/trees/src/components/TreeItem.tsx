@@ -62,7 +62,7 @@ function FlattenedDirectoryName({
   renameInputProps,
 }: {
   tree: TreeInstance<FileTreeNode>;
-  idToPath: Map<string, string>;
+  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
   flattens: string[];
   fallbackName: string;
   renameInputProps?: Record<string, unknown> | null;
@@ -145,7 +145,7 @@ export interface TreeItemProps {
   gitStatus: string | undefined;
   containsGitChange: boolean;
   flattens: string[] | undefined;
-  idToPath: Map<string, string>;
+  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
   ancestors: string[];
   treeDomId: string;
   remapIcon: (name: SVGSpriteNames) => {

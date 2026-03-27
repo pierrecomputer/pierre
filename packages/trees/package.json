@@ -38,6 +38,7 @@
     "benchmark:file-list-to-tree": "bun run ./scripts/benchmarkFileListToTree.ts",
     "benchmark:core": "bun run ./scripts/benchmarkTreeCorePrimitives.ts",
     "benchmark:render": "bun run ./scripts/benchmarkVirtualizedFileTreeRender.ts",
+    "benchmark:render:client": "bun run ./scripts/benchmarkVirtualizedFileTreeClientMount.ts",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
     "coverage": "bun test --coverage",

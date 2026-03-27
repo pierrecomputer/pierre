@@ -1,3 +1,4 @@
+import type { FileTreeRootProps } from './components/Root';
 import { FileTreeContainerLoaded } from './components/web-components';
 import {
   FILE_TREE_TAG_NAME,
@@ -80,7 +81,7 @@ export type FileTreeCollision = {
 export interface FileTreeHandle {
   tree: TreeInstance<FileTreeNode>;
   pathToId: Map<string, string>;
-  idToPath: Map<string, string>;
+  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
   closeContextMenu?: () => void;
 }
 
@@ -542,12 +543,13 @@ export class FileTree {
     }
   }
 
-  private buildRootProps() {
+  private buildRootProps(overrides?: Partial<FileTreeRootProps>) {
     return {
       fileTreeOptions: this.options,
       stateConfig: this.stateConfig,
       handleRef: this.handleRef,
       callbacksRef: this.callbacksRef,
+      ...overrides,
     };
   }
 
@@ -799,7 +801,17 @@ export class FileTree {
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
     this.syncVirtualizedLayoutAttrs(fileTreeContainer, divWrapper);
-    preactRenderRoot(divWrapper, this.buildRootProps());
+
+    // Seed the first virtualized window with the outer mount height so client
+    // mounts can render the initial rows immediately before the layout effect
+    // performs the authoritative viewport measurement.
+    const initialViewportHeight =
+      containerWrapper?.clientHeight ?? fileTreeContainer.clientHeight;
+
+    preactRenderRoot(
+      divWrapper,
+      this.buildRootProps({ initialViewportHeight })
+    );
   }
 
   hydrate(props: FileTreeHydrationProps): void {

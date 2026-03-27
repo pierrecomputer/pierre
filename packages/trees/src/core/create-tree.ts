@@ -97,7 +97,8 @@ export const createTree = <T>(
 
   let rebuildScheduled = false;
   const itemInstancesMap: Record<string, ItemInstance<T>> = {};
-  let itemInstances: ItemInstance<T>[] = [];
+  let visibleItemIds: string[] = [];
+  let itemInstances: ItemInstance<T>[] | null = null;
   const itemElementsMap: Record<string, HTMLElement | undefined | null> = {};
   // oxlint-disable-next-line typescript-eslint/no-explicit-any
   const itemDataRefs: Record<string, { current: any }> = {};
@@ -105,17 +106,51 @@ export const createTree = <T>(
 
   const hotkeyPresets = {} as HotkeysConfig<T>;
 
-  const rebuildItemMeta = () => {
-    itemInstances = [];
-    itemMetaMap = {};
+  // Builds and caches a single item instance the first time a caller actually
+  // needs it. This lets virtualized renders size/slice the visible tree using
+  // IDs alone instead of eagerly materializing every visible item instance.
+  const getOrCreateItemInstance = (itemId: string): ItemInstance<T> => {
+    const existingInstance = itemInstancesMap[itemId];
+    if (existingInstance != null) {
+      return existingInstance;
+    }
 
+    const [instance, finalizeInstance] = buildInstance(
+      features,
+      'itemInstance',
+      (builtItem) => ({
+        item: builtItem,
+        tree: treeInstance,
+        itemId,
+      })
+    );
+    finalizeInstance();
+    itemInstancesMap[itemId] = instance;
+    return instance;
+  };
+
+  // Rebuilds the synthetic root item instance on every tree rebuild so core's
+  // existing instanceBuilder contract stays intact even when visible items are
+  // materialized lazily.
+  const rebuildRootItemInstance = (): void => {
     const [rootInstance, finalizeRootInstance] = buildInstance(
       features,
       'itemInstance',
-      (item) => ({ item, tree: treeInstance, itemId: config.rootItemId })
+      (builtItem) => ({
+        item: builtItem,
+        tree: treeInstance,
+        itemId: config.rootItemId,
+      })
     );
     finalizeRootInstance();
     itemInstancesMap[config.rootItemId] = rootInstance;
+  };
+
+  const rebuildItemMeta = () => {
+    itemInstances = null;
+    itemMetaMap = {};
+
+    rebuildRootItemInstance();
     itemMetaMap[config.rootItemId] = {
       itemId: config.rootItemId,
       index: -1,
@@ -125,26 +160,14 @@ export const createTree = <T>(
       setSize: 1,
     };
 
+    const nextVisibleItemIds: string[] = [];
     for (const item of treeInstance.getItemsMeta()) {
       itemMetaMap[item.itemId] = item;
-      if (itemInstancesMap[item.itemId] == null) {
-        const [instance, finalizeInstance] = buildInstance(
-          features,
-          'itemInstance',
-          (instance) => ({
-            item: instance,
-            tree: treeInstance,
-            itemId: item.itemId,
-          })
-        );
-        finalizeInstance();
-        itemInstancesMap[item.itemId] = instance;
-        itemInstances.push(instance);
-      } else {
-        itemInstances.push(itemInstancesMap[item.itemId]);
-      }
+      nextVisibleItemIds.push(item.itemId);
     }
 
+    visibleItemIds = nextVisibleItemIds;
+    (treeDataRef.current as TreeDataRef).visibleItemIds = visibleItemIds;
     rebuildScheduled = false;
   };
 
@@ -227,25 +250,12 @@ export const createTree = <T>(
           config.setState?.(state);
         }
       },
-      getItemInstance: (_opts, itemId) => {
-        const existingInstance = itemInstancesMap[itemId];
-        if (existingInstance == null) {
-          const [instance, finalizeInstance] = buildInstance(
-            features,
-            'itemInstance',
-            (instance) => ({
-              item: instance,
-              tree: treeInstance,
-              itemId,
-            })
-          );
-          finalizeInstance();
-          return instance;
-        }
-        return existingInstance;
-      },
+      getItemInstance: (_opts, itemId) => getOrCreateItemInstance(itemId),
       getItems: () => {
         if (rebuildScheduled) rebuildItemMeta();
+        itemInstances ??= visibleItemIds.map((itemId) =>
+          getOrCreateItemInstance(itemId)
+        );
         return itemInstances;
       },
       registerElement: (_opts, element) => {
