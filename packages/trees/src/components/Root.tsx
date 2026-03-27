@@ -188,10 +188,7 @@ export function Root({
   // second Map on every fresh mount.
   const pathToId = useMemo(() => {
     return withBenchmarkPhase(benchmarkInstrumentation, 'root.pathToId', () => {
-      const next = attachBenchmarkInstrumentation(
-        new Map<string, string>(),
-        benchmarkInstrumentation
-      );
+      const next = new Map<string, string>();
       for (const id in treeData) {
         const node = treeData[id];
         if (node != null) {
@@ -225,6 +222,7 @@ export function Root({
     pathToId,
     stateConfig,
     flattenEmptyDirectories,
+    benchmarkInstrumentation,
   });
 
   const dataLoader = useMemo(

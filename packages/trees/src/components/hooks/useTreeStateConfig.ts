@@ -4,7 +4,8 @@ import { FLATTENED_PREFIX } from '../../constants';
 import type { TreeConfig } from '../../core/types/core';
 import type { FileTreeStateConfig } from '../../FileTree';
 import {
-  getBenchmarkInstrumentation,
+  attachBenchmarkInstrumentation,
+  type BenchmarkInstrumentation,
   setBenchmarkCounter,
   withBenchmarkPhase,
 } from '../../internal/benchmarkInstrumentation';
@@ -21,6 +22,7 @@ export interface UseTreeStateConfigArgs {
   pathToId: Map<string, string>;
   stateConfig: FileTreeStateConfig | undefined;
   flattenEmptyDirectories: boolean | undefined;
+  benchmarkInstrumentation: BenchmarkInstrumentation | null;
 }
 
 /**
@@ -33,9 +35,9 @@ export function useTreeStateConfig({
   pathToId,
   stateConfig,
   flattenEmptyDirectories,
+  benchmarkInstrumentation,
 }: UseTreeStateConfigArgs): TreeConfigStateSlice {
   'use no memo';
-  const benchmarkInstrumentation = getBenchmarkInstrumentation(pathToId);
   return useMemo<TreeConfigStateSlice>(() => {
     return withBenchmarkPhase(
       benchmarkInstrumentation,
@@ -73,12 +75,18 @@ export function useTreeStateConfig({
         const topLevelInitialSearch = stateConfig?.initialSearchQuery;
         const topLevelExpanded = stateConfig?.expandedItems;
         const topLevelSelected = stateConfig?.selectedItems;
+        const expandPathsOptions = attachBenchmarkInstrumentation(
+          { flattenEmptyDirectories },
+          benchmarkInstrumentation
+        );
 
         const topLevelInitialExpandedIds =
           topLevelInitialExpanded != null
-            ? expandPathsWithAncestors(topLevelInitialExpanded, pathToId, {
-                flattenEmptyDirectories,
-              })
+            ? expandPathsWithAncestors(
+                topLevelInitialExpanded,
+                pathToId,
+                expandPathsOptions
+              )
             : undefined;
         const topLevelInitialSelectedIds = mapPathsToIds(
           topLevelInitialSelected
