@@ -4,6 +4,7 @@ import type {
   FileDiffMetadata,
   Hunk,
 } from '../types';
+import { trimResolvedHunk } from './trimResolvedHunk';
 
 interface RegionResolutionTarget {
   hunkIndex: number;
@@ -23,6 +24,28 @@ interface CursorState {
   unifiedLineCount: number;
 }
 
+interface EmissionState {
+  nextAdditionStart: number;
+  nextDeletionStart: number;
+  splitLineCount: number;
+  unifiedLineCount: number;
+}
+
+type EmitReadyHunk = Pick<
+  Hunk,
+  | 'additionStart'
+  | 'additionCount'
+  | 'additionLines'
+  | 'additionLineIndex'
+  | 'deletionStart'
+  | 'deletionCount'
+  | 'deletionLines'
+  | 'deletionLineIndex'
+  | 'splitLineCount'
+  | 'unifiedLineCount'
+  | 'hunkContent'
+>;
+
 export function resolveRegion(
   diff: FileDiffMetadata,
   target: RegionResolutionTarget
@@ -33,6 +56,7 @@ export function resolveRegion(
     startContentIndex,
     endContentIndex,
     indexesToDelete = new Set(),
+    trimContextLines,
   } = target;
   const currentHunk = diff.hunks[hunkIndex];
   if (currentHunk == null) {
@@ -60,13 +84,19 @@ export function resolveRegion(
     unifiedLineCount: 0,
     cacheKey:
       diff.cacheKey != null
-        ? `${diff.cacheKey}:${resolution[0]}-${hunkIndex}:${startContentIndex}-${endContentIndex}`
+        ? `${diff.cacheKey}:${resolution[0]}-${hunkIndex}:${startContentIndex}-${endContentIndex}${trimContextLines != null ? `:t-${trimContextLines}` : ''}`
         : undefined,
   };
 
   const cursor: CursorState = {
     nextAdditionLineIndex: 0,
     nextDeletionLineIndex: 0,
+    nextAdditionStart: 1,
+    nextDeletionStart: 1,
+    splitLineCount: 0,
+    unifiedLineCount: 0,
+  };
+  const emissionState: EmissionState = {
     nextAdditionStart: 1,
     nextDeletionStart: 1,
     splitLineCount: 0,
@@ -88,22 +118,7 @@ export function resolveRegion(
       shouldProcessCollapsedContext
     );
 
-    const newHunk: Hunk = {
-      ...hunk,
-      hunkContent: [],
-      additionStart: cursor.nextAdditionStart,
-      deletionStart: cursor.nextDeletionStart,
-      additionLineIndex: cursor.nextAdditionLineIndex,
-      deletionLineIndex: cursor.nextDeletionLineIndex,
-      additionCount: 0,
-      deletionCount: 0,
-      deletionLines: 0,
-      additionLines: 0,
-      splitLineStart: cursor.splitLineCount,
-      unifiedLineStart: cursor.unifiedLineCount,
-      splitLineCount: 0,
-      unifiedLineCount: 0,
-    };
+    const newHunk = createScannedHunk(hunk, cursor);
 
     for (const [contentIndex, content] of hunk.hunkContent.entries()) {
       // If we are outside of the targeted hunk or content region
@@ -186,7 +201,20 @@ export function resolveRegion(
       newHunk.noEOFCRDeletions = noEOFCR;
     }
 
-    resolvedDiff.hunks.push(newHunk);
+    const emittedHunks =
+      index === hunkIndex && trimContextLines != null
+        ? trimResolvedHunk(newHunk, trimContextLines)
+        : [newHunk];
+
+    emitResolvedHunks(resolvedDiff, newHunk, emittedHunks, emissionState);
+  }
+
+  if (resolvedDiff.hunks.length === 0) {
+    resolvedDiff.deletionLines = [];
+    resolvedDiff.additionLines = [];
+    resolvedDiff.splitLineCount = 0;
+    resolvedDiff.unifiedLineCount = 0;
+    return resolvedDiff;
   }
 
   const finalHunk = hunks.at(-1);
@@ -210,6 +238,70 @@ export function resolveRegion(
   resolvedDiff.unifiedLineCount = cursor.unifiedLineCount;
 
   return resolvedDiff;
+}
+
+function createScannedHunk(hunk: Hunk, cursor: CursorState): Hunk {
+  return {
+    ...hunk,
+    collapsedBefore: 0,
+    hunkContent: [],
+    additionStart: cursor.nextAdditionStart,
+    deletionStart: cursor.nextDeletionStart,
+    additionLineIndex: cursor.nextAdditionLineIndex,
+    deletionLineIndex: cursor.nextDeletionLineIndex,
+    additionCount: 0,
+    deletionCount: 0,
+    deletionLines: 0,
+    additionLines: 0,
+    splitLineStart: 0,
+    unifiedLineStart: 0,
+    splitLineCount: 0,
+    unifiedLineCount: 0,
+  };
+}
+
+function emitResolvedHunks(
+  diff: FileDiffMetadata,
+  sourceHunk: Hunk,
+  hunks: EmitReadyHunk[],
+  emissionState: EmissionState
+) {
+  for (const [index, hunk] of hunks.entries()) {
+    const collapsedBefore = Math.max(
+      hunk.additionStart - emissionState.nextAdditionStart,
+      0
+    );
+    const emittedHunk: Hunk = {
+      ...sourceHunk,
+      ...hunk,
+      collapsedBefore,
+      splitLineStart: emissionState.splitLineCount + collapsedBefore,
+      unifiedLineStart: emissionState.unifiedLineCount + collapsedBefore,
+      hunkSpecs: createHunkSpecs(hunk, sourceHunk.hunkContext),
+      noEOFCRAdditions:
+        index === hunks.length - 1 ? sourceHunk.noEOFCRAdditions : false,
+      noEOFCRDeletions:
+        index === hunks.length - 1 ? sourceHunk.noEOFCRDeletions : false,
+    };
+
+    diff.hunks.push(emittedHunk);
+    emissionState.nextAdditionStart =
+      emittedHunk.additionStart + emittedHunk.additionCount;
+    emissionState.nextDeletionStart =
+      emittedHunk.deletionStart + emittedHunk.deletionCount;
+    emissionState.splitLineCount =
+      emittedHunk.splitLineStart + emittedHunk.splitLineCount;
+    emissionState.unifiedLineCount =
+      emittedHunk.unifiedLineStart + emittedHunk.unifiedLineCount;
+  }
+}
+
+function createHunkSpecs(hunk: EmitReadyHunk, hunkContext: string | undefined) {
+  return `@@ -${formatHunkRange(hunk.deletionStart, hunk.deletionCount)} +${formatHunkRange(hunk.additionStart, hunk.additionCount)} @@${hunkContext != null ? ` ${hunkContext}` : ''}\n`;
+}
+
+function formatHunkRange(start: number, count: number): string {
+  return count === 1 ? `${start}` : `${start},${count}`;
 }
 
 function pushCollapsedContextLines(

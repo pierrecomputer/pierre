@@ -15,9 +15,20 @@ export interface TrimmedResolvedHunk {
 }
 
 interface ContextBuffer {
-  segments: ContextContent[];
+  segments: BufferedContextContent[];
   totalLines: number;
 }
+
+interface BlockStarts {
+  additionStart: number;
+  deletionStart: number;
+}
+
+interface BufferedContextContent extends ContextContent, BlockStarts {}
+
+interface BufferedChangeContent extends ChangeContent, BlockStarts {}
+
+type BufferedContent = BufferedContextContent | BufferedChangeContent;
 
 /**
  * Trim one resolved hunk down to the context needed around its remaining
@@ -35,12 +46,21 @@ export function trimResolvedHunk(
     ? Math.max(0, Math.trunc(contextSize))
     : 0;
   const trimmedHunks: TrimmedResolvedHunk[] = [];
-  const currentBlocks: (ContextContent | ChangeContent)[] = [];
+  const currentBlocks: BufferedContent[] = [];
   let pendingContext: ContextBuffer = createEmptyContextBuffer();
+  let { additionStart: nextAdditionStart, deletionStart: nextDeletionStart } =
+    hunk;
 
   for (const content of hunk.hunkContent) {
     if (content.type === 'context') {
-      appendContext(pendingContext, content);
+      appendContext(
+        pendingContext,
+        content,
+        nextAdditionStart,
+        nextDeletionStart
+      );
+      nextAdditionStart += content.lines;
+      nextDeletionStart += content.lines;
       continue;
     }
 
@@ -70,7 +90,13 @@ export function trimResolvedHunk(
     }
 
     pendingContext = createEmptyContextBuffer();
-    pushContent(currentBlocks, content);
+    pushContent(currentBlocks, {
+      ...content,
+      additionStart: nextAdditionStart,
+      deletionStart: nextDeletionStart,
+    });
+    nextAdditionStart += content.additions;
+    nextDeletionStart += content.deletions;
   }
 
   if (currentBlocks.length === 0) {
@@ -87,7 +113,7 @@ export function trimResolvedHunk(
 }
 
 function createTrimmedResolvedHunk(
-  blocks: (ContextContent | ChangeContent)[]
+  blocks: BufferedContent[]
 ): TrimmedResolvedHunk {
   const firstBlock = blocks[0];
   if (firstBlock == null) {
@@ -119,17 +145,21 @@ function createTrimmedResolvedHunk(
   }
 
   return {
-    additionStart: firstBlock.additionLineIndex + 1,
+    additionStart: firstBlock.additionStart,
     additionCount,
     additionLines,
     additionLineIndex: firstBlock.additionLineIndex,
-    deletionStart: firstBlock.deletionLineIndex + 1,
+    deletionStart: firstBlock.deletionStart,
     deletionCount,
     deletionLines,
     deletionLineIndex: firstBlock.deletionLineIndex,
     splitLineCount,
     unifiedLineCount,
-    hunkContent: blocks.map((content) => ({ ...content })),
+    hunkContent: blocks.map(
+      ({ additionStart: _a, deletionStart: _d, ...content }) => ({
+        ...content,
+      })
+    ),
   };
 }
 
@@ -140,24 +170,33 @@ function createEmptyContextBuffer(): ContextBuffer {
   };
 }
 
-function appendContext(buffer: ContextBuffer, content: ContextContent) {
+function appendContext(
+  buffer: ContextBuffer,
+  content: ContextContent,
+  additionStart: number,
+  deletionStart: number
+) {
   if (content.lines <= 0) {
     return;
   }
 
-  buffer.segments.push({ ...content });
+  buffer.segments.push({
+    ...content,
+    additionStart,
+    deletionStart,
+  });
   buffer.totalLines += content.lines;
 }
 
 function takeLeadingContext(
   buffer: ContextBuffer,
   lineCount: number
-): ContextContent[] {
+): BufferedContextContent[] {
   if (lineCount <= 0) {
     return [];
   }
 
-  const leadingContext: ContextContent[] = [];
+  const leadingContext: BufferedContextContent[] = [];
   let remaining = lineCount;
 
   for (const segment of buffer.segments) {
@@ -171,6 +210,8 @@ function takeLeadingContext(
       lines: keptLines,
       additionLineIndex: segment.additionLineIndex,
       deletionLineIndex: segment.deletionLineIndex,
+      additionStart: segment.additionStart,
+      deletionStart: segment.deletionStart,
     });
     remaining -= keptLines;
   }
@@ -181,12 +222,12 @@ function takeLeadingContext(
 function takeTrailingContext(
   buffer: ContextBuffer,
   lineCount: number
-): ContextContent[] {
+): BufferedContextContent[] {
   if (lineCount <= 0) {
     return [];
   }
 
-  const trailingContext: ContextContent[] = [];
+  const trailingContext: BufferedContextContent[] = [];
   let remaining = lineCount;
 
   for (let index = buffer.segments.length - 1; index >= 0; index--) {
@@ -205,6 +246,8 @@ function takeTrailingContext(
       lines: keptLines,
       additionLineIndex: segment.additionLineIndex + segment.lines - keptLines,
       deletionLineIndex: segment.deletionLineIndex + segment.lines - keptLines,
+      additionStart: segment.additionStart + segment.lines - keptLines,
+      deletionStart: segment.deletionStart + segment.lines - keptLines,
     });
     remaining -= keptLines;
   }
@@ -212,19 +255,13 @@ function takeTrailingContext(
   return trailingContext;
 }
 
-function pushContents(
-  target: (ContextContent | ChangeContent)[],
-  contents: (ContextContent | ChangeContent)[]
-) {
+function pushContents(target: BufferedContent[], contents: BufferedContent[]) {
   for (const content of contents) {
     pushContent(target, content);
   }
 }
 
-function pushContent(
-  target: (ContextContent | ChangeContent)[],
-  content: ContextContent | ChangeContent
-) {
+function pushContent(target: BufferedContent[], content: BufferedContent) {
   if (content.type === 'context') {
     if (content.lines <= 0) {
       return;

@@ -479,6 +479,134 @@ describe('diffAcceptRejectHunk', () => {
     });
   });
 
+  test('trimContextLines removes a resolved hunk and folds its context into the next hunk', () => {
+    const diff = createFixture();
+    const earlierHunks = [snapshotHunk(diff, 0), snapshotHunk(diff, 1)];
+    const trailingHunk = snapshotHunk(diff, 3);
+
+    const result = diffAcceptRejectHunk(diff, 2, {
+      type: 'accept',
+      trimContextLines: true,
+    });
+
+    expect(result.hunks).toHaveLength(3);
+    assertUnresolvedHunkMatchesSnapshot(result, 0, earlierHunks[0]);
+    assertUnresolvedHunkMatchesSnapshot(result, 1, earlierHunks[1]);
+    assertUnresolvedHunkMatchesSnapshot(result, 2, trailingHunk);
+    expect(result.hunks[2]?.collapsedBefore).toBe(5);
+    expect(result.cacheKey).toBeUndefined();
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
+  test('trimContextLines can collapse a fully resolved file to an empty diff', () => {
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: 'before\nold\nafter\n', cacheKey: 'old' },
+      { name: 'example.ts', contents: 'before\nnew\nafter\n', cacheKey: 'new' },
+      { context: 1 }
+    );
+
+    const result = diffAcceptRejectHunk(diff, 0, {
+      type: 'accept',
+      trimContextLines: true,
+    });
+
+    expect(result.hunks).toEqual([]);
+    expect(result.additionLines).toEqual([]);
+    expect(result.deletionLines).toEqual([]);
+    expect(result.splitLineCount).toBe(0);
+    expect(result.unifiedLineCount).toBe(0);
+    expect(result.cacheKey).toBe('old:new:a-0:0-2:t-3');
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
+  test('trimContextLines can split a partially resolved hunk into two hunks', () => {
+    const diff = parsePatchFiles(`diff --git a/example.ts b/example.ts
+--- a/example.ts
++++ b/example.ts
+@@ -1,11 +1,11 @@
+ line 1
+-line 2 old
++line 2 new
+ line 3
+ line 4
+ line 5
+-line 6 old
++line 6 new
+ line 7
+ line 8
+ line 9
+-line 10 old
++line 10 new
+ line 11
+`)[0]?.files[0];
+
+    expect(diff).toBeDefined();
+    if (diff == null) {
+      return;
+    }
+
+    const result = diffAcceptRejectHunk(diff, 0, {
+      type: 'accept',
+      changeIndex: 3,
+      trimContextLines: 1,
+    });
+
+    expect(
+      result.hunks.map((hunk) => ({
+        collapsedBefore: hunk.collapsedBefore,
+        additionStart: hunk.additionStart,
+        deletionStart: hunk.deletionStart,
+        additionCount: hunk.additionCount,
+        deletionCount: hunk.deletionCount,
+        blocks: hunk.hunkContent.map((content) =>
+          content.type === 'context'
+            ? { type: 'context', lines: content.lines }
+            : {
+                type: 'change',
+                additions: content.additions,
+                deletions: content.deletions,
+              }
+        ),
+      }))
+    ).toEqual([
+      {
+        collapsedBefore: 0,
+        additionStart: 1,
+        deletionStart: 1,
+        additionCount: 3,
+        deletionCount: 3,
+        blocks: [
+          { type: 'context', lines: 1 },
+          { type: 'change', additions: 1, deletions: 1 },
+          { type: 'context', lines: 1 },
+        ],
+      },
+      {
+        collapsedBefore: 5,
+        additionStart: 9,
+        deletionStart: 9,
+        additionCount: 3,
+        deletionCount: 3,
+        blocks: [
+          { type: 'context', lines: 1 },
+          { type: 'change', additions: 1, deletions: 1 },
+          { type: 'context', lines: 1 },
+        ],
+      },
+    ]);
+    expect(result.cacheKey).toBeUndefined();
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
   test('updates cacheKey when resolving a single content block', () => {
     const diff = parseDiffFromFile(
       {
