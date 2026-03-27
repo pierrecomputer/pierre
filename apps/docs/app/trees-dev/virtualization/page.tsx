@@ -10,13 +10,20 @@ import {
   makeDemoRenamingOptions,
   renderVanillaContextMenuSlot,
 } from '../_components/TreeDemoContextMenu';
-import { linuxKernelAllFolders, linuxKernelFiles } from '../demo-data';
+import {
+  linuxKernelAllFolders,
+  linuxKernelFiles,
+  linuxKernelReplicaNames,
+} from '../demo-data';
+
+const linuxKernelReplicaCount = linuxKernelReplicaNames.length;
 
 export default function VirtualizationPage() {
   return (
     <>
       <h1 className="mb-4 text-2xl font-bold">
-        Virtualized ({linuxKernelFiles.length.toLocaleString()} files)
+        Virtualized ({linuxKernelFiles.length.toLocaleString()} files across{' '}
+        {linuxKernelReplicaCount} Linux roots)
       </h1>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <VirtualizedLinuxKernelCard />
@@ -96,8 +103,8 @@ function VirtualizedLinuxKernelCard() {
 
   return (
     <ExampleCard
-      title="Vanilla Virtualized (Linux Kernel)"
-      description={`${linuxKernelFiles.length.toLocaleString()} files with opt-in virtualization`}
+      title="Vanilla Virtualized (Linux Kernel x5)"
+      description={`${linuxKernelFiles.length.toLocaleString()} files across ${linuxKernelReplicaCount} fully expanded Linux roots with opt-in virtualization`}
     >
       {mounted ? (
         <div ref={ref} style={{ height: '500px' }} />
@@ -143,8 +150,8 @@ function UnvirtualizedLinuxKernelCard() {
 
   return (
     <ExampleCard
-      title="Vanilla Unvirtualized (Linux Kernel)"
-      description={`${linuxKernelFiles.length.toLocaleString()} files without virtualization`}
+      title="Vanilla Unvirtualized (Linux Kernel x5)"
+      description={`${linuxKernelFiles.length.toLocaleString()} files across ${linuxKernelReplicaCount} fully expanded Linux roots without virtualization`}
     >
       {mounted ? (
         <div ref={ref} style={{ height: '500px', overflowY: 'auto' }} />
