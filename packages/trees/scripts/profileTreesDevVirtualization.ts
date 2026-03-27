@@ -8,6 +8,7 @@ interface ProfileConfig {
   browserUrl: string;
   url: string;
   timeoutMs: number;
+  runs: number;
   outputJson: boolean;
   traceOutputPath: string;
   ensureBuild: boolean;
@@ -92,6 +93,7 @@ interface CpuProfileSummary {
 }
 
 interface ProfileResult {
+  runNumber: number;
   browserUrl: string;
   url: string;
   traceOutputPath: string | null;
@@ -102,6 +104,13 @@ interface ProfileResult {
   longestLongTaskMs: number | null;
   trace: TraceSummary;
   cpuProfile: CpuProfileSummary;
+}
+
+interface AggregateMetricSummary {
+  label: string;
+  availableRuns: number;
+  totalMs: number | null;
+  averageMs: number | null;
 }
 
 interface InspectVersionResponse {
@@ -173,6 +182,7 @@ const DEFAULT_BROWSER_URL = 'http://127.0.0.1:9222';
 const DEFAULT_URL =
   'http://127.0.0.1:9221/test/e2e/fixtures/virtualization.html';
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_RUN_COUNT = 1;
 const DEFAULT_TRACE_OUTPUT_DIR = resolve(tmpdir(), 'pierrejs-trees-traces');
 const DEFAULT_TRACE_OUTPUT_EXAMPLE_PATH = resolve(
   DEFAULT_TRACE_OUTPUT_DIR,
@@ -258,6 +268,9 @@ function printHelpAndExit(): never {
     `  --timeout <ms>         Navigation/render timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})`
   );
   console.log(
+    `  --runs <count>         Number of benchmark runs to execute (default: ${DEFAULT_RUN_COUNT})`
+  );
+  console.log(
     `  --trace-out <path>     Where to save the Chrome trace JSON when tracing succeeds (default: ${DEFAULT_TRACE_OUTPUT_EXAMPLE_PATH})`
   );
   console.log(
@@ -293,11 +306,33 @@ function createDefaultTraceOutputPath(): string {
   );
 }
 
+function createRunTraceOutputPath(
+  traceOutputPath: string,
+  runNumber: number,
+  totalRuns: number
+): string {
+  if (totalRuns <= 1) {
+    return traceOutputPath;
+  }
+
+  const runSuffix = `-run-${String(runNumber).padStart(
+    String(totalRuns).length,
+    '0'
+  )}`;
+  const extensionIndex = traceOutputPath.lastIndexOf('.');
+  if (extensionIndex <= 0) {
+    return `${traceOutputPath}${runSuffix}`;
+  }
+
+  return `${traceOutputPath.slice(0, extensionIndex)}${runSuffix}${traceOutputPath.slice(extensionIndex)}`;
+}
+
 function parseArgs(argv: string[]): ProfileConfig {
   const config: ProfileConfig = {
     browserUrl: DEFAULT_BROWSER_URL,
     url: DEFAULT_URL,
     timeoutMs: DEFAULT_TIMEOUT_MS,
+    runs: DEFAULT_RUN_COUNT,
     outputJson: false,
     traceOutputPath: createDefaultTraceOutputPath(),
     ensureBuild: true,
@@ -330,6 +365,7 @@ function parseArgs(argv: string[]): ProfileConfig {
       flag === '--browser-url' ||
       flag === '--url' ||
       flag === '--timeout' ||
+      flag === '--runs' ||
       flag === '--trace-out'
     ) {
       const value = inlineValue ?? argv[index + 1];
@@ -346,6 +382,8 @@ function parseArgs(argv: string[]): ProfileConfig {
         config.url = value;
       } else if (flag === '--timeout') {
         config.timeoutMs = parsePositiveInteger(value, '--timeout');
+      } else if (flag === '--runs') {
+        config.runs = parsePositiveInteger(value, '--runs');
       } else {
         config.traceOutputPath = resolve(process.cwd(), value);
       }
@@ -431,6 +469,34 @@ function createTable(
     ...normalizedRows.map((row) => formatRow(row)),
     border,
   ].join('\n');
+}
+
+function summarizeAggregateMetric(
+  label: string,
+  results: ProfileResult[],
+  selector: (result: ProfileResult) => number | null
+): AggregateMetricSummary {
+  const values = results
+    .map(selector)
+    .filter(
+      (value): value is number => value != null && Number.isFinite(value)
+    );
+  if (values.length === 0) {
+    return {
+      label,
+      availableRuns: 0,
+      totalMs: null,
+      averageMs: null,
+    };
+  }
+
+  const totalMs = values.reduce((total, value) => total + value, 0);
+  return {
+    label,
+    availableRuns: values.length,
+    totalMs: Number(totalMs.toFixed(3)),
+    averageMs: Number((totalMs / values.length).toFixed(3)),
+  };
 }
 
 function decodeOutput(output: Uint8Array): string {
@@ -1665,7 +1731,9 @@ function writeTraceIfAvailable(
 }
 
 async function profileVirtualizedRender(
-  config: ProfileConfig
+  config: ProfileConfig,
+  runNumber: number,
+  traceOutputPath: string
 ): Promise<ProfileResult> {
   const version = await fetchJson<InspectVersionResponse>(
     `${config.browserUrl}/json/version`,
@@ -1702,11 +1770,11 @@ async function profileVirtualizedRender(
       }
     );
 
-    const savedTracePath = writeTraceIfAvailable(trace, config.traceOutputPath);
     return {
+      runNumber,
       browserUrl: config.browserUrl,
       url: config.url,
-      traceOutputPath: savedTracePath,
+      traceOutputPath: writeTraceIfAvailable(trace, traceOutputPath),
       renderedItemCount: pageSummary.renderedItemCount,
       renderDurationMs: Number(pageSummary.renderDurationMs.toFixed(3)),
       longTaskCount: pageSummary.longTaskCount ?? null,
@@ -1727,12 +1795,7 @@ async function profileVirtualizedRender(
   }
 }
 
-function printHumanSummary(result: ProfileResult): void {
-  const runInfoRows = [
-    ['Browser', result.browserUrl],
-    ['URL', result.url],
-    ['Trace file', result.traceOutputPath ?? 'not saved'],
-  ];
+function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
   const summaryRows = [['Visible rows', String(result.renderedItemCount)]];
 
   summaryRows.push(['Render ready', formatMs(result.renderDurationMs)]);
@@ -1777,15 +1840,7 @@ function printHumanSummary(result: ProfileResult): void {
     summaryRows.push(['Trace summary', 'unavailable']);
   }
 
-  console.log('Run Info');
-  console.log(
-    createTable(['Field', 'Value'], runInfoRows, {
-      maxWidths: [16, 96],
-    })
-  );
-  console.log('');
-
-  console.log('Render Summary');
+  console.log(`Run ${result.runNumber}/${totalRuns}`);
   console.log(
     createTable(['Metric', 'Value'], summaryRows, {
       alignments: ['left', 'right'],
@@ -1850,6 +1905,86 @@ function printHumanSummary(result: ProfileResult): void {
       );
     }
   }
+
+  if (result.traceOutputPath != null) {
+    console.log('');
+    console.log(`Trace file: ${result.traceOutputPath}`);
+  }
+}
+
+function printAggregateHumanSummary(results: ProfileResult[]): void {
+  const aggregateRows = [
+    summarizeAggregateMetric('Render ready', results, (result) => {
+      return result.renderDurationMs;
+    }),
+    summarizeAggregateMetric('Click dispatch task', results, (result) => {
+      return result.trace.clickDispatchMs;
+    }),
+    summarizeAggregateMetric('Click-to-render-ready', results, (result) => {
+      return result.trace.clickToRenderReadyMs;
+    }),
+    summarizeAggregateMetric('Trace window', results, (result) => {
+      return result.trace.windowDurationMs;
+    }),
+    summarizeAggregateMetric('Main-thread busy', results, (result) => {
+      return result.trace.mainThreadBusyMs;
+    }),
+    summarizeAggregateMetric('Longest top-level task', results, (result) => {
+      return result.trace.longestTaskMs;
+    }),
+    summarizeAggregateMetric('Sampled CPU time', results, (result) => {
+      return result.cpuProfile.sampledMs;
+    }),
+  ];
+
+  console.log('Aggregate Summary');
+  console.log(
+    createTable(
+      ['Metric', 'Total', 'Average', 'Runs'],
+      aggregateRows.map((row) => [
+        row.label,
+        formatMs(row.totalMs),
+        formatMs(row.averageMs),
+        `${row.availableRuns}/${results.length}`,
+      ]),
+      {
+        alignments: ['left', 'right', 'right', 'right'],
+        maxWidths: [28, 14, 14, 8],
+      }
+    )
+  );
+}
+
+function printRunsHumanSummary(results: ProfileResult[]): void {
+  if (results.length === 0) {
+    return;
+  }
+
+  const runInfoRows = [
+    ['Browser', results[0].browserUrl],
+    ['URL', results[0].url],
+    ['Runs', String(results.length)],
+  ];
+
+  console.log('Run Info');
+  console.log(
+    createTable(['Field', 'Value'], runInfoRows, {
+      maxWidths: [16, 96],
+    })
+  );
+
+  for (const [index, result] of results.entries()) {
+    console.log('');
+    printRunHumanSummary(result, results.length);
+    if (index < results.length - 1) {
+      console.log('');
+    }
+  }
+
+  if (results.length > 1) {
+    console.log('');
+    printAggregateHumanSummary(results);
+  }
 }
 
 async function main(): Promise<void> {
@@ -1858,12 +1993,25 @@ async function main(): Promise<void> {
 
   try {
     serverProcess = await startFixtureServerIfNeeded(config);
-    const result = await profileVirtualizedRender(config);
+    const results: ProfileResult[] = [];
+    for (let runNumber = 1; runNumber <= config.runs; runNumber += 1) {
+      const traceOutputPath = createRunTraceOutputPath(
+        config.traceOutputPath,
+        runNumber,
+        config.runs
+      );
+      const result = await profileVirtualizedRender(
+        config,
+        runNumber,
+        traceOutputPath
+      );
+      results.push(result);
+    }
 
     if (config.outputJson) {
-      console.log(JSON.stringify(result, null, 2));
+      console.log(JSON.stringify({ runs: results }, null, 2));
     } else {
-      printHumanSummary(result);
+      printRunsHumanSummary(results);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -335,6 +335,76 @@ Useful flags:
 - `--case` to run a different fixture or synthetic shape while iterating
 - `--json` and `--compare` for saved baselines and regression checks
 
+For a real Chrome trace of the virtualization click-to-render workload, use the
+dedicated profiler command:
+
+```bash
+bun ws trees profile:virtualization
+```
+
+This command is separate from Playwright. It uses a minimal Vite fixture page at
+`http://127.0.0.1:9221/test/e2e/fixtures/virtualization.html` and connects to a
+real Chrome instance over the DevTools remote debugging port
+`http://127.0.0.1:9222`.
+
+Before running it, start Chrome manually with remote debugging enabled. For
+example:
+
+```bash
+/Applications/Google\ Chrome\ Dev.app/Contents/MacOS/Google\ Chrome\ Dev \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/chrome-devtools-codex
+```
+
+By default the command:
+
+- rebuilds `@pierre/trees`
+- reuses the fixture server if it is already running on `127.0.0.1:9221`
+- otherwise starts the fixture server itself
+- opens the virtualization fixture in Chrome
+- clicks `Render`
+- captures both a Chrome trace and a sampled CPU profile for that render
+
+The human-readable output includes:
+
+- per-run render timing
+- click-dispatch and click-to-render timing
+- trace-window timing, busy time, and coarse render buckets
+- dominant trace events
+- a bottom-up sampled CPU table with `self` and `total` time
+
+Useful examples:
+
+```bash
+# Use the defaults: build, ensure the fixture server, and profile one run
+bun ws trees profile:virtualization
+
+# Reuse an already running build + fixture server
+bun ws trees profile:virtualization -- --no-build --no-server
+
+# Run multiple benchmark passes and print per-run + aggregate tables
+bun ws trees profile:virtualization -- --runs 5
+
+# Emit raw machine-readable runs only
+bun ws trees profile:virtualization -- --runs 5 --json
+```
+
+Flags:
+
+- `--browser-url <url>` to point at a different Chrome remote debugging base URL
+- `--url <url>` to profile a different page than the default virtualization
+  fixture
+- `--timeout <ms>` to change navigation/render/trace timeout behavior
+- `--runs <count>` to execute the benchmark multiple times sequentially
+- `--trace-out <path>` to choose the trace output location
+- `--no-build` to skip rebuilding `dist/`
+- `--no-server` to assume the fixture server is already running
+- `--json` to emit `{ "runs": [...] }` without a human summary
+
+Trace files are written to the system temp directory by default. For multi-run
+benchmarks the command appends `-run-N` to the trace filename so each run keeps
+its own trace.
+
 # Credits and Acknolwedgements
 
 The core of this library's underlying tree implementation started as a hard fork
