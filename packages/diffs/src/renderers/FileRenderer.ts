@@ -135,8 +135,6 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache ??= {
       file,
       options,
-      // NOTE(amadeus): If we're hydrating, we can assume there was
-      // pre-rendered HTML, otherwise one should not be hydrating
       highlighted: true,
       result: cache?.result,
       // FIXME(amadeus): Add support for renderRanges
@@ -146,11 +144,8 @@ export class FileRenderer<LAnnotation = undefined> {
       this.workerManager?.isWorkingPool() === true &&
       this.renderCache.result == null
     ) {
+      // We should only kick off a preload of the AST if we have a WorkerPool
       this.workerManager.highlightFileAST(this, file);
-    } else {
-      void this.asyncHighlight(file).then(({ result, options }) => {
-        this.onHighlightSuccess(file, result, options);
-      });
     }
   }
 

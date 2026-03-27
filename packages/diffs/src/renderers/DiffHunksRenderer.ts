@@ -394,8 +394,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     this.renderCache ??= {
       diff,
-      // NOTE(amadeus): If we're hydrating, we can assume there was
-      // pre-rendered HTML, otherwise one should not be hydrating
       highlighted: true,
       options,
       result: cache?.result,
@@ -405,11 +403,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.workerManager?.isWorkingPool() === true &&
       this.renderCache.result == null
     ) {
+      // We should only kick off a preload of the AST if we have a WorkerPool
       this.workerManager.highlightDiffAST(this, this.diff);
-    } else {
-      void this.asyncHighlight(diff).then(({ result, options }) => {
-        this.onHighlightSuccess(diff, result, options);
-      });
     }
   }
 
