@@ -220,7 +220,8 @@ export class FileRenderer<LAnnotation = undefined> {
       if (
         this.renderCache.result == null ||
         (!this.renderCache.highlighted &&
-          !areRenderRangesEqual(this.renderCache.renderRange, renderRange))
+          (file !== this.renderCache.file ||
+            !areRenderRangesEqual(this.renderCache.renderRange, renderRange)))
       ) {
         this.renderCache.file = file;
         this.renderCache.result = this.workerManager.getPlainFileAST(

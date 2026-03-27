@@ -462,7 +462,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (
         this.renderCache.result == null ||
         (!this.renderCache.highlighted &&
-          !areRenderRangesEqual(this.renderCache.renderRange, renderRange))
+          (diff !== this.renderCache.diff ||
+            !areRenderRangesEqual(this.renderCache.renderRange, renderRange)))
       ) {
         this.renderCache.diff = diff;
         this.renderCache.result = this.workerManager.getPlainDiffAST(
