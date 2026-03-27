@@ -456,6 +456,29 @@ describe('diffAcceptRejectHunk', () => {
     expect(result.cacheKey).toBe('old-key:new-key:b-0:0-0');
   });
 
+  test('updates cacheKey when trimContextLines is used for a full hunk', () => {
+    const diff = parseDiffFromFile(
+      {
+        name: 'example.ts',
+        contents: 'before\nold\nafter\n',
+        cacheKey: 'old-key',
+      },
+      {
+        name: 'example.ts',
+        contents: 'before\nnew\nafter\n',
+        cacheKey: 'new-key',
+      },
+      { context: 1 }
+    );
+
+    const result = diffAcceptRejectHunk(diff, 0, {
+      type: 'accept',
+      trimContextLines: true,
+    });
+
+    expect(result.cacheKey).toBe('old-key:new-key:a-0:0-2:t-3');
+  });
+
   test('accept resolves a partial patch without materializing omitted context', () => {
     const diff = createPartialFixture();
     const snapshot = snapshotHunk(diff, 0);
@@ -667,6 +690,44 @@ describe('diffAcceptRejectHunk', () => {
     });
 
     expect(result.cacheKey).toBe('old-key:new-key:a-2:1-1');
+  });
+
+  test('updates cacheKey when trimming a single resolved content block', () => {
+    const diff = parsePatchFiles(
+      `diff --git a/example.ts b/example.ts
+--- a/example.ts
++++ b/example.ts
+@@ -1,11 +1,11 @@
+ line 1
+-line 2 old
++line 2 new
+ line 3
+ line 4
+ line 5
+-line 6 old
++line 6 new
+ line 7
+ line 8
+ line 9
+-line 10 old
++line 10 new
+ line 11
+`,
+      'cache-key'
+    )[0]?.files[0];
+
+    expect(diff).toBeDefined();
+    if (diff == null) {
+      return;
+    }
+
+    const result = diffAcceptRejectHunk(diff, 0, {
+      type: 'accept',
+      changeIndex: 3,
+      trimContextLines: 1,
+    });
+
+    expect(result.cacheKey).toBe('cache-key-0-0:a-0:3-3:t-1');
   });
 
   test('both should inherit noEOFCR from additions', () => {

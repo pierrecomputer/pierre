@@ -126,6 +126,7 @@ function createTrimmedResolvedHunk(
   let deletionLines = 0;
   let splitLineCount = 0;
   let unifiedLineCount = 0;
+  const hunkContent: (ContextContent | ChangeContent)[] = [];
 
   for (const content of blocks) {
     if (content.type === 'context') {
@@ -133,6 +134,12 @@ function createTrimmedResolvedHunk(
       deletionCount += content.lines;
       splitLineCount += content.lines;
       unifiedLineCount += content.lines;
+      hunkContent.push({
+        type: 'context',
+        lines: content.lines,
+        additionLineIndex: content.additionLineIndex,
+        deletionLineIndex: content.deletionLineIndex,
+      });
       continue;
     }
 
@@ -142,6 +149,13 @@ function createTrimmedResolvedHunk(
     deletionLines += content.deletions;
     splitLineCount += Math.max(content.deletions, content.additions);
     unifiedLineCount += content.deletions + content.additions;
+    hunkContent.push({
+      type: 'change',
+      additions: content.additions,
+      deletions: content.deletions,
+      additionLineIndex: content.additionLineIndex,
+      deletionLineIndex: content.deletionLineIndex,
+    });
   }
 
   return {
@@ -155,11 +169,7 @@ function createTrimmedResolvedHunk(
     deletionLineIndex: firstBlock.deletionLineIndex,
     splitLineCount,
     unifiedLineCount,
-    hunkContent: blocks.map(
-      ({ additionStart: _a, deletionStart: _d, ...content }) => ({
-        ...content,
-      })
-    ),
+    hunkContent,
   };
 }
 
