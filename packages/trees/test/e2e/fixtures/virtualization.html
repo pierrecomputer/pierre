@@ -177,6 +177,11 @@
       longTaskObserver?.observe({ type: 'longtask', buffered: true });
 
       const formatMs = (value) => `${value.toFixed(1)} ms`;
+      const getTaskOverlapMs = (entry, startTime, endTime) => {
+        const overlapStart = Math.max(entry.startTime, startTime);
+        const overlapEnd = Math.min(entry.startTime + entry.duration, endTime);
+        return Math.max(0, overlapEnd - overlapStart);
+      };
 
       const waitForTreeHost = async () => {
         const started = performance.now();
@@ -252,18 +257,18 @@
 
         const measure = performance.getEntriesByName(MEASURE_NAME).at(-1);
         const renderEndTime = performance.now();
-        const renderLongTasks = longTaskEntries.filter((entry) => {
-          return (
-            entry.startTime >= renderStartTime &&
-            entry.startTime <= renderEndTime
-          );
-        });
+        const renderLongTasks = longTaskEntries
+          .map((entry) => ({
+            ...entry,
+            overlapMs: getTaskOverlapMs(entry, renderStartTime, renderEndTime),
+          }))
+          .filter((entry) => entry.overlapMs > 0);
         const longTaskCount = renderLongTasks.length;
         const longTaskTotalMs = renderLongTasks.reduce((total, entry) => {
-          return total + entry.duration;
+          return total + entry.overlapMs;
         }, 0);
         const longestLongTaskMs = renderLongTasks.reduce((longest, entry) => {
-          return Math.max(longest, entry.duration);
+          return Math.max(longest, entry.overlapMs);
         }, 0);
         const instrumentation = benchmark?.summarize(heapBefore, heapAfter) ?? {
           phases: [],

@@ -431,8 +431,9 @@ Flags:
 
 - `--browser-url <url>` to point at a different Chrome remote debugging base URL
 - `--url <url>` to profile a different page than the default virtualization
-  fixture
-- `--workload <name>` to select one or more named fixture workloads
+  fixture. Existing query params on a custom URL are preserved.
+- `--workload <name>` to select one or more named fixture workloads for the
+  built-in virtualization fixture
 - `--timeout <ms>` to change navigation/render/trace timeout behavior
 - `--runs <count>` to execute the benchmark multiple times sequentially
 - `--warmup-runs <count>` to run and discard warm-up passes before reporting

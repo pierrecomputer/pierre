@@ -623,17 +623,33 @@ function createRunTraceOutputPath(
   return `${traceOutputPath.slice(0, extensionIndex)}${runSuffix}${traceOutputPath.slice(extensionIndex)}`;
 }
 
+function isVirtualizationFixtureUrl(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    const defaultUrl = new URL(DEFAULT_URL);
+    return parsedUrl.pathname === defaultUrl.pathname;
+  } catch {
+    return false;
+  }
+}
+
 function createProfileUrl(
   url: string,
   instrumentationMode: 'on' | 'off',
   workloadName: string
 ): string {
   const parsedUrl = new URL(url);
-  parsedUrl.searchParams.set(
-    'instrumentation',
-    instrumentationMode === 'on' ? '1' : '0'
-  );
-  parsedUrl.searchParams.set('workload', workloadName);
+  if (isVirtualizationFixtureUrl(url)) {
+    if (!parsedUrl.searchParams.has('instrumentation')) {
+      parsedUrl.searchParams.set(
+        'instrumentation',
+        instrumentationMode === 'on' ? '1' : '0'
+      );
+    }
+    if (!parsedUrl.searchParams.has('workload')) {
+      parsedUrl.searchParams.set('workload', workloadName);
+    }
+  }
   return parsedUrl.toString();
 }
 
@@ -1006,15 +1022,32 @@ async function isUrlReachable(
   url: string,
   timeoutMs: number
 ): Promise<boolean> {
-  try {
+  const isReachableWithMethod = async (
+    method: 'HEAD' | 'GET'
+  ): Promise<boolean> => {
     const response = await fetchWithTimeout(
       url,
       {
-        method: 'HEAD',
+        method,
       },
       timeoutMs
     );
+    if (method === 'GET') {
+      response.body?.cancel().catch(() => {});
+    }
     return response.ok;
+  };
+
+  try {
+    if (await isReachableWithMethod('HEAD')) {
+      return true;
+    }
+  } catch {
+    // Fall back to GET for targets that reject or do not implement HEAD.
+  }
+
+  try {
+    return await isReachableWithMethod('GET');
   } catch {
     return false;
   }
