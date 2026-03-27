@@ -137,13 +137,21 @@ export interface ExpandPathsOptions {
   cache?: Map<string, string[]>;
 }
 
+interface ExpandPathsStats {
+  ancestorCacheHitCount: number;
+  ancestorCacheMissCount: number;
+  pathCacheHitCount: number;
+  pathCacheMissCount: number;
+}
+
 // Resolves each ancestor segment in a path using a shared cache so expanding a
 // large folder set does not repeatedly rebuild the same prefix strings.
 function resolveAncestorIdsForPath(
   path: string,
   pathToId: Map<string, string>,
   flatten: boolean,
-  ancestorIdCache: Map<string, string | null>
+  ancestorIdCache: Map<string, string | null>,
+  stats: ExpandPathsStats
 ): string[] {
   const resolvedIds: string[] = [];
   let segmentStart = 0;
@@ -155,11 +163,13 @@ function resolveAncestorIdsForPath(
 
     if (ancestor.length > 0) {
       if (ancestorIdCache.has(ancestor)) {
+        stats.ancestorCacheHitCount += 1;
         const cachedId = ancestorIdCache.get(ancestor);
         if (cachedId != null) {
           resolvedIds.push(cachedId);
         }
       } else {
+        stats.ancestorCacheMissCount += 1;
         let resolvedId: string | null;
         if (flatten) {
           // Prefer the flattened (f::) ID when it exists — that's the actual
@@ -209,15 +219,25 @@ export function expandPathsWithAncestors(
       const flatten = options?.flattenEmptyDirectories !== false;
       const ids = new Set<string>();
       const ancestorIdCache = new Map<string, string | null>();
+      const stats: ExpandPathsStats = {
+        ancestorCacheHitCount: 0,
+        ancestorCacheMissCount: 0,
+        pathCacheHitCount: 0,
+        pathCacheMissCount: 0,
+      };
 
       for (const path of paths) {
         let expanded = cache?.get(path);
-        if (expanded == null) {
+        if (expanded != null) {
+          stats.pathCacheHitCount += 1;
+        } else {
+          stats.pathCacheMissCount += 1;
           expanded = resolveAncestorIdsForPath(
             path,
             pathToId,
             flatten,
-            ancestorIdCache
+            ancestorIdCache,
+            stats
           );
           cache?.set(path, expanded);
         }
@@ -236,6 +256,26 @@ export function expandPathsWithAncestors(
         benchmarkInstrumentation,
         'workload.expandPathsResolvedIds',
         ids.size
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsPathCacheHits',
+        stats.pathCacheHitCount
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsPathCacheMisses',
+        stats.pathCacheMissCount
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsAncestorCacheHits',
+        stats.ancestorCacheHitCount
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsAncestorCacheMisses',
+        stats.ancestorCacheMissCount
       );
       return Array.from(ids);
     }

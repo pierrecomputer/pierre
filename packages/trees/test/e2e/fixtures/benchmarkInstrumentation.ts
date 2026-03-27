@@ -1,11 +1,20 @@
-import {
-  attachBenchmarkInstrumentation,
-  type BenchmarkInstrumentation,
-} from '../../../src/internal/benchmarkInstrumentation';
+import { attachBenchmarkInstrumentation } from '../../../dist/internal/benchmarkInstrumentation.js';
+
+interface BenchmarkInstrumentation {
+  measurePhase: <TValue>(name: string, fn: () => TValue) => TValue;
+  setCounter: (name: string, value: number) => void;
+}
 
 interface BenchmarkPhaseAggregate {
-  totalMs: number;
+  inclusiveMs: number;
+  exclusiveMs: number;
   count: number;
+}
+
+interface BenchmarkPhaseFrame {
+  childDurationMs: number;
+  name: string;
+  startedAt: number;
 }
 
 interface HeapSnapshot {
@@ -24,6 +33,7 @@ export interface BenchmarkInstrumentationSummary {
   phases: Array<{
     name: string;
     durationMs: number;
+    selfDurationMs: number;
     count: number;
   }>;
   counters: Record<string, number>;
@@ -54,22 +64,36 @@ export function createBenchmarkInstrumentation(): {
 } {
   const phaseTotals: Record<string, BenchmarkPhaseAggregate> = {};
   const counters: Record<string, number> = {};
+  const phaseStack: BenchmarkPhaseFrame[] = [];
 
   const instrumentation: BenchmarkInstrumentation = {
     measurePhase(name, fn) {
-      const startedAt = now();
+      const frame: BenchmarkPhaseFrame = {
+        childDurationMs: 0,
+        name,
+        startedAt: now(),
+      };
+      phaseStack.push(frame);
       try {
         return fn();
       } finally {
-        const durationMs = now() - startedAt;
+        phaseStack.pop();
+        const durationMs = now() - frame.startedAt;
+        const exclusiveMs = Math.max(0, durationMs - frame.childDurationMs);
         if (Number.isFinite(durationMs) && durationMs >= 0) {
           const existing = phaseTotals[name] ?? {
-            totalMs: 0,
+            inclusiveMs: 0,
+            exclusiveMs: 0,
             count: 0,
           };
-          existing.totalMs += durationMs;
+          existing.inclusiveMs += durationMs;
+          existing.exclusiveMs += exclusiveMs;
           existing.count += 1;
           phaseTotals[name] = existing;
+        }
+        const parentFrame = phaseStack.at(-1);
+        if (parentFrame != null) {
+          parentFrame.childDurationMs += durationMs;
         }
       }
     },
@@ -105,7 +129,8 @@ export function createBenchmarkInstrumentation(): {
     return {
       phases: Object.entries(phaseTotals).map(([name, aggregate]) => ({
         name,
-        durationMs: aggregate.totalMs,
+        durationMs: aggregate.inclusiveMs,
+        selfDurationMs: aggregate.exclusiveMs,
         count: aggregate.count,
       })),
       counters: { ...counters },

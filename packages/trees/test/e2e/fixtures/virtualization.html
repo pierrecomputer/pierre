@@ -118,9 +118,8 @@
       import { FileTree } from '/dist/index.js';
       import { createBenchmarkInstrumentation } from './benchmarkInstrumentation.ts';
       import {
-        linuxKernelAllFolders,
-        linuxKernelFiles,
-        linuxKernelReplicaCount,
+        DEFAULT_VIRTUALIZATION_WORKLOAD_NAME,
+        getVirtualizationWorkload,
       } from './virtualization-data.ts';
 
       const START_MARK_NAME = 'trees-dev-virtualized-render-start';
@@ -131,6 +130,9 @@
       const searchParams = new URLSearchParams(window.location.search);
       const instrumentationEnabled =
         searchParams.get('instrumentation') !== '0';
+      const selectedWorkload = getVirtualizationWorkload(
+        searchParams.get('workload') ?? DEFAULT_VIRTUALIZATION_WORKLOAD_NAME
+      );
 
       const mount = document.querySelector('[data-profile-mount]');
       const renderButton = document.querySelector(
@@ -157,7 +159,7 @@
         throw new Error('Missing [data-profile-result] element.');
       }
 
-      fileCountLabel.textContent = `${linuxKernelFiles.length.toLocaleString()} files across ${linuxKernelReplicaCount} Linux roots`;
+      fileCountLabel.textContent = `${selectedWorkload.label}: ${selectedWorkload.fileCountLabel}`;
 
       const longTaskEntries = [];
       const longTaskObserver =
@@ -223,23 +225,24 @@
 
         const fileTree = new FileTree(
           benchmark?.attach({
-            initialFiles: linuxKernelFiles,
+            initialFiles: selectedWorkload.files,
             virtualize: { threshold: 0 },
             flattenEmptyDirectories: true,
             sort: false,
           }) ?? {
-            initialFiles: linuxKernelFiles,
+            initialFiles: selectedWorkload.files,
             virtualize: { threshold: 0 },
             flattenEmptyDirectories: true,
             sort: false,
           },
           {
-            initialExpandedItems: linuxKernelAllFolders,
+            initialExpandedItems: selectedWorkload.expandedFolders,
           }
         );
         fileTree.render({ containerWrapper: mount });
 
         const { renderedItemCount } = await waitForTreeHost();
+        const visibleRowsReadyTime = performance.now();
         await waitForPaint();
         const heapAfter = benchmark?.readHeapSnapshot() ?? null;
 
@@ -270,14 +273,23 @@
         instrumentation.counters['workload.renderedRows'] = renderedItemCount;
 
         window.__treesDevVirtualizationProfile = {
+          workload: {
+            name: selectedWorkload.name,
+            label: selectedWorkload.label,
+            fileCount: selectedWorkload.files.length,
+            expandedFolderCount: selectedWorkload.expandedFolders.length,
+          },
           renderedItemCount,
+          visibleRowsReadyMs: visibleRowsReadyTime - renderStartTime,
           renderDurationMs: measure?.duration ?? 0,
           longTaskCount,
           longTaskTotalMs,
           longestLongTaskMs,
           instrumentation,
-          resultText: `Render ready ${formatMs(
+          resultText: `Post-paint ready ${formatMs(
             measure?.duration ?? 0
+          )}. Visible rows ready ${formatMs(
+            visibleRowsReadyTime - renderStartTime
           )}. Visible rows ${renderedItemCount}. Long tasks ${longTaskCount}; total ${formatMs(
             longTaskTotalMs
           )}; longest ${formatMs(longestLongTaskMs)}.`,

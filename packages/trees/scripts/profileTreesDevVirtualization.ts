@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,12 +7,14 @@ import { fileURLToPath } from 'node:url';
 interface ProfileConfig {
   browserUrl: string;
   url: string;
+  workloads: string[];
   timeoutMs: number;
   runs: number;
   warmupRuns: number;
   instrumentationMode: 'on' | 'off';
   includeCallCounts: boolean;
   outputJson: boolean;
+  comparePath?: string;
   traceOutputPath: string;
   ensureBuild: boolean;
   ensureServer: boolean;
@@ -46,6 +48,7 @@ interface TraceFile {
 interface PageBenchmarkPhase {
   name: string;
   durationMs: number;
+  selfDurationMs: number;
   count: number;
 }
 
@@ -63,8 +66,17 @@ interface PageInstrumentationSummary {
   heap: PageHeapSummary | null;
 }
 
+interface PageWorkloadSummary {
+  name: string;
+  label: string;
+  fileCount: number;
+  expandedFolderCount: number;
+}
+
 interface PageRenderSummary {
+  workload?: PageWorkloadSummary;
   renderedItemCount: number;
+  visibleRowsReadyMs?: number;
   renderDurationMs: number;
   longTaskCount?: number;
   longTaskTotalMs?: number;
@@ -120,8 +132,10 @@ interface CpuProfileSummary {
 interface InstrumentedPhaseSummary {
   name: string;
   durationMs: number;
+  selfDurationMs: number;
   count: number;
   percentOfRender: number | null;
+  selfPercentOfRender: number | null;
   workload: string | null;
 }
 
@@ -138,8 +152,10 @@ interface ProfileResult {
   runNumber: number;
   browserUrl: string;
   url: string;
+  workload: PageWorkloadSummary;
   traceOutputPath: string | null;
   renderedItemCount: number;
+  visibleRowsReadyMs: number | null;
   renderDurationMs: number;
   longTaskCount: number | null;
   longTaskTotalMs: number | null;
@@ -163,7 +179,8 @@ interface AggregateMetricSummary {
 }
 
 type AggregateMetricKey =
-  | 'renderReadyMs'
+  | 'visibleRowsReadyMs'
+  | 'postPaintReadyMs'
   | 'clickDispatchMs'
   | 'clickToRenderReadyMs'
   | 'traceWindowMs'
@@ -174,6 +191,70 @@ type AggregateMetricKey =
 interface JsonAggregateSummary {
   measuredRuns: number;
   metrics: Record<AggregateMetricKey, AggregateMetricSummary>;
+}
+
+interface ProfileWorkloadOutput {
+  workload: PageWorkloadSummary;
+  runs: ProfileResult[];
+  summary: JsonAggregateSummary;
+}
+
+interface ProfileConfigSummary {
+  browserUrl: string;
+  url: string;
+  workloads: string[];
+  timeoutMs: number;
+  runs: number;
+  warmupRuns: number;
+  instrumentationMode: 'on' | 'off';
+  includeCallCounts: boolean;
+}
+
+interface MetricComparisonSummary {
+  label: string;
+  availableRuns: {
+    baseline: number;
+    current: number;
+  };
+  averageMs: {
+    baseline: number | null;
+    current: number | null;
+    deltaMs: number | null;
+    deltaPct: number | null;
+  };
+  medianMs: {
+    baseline: number | null;
+    current: number | null;
+    deltaMs: number | null;
+    deltaPct: number | null;
+  };
+  p95Ms: {
+    baseline: number | null;
+    current: number | null;
+    deltaMs: number | null;
+    deltaPct: number | null;
+  };
+}
+
+interface WorkloadComparisonSummary {
+  workload: PageWorkloadSummary;
+  baselineWorkload: PageWorkloadSummary;
+  workloadShapeMatches: boolean;
+  metrics: Record<AggregateMetricKey, MetricComparisonSummary>;
+}
+
+interface ProfileComparisonSummary {
+  baselinePath: string;
+  unmatchedBaselineWorkloads: string[];
+  unmatchedCurrentWorkloads: string[];
+  workloads: WorkloadComparisonSummary[];
+}
+
+interface ProfileBenchmarkOutput {
+  benchmark: 'virtualizationProfile';
+  config: ProfileConfigSummary;
+  workloads: ProfileWorkloadOutput[];
+  comparison?: ProfileComparisonSummary;
 }
 
 interface InspectVersionResponse {
@@ -261,6 +342,14 @@ const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const DEFAULT_BROWSER_URL = 'http://127.0.0.1:9222';
 const DEFAULT_URL =
   'http://127.0.0.1:9221/test/e2e/fixtures/virtualization.html';
+const DEFAULT_WORKLOAD_NAME = 'linux-5x';
+const KNOWN_WORKLOAD_NAMES = new Set([
+  'pierre-snapshot',
+  'half-linux',
+  'linux',
+  'linux-5x',
+  'linux-10x',
+]);
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RUN_COUNT = 1;
 const DEFAULT_WARMUP_RUN_COUNT = 0;
@@ -351,8 +440,13 @@ const AGGREGATE_METRIC_DEFINITIONS: Array<{
   select: (result: ProfileResult) => number | null;
 }> = [
   {
-    key: 'renderReadyMs',
-    label: 'Render ready',
+    key: 'visibleRowsReadyMs',
+    label: 'Visible rows ready',
+    select: (result) => result.visibleRowsReadyMs,
+  },
+  {
+    key: 'postPaintReadyMs',
+    label: 'Post-paint ready',
     select: (result) => result.renderDurationMs,
   },
   {
@@ -362,7 +456,7 @@ const AGGREGATE_METRIC_DEFINITIONS: Array<{
   },
   {
     key: 'clickToRenderReadyMs',
-    label: 'Click-to-render-ready',
+    label: 'Click-to-post-paint-ready',
     select: (result) => result.trace.clickToRenderReadyMs,
   },
   {
@@ -403,6 +497,9 @@ function printHelpAndExit(): never {
     `  --url <url>            Page to profile (default: ${DEFAULT_URL})`
   );
   console.log(
+    `  --workload <name>      Fixture workload to run (repeatable, default: ${DEFAULT_WORKLOAD_NAME})`
+  );
+  console.log(
     `  --timeout <ms>         Navigation/render timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})`
   );
   console.log(
@@ -419,6 +516,9 @@ function printHelpAndExit(): never {
   );
   console.log(
     `  --trace-out <path>     Where to save the Chrome trace JSON when tracing succeeds (default: ${DEFAULT_TRACE_OUTPUT_EXAMPLE_PATH})`
+  );
+  console.log(
+    '  --compare <path>       Compare against a prior --json virtualization profile run'
   );
   console.log(
     '  --no-build             Skip rebuilding @pierre/trees before profiling'
@@ -456,6 +556,18 @@ function parseInstrumentationMode(value: string): 'on' | 'off' {
   );
 }
 
+function parseWorkloadName(value: string): string {
+  if (KNOWN_WORKLOAD_NAMES.has(value)) {
+    return value;
+  }
+
+  throw new Error(
+    `Invalid --workload value '${value}'. Expected one of: ${[
+      ...KNOWN_WORKLOAD_NAMES,
+    ].join(', ')}.`
+  );
+}
+
 function createTraceRunId(): string {
   return `${new Date()
     .toISOString()
@@ -472,17 +584,32 @@ function createDefaultTraceOutputPath(): string {
 
 function createRunTraceOutputPath(
   traceOutputPath: string,
+  workloadName: string,
+  workloadCount: number,
   runNumber: number,
   totalRuns: number
 ): string {
-  if (totalRuns <= 1) {
+  const suffixParts: string[] = [];
+  if (workloadCount > 1) {
+    const workloadSlug = workloadName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    suffixParts.push(workloadSlug.length > 0 ? workloadSlug : 'workload');
+  }
+
+  if (totalRuns > 1) {
+    suffixParts.push(
+      `run-${String(runNumber).padStart(String(totalRuns).length, '0')}`
+    );
+  }
+
+  if (suffixParts.length === 0) {
     return traceOutputPath;
   }
 
-  const runSuffix = `-run-${String(runNumber).padStart(
-    String(totalRuns).length,
-    '0'
-  )}`;
+  const runSuffix = `-${suffixParts.join('-')}`;
   const extensionIndex = traceOutputPath.lastIndexOf('.');
   if (extensionIndex <= 0) {
     return `${traceOutputPath}${runSuffix}`;
@@ -491,15 +618,17 @@ function createRunTraceOutputPath(
   return `${traceOutputPath.slice(0, extensionIndex)}${runSuffix}${traceOutputPath.slice(extensionIndex)}`;
 }
 
-function createInstrumentedProfileUrl(
+function createProfileUrl(
   url: string,
-  instrumentationMode: 'on' | 'off'
+  instrumentationMode: 'on' | 'off',
+  workloadName: string
 ): string {
   const parsedUrl = new URL(url);
   parsedUrl.searchParams.set(
     'instrumentation',
     instrumentationMode === 'on' ? '1' : '0'
   );
+  parsedUrl.searchParams.set('workload', workloadName);
   return parsedUrl.toString();
 }
 
@@ -507,6 +636,7 @@ function parseArgs(argv: string[]): ProfileConfig {
   const config: ProfileConfig = {
     browserUrl: DEFAULT_BROWSER_URL,
     url: DEFAULT_URL,
+    workloads: [DEFAULT_WORKLOAD_NAME],
     timeoutMs: DEFAULT_TIMEOUT_MS,
     runs: DEFAULT_RUN_COUNT,
     warmupRuns: DEFAULT_WARMUP_RUN_COUNT,
@@ -548,11 +678,13 @@ function parseArgs(argv: string[]): ProfileConfig {
     if (
       flag === '--browser-url' ||
       flag === '--url' ||
+      flag === '--workload' ||
       flag === '--timeout' ||
       flag === '--runs' ||
       flag === '--warmup-runs' ||
       flag === '--instrumentation' ||
-      flag === '--trace-out'
+      flag === '--trace-out' ||
+      flag === '--compare'
     ) {
       const value = inlineValue ?? argv[index + 1];
       if (value == null) {
@@ -566,6 +698,14 @@ function parseArgs(argv: string[]): ProfileConfig {
         config.browserUrl = value.replace(/\/$/, '');
       } else if (flag === '--url') {
         config.url = value;
+      } else if (flag === '--workload') {
+        if (
+          config.workloads.length === 1 &&
+          config.workloads[0] === DEFAULT_WORKLOAD_NAME
+        ) {
+          config.workloads = [];
+        }
+        config.workloads.push(parseWorkloadName(value));
       } else if (flag === '--timeout') {
         config.timeoutMs = parsePositiveInteger(value, '--timeout');
       } else if (flag === '--runs') {
@@ -574,6 +714,8 @@ function parseArgs(argv: string[]): ProfileConfig {
         config.warmupRuns = parseNonNegativeInteger(value, '--warmup-runs');
       } else if (flag === '--instrumentation') {
         config.instrumentationMode = parseInstrumentationMode(value);
+      } else if (flag === '--compare') {
+        config.comparePath = resolve(process.cwd(), value);
       } else {
         config.traceOutputPath = resolve(process.cwd(), value);
       }
@@ -583,6 +725,7 @@ function parseArgs(argv: string[]): ProfileConfig {
     throw new Error(`Unknown argument: ${rawArg}`);
   }
 
+  config.workloads = [...new Set(config.workloads)];
   return config;
 }
 
@@ -716,6 +859,33 @@ function summarizeAggregateMetric(
     averageMs: Number((totalMs / values.length).toFixed(3)),
     medianMs: Number(percentile(sortedValues, 50).toFixed(3)),
     p95Ms: Number(percentile(sortedValues, 95).toFixed(3)),
+  };
+}
+
+function createProfileConfigSummary(
+  config: ProfileConfig
+): ProfileConfigSummary {
+  return {
+    browserUrl: config.browserUrl,
+    url: config.url,
+    workloads: [...config.workloads],
+    timeoutMs: config.timeoutMs,
+    runs: config.runs,
+    warmupRuns: config.warmupRuns,
+    instrumentationMode: config.instrumentationMode,
+    includeCallCounts: config.includeCallCounts,
+  };
+}
+
+function createWorkloadOutput(results: ProfileResult[]): ProfileWorkloadOutput {
+  if (results.length === 0) {
+    throw new Error('Cannot summarize an empty workload result set.');
+  }
+
+  return {
+    workload: results[0].workload,
+    runs: results,
+    summary: createJsonAggregateSummary(results),
   };
 }
 
@@ -882,9 +1052,10 @@ async function waitForUrl(url: string, timeoutMs: number): Promise<void> {
 async function startFixtureServerIfNeeded(
   config: ProfileConfig
 ): Promise<Bun.Subprocess | null> {
-  const profileUrl = createInstrumentedProfileUrl(
+  const profileUrl = createProfileUrl(
     config.url,
-    config.instrumentationMode
+    config.instrumentationMode,
+    config.workloads[0] ?? DEFAULT_WORKLOAD_NAME
   );
   if (!config.ensureBuild && !config.ensureServer) {
     return null;
@@ -1774,6 +1945,24 @@ function getCounterValue(
   return Number.isFinite(value) ? value : null;
 }
 
+function getPageWorkloadSummary(
+  pageSummary: PageRenderSummary,
+  url: string
+): PageWorkloadSummary {
+  if (pageSummary.workload != null) {
+    return pageSummary.workload;
+  }
+
+  const workloadName =
+    new URL(url).searchParams.get('workload') ?? 'custom-workload';
+  return {
+    name: workloadName,
+    label: workloadName,
+    fileCount: 0,
+    expandedFolderCount: 0,
+  };
+}
+
 function formatWorkloadPair(
   counters: Record<string, number>,
   key: string,
@@ -1790,6 +1979,24 @@ function joinWorkloadParts(parts: Array<string | null>): string | null {
   return availableParts.length === 0 ? null : availableParts.join(', ');
 }
 
+function formatWorkloadRate(
+  numerator: number | null,
+  denominator: number | null,
+  label: string
+): string | null {
+  if (
+    numerator == null ||
+    denominator == null ||
+    !Number.isFinite(numerator) ||
+    !Number.isFinite(denominator) ||
+    denominator <= 0
+  ) {
+    return null;
+  }
+
+  return `${((numerator / denominator) * 100).toFixed(1)}% ${label}`;
+}
+
 function formatPhaseWorkload(
   name: string,
   counters: Record<string, number>,
@@ -1803,9 +2010,18 @@ function formatPhaseWorkload(
       ]);
     }
     case 'fileListToTree.pathGraph': {
+      const totalSegments = getCounterValue(
+        counters,
+        'workload.inputPathSegments'
+      );
+      const reusedSegments = getCounterValue(
+        counters,
+        'workload.pathGraphReusedPrefixSegments'
+      );
       return joinWorkloadParts([
         formatWorkloadPair(counters, 'workload.inputFiles', 'files'),
         formatWorkloadPair(counters, 'workload.inputPathSegments', 'segments'),
+        formatWorkloadRate(reusedSegments, totalSegments, 'prefix reuse'),
         formatWorkloadPair(counters, 'workload.pathGraphFolders', 'folders'),
       ]);
     }
@@ -1828,7 +2044,23 @@ function formatPhaseWorkload(
     }
     case 'fileListToTree.hashKeys':
     case 'root.dataLoader': {
-      return formatWorkloadPair(counters, 'workload.treeNodes', 'nodes');
+      if (name === 'root.dataLoader') {
+        return formatWorkloadPair(counters, 'workload.treeNodes', 'nodes');
+      }
+
+      const resolveIdCalls = getCounterValue(
+        counters,
+        'workload.hashKeysResolveIdCalls'
+      );
+      const resolveIdCacheHits = getCounterValue(
+        counters,
+        'workload.hashKeysResolveIdCacheHits'
+      );
+      return joinWorkloadParts([
+        formatWorkloadPair(counters, 'workload.treeNodes', 'nodes'),
+        resolveIdCalls == null ? null : `${formatCount(resolveIdCalls)} remaps`,
+        formatWorkloadRate(resolveIdCacheHits, resolveIdCalls, 'cache hits'),
+      ]);
     }
     case 'root.pathToId': {
       return formatWorkloadPair(
@@ -1856,6 +2088,22 @@ function formatPhaseWorkload(
       ]);
     }
     case 'expandPathsWithAncestors': {
+      const pathCacheHits = getCounterValue(
+        counters,
+        'workload.expandPathsPathCacheHits'
+      );
+      const pathCacheMisses = getCounterValue(
+        counters,
+        'workload.expandPathsPathCacheMisses'
+      );
+      const ancestorCacheHits = getCounterValue(
+        counters,
+        'workload.expandPathsAncestorCacheHits'
+      );
+      const ancestorCacheMisses = getCounterValue(
+        counters,
+        'workload.expandPathsAncestorCacheMisses'
+      );
       return (() => {
         const inputCount = getCounterValue(
           counters,
@@ -1868,7 +2116,23 @@ function formatPhaseWorkload(
         if (inputCount == null && outputCount == null) {
           return null;
         }
-        return `${formatCount(inputCount)} paths -> ${formatCount(outputCount)} ids`;
+        return joinWorkloadParts([
+          `${formatCount(inputCount)} paths -> ${formatCount(outputCount)} ids`,
+          formatWorkloadRate(
+            pathCacheHits,
+            pathCacheHits != null && pathCacheMisses != null
+              ? pathCacheHits + pathCacheMisses
+              : null,
+            'path cache hits'
+          ),
+          formatWorkloadRate(
+            ancestorCacheHits,
+            ancestorCacheHits != null && ancestorCacheMisses != null
+              ? ancestorCacheHits + ancestorCacheMisses
+              : null,
+            'ancestor cache hits'
+          ),
+        ]);
       })();
     }
     case 'core.rebuildItemMeta': {
@@ -1924,6 +2188,7 @@ function summarizeInstrumentation(
     .map((phase) => ({
       name: phase.name,
       durationMs: Number(phase.durationMs.toFixed(3)),
+      selfDurationMs: Number(phase.selfDurationMs.toFixed(3)),
       count: phase.count,
       percentOfRender:
         pageSummary.renderDurationMs <= 0
@@ -1932,6 +2197,15 @@ function summarizeInstrumentation(
               ((phase.durationMs / pageSummary.renderDurationMs) * 100).toFixed(
                 1
               )
+            ),
+      selfPercentOfRender:
+        pageSummary.renderDurationMs <= 0
+          ? null
+          : Number(
+              (
+                (phase.selfDurationMs / pageSummary.renderDurationMs) *
+                100
+              ).toFixed(1)
             ),
       workload: formatPhaseWorkload(
         phase.name,
@@ -1998,14 +2272,58 @@ function summarizeInstrumentation(
   };
 }
 
-function getNamedPhases(
-  phases: InstrumentedPhaseSummary[],
-  phaseNames: readonly string[]
-): InstrumentedPhaseSummary[] {
+function createNestedPhaseRows(phases: InstrumentedPhaseSummary[]): Array<{
+  label: string;
+  phase: InstrumentedPhaseSummary;
+}> {
   const phaseByName = new Map(phases.map((phase) => [phase.name, phase]));
-  return phaseNames
-    .map((phaseName) => phaseByName.get(phaseName))
-    .filter((phase): phase is InstrumentedPhaseSummary => phase != null);
+  const rows: Array<{
+    label: string;
+    phase: InstrumentedPhaseSummary;
+  }> = [];
+  const consumedNames = new Set<string>();
+
+  const pushPhase = (phaseName: string, label: string): void => {
+    const phase = phaseByName.get(phaseName);
+    if (phase == null) {
+      return;
+    }
+
+    consumedNames.add(phaseName);
+    rows.push({ label, phase });
+  };
+
+  pushPhase('root.fileListToTree', formatPhaseLabel('root.fileListToTree'));
+  for (const childPhaseName of TREE_BUILD_PHASE_ORDER) {
+    pushPhase(childPhaseName, `  - ${formatPhaseLabel(childPhaseName)}`);
+  }
+
+  pushPhase('root.pathToId', formatPhaseLabel('root.pathToId'));
+  pushPhase('root.stateConfig', formatPhaseLabel('root.stateConfig'));
+  pushPhase(
+    'expandPathsWithAncestors',
+    `  - ${formatPhaseLabel('expandPathsWithAncestors')}`
+  );
+  pushPhase('root.dataLoader', formatPhaseLabel('root.dataLoader'));
+  pushPhase('core.rebuildItemMeta', formatPhaseLabel('core.rebuildItemMeta'));
+  pushPhase('fileTree.render.mount', formatPhaseLabel('fileTree.render.mount'));
+
+  const remainingPhases = phases
+    .filter((phase) => !consumedNames.has(phase.name))
+    .sort((left, right) => {
+      if (right.durationMs !== left.durationMs) {
+        return right.durationMs - left.durationMs;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  for (const phase of remainingPhases) {
+    rows.push({
+      label: formatPhaseLabel(phase.name),
+      phase,
+    });
+  }
+
+  return rows;
 }
 
 function startTrace(cdp: CdpClient): Promise<TraceFile> {
@@ -2315,12 +2633,14 @@ function writeTraceIfAvailable(
 
 async function profileVirtualizedRender(
   config: ProfileConfig,
+  workloadName: string,
   runNumber: number,
   traceOutputPath: string | null
 ): Promise<ProfileResult> {
-  const profileUrl = createInstrumentedProfileUrl(
+  const profileUrl = createProfileUrl(
     config.url,
-    config.instrumentationMode
+    config.instrumentationMode,
+    workloadName
   );
   const version = await fetchJson<InspectVersionResponse>(
     `${config.browserUrl}/json/version`,
@@ -2364,8 +2684,13 @@ async function profileVirtualizedRender(
       runNumber,
       browserUrl: config.browserUrl,
       url: profileUrl,
+      workload: getPageWorkloadSummary(pageSummary, profileUrl),
       traceOutputPath: writeTraceIfAvailable(trace, traceOutputPath),
       renderedItemCount: pageSummary.renderedItemCount,
+      visibleRowsReadyMs:
+        pageSummary.visibleRowsReadyMs == null
+          ? null
+          : Number(pageSummary.visibleRowsReadyMs.toFixed(3)),
       renderDurationMs: Number(pageSummary.renderDurationMs.toFixed(3)),
       longTaskCount: pageSummary.longTaskCount ?? null,
       longTaskTotalMs:
@@ -2389,7 +2714,13 @@ async function profileVirtualizedRender(
 function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
   const summaryRows = [['Visible rows', String(result.renderedItemCount)]];
 
-  summaryRows.push(['Render ready', formatMs(result.renderDurationMs)]);
+  if (result.visibleRowsReadyMs != null) {
+    summaryRows.push([
+      'Visible rows ready',
+      formatMs(result.visibleRowsReadyMs),
+    ]);
+  }
+  summaryRows.push(['Post-paint ready', formatMs(result.renderDurationMs)]);
 
   if (result.trace.available) {
     if (result.trace.clickDispatchMs != null) {
@@ -2400,7 +2731,7 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
     }
     if (result.trace.clickToRenderReadyMs != null) {
       summaryRows.push([
-        'Click-to-render-ready',
+        'Click-to-post-paint-ready',
         formatMs(result.trace.clickToRenderReadyMs),
       ]);
     }
@@ -2438,51 +2769,25 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
     })
   );
 
-  const majorPhases = getNamedPhases(
-    result.instrumentation.phases,
-    MAJOR_PHASE_ORDER
-  );
-  if (majorPhases.length > 0) {
+  const phaseRows = createNestedPhaseRows(result.instrumentation.phases);
+  if (phaseRows.length > 0) {
     console.log('');
-    console.log('Major Phases');
+    console.log('Phases');
+    console.log('Total includes nested child phases. Own excludes them.');
     console.log(
       createTable(
-        ['Phase', 'Time', 'Render %', 'Calls', 'Workload'],
-        majorPhases.map((phase) => [
-          formatPhaseLabel(phase.name),
+        ['Phase', 'Total', 'Own', 'Own %', 'Calls', 'Workload'],
+        phaseRows.map(({ label, phase }) => [
+          label,
           formatMs(phase.durationMs),
-          formatPercent(phase.percentOfRender),
+          formatMs(phase.selfDurationMs),
+          formatPercent(phase.selfPercentOfRender),
           formatCount(phase.count),
           phase.workload ?? 'n/a',
         ]),
         {
-          alignments: ['left', 'right', 'right', 'right', 'left'],
-          maxWidths: [28, 12, 10, 8, 34],
-        }
-      )
-    );
-  }
-
-  const treeBuildPhases = getNamedPhases(
-    result.instrumentation.phases,
-    TREE_BUILD_PHASE_ORDER
-  );
-  if (treeBuildPhases.length > 0) {
-    console.log('');
-    console.log('Tree Build Breakdown');
-    console.log(
-      createTable(
-        ['Phase', 'Time', 'Render %', 'Calls', 'Workload'],
-        treeBuildPhases.map((phase) => [
-          formatPhaseLabel(phase.name),
-          formatMs(phase.durationMs),
-          formatPercent(phase.percentOfRender),
-          formatCount(phase.count),
-          phase.workload ?? 'n/a',
-        ]),
-        {
-          alignments: ['left', 'right', 'right', 'right', 'left'],
-          maxWidths: [32, 12, 10, 8, 34],
+          alignments: ['left', 'right', 'right', 'right', 'right', 'left'],
+          maxWidths: [32, 12, 12, 9, 8, 38],
         }
       )
     );
@@ -2609,32 +2914,6 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
   }
 }
 
-function printAggregateHumanSummary(results: ProfileResult[]): void {
-  const aggregateSummary = createJsonAggregateSummary(results);
-  const aggregateRows = AGGREGATE_METRIC_DEFINITIONS.map((definition) => {
-    return aggregateSummary.metrics[definition.key];
-  });
-
-  console.log('Aggregate Summary');
-  console.log(
-    createTable(
-      ['Metric', 'Total', 'Average', 'Median', 'P95', 'Runs'],
-      aggregateRows.map((row) => [
-        row.label,
-        formatMs(row.totalMs),
-        formatMs(row.averageMs),
-        formatMs(row.medianMs),
-        formatMs(row.p95Ms),
-        `${row.availableRuns}/${results.length}`,
-      ]),
-      {
-        alignments: ['left', 'right', 'right', 'right', 'right', 'right'],
-        maxWidths: [28, 14, 14, 14, 14, 8],
-      }
-    )
-  );
-}
-
 function createJsonAggregateSummary(
   results: ProfileResult[]
 ): JsonAggregateSummary {
@@ -2651,41 +2930,568 @@ function createJsonAggregateSummary(
   };
 }
 
-function printRunsHumanSummary(
-  results: ProfileResult[],
-  config: Pick<ProfileConfig, 'instrumentationMode' | 'warmupRuns'>
+function printAggregateHumanSummary(
+  summary: JsonAggregateSummary,
+  measuredRuns: number
 ): void {
-  if (results.length === 0) {
-    return;
+  const aggregateRows = AGGREGATE_METRIC_DEFINITIONS.map((definition) => {
+    return summary.metrics[definition.key];
+  });
+
+  console.log('Aggregate Summary');
+  console.log(
+    createTable(
+      ['Metric', 'Total', 'Average', 'Median', 'P95', 'Runs'],
+      aggregateRows.map((row) => [
+        row.label,
+        formatMs(row.totalMs),
+        formatMs(row.averageMs),
+        formatMs(row.medianMs),
+        formatMs(row.p95Ms),
+        `${row.availableRuns}/${measuredRuns}`,
+      ]),
+      {
+        alignments: ['left', 'right', 'right', 'right', 'right', 'right'],
+        maxWidths: [28, 14, 14, 14, 14, 8],
+      }
+    )
+  );
+}
+
+function formatSignedNumber(
+  value: number | null,
+  digits: number,
+  suffix: string
+): string {
+  if (value == null || !Number.isFinite(value)) {
+    return 'n/a';
   }
 
-  const runInfoRows = [
-    ['Browser', results[0].browserUrl],
-    ['URL', results[0].url],
-    ['Runs', String(results.length)],
+  const prefix = value > 0 ? '+' : '';
+  return `${prefix}${value.toFixed(digits)}${suffix}`;
+}
+
+function formatDeltaMsPct(
+  deltaMs: number | null,
+  deltaPct: number | null
+): string {
+  if (
+    (deltaMs == null || !Number.isFinite(deltaMs)) &&
+    (deltaPct == null || !Number.isFinite(deltaPct))
+  ) {
+    return 'n/a';
+  }
+
+  if (deltaMs == null || !Number.isFinite(deltaMs)) {
+    return formatSignedNumber(deltaPct, 1, '%');
+  }
+
+  if (deltaPct == null || !Number.isFinite(deltaPct)) {
+    return formatSignedNumber(deltaMs, 2, ' ms');
+  }
+
+  return `${formatSignedNumber(deltaMs, 2, ' ms')} (${formatSignedNumber(
+    deltaPct,
+    1,
+    '%'
+  )})`;
+}
+
+function createMetricDelta(
+  baseline: number | null,
+  current: number | null
+): {
+  baseline: number | null;
+  current: number | null;
+  deltaMs: number | null;
+  deltaPct: number | null;
+} {
+  const deltaMs =
+    baseline == null || current == null
+      ? null
+      : Number((current - baseline).toFixed(3));
+  const deltaPct =
+    baseline == null ||
+    current == null ||
+    !Number.isFinite(baseline) ||
+    baseline === 0
+      ? null
+      : Number((((current - baseline) / baseline) * 100).toFixed(1));
+
+  return {
+    baseline,
+    current,
+    deltaMs,
+    deltaPct,
+  };
+}
+
+function createMetricComparisonSummary(
+  baseline: AggregateMetricSummary,
+  current: AggregateMetricSummary
+): MetricComparisonSummary {
+  return {
+    label: current.label,
+    availableRuns: {
+      baseline: baseline.availableRuns,
+      current: current.availableRuns,
+    },
+    averageMs: createMetricDelta(baseline.averageMs, current.averageMs),
+    medianMs: createMetricDelta(baseline.medianMs, current.medianMs),
+    p95Ms: createMetricDelta(baseline.p95Ms, current.p95Ms),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value != null;
+}
+
+function normalizeComparableUrl(url: string): string {
+  try {
+    const parsedUrl = new URL(url);
+    parsedUrl.searchParams.delete('instrumentation');
+    parsedUrl.searchParams.delete('workload');
+    return parsedUrl.toString();
+  } catch {
+    return url;
+  }
+}
+
+function inferInstrumentationModeFromUrl(url: string): 'on' | 'off' {
+  try {
+    return new URL(url).searchParams.get('instrumentation') === '0'
+      ? 'off'
+      : 'on';
+  } catch {
+    return 'on';
+  }
+}
+
+/** Reads older single-workload JSON so compare mode keeps working across script revisions. */
+function createLegacyConfigSummaryFromRuns(
+  runs: ProfileResult[]
+): ProfileConfigSummary {
+  const firstRun = runs[0];
+  const workloadNames = [...new Set(runs.map((run) => run.workload.name))];
+  const includeCallCounts = runs.some((run) => {
+    return run.cpuProfile.bottomUpFunctions.some((fn) => fn.callCount != null);
+  });
+
+  return {
+    browserUrl: firstRun?.browserUrl ?? DEFAULT_BROWSER_URL,
+    url: normalizeComparableUrl(firstRun?.url ?? DEFAULT_URL),
+    workloads:
+      workloadNames.length > 0 ? workloadNames : [DEFAULT_WORKLOAD_NAME],
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    runs: runs.length,
+    warmupRuns: 0,
+    instrumentationMode: inferInstrumentationModeFromUrl(firstRun?.url ?? ''),
+    includeCallCounts,
+  };
+}
+
+function normalizeProfileBenchmarkOutput(
+  rawValue: unknown,
+  sourcePath: string
+): ProfileBenchmarkOutput {
+  if (!isRecord(rawValue)) {
+    throw new Error(`Invalid benchmark JSON in ${sourcePath}.`);
+  }
+
+  if (
+    rawValue.benchmark != null &&
+    rawValue.benchmark !== 'virtualizationProfile'
+  ) {
+    const benchmarkDescription =
+      typeof rawValue.benchmark === 'string'
+        ? rawValue.benchmark
+        : JSON.stringify(rawValue.benchmark);
+    throw new Error(
+      `Unsupported benchmark type in ${sourcePath}: ${benchmarkDescription ?? 'unknown'}`
+    );
+  }
+
+  if (Array.isArray(rawValue.workloads)) {
+    const workloads = (rawValue.workloads as ProfileWorkloadOutput[]).map(
+      (workloadOutput) => {
+        return {
+          workload: workloadOutput.workload,
+          runs: workloadOutput.runs,
+          summary: createJsonAggregateSummary(workloadOutput.runs),
+        };
+      }
+    );
+    if (workloads.length === 0) {
+      throw new Error(`No workload results found in ${sourcePath}.`);
+    }
+
+    const fallbackConfig = createLegacyConfigSummaryFromRuns(
+      workloads.flatMap((workloadOutput) => workloadOutput.runs)
+    );
+    const rawConfig = isRecord(rawValue.config)
+      ? (rawValue.config as Partial<ProfileConfigSummary>)
+      : {};
+
+    return {
+      benchmark: 'virtualizationProfile',
+      config: {
+        ...fallbackConfig,
+        ...rawConfig,
+        url: normalizeComparableUrl(rawConfig.url ?? fallbackConfig.url),
+        workloads: workloads.map(
+          (workloadOutput) => workloadOutput.workload.name
+        ),
+        runs: rawConfig.runs ?? workloads[0].runs.length,
+        warmupRuns: rawConfig.warmupRuns ?? fallbackConfig.warmupRuns,
+        instrumentationMode:
+          rawConfig.instrumentationMode ?? fallbackConfig.instrumentationMode,
+        includeCallCounts:
+          rawConfig.includeCallCounts ?? fallbackConfig.includeCallCounts,
+      },
+      workloads,
+    };
+  }
+
+  if (Array.isArray(rawValue.runs)) {
+    const runs = rawValue.runs as ProfileResult[];
+    if (runs.length === 0) {
+      throw new Error(`No benchmark runs found in ${sourcePath}.`);
+    }
+
+    const workloadOutput = createWorkloadOutput(runs);
+    return {
+      benchmark: 'virtualizationProfile',
+      config: createLegacyConfigSummaryFromRuns(runs),
+      workloads: [workloadOutput],
+    };
+  }
+
+  throw new Error(
+    `Expected ${sourcePath} to contain either { workloads: [...] } or { runs: [...] }.`
+  );
+}
+
+function readProfileBenchmarkOutput(
+  benchmarkPath: string
+): ProfileBenchmarkOutput {
+  const rawText = readFileSync(benchmarkPath, 'utf8');
+  const rawValue = JSON.parse(rawText) as unknown;
+  return normalizeProfileBenchmarkOutput(rawValue, benchmarkPath);
+}
+
+function assertComparableBenchmarkOutputs(
+  baseline: ProfileBenchmarkOutput,
+  current: ProfileBenchmarkOutput
+): void {
+  if (
+    normalizeComparableUrl(baseline.config.url) !==
+    normalizeComparableUrl(current.config.url)
+  ) {
+    throw new Error(
+      [
+        'Cannot compare benchmark outputs with different URLs.',
+        `Baseline: ${baseline.config.url}`,
+        `Current: ${current.config.url}`,
+      ].join('\n')
+    );
+  }
+
+  if (
+    baseline.config.instrumentationMode !== current.config.instrumentationMode
+  ) {
+    throw new Error(
+      [
+        'Cannot compare benchmark outputs with different instrumentation modes.',
+        `Baseline: ${baseline.config.instrumentationMode}`,
+        `Current: ${current.config.instrumentationMode}`,
+      ].join('\n')
+    );
+  }
+}
+
+function createProfileComparisonSummary(
+  baselinePath: string,
+  baseline: ProfileBenchmarkOutput,
+  current: ProfileBenchmarkOutput
+): ProfileComparisonSummary {
+  assertComparableBenchmarkOutputs(baseline, current);
+
+  const baselineByWorkloadName = new Map(
+    baseline.workloads.map((workloadOutput) => [
+      workloadOutput.workload.name,
+      workloadOutput,
+    ])
+  );
+  const currentByWorkloadName = new Map(
+    current.workloads.map((workloadOutput) => [
+      workloadOutput.workload.name,
+      workloadOutput,
+    ])
+  );
+
+  const workloads: WorkloadComparisonSummary[] = [];
+  for (const currentWorkloadOutput of current.workloads) {
+    const baselineWorkloadOutput = baselineByWorkloadName.get(
+      currentWorkloadOutput.workload.name
+    );
+    if (baselineWorkloadOutput == null) {
+      continue;
+    }
+
+    const metrics = Object.fromEntries(
+      AGGREGATE_METRIC_DEFINITIONS.map((definition) => [
+        definition.key,
+        createMetricComparisonSummary(
+          baselineWorkloadOutput.summary.metrics[definition.key],
+          currentWorkloadOutput.summary.metrics[definition.key]
+        ),
+      ])
+    ) as Record<AggregateMetricKey, MetricComparisonSummary>;
+
+    workloads.push({
+      workload: currentWorkloadOutput.workload,
+      baselineWorkload: baselineWorkloadOutput.workload,
+      workloadShapeMatches:
+        baselineWorkloadOutput.workload.fileCount ===
+          currentWorkloadOutput.workload.fileCount &&
+        baselineWorkloadOutput.workload.expandedFolderCount ===
+          currentWorkloadOutput.workload.expandedFolderCount,
+      metrics,
+    });
+  }
+
+  return {
+    baselinePath,
+    unmatchedBaselineWorkloads: baseline.workloads
+      .map((workloadOutput) => workloadOutput.workload.name)
+      .filter((workloadName) => !currentByWorkloadName.has(workloadName)),
+    unmatchedCurrentWorkloads: current.workloads
+      .map((workloadOutput) => workloadOutput.workload.name)
+      .filter((workloadName) => !baselineByWorkloadName.has(workloadName)),
+    workloads,
+  };
+}
+
+function printWorkloadHumanSummary(
+  workloadOutput: ProfileWorkloadOutput,
+  config: ProfileConfigSummary
+): void {
+  const workloadRows = [
+    [
+      'Workload',
+      `${workloadOutput.workload.label} (${workloadOutput.workload.name})`,
+    ],
+    ['Files', formatCount(workloadOutput.workload.fileCount)],
+    [
+      'Expanded folders',
+      formatCount(workloadOutput.workload.expandedFolderCount),
+    ],
+    ['Measured runs', String(workloadOutput.runs.length)],
     ['Warmup runs', String(config.warmupRuns)],
-    ['Instrumentation', config.instrumentationMode],
   ];
 
-  console.log('Run Info');
+  console.log('Workload');
   console.log(
-    createTable(['Field', 'Value'], runInfoRows, {
-      maxWidths: [16, 96],
+    createTable(['Field', 'Value'], workloadRows, {
+      maxWidths: [18, 96],
     })
   );
 
-  for (const [index, result] of results.entries()) {
+  for (const [index, result] of workloadOutput.runs.entries()) {
     console.log('');
-    printRunHumanSummary(result, results.length);
-    if (index < results.length - 1) {
+    printRunHumanSummary(result, workloadOutput.runs.length);
+    if (index < workloadOutput.runs.length - 1) {
       console.log('');
     }
   }
 
-  if (results.length > 1) {
+  if (workloadOutput.runs.length > 1) {
     console.log('');
-    printAggregateHumanSummary(results);
+    printAggregateHumanSummary(
+      workloadOutput.summary,
+      workloadOutput.runs.length
+    );
   }
+}
+
+function printComparisonHumanSummary(
+  comparison: ProfileComparisonSummary
+): void {
+  console.log('Comparison');
+  console.log(
+    createTable(
+      ['Field', 'Value'],
+      [
+        ['Baseline JSON', comparison.baselinePath],
+        ['Matched workloads', String(comparison.workloads.length)],
+        [
+          'Baseline-only workloads',
+          comparison.unmatchedBaselineWorkloads.length === 0
+            ? 'none'
+            : comparison.unmatchedBaselineWorkloads.join(', '),
+        ],
+        [
+          'Current-only workloads',
+          comparison.unmatchedCurrentWorkloads.length === 0
+            ? 'none'
+            : comparison.unmatchedCurrentWorkloads.join(', '),
+        ],
+      ],
+      {
+        maxWidths: [22, 96],
+      }
+    )
+  );
+
+  for (const workloadComparison of comparison.workloads) {
+    console.log('');
+    console.log(
+      `Workload: ${workloadComparison.workload.label} (${workloadComparison.workload.name})`
+    );
+
+    if (!workloadComparison.workloadShapeMatches) {
+      console.log(
+        createTable(
+          ['Shape', 'Files', 'Expanded folders'],
+          [
+            [
+              'Baseline',
+              formatCount(workloadComparison.baselineWorkload.fileCount),
+              formatCount(
+                workloadComparison.baselineWorkload.expandedFolderCount
+              ),
+            ],
+            [
+              'Current',
+              formatCount(workloadComparison.workload.fileCount),
+              formatCount(workloadComparison.workload.expandedFolderCount),
+            ],
+          ],
+          {
+            alignments: ['left', 'right', 'right'],
+            maxWidths: [12, 16, 18],
+          }
+        )
+      );
+      console.log('');
+    }
+
+    console.log(
+      createTable(
+        [
+          'Metric',
+          'Baseline median',
+          'Current median',
+          'Median delta',
+          'Baseline P95',
+          'Current P95',
+          'P95 delta',
+        ],
+        AGGREGATE_METRIC_DEFINITIONS.map((definition) => {
+          const metric = workloadComparison.metrics[definition.key];
+          return [
+            metric.label,
+            formatMs(metric.medianMs.baseline),
+            formatMs(metric.medianMs.current),
+            formatDeltaMsPct(metric.medianMs.deltaMs, metric.medianMs.deltaPct),
+            formatMs(metric.p95Ms.baseline),
+            formatMs(metric.p95Ms.current),
+            formatDeltaMsPct(metric.p95Ms.deltaMs, metric.p95Ms.deltaPct),
+          ];
+        }),
+        {
+          alignments: [
+            'left',
+            'right',
+            'right',
+            'right',
+            'right',
+            'right',
+            'right',
+          ],
+          maxWidths: [28, 16, 16, 22, 16, 16, 22],
+        }
+      )
+    );
+  }
+}
+
+function printRunsHumanSummary(output: ProfileBenchmarkOutput): void {
+  if (output.workloads.length === 0) {
+    return;
+  }
+
+  const runInfoRows = [
+    ['Browser', output.config.browserUrl],
+    ['URL', output.config.url],
+    ['Workloads', output.config.workloads.join(', ')],
+    ['Measured runs/workload', String(output.config.runs)],
+    ['Warmup runs/workload', String(output.config.warmupRuns)],
+    ['Instrumentation', output.config.instrumentationMode],
+    ['Call counts', output.config.includeCallCounts ? 'on' : 'off'],
+  ];
+
+  console.log('Benchmark');
+  console.log(
+    createTable(['Field', 'Value'], runInfoRows, {
+      maxWidths: [22, 96],
+    })
+  );
+
+  for (const [index, workloadOutput] of output.workloads.entries()) {
+    console.log('');
+    printWorkloadHumanSummary(workloadOutput, output.config);
+    if (index < output.workloads.length - 1) {
+      console.log('');
+    }
+  }
+
+  if (output.comparison != null) {
+    console.log('');
+    printComparisonHumanSummary(output.comparison);
+  }
+}
+
+async function runWorkloadProfile(
+  config: ProfileConfig,
+  workloadName: string
+): Promise<ProfileWorkloadOutput> {
+  const results: ProfileResult[] = [];
+
+  for (
+    let warmupRunNumber = 1;
+    warmupRunNumber <= config.warmupRuns;
+    warmupRunNumber += 1
+  ) {
+    await profileVirtualizedRender(
+      {
+        ...config,
+        includeCallCounts: false,
+      },
+      workloadName,
+      warmupRunNumber,
+      null
+    );
+  }
+
+  for (let runNumber = 1; runNumber <= config.runs; runNumber += 1) {
+    const traceOutputPath = createRunTraceOutputPath(
+      config.traceOutputPath,
+      workloadName,
+      config.workloads.length,
+      runNumber,
+      config.runs
+    );
+    const result = await profileVirtualizedRender(
+      config,
+      workloadName,
+      runNumber,
+      traceOutputPath
+    );
+    results.push(result);
+  }
+
+  return createWorkloadOutput(results);
 }
 
 async function main(): Promise<void> {
@@ -2694,48 +3500,31 @@ async function main(): Promise<void> {
 
   try {
     serverProcess = await startFixtureServerIfNeeded(config);
-    const results: ProfileResult[] = [];
-    for (
-      let warmupRunNumber = 1;
-      warmupRunNumber <= config.warmupRuns;
-      warmupRunNumber += 1
-    ) {
-      await profileVirtualizedRender(
-        {
-          ...config,
-          includeCallCounts: false,
-        },
-        warmupRunNumber,
-        null
-      );
+
+    const workloads: ProfileWorkloadOutput[] = [];
+    for (const workloadName of config.workloads) {
+      workloads.push(await runWorkloadProfile(config, workloadName));
     }
-    for (let runNumber = 1; runNumber <= config.runs; runNumber += 1) {
-      const traceOutputPath = createRunTraceOutputPath(
-        config.traceOutputPath,
-        runNumber,
-        config.runs
+
+    const output: ProfileBenchmarkOutput = {
+      benchmark: 'virtualizationProfile',
+      config: createProfileConfigSummary(config),
+      workloads,
+    };
+
+    if (config.comparePath != null) {
+      const baselineOutput = readProfileBenchmarkOutput(config.comparePath);
+      output.comparison = createProfileComparisonSummary(
+        config.comparePath,
+        baselineOutput,
+        output
       );
-      const result = await profileVirtualizedRender(
-        config,
-        runNumber,
-        traceOutputPath
-      );
-      results.push(result);
     }
 
     if (config.outputJson) {
-      console.log(
-        JSON.stringify(
-          {
-            runs: results,
-            summary: createJsonAggregateSummary(results),
-          },
-          null,
-          2
-        )
-      );
+      console.log(JSON.stringify(output, null, 2));
     } else {
-      printRunsHumanSummary(results, config);
+      printRunsHumanSummary(output);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

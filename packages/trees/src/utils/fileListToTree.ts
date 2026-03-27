@@ -85,6 +85,10 @@ export function buildFileListToTreePathGraph(
   const hashStack: number[] = [0];
   let prevPath = '';
   let prevDepth = 0;
+  let reusedPrefixHitCount = 0;
+  let reusedPrefixSegments = 0;
+  let maxReusedPrefixDepth = 0;
+  let createdFileNodeCount = 0;
 
   for (const path of filePaths) {
     if (path.length === 0) continue;
@@ -142,6 +146,11 @@ export function buildFileListToTreePathGraph(
     let hashNeedsSep: boolean;
 
     if (reuseDepth > 0) {
+      reusedPrefixHitCount += 1;
+      reusedPrefixSegments += reuseDepth;
+      if (reuseDepth > maxReusedPrefixDepth) {
+        maxReusedPrefixDepth = reuseDepth;
+      }
       segmentStart = commonPrefixLen;
       parentChildren = parentStack[reuseDepth];
       currentPath = pathStack[reuseDepth]; // reuse stored path (no allocation)
@@ -209,6 +218,7 @@ export function buildFileListToTreePathGraph(
             `n${(hashValue >>> 0).toString(36)}`;
           tree.set(currentPath, node);
           state.treeEntries.push([currentPath, node]);
+          createdFileNodeCount += 1;
         }
       } else {
         let nextParentChildren = folderChildren.get(currentPath);
@@ -234,11 +244,32 @@ export function buildFileListToTreePathGraph(
     prevDepth = currentDepth;
   }
 
+  const totalInputSegments = segmentCount + reusedPrefixSegments;
   setBenchmarkCounter(instrumentation, 'workload.inputFiles', filePaths.length);
   setBenchmarkCounter(
     instrumentation,
     'workload.inputPathSegments',
+    totalInputSegments
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.pathGraphProcessedSegments',
     segmentCount
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.pathGraphReusedPrefixSegments',
+    reusedPrefixSegments
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.pathGraphReuseHitCount',
+    reusedPrefixHitCount
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.pathGraphMaxReusedPrefixDepth',
+    maxReusedPrefixDepth
   );
   setBenchmarkCounter(
     instrumentation,
@@ -249,6 +280,11 @@ export function buildFileListToTreePathGraph(
     instrumentation,
     'workload.pathGraphEntries',
     state.treeEntries.length
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.pathGraphCreatedFileNodes',
+    createdFileNodeCount
   );
   return state;
 }
@@ -427,12 +463,22 @@ export function hashFileListToTreeKeys(
   rootId: string,
   instrumentation?: BenchmarkInstrumentation
 ): Record<string, FileTreeNode> {
+  let resolveIdCallCount = 0;
+  let resolveIdCacheHitCount = 0;
+  let directChildRemapCount = 0;
+  let flattenedChildRemapCount = 0;
+  let flattenPathRemapCount = 0;
+
   // Resolve a path key to its hashed ID via the target node's cached
   // NODE_ID symbol. For child/flattens references where we only have a key.
   const resolveId = (key: string): string => {
+    resolveIdCallCount += 1;
     const node = tree.get(key)!;
     const cached = (node as Record<symbol, string>)[NODE_ID];
-    if (cached != null) return cached;
+    if (cached != null) {
+      resolveIdCacheHitCount += 1;
+      return cached;
+    }
 
     const id = key === rootId ? rootId : `n${hashId(key)}`;
     (node as Record<symbol, string>)[NODE_ID] = id;
@@ -459,12 +505,14 @@ export function hashFileListToTreeKeys(
     const children = node.children;
     if (children != null) {
       for (let index = 0; index < children.direct.length; index += 1) {
+        directChildRemapCount += 1;
         children.direct[index] = resolveId(children.direct[index]);
       }
 
       const flattened = children.flattened;
       if (flattened != null) {
         for (let index = 0; index < flattened.length; index += 1) {
+          flattenedChildRemapCount += 1;
           flattened[index] = resolveId(flattened[index]);
         }
       }
@@ -473,6 +521,7 @@ export function hashFileListToTreeKeys(
     const flattens = node.flattens;
     if (flattens != null) {
       for (let index = 0; index < flattens.length; index += 1) {
+        flattenPathRemapCount += 1;
         flattens[index] = resolveId(flattens[index]);
       }
     }
@@ -484,6 +533,31 @@ export function hashFileListToTreeKeys(
     instrumentation,
     'workload.treeNodes',
     treeEntries.length
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.hashKeysResolveIdCalls',
+    resolveIdCallCount
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.hashKeysResolveIdCacheHits',
+    resolveIdCacheHitCount
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.hashKeysDirectChildRemaps',
+    directChildRemapCount
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.hashKeysFlattenedChildRemaps',
+    flattenedChildRemapCount
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.hashKeysFlattenPathRemaps',
+    flattenPathRemapCount
   );
   return hashedTree;
 }

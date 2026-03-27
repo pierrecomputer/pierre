@@ -368,11 +368,26 @@ By default the command:
 The human-readable output includes:
 
 - per-run render timing
+- visible-rows-ready and post-paint-ready timing
 - click-dispatch and click-to-render timing
 - trace-window timing, busy time, and coarse render buckets
+- inclusive/self phase tables for the major subsystems and tree-build stages
+- workload counters beside those phase timings
 - dominant trace events
 - a bottom-up sampled CPU table with `self` and `total` time
 - optional function invocation counts from an auxiliary precise-coverage pass
+
+Fixture workloads:
+
+- `pierre-snapshot`
+- `half-linux`
+- `linux`
+- `linux-5x` (default)
+- `linux-10x`
+
+These let the same real-Chrome interaction be measured across a small
+representative repo snapshot, a lighter Linux slice, the base Linux fixture, and
+the larger replicated worst-case trees.
 
 Useful examples:
 
@@ -389,14 +404,21 @@ bun ws trees profile:virtualization -- --runs 5
 # Discard warm-up runs before measuring the reported runs
 bun ws trees profile:virtualization -- --warmup-runs 2 --runs 8
 
+# Run multiple named workloads in one command
+bun ws trees profile:virtualization -- --workload pierre-snapshot --workload linux --workload linux-5x --runs 5
+
 # Add function call counts to the bottom-up CPU table
 bun ws trees profile:virtualization -- --call-counts
 
 # Compare the hidden benchmark hook surface with the collector disabled
 bun ws trees profile:virtualization -- --instrumentation off --runs 5
 
-# Emit raw machine-readable runs only
+# Emit machine-readable benchmark output
 bun ws trees profile:virtualization -- --runs 5 --json
+
+# Save a JSON baseline, then compare the current code against it
+bun ws trees profile:virtualization -- --workload linux --workload linux-5x --runs 5 --json > tmp/trees-virtualization-baseline.json
+bun ws trees profile:virtualization -- --workload linux --workload linux-5x --runs 5 --compare tmp/trees-virtualization-baseline.json
 ```
 
 Flags:
@@ -404,6 +426,7 @@ Flags:
 - `--browser-url <url>` to point at a different Chrome remote debugging base URL
 - `--url <url>` to profile a different page than the default virtualization
   fixture
+- `--workload <name>` to select one or more named fixture workloads
 - `--timeout <ms>` to change navigation/render/trace timeout behavior
 - `--runs <count>` to execute the benchmark multiple times sequentially
 - `--warmup-runs <count>` to run and discard warm-up passes before reporting
@@ -411,27 +434,51 @@ Flags:
 - `--call-counts` to run a second precise-coverage pass and annotate bottom-up
   functions with invocation counts
 - `--trace-out <path>` to choose the trace output location
+- `--compare <path>` to compare the current benchmark run against a saved
+  `--json` output
 - `--no-build` to skip rebuilding `dist/`
 - `--no-server` to assume the fixture server is already running
-- `--json` to emit `{ "runs": [...], "summary": { ... } }` without a human
-  summary
+- `--json` to emit the full benchmark object without a human summary
 
 Trace files are written to the system temp directory by default. For multi-run
 benchmarks the command appends `-run-N` to the trace filename so each run keeps
-its own trace.
+its own trace. For multi-workload benchmarks it also includes the workload name
+in each trace filename.
 
 `--call-counts` is intentionally not enabled by default. It uses Chrome precise
 coverage, which runs as a separate auxiliary pass so the timed benchmark run is
 not perturbed.
 
-The JSON `summary` block includes the same aggregate metrics that power the
-human-readable multi-run table. Each metric reports:
+`Visible rows ready` is the time until the first virtualized rows are present in
+the shadow DOM. `Post-paint ready` adds the extra double-`requestAnimationFrame`
+settle used by the fixture so the top-line metric more closely reflects the
+interactive click-to-render experience.
+
+The JSON output now includes:
+
+- `benchmark`
+- `config`
+- `workloads`
+- optional `comparison`
+
+Each workload entry contains:
+
+- `workload`
+- `runs`
+- `summary`
+
+Each workload `summary` includes the same aggregate metrics that power the
+human-readable multi-run table. Every metric reports:
 
 - `availableRuns`
 - `totalMs`
 - `averageMs`
 - `medianMs`
 - `p95Ms`
+
+When `--compare` is used, the human-readable output adds per-workload median and
+P95 delta tables, and the JSON output adds a `comparison` block keyed by
+workload name.
 
 ### Instrumentation overhead
 
