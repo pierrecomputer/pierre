@@ -187,6 +187,7 @@ export interface HunksRenderResult {
   headerElement: HASTElement | undefined;
   totalLines: number;
   themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
   rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
@@ -635,7 +636,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private processDiffResult(
     fileDiff: FileDiffMetadata,
     renderRange: RenderRange,
-    { code, themeStyles }: ThemedDiffResult
+    { code, themeStyles, baseThemeType }: ThemedDiffResult
   ): HunksRenderResult {
     const {
       diffStyle,
@@ -1114,6 +1115,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkData,
       preNode,
       themeStyles,
+      baseThemeType,
       headerElement: !disableFileHeader
         ? this.renderHeader(this.diff)
         : undefined,

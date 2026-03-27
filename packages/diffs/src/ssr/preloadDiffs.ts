@@ -231,7 +231,12 @@ function processHunkResult<LAnnotation>(
 ) {
   const children = [createStyleElement(hunkResult.css, true)];
   children.push(
-    createThemeStyleElement(wrapThemeCSS(hunkResult.themeStyles, themeType))
+    createThemeStyleElement(
+      wrapThemeCSS(
+        hunkResult.themeStyles,
+        hunkResult.baseThemeType ?? themeType
+      )
+    )
   );
   if (unsafeCSS != null) {
     children.push(createStyleElement(unsafeCSS));

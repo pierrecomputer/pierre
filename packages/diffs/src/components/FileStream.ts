@@ -63,13 +63,19 @@ export class FileStream {
       return;
     }
     this.options = { ...this.options, themeType };
-    if (this.fileContainer != null && this.appliedThemeCSS != null) {
-      this.applyThemeState(
-        this.fileContainer,
-        this.appliedThemeCSS.themeStyles,
-        themeType
-      );
+    if (
+      typeof this.options.theme === 'string' ||
+      this.fileContainer == null ||
+      this.appliedThemeCSS == null
+    ) {
+      return;
     }
+    this.applyThemeState(
+      this.fileContainer,
+      this.appliedThemeCSS.themeStyles,
+      themeType,
+      this.appliedThemeCSS.baseThemeType
+    );
   }
 
   private async initializeHighlighter(): Promise<DiffsHighlighter> {
@@ -120,8 +126,10 @@ export class FileStream {
     if (this.pre.parentElement == null) {
       fileContainer.shadowRoot?.appendChild(this.pre);
     }
+    const baseThemeType =
+      typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
     const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
-    this.applyThemeState(fileContainer, themeStyles, themeType);
+    this.applyThemeState(fileContainer, themeStyles, themeType, baseThemeType);
     const pre = setPreNodeProperties(this.pre, {
       type: 'file',
       diffIndicators: 'none',
@@ -325,23 +333,31 @@ export class FileStream {
   private applyThemeState(
     container: HTMLElement,
     themeStyles: string,
-    themeType: ThemeTypes
+    themeType: ThemeTypes,
+    baseThemeType?: 'light' | 'dark'
   ): void {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    const effectiveThemeType = baseThemeType ?? themeType;
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
       this.appliedThemeCSS?.themeStyles === themeStyles &&
-      this.appliedThemeCSS.themeType === themeType
+      this.appliedThemeCSS.themeType === effectiveThemeType
     ) {
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
       shadowRoot,
       currentNode: this.themeCSSStyle,
-      themeCSS: wrapThemeCSS(themeStyles, themeType),
+      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType),
     });
     this.appliedThemeCSS =
-      this.themeCSSStyle != null ? { themeStyles, themeType } : undefined;
+      this.themeCSSStyle != null
+        ? {
+            themeStyles,
+            themeType: effectiveThemeType,
+            baseThemeType,
+          }
+        : undefined;
   }
 }

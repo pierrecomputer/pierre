@@ -42,7 +42,10 @@ export async function preloadFile<LAnnotation = undefined>({
 
   children.push(
     createThemeStyleElement(
-      wrapThemeCSS(fileResult.themeStyles, options?.themeType ?? 'system')
+      wrapThemeCSS(
+        fileResult.themeStyles,
+        fileResult.baseThemeType ?? options?.themeType ?? 'system'
+      )
     )
   );
 

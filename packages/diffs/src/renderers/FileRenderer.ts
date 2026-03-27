@@ -61,6 +61,7 @@ export interface FileRenderResult {
   css: string;
   totalLines: number;
   themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
   rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
@@ -331,7 +332,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private processFileResult(
     file: FileContents,
     renderRange: RenderRange,
-    { code, themeStyles }: ThemedFileResult
+    { code, themeStyles, baseThemeType }: ThemedFileResult
   ): FileRenderResult {
     const { disableFileHeader = false } = this.options;
     const contentArray: ElementContent[] = [];
@@ -395,6 +396,7 @@ export class FileRenderer<LAnnotation = undefined> {
       totalLines: lines.length,
       rowCount,
       themeStyles: themeStyles,
+      baseThemeType,
       bufferBefore: renderRange.bufferBefore,
       bufferAfter: renderRange.bufferAfter,
       css: '',

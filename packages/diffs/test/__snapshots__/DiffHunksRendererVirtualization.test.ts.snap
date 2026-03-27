@@ -4,6 +4,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
 {
   "additionsContentAST": undefined,
   "additionsGutterAST": undefined,
+  "baseThemeType": undefined,
   "bufferAfter": 0,
   "bufferBefore": 0,
   "css": "",
@@ -29209,6 +29210,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
 {
   "additionsContentAST": undefined,
   "additionsGutterAST": undefined,
+  "baseThemeType": undefined,
   "bufferAfter": 0,
   "bufferBefore": 0,
   "css": "",
@@ -58179,6 +58181,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
 {
   "additionsContentAST": undefined,
   "additionsGutterAST": undefined,
+  "baseThemeType": undefined,
   "bufferAfter": 0,
   "bufferBefore": 0,
   "css": "",
@@ -87512,6 +87515,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
 {
   "additionsContentAST": undefined,
   "additionsGutterAST": undefined,
+  "baseThemeType": undefined,
   "bufferAfter": 0,
   "bufferBefore": 0,
   "css": "",
@@ -90310,6 +90314,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
 {
   "additionsContentAST": undefined,
   "additionsGutterAST": undefined,
+  "baseThemeType": undefined,
   "bufferAfter": 0,
   "bufferBefore": 0,
   "css": "",
@@ -91398,6 +91403,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
       "type": "element",
     },
   ],
+  "baseThemeType": undefined,
   "bufferAfter": 0,
   "bufferBefore": 0,
   "css": "",

@@ -352,6 +352,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
       "type": "element",
     },
   ],
+  "baseThemeType": undefined,
   "bufferAfter": 0,
   "bufferBefore": 0,
   "css": "",

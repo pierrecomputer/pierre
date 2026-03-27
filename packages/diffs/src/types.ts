@@ -565,6 +565,7 @@ export type ExpansionDirections = 'up' | 'down' | 'both';
 export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface RenderDiffFilesResult {
@@ -575,6 +576,7 @@ export interface RenderDiffFilesResult {
 export interface ThemedDiffResult {
   code: RenderDiffFilesResult;
   themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface HunkExpansionRegion {
@@ -707,4 +709,5 @@ export interface ProcessFileConflictData {
 export interface AppliedThemeStyleCache {
   themeStyles: string;
   themeType: ThemeTypes;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
