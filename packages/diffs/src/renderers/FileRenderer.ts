@@ -38,6 +38,7 @@ import {
   createGutterWrapper,
   createHastElement,
 } from '../utils/hast_utils';
+import { isFilePlainText } from '../utils/isFilePlainText';
 import { iterateOverFile } from '../utils/iterateOverFile';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { splitFileContents } from '../utils/splitFileContents';
@@ -135,7 +136,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache ??= {
       file,
       options,
-      highlighted: true,
+      highlighted: !isFilePlainText(file),
       result: cache?.result,
       // FIXME(amadeus): Add support for renderRanges
       renderRange: undefined,
@@ -221,6 +222,7 @@ export class FileRenderer<LAnnotation = undefined> {
         (!this.renderCache.highlighted &&
           !areRenderRangesEqual(this.renderCache.renderRange, renderRange))
       ) {
+        this.renderCache.file = file;
         this.renderCache.result = this.workerManager.getPlainFileAST(
           file,
           renderRange.startingLine,
