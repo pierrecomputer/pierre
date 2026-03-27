@@ -155,7 +155,7 @@ function CustomHeaderComponent({
         <div className="min-w-0">
           <div
             className="-mb-0.5 truncate text-sm font-medium"
-            style={{ color: 'var(--diff-fg)' }}
+            style={{ color: 'var(--diffs-fg)' }}
           >
             AppConfig.swift
           </div>
