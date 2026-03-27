@@ -2,24 +2,16 @@
 
 import {
   type AnnotationSide,
-  diffAcceptRejectHunk,
   type DiffLineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import { FileDiff, MultiFileDiff } from '@pierre/diffs/react';
-import type {
-  FileDiffMetadata,
-  PreloadFileDiffResult,
-  PreloadMultiFileDiffResult,
-} from '@pierre/diffs/ssr';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { IconArrowDownRight } from '@pierre/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
-import {
-  type AcceptRejectMetadata,
-  type AnnotationMetadata,
-} from './constants';
+import { type AnnotationMetadata } from './constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 
@@ -335,78 +327,6 @@ export function CommentThread({
           Resolve
         </button>
       </div>
-    </div>
-  );
-}
-
-interface AcceptRejectExampleProps {
-  prerenderedDiff: PreloadFileDiffResult<AcceptRejectMetadata>;
-}
-
-export function AcceptRejectExample({
-  prerenderedDiff,
-}: AcceptRejectExampleProps) {
-  const [fileDiff, setFileDiff] = useState<FileDiffMetadata>(
-    prerenderedDiff.fileDiff
-  );
-  const [annotations, setAnnotations] = useState(prerenderedDiff.annotations);
-  const renderAnnotation = useCallback(() => {
-    return (
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 10,
-          width: '100%',
-          backgroundColor: 'red',
-          overflow: 'visible',
-          fontFamily: 'Geist',
-        }}
-      >
-        <div className="absolute top-1 right-8 flex gap-1">
-          <Button
-            variant="muted"
-            size="xs"
-            className="rounded-[4px]"
-            onClick={() => {
-              setFileDiff((fileDiff) =>
-                diffAcceptRejectHunk(fileDiff, 0, 'reject')
-              );
-              setAnnotations([]);
-            }}
-          >
-            Undo <span className="-ml-0.5 font-normal opacity-80">⌘N</span>
-          </Button>
-          <Button
-            variant="success"
-            size="xs"
-            className="rounded-[4px] text-black dark:text-black"
-            onClick={() => {
-              setFileDiff((fileDiff) =>
-                diffAcceptRejectHunk(fileDiff, 0, 'accept')
-              );
-              setAnnotations([]);
-            }}
-          >
-            Keep <span className="-ml-0.5 font-normal opacity-40">⌘Y</span>
-          </Button>
-        </div>
-      </div>
-    );
-  }, []);
-
-  return (
-    <div className="scroll-mt-20 space-y-5" id="accept-reject">
-      <FeatureHeader
-        title="Accept/Reject Changes"
-        description="Annotations can also be used to build interactive code review interfaces similar to AI-assisted coding tools like Cursor. Use it to track the state of each change, inject custom UI like accept/reject buttons, and provide immediate visual feedback."
-      />
-      <FileDiff
-        {...prerenderedDiff}
-        fileDiff={fileDiff}
-        className="diff-container"
-        lineAnnotations={annotations}
-        renderAnnotation={renderAnnotation}
-      />
     </div>
   );
 }

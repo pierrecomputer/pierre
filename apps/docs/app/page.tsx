@@ -4,14 +4,10 @@ import {
   preloadUnresolvedFile,
 } from '@pierre/diffs/ssr';
 
-import {
-  AcceptRejectExample,
-  Annotations,
-} from './diff-examples/Annotations/Annotations';
-import {
-  ACCEPT_REJECT_EXAMPLE,
-  ANNOTATION_EXAMPLE,
-} from './diff-examples/Annotations/constants';
+import { AcceptRejectExample } from './diff-examples/AcceptRejectExample/AcceptRejectExample';
+import { ACCEPT_REJECT_EXAMPLE } from './diff-examples/AcceptRejectExample/constants';
+import { Annotations } from './diff-examples/Annotations/Annotations';
+import { ANNOTATION_EXAMPLE } from './diff-examples/Annotations/constants';
 import { ArbitraryFiles } from './diff-examples/ArbitraryFiles/ArbitraryFiles';
 import { ARBITRARY_DIFF_EXAMPLE } from './diff-examples/ArbitraryFiles/constants';
 import { CUSTOM_HEADER_EXAMPLE } from './diff-examples/CustomHeader/constants';
