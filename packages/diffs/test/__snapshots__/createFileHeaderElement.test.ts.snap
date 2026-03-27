@@ -36,8 +36,15 @@ exports[`createFileHeaderElement renders default file header AST 1`] = `
         {
           "children": [
             {
-              "type": "text",
-              "value": "src/index.ts",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "src/index.ts",
+                },
+              ],
+              "properties": {},
+              "tagName": "bdi",
+              "type": "element",
             },
           ],
           "properties": {
