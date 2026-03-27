@@ -24,7 +24,10 @@ export function parseDiffFromFile(
     newFile.contents,
     oldFile.header,
     newFile.header,
-    options
+    // NOTE(amadeus): By default, git defaults to 3 context lines, but for some
+    // reason this library does 4. I want this to _feel_ like git by default,
+    // and it can always be changed if people want to override
+    { ...options, context: options?.context ?? 3 }
   );
 
   const fileData = processFile(patch, {

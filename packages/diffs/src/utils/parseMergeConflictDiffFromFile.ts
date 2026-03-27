@@ -197,7 +197,7 @@ export function getMergeConflictActionAnchor(
 //   3. Result assembly    — joins line arrays, builds marker rows for the UI
 export function parseMergeConflictDiffFromFile(
   file: FileContents,
-  maxContextLines: number = 6
+  maxContextLines: number = 3
 ): ParseMergeConflictDiffFromFileResult {
   // Never allow maxContextLines to drop below 1 or else things break.
   maxContextLines = Math.max(maxContextLines, 1);

@@ -17,7 +17,7 @@ type ContextFlushMode = 'before-change' | 'leading' | 'trailing';
  * well as be able to create new hunks where necessary if there's excessive
  * context between changes
  */
-export function trimPatchContext(patch: string, contextSize = 10): string {
+export function trimPatchContext(patch: string, contextSize = 3): string {
   const lines: string[] = [];
 
   let currentHunk: CurrentHunk | undefined;
