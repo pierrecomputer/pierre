@@ -41,12 +41,33 @@ interface TraceFile {
   traceEvents: TraceEvent[];
 }
 
+interface PageBenchmarkPhase {
+  name: string;
+  durationMs: number;
+  count: number;
+}
+
+interface PageHeapSummary {
+  usedJSHeapSizeBeforeBytes: number;
+  usedJSHeapSizeAfterBytes: number;
+  usedJSHeapSizeDeltaBytes: number;
+  totalJSHeapSizeAfterBytes: number;
+  jsHeapSizeLimitBytes: number;
+}
+
+interface PageInstrumentationSummary {
+  phases: PageBenchmarkPhase[];
+  counters: Record<string, number>;
+  heap: PageHeapSummary | null;
+}
+
 interface PageRenderSummary {
   renderedItemCount: number;
   renderDurationMs: number;
   longTaskCount?: number;
   longTaskTotalMs?: number;
   longestLongTaskMs?: number;
+  instrumentation?: PageInstrumentationSummary | null;
   resultText?: string | null;
 }
 
@@ -94,6 +115,23 @@ interface CpuProfileSummary {
   bottomUpFunctions: BottomUpFunctionSummary[];
 }
 
+interface InstrumentedPhaseSummary {
+  name: string;
+  durationMs: number;
+  count: number;
+  percentOfRender: number | null;
+  workload: string | null;
+}
+
+interface HeapSummary {
+  available: boolean;
+  usedJSHeapSizeBeforeBytes: number | null;
+  usedJSHeapSizeAfterBytes: number | null;
+  usedJSHeapSizeDeltaBytes: number | null;
+  totalJSHeapSizeAfterBytes: number | null;
+  jsHeapSizeLimitBytes: number | null;
+}
+
 interface ProfileResult {
   runNumber: number;
   browserUrl: string;
@@ -104,6 +142,11 @@ interface ProfileResult {
   longTaskCount: number | null;
   longTaskTotalMs: number | null;
   longestLongTaskMs: number | null;
+  instrumentation: {
+    phases: InstrumentedPhaseSummary[];
+    counters: Record<string, number>;
+    heap: HeapSummary;
+  };
   trace: TraceSummary;
   cpuProfile: CpuProfileSummary;
 }
@@ -113,6 +156,8 @@ interface AggregateMetricSummary {
   availableRuns: number;
   totalMs: number | null;
   averageMs: number | null;
+  medianMs: number | null;
+  p95Ms: number | null;
 }
 
 interface InspectVersionResponse {
@@ -268,6 +313,22 @@ const INTERNAL_CPU_PROFILE_URL_SNIPPETS = [
   'node:',
   'inspector://',
 ];
+const MAJOR_PHASE_ORDER = [
+  'root.fileListToTree',
+  'root.pathToId',
+  'root.stateConfig',
+  'expandPathsWithAncestors',
+  'root.dataLoader',
+  'core.rebuildItemMeta',
+  'fileTree.render.mount',
+] as const;
+const TREE_BUILD_PHASE_ORDER = [
+  'fileListToTree.pathGraph',
+  'fileListToTree.flattenedNodes',
+  'fileListToTree.folderNodes',
+  'fileListToTree.hashKeys',
+] as const;
+const INTEGER_FORMATTER = new Intl.NumberFormat('en-US');
 
 function printHelpAndExit(): never {
   console.log('Usage: bun ws trees profile:virtualization -- [options]');
@@ -438,6 +499,31 @@ function formatPercent(value: number | null): string {
   return `${value.toFixed(1)}%`;
 }
 
+function formatCount(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+  return INTEGER_FORMATTER.format(Math.round(value));
+}
+
+function formatBytes(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+
+  const absoluteValue = Math.abs(value);
+  if (absoluteValue < 1024) {
+    return `${value.toFixed(0)} B`;
+  }
+  if (absoluteValue < 1024 ** 2) {
+    return `${(value / 1024).toFixed(1)} KiB`;
+  }
+  if (absoluteValue < 1024 ** 3) {
+    return `${(value / 1024 ** 2).toFixed(2)} MiB`;
+  }
+  return `${(value / 1024 ** 3).toFixed(2)} GiB`;
+}
+
 type TableAlignment = 'left' | 'right';
 
 interface TableOptions {
@@ -515,16 +601,43 @@ function summarizeAggregateMetric(
       availableRuns: 0,
       totalMs: null,
       averageMs: null,
+      medianMs: null,
+      p95Ms: null,
     };
   }
 
   const totalMs = values.reduce((total, value) => total + value, 0);
+  const sortedValues = [...values].sort((left, right) => left - right);
   return {
     label,
     availableRuns: values.length,
     totalMs: Number(totalMs.toFixed(3)),
     averageMs: Number((totalMs / values.length).toFixed(3)),
+    medianMs: Number(percentile(sortedValues, 50).toFixed(3)),
+    p95Ms: Number(percentile(sortedValues, 95).toFixed(3)),
   };
+}
+
+function percentile(sortedValues: number[], percentileValue: number): number {
+  if (sortedValues.length === 0) {
+    return Number.NaN;
+  }
+
+  if (sortedValues.length === 1) {
+    return sortedValues[0];
+  }
+
+  const index = (percentileValue / 100) * (sortedValues.length - 1);
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+  if (lowerIndex === upperIndex) {
+    return sortedValues[lowerIndex];
+  }
+
+  const weight = index - lowerIndex;
+  return (
+    sortedValues[lowerIndex] * (1 - weight) + sortedValues[upperIndex] * weight
+  );
 }
 
 function decodeOutput(output: Uint8Array): string {
@@ -1537,6 +1650,259 @@ function summarizeTrace(
   };
 }
 
+function createUnavailableHeapSummary(): HeapSummary {
+  return {
+    available: false,
+    usedJSHeapSizeBeforeBytes: null,
+    usedJSHeapSizeAfterBytes: null,
+    usedJSHeapSizeDeltaBytes: null,
+    totalJSHeapSizeAfterBytes: null,
+    jsHeapSizeLimitBytes: null,
+  };
+}
+
+function getCounterValue(
+  counters: Record<string, number>,
+  key: string
+): number | null {
+  const value = counters[key];
+  return Number.isFinite(value) ? value : null;
+}
+
+function formatWorkloadPair(
+  counters: Record<string, number>,
+  key: string,
+  suffix: string
+): string | null {
+  const value = getCounterValue(counters, key);
+  return value == null ? null : `${formatCount(value)} ${suffix}`;
+}
+
+function joinWorkloadParts(parts: Array<string | null>): string | null {
+  const availableParts = parts.filter(
+    (part): part is string => part != null && part !== ''
+  );
+  return availableParts.length === 0 ? null : availableParts.join(', ');
+}
+
+function formatPhaseWorkload(
+  name: string,
+  counters: Record<string, number>,
+  renderedItemCount: number
+): string | null {
+  switch (name) {
+    case 'root.fileListToTree': {
+      return joinWorkloadParts([
+        formatWorkloadPair(counters, 'workload.inputFiles', 'files'),
+        formatWorkloadPair(counters, 'workload.treeNodes', 'nodes'),
+      ]);
+    }
+    case 'fileListToTree.pathGraph': {
+      return joinWorkloadParts([
+        formatWorkloadPair(counters, 'workload.inputFiles', 'files'),
+        formatWorkloadPair(counters, 'workload.inputPathSegments', 'segments'),
+        formatWorkloadPair(counters, 'workload.pathGraphFolders', 'folders'),
+      ]);
+    }
+    case 'fileListToTree.flattenedNodes': {
+      return joinWorkloadParts([
+        formatWorkloadPair(
+          counters,
+          'workload.flattenedNodes',
+          'flattened nodes'
+        ),
+        formatWorkloadPair(
+          counters,
+          'workload.intermediateFlattenedFolders',
+          'intermediate folders'
+        ),
+      ]);
+    }
+    case 'fileListToTree.folderNodes': {
+      return formatWorkloadPair(counters, 'workload.folderNodes', 'folders');
+    }
+    case 'fileListToTree.hashKeys':
+    case 'root.dataLoader': {
+      return formatWorkloadPair(counters, 'workload.treeNodes', 'nodes');
+    }
+    case 'root.pathToId': {
+      return formatWorkloadPair(
+        counters,
+        'workload.pathToIdEntries',
+        'entries'
+      );
+    }
+    case 'root.stateConfig': {
+      return joinWorkloadParts([
+        (() => {
+          const inputCount = getCounterValue(
+            counters,
+            'workload.state.initialExpandedPaths'
+          );
+          const outputCount = getCounterValue(
+            counters,
+            'workload.state.initialExpandedIds'
+          );
+          if (inputCount == null && outputCount == null) {
+            return null;
+          }
+          return `${formatCount(inputCount)} expanded paths -> ${formatCount(outputCount)} ids`;
+        })(),
+      ]);
+    }
+    case 'expandPathsWithAncestors': {
+      return (() => {
+        const inputCount = getCounterValue(
+          counters,
+          'workload.expandPathsInputCount'
+        );
+        const outputCount = getCounterValue(
+          counters,
+          'workload.expandPathsResolvedIds'
+        );
+        if (inputCount == null && outputCount == null) {
+          return null;
+        }
+        return `${formatCount(inputCount)} paths -> ${formatCount(outputCount)} ids`;
+      })();
+    }
+    case 'core.rebuildItemMeta': {
+      return formatWorkloadPair(
+        counters,
+        'workload.visibleItemMeta',
+        'visible items'
+      );
+    }
+    case 'fileTree.render.mount': {
+      return `${formatCount(renderedItemCount)} visible rows`;
+    }
+    default: {
+      return null;
+    }
+  }
+}
+
+function formatPhaseLabel(name: string): string {
+  switch (name) {
+    case 'root.fileListToTree':
+      return 'Build tree data';
+    case 'root.pathToId':
+      return 'Map paths to ids';
+    case 'root.stateConfig':
+      return 'Derive tree state';
+    case 'expandPathsWithAncestors':
+      return 'Resolve expanded ancestors';
+    case 'root.dataLoader':
+      return 'Create data loader';
+    case 'core.rebuildItemMeta':
+      return 'Rebuild item metadata';
+    case 'fileTree.render.mount':
+      return 'Mount Preact tree';
+    case 'fileListToTree.pathGraph':
+      return 'Build path graph';
+    case 'fileListToTree.flattenedNodes':
+      return 'Build flattened nodes';
+    case 'fileListToTree.folderNodes':
+      return 'Build folder nodes';
+    case 'fileListToTree.hashKeys':
+      return 'Hash node ids';
+    default:
+      return name;
+  }
+}
+
+function summarizeInstrumentation(
+  pageSummary: PageRenderSummary
+): ProfileResult['instrumentation'] {
+  const counters = pageSummary.instrumentation?.counters ?? {};
+  const phases = (pageSummary.instrumentation?.phases ?? [])
+    .map((phase) => ({
+      name: phase.name,
+      durationMs: Number(phase.durationMs.toFixed(3)),
+      count: phase.count,
+      percentOfRender:
+        pageSummary.renderDurationMs <= 0
+          ? null
+          : Number(
+              ((phase.durationMs / pageSummary.renderDurationMs) * 100).toFixed(
+                1
+              )
+            ),
+      workload: formatPhaseWorkload(
+        phase.name,
+        counters,
+        pageSummary.renderedItemCount
+      ),
+    }))
+    .sort((left, right) => {
+      const majorLeftIndex = MAJOR_PHASE_ORDER.indexOf(
+        left.name as (typeof MAJOR_PHASE_ORDER)[number]
+      );
+      const majorRightIndex = MAJOR_PHASE_ORDER.indexOf(
+        right.name as (typeof MAJOR_PHASE_ORDER)[number]
+      );
+      if (majorLeftIndex !== -1 || majorRightIndex !== -1) {
+        if (majorLeftIndex === -1) {
+          return 1;
+        }
+        if (majorRightIndex === -1) {
+          return -1;
+        }
+        return majorLeftIndex - majorRightIndex;
+      }
+
+      const treeLeftIndex = TREE_BUILD_PHASE_ORDER.indexOf(
+        left.name as (typeof TREE_BUILD_PHASE_ORDER)[number]
+      );
+      const treeRightIndex = TREE_BUILD_PHASE_ORDER.indexOf(
+        right.name as (typeof TREE_BUILD_PHASE_ORDER)[number]
+      );
+      if (treeLeftIndex !== -1 || treeRightIndex !== -1) {
+        if (treeLeftIndex === -1) {
+          return 1;
+        }
+        if (treeRightIndex === -1) {
+          return -1;
+        }
+        return treeLeftIndex - treeRightIndex;
+      }
+
+      if (right.durationMs !== left.durationMs) {
+        return right.durationMs - left.durationMs;
+      }
+      return left.name.localeCompare(right.name);
+    });
+
+  const rawHeap = pageSummary.instrumentation?.heap;
+  const heap =
+    rawHeap == null
+      ? createUnavailableHeapSummary()
+      : {
+          available: true,
+          usedJSHeapSizeBeforeBytes: rawHeap.usedJSHeapSizeBeforeBytes,
+          usedJSHeapSizeAfterBytes: rawHeap.usedJSHeapSizeAfterBytes,
+          usedJSHeapSizeDeltaBytes: rawHeap.usedJSHeapSizeDeltaBytes,
+          totalJSHeapSizeAfterBytes: rawHeap.totalJSHeapSizeAfterBytes,
+          jsHeapSizeLimitBytes: rawHeap.jsHeapSizeLimitBytes,
+        };
+
+  return {
+    phases,
+    counters,
+    heap,
+  };
+}
+
+function getNamedPhases(
+  phases: InstrumentedPhaseSummary[],
+  phaseNames: readonly string[]
+): InstrumentedPhaseSummary[] {
+  const phaseByName = new Map(phases.map((phase) => [phase.name, phase]));
+  return phaseNames
+    .map((phaseName) => phaseByName.get(phaseName))
+    .filter((phase): phase is InstrumentedPhaseSummary => phase != null);
+}
+
 function startTrace(cdp: CdpClient): Promise<TraceFile> {
   const traceEvents: TraceEvent[] = [];
   const removeListener = cdp.on('Tracing.dataCollected', (params) => {
@@ -1901,6 +2267,7 @@ async function profileVirtualizedRender(
         pageSummary.longestLongTaskMs == null
           ? null
           : Number(pageSummary.longestLongTaskMs.toFixed(3)),
+      instrumentation: summarizeInstrumentation(pageSummary),
       trace: summarizeTrace(trace, pageSummary),
       cpuProfile: summarizeCpuProfile(cpuProfile, callCountsByFunction),
     };
@@ -1941,7 +2308,6 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
       'Top-level task count',
       String(result.trace.topLevelTaskCount ?? 'n/a'),
     ]);
-    summaryRows.push(['Scripting time', formatMs(result.trace.scriptingMs)]);
     summaryRows.push(['GC time', formatMs(result.trace.gcMs)]);
     summaryRows.push([
       'Style/layout time',
@@ -1962,6 +2328,92 @@ function printRunHumanSummary(result: ProfileResult, totalRuns: number): void {
       maxWidths: [28, 18],
     })
   );
+
+  const majorPhases = getNamedPhases(
+    result.instrumentation.phases,
+    MAJOR_PHASE_ORDER
+  );
+  if (majorPhases.length > 0) {
+    console.log('');
+    console.log('Major Phases');
+    console.log(
+      createTable(
+        ['Phase', 'Time', 'Render %', 'Calls', 'Workload'],
+        majorPhases.map((phase) => [
+          formatPhaseLabel(phase.name),
+          formatMs(phase.durationMs),
+          formatPercent(phase.percentOfRender),
+          formatCount(phase.count),
+          phase.workload ?? 'n/a',
+        ]),
+        {
+          alignments: ['left', 'right', 'right', 'right', 'left'],
+          maxWidths: [28, 12, 10, 8, 34],
+        }
+      )
+    );
+  }
+
+  const treeBuildPhases = getNamedPhases(
+    result.instrumentation.phases,
+    TREE_BUILD_PHASE_ORDER
+  );
+  if (treeBuildPhases.length > 0) {
+    console.log('');
+    console.log('Tree Build Breakdown');
+    console.log(
+      createTable(
+        ['Phase', 'Time', 'Render %', 'Calls', 'Workload'],
+        treeBuildPhases.map((phase) => [
+          formatPhaseLabel(phase.name),
+          formatMs(phase.durationMs),
+          formatPercent(phase.percentOfRender),
+          formatCount(phase.count),
+          phase.workload ?? 'n/a',
+        ]),
+        {
+          alignments: ['left', 'right', 'right', 'right', 'left'],
+          maxWidths: [32, 12, 10, 8, 34],
+        }
+      )
+    );
+  }
+
+  if (result.instrumentation.heap.available) {
+    console.log('');
+    console.log('Heap');
+    console.log(
+      createTable(
+        ['Metric', 'Value'],
+        [
+          [
+            'Used JS heap before',
+            formatBytes(result.instrumentation.heap.usedJSHeapSizeBeforeBytes),
+          ],
+          [
+            'Used JS heap after',
+            formatBytes(result.instrumentation.heap.usedJSHeapSizeAfterBytes),
+          ],
+          [
+            'Used JS heap delta',
+            formatBytes(result.instrumentation.heap.usedJSHeapSizeDeltaBytes),
+          ],
+          [
+            'Total JS heap after',
+            formatBytes(result.instrumentation.heap.totalJSHeapSizeAfterBytes),
+          ],
+          [
+            'JS heap limit',
+            formatBytes(result.instrumentation.heap.jsHeapSizeLimitBytes),
+          ],
+        ],
+        {
+          alignments: ['left', 'right'],
+          maxWidths: [24, 18],
+        }
+      )
+    );
+  }
 
   if (result.trace.available && result.trace.dominantEvents.length > 0) {
     console.log('');
@@ -2076,16 +2528,18 @@ function printAggregateHumanSummary(results: ProfileResult[]): void {
   console.log('Aggregate Summary');
   console.log(
     createTable(
-      ['Metric', 'Total', 'Average', 'Runs'],
+      ['Metric', 'Total', 'Average', 'Median', 'P95', 'Runs'],
       aggregateRows.map((row) => [
         row.label,
         formatMs(row.totalMs),
         formatMs(row.averageMs),
+        formatMs(row.medianMs),
+        formatMs(row.p95Ms),
         `${row.availableRuns}/${results.length}`,
       ]),
       {
-        alignments: ['left', 'right', 'right', 'right'],
-        maxWidths: [28, 14, 14, 8],
+        alignments: ['left', 'right', 'right', 'right', 'right', 'right'],
+        maxWidths: [28, 14, 14, 14, 14, 8],
       }
     )
   );

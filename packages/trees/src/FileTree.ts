@@ -6,6 +6,7 @@ import {
   FLATTENED_PREFIX,
 } from './constants';
 import type { TreeInstance } from './core/types/core';
+import { withBenchmarkPhase } from './internal/benchmarkProfile';
 import { SVGSpriteSheet } from './sprite';
 import type {
   ContextMenuItem,
@@ -808,9 +809,11 @@ export class FileTree {
     const initialViewportHeight =
       containerWrapper?.clientHeight ?? fileTreeContainer.clientHeight;
 
-    preactRenderRoot(
-      divWrapper,
-      this.buildRootProps({ initialViewportHeight })
+    withBenchmarkPhase('fileTree.render.mount', () =>
+      preactRenderRoot(
+        divWrapper,
+        this.buildRootProps({ initialViewportHeight })
+      )
     );
   }
 

@@ -43,6 +43,10 @@ import {
   type FileTreeStateConfig,
   isRenamingEnabled,
 } from '../FileTree';
+import {
+  setBenchmarkCounter,
+  withBenchmarkPhase,
+} from '../internal/benchmarkProfile';
 import { generateLazyDataLoader } from '../loader/lazy';
 import { generateSyncDataLoaderFromTreeData } from '../loader/sync';
 import type { SVGSpriteNames } from '../sprite';
@@ -163,7 +167,10 @@ export function Root({
   );
 
   const treeData = useMemo(
-    () => fileListToTree(files, { sortComparator }),
+    () =>
+      withBenchmarkPhase('root.fileListToTree', () =>
+        fileListToTree(files, { sortComparator })
+      ),
     [files, sortComparator]
   );
 
@@ -171,14 +178,17 @@ export function Root({
   // lookups straight from treeData so we do not duplicate the whole tree into a
   // second Map on every fresh mount.
   const pathToId = useMemo(() => {
-    const next = new Map<string, string>();
-    for (const id in treeData) {
-      const node = treeData[id];
-      if (node != null) {
-        next.set(node.path, id);
+    return withBenchmarkPhase('root.pathToId', () => {
+      const next = new Map<string, string>();
+      for (const id in treeData) {
+        const node = treeData[id];
+        if (node != null) {
+          next.set(node.path, id);
+        }
       }
-    }
-    return next;
+      setBenchmarkCounter('workload.pathToIdEntries', next.size);
+      return next;
+    });
   }, [treeData]);
   const idToPath = useMemo<Pick<Map<string, string>, 'get' | 'has'>>(
     () => ({
@@ -203,14 +213,16 @@ export function Root({
 
   const dataLoader = useMemo(
     () =>
-      useLazyDataLoader === true
-        ? generateLazyDataLoader(files, {
-            flattenEmptyDirectories,
-            sortComparator,
-          })
-        : generateSyncDataLoaderFromTreeData(treeData, {
-            flattenEmptyDirectories,
-          }),
+      withBenchmarkPhase('root.dataLoader', () =>
+        useLazyDataLoader === true
+          ? generateLazyDataLoader(files, {
+              flattenEmptyDirectories,
+              sortComparator,
+            })
+          : generateSyncDataLoaderFromTreeData(treeData, {
+              flattenEmptyDirectories,
+            })
+      ),
     [
       files,
       flattenEmptyDirectories,
@@ -626,6 +638,8 @@ export function Root({
           visibleIdSet != null
             ? allItemIds.filter((itemId) => visibleIdSet.has(itemId))
             : allItemIds;
+        setBenchmarkCounter('workload.visibleItemIds', allItemIds.length);
+        setBenchmarkCounter('workload.renderItemIds', itemIds.length);
         const draggedItemIdSet = isDnD
           ? new Set(
               (tree.getState().dnd?.draggedItems ?? []).map(

@@ -1,3 +1,8 @@
+import {
+  setBenchmarkCounter,
+  withBenchmarkPhase,
+} from '../internal/benchmarkProfile';
+
 /**
  * Removes paths whose ancestor directories are not also in the expanded set.
  * When a parent folder is collapsed, its descendants become "orphaned" — they
@@ -191,26 +196,31 @@ export function expandPathsWithAncestors(
   pathToId: Map<string, string>,
   options?: ExpandPathsOptions
 ): string[] {
-  const cache = options?.cache;
-  const flatten = options?.flattenEmptyDirectories !== false;
-  const ids = new Set<string>();
-  const ancestorIdCache = new Map<string, string | null>();
+  return withBenchmarkPhase('expandPathsWithAncestors', () => {
+    const cache = options?.cache;
+    const flatten = options?.flattenEmptyDirectories !== false;
+    const ids = new Set<string>();
+    const ancestorIdCache = new Map<string, string | null>();
 
-  for (const path of paths) {
-    let expanded = cache?.get(path);
-    if (expanded == null) {
-      expanded = resolveAncestorIdsForPath(
-        path,
-        pathToId,
-        flatten,
-        ancestorIdCache
-      );
-      cache?.set(path, expanded);
+    for (const path of paths) {
+      let expanded = cache?.get(path);
+      if (expanded == null) {
+        expanded = resolveAncestorIdsForPath(
+          path,
+          pathToId,
+          flatten,
+          ancestorIdCache
+        );
+        cache?.set(path, expanded);
+      }
+
+      for (const id of expanded) {
+        ids.add(id);
+      }
     }
 
-    for (const id of expanded) {
-      ids.add(id);
-    }
-  }
-  return Array.from(ids);
+    setBenchmarkCounter('workload.expandPathsInputCount', paths.length);
+    setBenchmarkCounter('workload.expandPathsResolvedIds', ids.size);
+    return Array.from(ids);
+  });
 }

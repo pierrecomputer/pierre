@@ -1,4 +1,8 @@
 import { FLATTENED_PREFIX } from '../constants';
+import {
+  setBenchmarkCounter,
+  withBenchmarkPhase,
+} from '../internal/benchmarkProfile';
 import type { FileTreeNode } from '../types';
 import { createLoaderUtils, type LoaderUtils } from './createLoaderUtils';
 import type { ChildrenSortOption } from './sortChildren';
@@ -63,6 +67,7 @@ export function buildFileListToTreePathGraph(
   const state = createBuildState(rootId);
   const { tree, folderChildren } = state;
   const rootChildren = folderChildren.get(rootId)!;
+  let segmentCount = 0;
 
   // Track the previous path's folder-depth stack so consecutive paths that
   // share a directory prefix can skip re-scanning those segments. For each
@@ -162,6 +167,8 @@ export function buildFileListToTreePathGraph(
         continue;
       }
 
+      segmentCount += 1;
+
       const isFile = !isDirectory && nextSlashIndex === -1;
 
       // For normalized paths (no empty segments), extract currentPath as a
@@ -224,6 +231,10 @@ export function buildFileListToTreePathGraph(
     prevDepth = currentDepth;
   }
 
+  setBenchmarkCounter('workload.inputFiles', filePaths.length);
+  setBenchmarkCounter('workload.inputPathSegments', segmentCount);
+  setBenchmarkCounter('workload.pathGraphFolders', folderChildren.size);
+  setBenchmarkCounter('workload.pathGraphEntries', state.treeEntries.length);
   return state;
 }
 
@@ -272,6 +283,7 @@ export function buildFileListToTreeFlattenedNodes(
   const intermediateFolders = new Set<string>();
   const { tree, folderChildren } = state;
   const { isFolder, sortChildrenArray, utils } = context;
+  let flattenedNodeCount = 0;
 
   for (const children of folderChildren.values()) {
     for (const child of children) {
@@ -314,9 +326,15 @@ export function buildFileListToTreeFlattenedNodes(
       };
       tree.set(flattenedKey, flatNode);
       state.treeEntries.push([flattenedKey, flatNode]);
+      flattenedNodeCount += 1;
     }
   }
 
+  setBenchmarkCounter('workload.flattenedNodes', flattenedNodeCount);
+  setBenchmarkCounter(
+    'workload.intermediateFlattenedFolders',
+    intermediateFolders.size
+  );
   return intermediateFolders;
 }
 
@@ -363,6 +381,8 @@ export function buildFileListToTreeFolderNodes(
     tree.set(path, folderNode);
     state.treeEntries.push([path, folderNode]);
   }
+
+  setBenchmarkCounter('workload.folderNodes', folderChildren.size);
 }
 
 /**
@@ -433,6 +453,7 @@ export function hashFileListToTreeKeys(
     hashedTree[mappedKey] = node;
   }
 
+  setBenchmarkCounter('workload.treeNodes', treeEntries.length);
   return hashedTree;
 }
 
@@ -446,22 +467,31 @@ function fileListToTreeInternal(
     sortComparator = defaultChildrenComparator,
   } = options;
 
-  const state = buildFileListToTreePathGraph(filePaths, rootId);
+  const state = withBenchmarkPhase('fileListToTree.pathGraph', () =>
+    buildFileListToTreePathGraph(filePaths, rootId)
+  );
   const context = createFileListToTreeBuildContext(
     state.folderChildren,
     sortComparator
   );
-  const intermediateFolders = buildFileListToTreeFlattenedNodes(state, context);
-
-  buildFileListToTreeFolderNodes(
-    state,
-    context,
-    rootId,
-    rootName,
-    intermediateFolders
+  const intermediateFolders = withBenchmarkPhase(
+    'fileListToTree.flattenedNodes',
+    () => buildFileListToTreeFlattenedNodes(state, context)
   );
 
-  return hashFileListToTreeKeys(state.tree, state.treeEntries, rootId);
+  withBenchmarkPhase('fileListToTree.folderNodes', () =>
+    buildFileListToTreeFolderNodes(
+      state,
+      context,
+      rootId,
+      rootName,
+      intermediateFolders
+    )
+  );
+
+  return withBenchmarkPhase('fileListToTree.hashKeys', () =>
+    hashFileListToTreeKeys(state.tree, state.treeEntries, rootId)
+  );
 }
 
 /**
