@@ -1,12 +1,13 @@
-import type { InstanceBuilder } from '../features/main/types';
+import type { InstanceBuilder, InstanceTypeMap } from '../features/main/types';
 
-export const buildStaticInstance: InstanceBuilder = (
-  features,
-  instanceType,
-  buildOpts
-) => {
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any
-  const instance: any = {};
+export const buildStaticInstance: InstanceBuilder = <
+  T extends keyof InstanceTypeMap,
+>(
+  features: Parameters<InstanceBuilder>[0],
+  instanceType: T,
+  buildOpts: Parameters<InstanceBuilder>[2]
+): [instance: InstanceTypeMap[T], finalize: () => void] => {
+  const instance: Record<string, unknown> = {};
   const finalize = () => {
     const opts = buildOpts(instance);
     featureLoop: for (let i = 0; i < features.length; i++) {
@@ -18,20 +19,19 @@ export const buildStaticInstance: InstanceBuilder = (
       // for every instance finalization (hot when building very large trees).
       const keyedDefinition = definition as Record<
         string,
-        ((...args: any[]) => unknown) | undefined
+        ((...args: unknown[]) => unknown) | undefined
       >;
       methodLoop: for (const key in keyedDefinition) {
         if (!Object.hasOwn(keyedDefinition, key)) continue methodLoop;
         const method = keyedDefinition[key];
         if (method == null) continue methodLoop;
         const prev = instance[key];
-        // oxlint-disable-next-line typescript-eslint/no-explicit-any
-        instance[key] = (...args: any[]) => {
+        instance[key] = (...args: unknown[]) => {
           // oxlint-disable-next-line typescript-eslint/no-unsafe-return
           return method({ ...opts, prev }, ...args);
         };
       }
     }
   };
-  return [instance, finalize];
+  return [instance as unknown as InstanceTypeMap[T], finalize];
 };

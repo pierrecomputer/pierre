@@ -107,7 +107,8 @@
     "lint-staged": "lint-staged",
     "prepare": "husky",
     "demo:build": "(cd apps/demo && bun run build)",
-    "docs:build": "(cd apps/docs && bun run build)"
+    "docs:build": "(cd apps/docs && bun run build)",
+    "chrome": "./scripts/chrome-remote-debug.sh"
   },
   "devDependencies": {
     "@pierre/icons": "catalog:",
