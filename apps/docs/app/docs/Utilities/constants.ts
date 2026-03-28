@@ -160,7 +160,9 @@ export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<undefined> = {
 // inside your theme JSON file.
 
 // Option 1: Dynamic import (recommended for code splitting)
-registerCustomTheme('my-custom-theme', () => import('./my-theme.json'));
+registerCustomTheme('my-custom-theme', () =>
+  import('./my-theme.json', { with: { type: 'json' } })
+);
 
 // Option 2: Inline theme object
 registerCustomTheme('inline-theme', async () => ({

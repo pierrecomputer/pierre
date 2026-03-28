@@ -489,8 +489,12 @@ export const THEMING_REGISTER_THEME: ThemingConstant = {
 // The name must match the "name" field in your theme JSON
 
 // Option 1: Import from your bundled theme files
-registerCustomTheme('my-theme-dark', () => import('./themes/my-theme-dark.json'));
-registerCustomTheme('my-theme-light', () => import('./themes/my-theme-light.json'));
+registerCustomTheme('my-theme-dark', () =>
+  import('./themes/my-theme-dark.json', { with: { type: 'json' } })
+);
+registerCustomTheme('my-theme-light', () =>
+  import('./themes/my-theme-light.json', { with: { type: 'json' } })
+);
 
 // Option 2: Fetch from a URL (for CDN-hosted themes)
 registerCustomTheme('my-theme-dark', async () => {
