@@ -43,7 +43,7 @@ export function parseDiffFromFile(
       'parseDiffFrom: FileInvalid diff -- probably need to fix something -- if the files are the same maybe?'
     );
   }
-  // If we've been provided an override for language in the newFile, lets pass
+  // If we've been provided an override for language in the newFile, let’s pass
   // it through to FileDiffMetadata.
   if (newFile.lang != null) {
     fileData.lang = newFile.lang;
