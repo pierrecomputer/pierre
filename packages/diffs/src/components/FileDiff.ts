@@ -588,7 +588,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.fileDiff =
       fileDiff ??
       (oldFile != null && newFile != null
-        ? parseDiffFromFile(oldFile, newFile)
+        ? parseDiffFromFile(oldFile, newFile, this.options.parseDiffOptions)
         : undefined);
 
     if (this.pre == null) {
@@ -706,7 +706,11 @@ export class FileDiff<LAnnotation = undefined> {
       this.fileDiff = fileDiff;
     } else if (oldFile != null && newFile != null && filesDidChange) {
       diffDidChange = true;
-      this.fileDiff = parseDiffFromFile(oldFile, newFile);
+      this.fileDiff = parseDiffFromFile(
+        oldFile,
+        newFile,
+        this.options.parseDiffOptions
+      );
     }
 
     if (lineAnnotations != null) {

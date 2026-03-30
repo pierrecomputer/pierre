@@ -347,7 +347,7 @@ export class VirtualizedFileDiff<
     this.fileDiff ??=
       fileDiff ??
       (oldFile != null && newFile != null
-        ? parseDiffFromFile(oldFile, newFile, this.options.diffOptions)
+        ? parseDiffFromFile(oldFile, newFile, this.options.parseDiffOptions)
         : undefined);
 
     fileContainer = this.getOrCreateFileContainer(fileContainer);

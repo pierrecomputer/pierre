@@ -40,7 +40,7 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
   annotations,
 }: PreloadDiffOptions<LAnnotation>): Promise<string> {
   if (fileDiff == null && oldFile != null && newFile != null) {
-    fileDiff = parseDiffFromFile(oldFile, newFile, options?.diffOptions);
+    fileDiff = parseDiffFromFile(oldFile, newFile, options?.parseDiffOptions);
   }
   if (fileDiff == null) {
     throw new Error(

@@ -1,7 +1,8 @@
+import type { CreatePatchOptionsNonabortable } from 'diff';
+
 import type { FileDiffOptions } from '../components/FileDiff';
 import { DEFAULT_THEMES } from '../constants';
 import type { FileOptions } from '../react';
-import type { DiffComputeOptions } from '../types';
 import { areObjectsEqual } from './areObjectsEqual';
 import { areThemesEqual } from './areThemesEqual';
 
@@ -13,23 +14,23 @@ export function areOptionsEqual<LAnnotation>(
 ): boolean {
   const themeA = optionsA?.theme ?? DEFAULT_THEMES;
   const themeB = optionsB?.theme ?? DEFAULT_THEMES;
-  const diffOptsA = getDiffOptions(optionsA);
-  const diffOptsB = getDiffOptions(optionsB);
+  const diffOptsA = getParseDiffOptions(optionsA);
+  const diffOptsB = getParseDiffOptions(optionsB);
   return (
     areThemesEqual(themeA, themeB) &&
     areObjectsEqual(optionsA, optionsB, [
       'theme',
-      'diffOptions' as keyof typeof optionsA,
+      'parseDiffOptions' as keyof typeof optionsA,
     ]) &&
-    areObjectsEqual(diffOptsA ?? {}, diffOptsB ?? {})
+    areObjectsEqual(diffOptsA, diffOptsB)
   );
 }
 
-function getDiffOptions<L>(
+function getParseDiffOptions<L>(
   options: AnyOptions<L>
-): DiffComputeOptions | undefined {
-  if (options != null && 'diffOptions' in options) {
-    return options.diffOptions;
+): CreatePatchOptionsNonabortable | undefined {
+  if (options != null && 'parseDiffOptions' in options) {
+    return options.parseDiffOptions;
   }
   return undefined;
 }
