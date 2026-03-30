@@ -34,6 +34,15 @@ export interface FileListToTreeBuildContext {
   utils: LoaderUtils;
 }
 
+export interface FileListSyncIndex {
+  pathToId: Map<string, string>;
+  tree: Map<string, FileTreeNode>;
+}
+
+interface FileListToTreeBuildContextOptions {
+  reuseUnsortedChildArrays?: boolean;
+}
+
 const ROOT_ID = 'root';
 const FILE_LIST_TO_TREE_PATH_TO_ID_MAP: unique symbol = Symbol(
   'fileListToTree.pathToIdMap'
@@ -245,8 +254,10 @@ export function buildFileListToTreePathGraph(
 
 export function createFileListToTreeBuildContext(
   folderChildren: Map<string, string[]>,
-  sortComparator: ChildrenSortOption
+  sortComparator: ChildrenSortOption,
+  options: FileListToTreeBuildContextOptions = {}
 ): FileListToTreeBuildContext {
+  const { reuseUnsortedChildArrays = false } = options;
   const isFolder = folderChildren.has.bind(folderChildren) as (
     path: string
   ) => boolean;
@@ -255,7 +266,9 @@ export function createFileListToTreeBuildContext(
     parentPathLength?: number
   ): string[] =>
     sortComparator === false
-      ? children.slice()
+      ? reuseUnsortedChildArrays
+        ? children
+        : children.slice()
       : sortChildren(children, isFolder, sortComparator, parentPathLength);
   const childrenArrayCache = new Map<string, string[]>();
   const getChildrenArray = (path: string): string[] => {
@@ -265,7 +278,12 @@ export function createFileListToTreeBuildContext(
     }
 
     const children = folderChildren.get(path);
-    const childArray = children != null ? children.slice() : [];
+    const childArray =
+      children != null
+        ? reuseUnsortedChildArrays
+          ? children
+          : children.slice()
+        : [];
     childrenArrayCache.set(path, childArray);
     return childArray;
   };
@@ -275,6 +293,16 @@ export function createFileListToTreeBuildContext(
     sortChildrenArray,
     utils: createLoaderUtils(isFolder, getChildrenArray),
   };
+}
+
+function createFileListToTreePathToIdMap(
+  tree: Map<string, FileTreeNode>
+): Map<string, string> {
+  const pathToId = new Map<string, string>();
+  for (const [id, node] of tree) {
+    pathToId.set(node.path, id);
+  }
+  return pathToId;
 }
 
 /**
@@ -407,16 +435,15 @@ export function buildFileListToTreeFolderNodes(
  */
 export function hashFileListToTreeKeys(
   tree: Map<string, FileTreeNode>,
-  instrumentation?: BenchmarkInstrumentation
+  instrumentation?: BenchmarkInstrumentation,
+  pathToId: Map<string, string> = createFileListToTreePathToIdMap(tree)
 ): Record<string, FileTreeNode> {
   const hashedTree: FileListToTreeWithPathToIdMap = Object.create(null);
-  const pathToId = new Map<string, string>();
 
   // Use path IDs directly (including f:: flattened paths) so we avoid a full
   // hash+remap pass before the initial render.
   for (const [key, node] of tree) {
     hashedTree[key] = node;
-    pathToId.set(node.path, key);
   }
 
   setBenchmarkCounter(instrumentation, 'workload.treeNodes', tree.size);
@@ -464,10 +491,15 @@ export function getFileListToTreePathToIdMap(
   return map instanceof Map ? map : null;
 }
 
-function fileListToTreeInternal(
+interface BuildFileListStructureOptions {
+  reuseUnsortedChildArrays?: boolean;
+}
+
+function buildFileListStructure(
   filePaths: string[],
-  options: FileListToTreeOptions
-): Record<string, FileTreeNode> {
+  options: FileListToTreeOptions,
+  buildOptions: BuildFileListStructureOptions = {}
+): FileListToTreeBuildState {
   const {
     rootId = ROOT_ID,
     rootName = ROOT_ID,
@@ -482,7 +514,10 @@ function fileListToTreeInternal(
   );
   const context = createFileListToTreeBuildContext(
     state.folderChildren,
-    sortComparator
+    sortComparator,
+    buildOptions.reuseUnsortedChildArrays === true && sortComparator === false
+      ? { reuseUnsortedChildArrays: true }
+      : undefined
   );
   const intermediateFolders = withBenchmarkPhase(
     instrumentation,
@@ -501,8 +536,60 @@ function fileListToTreeInternal(
     )
   );
 
+  return state;
+}
+
+function finalizeFileListSyncIndex(
+  state: FileListToTreeBuildState,
+  instrumentation?: BenchmarkInstrumentation
+): FileListSyncIndex {
+  setBenchmarkCounter(instrumentation, 'workload.treeNodes', state.tree.size);
+  setBenchmarkCounter(instrumentation, 'workload.hashKeysResolveIdCalls', 0);
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.hashKeysResolveIdCacheHits',
+    0
+  );
+  setBenchmarkCounter(instrumentation, 'workload.hashKeysDirectChildRemaps', 0);
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.hashKeysFlattenedChildRemaps',
+    0
+  );
+  setBenchmarkCounter(instrumentation, 'workload.hashKeysFlattenPathRemaps', 0);
+
+  return {
+    pathToId: createFileListToTreePathToIdMap(state.tree),
+    tree: state.tree,
+  };
+}
+
+export function buildFileListSyncIndex(
+  filePaths: string[],
+  options: FileListToTreeOptions = {}
+): FileListSyncIndex {
+  const instrumentation = getBenchmarkInstrumentation(options) ?? undefined;
+  const state = buildFileListStructure(filePaths, options, {
+    // The direct sync loader keeps these arrays read-only after build, so it
+    // can safely reuse insertion-order child arrays when sorting is disabled.
+    reuseUnsortedChildArrays: true,
+  });
+
   return withBenchmarkPhase(instrumentation, 'fileListToTree.hashKeys', () =>
-    hashFileListToTreeKeys(state.tree, instrumentation)
+    finalizeFileListSyncIndex(state, instrumentation)
+  );
+}
+
+function fileListToTreeInternal(
+  filePaths: string[],
+  options: FileListToTreeOptions
+): Record<string, FileTreeNode> {
+  const instrumentation = getBenchmarkInstrumentation(options) ?? undefined;
+  const state = buildFileListStructure(filePaths, options);
+  const pathToId = createFileListToTreePathToIdMap(state.tree);
+
+  return withBenchmarkPhase(instrumentation, 'fileListToTree.hashKeys', () =>
+    hashFileListToTreeKeys(state.tree, instrumentation, pathToId)
   );
 }
 

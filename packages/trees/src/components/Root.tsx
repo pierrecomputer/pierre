@@ -50,14 +50,11 @@ import {
   withBenchmarkPhase,
 } from '../internal/benchmarkInstrumentation';
 import { generateLazyDataLoader } from '../loader/lazy';
-import { generateSyncDataLoaderFromTreeData } from '../loader/sync';
+import { generateSyncDataLoaderFromIndex } from '../loader/sync';
 import type { SVGSpriteNames } from '../sprite';
 import type { FileTreeNode } from '../types';
 import { computeNewFilesAfterDrop } from '../utils/computeNewFilesAfterDrop';
-import {
-  fileListToTree,
-  getFileListToTreePathToIdMap,
-} from '../utils/fileListToTree';
+import { buildFileListSyncIndex } from '../utils/fileListToTree';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
 import { getSelectionPath } from '../utils/getSelectionPath';
 import { renameFileTreePaths } from '../utils/renameFileTreePaths';
@@ -172,10 +169,10 @@ export function Root({
     [sortOption]
   );
 
-  const treeData = useMemo(
+  const syncIndex = useMemo(
     () =>
       withBenchmarkPhase(benchmarkInstrumentation, 'root.fileListToTree', () =>
-        fileListToTree(
+        buildFileListSyncIndex(
           files,
           attachBenchmarkInstrumentation(
             { sortComparator },
@@ -186,41 +183,22 @@ export function Root({
     [benchmarkInstrumentation, files, sortComparator]
   );
 
-  // Reuse the path->id map precomputed during fileListToTree hashing when
-  // available so Root does not need to rescan the full tree object.
   const pathToId = useMemo(() => {
     return withBenchmarkPhase(benchmarkInstrumentation, 'root.pathToId', () => {
-      const precomputed = getFileListToTreePathToIdMap(treeData);
-      if (precomputed != null) {
-        setBenchmarkCounter(
-          benchmarkInstrumentation,
-          'workload.pathToIdEntries',
-          precomputed.size
-        );
-        return precomputed;
-      }
-
-      const next = new Map<string, string>();
-      for (const id in treeData) {
-        const node = treeData[id];
-        if (node != null) {
-          next.set(node.path, id);
-        }
-      }
       setBenchmarkCounter(
         benchmarkInstrumentation,
         'workload.pathToIdEntries',
-        next.size
+        syncIndex.pathToId.size
       );
-      return next;
+      return syncIndex.pathToId;
     });
-  }, [benchmarkInstrumentation, treeData]);
+  }, [benchmarkInstrumentation, syncIndex]);
   const idToPath = useMemo<Pick<Map<string, string>, 'get' | 'has'>>(
     () => ({
-      get: (id: string) => treeData[id]?.path,
-      has: (id: string) => treeData[id] != null,
+      get: (id: string) => syncIndex.tree.get(id)?.path,
+      has: (id: string) => syncIndex.tree.has(id),
     }),
-    [treeData]
+    [syncIndex]
   );
 
   const ancestorChainsCacheRef = useRef<Map<string, string[]>>(new Map());
@@ -245,7 +223,7 @@ export function Root({
               flattenEmptyDirectories,
               sortComparator,
             })
-          : generateSyncDataLoaderFromTreeData(treeData, {
+          : generateSyncDataLoaderFromIndex(syncIndex, {
               flattenEmptyDirectories,
             })
       ),
@@ -254,7 +232,7 @@ export function Root({
       files,
       flattenEmptyDirectories,
       sortComparator,
-      treeData,
+      syncIndex,
       useLazyDataLoader,
     ]
   );
