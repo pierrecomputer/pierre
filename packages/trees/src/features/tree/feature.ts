@@ -1,6 +1,5 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
 import type { FeatureImplementation } from '../../core/types/core';
-import { logWarning } from '../../core/utilities/errors';
 import { makeStateUpdater, poll } from '../../core/utils';
 import type { ItemMeta } from './types';
 
@@ -31,55 +30,64 @@ export const treeFeature: FeatureImplementation<any> = {
       const { expandedItems } = tree.getState();
       const flatItems: ItemMeta[] = [];
       const expandedItemsSet = new Set(expandedItems); // TODO support setting state expandedItems as set instead of array
-      const lineageSet = new Set([rootItemId]);
-      const lineageStack = [rootItemId];
+      const rootChildren = tree.retrieveChildrenIds(rootItemId) ?? [];
 
-      // Walks visible tree nodes while reusing a single lineage stack/set for
-      // circular-reference detection to avoid per-node path array allocations.
-      const recursiveAdd = (
-        itemId: string,
-        parentId: string,
-        level: number,
-        setSize: number,
-        posInSet: number
-      ) => {
-        if (lineageSet.has(itemId)) {
-          logWarning(
-            `Circular reference for ${[...lineageStack, itemId].join('.')}`
-          );
-          return;
-        }
+      // Iterative pre-order traversal avoids per-node recursive call overhead
+      // on very large fully-expanded trees.
+      const stack: Array<{
+        itemId: string;
+        parentId: string;
+        level: number;
+        setSize: number;
+        posInSet: number;
+      }> = [];
+
+      for (
+        let childIndex = rootChildren.length - 1;
+        childIndex >= 0;
+        childIndex--
+      ) {
+        const itemId = rootChildren[childIndex];
+        stack.push({
+          itemId,
+          parentId: rootItemId,
+          level: 0,
+          setSize: rootChildren.length,
+          posInSet: childIndex,
+        });
+      }
+
+      while (stack.length > 0) {
+        const current = stack.pop()!;
 
         flatItems.push({
-          itemId,
-          level,
+          itemId: current.itemId,
+          level: current.level,
           index: flatItems.length,
-          parentId,
-          setSize,
-          posInSet,
+          parentId: current.parentId,
+          setSize: current.setSize,
+          posInSet: current.posInSet,
         });
 
-        if (!expandedItemsSet.has(itemId)) {
-          return;
+        if (!expandedItemsSet.has(current.itemId)) {
+          continue;
         }
 
-        lineageSet.add(itemId);
-        lineageStack.push(itemId);
-
-        const children = tree.retrieveChildrenIds(itemId) ?? [];
-        for (let childIndex = 0; childIndex < children.length; childIndex++) {
+        const children = tree.retrieveChildrenIds(current.itemId) ?? [];
+        for (
+          let childIndex = children.length - 1;
+          childIndex >= 0;
+          childIndex--
+        ) {
           const childId = children[childIndex];
-          recursiveAdd(childId, itemId, level + 1, children.length, childIndex);
+          stack.push({
+            itemId: childId,
+            parentId: current.itemId,
+            level: current.level + 1,
+            setSize: children.length,
+            posInSet: childIndex,
+          });
         }
-
-        lineageStack.pop();
-        lineageSet.delete(itemId);
-      };
-
-      const children = tree.retrieveChildrenIds(rootItemId) ?? [];
-      for (let childIndex = 0; childIndex < children.length; childIndex++) {
-        const itemId = children[childIndex];
-        recursiveAdd(itemId, rootItemId, 0, children.length, childIndex);
       }
 
       return flatItems;

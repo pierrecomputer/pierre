@@ -80,7 +80,7 @@ export function benchmarkFileListToTreeStages(
   stageTimingsMs.buildFolderNodes = buildFolderNodesMs;
 
   const [tree, hashTreeKeysMs] = timeStage(() =>
-    hashFileListToTreeKeys(state.tree, state.treeEntries, rootId)
+    hashFileListToTreeKeys(state.tree)
   );
   stageTimingsMs.hashTreeKeys = hashTreeKeysMs;
 

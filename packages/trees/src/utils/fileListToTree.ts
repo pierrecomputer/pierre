@@ -8,17 +8,6 @@ import {
 import type { FileTreeNode } from '../types';
 import { createLoaderUtils, type LoaderUtils } from './createLoaderUtils';
 import type { ChildrenSortOption } from './sortChildren';
-
-// FNV-1a hash inlined here (not imported from ./hashId) so the JIT compiler
-// can inline it into getIdForKey without cross-module barriers.
-const hashId = (input: string): string => {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
-};
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
 
 export interface FileListToTreeOptions {
@@ -31,10 +20,9 @@ export interface FileListToTreeBuildState {
   /** Map-based tree for fast has/get/set during construction (~37% faster
    *  than plain-object property access for 99K string-keyed entries). */
   tree: Map<string, FileTreeNode>;
-  folderChildren: Map<string, Set<string>>;
-  /** Ordered list of [key, node] pairs in insertion order, enabling
-   *  hashTreeKeys to iterate without Object.keys + tree[key] lookups. */
-  treeEntries: Array<[string, FileTreeNode]>;
+  // Children are append-only and written once per unique edge, so arrays are
+  // cheaper than Sets while preserving deterministic insertion order.
+  folderChildren: Map<string, string[]>;
 }
 
 export interface FileListToTreeBuildContext {
@@ -47,14 +35,16 @@ export interface FileListToTreeBuildContext {
 }
 
 const ROOT_ID = 'root';
+const FILE_LIST_TO_TREE_PATH_TO_ID_MAP: unique symbol = Symbol(
+  'fileListToTree.pathToIdMap'
+);
 
 function createBuildState(rootId: string): FileListToTreeBuildState {
-  const folderChildren = new Map<string, Set<string>>();
-  folderChildren.set(rootId, new Set());
+  const folderChildren = new Map<string, string[]>();
+  folderChildren.set(rootId, []);
   return {
     tree: new Map(),
     folderChildren,
-    treeEntries: [],
   };
 }
 
@@ -76,13 +66,8 @@ export function buildFileListToTreePathGraph(
   // share a directory prefix can skip re-scanning those segments. For each
   // depth d, parentStack[d] holds the children Set and pathStack[d] holds
   // the folder path string at that depth (reused to avoid re-slicing).
-  const parentStack: Array<Set<string>> = [rootChildren];
+  const parentStack: Array<string[]> = [rootChildren];
   const pathStack: string[] = [rootId];
-  // Incremental FNV-1a hash state at each folder depth. Allows extending the
-  // hash with only the divergent suffix characters instead of rehashing the
-  // full path in hashTreeKeys. The final hashed ID string is stored on each
-  // node via the NODE_ID symbol during construction.
-  const hashStack: number[] = [0];
   let prevPath = '';
   let prevDepth = 0;
   let reusedPrefixHitCount = 0;
@@ -134,16 +119,10 @@ export function buildFileListToTreePathGraph(
 
     // Either resume from the deepest shared folder or start from root.
     let segmentStart: number;
-    let parentChildren: Set<string>;
+    let parentChildren: string[];
     let currentPath: string | undefined;
     let currentDepth: number;
     let hasEmptySegment = false;
-
-    let hashValue: number;
-    // Whether the next real segment needs a '/' separator in the hash.
-    // True when resuming from a prefix (separator between prefix and suffix);
-    // false at the start of a fresh path (first segment has no separator).
-    let hashNeedsSep: boolean;
 
     if (reuseDepth > 0) {
       reusedPrefixHitCount += 1;
@@ -155,15 +134,11 @@ export function buildFileListToTreePathGraph(
       parentChildren = parentStack[reuseDepth];
       currentPath = pathStack[reuseDepth]; // reuse stored path (no allocation)
       currentDepth = reuseDepth;
-      hashValue = hashStack[reuseDepth]; // reuse stored hash state
-      hashNeedsSep = true;
     } else {
       segmentStart = 0;
       parentChildren = rootChildren;
       currentPath = undefined;
       currentDepth = 0;
-      hashValue = 0x811c9dc5; // FNV-1a offset basis
-      hashNeedsSep = false;
     }
 
     while (segmentStart < path.length) {
@@ -194,43 +169,26 @@ export function buildFileListToTreePathGraph(
         currentPath = path.slice(0, segmentEnd);
       }
 
-      // Extend the running FNV-1a hash with '/' separator + segment characters.
-      // This produces the same value as hashId(currentPath) but avoids
-      // reprocessing the entire prefix for each deeper level.
-      if (hashNeedsSep) {
-        hashValue ^= 47; // '/'
-        hashValue = Math.imul(hashValue, 0x01000193);
-      }
-      hashNeedsSep = true;
-      for (let hi = segmentStart; hi < segmentEnd; hi++) {
-        hashValue ^= path.charCodeAt(hi);
-        hashValue = Math.imul(hashValue, 0x01000193);
-      }
-
       if (isFile) {
-        parentChildren.add(currentPath);
         if (!tree.has(currentPath)) {
+          parentChildren.push(currentPath);
           const node: FileTreeNode = {
             name: path.slice(segmentStart, segmentEnd),
             path: currentPath,
           };
-          (node as Record<symbol, string>)[NODE_ID] =
-            `n${(hashValue >>> 0).toString(36)}`;
           tree.set(currentPath, node);
-          state.treeEntries.push([currentPath, node]);
           createdFileNodeCount += 1;
         }
       } else {
         let nextParentChildren = folderChildren.get(currentPath);
         if (nextParentChildren == null) {
-          parentChildren.add(currentPath);
-          nextParentChildren = new Set<string>();
+          parentChildren.push(currentPath);
+          nextParentChildren = [];
           folderChildren.set(currentPath, nextParentChildren);
         }
         currentDepth++;
         parentStack[currentDepth] = nextParentChildren;
         pathStack[currentDepth] = currentPath;
-        hashStack[currentDepth] = hashValue;
         parentChildren = nextParentChildren;
       }
 
@@ -276,11 +234,7 @@ export function buildFileListToTreePathGraph(
     'workload.pathGraphFolders',
     folderChildren.size
   );
-  setBenchmarkCounter(
-    instrumentation,
-    'workload.pathGraphEntries',
-    state.treeEntries.length
-  );
+  setBenchmarkCounter(instrumentation, 'workload.pathGraphEntries', tree.size);
   setBenchmarkCounter(
     instrumentation,
     'workload.pathGraphCreatedFileNodes',
@@ -290,16 +244,18 @@ export function buildFileListToTreePathGraph(
 }
 
 export function createFileListToTreeBuildContext(
-  folderChildren: Map<string, Set<string>>,
+  folderChildren: Map<string, string[]>,
   sortComparator: ChildrenSortOption
 ): FileListToTreeBuildContext {
-  const isFolder = (path: string): boolean => folderChildren.has(path);
+  const isFolder = folderChildren.has.bind(folderChildren) as (
+    path: string
+  ) => boolean;
   const sortChildrenArray = (
     children: string[],
     parentPathLength?: number
   ): string[] =>
     sortComparator === false
-      ? children
+      ? children.slice()
       : sortChildren(children, isFolder, sortComparator, parentPathLength);
   const childrenArrayCache = new Map<string, string[]>();
   const getChildrenArray = (path: string): string[] => {
@@ -309,7 +265,7 @@ export function createFileListToTreeBuildContext(
     }
 
     const children = folderChildren.get(path);
-    const childArray = children != null ? [...children] : [];
+    const childArray = children != null ? children.slice() : [];
     childrenArrayCache.set(path, childArray);
     return childArray;
   };
@@ -359,7 +315,7 @@ export function buildFileListToTreeFlattenedNodes(
       const endpointChildren = folderChildren.get(flattenedEndpoint);
       const endpointDirectChildren =
         endpointChildren != null
-          ? sortChildrenArray([...endpointChildren], flattenedEndpoint.length)
+          ? sortChildrenArray(endpointChildren, flattenedEndpoint.length)
           : [];
       const endpointFlattenedChildren = utils.buildFlattenedChildren(
         endpointDirectChildren
@@ -377,7 +333,6 @@ export function buildFileListToTreeFlattenedNodes(
         },
       };
       tree.set(flattenedKey, flatNode);
-      state.treeEntries.push([flattenedKey, flatNode]);
       flattenedNodeCount += 1;
     }
   }
@@ -415,7 +370,7 @@ export function buildFileListToTreeFolderNodes(
     // Pass parent path length for fast name extraction. Root children don't
     // have a "root/" prefix, so skip the hint for the root folder.
     const parentLen = path === rootId ? undefined : path.length;
-    const directChildren = sortChildrenArray([...children], parentLen);
+    const directChildren = sortChildrenArray(children, parentLen);
     const flattenedChildren = intermediateFolders.has(path)
       ? undefined
       : utils.buildFlattenedChildren(directChildren);
@@ -437,7 +392,6 @@ export function buildFileListToTreeFolderNodes(
       },
     };
     tree.set(path, folderNode);
-    state.treeEntries.push([path, folderNode]);
   }
 
   setBenchmarkCounter(
@@ -448,118 +402,66 @@ export function buildFileListToTreeFolderNodes(
 }
 
 /**
- * Replaces human-readable path keys with deterministic hashed IDs and remaps
- * all children/flattens references to use the same hashed IDs.
+ * Finalizes the built tree object and attaches a precomputed path->id lookup
+ * map that Root can consume directly.
  */
-// Symbol used to cache hashed IDs directly on tree nodes. Symbol properties
-// are invisible to Object.keys / Object.entries / JSON.stringify, so they
-// don't leak into the public output while giving O(1) identity-based access
-// that's faster than a string-keyed Map lookup.
-const NODE_ID: unique symbol = Symbol('id');
-
 export function hashFileListToTreeKeys(
   tree: Map<string, FileTreeNode>,
-  treeEntries: Array<[string, FileTreeNode]>,
-  rootId: string,
   instrumentation?: BenchmarkInstrumentation
 ): Record<string, FileTreeNode> {
-  let resolveIdCallCount = 0;
-  let resolveIdCacheHitCount = 0;
-  let directChildRemapCount = 0;
-  let flattenedChildRemapCount = 0;
-  let flattenPathRemapCount = 0;
+  const hashedTree: FileListToTreeWithPathToIdMap = Object.create(null);
+  const pathToId = new Map<string, string>();
 
-  // Resolve a path key to its hashed ID via the target node's cached
-  // NODE_ID symbol. For child/flattens references where we only have a key.
-  const resolveId = (key: string): string => {
-    resolveIdCallCount += 1;
-    const node = tree.get(key)!;
-    const cached = (node as Record<symbol, string>)[NODE_ID];
-    if (cached != null) {
-      resolveIdCacheHitCount += 1;
-      return cached;
-    }
-
-    const id = key === rootId ? rootId : `n${hashId(key)}`;
-    (node as Record<symbol, string>)[NODE_ID] = id;
-    return id;
-  };
-
-  const hashedTree: Record<string, FileTreeNode> = Object.create(null);
-
-  // Iterate the pre-built entries array instead of Object.keys(tree) +
-  // tree[key] lookups. This avoids one ~99K array allocation and ~99K
-  // redundant hash-table property accesses.
-  for (let ei = 0; ei < treeEntries.length; ei++) {
-    const entry = treeEntries[ei];
-    const key = entry[0];
-    const node = entry[1];
-
-    // Read cached ID (pre-computed for files, compute for folders/flattened).
-    let mappedKey = (node as Record<symbol, string>)[NODE_ID];
-    if (mappedKey == null) {
-      mappedKey = key === rootId ? rootId : `n${hashId(key)}`;
-      (node as Record<symbol, string>)[NODE_ID] = mappedKey;
-    }
-
-    const children = node.children;
-    if (children != null) {
-      for (let index = 0; index < children.direct.length; index += 1) {
-        directChildRemapCount += 1;
-        children.direct[index] = resolveId(children.direct[index]);
-      }
-
-      const flattened = children.flattened;
-      if (flattened != null) {
-        for (let index = 0; index < flattened.length; index += 1) {
-          flattenedChildRemapCount += 1;
-          flattened[index] = resolveId(flattened[index]);
-        }
-      }
-    }
-
-    const flattens = node.flattens;
-    if (flattens != null) {
-      for (let index = 0; index < flattens.length; index += 1) {
-        flattenPathRemapCount += 1;
-        flattens[index] = resolveId(flattens[index]);
-      }
-    }
-
-    hashedTree[mappedKey] = node;
+  // Use path IDs directly (including f:: flattened paths) so we avoid a full
+  // hash+remap pass before the initial render.
+  for (const [key, node] of tree) {
+    hashedTree[key] = node;
+    pathToId.set(node.path, key);
   }
 
-  setBenchmarkCounter(
-    instrumentation,
-    'workload.treeNodes',
-    treeEntries.length
-  );
-  setBenchmarkCounter(
-    instrumentation,
-    'workload.hashKeysResolveIdCalls',
-    resolveIdCallCount
-  );
+  setBenchmarkCounter(instrumentation, 'workload.treeNodes', tree.size);
+  setBenchmarkCounter(instrumentation, 'workload.hashKeysResolveIdCalls', 0);
   setBenchmarkCounter(
     instrumentation,
     'workload.hashKeysResolveIdCacheHits',
-    resolveIdCacheHitCount
+    0
   );
-  setBenchmarkCounter(
-    instrumentation,
-    'workload.hashKeysDirectChildRemaps',
-    directChildRemapCount
-  );
+  setBenchmarkCounter(instrumentation, 'workload.hashKeysDirectChildRemaps', 0);
   setBenchmarkCounter(
     instrumentation,
     'workload.hashKeysFlattenedChildRemaps',
-    flattenedChildRemapCount
+    0
   );
-  setBenchmarkCounter(
-    instrumentation,
-    'workload.hashKeysFlattenPathRemaps',
-    flattenPathRemapCount
-  );
+  setBenchmarkCounter(instrumentation, 'workload.hashKeysFlattenPathRemaps', 0);
+
+  // Attach the lookup map as hidden metadata so Root can reuse it without
+  // rescanning the full tree object in a second O(n) pass.
+  Object.defineProperty(hashedTree, FILE_LIST_TO_TREE_PATH_TO_ID_MAP, {
+    configurable: false,
+    enumerable: false,
+    value: pathToId,
+    writable: false,
+  });
+
   return hashedTree;
+}
+
+type FileListToTreeWithPathToIdMap = Record<string, FileTreeNode> & {
+  [FILE_LIST_TO_TREE_PATH_TO_ID_MAP]?: Map<string, string>;
+};
+
+/**
+ * Returns the precomputed path->id lookup map that hashFileListToTreeKeys
+ * attaches to the tree object for Root's hot path. Falls back to null when the
+ * input tree came from an older builder that does not attach this metadata.
+ */
+export function getFileListToTreePathToIdMap(
+  tree: Record<string, FileTreeNode>
+): Map<string, string> | null {
+  const map = (tree as FileListToTreeWithPathToIdMap)[
+    FILE_LIST_TO_TREE_PATH_TO_ID_MAP
+  ];
+  return map instanceof Map ? map : null;
 }
 
 function fileListToTreeInternal(
@@ -600,12 +502,7 @@ function fileListToTreeInternal(
   );
 
   return withBenchmarkPhase(instrumentation, 'fileListToTree.hashKeys', () =>
-    hashFileListToTreeKeys(
-      state.tree,
-      state.treeEntries,
-      rootId,
-      instrumentation
-    )
+    hashFileListToTreeKeys(state.tree, instrumentation)
   );
 }
 

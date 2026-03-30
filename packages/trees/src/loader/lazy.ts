@@ -1,6 +1,5 @@
 import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
-import { createIdMaps } from '../utils/createIdMaps';
 import { createLoaderUtils } from '../utils/createLoaderUtils';
 import {
   forEachFolderInNormalizedPath,
@@ -139,7 +138,6 @@ export function generateLazyDataLoader(
     flattenedKeys.add(`${FLATTENED_PREFIX}${flattenedEndpoint}`);
   }
 
-  const { getIdForKey, getKeyForId } = createIdMaps(rootId);
   const allKeys = new Set<string>([rootId]);
   for (const path of sortedPaths) {
     allKeys.add(path);
@@ -150,11 +148,10 @@ export function generateLazyDataLoader(
   for (const flattenedKey of flattenedKeys) {
     allKeys.add(flattenedKey);
   }
-  for (const key of Array.from(allKeys).sort()) {
-    getIdForKey(key);
-  }
 
-  const mapKey = (key: string) => getIdForKey(key);
+  const mapKey = (key: string): string => key;
+  const getKeyForId = (id: string): string | undefined =>
+    allKeys.has(id) ? id : undefined;
 
   // Find the start of the flattened chain that ends at endPath
   const findFlattenedChainStart = (endPath: string): string => {

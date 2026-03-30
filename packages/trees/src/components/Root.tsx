@@ -54,7 +54,10 @@ import { generateSyncDataLoaderFromTreeData } from '../loader/sync';
 import type { SVGSpriteNames } from '../sprite';
 import type { FileTreeNode } from '../types';
 import { computeNewFilesAfterDrop } from '../utils/computeNewFilesAfterDrop';
-import { fileListToTree } from '../utils/fileListToTree';
+import {
+  fileListToTree,
+  getFileListToTreePathToIdMap,
+} from '../utils/fileListToTree';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
 import { getSelectionPath } from '../utils/getSelectionPath';
 import { renameFileTreePaths } from '../utils/renameFileTreePaths';
@@ -183,11 +186,20 @@ export function Root({
     [benchmarkInstrumentation, files, sortComparator]
   );
 
-  // Build the hot path->id map with a direct for-in scan and answer id->path
-  // lookups straight from treeData so we do not duplicate the whole tree into a
-  // second Map on every fresh mount.
+  // Reuse the path->id map precomputed during fileListToTree hashing when
+  // available so Root does not need to rescan the full tree object.
   const pathToId = useMemo(() => {
     return withBenchmarkPhase(benchmarkInstrumentation, 'root.pathToId', () => {
+      const precomputed = getFileListToTreePathToIdMap(treeData);
+      if (precomputed != null) {
+        setBenchmarkCounter(
+          benchmarkInstrumentation,
+          'workload.pathToIdEntries',
+          precomputed.size
+        );
+        return precomputed;
+      }
+
       const next = new Map<string, string>();
       for (const id in treeData) {
         const node = treeData[id];

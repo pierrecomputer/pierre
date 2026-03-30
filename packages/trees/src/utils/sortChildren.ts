@@ -109,9 +109,13 @@ export function sortChildren(
   comparator: ChildrenSortOption = defaultChildrenComparator,
   parentPathLength?: number
 ): string[] {
+  if (children.length <= 1) {
+    return children.slice();
+  }
+
   if (comparator === false) {
     // Preserve insertion order without paying Array.sort() cost.
-    return [...children];
+    return children.slice();
   }
 
   if (comparator === defaultChildrenComparator) {
