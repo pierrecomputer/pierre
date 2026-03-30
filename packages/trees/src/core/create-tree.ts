@@ -1,6 +1,7 @@
 import type { TreeDataRef } from '../features/main/types';
 import { treeFeature } from '../features/tree/feature';
 import type { ItemMeta } from '../features/tree/types';
+import { buildPackedVisibleItemMeta } from '../features/tree/visibleItemMeta';
 import {
   getBenchmarkInstrumentation,
   setBenchmarkCounter,
@@ -65,6 +66,37 @@ const compareFeatures =
 const sortFeatures = (features: FeatureImplementation[] = []) =>
   exhaustiveSort(features, compareFeatures(features));
 
+interface PackedItemMetaStore {
+  cache: Array<ItemMeta | undefined>;
+  indexById: Record<string, number | undefined>;
+  levels: number[];
+  parentIds: string[];
+  posInSet: number[];
+  setSizes: number[];
+}
+
+function createPackedItemMetaStore(): PackedItemMetaStore {
+  return {
+    cache: [],
+    indexById: Object.create(null) as Record<string, number | undefined>,
+    levels: [],
+    parentIds: [],
+    posInSet: [],
+    setSizes: [],
+  };
+}
+
+function createFallbackItemMeta(itemId: string): ItemMeta {
+  return {
+    itemId,
+    parentId: null,
+    level: -1,
+    index: -1,
+    posInSet: 0,
+    setSize: 1,
+  };
+}
+
 export const createTree = <T>(
   initialConfig: TreeConfig<T>
 ): TreeInstance<T> => {
@@ -108,7 +140,8 @@ export const createTree = <T>(
   const itemElementsMap: Record<string, HTMLElement | undefined | null> = {};
   // oxlint-disable-next-line typescript-eslint/no-explicit-any
   const itemDataRefs: Record<string, { current: any }> = {};
-  let itemMetaMap: Record<string, ItemMeta> = {};
+  let itemMetaStore = createPackedItemMetaStore();
+  let rootItemMeta: ItemMeta = createFallbackItemMeta(initialConfig.rootItemId);
 
   const hotkeyPresets = {} as HotkeysConfig<T>;
 
@@ -155,10 +188,8 @@ export const createTree = <T>(
   const rebuildItemMeta = () => {
     withBenchmarkPhase(benchmarkInstrumentation, 'core.rebuildItemMeta', () => {
       itemInstances = null;
-      itemMetaMap = {};
-
-      rebuildRootItemInstance();
-      itemMetaMap[config.rootItemId] = {
+      itemMetaStore = createPackedItemMetaStore();
+      rootItemMeta = {
         itemId: config.rootItemId,
         index: -1,
         parentId: null!,
@@ -167,13 +198,17 @@ export const createTree = <T>(
         setSize: 1,
       };
 
-      const nextVisibleItemIds: string[] = [];
-      for (const item of treeInstance.getItemsMeta()) {
-        itemMetaMap[item.itemId] = item;
-        nextVisibleItemIds.push(item.itemId);
-      }
+      rebuildRootItemInstance();
 
-      visibleItemIds = nextVisibleItemIds;
+      const packedVisibleMeta = buildPackedVisibleItemMeta(treeInstance);
+      itemMetaStore.indexById = packedVisibleMeta.indexById;
+      itemMetaStore.parentIds = packedVisibleMeta.parentIds;
+      itemMetaStore.levels = packedVisibleMeta.levels;
+      itemMetaStore.setSizes = packedVisibleMeta.setSizes;
+      itemMetaStore.posInSet = packedVisibleMeta.posInSet;
+      itemMetaStore.cache = new Array(packedVisibleMeta.visibleItemIds.length);
+
+      visibleItemIds = packedVisibleMeta.visibleItemIds;
       (treeDataRef.current as TreeDataRef).visibleItemIds = visibleItemIds;
       setBenchmarkCounter(
         benchmarkInstrumentation,
@@ -311,15 +346,32 @@ export const createTree = <T>(
       },
       getElement: ({ itemId }) => itemElementsMap[itemId],
       getDataRef: ({ itemId }) => (itemDataRefs[itemId] ??= { current: {} }),
-      getItemMeta: ({ itemId }) =>
-        itemMetaMap[itemId] ?? {
+      getItemMeta: ({ itemId }) => {
+        if (itemId === rootItemMeta.itemId) {
+          return rootItemMeta;
+        }
+
+        const index = itemMetaStore.indexById[itemId];
+        if (index === undefined) {
+          return createFallbackItemMeta(itemId);
+        }
+
+        const cached = itemMetaStore.cache[index];
+        if (cached != null) {
+          return cached;
+        }
+
+        const meta: ItemMeta = {
           itemId,
-          parentId: null,
-          level: -1,
-          index: -1,
-          posInSet: 0,
-          setSize: 1,
-        },
+          parentId: itemMetaStore.parentIds[index] ?? null,
+          level: itemMetaStore.levels[index] ?? -1,
+          index,
+          posInSet: itemMetaStore.posInSet[index] ?? 0,
+          setSize: itemMetaStore.setSizes[index] ?? 1,
+        };
+        itemMetaStore.cache[index] = meta;
+        return meta;
+      },
     },
   };
 

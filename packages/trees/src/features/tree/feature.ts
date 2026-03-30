@@ -1,7 +1,7 @@
 /* oxlint-disable typescript-eslint/no-unsafe-return, typescript-eslint/strict-boolean-expressions */
 import type { FeatureImplementation } from '../../core/types/core';
 import { makeStateUpdater, poll } from '../../core/utils';
-import type { ItemMeta } from './types';
+import { collectVisibleItemMeta } from './visibleItemMeta';
 
 // oxlint-disable-next-line typescript-eslint/no-explicit-any
 export const treeFeature: FeatureImplementation<any> = {
@@ -25,73 +25,7 @@ export const treeFeature: FeatureImplementation<any> = {
   },
 
   treeInstance: {
-    getItemsMeta: ({ tree }) => {
-      const { rootItemId } = tree.getConfig();
-      const { expandedItems } = tree.getState();
-      const flatItems: ItemMeta[] = [];
-      const expandedItemsSet = new Set(expandedItems); // TODO support setting state expandedItems as set instead of array
-      const rootChildren = tree.retrieveChildrenIds(rootItemId) ?? [];
-
-      // Iterative pre-order traversal avoids per-node recursive call overhead
-      // on very large fully-expanded trees.
-      const stack: Array<{
-        itemId: string;
-        parentId: string;
-        level: number;
-        setSize: number;
-        posInSet: number;
-      }> = [];
-
-      for (
-        let childIndex = rootChildren.length - 1;
-        childIndex >= 0;
-        childIndex--
-      ) {
-        const itemId = rootChildren[childIndex];
-        stack.push({
-          itemId,
-          parentId: rootItemId,
-          level: 0,
-          setSize: rootChildren.length,
-          posInSet: childIndex,
-        });
-      }
-
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-
-        flatItems.push({
-          itemId: current.itemId,
-          level: current.level,
-          index: flatItems.length,
-          parentId: current.parentId,
-          setSize: current.setSize,
-          posInSet: current.posInSet,
-        });
-
-        if (!expandedItemsSet.has(current.itemId)) {
-          continue;
-        }
-
-        const children = tree.retrieveChildrenIds(current.itemId) ?? [];
-        for (
-          let childIndex = children.length - 1;
-          childIndex >= 0;
-          childIndex--
-        ) {
-          const childId = children[childIndex];
-          stack.push({
-            itemId: childId,
-            parentId: current.itemId,
-            level: current.level + 1,
-            setSize: children.length,
-            posInSet: childIndex,
-          });
-        }
-      }
-
-      return flatItems;
-    },
+    getItemsMeta: ({ tree }) => collectVisibleItemMeta(tree),
 
     getFocusedItem: ({ tree }) => {
       const focusedItemId = tree.getState().focusedItem;
