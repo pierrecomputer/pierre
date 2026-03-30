@@ -490,10 +490,10 @@ export const THEMING_REGISTER_THEME: ThemingConstant = {
 
 // Option 1: Import from your bundled theme files
 registerCustomTheme('my-theme-dark', () =>
-  import('./themes/my-theme-dark.json', { with: { type: 'json' } })
+  import('./themes/my-theme-dark.json')
 );
 registerCustomTheme('my-theme-light', () =>
-  import('./themes/my-theme-light.json', { with: { type: 'json' } })
+  import('./themes/my-theme-light.json')
 );
 
 // Option 2: Fetch from a URL (for CDN-hosted themes)

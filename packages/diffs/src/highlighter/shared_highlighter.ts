@@ -127,18 +127,42 @@ export async function disposeHighlighter(): Promise<void> {
   highlighter = undefined;
 }
 
-registerCustomTheme('pierre-dark', async () => {
-  const m = await import('@pierre/theme/themes/pierre-dark.json', {
-    with: { type: 'json' },
-  });
-  const theme = (m.default ?? m) as unknown as ThemeRegistrationResolved;
-  return { ...theme, name: 'pierre-dark' } as ThemeRegistrationResolved;
-});
+// Node ESM requires JSON import attributes, but browser dev servers often
+// transform JSON requests into JavaScript modules that fail when attributes are
+// present. Each loader keeps a literal import specifier so bundlers can still
+// rewrite the browser path.
+function shouldUseNodeJsonImportAttributes(): boolean {
+  return (
+    typeof process !== 'undefined' &&
+    process.release?.name === 'node' &&
+    process.versions?.bun == null
+  );
+}
 
-registerCustomTheme('pierre-light', async () => {
-  const m = await import('@pierre/theme/themes/pierre-light.json', {
-    with: { type: 'json' },
+const BuiltInPierreThemeLoaders = {
+  'pierre-dark': () =>
+    shouldUseNodeJsonImportAttributes()
+      ? import('@pierre/theme/themes/pierre-dark.json', {
+          with: { type: 'json' },
+        })
+      : import('@pierre/theme/themes/pierre-dark.json'),
+  'pierre-light': () =>
+    shouldUseNodeJsonImportAttributes()
+      ? import('@pierre/theme/themes/pierre-light.json', {
+          with: { type: 'json' },
+        })
+      : import('@pierre/theme/themes/pierre-light.json'),
+} as const;
+
+function registerBuiltInPierreTheme(
+  name: keyof typeof BuiltInPierreThemeLoaders
+): void {
+  registerCustomTheme(name, async () => {
+    const m = await BuiltInPierreThemeLoaders[name]();
+    const theme = (m.default ?? m) as unknown as ThemeRegistrationResolved;
+    return { ...theme, name } as ThemeRegistrationResolved;
   });
-  const theme = (m.default ?? m) as unknown as ThemeRegistrationResolved;
-  return { ...theme, name: 'pierre-light' } as ThemeRegistrationResolved;
-});
+}
+
+registerBuiltInPierreTheme('pierre-dark');
+registerBuiltInPierreTheme('pierre-light');
