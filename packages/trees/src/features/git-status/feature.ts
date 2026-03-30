@@ -6,13 +6,14 @@ import type {
 } from '../../core/types/core';
 import type { FileTreeNode, GitStatus, GitStatusEntry } from '../../types';
 import { getGitStatusSignature } from '../../utils/getGitStatusSignature';
+import type { PathToIdLookup } from '../../utils/pathLookups';
 import type { GitStatusConfig } from './types';
 
 export type { GitStatusEntry } from '../../types';
 
 type GitStatusCache = {
   gitStatusSignature: string;
-  gitStatusPathToId?: Map<string, string>;
+  gitStatusPathToId?: PathToIdLookup;
   dataLoader: TreeConfig<FileTreeNode>['dataLoader'];
   statusById: Map<string, GitStatus>;
   foldersWithChanges: Set<string>;
@@ -34,7 +35,7 @@ const getParentPath = (path: string): string | null => {
 };
 
 const addFolderIdsByPath = (
-  pathToId: Map<string, string>,
+  pathToId: PathToIdLookup,
   path: string,
   foldersWithChanges: Set<string>
 ) => {
@@ -80,7 +81,7 @@ const buildGitStatusCache = (
   tree: TreeInstance<FileTreeNode>,
   gitStatus: GitStatusEntry[],
   gitStatusSignature: string,
-  gitStatusPathToId: Map<string, string> | undefined
+  gitStatusPathToId: PathToIdLookup | undefined
 ): GitStatusCache => {
   const config = tree.getConfig();
   const pathToId = gitStatusPathToId ?? buildPathToIdMapFromTree(tree);

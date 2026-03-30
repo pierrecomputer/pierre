@@ -1,5 +1,5 @@
 export type GitStatusConfig = {
   gitStatus?: import('../../types').GitStatusEntry[];
   gitStatusSignature?: string;
-  gitStatusPathToId?: Map<string, string>;
+  gitStatusPathToId?: import('../../utils/pathLookups').PathToIdLookup;
 };

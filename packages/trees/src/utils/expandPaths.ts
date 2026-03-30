@@ -3,6 +3,7 @@ import {
   setBenchmarkCounter,
   withBenchmarkPhase,
 } from '../internal/benchmarkInstrumentation';
+import type { PathToIdLookup } from './pathLookups';
 
 /**
  * Removes paths whose ancestor directories are not also in the expanded set.
@@ -19,7 +20,7 @@ import {
  */
 export function filterOrphanedPaths(
   expandedPaths: string[],
-  pathToId: Map<string, string>,
+  pathToId: PathToIdLookup,
   flattenEmptyDirectories?: boolean
 ): string[] {
   const expandedSet = new Set(expandedPaths);
@@ -71,7 +72,7 @@ export function filterOrphanedPaths(
 }
 
 export function buildDirectChildCountMap(
-  pathToId: Map<string, string>
+  pathToId: PathToIdLookup
 ): Map<string, number> {
   const childCount = new Map<string, number>();
   for (const key of pathToId.keys()) {
@@ -87,7 +88,7 @@ export function buildDirectChildCountMap(
 export function isOrphanedPathForExpandedSet(
   path: string,
   expandedSet: ReadonlySet<string>,
-  pathToId: Map<string, string>,
+  pathToId: PathToIdLookup,
   options?: {
     flattenEmptyDirectories?: boolean;
     childCount?: Map<string, number>;
@@ -148,7 +149,7 @@ interface ExpandPathsStats {
 // large folder set does not repeatedly rebuild the same prefix strings.
 function resolveAncestorIdsForPath(
   path: string,
-  pathToId: Map<string, string>,
+  pathToId: PathToIdLookup,
   flatten: boolean,
   ancestorIdCache: Map<string, string | null>,
   stats: ExpandPathsStats | null
@@ -208,7 +209,7 @@ function resolveAncestorIdsForPath(
  */
 export function expandPathsWithAncestors(
   paths: string[],
-  pathToId: Map<string, string>,
+  pathToId: PathToIdLookup,
   options?: ExpandPathsOptions
 ): string[] {
   const benchmarkInstrumentation =

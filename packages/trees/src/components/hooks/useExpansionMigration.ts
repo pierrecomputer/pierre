@@ -4,6 +4,7 @@ import { FLATTENED_PREFIX } from '../../constants';
 import type { TreeInstance } from '../../core/types/core';
 import type { FileTreeNode } from '../../types';
 import { expandPathsWithAncestors } from '../../utils/expandPaths';
+import type { IdToPathLookup, PathToIdLookup } from '../../utils/pathLookups';
 import { remapExpandedPathsForFolderRename } from '../../utils/renameFileTreePaths';
 
 /** Produces a quick content hash of a file list for equality comparison. */
@@ -16,7 +17,7 @@ export const getFilesSignature = (files: string[]): string =>
  */
 function resolvePathToRenderedId(
   path: string,
-  pathToId: Map<string, string>,
+  pathToId: PathToIdLookup,
   flattenEmptyDirectories: boolean
 ): string | null {
   if (path.startsWith(FLATTENED_PREFIX)) {
@@ -46,8 +47,8 @@ export interface PendingRenameFocusRestore {
 export interface UseExpansionMigrationArgs {
   tree: TreeInstance<FileTreeNode>;
   files: string[];
-  pathToId: Map<string, string>;
-  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
+  pathToId: PathToIdLookup;
+  idToPath: IdToPathLookup;
   flattenEmptyDirectories: boolean | undefined;
   pendingDropTargetExpandRef: { current: PendingDropTarget | null };
   pendingRenameExpandedRemapRef: {
@@ -83,9 +84,7 @@ export function useExpansionMigration({
   'use no memo';
   // Keep the previous idToPath so we can translate stale expanded IDs -> paths
   // when files change (DnD or controlled update).
-  const prevIdToPathRef = useRef<Pick<Map<string, string>, 'get' | 'has'>>(
-    idToPath
-  );
+  const prevIdToPathRef = useRef<IdToPathLookup>(idToPath);
 
   // Detect stale expanded IDs when the file list changes. Flattened chains
   // may break or form, causing node IDs to change. We snapshot the expanded

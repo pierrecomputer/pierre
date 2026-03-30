@@ -7,6 +7,10 @@ import {
 } from '../internal/benchmarkInstrumentation';
 import type { FileTreeNode } from '../types';
 import { createLoaderUtils, type LoaderUtils } from './createLoaderUtils';
+import {
+  createIdentityPathToIdLookup,
+  type PathToIdLookup,
+} from './pathLookups';
 import type { ChildrenSortOption } from './sortChildren';
 import { defaultChildrenComparator, sortChildren } from './sortChildren';
 
@@ -35,7 +39,7 @@ export interface FileListToTreeBuildContext {
 }
 
 export interface FileListSyncIndex {
-  pathToId: Map<string, string>;
+  pathToId: PathToIdLookup;
   tree: Map<string, FileTreeNode>;
 }
 
@@ -559,7 +563,7 @@ function finalizeFileListSyncIndex(
   setBenchmarkCounter(instrumentation, 'workload.hashKeysFlattenPathRemaps', 0);
 
   return {
-    pathToId: createFileListToTreePathToIdMap(state.tree),
+    pathToId: createIdentityPathToIdLookup(state.tree),
     tree: state.tree,
   };
 }

@@ -5,12 +5,13 @@ import type { FileTreeCallbacks, FileTreeSelectionItem } from '../../FileTree';
 import type { FileTreeNode } from '../../types';
 import { filterOrphanedPaths } from '../../utils/expandPaths';
 import { getSelectionPath } from '../../utils/getSelectionPath';
+import type { IdToPathLookup, PathToIdLookup } from '../../utils/pathLookups';
 
 export interface UseStateChangeCallbacksArgs {
   tree: TreeInstance<FileTreeNode>;
   callbacksRef: { current: FileTreeCallbacks } | undefined;
-  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
-  pathToId: Map<string, string>;
+  idToPath: IdToPathLookup;
+  pathToId: PathToIdLookup;
   flattenEmptyDirectories: boolean | undefined;
 }
 

@@ -1,4 +1,5 @@
 import { FLATTENED_PREFIX } from '../constants';
+import type { IdToPathLookup, PathToIdLookup } from './pathLookups';
 
 const stripFlattenedPrefix = (path: string): string =>
   path.startsWith(FLATTENED_PREFIX)
@@ -11,8 +12,8 @@ const stripFlattenedPrefix = (path: string): string =>
  */
 export function expandedIdsToControlledExpandedPaths(
   expandedIds: string[],
-  idToPath: Map<string, string>,
-  _pathToId: Map<string, string>,
+  idToPath: IdToPathLookup,
+  _pathToId: PathToIdLookup,
   _options: { flattenEmptyDirectories?: boolean }
 ): string[] {
   const out: string[] = [];
@@ -38,7 +39,7 @@ export function expandedIdsToControlledExpandedPaths(
  */
 export function controlledExpandedPathsToExpandedIds(
   expandedPaths: string[],
-  pathToId: Map<string, string>,
+  pathToId: PathToIdLookup,
   options: { flattenEmptyDirectories?: boolean }
 ): string[] {
   const flatten = options.flattenEmptyDirectories !== false;

@@ -12,6 +12,7 @@ import {
 import type { FileTreeNode } from '../../types';
 import { controlledExpandedPathsToExpandedIds } from '../../utils/controlledExpandedState';
 import { expandPathsWithAncestors } from '../../utils/expandPaths';
+import type { PathToIdLookup } from '../../utils/pathLookups';
 
 type TreeConfigStateSlice = Pick<
   TreeConfig<FileTreeNode>,
@@ -19,7 +20,7 @@ type TreeConfigStateSlice = Pick<
 >;
 
 export interface UseTreeStateConfigArgs {
-  pathToId: Map<string, string>;
+  pathToId: PathToIdLookup;
   stateConfig: FileTreeStateConfig | undefined;
   flattenEmptyDirectories: boolean | undefined;
   benchmarkInstrumentation: BenchmarkInstrumentation | null;

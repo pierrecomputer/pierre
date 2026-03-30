@@ -57,6 +57,7 @@ import { computeNewFilesAfterDrop } from '../utils/computeNewFilesAfterDrop';
 import { buildFileListSyncIndex } from '../utils/fileListToTree';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
 import { getSelectionPath } from '../utils/getSelectionPath';
+import type { IdToPathLookup } from '../utils/pathLookups';
 import { renameFileTreePaths } from '../utils/renameFileTreePaths';
 import type { ChildrenSortOption } from '../utils/sortChildren';
 import { useContextMenuController } from './hooks/useContextMenuController';
@@ -193,7 +194,7 @@ export function Root({
       return syncIndex.pathToId;
     });
   }, [benchmarkInstrumentation, syncIndex]);
-  const idToPath = useMemo<Pick<Map<string, string>, 'get' | 'has'>>(
+  const idToPath = useMemo<IdToPathLookup>(
     () => ({
       get: (id: string) => syncIndex.tree.get(id)?.path,
       has: (id: string) => syncIndex.tree.has(id),

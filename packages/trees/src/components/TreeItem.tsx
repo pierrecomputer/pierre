@@ -6,6 +6,7 @@ import { useMemo } from 'preact/hooks';
 import type { ItemInstance, TreeInstance } from '../core/types/core';
 import type { SVGSpriteNames } from '../sprite';
 import type { FileTreeNode } from '../types';
+import type { IdToPathLookup } from '../utils/pathLookups';
 import { Icon } from './Icon';
 import { MiddleTruncate, Truncate } from './OverflowText';
 
@@ -62,7 +63,7 @@ function FlattenedDirectoryName({
   renameInputProps,
 }: {
   tree: TreeInstance<FileTreeNode>;
-  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
+  idToPath: IdToPathLookup;
   flattens: string[];
   fallbackName: string;
   renameInputProps?: Record<string, unknown> | null;
@@ -145,7 +146,7 @@ export interface TreeItemProps {
   gitStatus: string | undefined;
   containsGitChange: boolean;
   flattens: string[] | undefined;
-  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
+  idToPath: IdToPathLookup;
   ancestors: string[];
   treeDomId: string;
   remapIcon: (name: SVGSpriteNames) => {
