@@ -609,6 +609,7 @@ export interface RenderDiffOptions {
   theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  maxLineDiffLength: number;
 }
 
 export interface RenderFileResult {

@@ -414,9 +414,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (this.workerManager?.isWorkingPool() === true) {
         return this.workerManager.getDiffRenderOptions();
       }
-      const { theme, tokenizeMaxLineLength, lineDiffType } =
+      const { theme, tokenizeMaxLineLength, lineDiffType, maxLineDiffLength } =
         this.getOptionsWithDefaults();
-      return { theme, tokenizeMaxLineLength, lineDiffType };
+      return { theme, tokenizeMaxLineLength, lineDiffType, maxLineDiffLength };
     })();
     this.getOptionsWithDefaults();
     const { renderCache } = this;
@@ -1316,7 +1316,8 @@ function areRenderOptionsEqual(
   return (
     areThemesEqual(optionsA.theme, optionsB.theme) &&
     optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength &&
-    optionsA.lineDiffType === optionsB.lineDiffType
+    optionsA.lineDiffType === optionsB.lineDiffType &&
+    optionsA.maxLineDiffLength === optionsB.maxLineDiffLength
   );
 }
 

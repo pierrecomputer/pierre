@@ -84,6 +84,7 @@ export function renderDiffWithHighlighter(
     additionLines: [],
   };
 
+  const { maxLineDiffLength } = options;
   const shouldGroupAll = !forcePlainText && !diff.isPartial;
   const expandedHunksForIteration = forcePlainText ? expandedHunks : undefined;
   const buckets = new Map<number, RenderBucket>();
@@ -141,6 +142,7 @@ export function renderDiffWithHighlighter(
           deletionDecorations: bucket.deletionDecorations,
           additionDecorations: bucket.additionDecorations,
           lineDiffType,
+          maxLineDiffLength,
         });
       }
 
@@ -251,6 +253,7 @@ interface ProcessLineDiffProps {
   deletionDecorations: DecorationItem[];
   additionDecorations: DecorationItem[];
   lineDiffType: LineDiffTypes;
+  maxLineDiffLength: number;
 }
 
 function computeLineDiffDecorations({
@@ -261,12 +264,20 @@ function computeLineDiffDecorations({
   deletionDecorations,
   additionDecorations,
   lineDiffType,
+  maxLineDiffLength,
 }: ProcessLineDiffProps) {
   if (deletionLine == null || additionLine == null || lineDiffType === 'none') {
     return;
   }
   deletionLine = cleanLastNewline(deletionLine);
   additionLine = cleanLastNewline(additionLine);
+  // If we have really long lines, we probably shouldn't compute diffs on them.
+  if (
+    deletionLine.length > maxLineDiffLength ||
+    additionLine.length > maxLineDiffLength
+  ) {
+    return;
+  }
   // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
   // we also gotta make sure the diff parsing doesn't include the newline
   // character that could be there...

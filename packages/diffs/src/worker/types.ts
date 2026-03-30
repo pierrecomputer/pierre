@@ -20,6 +20,7 @@ export interface WorkerRenderingOptions {
   theme: DiffsThemeNames | ThemesType;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  maxLineDiffLength: number;
 }
 
 export interface FileRendererInstance {
