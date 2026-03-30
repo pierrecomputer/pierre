@@ -9151,3 +9151,751 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
   "unifiedGutterAST": undefined,
 }
 `;
+
+exports[`DiffHunksRenderer skips inline diff decorations for changed lines above maxLineDiffLength: rendered result without inline diff spans 1`] = `
+{
+  "additionsContentAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "const",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " value",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " =",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " "bbbbbbbbbbbb"",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": ";",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 1,
+        "data-line-index": "1,0",
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "additionsGutterAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "1",
+            },
+          ],
+          "properties": {
+            "data-line-number-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-column-number": 1,
+        "data-line-index": "1,0",
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "baseThemeType": undefined,
+  "bufferAfter": 0,
+  "bufferBefore": 0,
+  "css": "",
+  "deletionsContentAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "const",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " value",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " =",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " "aaaaaaaaaaaa"",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#5ECC71;--diffs-token-light:#199F43",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": ";",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 1,
+        "data-line-index": "0,0",
+        "data-line-type": "change-deletion",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "deletionsGutterAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "1",
+            },
+          ],
+          "properties": {
+            "data-line-number-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-column-number": 1,
+        "data-line-index": "0,0",
+        "data-line-type": "change-deletion",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "headerElement": {
+    "children": [
+      {
+        "children": [
+          {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "properties": {
+                  "href": "#diffs-icon-symbol-modified",
+                },
+                "tagName": "use",
+                "type": "element",
+              },
+            ],
+            "properties": {
+              "data-change-icon": "change",
+              "height": 16,
+              "viewBox": "0 0 16 16",
+              "width": 16,
+            },
+            "tagName": "svg",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "example.ts",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
+              },
+            ],
+            "properties": {
+              "data-title": "",
+            },
+            "tagName": "div",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-header-content": "",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "-1",
+              },
+            ],
+            "properties": {
+              "data-deletions-count": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "+1",
+              },
+            ],
+            "properties": {
+              "data-additions-count": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [],
+            "properties": {
+              "name": "header-metadata",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-metadata": "",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+    ],
+    "properties": {
+      "data-change-type": "change",
+      "data-diffs-header": "default",
+    },
+    "tagName": "div",
+    "type": "element",
+  },
+  "hunkData": [],
+  "preNode": {
+    "children": [],
+    "properties": {
+      "data-background": "",
+      "data-diff": "",
+      "data-diff-type": "split",
+      "data-disable-line-numbers": undefined,
+      "data-file": undefined,
+      "data-indicators": "bars",
+      "data-overflow": "scroll",
+      "style": "--diffs-min-number-column-width-default:1ch;",
+      "tabIndex": 0,
+    },
+    "tagName": "pre",
+    "type": "element",
+  },
+  "rowCount": 1,
+  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "totalLines": 2,
+  "unifiedContentAST": undefined,
+  "unifiedGutterAST": undefined,
+}
+`;
+
+exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below maxLineDiffLength: rendered result with inline diff spans 1`] = `
+{
+  "additionsContentAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "const",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " x",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " =",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " ",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#68CDF2;--diffs-token-light:#1CA1C7",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "2",
+                },
+              ],
+              "properties": {
+                "style": "--diffs-token-dark:#68CDF2;--diffs-token-light:#1CA1C7",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "class": undefined,
+            "data-diff-span": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": ";",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 1,
+        "data-line-index": "1,0",
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "additionsGutterAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "1",
+            },
+          ],
+          "properties": {
+            "data-line-number-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-column-number": 1,
+        "data-line-index": "1,0",
+        "data-line-type": "change-addition",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "baseThemeType": undefined,
+  "bufferAfter": 0,
+  "bufferBefore": 0,
+  "css": "",
+  "deletionsContentAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "const",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " x",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " =",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#08C0EF;--diffs-token-light:#08C0EF",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": " ",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#68CDF2;--diffs-token-light:#1CA1C7",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "1",
+                },
+              ],
+              "properties": {
+                "style": "--diffs-token-dark:#68CDF2;--diffs-token-light:#1CA1C7",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "class": undefined,
+            "data-diff-span": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": ";",
+            },
+          ],
+          "properties": {
+            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-alt-line": undefined,
+        "data-line": 1,
+        "data-line-index": "0,0",
+        "data-line-type": "change-deletion",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "deletionsGutterAST": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "1",
+            },
+          ],
+          "properties": {
+            "data-line-number-content": "",
+          },
+          "tagName": "span",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-column-number": 1,
+        "data-line-index": "0,0",
+        "data-line-type": "change-deletion",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "headerElement": {
+    "children": [
+      {
+        "children": [
+          {
+            "children": [],
+            "properties": {
+              "name": "header-prefix",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "properties": {
+                  "href": "#diffs-icon-symbol-modified",
+                },
+                "tagName": "use",
+                "type": "element",
+              },
+            ],
+            "properties": {
+              "data-change-icon": "change",
+              "height": 16,
+              "viewBox": "0 0 16 16",
+              "width": 16,
+            },
+            "tagName": "svg",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "example.ts",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
+              },
+            ],
+            "properties": {
+              "data-title": "",
+            },
+            "tagName": "div",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-header-content": "",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "-1",
+              },
+            ],
+            "properties": {
+              "data-deletions-count": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "+1",
+              },
+            ],
+            "properties": {
+              "data-additions-count": "",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [],
+            "properties": {
+              "name": "header-metadata",
+            },
+            "tagName": "slot",
+            "type": "element",
+          },
+        ],
+        "properties": {
+          "data-metadata": "",
+        },
+        "tagName": "div",
+        "type": "element",
+      },
+    ],
+    "properties": {
+      "data-change-type": "change",
+      "data-diffs-header": "default",
+    },
+    "tagName": "div",
+    "type": "element",
+  },
+  "hunkData": [],
+  "preNode": {
+    "children": [],
+    "properties": {
+      "data-background": "",
+      "data-diff": "",
+      "data-diff-type": "split",
+      "data-disable-line-numbers": undefined,
+      "data-file": undefined,
+      "data-indicators": "bars",
+      "data-overflow": "scroll",
+      "style": "--diffs-min-number-column-width-default:1ch;",
+      "tabIndex": 0,
+    },
+    "tagName": "pre",
+    "type": "element",
+  },
+  "rowCount": 1,
+  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "totalLines": 2,
+  "unifiedContentAST": undefined,
+  "unifiedGutterAST": undefined,
+}
+`;

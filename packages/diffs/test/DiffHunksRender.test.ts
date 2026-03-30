@@ -2,7 +2,18 @@ import { describe, expect, test } from 'bun:test';
 
 import { DiffHunksRenderer, parseDiffFromFile } from '../src';
 import { mockDiffs } from './mocks';
-import { assertDefined, countSplitRows } from './testUtils';
+import { assertDefined, collectAllElements, countSplitRows } from './testUtils';
+
+function countInlineDiffSpans(
+  result: Awaited<ReturnType<DiffHunksRenderer['asyncRender']>>
+) {
+  const additions = result.additionsContentAST ?? [];
+  const deletions = result.deletionsContentAST ?? [];
+  return [
+    ...collectAllElements(additions),
+    ...collectAllElements(deletions),
+  ].filter((element) => element.properties?.['data-diff-span'] != null).length;
+}
 
 describe('DiffHunksRenderer', () => {
   test('proper buffers should be prepended to additions colum in split style', async () => {
@@ -127,5 +138,47 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);
     expect(html).not.toContain('data-container-size');
+  });
+
+  test('skips inline diff decorations for changed lines above maxLineDiffLength', async () => {
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'split',
+      maxLineDiffLength: 5,
+    });
+    const diff = parseDiffFromFile(
+      {
+        name: 'example.ts',
+        contents: 'const value = "aaaaaaaaaaaa";\n',
+      },
+      {
+        name: 'example.ts',
+        contents: 'const value = "bbbbbbbbbbbb";\n',
+      }
+    );
+    const result = await instance.asyncRender(diff);
+
+    expect(countInlineDiffSpans(result)).toBe(0);
+    expect(result).toMatchSnapshot('rendered result without inline diff spans');
+  });
+
+  test('keeps inline diff decorations for changed lines below maxLineDiffLength', async () => {
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'split',
+      maxLineDiffLength: 50,
+    });
+    const diff = parseDiffFromFile(
+      {
+        name: 'example.ts',
+        contents: 'const x = 1;\n',
+      },
+      {
+        name: 'example.ts',
+        contents: 'const x = 2;\n',
+      }
+    );
+    const result = await instance.asyncRender(diff);
+
+    expect(countInlineDiffSpans(result)).toBeGreaterThan(0);
+    expect(result).toMatchSnapshot('rendered result with inline diff spans');
   });
 });
