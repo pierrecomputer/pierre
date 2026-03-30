@@ -42,6 +42,7 @@ export * from './renderers/FileRenderer';
 export * from './shiki-stream';
 export * from './sprite';
 export * from './utils/areDiffLineAnnotationsEqual';
+export * from './utils/areDiffRenderOptionsEqual';
 export * from './utils/areFilesEqual';
 export * from './utils/areHunkDataEqual';
 export * from './utils/areLineAnnotationsEqual';

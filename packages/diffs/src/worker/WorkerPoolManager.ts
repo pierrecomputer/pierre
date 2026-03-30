@@ -24,6 +24,7 @@ import type {
   ThemedFileResult,
   ThemeRegistrationResolved,
 } from '../types';
+import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
@@ -168,24 +169,13 @@ export class WorkerPoolManager {
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    const themesEqual = areThemesEqual(
-      newRenderOptions.theme,
-      this.renderOptions.theme
-    );
-    if (
-      themesEqual &&
-      newRenderOptions.lineDiffType === this.renderOptions.lineDiffType &&
-      newRenderOptions.maxLineDiffLength ===
-        this.renderOptions.maxLineDiffLength &&
-      newRenderOptions.tokenizeMaxLineLength ===
-        this.renderOptions.tokenizeMaxLineLength
-    ) {
+    if (areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions)) {
       return;
     }
 
     const themeNames = getThemes(theme);
     let resolvedThemes: ThemeRegistrationResolved[] = [];
-    if (!themesEqual) {
+    if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
       if (hasResolvedThemes(themeNames)) {
         resolvedThemes = getResolvedThemes(themeNames);
       } else {
