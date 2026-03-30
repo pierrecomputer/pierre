@@ -30,12 +30,14 @@ export const MERGE_CONFLICT_END_MARKER_REGEX: RegExp = /^>{7,}(?:\s.*)?$/;
 
 export const HEADER_PREFIX_SLOT_ID = 'header-prefix';
 export const HEADER_METADATA_SLOT_ID = 'header-metadata';
+export const CUSTOM_HEADER_SLOT_ID = 'header-custom';
 
 export const DEFAULT_THEMES: ThemesType = {
   dark: 'pierre-dark',
   light: 'pierre-light',
 };
 
+export const THEME_CSS_ATTRIBUTE = 'data-theme-css';
 export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';
 export const CORE_CSS_ATTRIBUTE = 'data-core-css';
 

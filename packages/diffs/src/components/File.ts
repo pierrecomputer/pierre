@@ -2,11 +2,13 @@ import type { Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
+  THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import {
@@ -20,6 +22,7 @@ import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
+  AppliedThemeStyleCache,
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
@@ -35,9 +38,10 @@ import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
-import { wrapUnsafeCSS } from '../utils/cssWrappers';
+import { wrapThemeCSS, wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
@@ -72,6 +76,7 @@ export interface FileOptions<LAnnotation>
   enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderFileMetadata;
   renderCustomMetadata?: RenderFileMetadata;
+  renderCustomHeader?: RenderFileMetadata;
   /**
    * When true, errors during rendering are rethrown instead of being caught
    * and displayed in the DOM. Useful for testing or when you want to handle
@@ -104,6 +109,11 @@ interface ColumnElements {
   content: HTMLElement;
 }
 
+interface HydrationSetup<LAnnotation> {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+}
+
 let instanceId = -1;
 
 export class File<LAnnotation = undefined> {
@@ -117,7 +127,10 @@ export class File<LAnnotation = undefined> {
   protected code: HTMLElement | undefined;
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
+  protected themeCSSStyle: HTMLStyleElement | undefined;
+  protected appliedThemeCSS: AppliedThemeStyleCache | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
+  protected appliedUnsafeCSS: string | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
   protected errorWrapper: HTMLElement | undefined;
   protected placeHolder: HTMLElement | undefined;
@@ -126,6 +139,7 @@ export class File<LAnnotation = undefined> {
   protected lastRowCount: number | undefined;
 
   protected headerElement: HTMLElement | undefined;
+  protected headerCustom: HTMLElement | undefined;
   protected headerPrefix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
 
@@ -182,33 +196,23 @@ export class File<LAnnotation = undefined> {
   }
 
   public setThemeType(themeType: ThemeTypes): void {
-    const currentThemeType = this.options.themeType ?? 'system';
-    if (currentThemeType === themeType) {
+    if ((this.options.themeType ?? 'system') === themeType) {
       return;
     }
     this.mergeOptions({ themeType });
-    this.fileRenderer.setThemeType(themeType);
-
-    if (this.headerElement != null) {
-      if (themeType === 'system') {
-        delete this.headerElement.dataset.themeType;
-      } else {
-        this.headerElement.dataset.themeType = themeType;
-      }
+    if (
+      typeof this.options.theme === 'string' ||
+      this.fileContainer == null ||
+      this.appliedThemeCSS == null
+    ) {
+      return;
     }
-
-    // Update pre element theme mode
-    if (this.pre != null) {
-      switch (themeType) {
-        case 'system':
-          delete this.pre.dataset.themeType;
-          break;
-        case 'light':
-        case 'dark':
-          this.pre.dataset.themeType = themeType;
-          break;
-      }
-    }
+    this.applyThemeState(
+      this.fileContainer,
+      this.appliedThemeCSS.themeStyles,
+      themeType,
+      this.appliedThemeCSS.baseThemeType
+    );
   }
 
   public getHoveredLine = (): GetHoveredLineResult<'file'> | undefined => {
@@ -252,14 +256,43 @@ export class File<LAnnotation = undefined> {
     this.headerElement = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
+    this.themeCSSStyle = undefined;
+    this.appliedThemeCSS = undefined;
     this.unsafeCSSStyle = undefined;
+    this.appliedUnsafeCSS = undefined;
     this.placeHolder = undefined;
   }
 
   public hydrate(props: FileHydrateProps<LAnnotation>): void {
-    const { fileContainer, prerenderedHTML, preventEmit = false } = props;
+    const {
+      fileContainer,
+      prerenderedHTML,
+      preventEmit = false,
+      file,
+      lineAnnotations,
+    } = props;
+    this.hydrateElements(fileContainer, prerenderedHTML);
+    // If we have no pre tag and header tag, then something probably didn't
+    // pre-render and we should kick off a render.
+    if (this.pre == null && this.headerElement == null) {
+      this.render({ ...props, preventEmit: true });
+    }
+    // Otherwise orchestrate our setup.
+    else {
+      this.hydrationSetup({ file, lineAnnotations });
+    }
+    if (!preventEmit) {
+      this.emitPostRender();
+    }
+  }
+
+  protected hydrateElements(
+    fileContainer: HTMLElement,
+    prerenderedHTML: string | undefined
+  ): void {
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
       fileContainer.shadowRoot?.children ?? []
@@ -278,9 +311,17 @@ export class File<LAnnotation = undefined> {
       }
       if (
         element instanceof HTMLStyleElement &&
+        element.hasAttribute(THEME_CSS_ATTRIBUTE)
+      ) {
+        this.themeCSSStyle = element;
+        continue;
+      }
+      if (
+        element instanceof HTMLStyleElement &&
         element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
       ) {
         this.unsafeCSSStyle = element;
+        this.appliedUnsafeCSS = element.textContent;
         continue;
       }
       if ('diffsHeader' in element.dataset) {
@@ -289,29 +330,34 @@ export class File<LAnnotation = undefined> {
         continue;
       }
     }
-    // If we have no pre tag, then we should render
-    if (this.pre == null) {
-      this.render({ ...props, preventEmit: true });
+    if (this.pre != null) {
+      this.syncCodeNodeFromPre(this.pre);
+      this.pre.removeAttribute('data-dehydrated');
     }
-    // Otherwise orchestrate our setup
-    else {
-      const { file, lineAnnotations } = props;
-      const { overflow = 'scroll' } = this.options;
-      this.fileContainer = fileContainer;
-      delete this.pre.dataset.dehydrated;
+    this.fileContainer = fileContainer;
+  }
 
-      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
-      this.file = file;
-      this.fileRenderer.hydrate(file);
-      this.renderAnnotations();
-      this.renderGutterUtility();
-      this.injectUnsafeCSS();
-      this.interactionManager.setup(this.pre);
-      this.resizeManager.setup(this.pre, overflow === 'wrap');
+  protected hydrationSetup({
+    file,
+    lineAnnotations,
+  }: HydrationSetup<LAnnotation>): void {
+    const { overflow = 'scroll' } = this.options;
+    this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    this.file = file;
+    this.fileRenderer.setOptions({
+      ...this.options,
+      headerRenderMode:
+        this.options.renderCustomHeader != null ? 'custom' : 'default',
+    });
+    if (this.pre == null) {
+      return;
     }
-    if (!preventEmit) {
-      this.emitPostRender();
-    }
+    this.fileRenderer.hydrate(file);
+    this.renderAnnotations();
+    this.renderGutterUtility();
+    this.injectUnsafeCSS();
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, overflow === 'wrap');
   }
 
   public getOrCreateLineCache(
@@ -331,7 +377,7 @@ export class File<LAnnotation = undefined> {
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    const { collapsed = false } = this.options;
+    const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const annotationsChanged =
@@ -352,7 +398,11 @@ export class File<LAnnotation = undefined> {
 
     this.renderRange = nextRenderRange;
     this.file = file;
-    this.fileRenderer.setOptions(this.options);
+    this.fileRenderer.setOptions({
+      ...this.options,
+      headerRenderMode:
+        this.options.renderCustomHeader != null ? 'custom' : 'default',
+    });
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
@@ -370,14 +420,7 @@ export class File<LAnnotation = undefined> {
         this.headerElement = undefined;
         this.lastRenderedHeaderHTML = undefined;
       }
-      if (this.headerPrefix != null) {
-        this.headerPrefix.remove();
-        this.headerPrefix = undefined;
-      }
-      if (this.headerMetadata != null) {
-        this.headerMetadata.remove();
-        this.headerMetadata = undefined;
-      }
+      this.clearHeaderSlots();
     }
 
     fileContainer = this.getOrCreateFileContainerNode(
@@ -394,6 +437,14 @@ export class File<LAnnotation = undefined> {
           file,
           EMPTY_RENDER_RANGE
         );
+        if (fileResult != null) {
+          this.applyThemeState(
+            fileContainer,
+            fileResult.themeStyles,
+            themeType,
+            fileResult.baseThemeType
+          );
+        }
         if (fileResult?.headerAST != null) {
           this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
         }
@@ -430,6 +481,12 @@ export class File<LAnnotation = undefined> {
           }
           return false;
         }
+        this.applyThemeState(
+          fileContainer,
+          fileResult.themeStyles,
+          themeType,
+          fileResult.baseThemeType
+        );
         if (fileResult.headerAST != null) {
           this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
         }
@@ -533,8 +590,10 @@ export class File<LAnnotation = undefined> {
     this.gutterUtilityContent?.remove();
     this.headerPrefix?.remove();
     this.headerMetadata?.remove();
+    this.headerCustom?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
+    this.themeCSSStyle?.remove();
     this.unsafeCSSStyle?.remove();
 
     this.bufferAfter = undefined;
@@ -545,9 +604,13 @@ export class File<LAnnotation = undefined> {
     this.gutterUtilityContent = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
+    this.themeCSSStyle = undefined;
+    this.appliedThemeCSS = undefined;
     this.unsafeCSSStyle = undefined;
+    this.appliedUnsafeCSS = undefined;
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
@@ -620,26 +683,67 @@ export class File<LAnnotation = undefined> {
   }
 
   private injectUnsafeCSS(): void {
-    if (this.fileContainer?.shadowRoot == null) {
+    const { unsafeCSS } = this.options;
+    const shadowRoot = this.fileContainer?.shadowRoot;
+    if (shadowRoot == null) {
       return;
     }
-    const { unsafeCSS } = this.options;
 
     if (unsafeCSS == null || unsafeCSS === '') {
       if (this.unsafeCSSStyle != null) {
         this.unsafeCSSStyle.remove();
         this.unsafeCSSStyle = undefined;
       }
+      this.appliedUnsafeCSS = undefined;
+      return;
+    }
+
+    if (
+      this.unsafeCSSStyle?.parentNode === shadowRoot &&
+      this.appliedUnsafeCSS === unsafeCSS
+    ) {
       return;
     }
 
     // Create or update the style element
-    if (this.unsafeCSSStyle == null) {
-      this.unsafeCSSStyle = createUnsafeCSSStyleNode();
-      this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
+    this.unsafeCSSStyle ??= createUnsafeCSSStyleNode();
+    if (this.unsafeCSSStyle.parentNode !== shadowRoot) {
+      shadowRoot.appendChild(this.unsafeCSSStyle);
     }
     // Wrap in @layer unsafe to match SSR behavior
-    this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
+    this.unsafeCSSStyle.textContent = wrapUnsafeCSS(unsafeCSS);
+    this.appliedUnsafeCSS = unsafeCSS;
+  }
+
+  private applyThemeState(
+    container: HTMLElement,
+    themeStyles: string,
+    themeType: ThemeTypes,
+    baseThemeType?: 'light' | 'dark'
+  ): void {
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    const effectiveThemeType = baseThemeType ?? themeType;
+    if (
+      this.themeCSSStyle?.parentNode === shadowRoot &&
+      this.appliedThemeCSS?.themeStyles === themeStyles &&
+      this.appliedThemeCSS.themeType === effectiveThemeType
+    ) {
+      return;
+    }
+    this.themeCSSStyle = upsertHostThemeStyle({
+      shadowRoot,
+      currentNode: this.themeCSSStyle,
+      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType),
+    });
+    this.appliedThemeCSS =
+      this.themeCSSStyle != null
+        ? {
+            themeStyles,
+            themeType: effectiveThemeType,
+            baseThemeType,
+          }
+        : undefined;
   }
 
   private applyFullRender(result: FileRenderResult, pre: HTMLPreElement): void {
@@ -929,35 +1033,85 @@ export class File<LAnnotation = undefined> {
 
     if (this.isContainerManaged) return;
 
-    const { renderHeaderPrefix, renderCustomMetadata } = this.options;
-    if (this.headerPrefix != null) {
-      this.headerPrefix.remove();
+    const { renderHeaderPrefix, renderCustomHeader, renderCustomMetadata } =
+      this.options;
+
+    if (renderCustomHeader != null) {
+      const content = renderCustomHeader(file) ?? undefined;
+      this.headerCustom = this.upsertHeaderSlotElement(
+        container,
+        this.headerCustom,
+        CUSTOM_HEADER_SLOT_ID,
+        content
+      );
+      this.headerPrefix?.remove();
+      this.headerMetadata?.remove();
+      this.headerPrefix = undefined;
+      this.headerMetadata = undefined;
+    } else {
+      const prefix = renderHeaderPrefix?.(file) ?? undefined;
+      const content = renderCustomMetadata?.(file) ?? undefined;
+      this.headerPrefix = this.upsertHeaderSlotElement(
+        container,
+        this.headerPrefix,
+        HEADER_PREFIX_SLOT_ID,
+        prefix
+      );
+      this.headerMetadata = this.upsertHeaderSlotElement(
+        container,
+        this.headerMetadata,
+        HEADER_METADATA_SLOT_ID,
+        content
+      );
+      this.headerCustom?.remove();
+      this.headerCustom = undefined;
     }
-    if (this.headerMetadata != null) {
-      this.headerMetadata.remove();
+  }
+
+  private clearHeaderSlots(): void {
+    this.headerPrefix?.remove();
+    this.headerMetadata?.remove();
+    this.headerCustom?.remove();
+    this.headerPrefix = undefined;
+    this.headerMetadata = undefined;
+    this.headerCustom = undefined;
+  }
+
+  // Header slot callbacks are presence-based render hooks, not reactive views.
+  private upsertHeaderSlotElement(
+    container: HTMLElement,
+    current: HTMLElement | undefined,
+    slot: string,
+    content: Element | string | number | undefined
+  ): HTMLElement | undefined {
+    if (content == null) {
+      current?.remove();
+      return undefined;
     }
-    const prefix = renderHeaderPrefix?.(file) ?? undefined;
-    const content = renderCustomMetadata?.(file) ?? undefined;
-    if (prefix != null) {
-      this.headerPrefix = document.createElement('div');
-      this.headerPrefix.slot = HEADER_PREFIX_SLOT_ID;
-      if (prefix instanceof Element) {
-        this.headerPrefix.appendChild(prefix);
-      } else {
-        this.headerPrefix.innerText = `${prefix}`;
-      }
-      container.appendChild(this.headerPrefix);
+    const element = current ?? this.createHeaderSlotElement(slot);
+    if (current == null) {
+      container.appendChild(element);
     }
-    if (content != null) {
-      this.headerMetadata = document.createElement('div');
-      this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
-      if (content instanceof Element) {
-        this.headerMetadata.appendChild(content);
-      } else {
-        this.headerMetadata.innerText = `${content}`;
-      }
-      container.appendChild(this.headerMetadata);
+    this.replaceHeaderSlotContent(element, content);
+    return element;
+  }
+
+  private replaceHeaderSlotContent(
+    element: HTMLElement,
+    content: Element | string | number
+  ): void {
+    element.replaceChildren();
+    if (content instanceof Element) {
+      element.appendChild(content);
+    } else {
+      element.innerText = `${content}`;
     }
+  }
+
+  private createHeaderSlotElement(slot: string): HTMLElement {
+    const element = document.createElement('div');
+    element.slot = slot;
+    return element;
   }
 
   protected getOrCreateFileContainerNode(
@@ -1011,22 +1165,29 @@ export class File<LAnnotation = undefined> {
     return this.pre;
   }
 
+  private syncCodeNodeFromPre(pre: HTMLPreElement): void {
+    this.code = undefined;
+    for (const child of Array.from(pre.children)) {
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      if (child.hasAttribute('data-code')) {
+        this.code = child;
+        return;
+      }
+    }
+  }
+
   private applyPreNodeAttributes(
     pre: HTMLPreElement,
-    { totalLines, themeStyles, baseThemeType }: FileRenderResult
+    { totalLines }: FileRenderResult
   ): void {
-    const {
-      overflow = 'scroll',
-      themeType = 'system',
-      disableLineNumbers = false,
-    } = this.options;
+    const { overflow = 'scroll', disableLineNumbers = false } = this.options;
     const preProperties: PrePropertiesConfig = {
       type: 'file',
       split: false,
-      themeStyles,
       overflow,
       disableLineNumbers,
-      themeType: baseThemeType ?? themeType,
       diffIndicators: 'none',
       disableBackground: true,
       totalLines,

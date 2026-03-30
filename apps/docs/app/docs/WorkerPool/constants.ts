@@ -292,6 +292,8 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
       }}
       highlighterOptions={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        // Optional: skip inline line diffs for very long changed lines
+        // maxLineDiffLength: 1000,
         // Optional: pick the Shiki engine ('shiki-js' is default)
         // preferredHighlighter: 'shiki-wasm',
         // Optionally preload languages to avoid lazy-loading delays
@@ -330,6 +332,7 @@ function ThemeSwitcher() {
     // Any omitted options will use defaults:
     // - theme: { dark: 'pierre-dark', light: 'pierre-light' }
     // - lineDiffType: 'word-alt'
+    // - maxLineDiffLength: 1000
     // - tokenizeMaxLineLength: 1000
     void workerPool?.setRenderOptions({
       theme: { dark: 'github-dark', light: 'github-light' },
@@ -365,6 +368,8 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Optional: skip inline line diffs for very long changed lines
+    // maxLineDiffLength: 1000,
     // Optional: pick the Shiki engine ('shiki-js' is default)
     // preferredHighlighter: 'shiki-wasm',
     // Optionally preload languages to avoid lazy-loading delays
@@ -390,6 +395,7 @@ instance.render({ oldFile, newFile, containerWrapper: document.body });
 // It accepts a Partial<WorkerRenderingOptions>. Any omitted options will use defaults:
 // - theme: { dark: 'pierre-dark', light: 'pierre-light' }
 // - lineDiffType: 'word-alt'
+// - maxLineDiffLength: 1000
 // - tokenizeMaxLineLength: 1000
 await workerPool.setRenderOptions({
   theme: { dark: 'github-dark', light: 'github-light' },
@@ -421,6 +427,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
+//   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
 //   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
 //   - langs?: SupportedLanguages[] - Array of languages to preload
@@ -437,6 +444,7 @@ poolManager.setRenderOptions(options)
 // Accepts: Partial<WorkerRenderingOptions>
 //   - theme?: DiffsThemeNames | ThemesType
 //   - lineDiffType?: 'word' | 'word-alt' | 'char'
+//   - maxLineDiffLength?: number
 //   - tokenizeMaxLineLength?: number
 // Omitted options will use defaults. WARNING: This forces all mounted
 // components to re-render and clears the render cache.
@@ -529,7 +537,7 @@ const fileV2 = { name: 'file.ts', contents: 'v2', cacheKey: 'file-v2' };
 // - Files/diffs with cacheKey are stored in an LRU cache after rendering
 // - Subsequent renders with the same cacheKey return cached results instantly
 // - No worker processing required for cache hits
-// - Cache is validated against render options (e.g., theme, lineDiffType)
+// - Cache is validated against render options (e.g., theme, lineDiffType, maxLineDiffLength)
 // - If options changed, cached result is skipped and re-rendered
 // - Cache is cleared when the pool is terminated
 

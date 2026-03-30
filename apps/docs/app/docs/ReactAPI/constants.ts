@@ -253,14 +253,22 @@ interface ThreadMetadata {
   )}
 
   // ─────────────────────────────────────────────────────────────
-  // HEADER METADATA
+  // HEADER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
-  // Render custom content on the right side of the file header,
+  // All diff header render callbacks receive FileDiffMetadata directly.
+  // This includes renderCustomHeader, renderHeaderPrefix, and
+  // renderHeaderMetadata.
+  // renderHeaderPrefix renders at the beginning of the built-in header,
+  // before the filename.
+  // renderHeaderMetadata renders at the end of the built-in header,
   // after the +/- line metrics.
-  // Props: { oldFile?, newFile?, fileDiff? }
-  renderHeaderMetadata={({ fileDiff }) => (
-    <span>{fileDiff?.newName}</span>
+  // renderCustomHeader replaces the built-in header content entirely.
+  //
+  // Render custom content on the right side of the built-in header.
+  // Callback arg: FileDiffMetadata
+  renderHeaderMetadata={(fileDiff) => (
+    <span>{fileDiff.name}</span>
   )}
 
   // ─────────────────────────────────────────────────────────────
@@ -748,12 +756,18 @@ interface CommentMetadata {
   )}
 
   // ─────────────────────────────────────────────────────────────
-  // HEADER METADATA
+  // HEADER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
-  // Render custom content on the right side of the file header.
-  // Props: { file }
-  renderHeaderMetadata={({ file }) => (
+  // File header callbacks receive FileContents directly.
+  // renderHeaderPrefix renders at the beginning of the built-in header,
+  // before the filename.
+  // renderHeaderMetadata renders at the end of the built-in header.
+  // renderCustomHeader replaces the built-in header content entirely.
+  // Callback arg: FileContents
+  //
+  // Render custom content on the right side of the built-in header.
+  renderHeaderMetadata={(file) => (
     <span>{file.name}</span>
   )}
 

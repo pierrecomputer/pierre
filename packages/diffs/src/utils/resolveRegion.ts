@@ -74,22 +74,18 @@ export function resolveRegion(
   const updatesEOFState =
     hunkIndex === hunks.length - 1 &&
     endContentIndex === currentHunk.hunkContent.length - 1;
+  const shouldProcessCollapsedContext = !diff.isPartial;
 
   for (const [index, hunk] of hunks.entries()) {
-    pushCollapsedContextLines(
+    processCollapsedContext(
+      diff,
       resolvedDiff,
-      deletionLines,
-      additionLines,
+      cursor,
       hunk.deletionLineIndex - hunk.collapsedBefore,
       hunk.additionLineIndex - hunk.collapsedBefore,
-      hunk.collapsedBefore
+      hunk.collapsedBefore,
+      shouldProcessCollapsedContext
     );
-    cursor.nextAdditionLineIndex += hunk.collapsedBefore;
-    cursor.nextDeletionLineIndex += hunk.collapsedBefore;
-    cursor.nextAdditionStart += hunk.collapsedBefore;
-    cursor.nextDeletionStart += hunk.collapsedBefore;
-    cursor.splitLineCount += hunk.collapsedBefore;
-    cursor.unifiedLineCount += hunk.collapsedBefore;
 
     const newHunk: Hunk = {
       ...hunk,
@@ -234,6 +230,41 @@ function pushCollapsedContextLines(
     diff.deletionLines.push(deletionLine);
     diff.additionLines.push(additionLine);
   }
+}
+
+// Partial patches track omitted context in `collapsedBefore`, but those lines do
+// not exist in the diff's line arrays. Keep the virtual row counts and file
+// positions in sync without inventing hidden lines.
+function processCollapsedContext(
+  sourceDiff: FileDiffMetadata,
+  resolvedDiff: FileDiffMetadata,
+  cursor: CursorState,
+  deletionLineIndex: number,
+  additionLineIndex: number,
+  lineCount: number,
+  shouldProcessContent: boolean
+) {
+  if (lineCount <= 0) {
+    return;
+  }
+
+  if (shouldProcessContent) {
+    pushCollapsedContextLines(
+      resolvedDiff,
+      sourceDiff.deletionLines,
+      sourceDiff.additionLines,
+      deletionLineIndex,
+      additionLineIndex,
+      lineCount
+    );
+    cursor.nextAdditionLineIndex += lineCount;
+    cursor.nextDeletionLineIndex += lineCount;
+  }
+
+  cursor.nextAdditionStart += lineCount;
+  cursor.nextDeletionStart += lineCount;
+  cursor.splitLineCount += lineCount;
+  cursor.unifiedLineCount += lineCount;
 }
 
 function pushContentLinesToDiff(

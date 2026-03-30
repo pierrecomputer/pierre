@@ -1,3 +1,4 @@
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -131,7 +132,8 @@ func (c *Cache) onEviction(key string, value interface{}) {
 `,
   },
   options: {
-    theme: 'pierre-dark',
+    theme: DEFAULT_THEMES,
+    themeType: 'dark',
     diffStyle: 'unified',
     unsafeCSS: CustomScrollbarCSS,
   },

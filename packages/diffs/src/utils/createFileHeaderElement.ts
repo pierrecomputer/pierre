@@ -1,11 +1,15 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
-import { HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID } from '../constants';
+import {
+  CUSTOM_HEADER_SLOT_ID,
+  HEADER_METADATA_SLOT_ID,
+  HEADER_PREFIX_SLOT_ID,
+} from '../constants';
 import type {
   ChangeTypes,
   FileContents,
   FileDiffMetadata,
-  ThemeTypes,
+  FileHeaderRenderMode,
 } from '../types';
 import { getIconForType } from './getIconForType';
 import {
@@ -16,32 +20,34 @@ import {
 
 export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
-  themeStyles: string;
-  themeType: ThemeTypes;
+  mode: FileHeaderRenderMode;
 }
 
 export function createFileHeaderElement({
   fileOrDiff,
-  themeStyles,
-  themeType,
+  mode,
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
-    'data-diffs-header': '',
+    'data-diffs-header': mode,
     'data-change-type': fileDiff?.type,
-    'data-theme-type': themeType !== 'system' ? themeType : undefined,
-    style: themeStyles,
   };
 
   return createHastElement({
     tagName: 'div',
     children: [
-      createHeaderElement({
-        name: fileOrDiff.name,
-        prevName: 'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
-        iconType: fileDiff?.type ?? 'file',
-      }),
-      createMetadataElement(fileDiff),
+      mode === 'custom'
+        ? createHastElement({
+            tagName: 'slot',
+            properties: { name: CUSTOM_HEADER_SLOT_ID },
+          })
+        : createHeaderElement({
+            name: fileOrDiff.name,
+            prevName:
+              'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
+            iconType: fileDiff?.type ?? 'file',
+          }),
+      ...(mode === 'custom' ? [] : [createMetadataElement(fileDiff)]),
     ],
     properties,
   });
@@ -72,7 +78,12 @@ function createHeaderElement({
     children.push(
       createHastElement({
         tagName: 'div',
-        children: [createTextNodeElement(prevName)],
+        children: [
+          createHastElement({
+            tagName: 'bdi',
+            children: [createTextNodeElement(prevName)],
+          }),
+        ],
         properties: {
           'data-prev-name': '',
         },
@@ -90,7 +101,12 @@ function createHeaderElement({
   children.push(
     createHastElement({
       tagName: 'div',
-      children: [createTextNodeElement(name)],
+      children: [
+        createHastElement({
+          tagName: 'bdi',
+          children: [createTextNodeElement(name)],
+        }),
+      ],
       properties: { 'data-title': '' },
     })
   );

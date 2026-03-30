@@ -1,11 +1,16 @@
-import { type TreeInstance } from '@headless-tree/core';
-
+import type { FileTreeRootProps } from './components/Root';
 import { FileTreeContainerLoaded } from './components/web-components';
 import {
   FILE_TREE_TAG_NAME,
   FILE_TREE_UNSAFE_CSS_ATTRIBUTE,
   FLATTENED_PREFIX,
 } from './constants';
+import type { TreeInstance } from './core/types/core';
+import {
+  getBenchmarkInstrumentation,
+  inheritBenchmarkInstrumentation,
+  withBenchmarkPhase,
+} from './internal/benchmarkInstrumentation';
 import { SVGSpriteSheet } from './sprite';
 import type {
   ContextMenuItem,
@@ -51,6 +56,23 @@ export interface FileTreeSearchConfig {
   search?: boolean;
 }
 
+export type FileTreeRenamingItem = {
+  path: string;
+  isFolder: boolean;
+};
+
+export type FileTreeRenameEvent = {
+  sourcePath: string;
+  destinationPath: string;
+  isFolder: boolean;
+};
+
+export interface FileTreeRenamingConfig {
+  canRename?: (item: FileTreeRenamingItem) => boolean;
+  onError?: (error: string) => void;
+  onRename?: (event: FileTreeRenameEvent) => void;
+}
+
 export type FileTreeSelectionItem = {
   path: string;
   isFolder: boolean;
@@ -64,7 +86,7 @@ export type FileTreeCollision = {
 export interface FileTreeHandle {
   tree: TreeInstance<FileTreeNode>;
   pathToId: Map<string, string>;
-  idToPath: Map<string, string>;
+  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
   closeContextMenu?: () => void;
 }
 
@@ -80,6 +102,8 @@ export interface FileTreeCallbacks {
   onContextMenuClose?: () => void;
   /** Internal: called when a DnD move produces a new file list. */
   _onDragMoveFiles?: (newFiles: string[]) => void;
+  /** Internal: called when a rename produces a new file list. */
+  _onRenameFiles?: (newFiles: string[]) => void;
 }
 
 type RemappedIcon =
@@ -106,6 +130,8 @@ export interface FileTreeOptions {
   lockedPaths?: string[];
   /** Return true to overwrite the destination file when a DnD move collides. */
   onCollision?: (collision: FileTreeCollision) => boolean;
+  /** Enable inline item renaming (F2/context menu start). */
+  renaming?: boolean | FileTreeRenamingConfig;
   /** Render the built-in search input. Defaults to `false`. */
   search?: boolean;
   /** Sort children within each directory. Defaults to `true` (folders first,
@@ -147,6 +173,10 @@ export interface FileTreeStateConfig {
 }
 
 const isBrowser = typeof document !== 'undefined';
+/** Checks whether the renaming option is enabled (not false/undefined). */
+export const isRenamingEnabled = (
+  renaming: FileTreeOptions['renaming'] | undefined
+): boolean => renaming != null && renaming !== false;
 
 export class FileTree {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
@@ -188,6 +218,9 @@ export class FileTree {
           options.dragAndDrop === true
             ? (newFiles) => this.setFiles(newFiles)
             : undefined,
+        _onRenameFiles: isRenamingEnabled(options.renaming)
+          ? (newFiles) => this.setFiles(newFiles)
+          : undefined,
       },
     };
   }
@@ -389,7 +422,10 @@ export class FileTree {
   // --- Git status ---
 
   setGitStatus(entries: GitStatusEntry[] | undefined): void {
-    this.options = { ...this.options, gitStatus: entries };
+    this.options = inheritBenchmarkInstrumentation(this.options, {
+      ...this.options,
+      gitStatus: entries,
+    });
     this.rerender();
   }
 
@@ -403,7 +439,10 @@ export class FileTree {
     if (this.options.initialFiles === files) {
       return;
     }
-    this.options = { ...this.options, initialFiles: files };
+    this.options = inheritBenchmarkInstrumentation(this.options, {
+      ...this.options,
+      initialFiles: files,
+    });
     this.callbacksRef.current.onFilesChange?.(files);
     this.rerender();
   }
@@ -426,6 +465,14 @@ export class FileTree {
     ) {
       this.callbacksRef.current._onDragMoveFiles = (newFiles) =>
         this.setFiles(newFiles);
+    }
+    if ('renaming' in options) {
+      if (!isRenamingEnabled(options.renaming)) {
+        this.callbacksRef.current._onRenameFiles = undefined;
+      } else {
+        this.callbacksRef.current._onRenameFiles ??= (newFiles) =>
+          this.setFiles(newFiles);
+      }
     }
 
     // Update callbacks without re-rendering
@@ -460,6 +507,7 @@ export class FileTree {
       'flattenEmptyDirectories',
       'lockedPaths',
       'onCollision',
+      'renaming',
       'sort',
       'unsafeCSS',
       'useLazyDataLoader',
@@ -476,13 +524,16 @@ export class FileTree {
     const nextFiles = state?.files;
     const stateFilesChanged =
       nextFiles !== undefined && this.options.initialFiles !== nextFiles;
-    this.options = {
+    this.options = inheritBenchmarkInstrumentation(this.options, {
       ...this.options,
       ...options,
       ...(nextFiles !== undefined && { initialFiles: nextFiles }),
-    };
+    });
     if (state != null) {
-      this.stateConfig = { ...this.stateConfig, ...state };
+      this.stateConfig = inheritBenchmarkInstrumentation(this.options, {
+        ...this.stateConfig,
+        ...state,
+      });
     }
 
     const hasContextMenu = this.callbacksRef.current.onContextMenuOpen != null;
@@ -506,12 +557,13 @@ export class FileTree {
     }
   }
 
-  private buildRootProps() {
+  private buildRootProps(overrides?: Partial<FileTreeRootProps>) {
     return {
       fileTreeOptions: this.options,
       stateConfig: this.stateConfig,
       handleRef: this.handleRef,
       callbacksRef: this.callbacksRef,
+      ...overrides,
     };
   }
 
@@ -763,7 +815,22 @@ export class FileTree {
     );
     const divWrapper = this.getOrCreateDivWrapperNode(fileTreeContainer);
     this.syncVirtualizedLayoutAttrs(fileTreeContainer, divWrapper);
-    preactRenderRoot(divWrapper, this.buildRootProps());
+
+    // Seed the first virtualized window with the outer mount height so client
+    // mounts can render the initial rows immediately before the layout effect
+    // performs the authoritative viewport measurement.
+    const initialViewportHeight =
+      containerWrapper?.clientHeight ?? fileTreeContainer.clientHeight;
+
+    withBenchmarkPhase(
+      getBenchmarkInstrumentation(this.options),
+      'fileTree.render.mount',
+      () =>
+        preactRenderRoot(
+          divWrapper,
+          this.buildRootProps({ initialViewportHeight })
+        )
+    );
   }
 
   hydrate(props: FileTreeHydrationProps): void {
@@ -796,7 +863,10 @@ export class FileTree {
 
     if (discoveredId != null && this.__id !== discoveredId) {
       this.__id = discoveredId;
-      this.options = { ...this.options, id: discoveredId };
+      this.options = inheritBenchmarkInstrumentation(this.options, {
+        ...this.options,
+        id: discoveredId,
+      });
     }
 
     this.fileTreeContainer = fileTreeContainer;

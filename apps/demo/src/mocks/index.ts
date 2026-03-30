@@ -1,10 +1,5 @@
-import type {
-  DiffLineAnnotation,
-  FileStreamOptions,
-  LineAnnotation,
-} from '@pierre/diffs';
+import { type DiffLineAnnotation, type LineAnnotation } from '@pierre/diffs';
 
-import { createHighlighterCleanup } from '../utils/createHighlighterCleanup';
 import mdContent from './example_md.txt?raw';
 import tsContent from './example_ts.txt?raw';
 import fileAnsi from './fileAnsi.txt?raw';
@@ -13,27 +8,6 @@ import fileNew from './fileNew.txt?raw';
 import fileOld from './fileOld.txt?raw';
 
 export { mdContent, tsContent };
-
-export const CodeConfigs = [
-  {
-    content: tsContent,
-    letterByLetter: false,
-    options: {
-      lang: 'tsx',
-      theme: { dark: 'pierre-dark', light: 'pierre-light' },
-      ...createHighlighterCleanup(),
-    } satisfies FileStreamOptions,
-  },
-  {
-    content: mdContent,
-    letterByLetter: true,
-    options: {
-      lang: 'markdown',
-      theme: { dark: 'pierre-dark', light: 'pierre-light' },
-      ...createHighlighterCleanup(),
-    } satisfies FileStreamOptions,
-  },
-] as const;
 
 export const FILE_OLD = fileOld;
 export const FILE_NEW = fileNew;

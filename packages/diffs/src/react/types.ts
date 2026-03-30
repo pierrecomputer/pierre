@@ -9,8 +9,8 @@ import type {
 import type {
   DiffLineAnnotation,
   FileContents,
+  FileDiffMetadata,
   LineAnnotation,
-  RenderHeaderMetadataProps,
   VirtualFileMetrics,
 } from '../types';
 
@@ -20,8 +20,9 @@ export interface DiffBasePropsReact<LAnnotation> {
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
-  renderHeaderPrefix?(props: RenderHeaderMetadataProps): ReactNode;
-  renderHeaderMetadata?(props: RenderHeaderMetadataProps): ReactNode;
+  renderCustomHeader?(fileDiff: FileDiffMetadata): ReactNode;
+  renderHeaderPrefix?(fileDiff: FileDiffMetadata): ReactNode;
+  renderHeaderMetadata?(fileDiff: FileDiffMetadata): ReactNode;
   renderGutterUtility?(
     getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
   ): ReactNode;
@@ -43,6 +44,7 @@ export interface FileProps<LAnnotation> {
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
+  renderCustomHeader?(file: FileContents): ReactNode;
   renderHeaderPrefix?(file: FileContents): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
   renderGutterUtility?(
@@ -57,4 +59,5 @@ export interface FileProps<LAnnotation> {
   className?: string;
   style?: CSSProperties;
   prerenderedHTML?: string;
+  disableWorkerPool?: boolean;
 }

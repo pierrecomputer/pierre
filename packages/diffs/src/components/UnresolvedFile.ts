@@ -340,8 +340,9 @@ export class UnresolvedFile<
       actions,
       markerRows,
       lineAnnotations,
+      fileContainer,
+      prerenderedHTML,
       preventEmit = false,
-      ...rest
     } = props;
     const source = this.getOrComputeDiff({
       file,
@@ -352,13 +353,17 @@ export class UnresolvedFile<
     if (source == null) {
       return;
     }
+    this.hydrateElements(fileContainer, prerenderedHTML);
     this.setActiveMergeConflictState(source.actions, source.markerRows);
-    super.hydrate({
-      ...rest,
-      fileDiff: source.fileDiff,
-      lineAnnotations,
-      preventEmit: true,
-    });
+    // If we have no pre tag, then we should render
+    if (this.pre == null) {
+      this.render({ ...props, preventEmit: true });
+    }
+    // Otherwise orchestrate our setup
+    else {
+      this.hydrationSetup({ fileDiff: source.fileDiff, lineAnnotations });
+    }
+
     this.renderMergeConflictActionSlots();
     if (!preventEmit) {
       this.emitPostRender();
@@ -448,7 +453,7 @@ export class UnresolvedFile<
   ): void {
     const action = this.conflictActions[conflictIndex];
     if (action == null) {
-      return undefined;
+      return;
     }
     if (action.conflictIndex !== conflictIndex) {
       console.error({ conflictIndex, action });
@@ -468,7 +473,7 @@ export class UnresolvedFile<
       actions == null ||
       markerRows == null
     ) {
-      return undefined;
+      return;
     }
 
     this.computedCache = { file, fileDiff, actions, markerRows };

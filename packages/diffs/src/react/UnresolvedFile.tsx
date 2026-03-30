@@ -56,6 +56,7 @@ export interface UnresolvedFileProps<LAnnotation> extends Omit<
     action: MergeConflictDiffAction,
     getInstance: () => UnresolvedFileClass<LAnnotation> | undefined
   ): ReactNode;
+  disableWorkerPool?: boolean;
 }
 
 export function UnresolvedFile<LAnnotation = undefined>({
@@ -67,11 +68,13 @@ export function UnresolvedFile<LAnnotation = undefined>({
   style,
   prerenderedHTML,
   renderAnnotation,
+  renderCustomHeader,
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
   renderHoverUtility,
   renderMergeConflictUtility,
+  disableWorkerPool = false,
 }: UnresolvedFileProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine, fileDiff, actions, getInstance } =
     useUnresolvedFileInstance({
@@ -83,9 +86,12 @@ export function UnresolvedFile<LAnnotation = undefined>({
       hasConflictUtility: renderMergeConflictUtility != null,
       hasGutterRenderUtility:
         renderGutterUtility != null || renderHoverUtility != null,
+      hasCustomHeader: renderCustomHeader != null,
+      disableWorkerPool,
     });
   const children = renderDiffChildren({
     fileDiff,
+    renderCustomHeader,
     renderHeaderPrefix,
     renderHeaderMetadata,
     renderAnnotation,

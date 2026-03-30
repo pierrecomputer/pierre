@@ -18,7 +18,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
-import { noopRender as renderGutterUtility } from '../constants';
+import { noopRender } from '../constants';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -34,6 +34,8 @@ interface UseFileInstanceProps<LAnnotation> {
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
   hasGutterRenderUtility: boolean;
+  hasCustomHeader: boolean;
+  disableWorkerPool: boolean;
 }
 
 interface UseFileInstanceReturn {
@@ -49,6 +51,8 @@ export function useFileInstance<LAnnotation>({
   prerenderedHTML,
   metrics,
   hasGutterRenderUtility,
+  hasCustomHeader,
+  disableWorkerPool,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const poolManager = useContext(WorkerPoolContext);
@@ -64,16 +68,24 @@ export function useFileInstance<LAnnotation>({
       }
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFile(
-          mergeFileOptions(options, hasGutterRenderUtility),
+          mergeFileOptions({
+            hasCustomHeader,
+            hasGutterRenderUtility,
+            options,
+          }),
           simpleVirtualizer,
           metrics,
-          poolManager,
+          !disableWorkerPool ? poolManager : undefined,
           true
         );
       } else {
         instanceRef.current = new File(
-          mergeFileOptions(options, hasGutterRenderUtility),
-          poolManager,
+          mergeFileOptions({
+            hasCustomHeader,
+            hasGutterRenderUtility,
+            options,
+          }),
+          !disableWorkerPool ? poolManager : undefined,
           true
         );
       }
@@ -94,7 +106,11 @@ export function useFileInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
-    const newOptions = mergeFileOptions(options, hasGutterRenderUtility);
+    const newOptions = mergeFileOptions({
+      hasCustomHeader,
+      hasGutterRenderUtility,
+      options,
+    });
     const forceRender = !areOptionsEqual(
       instanceRef.current.options,
       newOptions
@@ -114,12 +130,23 @@ export function useFileInstance<LAnnotation>({
   return { ref, getHoveredLine };
 }
 
-function mergeFileOptions<LAnnotation>(
-  options: FileOptions<LAnnotation> | undefined,
-  hasGutterRenderUtility: boolean
-): FileOptions<LAnnotation> | undefined {
-  if (hasGutterRenderUtility) {
-    return { ...options, renderGutterUtility };
+interface MergeFileOptionsProps<LAnnotation> {
+  options: FileOptions<LAnnotation> | undefined;
+  hasGutterRenderUtility: boolean;
+  hasCustomHeader: boolean;
+}
+
+function mergeFileOptions<LAnnotation>({
+  options,
+  hasCustomHeader,
+  hasGutterRenderUtility,
+}: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
+  if (hasGutterRenderUtility || hasCustomHeader) {
+    return {
+      ...options,
+      renderCustomHeader: hasCustomHeader ? noopRender : undefined,
+      renderGutterUtility: hasGutterRenderUtility ? noopRender : undefined,
+    };
   }
   return options;
 }

@@ -3,6 +3,7 @@ import { getSharedHighlighter } from '../highlighter/shared_highlighter';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import { CodeToTokenTransformStream, type RecallToken } from '../shiki-stream';
 import type {
+  AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffsHighlighter,
   SupportedLanguages,
@@ -10,10 +11,12 @@ import type {
   ThemeTypes,
 } from '../types';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
+import { wrapThemeCSS } from '../utils/cssWrappers';
 import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
@@ -38,10 +41,12 @@ export class FileStream {
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;
   private fileContainer: HTMLElement | undefined;
-  pre: HTMLPreElement | undefined;
+  private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
   private gutterElement: HTMLElement | undefined;
   private contentElement: HTMLElement | undefined;
+  private themeCSSStyle: HTMLStyleElement | undefined;
+  private appliedThemeCSS: AppliedThemeStyleCache | undefined;
   private currentRowCount = 0;
 
   constructor(public options: FileStreamOptions = { theme: DEFAULT_THEMES }) {
@@ -58,19 +63,19 @@ export class FileStream {
       return;
     }
     this.options = { ...this.options, themeType };
-
-    // Update pre element theme mode
-    if (this.pre != null) {
-      switch (themeType) {
-        case 'system':
-          delete this.pre.dataset.themeType;
-          break;
-        case 'light':
-        case 'dark':
-          this.pre.dataset.themeType = themeType;
-          break;
-      }
+    if (
+      typeof this.options.theme === 'string' ||
+      this.fileContainer == null ||
+      this.appliedThemeCSS == null
+    ) {
+      return;
     }
+    this.applyThemeState(
+      this.fileContainer,
+      this.appliedThemeCSS.themeStyles,
+      themeType,
+      this.appliedThemeCSS.baseThemeType
+    );
   }
 
   private async initializeHighlighter(): Promise<DiffsHighlighter> {
@@ -121,9 +126,10 @@ export class FileStream {
     if (this.pre.parentElement == null) {
       fileContainer.shadowRoot?.appendChild(this.pre);
     }
-    const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
     const baseThemeType =
       typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
+    const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
+    this.applyThemeState(fileContainer, themeStyles, themeType, baseThemeType);
     const pre = setPreNodeProperties(this.pre, {
       type: 'file',
       diffIndicators: 'none',
@@ -131,8 +137,6 @@ export class FileStream {
       disableLineNumbers,
       overflow,
       split: false,
-      themeType: baseThemeType ?? themeType,
-      themeStyles,
       totalLines: 0,
     });
     pre.innerHTML = '';
@@ -313,8 +317,47 @@ export class FileStream {
     ) {
       return this.fileContainer;
     }
+    if (
+      this.fileContainer != null &&
+      fileContainer != null &&
+      fileContainer !== this.fileContainer
+    ) {
+      this.themeCSSStyle = undefined;
+      this.appliedThemeCSS = undefined;
+    }
     this.fileContainer =
       fileContainer ?? document.createElement(DIFFS_TAG_NAME);
     return this.fileContainer;
+  }
+
+  private applyThemeState(
+    container: HTMLElement,
+    themeStyles: string,
+    themeType: ThemeTypes,
+    baseThemeType?: 'light' | 'dark'
+  ): void {
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    const effectiveThemeType = baseThemeType ?? themeType;
+    if (
+      this.themeCSSStyle?.parentNode === shadowRoot &&
+      this.appliedThemeCSS?.themeStyles === themeStyles &&
+      this.appliedThemeCSS.themeType === effectiveThemeType
+    ) {
+      return;
+    }
+    this.themeCSSStyle = upsertHostThemeStyle({
+      shadowRoot,
+      currentNode: this.themeCSSStyle,
+      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType),
+    });
+    this.appliedThemeCSS =
+      this.themeCSSStyle != null
+        ? {
+            themeStyles,
+            themeType: effectiveThemeType,
+            baseThemeType,
+          }
+        : undefined;
   }
 }

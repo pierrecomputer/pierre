@@ -24,10 +24,13 @@ import type {
   ThemedFileResult,
   ThemeRegistrationResolved,
 } from '../types';
+import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
+import { isDiffPlainText } from '../utils/isDiffPlainText';
+import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
@@ -97,12 +100,18 @@ export class WorkerPoolManager {
       langs,
       theme = DEFAULT_THEMES,
       lineDiffType = 'word-alt',
+      maxLineDiffLength = 1000,
       tokenizeMaxLineLength = 1000,
       preferredHighlighter = 'shiki-js',
     }: WorkerInitializationRenderOptions
   ) {
     this.preferredHighlighter = preferredHighlighter;
-    this.renderOptions = { theme, lineDiffType, tokenizeMaxLineLength };
+    this.renderOptions = {
+      theme,
+      lineDiffType,
+      maxLineDiffLength,
+      tokenizeMaxLineLength,
+    };
     this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     void this.initialize(langs);
@@ -148,32 +157,25 @@ export class WorkerPoolManager {
   async setRenderOptions({
     theme = DEFAULT_THEMES,
     lineDiffType = 'word-alt',
+    maxLineDiffLength = 1000,
     tokenizeMaxLineLength = 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
     const newRenderOptions: WorkerRenderingOptions = {
       theme,
       lineDiffType,
+      maxLineDiffLength,
       tokenizeMaxLineLength,
     };
     if (!this.isInitialized()) {
       await this.initialize();
     }
-    const themesEqual = areThemesEqual(
-      newRenderOptions.theme,
-      this.renderOptions.theme
-    );
-    if (
-      themesEqual &&
-      newRenderOptions.lineDiffType === this.renderOptions.lineDiffType &&
-      newRenderOptions.tokenizeMaxLineLength ===
-        this.renderOptions.tokenizeMaxLineLength
-    ) {
+    if (areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions)) {
       return;
     }
 
     const themeNames = getThemes(theme);
     let resolvedThemes: ThemeRegistrationResolved[] = [];
-    if (!themesEqual) {
+    if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
       if (hasResolvedThemes(themeNames)) {
         resolvedThemes = getResolvedThemes(themeNames);
       } else {
@@ -456,8 +458,9 @@ export class WorkerPoolManager {
   };
 
   highlightFileAST(instance: FileRendererInstance, file: FileContents): void {
-    const computedLang = file.lang ?? getFiletypeFromFileName(file.name);
-    if (computedLang === 'text') return;
+    if (isFilePlainText(file)) {
+      return;
+    }
     // If we already have a task in progress for this same file content, we
     // should drop it
     for (const tasks of [this.taskQueue, this.pendingTasks.values()]) {
@@ -497,8 +500,9 @@ export class WorkerPoolManager {
     instance: DiffRendererInstance,
     diff: FileDiffMetadata
   ): void {
-    const computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
-    if (computedLang === 'text') return;
+    if (isDiffPlainText(diff)) {
+      return;
+    }
     // If we already have a task in progress for this same diff content, we
     // should ignore executing it again
     for (const tasks of [this.taskQueue, this.pendingTasks.values()]) {

@@ -1,5 +1,3 @@
-import type { TreeDataLoader } from '@headless-tree/core';
-
 import { FLATTENED_PREFIX } from '../constants';
 import type { FileTreeNode } from '../types';
 import { createIdMaps } from '../utils/createIdMaps';
@@ -9,7 +7,8 @@ import {
   normalizeInputPath,
 } from '../utils/normalizeInputPath';
 import { defaultChildrenComparator, sortChildren } from '../utils/sortChildren';
-import type { DataLoaderOptions } from './index';
+import type { DataLoaderOptions } from './types';
+import type { TreeDataLoader } from './types';
 
 /**
  * Creates a lazy data loader that computes nodes on-demand.

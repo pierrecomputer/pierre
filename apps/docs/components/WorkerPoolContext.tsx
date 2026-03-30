@@ -22,18 +22,35 @@ const PoolOptions: WorkerPoolOptions = {
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  langs: ['zig', 'typescript', 'tsx', 'css', 'sh'],
+  langs: [
+    'cpp',
+    'css',
+    'go',
+    'python',
+    'rust',
+    'sh',
+    'swift',
+    'tsx',
+    'typescript',
+    'zig',
+  ],
 };
 
 interface WorkerPoolProps {
   children: ReactNode;
+  highlighterOptions?: WorkerInitializationRenderOptions;
+  poolOptions?: WorkerPoolOptions;
 }
 
-export function WorkerPoolContext({ children }: WorkerPoolProps) {
+export function WorkerPoolContext({
+  children,
+  highlighterOptions = HighlighterOptions,
+  poolOptions = PoolOptions,
+}: WorkerPoolProps) {
   return (
     <WorkerPoolContextProvider
-      poolOptions={PoolOptions}
-      highlighterOptions={HighlighterOptions}
+      poolOptions={poolOptions}
+      highlighterOptions={highlighterOptions}
     >
       {children}
     </WorkerPoolContextProvider>

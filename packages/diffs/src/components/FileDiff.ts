@@ -2,11 +2,13 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
+  CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
+  THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import {
@@ -21,10 +23,12 @@ import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
 import {
   DiffHunksRenderer,
+  type DiffHunksRendererOptions,
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
+  AppliedThemeStyleCache,
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -48,9 +52,10 @@ import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
-import { wrapUnsafeCSS } from '../utils/cssWrappers';
+import { wrapThemeCSS, wrapUnsafeCSS } from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -97,6 +102,7 @@ export interface FileDiffOptions<LAnnotation>
   enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderHeaderPrefixCallback;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
+  renderCustomHeader?: RenderHeaderMetadataCallback;
   /**
    * When true, errors during rendering are rethrown instead of being caught
    * and displayed in the DOM. Useful for testing or when you want to handle
@@ -151,6 +157,13 @@ interface ApplyPartialRenderProps {
   renderRange: RenderRange | undefined;
 }
 
+interface HydrationSetup<LAnnotation> {
+  fileDiff: FileDiffMetadata | undefined;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  oldFile?: FileContents;
+  newFile?: FileContents;
+}
+
 let instanceId = -1;
 
 export class FileDiff<LAnnotation = undefined> {
@@ -168,12 +181,16 @@ export class FileDiff<LAnnotation = undefined> {
   protected codeAdditions: HTMLElement | undefined;
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
+  protected themeCSSStyle: HTMLStyleElement | undefined;
+  protected appliedThemeCSS: AppliedThemeStyleCache | undefined;
   protected unsafeCSSStyle: HTMLStyleElement | undefined;
+  protected appliedUnsafeCSS: string | undefined;
   protected gutterUtilityContent: HTMLElement | undefined;
 
   protected headerElement: HTMLElement | undefined;
   protected headerPrefix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
+  protected headerCustom: HTMLElement | undefined;
   protected separatorCache: Map<string, CustomHunkElementCache> = new Map();
   protected errorWrapper: HTMLElement | undefined;
   protected placeHolder: HTMLElement | undefined;
@@ -227,9 +244,11 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected getHunksRendererOptions(
     options: FileDiffOptions<LAnnotation>
-  ): BaseDiffOptions {
+  ): DiffHunksRendererOptions {
     return {
       ...options,
+      headerRenderMode:
+        options.renderCustomHeader != null ? 'custom' : 'default',
       hunkSeparators:
         typeof options.hunkSeparators === 'function'
           ? 'custom'
@@ -359,28 +378,19 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
-    this.hunksRenderer.setThemeType(themeType);
-
-    if (this.headerElement != null) {
-      if (themeType === 'system') {
-        delete this.headerElement.dataset.themeType;
-      } else {
-        this.headerElement.dataset.themeType = themeType;
-      }
+    if (
+      typeof this.options.theme === 'string' ||
+      this.fileContainer == null ||
+      this.appliedThemeCSS == null
+    ) {
+      return;
     }
-
-    // Update pre element theme mode
-    if (this.pre != null) {
-      switch (themeType) {
-        case 'system':
-          delete this.pre.dataset.themeType;
-          break;
-        case 'light':
-        case 'dark':
-          this.pre.dataset.themeType = themeType;
-          break;
-      }
-    }
+    this.applyThemeState(
+      this.fileContainer,
+      this.appliedThemeCSS.themeStyles,
+      themeType,
+      this.appliedThemeCSS.baseThemeType
+    );
   }
 
   public getHoveredLine = (): GetHoveredLineResult<'diff'> | undefined => {
@@ -443,10 +453,15 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerElement = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
     this.lastRowCount = undefined;
+    this.themeCSSStyle = undefined;
+    this.appliedThemeCSS = undefined;
+    this.unsafeCSSStyle = undefined;
+    this.appliedUnsafeCSS = undefined;
 
     if (recycle) {
       this.hunksRenderer.recycle();
@@ -468,8 +483,39 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
-    const { overflow = 'scroll', diffStyle = 'split' } = this.options;
-    const { fileContainer, prerenderedHTML, preventEmit = false } = props;
+    const {
+      fileContainer,
+      prerenderedHTML,
+      preventEmit = false,
+      lineAnnotations,
+      oldFile,
+      newFile,
+      fileDiff,
+    } = props;
+    this.hydrateElements(fileContainer, prerenderedHTML);
+    // If we have no pre tag and header tag, then something probably didn't
+    // pre-render and we should kick off a render.
+    if (this.pre == null && this.headerElement == null) {
+      this.render({ ...props, preventEmit: true });
+    }
+    // Otherwise orchestrate our setup
+    else {
+      this.hydrationSetup({
+        fileDiff,
+        oldFile,
+        newFile,
+        lineAnnotations,
+      });
+    }
+    if (!preventEmit) {
+      this.emitPostRender();
+    }
+  }
+
+  protected hydrateElements(
+    fileContainer: HTMLElement,
+    prerenderedHTML: string | undefined
+  ): void {
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
       if (element instanceof SVGElement) {
@@ -506,52 +552,63 @@ export class FileDiff<LAnnotation = undefined> {
       }
       if (
         element instanceof HTMLStyleElement &&
+        element.hasAttribute(THEME_CSS_ATTRIBUTE)
+      ) {
+        this.themeCSSStyle = element;
+        continue;
+      }
+      if (
+        element instanceof HTMLStyleElement &&
         element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
       ) {
         this.unsafeCSSStyle = element;
+        this.appliedUnsafeCSS = element.textContent;
         continue;
       }
     }
     if (this.pre != null) {
       this.syncCodeNodesFromPre(this.pre);
+      this.pre.removeAttribute('data-dehydrated');
     }
-    // If we have no pre tag, then we should render
+    this.fileContainer = fileContainer;
+  }
+
+  protected hydrationSetup({
+    fileDiff,
+    oldFile,
+    newFile,
+    lineAnnotations,
+  }: HydrationSetup<LAnnotation>): void {
+    // It's possible we are hydrating a pure-rename and therefore there will be
+    // no pre element
+    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
+    this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    this.additionFile = newFile;
+    this.deletionFile = oldFile;
+    this.fileDiff =
+      fileDiff ??
+      (oldFile != null && newFile != null
+        ? parseDiffFromFile(oldFile, newFile)
+        : undefined);
+
     if (this.pre == null) {
-      this.render({ ...props, preventEmit: true });
+      return;
     }
-    // Otherwise orchestrate our setup
-    else {
-      const { lineAnnotations, oldFile, newFile, fileDiff } = props;
-      this.fileContainer = fileContainer;
-      delete this.pre.dataset.dehydrated;
 
-      this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
-      this.additionFile = newFile;
-      this.deletionFile = oldFile;
-      this.fileDiff =
-        fileDiff ??
-        (oldFile != null && newFile != null
-          ? parseDiffFromFile(oldFile, newFile, this.options.diffOptions)
-          : undefined);
-
-      this.hunksRenderer.hydrate(this.fileDiff);
-      // FIXME(amadeus): not sure how to handle this yet...
-      // this.renderSeparators();
-      this.renderAnnotations();
-      this.renderGutterUtility();
-      this.injectUnsafeCSS();
-      this.interactionManager.setup(this.pre);
-      this.resizeManager.setup(this.pre, overflow === 'wrap');
-      if (overflow === 'scroll' && diffStyle === 'split') {
-        this.scrollSyncManager.setup(
-          this.pre,
-          this.codeDeletions,
-          this.codeAdditions
-        );
-      }
-    }
-    if (!preventEmit) {
-      this.emitPostRender();
+    this.hunksRenderer.hydrate(this.fileDiff);
+    // FIXME(amadeus): not sure how to handle this yet...
+    // this.renderSeparators();
+    this.renderAnnotations();
+    this.renderGutterUtility();
+    this.injectUnsafeCSS();
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    if (overflow === 'scroll' && diffStyle === 'split') {
+      this.scrollSyncManager.setup(
+        this.pre,
+        this.codeDeletions,
+        this.codeAdditions
+      );
     }
   }
 
@@ -649,11 +706,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.fileDiff = fileDiff;
     } else if (oldFile != null && newFile != null && filesDidChange) {
       diffDidChange = true;
-      this.fileDiff = parseDiffFromFile(
-        oldFile,
-        newFile,
-        this.options.diffOptions
-      );
+      this.fileDiff = parseDiffFromFile(oldFile, newFile);
     }
 
     if (lineAnnotations != null) {
@@ -662,13 +715,7 @@ export class FileDiff<LAnnotation = undefined> {
     if (this.fileDiff == null) {
       return false;
     }
-    this.hunksRenderer.setOptions({
-      ...this.options,
-      hunkSeparators:
-        typeof this.options.hunkSeparators === 'function'
-          ? 'custom'
-          : this.options.hunkSeparators,
-    });
+    this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
 
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
@@ -677,6 +724,7 @@ export class FileDiff<LAnnotation = undefined> {
       disableErrorHandling = false,
       disableFileHeader = false,
       overflow = 'scroll',
+      themeType = 'system',
     } = this.options;
 
     if (disableFileHeader) {
@@ -686,14 +734,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.headerElement = undefined;
         this.lastRenderedHeaderHTML = undefined;
       }
-      if (this.headerPrefix != null) {
-        this.headerPrefix.remove();
-        this.headerPrefix = undefined;
-      }
-      if (this.headerMetadata != null) {
-        this.headerMetadata.remove();
-        this.headerMetadata = undefined;
-      }
+      this.clearHeaderSlots();
     }
     fileContainer = this.getOrCreateFileContainer(
       fileContainer,
@@ -709,6 +750,14 @@ export class FileDiff<LAnnotation = undefined> {
           this.fileDiff,
           EMPTY_RENDER_RANGE
         );
+        if (hunksResult != null) {
+          this.applyThemeState(
+            fileContainer,
+            hunksResult.themeStyles,
+            themeType,
+            hunksResult.baseThemeType
+          );
+        }
         if (hunksResult?.headerElement != null) {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
         }
@@ -758,6 +807,13 @@ export class FileDiff<LAnnotation = undefined> {
           }
           return false;
         }
+
+        this.applyThemeState(
+          fileContainer,
+          hunksResult.themeStyles,
+          themeType,
+          hunksResult.baseThemeType
+        );
 
         if (hunksResult.headerElement != null) {
           this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
@@ -884,8 +940,10 @@ export class FileDiff<LAnnotation = undefined> {
     this.gutterUtilityContent?.remove();
     this.headerPrefix?.remove();
     this.headerMetadata?.remove();
+    this.headerCustom?.remove();
     this.pre?.remove();
     this.spriteSVG?.remove();
+    this.themeCSSStyle?.remove();
     this.unsafeCSSStyle?.remove();
 
     this.bufferAfter = undefined;
@@ -898,9 +956,13 @@ export class FileDiff<LAnnotation = undefined> {
     this.gutterUtilityContent = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
+    this.headerCustom = undefined;
     this.pre = undefined;
     this.spriteSVG = undefined;
+    this.themeCSSStyle = undefined;
+    this.appliedThemeCSS = undefined;
     this.unsafeCSSStyle = undefined;
+    this.appliedUnsafeCSS = undefined;
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
@@ -944,7 +1006,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private renderAnnotations(): void {
+  protected renderAnnotations(): void {
     if (this.isContainerManaged || this.fileContainer == null) {
       for (const { element } of this.annotationCache.values()) {
         element.remove();
@@ -988,7 +1050,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
-  private renderGutterUtility() {
+  protected renderGutterUtility(): void {
     const renderGutterUtility =
       this.options.renderGutterUtility ?? this.options.renderHoverUtility;
     if (this.fileContainer == null || renderGutterUtility == null) {
@@ -1069,7 +1131,7 @@ export class FileDiff<LAnnotation = undefined> {
     return this.pre;
   }
 
-  private syncCodeNodesFromPre(pre: HTMLPreElement): void {
+  protected syncCodeNodesFromPre(pre: HTMLPreElement): void {
     this.codeUnified = undefined;
     this.codeDeletions = undefined;
     this.codeAdditions = undefined;
@@ -1077,11 +1139,11 @@ export class FileDiff<LAnnotation = undefined> {
       if (!(child instanceof HTMLElement)) {
         continue;
       }
-      if ('unified' in child.dataset) {
+      if (child.hasAttribute('data-unified')) {
         this.codeUnified = child;
-      } else if ('deletions' in child.dataset) {
+      } else if (child.hasAttribute('data-deletions')) {
         this.codeDeletions = child;
-      } else if ('additions' in child.dataset) {
+      } else if (child.hasAttribute('data-additions')) {
         this.codeAdditions = child;
       }
     }
@@ -1094,6 +1156,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;
+    const { fileDiff } = this;
     const headerHTML = toHtml(headerAST);
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');
@@ -1111,66 +1174,154 @@ export class FileDiff<LAnnotation = undefined> {
       this.lastRenderedHeaderHTML = headerHTML;
     }
 
-    if (this.isContainerManaged) return;
+    if (this.isContainerManaged || fileDiff == null) {
+      return;
+    }
 
-    const { renderHeaderPrefix, renderHeaderMetadata } = this.options;
-    if (this.headerPrefix != null) {
-      this.headerPrefix.remove();
+    const { renderCustomHeader, renderHeaderPrefix, renderHeaderMetadata } =
+      this.options;
+
+    if (renderCustomHeader != null) {
+      const content = renderCustomHeader(fileDiff) ?? undefined;
+      this.headerCustom = this.upsertHeaderSlotElement(
+        container,
+        this.headerCustom,
+        CUSTOM_HEADER_SLOT_ID,
+        content
+      );
+      this.headerPrefix?.remove();
+      this.headerMetadata?.remove();
+      this.headerPrefix = undefined;
+      this.headerMetadata = undefined;
+      return;
     }
-    if (this.headerMetadata != null) {
-      this.headerMetadata.remove();
+
+    const prefix = renderHeaderPrefix?.(fileDiff) ?? undefined;
+    const content = renderHeaderMetadata?.(fileDiff) ?? undefined;
+    this.headerPrefix = this.upsertHeaderSlotElement(
+      container,
+      this.headerPrefix,
+      HEADER_PREFIX_SLOT_ID,
+      prefix
+    );
+    this.headerMetadata = this.upsertHeaderSlotElement(
+      container,
+      this.headerMetadata,
+      HEADER_METADATA_SLOT_ID,
+      content
+    );
+    this.headerCustom?.remove();
+    this.headerCustom = undefined;
+  }
+
+  private clearHeaderSlots(): void {
+    this.headerPrefix?.remove();
+    this.headerMetadata?.remove();
+    this.headerCustom?.remove();
+    this.headerPrefix = undefined;
+    this.headerMetadata = undefined;
+    this.headerCustom = undefined;
+  }
+
+  // Header slot callbacks are presence-based render hooks, not reactive views.
+  private upsertHeaderSlotElement(
+    container: HTMLElement,
+    current: HTMLElement | undefined,
+    slot: string,
+    content: Element | string | number | undefined
+  ): HTMLElement | undefined {
+    if (content == null) {
+      current?.remove();
+      return undefined;
     }
-    const prefix =
-      renderHeaderPrefix?.({
-        deletionFile: this.deletionFile,
-        additionFile: this.additionFile,
-        fileDiff: this.fileDiff,
-      }) ?? undefined;
-    const content =
-      renderHeaderMetadata?.({
-        deletionFile: this.deletionFile,
-        additionFile: this.additionFile,
-        fileDiff: this.fileDiff,
-      }) ?? undefined;
-    if (prefix != null) {
-      this.headerPrefix = document.createElement('div');
-      this.headerPrefix.slot = HEADER_PREFIX_SLOT_ID;
-      if (prefix instanceof Element) {
-        this.headerPrefix.appendChild(prefix);
-      } else {
-        this.headerPrefix.innerText = `${prefix}`;
-      }
-      container.appendChild(this.headerPrefix);
+    const element = current ?? this.createHeaderSlotElement(slot);
+    if (current == null) {
+      container.appendChild(element);
     }
-    if (content != null) {
-      this.headerMetadata = document.createElement('div');
-      this.headerMetadata.slot = HEADER_METADATA_SLOT_ID;
-      if (content instanceof Element) {
-        this.headerMetadata.appendChild(content);
-      } else {
-        this.headerMetadata.innerText = `${content}`;
-      }
-      container.appendChild(this.headerMetadata);
+    this.replaceHeaderSlotContent(element, content);
+    return element;
+  }
+
+  private replaceHeaderSlotContent(
+    element: HTMLElement,
+    content: Element | string | number
+  ): void {
+    element.replaceChildren();
+    if (content instanceof Element) {
+      element.appendChild(content);
+    } else {
+      element.innerText = `${content}`;
     }
   }
 
-  private injectUnsafeCSS(): void {
-    if (this.fileContainer?.shadowRoot == null) {
+  private createHeaderSlotElement(slot: string): HTMLElement {
+    const element = document.createElement('div');
+    element.slot = slot;
+    return element;
+  }
+
+  protected injectUnsafeCSS(): void {
+    const { unsafeCSS } = this.options;
+    const shadowRoot = this.fileContainer?.shadowRoot;
+    if (shadowRoot == null) {
       return;
     }
-    const { unsafeCSS } = this.options;
 
     if (unsafeCSS == null || unsafeCSS === '') {
+      if (this.unsafeCSSStyle != null) {
+        this.unsafeCSSStyle.remove();
+        this.unsafeCSSStyle = undefined;
+      }
+      this.appliedUnsafeCSS = undefined;
+      return;
+    }
+
+    if (
+      this.unsafeCSSStyle?.parentNode === shadowRoot &&
+      this.appliedUnsafeCSS === unsafeCSS
+    ) {
       return;
     }
 
     // Create or update the style element
-    if (this.unsafeCSSStyle == null) {
-      this.unsafeCSSStyle = createUnsafeCSSStyleNode();
-      this.fileContainer.shadowRoot.appendChild(this.unsafeCSSStyle);
+    this.unsafeCSSStyle ??= createUnsafeCSSStyleNode();
+    if (this.unsafeCSSStyle.parentNode !== shadowRoot) {
+      shadowRoot.appendChild(this.unsafeCSSStyle);
     }
     // Wrap in @layer unsafe to match SSR behavior
-    this.unsafeCSSStyle.innerText = wrapUnsafeCSS(unsafeCSS);
+    this.unsafeCSSStyle.textContent = wrapUnsafeCSS(unsafeCSS);
+    this.appliedUnsafeCSS = unsafeCSS;
+  }
+
+  private applyThemeState(
+    container: HTMLElement,
+    themeStyles: string,
+    themeType: ThemeTypes,
+    baseThemeType?: 'light' | 'dark'
+  ): void {
+    const shadowRoot =
+      container.shadowRoot ?? container.attachShadow({ mode: 'open' });
+    const effectiveThemeType = baseThemeType ?? themeType;
+    if (
+      this.themeCSSStyle?.parentNode === shadowRoot &&
+      this.appliedThemeCSS?.themeStyles === themeStyles &&
+      this.appliedThemeCSS.themeType === effectiveThemeType
+    ) {
+      return;
+    }
+    this.themeCSSStyle = upsertHostThemeStyle({
+      shadowRoot,
+      currentNode: this.themeCSSStyle,
+      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType),
+    });
+    this.appliedThemeCSS =
+      this.themeCSSStyle != null
+        ? {
+            themeStyles,
+            themeType: effectiveThemeType,
+            baseThemeType,
+          }
+        : undefined;
   }
 
   private applyHunksToDOM(
@@ -1885,13 +2036,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected applyPreNodeAttributes(
     pre: HTMLPreElement,
-    {
-      themeStyles,
-      baseThemeType,
-      additionsContentAST,
-      deletionsContentAST,
-      totalLines,
-    }: HunksRenderResult,
+    { additionsContentAST, deletionsContentAST, totalLines }: HunksRenderResult,
     customProperties?: CustomPreProperties
   ): void {
     const {
@@ -1899,7 +2044,6 @@ export class FileDiff<LAnnotation = undefined> {
       disableBackground = false,
       disableLineNumbers = false,
       overflow = 'scroll',
-      themeType = 'system',
       diffStyle = 'split',
     } = this.options;
     const preProperties: PrePropertiesConfig = {
@@ -1912,8 +2056,6 @@ export class FileDiff<LAnnotation = undefined> {
         diffStyle === 'unified'
           ? false
           : additionsContentAST != null && deletionsContentAST != null,
-      themeStyles,
-      themeType: baseThemeType ?? themeType,
       totalLines,
       customProperties,
     };

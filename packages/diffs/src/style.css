@@ -1,9 +1,7 @@
-@layer base, theme, unsafe;
+@layer base, theme, rendered, unsafe;
 
 @layer base {
   :host {
-    --diffs-bg: #fff;
-    --diffs-fg: #000;
     --diffs-font-fallback:
       'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
       'Courier New', monospace;
@@ -70,70 +68,14 @@
     font-size: var(--diffs-font-size, 13px);
     line-height: var(--diffs-line-height, 20px);
     font-feature-settings: var(--diffs-font-features);
-  }
 
-  /* NOTE(mdo): Some semantic HTML elements (e.g. `pre`, `code`) have default
- * user-agent styles. These must be overridden to use our custom styles. */
-  pre,
-  code,
-  [data-error-wrapper] {
-    isolation: isolate;
-    margin: 0;
-    padding: 0;
-    display: block;
-    outline: none;
-    font-family: var(--diffs-font-family, var(--diffs-font-fallback));
-  }
-
-  pre,
-  code {
-    background-color: var(--diffs-bg);
-  }
-
-  code {
-    contain: content;
-  }
-
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-  }
-
-  [data-icon-sprite] {
-    display: none;
-  }
-
-  /* NOTE(mdo): Headers and separators are within pre/code, so we need to reset
-   * their font-family explicitly. */
-  [data-diffs-header],
-  [data-separator] {
-    font-family: var(
-      --diffs-header-font-family,
-      var(--diffs-header-font-fallback)
+    /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
+     * and vscode use an older build of chrome that appears to have a bug with
+     * color-mix and 'in oklch', so use 'in lab' instead */
+    --diffs-bg: light-dark(
+      var(--diffs-light-bg, #fff),
+      var(--diffs-dark-bg, #000)
     );
-  }
-
-  [data-file-info] {
-    padding: 10px;
-    font-weight: 700;
-    color: var(--fg);
-    /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
-   * and vscode use an older build of chrome that appears to have a bug with
-   * color-mix and 'in oklch', so use 'in lab' instead */
-    background-color: color-mix(in lab, var(--bg) 98%, var(--fg));
-    border-block: 1px solid color-mix(in lab, var(--bg) 95%, var(--fg));
-  }
-
-  [data-diffs-header],
-  [data-diff],
-  [data-file],
-  [data-error-wrapper],
-  [data-virtualizer-buffer] {
-    --diffs-bg: light-dark(var(--diffs-light-bg), var(--diffs-dark-bg));
-    /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
-   * and vscode use an older build of chrome that appears to have a bug with
-   * color-mix and 'in oklch', so use 'in lab' instead */
     --diffs-bg-buffer: var(
       --diffs-bg-buffer-override,
       light-dark(
@@ -282,7 +224,7 @@
       )
     );
 
-    --diffs-fg: light-dark(var(--diffs-light), var(--diffs-dark));
+    --diffs-fg: light-dark(var(--diffs-light, #000), var(--diffs-dark, #fff));
     --diffs-fg-number: var(
       --diffs-fg-number-override,
       light-dark(
@@ -420,6 +362,59 @@
     color: var(--diffs-fg);
   }
 
+  /* NOTE(mdo): Some semantic HTML elements (e.g. `pre`, `code`) have default
+ * user-agent styles. These must be overridden to use our custom styles. */
+  pre,
+  code,
+  [data-error-wrapper] {
+    isolation: isolate;
+    margin: 0;
+    padding: 0;
+    display: block;
+    outline: none;
+    font-family: var(--diffs-font-family, var(--diffs-font-fallback));
+  }
+
+  pre,
+  code {
+    background-color: var(--diffs-bg);
+  }
+
+  code {
+    contain: content;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  [data-icon-sprite] {
+    display: none;
+  }
+
+  /* NOTE(mdo): Headers and separators are within pre/code, so we need to reset
+   * their font-family explicitly. */
+  [data-diffs-header],
+  [data-separator] {
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
+  }
+
+  [data-file-info] {
+    padding: 10px;
+    font-weight: 700;
+    color: var(--fg);
+    /* NOTE(amadeus): we cannot use 'in oklch' because current versions of cursor
+   * and vscode use an older build of chrome that appears to have a bug with
+   * color-mix and 'in oklch', so use 'in lab' instead */
+    background-color: color-mix(in lab, var(--bg) 98%, var(--fg));
+    border-block: 1px solid color-mix(in lab, var(--bg) 95%, var(--fg));
+  }
+
   [data-diff],
   [data-file] {
     /* This feels a bit crazy to me... so I need to think about it a bit more... */
@@ -430,34 +425,31 @@
       --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
     }
 
-    &[data-theme-type='light'],
-    & {
-      [data-line] span {
-        color: light-dark(
-          var(--diffs-token-light, var(--diffs-light)),
-          var(--diffs-token-dark, var(--diffs-dark))
-        );
-        font-weight: var(--diffs-token-light-font-weight, inherit);
-        font-style: var(--diffs-token-light-font-style, inherit);
-        text-decoration: var(--diffs-token-light-text-decoration, inherit);
-      }
-    }
-
-    &[data-theme-type='dark'] [data-line] span {
-      font-weight: var(--diffs-token-dark-font-weight, inherit);
-      font-style: var(--diffs-token-dark-font-style, inherit);
-      text-decoration: var(--diffs-token-dark-text-decoration, inherit);
-    }
-
     &:hover [data-code]::-webkit-scrollbar-thumb {
       background-color: var(--diffs-bg-context);
     }
   }
 
   [data-line] span {
+    color: light-dark(
+      var(--diffs-token-light, var(--diffs-light)),
+      var(--diffs-token-dark, var(--diffs-dark))
+    );
     background-color: light-dark(
       var(--diffs-token-light-bg, inherit),
       var(--diffs-token-dark-bg, inherit)
+    );
+    font-weight: light-dark(
+      var(--diffs-token-light-font-weight, inherit),
+      var(--diffs-token-dark-font-weight, inherit)
+    );
+    font-style: light-dark(
+      var(--diffs-token-light-font-style, inherit),
+      var(--diffs-token-dark-font-style, inherit)
+    );
+    text-decoration: light-dark(
+      var(--diffs-token-light-text-decoration, inherit),
+      var(--diffs-token-dark-text-decoration, inherit)
     );
   }
 
@@ -474,33 +466,6 @@
 
     span {
       opacity: 0.6;
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    [data-diffs-header],
-    [data-error-wrapper],
-    [data-diff],
-    [data-file] {
-      color-scheme: dark;
-    }
-
-    [data-content] [data-line] span {
-      font-weight: var(--diffs-token-dark-font-weight, inherit);
-      font-style: var(--diffs-token-dark-font-style, inherit);
-      text-decoration: var(--diffs-token-dark-text-decoration, inherit);
-    }
-  }
-
-  [data-diffs-header],
-  [data-diff],
-  [data-file] {
-    &[data-theme-type='light'] {
-      color-scheme: light;
-    }
-
-    &[data-theme-type='dark'] {
-      color-scheme: dark;
     }
   }
 
@@ -1386,8 +1351,9 @@
     }
   }
 
-  [data-diffs-header] {
+  [data-diffs-header='default'] {
     position: relative;
+    background-color: var(--diffs-bg);
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -1429,19 +1395,19 @@
     flex-grow: 0;
   }
 
-  [data-diffs-header] [data-metadata] {
+  [data-diffs-header='default'] [data-metadata] {
     display: flex;
     align-items: center;
     gap: 1ch;
     white-space: nowrap;
   }
 
-  [data-diffs-header] [data-additions-count] {
+  [data-diffs-header='default'] [data-additions-count] {
     font-family: var(--diffs-font-family, var(--diffs-font-fallback));
     color: var(--diffs-addition-base);
   }
 
-  [data-diffs-header] [data-deletions-count] {
+  [data-diffs-header='default'] [data-deletions-count] {
     font-family: var(--diffs-font-family, var(--diffs-font-fallback));
     color: var(--diffs-deletion-base);
   }

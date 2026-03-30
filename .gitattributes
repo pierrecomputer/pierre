@@ -1,0 +1,2 @@
+# Mark large generated fixtures so they collapse in PR diffs
+packages/trees/scripts/fixtures/fileListToTree-monorepo-snapshot.txt linguist-generated

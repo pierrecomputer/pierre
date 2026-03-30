@@ -423,37 +423,28 @@ export type CustomPreProperties = Record<string, string | number | undefined>;
 export interface PrePropertiesConfig extends Required<
   Pick<
     BaseDiffOptions,
-    | 'diffIndicators'
-    | 'disableBackground'
-    | 'disableLineNumbers'
-    | 'overflow'
-    | 'themeType'
+    'diffIndicators' | 'disableBackground' | 'disableLineNumbers' | 'overflow'
   >
 > {
   type: 'diff' | 'file';
   split: boolean;
-  themeStyles: string;
   totalLines: number;
   customProperties?: CustomPreProperties;
 }
 
-export interface RenderHeaderMetadataProps {
-  deletionFile?: FileContents;
-  additionFile?: FileContents;
-  fileDiff?: FileDiffMetadata;
-}
+export type FileHeaderRenderMode = 'default' | 'custom';
 
 export type RenderHeaderMetadataCallback = (
-  props: RenderHeaderMetadataProps
-) => Element | null | undefined | string | number;
+  fileDiff: FileDiffMetadata
+) => Element | string | number | null | undefined;
 
 export type RenderHeaderPrefixCallback = (
-  props: RenderHeaderMetadataProps
-) => Element | null | undefined | string | number;
+  fileDiff: FileDiffMetadata
+) => Element | string | number | null | undefined;
 
 export type RenderFileMetadata = (
   file: FileContents
-) => Element | null | undefined | string | number;
+) => Element | string | number | null | undefined;
 
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 
@@ -634,6 +625,7 @@ export interface RenderDiffOptions {
   theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  maxLineDiffLength: number;
 }
 
 export interface RenderFileResult {
@@ -729,4 +721,10 @@ export interface ProcessFileConflictData {
 
   /** Hunk-content index that anchors the end marker row. */
   endMarkerContentIndex: number;
+}
+
+export interface AppliedThemeStyleCache {
+  themeStyles: string;
+  themeType: ThemeTypes;
+  baseThemeType: 'light' | 'dark' | undefined;
 }

@@ -222,10 +222,13 @@ export function ShikiThemes({
         {...props}
         className="overflow-hidden rounded-lg border dark:border-neutral-800"
         options={{
-          diffStyle: 'split',
-          themeType: selectedColorMode,
+          ...options,
           theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+          themeType: selectedColorMode,
         }}
+        // WorkerPool is disabled because we need to be able to change themes
+        // without changing our whole page
+        disableWorkerPool
       />
       <PierreThemeFootnote />
     </div>

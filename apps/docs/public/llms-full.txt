@@ -507,10 +507,16 @@ component has similar props, but uses `LineAnnotation` instead of
 
 Header customization and collapsing behavior:
 
-- Use `renderHeaderMetadata` to render custom UI at the end of the file header
-  (after the diff stats).
-- Use `renderHeaderPrefix` to render custom UI at the start of the file header
-  (before the filename).
+- Use `renderHeaderPrefix` to render custom UI at the beginning of the built-in
+  header, before the filename and icons, while keeping the default header
+  layout.
+- Use `renderHeaderMetadata` to render custom UI at the end of the built-in
+  header, after the diff stats, while keeping the default header layout.
+- Use `renderCustomHeader` when you want to replace the built-in header content
+  with your own custom designed one.
+- For diff components, these header callbacks receive
+  `fileDiff: FileDiffMetadata`.
+- For `File`, the corresponding header callbacks receive `file: FileContents`.
 - Use `options.collapsed` to hide file body content while keeping the file
   header visible.
 
@@ -923,14 +929,22 @@ interface ThreadMetadata {
   )}
 
   // ─────────────────────────────────────────────────────────────
-  // HEADER METADATA
+  // HEADER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
-  // Render custom content on the right side of the file header,
+  // All diff header render callbacks receive FileDiffMetadata directly.
+  // This includes renderCustomHeader, renderHeaderPrefix, and
+  // renderHeaderMetadata.
+  // renderHeaderPrefix renders at the beginning of the built-in header,
+  // before the filename.
+  // renderHeaderMetadata renders at the end of the built-in header,
   // after the +/- line metrics.
-  // Props: { oldFile?, newFile?, fileDiff? }
-  renderHeaderMetadata={({ fileDiff }) => (
-    <span>{fileDiff?.newName}</span>
+  // renderCustomHeader replaces the built-in header content entirely.
+  //
+  // Render custom content on the right side of the built-in header.
+  // Callback arg: FileDiffMetadata
+  renderHeaderMetadata={(fileDiff) => (
+    <span>{fileDiff.name}</span>
   )}
 
   // ─────────────────────────────────────────────────────────────
@@ -1187,12 +1201,18 @@ interface CommentMetadata {
   )}
 
   // ─────────────────────────────────────────────────────────────
-  // HEADER METADATA
+  // HEADER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
-  // Render custom content on the right side of the file header.
-  // Props: { file }
-  renderHeaderMetadata={({ file }) => (
+  // File header callbacks receive FileContents directly.
+  // renderHeaderPrefix renders at the beginning of the built-in header,
+  // before the filename.
+  // renderHeaderMetadata renders at the end of the built-in header.
+  // renderCustomHeader replaces the built-in header content entirely.
+  // Callback arg: FileContents
+  //
+  // Render custom content on the right side of the built-in header.
+  renderHeaderMetadata={(file) => (
     <span>{file.name}</span>
   )}
 
@@ -1338,10 +1358,15 @@ uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
 Header customization and collapsing behavior:
 
-- Use `renderHeaderMetadata` to render custom UI at the end of the file header
-  (after the diff stats).
-- Use `renderHeaderPrefix` to render custom UI at the start of the file header
-  (before the filename).
+- Use `renderHeaderPrefix` to render custom UI at the beginning of the built-in
+  `FileDiff` header, before the filename and icon, while keeping the default
+  header layout.
+- Use `renderHeaderMetadata` to render custom UI at the end of the built-in
+  `FileDiff` header, after the diff stats, while keeping the default header
+  layout.
+- Use `renderCustomHeader` when you want to replace the built-in header content
+  entirely.
+- In `File`, header callbacks receive `file: FileContents`.
 - Use `collapsed` in constructor options to hide file body content while keeping
   the file header visible.
 
@@ -1660,10 +1685,19 @@ const instance = new FileDiff({
   // RENDER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
-  // Render custom content in the file header (after +/- stats)
-  renderHeaderMetadata({ oldFile, newFile, fileDiff }) {
+  // Diff header render callbacks receive FileDiffMetadata directly.
+  // This includes renderCustomHeader, renderHeaderPrefix, and
+  // renderHeaderMetadata.
+  // renderHeaderPrefix renders at the beginning of the built-in header,
+  // before the filename and icon.
+  // renderHeaderMetadata renders at the end of the built-in header,
+  // after the +/- line metrics.
+  // renderCustomHeader replaces the built-in header content entirely.
+  //
+  // Render custom content at the end of the built-in header.
+  renderHeaderMetadata(fileDiff) {
     const span = document.createElement('span');
-    span.textContent = fileDiff?.newName ?? '';
+    span.textContent = fileDiff.name;
     return span;
   },
 

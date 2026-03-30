@@ -30,14 +30,8 @@ async function getItemRect(page: Page, label: string) {
     const host = document.getElementById('touch-dnd-host');
     const root = host?.shadowRoot;
     if (root == null) return null;
-    const buttons = Array.from(
-      root.querySelectorAll('button[data-type="item"]')
-    );
-    const button = buttons.find(
-      (b) =>
-        b
-          .querySelector("[data-item-section='content']")
-          ?.textContent?.trim() === lbl
+    const button = root.querySelector(
+      `button[data-type="item"][aria-label="${lbl}"]`
     );
     if (button == null) return null;
     const rect = button.getBoundingClientRect();
@@ -51,14 +45,8 @@ async function isDragging(page: Page, label: string) {
     const host = document.getElementById('touch-dnd-host');
     const root = host?.shadowRoot;
     if (root == null) return false;
-    const buttons = Array.from(
-      root.querySelectorAll('button[data-type="item"]')
-    );
-    const button = buttons.find(
-      (b) =>
-        b
-          .querySelector("[data-item-section='content']")
-          ?.textContent?.trim() === lbl
+    const button = root.querySelector(
+      `button[data-type="item"][aria-label="${lbl}"]`
     );
     return button?.hasAttribute('data-item-dragging') === true;
   }, label);
@@ -70,14 +58,8 @@ async function isDragTarget(page: Page, label: string) {
     const host = document.getElementById('touch-dnd-host');
     const root = host?.shadowRoot;
     if (root == null) return false;
-    const buttons = Array.from(
-      root.querySelectorAll('button[data-type="item"]')
-    );
-    const button = buttons.find(
-      (b) =>
-        b
-          .querySelector("[data-item-section='content']")
-          ?.textContent?.trim() === lbl
+    const button = root.querySelector(
+      `button[data-type="item"][aria-label="${lbl}"]`
     );
     return button?.hasAttribute('data-item-drag-target') === true;
   }, label);

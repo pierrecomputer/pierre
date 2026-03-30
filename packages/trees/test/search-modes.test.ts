@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getSearchVisibleIdSet } from '../src/features/fileTreeSearchFeature';
+import { getSearchVisibleIdSet } from '../src/features/search/feature';
 import type { FileTreeSearchMode } from '../src/FileTree';
 import { createTestTree, getSelectionPath, TEST_CONFIGS } from './test-config';
 

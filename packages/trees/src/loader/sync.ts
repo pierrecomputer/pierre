@@ -1,8 +1,7 @@
-import type { TreeDataLoader } from '@headless-tree/core';
-
 import type { FileTreeData, FileTreeNode } from '../types';
 import { fileListToTree } from '../utils/fileListToTree';
-import type { DataLoaderOptions } from './index';
+import type { DataLoaderOptions } from './types';
+import type { TreeDataLoader } from './types';
 
 /**
  * Creates a sync data loader from prebuilt tree data.

@@ -219,7 +219,7 @@ export function processFile(
           // We have to handle these for pure renames because there won't be
           // --- and +++ lines
           if (line.startsWith('rename from ')) {
-            currentFile.prevName = line.replace('rename from ', '');
+            currentFile.prevName = line.replace('rename from ', '').trim();
           }
           if (line.startsWith('rename to ')) {
             currentFile.name = line.replace('rename to ', '').trim();

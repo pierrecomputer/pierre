@@ -1,5 +1,4 @@
 import {
-  type BundledLanguage,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
   type DiffsThemeNames,
@@ -9,11 +8,14 @@ import {
   type FileDiffOptions,
   type FileOptions,
   FileStream,
+  type FileStreamOptions,
   isHighlighterNull,
   parseDiffFromFile,
   type ParsedPatch,
   parsePatchFiles,
   preloadHighlighter,
+  type SupportedLanguages,
+  type ThemesType,
   UnresolvedFile,
   VirtualizedFile,
   VirtualizedFileDiff,
@@ -22,7 +24,6 @@ import {
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 
 import {
-  CodeConfigs,
   FAKE_DIFF_LINE_ANNOTATIONS,
   FAKE_LINE_ANNOTATIONS,
   FILE_CONFLICT,
@@ -31,12 +32,42 @@ import {
   type LineCommentMetadata,
 } from './mocks/';
 import './style.css';
+import mdContent from './mocks/example_md.txt?raw';
+import tsContent from './mocks/example_ts.txt?raw';
 import { createFakeContentStream } from './utils/createFakeContentStream';
+import { createHighlighterCleanup } from './utils/createHighlighterCleanup';
 import { createWorkerAPI } from './utils/createWorkerAPI';
 import {
   renderAnnotation,
   renderDiffAnnotation,
 } from './utils/renderAnnotation';
+
+const DEMO_THEME: DiffsThemeNames | ThemesType = DEFAULT_THEMES;
+const WORKER_POOL = true;
+const VIRTUALIZE = true;
+const CRAZY_FILE = false;
+const LARGE_CONFLICT_FILE = false;
+
+const FileStreamCodeConfigs: FileStreamCodeConfigsItem[] = [
+  {
+    content: tsContent,
+    letterByLetter: false,
+    options: {
+      lang: 'tsx',
+      theme: DEMO_THEME,
+      ...createHighlighterCleanup(),
+    },
+  },
+  {
+    content: mdContent,
+    letterByLetter: true,
+    options: {
+      lang: 'markdown',
+      theme: DEMO_THEME,
+      ...createHighlighterCleanup(),
+    },
+  },
+];
 
 const diffInstances: (
   | FileDiff<LineCommentMetadata>
@@ -45,6 +76,12 @@ const diffInstances: (
 const fileInstances: File<LineCommentMetadata>[] = [];
 const streamingInstances: FileStream[] = [];
 const conflictInstances: UnresolvedFile<LineCommentMetadata>[] = [];
+
+interface FileStreamCodeConfigsItem {
+  content: string;
+  letterByLetter: boolean;
+  options: FileStreamOptions;
+}
 
 function cleanupInstances(container: HTMLElement) {
   for (const instances of [
@@ -91,13 +128,11 @@ async function loadLargeConflictFile(): Promise<FileContents> {
   return loadingLargeConflict;
 }
 
-const WORKER_POOL = true;
-
 // Create worker API - helper handles worker creation automatically!
 const poolManager: WorkerPoolManager | undefined = WORKER_POOL
   ? (() => {
       const manager = createWorkerAPI({
-        theme: DEFAULT_THEMES,
+        theme: DEMO_THEME,
         langs: ['typescript', 'tsx'],
         preferredHighlighter: 'shiki-wasm',
       });
@@ -111,8 +146,6 @@ const poolManager: WorkerPoolManager | undefined = WORKER_POOL
     })()
   : undefined;
 
-const VIRTUALIZE = true;
-
 const virtualizer: Virtualizer | undefined = (() =>
   VIRTUALIZE ? new Virtualizer() : undefined)();
 
@@ -120,7 +153,7 @@ function startStreaming() {
   const container = document.getElementById('wrapper');
   if (container == null) return;
   cleanupInstances(container);
-  for (const { content, letterByLetter, options } of CodeConfigs) {
+  for (const { content, letterByLetter, options } of FileStreamCodeConfigs) {
     const instance = new FileStream(options);
     void instance.setup(
       createFakeContentStream(content, letterByLetter),
@@ -164,7 +197,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         | FileDiff<LineCommentMetadata>
         | VirtualizedFileDiff<LineCommentMetadata>;
       const options: FileDiffOptions<LineCommentMetadata> = {
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        theme: DEMO_THEME,
+        themeType,
         diffStyle: unified ? 'unified' : 'split',
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
@@ -182,7 +216,6 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
             }
           );
         },
-        themeType,
         lineHoverHighlight: 'both',
         expansionLineCount: 10,
         // expandUnchanged: true,
@@ -382,13 +415,17 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
 
 function handlePreload() {
   if (!isHighlighterNull()) return;
-  const langs: BundledLanguage[] = [];
+  const langs: SupportedLanguages[] = [];
   const themes: DiffsThemeNames[] = [];
-  for (const item of CodeConfigs) {
-    if ('lang' in item.options) {
+  for (const item of FileStreamCodeConfigs) {
+    if (item.options.lang != null) {
       langs.push(item.options.lang);
     }
-    if ('themes' in item.options) {
+    if (item.options.theme == null) {
+      continue;
+    } else if (typeof item.options.theme === 'string') {
+      themes.push(item.options.theme);
+    } else {
       themes.push(item.options.theme.dark);
       themes.push(item.options.theme.light);
     }
@@ -560,26 +597,19 @@ function toggleTheme() {
   document.documentElement.dataset.themeType =
     pageTheme === 'dark' ? 'light' : 'dark';
 
-  for (const instance of diffInstances) {
-    const themeSetting = instance.options.themeType ?? 'system';
-    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
-  }
-
-  for (const instance of streamingInstances) {
-    const themeSetting = instance.options.themeType ?? 'system';
-    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
-  }
-
-  for (const instance of fileInstances) {
-    const themeSetting = instance.options.themeType ?? 'system';
-    const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-    instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
+  for (const instances of [
+    diffInstances,
+    fileInstances,
+    streamingInstances,
+    conflictInstances,
+  ]) {
+    for (const instance of instances) {
+      const themeSetting = instance.options.themeType ?? 'system';
+      const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
+      instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
+    }
   }
 }
-
-const CRAZY_FILE = false;
 
 const fileExample: FileContents | Promise<FileContents> = (() => {
   if (CRAZY_FILE) {
@@ -605,8 +635,6 @@ const fileConflict: FileContents = {
   contents: FILE_CONFLICT,
 };
 
-const LARGE_CONFLICT_FILE = false;
-
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
   // oxlint-disable-next-line @typescript-oxlint/no-misused-promises
@@ -625,7 +653,7 @@ if (renderFileButton != null) {
       | VirtualizedFile<LineCommentMetadata>;
     const options: FileOptions<LineCommentMetadata> = {
       overflow: wrap ? 'wrap' : 'scroll',
-      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      theme: DEMO_THEME,
       themeType: getThemeType(),
       renderAnnotation,
       renderCustomMetadata() {
@@ -732,7 +760,7 @@ if (renderFileConflictButton != null) {
     wrapper.appendChild(fileContainer);
     const instance = new UnresolvedFile<LineCommentMetadata>(
       {
-        theme: DEFAULT_THEMES,
+        theme: DEMO_THEME,
         themeType: getThemeType(),
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation,

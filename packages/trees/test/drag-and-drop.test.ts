@@ -1,18 +1,15 @@
-import {
-  createTree,
-  expandAllFeature,
-  hotkeysCoreFeature,
-  type ItemInstance,
-  selectionFeature,
-  syncDataLoaderFeature,
-  type TreeInstance,
-} from '@headless-tree/core';
 import { describe, expect, test } from 'bun:test';
 
 import { FLATTENED_PREFIX } from '../src/constants';
-import { dragAndDropFeature } from '../src/features/dragAndDropFeature';
-import { canDrop, getDragTarget } from '../src/features/dragAndDropUtils';
-import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
+import { createTree } from '../src/core/create-tree';
+import type { ItemInstance, TreeInstance } from '../src/core/types/core';
+import { dragAndDropFeature } from '../src/features/drag-and-drop/feature';
+import { canDrop, getDragTarget } from '../src/features/drag-and-drop/utils';
+import { expandAllFeature } from '../src/features/expand-all/feature';
+import { hotkeysCoreFeature } from '../src/features/hotkeys-core/feature';
+import { fileTreeSearchFeature } from '../src/features/search/feature';
+import { selectionFeature } from '../src/features/selection/feature';
+import { syncDataLoaderFeature } from '../src/features/sync-data-loader/feature';
 import { generateSyncDataLoader } from '../src/loader/sync';
 import type { FileTreeNode } from '../src/types';
 import { computeNewFilesAfterDrop } from '../src/utils/computeNewFilesAfterDrop';

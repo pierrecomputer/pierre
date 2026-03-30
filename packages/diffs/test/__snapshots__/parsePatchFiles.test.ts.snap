@@ -1206,10 +1206,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "hunks": [],
         "isPartial": true,
         "name": "packages/diffs/src/components/web-components.ts",
-        "prevName": 
-"packages/diffs/src/custom-components/Container.ts
-"
-,
+        "prevName": "packages/diffs/src/custom-components/Container.ts",
         "splitLineCount": 0,
         "type": "rename-pure",
         "unifiedLineCount": 0,
@@ -1932,10 +1929,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "hunks": [],
         "isPartial": true,
         "name": "packages/diffs/src/managers/ScrollSyncManager.ts",
-        "prevName": 
-"packages/diffs/src/ScrollSyncManager.ts
-"
-,
+        "prevName": "packages/diffs/src/ScrollSyncManager.ts",
         "splitLineCount": 0,
         "type": "rename-pure",
         "unifiedLineCount": 0,
@@ -1947,10 +1941,7 @@ exports[`parsePatchFiles should parse diff.patch and match snapshot: git pr patc
         "hunks": [],
         "isPartial": true,
         "name": "packages/diffs/src/managers/UniversalRenderingManager.ts",
-        "prevName": 
-"packages/diffs/src/UniversalRenderer.ts
-"
-,
+        "prevName": "packages/diffs/src/UniversalRenderer.ts",
         "splitLineCount": 0,
         "type": "rename-pure",
         "unifiedLineCount": 0,
@@ -71660,10 +71651,7 @@ Subject: [PATCH 7/9] Update test snapshots
         "hunks": [],
         "isPartial": true,
         "name": "apps/docs/app/ssr/SSRPage.tsx",
-        "prevName": 
-"apps/docs/app/ssr/SSR_Page.tsx
-"
-,
+        "prevName": "apps/docs/app/ssr/SSR_Page.tsx",
         "splitLineCount": 0,
         "type": "rename-pure",
         "unifiedLineCount": 0,

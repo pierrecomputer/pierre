@@ -204,6 +204,7 @@
     font-size: var(--trees-font-size);
     color: var(--trees-fg);
     background-color: var(--trees-bg);
+    --truncate-marker-background-color: var(--trees-bg);
     font-family: var(--trees-font-family);
     font-weight: var(--trees-font-weight-regular);
   }
@@ -326,6 +327,7 @@
     &:hover,
     &[data-item-context-hover='true'] {
       background-color: var(--trees-bg-muted);
+      --truncate-marker-background-color: var(--trees-bg-muted);
     }
 
     &[data-item-focused='true'],
@@ -342,6 +344,7 @@
     &[data-item-selected='true'] {
       color: var(--trees-selected-fg);
       background-color: var(--trees-selected-bg);
+      --truncate-marker-background-color: var(--trees-selected-bg);
       z-index: 3;
 
       [data-item-section='icon'] {
@@ -393,8 +396,34 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    /* Breaks middle truncate component to also set this */
+    /* white-space: nowrap; */
   }
+
+  [data-item-rename-input] {
+    --trees-context-menu-width: calc(
+      (2 * var(--trees-item-padding-x)) + var(--trees-icon-width)
+    );
+    width: calc(100% - var(--trees-context-menu-width));
+    min-width: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: calc(var(--trees-row-height) - 8px);
+    height: calc(var(--trees-row-height) - 8px);
+    color: inherit;
+    background-color: var(--trees-search-bg);
+    border: 1px solid var(--trees-border-color);
+    /* border-radius: calc(var(--trees-border-radius) - 1px);border-radius */
+    padding-inline: 6px;
+    margin-right: 40px;
+    outline: none;
+  }
+
+  /* [data-item-flattened-rename-input] {
+    width: auto;
+    min-width: 4ch;
+    max-width: min(26ch, 100%);
+  } */
 
   [data-item-section='status'] {
     flex: 0 0 auto;
@@ -603,5 +632,223 @@
 
   [data-type='context-menu-trigger']:hover {
     color: var(--trees-fg);
+  }
+
+  /** @pierre/truncate css here, manually copy pasted for now */
+  [data-truncate-container] {
+    /* CUSTOM TO TREES, TO SUPPORT THE OUTLINE */
+    margin-top: -1px;
+    margin-bottom: -1px;
+
+    /* Width of the fade from default marker to text */
+    --truncate-internal-marker-fade-width: var(
+      --truncate-marker-fade-width,
+      2px
+    );
+    /* Width of the solid color between the fade from the default marker to the text */
+    --truncate-internal-marker-gap: var(--truncate-marker-gap, 0px);
+    /* Opacity of the marker 'color' property, not of the element itself */
+    --truncate-internal-marker-opacity: var(--truncate-marker-opacity, 50%);
+    /* Opacity of the marker 'color' property specifically for the middle truncate, not opacity of the element itself */
+    --truncate-internal-middle-marker-opacity: var(
+      --truncate-middle-marker-opacity,
+      80%
+    );
+    /* Background color of the default marker */
+    --truncate-internal-marker-background-color: var(
+      --truncate-marker-background-color,
+      light-dark(white, black)
+    );
+    /* Duration of the fade out animation for the marker */
+    --truncate-internal-marker-fade-out-duration: var(
+      --truncate-marker-fade-out-duration,
+      0ms
+    );
+    /* Duration of the fade in animation for the marker */
+    --truncate-internal-marker-fade-in-duration: var(
+      --truncate-marker-fade-in-duration,
+      100ms
+    );
+
+    /* FADE Variant specifics */
+    --truncate-internal-fade-marker-color: var(
+      --truncate-fade-marker-color,
+      #000
+    );
+    --truncate-internal-fade-marker-width: var(
+      --truncate-fade-marker-width,
+      0.2lh
+    );
+
+    /*
+    In some special cases people might be adding spacing in other ways
+    that would benefit from being able to override this, however the container
+    query below can't use this and would need to be redeclared with the overridden
+    value. It's a bad time, but better than nothing.
+    */
+    --truncate-internal-single-line-height: 1lh;
+
+    height: var(--truncate-internal-single-line-height);
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  [data-truncate-marker] {
+    display: flex;
+    position: absolute;
+    height: var(--truncate-internal-single-line-height);
+    z-index: 2;
+    color: color-mix(
+      in srgb,
+      currentColor var(--truncate-internal-marker-opacity),
+      transparent
+    );
+
+    /* Core trick for hiding the marker until overflow occurs */
+    opacity: 0;
+    transition: opacity var(--truncate-internal-marker-fade-out-duration)
+      ease-in-out;
+  }
+
+  @container measure (height > 1lh) {
+    [data-truncate-marker] {
+      opacity: 1;
+      transition: opacity var(--truncate-internal-marker-fade-in-duration)
+        ease-in-out;
+    }
+  }
+
+  [data-truncate-grid] {
+    display: grid;
+    position: relative;
+  }
+
+  [data-truncate-content='visible'] {
+    white-space: nowrap;
+  }
+
+  [data-truncate-content='overflow'] {
+    opacity: 0;
+    pointer-events: none;
+    user-select: none;
+    word-break: break-all;
+    margin-top: calc(-1 * var(--truncate-internal-single-line-height));
+  }
+
+  [data-truncate-marker-cell] {
+    container: measure / size;
+    overflow: visible;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  [data-truncate-container='truncate'] {
+    & [data-truncate-grid] {
+      grid-template-columns: minmax(0, max-content) 0;
+    }
+    & [data-truncate-marker] {
+      right: 0;
+    }
+    & [data-truncate-fade] {
+      margin-right: calc(-2 * var(--truncate-internal-fade-marker-width));
+    }
+  }
+
+  [data-truncate-container='fruncate'] {
+    & [data-truncate-grid] {
+      grid-template-columns: 0 minmax(0, max-content) auto;
+    }
+    & [data-truncate-content] {
+      direction: rtl;
+    }
+    & [data-truncate-content] > span {
+      unicode-bidi: plaintext;
+    }
+    & [data-truncate-fade] {
+      margin-left: calc(-2 * var(--truncate-internal-fade-marker-width));
+    }
+  }
+
+  [data-truncate-variant='default'] {
+    & [data-truncate-marker] {
+      background-color: var(--truncate-internal-marker-background-color);
+    }
+    & [data-truncate-marker]::after,
+    & [data-truncate-marker]::before {
+      content: '';
+      position: absolute;
+      width: calc(
+        var(--truncate-internal-marker-fade-width) +
+          var(--truncate-internal-marker-gap)
+      );
+      height: var(--truncate-internal-single-line-height);
+      background: linear-gradient(
+        var(--truncate-internal-fade-dir),
+        var(--truncate-internal-marker-background-color) 0%,
+        var(--truncate-internal-marker-background-color)
+          var(--truncate-internal-marker-gap),
+        transparent 100%
+      );
+    }
+    & [data-truncate-marker]::after {
+      --truncate-internal-fade-dir: to right;
+      right: calc(
+        -1 *
+          (
+            var(--truncate-internal-marker-fade-width) +
+              var(--truncate-internal-marker-gap)
+          )
+      );
+    }
+    & [data-truncate-marker]::before {
+      --truncate-internal-fade-dir: to left;
+      left: calc(
+        -1 *
+          (
+            var(--truncate-internal-marker-fade-width) +
+              var(--truncate-internal-marker-gap)
+          )
+      );
+    }
+  }
+
+  [data-truncate-variant='fade'] {
+    & [data-truncate-marker] {
+      background: transparent;
+    }
+  }
+
+  [data-truncate-fade] {
+    box-shadow:
+      0 0 calc(var(--truncate-internal-fade-marker-width) / 2)
+        var(--truncate-internal-fade-marker-color),
+      0 0 var(--truncate-internal-fade-marker-width)
+        var(--truncate-internal-fade-marker-color);
+    width: calc(var(--truncate-internal-fade-marker-width) * 2);
+    height: calc(
+      var(--truncate-internal-single-line-height) -
+        (var(--truncate-internal-fade-marker-width) * 2)
+    );
+    margin: var(--truncate-internal-fade-marker-width) 0;
+  }
+
+  [data-truncate-group-container='middle'] {
+    & [data-truncate-container] {
+      --truncate-marker-opacity: var(--truncate-internal-middle-marker-opacity);
+    }
+
+    display: flex;
+    min-width: 0;
+
+    & > div {
+      min-width: 0;
+    }
+
+    & > div[data-truncate-segment-priority='1'] {
+      flex: 0 1 max-content;
+    }
+    & > div[data-truncate-segment-priority='2'] {
+      flex: 0 999999 max-content;
+    }
   }
 }

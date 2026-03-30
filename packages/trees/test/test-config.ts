@@ -1,22 +1,19 @@
-import {
-  createTree,
-  expandAllFeature,
-  hotkeysCoreFeature,
-  selectionFeature,
-  syncDataLoaderFeature,
-  type TreeDataLoader,
-} from '@headless-tree/core';
-
 import { FLATTENED_PREFIX } from '../src/constants';
-import { fileTreeSearchFeature } from '../src/features/fileTreeSearchFeature';
+import { createTree } from '../src/core/create-tree';
+import { expandAllFeature } from '../src/features/expand-all/feature';
 import {
   type GitStatusEntry,
   gitStatusFeature,
-} from '../src/features/gitStatusFeature';
+} from '../src/features/git-status/feature';
+import { hotkeysCoreFeature } from '../src/features/hotkeys-core/feature';
+import { fileTreeSearchFeature } from '../src/features/search/feature';
+import { selectionFeature } from '../src/features/selection/feature';
+import { syncDataLoaderFeature } from '../src/features/sync-data-loader/feature';
 import type { FileTreeSearchConfig } from '../src/FileTree';
 import type { FileTreeSearchMode } from '../src/FileTree';
 import { generateLazyDataLoader } from '../src/loader/lazy';
 import { generateSyncDataLoader } from '../src/loader/sync';
+import type { TreeDataLoader } from '../src/loader/types';
 import type { FileTreeNode } from '../src/types';
 import { expandImplicitParentDirectories } from '../src/utils/expandImplicitParentDirectories';
 import {

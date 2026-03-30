@@ -139,7 +139,13 @@ export default function DocsPage() {
 async function MergeConflictDemoSection() {
   return (
     <MergeConflict
-      prerenderedFile={await preloadUnresolvedFile(MERGE_CONFLICT_EXAMPLE)}
+      prerenderedFile={await preloadUnresolvedFile({
+        ...MERGE_CONFLICT_EXAMPLE,
+        options: {
+          ...MERGE_CONFLICT_EXAMPLE.options,
+          themeType: 'system',
+        },
+      })}
     />
   );
 }

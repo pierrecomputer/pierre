@@ -21,7 +21,7 @@ function OverflowMarker({
 }: OverflowTextProps) {
   const isFadeVariant = variant === 'fade';
   return (
-    <div data-truncate-marker-cell>
+    <div aria-hidden data-truncate-marker-cell>
       <div data-truncate-marker>
         {typeof marker === 'function' ? (
           marker({ children })

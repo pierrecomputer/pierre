@@ -8,7 +8,6 @@
     ],
     "catalog": {
       "@arethetypeswrong/core": "0.18.2",
-      "@headless-tree/core": "1.6.1",
       "@icons-pack/react-simple-icons": "13.8.0",
       "@octokit/app": "16.1.1",
       "@octokit/auth-app": "8.1.1",
@@ -61,7 +60,7 @@
       "jsdom": "26.1.0",
       "lru_map": "0.4.1",
       "lucide-react": "0.545.0",
-      "next": "16.1.1",
+      "next": "16.2.1",
       "next-mdx-remote": "6.0.0",
       "next-themes": "0.4.6",
       "oxfmt": "0.27.0",
@@ -108,7 +107,8 @@
     "lint-staged": "lint-staged",
     "prepare": "husky",
     "demo:build": "(cd apps/demo && bun run build)",
-    "docs:build": "(cd apps/docs && bun run build)"
+    "docs:build": "(cd apps/docs && bun run build)",
+    "chrome": "./scripts/chrome-remote-debug.sh"
   },
   "devDependencies": {
     "@pierre/icons": "catalog:",

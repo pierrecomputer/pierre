@@ -5,16 +5,20 @@ import {
 } from '../components/UnresolvedFile';
 import {
   DiffHunksRenderer,
+  type DiffHunksRendererOptions,
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
 import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type {
-  BaseDiffOptions,
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
 } from '../types';
-import { createStyleElement } from '../utils/createStyleElement';
+import {
+  createStyleElement,
+  createThemeStyleElement,
+} from '../utils/createStyleElement';
+import { wrapThemeCSS } from '../utils/cssWrappers';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
@@ -53,7 +57,8 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
     processHunkResult(
       await renderer.asyncRender(fileDiff),
       renderer,
-      options?.unsafeCSS
+      options?.unsafeCSS,
+      options?.themeType ?? 'system'
     )
   );
 }
@@ -78,7 +83,8 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
     processHunkResult(
       await renderer.asyncRender(fileDiff),
       renderer,
-      options?.unsafeCSS
+      options?.unsafeCSS,
+      options?.themeType ?? 'system'
     )
   );
 }
@@ -220,9 +226,18 @@ function processHunkResult<LAnnotation>(
   renderer:
     | DiffHunksRenderer<LAnnotation>
     | UnresolvedFileHunksRenderer<LAnnotation>,
-  unsafeCSS: string | undefined
+  unsafeCSS: string | undefined,
+  themeType: 'system' | 'light' | 'dark'
 ) {
   const children = [createStyleElement(hunkResult.css, true)];
+  children.push(
+    createThemeStyleElement(
+      wrapThemeCSS(
+        hunkResult.themeStyles,
+        hunkResult.baseThemeType ?? themeType
+      )
+    )
+  );
   if (unsafeCSS != null) {
     children.push(createStyleElement(unsafeCSS));
   }
@@ -237,9 +252,11 @@ function processHunkResult<LAnnotation>(
 
 function getHunksRendererOptions<LAnnotation>(
   options: FileDiffOptions<LAnnotation> | undefined
-): BaseDiffOptions {
+): DiffHunksRendererOptions {
   return {
     ...options,
+    headerRenderMode:
+      options?.renderCustomHeader != null ? 'custom' : 'default',
     hunkSeparators:
       typeof options?.hunkSeparators === 'function'
         ? 'custom'

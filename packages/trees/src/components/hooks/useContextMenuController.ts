@@ -1,10 +1,10 @@
-import type { TreeInstance } from '@headless-tree/core';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import {
   CONTEXT_MENU_SLOT_NAME,
   CONTEXT_MENU_TRIGGER_TYPE,
 } from '../../constants';
+import type { TreeInstance } from '../../core/types/core';
 import type { FileTreeCallbacks } from '../../FileTree';
 import type { FileTreeNode } from '../../types';
 import { getSelectionPath } from '../../utils/getSelectionPath';
@@ -25,7 +25,7 @@ export interface UseContextMenuControllerArgs {
   isContextMenuEnabled: boolean;
   callbacksRef?: { current: FileTreeCallbacks };
   files: string[];
-  idToPath: Map<string, string>;
+  idToPath: Pick<Map<string, string>, 'get' | 'has'>;
 }
 
 export interface UseContextMenuControllerResult {
@@ -33,7 +33,7 @@ export interface UseContextMenuControllerResult {
   isContextMenuOpen: boolean;
   contextMenuAnchorRef: { current: HTMLDivElement | null };
   triggerRef: { current: HTMLButtonElement | null };
-  closeContextMenu: (notify?: boolean) => void;
+  closeContextMenu: (notify?: boolean, restoreFocus?: boolean) => void;
   openContextMenuForItem: (
     itemId: string,
     anchorEl: HTMLElement | null,
@@ -56,6 +56,7 @@ export function useContextMenuController({
   files,
   idToPath,
 }: UseContextMenuControllerArgs): UseContextMenuControllerResult {
+  'use no memo';
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(
     null
   );
@@ -93,7 +94,7 @@ export function useContextMenuController({
 
   // Lazily resolve and cache the tree container and its virtualized scroll
   // child. The cache is invalidated when the container disconnects from DOM.
-  const getTreeContainer = (): Element | null => {
+  const getTreeContainer = useCallback((): Element | null => {
     if (
       treeContainerRef.current != null &&
       treeContainerRef.current.isConnected
@@ -105,7 +106,7 @@ export function useContextMenuController({
     scrollContainerRef.current =
       container?.querySelector('[data-file-tree-virtualized-scroll]') ?? null;
     return container;
-  };
+  }, [tree]);
 
   const setContextHoverItem = useCallback(
     (itemId: string | null) => {
@@ -138,7 +139,7 @@ export function useContextMenuController({
       contextHoverItemElRef.current = itemEl;
       contextHoverItemIdRef.current = itemId;
     },
-    [tree]
+    [getTreeContainer]
   );
 
   const isEventInContextMenu = useCallback((e: Event): boolean => {
@@ -204,10 +205,10 @@ export function useContextMenuController({
     }
 
     return false;
-  }, [tree]);
+  }, [getTreeContainer, tree]);
 
   const closeContextMenu = useCallback(
-    (notify = true) => {
+    (notify = true, restoreFocus = true) => {
       if (contextMenuItemIdRef.current == null) return;
 
       clearContextMenuRestoreTimers();
@@ -217,6 +218,13 @@ export function useContextMenuController({
       setContextMenuItemId(null);
       if (notify) {
         callbacksRef?.current.onContextMenuClose?.();
+      }
+      if (!restoreFocus) {
+        contextMenuRestoreFocusRef.current = {
+          element: null,
+          focusedItemId: null,
+        };
+        return;
       }
 
       contextMenuRestoreFocusTimerRef.current = setTimeout(() => {
@@ -295,7 +303,7 @@ export function useContextMenuController({
       hoveredContextMenuItemRef.current = nextItemId;
       setContextHoverItem(nextItemId);
     },
-    [setContextHoverItem, tree]
+    [getTreeContainer, setContextHoverItem]
   );
 
   const openContextMenuForItem = useCallback(
@@ -346,6 +354,7 @@ export function useContextMenuController({
       setContextMenuItemId(itemId);
       const item = tree.getItemInstance(itemId);
       const data = item.getItemData();
+      const canRename = item.canRename?.() ?? false;
       const anchorRect = menuAnchorEl.getBoundingClientRect();
       openContextMenu(
         {
@@ -365,6 +374,12 @@ export function useContextMenuController({
             y: anchorRect.y,
           },
           close: () => closeContextMenu(),
+          canRename,
+          startRenaming: () => {
+            if (!canRename) return;
+            closeContextMenu(true, false);
+            item.startRenaming?.();
+          },
         }
       );
     },
@@ -391,7 +406,7 @@ export function useContextMenuController({
 
   const handleContextMenuKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (contextMenuItemIdRef.current == null || e.defaultPrevented) {
+      if (contextMenuItemIdRef.current == null) {
         return;
       }
       if (!isEventInContextMenu(e)) {
@@ -491,7 +506,12 @@ export function useContextMenuController({
       if (scrollTimer != null) clearTimeout(scrollTimer);
       isScrollingRef.current = false;
     };
-  }, [closeContextMenu, isContextMenuEnabled, setContextHoverItem, tree]);
+  }, [
+    closeContextMenu,
+    getTreeContainer,
+    isContextMenuEnabled,
+    setContextHoverItem,
+  ]);
 
   useEffect(
     () => () => {
@@ -542,7 +562,12 @@ export function useContextMenuController({
       `[data-item-id="${focusedItemId}"]`
     ) as HTMLElement | null;
     updateTriggerPosition(itemEl);
-  }, [focusedItemId, isContextMenuEnabled, updateTriggerPosition, tree]);
+  }, [
+    focusedItemId,
+    getTreeContainer,
+    isContextMenuEnabled,
+    updateTriggerPosition,
+  ]);
 
   const handleTreePointerOver = useCallback(
     (e: PointerEvent) => {

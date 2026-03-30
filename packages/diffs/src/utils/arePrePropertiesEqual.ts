@@ -18,8 +18,6 @@ export function arePrePropertiesEqual(
     propsA.disableLineNumbers === propsB.disableLineNumbers &&
     propsA.overflow === propsB.overflow &&
     propsA.split === propsB.split &&
-    propsA.themeStyles === propsB.themeStyles &&
-    propsA.themeType === propsB.themeType &&
     propsA.totalLines === propsB.totalLines
   );
 }

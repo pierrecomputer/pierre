@@ -8,6 +8,7 @@ import type {
 import { diffAcceptRejectHunk } from '../src/utils/diffAcceptRejectHunk';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
+import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { resolveConflict } from '../src/utils/resolveConflict';
 import { verifyFileDiffHunkValues } from './testUtils';
 
@@ -81,6 +82,32 @@ function createFixture() {
     { name: 'example.ts', contents: newContents },
     { context: 1 }
   );
+}
+
+function createPartialFixture() {
+  const patch = `diff --git a/index.html b/index.html
+index 36c553c..711c67c 100644
+--- a/index.html
++++ b/index.html
+@@ -6,8 +6,9 @@
+ </head>
+ <body>
+ <header>
+-  <h1>Welcome</h1>
+-  <p>Thanks for visiting</p>
++  <h1>Welcome to Our Site</h1>
++  <p>We're glad you're here</p>
++  <a href="/about" class="btn">Learn More</a>
+ </header>
+ <footer>
+   <p>&copy; Acme Inc.</p>`;
+
+  const diff = parsePatchFiles(patch)[0]?.files[0];
+  if (diff == null) {
+    throw new Error('Failed to parse partial patch fixture');
+  }
+
+  return diff;
 }
 
 // Convert a hunk into plain derived data that records the exact line content
@@ -405,6 +432,29 @@ describe('diffAcceptRejectHunk', () => {
     const result = diffAcceptRejectHunk(diff, 0, 'both');
 
     expect(result.cacheKey).toBe('old-key:new-key:b-0:0-0');
+  });
+
+  test('accept resolves a partial patch without materializing omitted context', () => {
+    const diff = createPartialFixture();
+    const snapshot = snapshotHunk(diff, 0);
+
+    const result = diffAcceptRejectHunk(diff, 0, 'accept');
+    const [hunk] = result.hunks;
+
+    expect(result.isPartial).toBe(true);
+    expect(result.deletionLines).toEqual(getResolvedLines(snapshot, 'accept'));
+    expect(result.additionLines).toEqual(getResolvedLines(snapshot, 'accept'));
+    expect(hunk?.collapsedBefore).toBe(5);
+    expect(hunk?.additionStart).toBe(6);
+    expect(hunk?.deletionStart).toBe(6);
+    expect(hunk?.additionLineIndex).toBe(0);
+    expect(hunk?.deletionLineIndex).toBe(0);
+    expect(result.splitLineCount).toBe(14);
+    expect(result.unifiedLineCount).toBe(14);
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
   });
 
   test('updates cacheKey when resolving a single content block', () => {

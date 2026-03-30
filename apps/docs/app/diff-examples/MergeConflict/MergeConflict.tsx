@@ -5,7 +5,12 @@ import {
   type UnresolvedFileReactOptions,
 } from '@pierre/diffs/react';
 import type { PreloadUnresolvedFileResult } from '@pierre/diffs/ssr';
-import { IconColorDark, IconColorLight, IconRefresh } from '@pierre/icons';
+import {
+  IconColorAuto,
+  IconColorDark,
+  IconColorLight,
+  IconRefresh,
+} from '@pierre/icons';
 import { useMemo, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -21,8 +26,14 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
   const [hasResolved, setHasResolved] = useState(false);
 
   const [themeType, setThemeType] = useState<'light' | 'dark' | 'system'>(
-    () => prerenderedFile.options?.themeType ?? 'dark'
+    () => prerenderedFile.options?.themeType ?? 'system'
   );
+  const borderClass =
+    themeType === 'light'
+      ? 'border-neutral-200'
+      : themeType === 'dark'
+        ? 'border-neutral-800'
+        : 'border-neutral-200 dark:border-neutral-800';
 
   // NOTE(amadeus): These server render APIs definitely suck, and it's
   // something we need to take a pass at.  Curious if it's something Nicolas
@@ -70,8 +81,14 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
         </Button>
         <ButtonGroup
           value={themeType}
-          onValueChange={(value) => setThemeType(value as 'light' | 'dark')}
+          onValueChange={(value) =>
+            setThemeType(value as 'light' | 'dark' | 'system')
+          }
         >
+          <ButtonGroupItem value="system">
+            <IconColorAuto />
+            Auto
+          </ButtonGroupItem>
           <ButtonGroupItem value="light">
             <IconColorLight />
             Light
@@ -103,7 +120,7 @@ export function MergeConflict({ prerenderedFile }: MergeConflictProps) {
           file={prerenderedFile.file}
           options={options}
           prerenderedHTML={prerenderedFile.prerenderedHTML}
-          className={`overflow-hidden rounded-lg border ${themeType === 'light' ? 'border-neutral-200' : 'border-neutral-800'}`}
+          className={`overflow-hidden rounded-lg border ${borderClass}`}
           // NOTE(amadeus): Test code, I need to better solve the whole server/vanilla/custom js thing with react
           // renderMergeConflictUtility={(action, getInstance) => {
           //   return (

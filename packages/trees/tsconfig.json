@@ -1,11 +1,14 @@
 {
   "extends": "../../tsconfig.options.json",
   "include": [
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.json",
     "test/**/*.ts",
     "test/**/*.tsx",
+    "test/**/*.json",
     "tsdown.config.ts"
   ],
   "exclude": ["node_modules", "dist"],

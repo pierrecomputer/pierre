@@ -1,3 +1,9 @@
+import {
+  getBenchmarkInstrumentation,
+  setBenchmarkCounter,
+  withBenchmarkPhase,
+} from '../internal/benchmarkInstrumentation';
+
 /**
  * Removes paths whose ancestor directories are not also in the expanded set.
  * When a parent folder is collapsed, its descendants become "orphaned" — they
@@ -131,6 +137,70 @@ export interface ExpandPathsOptions {
   cache?: Map<string, string[]>;
 }
 
+interface ExpandPathsStats {
+  ancestorCacheHitCount: number;
+  ancestorCacheMissCount: number;
+  pathCacheHitCount: number;
+  pathCacheMissCount: number;
+}
+
+// Resolves each ancestor segment in a path using a shared cache so expanding a
+// large folder set does not repeatedly rebuild the same prefix strings.
+function resolveAncestorIdsForPath(
+  path: string,
+  pathToId: Map<string, string>,
+  flatten: boolean,
+  ancestorIdCache: Map<string, string | null>,
+  stats: ExpandPathsStats | null
+): string[] {
+  const resolvedIds: string[] = [];
+  let segmentStart = 0;
+
+  while (true) {
+    const slashIndex = path.indexOf('/', segmentStart);
+    const endIndex = slashIndex === -1 ? path.length : slashIndex;
+    const ancestor = path.slice(0, endIndex);
+
+    if (ancestor.length > 0) {
+      if (ancestorIdCache.has(ancestor)) {
+        if (stats != null) {
+          stats.ancestorCacheHitCount += 1;
+        }
+        const cachedId = ancestorIdCache.get(ancestor);
+        if (cachedId != null) {
+          resolvedIds.push(cachedId);
+        }
+      } else {
+        if (stats != null) {
+          stats.ancestorCacheMissCount += 1;
+        }
+        let resolvedId: string | null;
+        if (flatten) {
+          // Prefer the flattened (f::) ID when it exists — that's the actual
+          // item headless-tree renders. Adding both the regular AND flattened
+          // IDs causes controlled-state round-trips to re-add IDs that the
+          // tree's built-in collapse removed.
+          resolvedId =
+            pathToId.get('f::' + ancestor) ?? pathToId.get(ancestor) ?? null;
+        } else {
+          // Without flattening, only use regular IDs — f:: nodes are not
+          // rendered and would create an ID mismatch in headless-tree.
+          resolvedId = pathToId.get(ancestor) ?? null;
+        }
+        ancestorIdCache.set(ancestor, resolvedId);
+        if (resolvedId != null) {
+          resolvedIds.push(resolvedId);
+        }
+      }
+    }
+
+    if (slashIndex === -1) {
+      return resolvedIds;
+    }
+    segmentStart = slashIndex + 1;
+  }
+}
+
 /**
  * Given a list of file/folder paths, returns the IDs of all those paths
  * plus every ancestor directory. This handles both regular and flattened
@@ -141,44 +211,84 @@ export function expandPathsWithAncestors(
   pathToId: Map<string, string>,
   options?: ExpandPathsOptions
 ): string[] {
-  const cache = options?.cache;
-  const flatten = options?.flattenEmptyDirectories !== false;
-  const ids = new Set<string>();
-  for (const path of paths) {
-    let expanded = cache?.get(path);
-    if (expanded == null) {
-      const parts = path.split('/');
-      const next: string[] = [];
-      for (let i = 1; i <= parts.length; i++) {
-        const ancestor = parts.slice(0, i).join('/');
-        if (flatten) {
-          // Prefer the flattened (f::) ID when it exists — that's the actual
-          // item headless-tree renders. Adding both the regular AND flattened
-          // IDs causes controlled-state round-trips to re-add IDs that the
-          // tree's built-in collapse removed.
-          const flatId = pathToId.get('f::' + ancestor);
-          if (flatId != null) {
-            next.push(flatId);
-          } else {
-            const id = pathToId.get(ancestor);
-            if (id != null) next.push(id);
+  const benchmarkInstrumentation =
+    getBenchmarkInstrumentation(options) ??
+    getBenchmarkInstrumentation(pathToId);
+
+  return withBenchmarkPhase(
+    benchmarkInstrumentation,
+    'expandPathsWithAncestors',
+    () => {
+      const cache = options?.cache;
+      const flatten = options?.flattenEmptyDirectories !== false;
+      const ids = new Set<string>();
+      const ancestorIdCache = new Map<string, string | null>();
+      const stats: ExpandPathsStats | null =
+        benchmarkInstrumentation == null
+          ? null
+          : {
+              ancestorCacheHitCount: 0,
+              ancestorCacheMissCount: 0,
+              pathCacheHitCount: 0,
+              pathCacheMissCount: 0,
+            };
+
+      for (const path of paths) {
+        let expanded = cache?.get(path);
+        if (expanded != null) {
+          if (stats != null) {
+            stats.pathCacheHitCount += 1;
           }
         } else {
-          // Without flattening, only use regular IDs — f:: nodes are not
-          // rendered and would create an ID mismatch in headless-tree.
-          const id = pathToId.get(ancestor);
-          if (id != null) next.push(id);
+          if (stats != null) {
+            stats.pathCacheMissCount += 1;
+          }
+          expanded = resolveAncestorIdsForPath(
+            path,
+            pathToId,
+            flatten,
+            ancestorIdCache,
+            stats
+          );
+          cache?.set(path, expanded);
+        }
+
+        for (const id of expanded) {
+          ids.add(id);
         }
       }
-      expanded = next;
-      if (cache != null) {
-        cache.set(path, expanded);
-      }
-    }
 
-    for (const id of expanded) {
-      ids.add(id);
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsInputCount',
+        paths.length
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsResolvedIds',
+        ids.size
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsPathCacheHits',
+        stats?.pathCacheHitCount ?? 0
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsPathCacheMisses',
+        stats?.pathCacheMissCount ?? 0
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsAncestorCacheHits',
+        stats?.ancestorCacheHitCount ?? 0
+      );
+      setBenchmarkCounter(
+        benchmarkInstrumentation,
+        'workload.expandPathsAncestorCacheMisses',
+        stats?.ancestorCacheMissCount ?? 0
+      );
+      return Array.from(ids);
     }
-  }
-  return Array.from(ids);
+  );
 }

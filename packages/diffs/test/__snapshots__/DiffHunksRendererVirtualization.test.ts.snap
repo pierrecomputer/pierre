@@ -45,8 +45,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -108,9 +115,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
     ],
     "properties": {
       "data-change-type": "change",
-      "data-diffs-header": "",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+      "data-diffs-header": "default",
     },
     "tagName": "div",
     "type": "element",
@@ -259,8 +264,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
       "data-file": undefined,
       "data-indicators": "bars",
       "data-overflow": "scroll",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
+      "style": "--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
     "tagName": "pre",
@@ -29247,8 +29251,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -29310,9 +29321,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
     ],
     "properties": {
       "data-change-type": "change",
-      "data-diffs-header": "",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+      "data-diffs-header": "default",
     },
     "tagName": "div",
     "type": "element",
@@ -29461,8 +29470,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
       "data-file": undefined,
       "data-indicators": "bars",
       "data-overflow": "scroll",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
+      "style": "--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
     "tagName": "pre",
@@ -58214,8 +58222,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -58277,9 +58292,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
     ],
     "properties": {
       "data-change-type": "change",
-      "data-diffs-header": "",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+      "data-diffs-header": "default",
     },
     "tagName": "div",
     "type": "element",
@@ -58428,8 +58441,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
       "data-file": undefined,
       "data-indicators": "bars",
       "data-overflow": "scroll",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
+      "style": "--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
     "tagName": "pre",
@@ -87544,8 +87556,15 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -87607,9 +87626,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
     ],
     "properties": {
       "data-change-type": "change",
-      "data-diffs-header": "",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+      "data-diffs-header": "default",
     },
     "tagName": "div",
     "type": "element",
@@ -87637,8 +87654,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
       "data-file": undefined,
       "data-indicators": "bars",
       "data-overflow": "scroll",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
+      "style": "--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
     "tagName": "pre",
@@ -90339,8 +90355,15 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -90402,9 +90425,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
     ],
     "properties": {
       "data-change-type": "change",
-      "data-diffs-header": "",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+      "data-diffs-header": "default",
     },
     "tagName": "div",
     "type": "element",
@@ -90420,8 +90441,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
       "data-file": undefined,
       "data-indicators": "bars",
       "data-overflow": "scroll",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
+      "style": "--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
     "tagName": "pre",
@@ -91588,8 +91608,15 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
           {
             "children": [
               {
-                "type": "text",
-                "value": "test.txt",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "test.txt",
+                  },
+                ],
+                "properties": {},
+                "tagName": "bdi",
+                "type": "element",
               },
             ],
             "properties": {
@@ -91651,9 +91678,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
     ],
     "properties": {
       "data-change-type": "change",
-      "data-diffs-header": "",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+      "data-diffs-header": "default",
     },
     "tagName": "div",
     "type": "element",
@@ -91669,8 +91694,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
       "data-file": undefined,
       "data-indicators": "bars",
       "data-overflow": "scroll",
-      "data-theme-type": undefined,
-      "style": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;--diffs-min-number-column-width-default:3ch;",
+      "style": "--diffs-min-number-column-width-default:3ch;",
       "tabIndex": 0,
     },
     "tagName": "pre",

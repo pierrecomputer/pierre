@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 
 import {
+  CUSTOM_HEADER_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
-import type { FileContents, FileDiffMetadata } from '../../types';
+import type { FileDiffMetadata } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { getMergeConflictActionSlotName } from '../../utils/getMergeConflictActionSlotName';
 import {
@@ -16,10 +17,9 @@ import { GutterUtilitySlotStyles, MergeConflictSlotStyles } from '../constants';
 import type { DiffBasePropsReact } from '../types';
 
 interface RenderDiffChildrenProps<LAnnotation, T> {
-  fileDiff?: FileDiffMetadata;
+  fileDiff: FileDiffMetadata;
   actions?: (MergeConflictDiffAction | undefined)[];
-  deletionFile?: FileContents;
-  additionFile?: FileContents;
+  renderCustomHeader: DiffBasePropsReact<LAnnotation>['renderCustomHeader'];
   renderHeaderPrefix: DiffBasePropsReact<LAnnotation>['renderHeaderPrefix'];
   renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
@@ -37,8 +37,7 @@ interface RenderDiffChildrenProps<LAnnotation, T> {
 export function renderDiffChildren<LAnnotation, T>({
   fileDiff,
   actions,
-  deletionFile,
-  additionFile,
+  renderCustomHeader,
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderAnnotation,
@@ -50,20 +49,21 @@ export function renderDiffChildren<LAnnotation, T>({
   getInstance,
 }: RenderDiffChildrenProps<LAnnotation, T>): ReactNode {
   const gutterUtility = renderGutterUtility ?? renderHoverUtility;
-  const prefix = renderHeaderPrefix?.({
-    fileDiff,
-    deletionFile,
-    additionFile,
-  });
-  const metadata = renderHeaderMetadata?.({
-    fileDiff,
-    deletionFile,
-    additionFile,
-  });
+  const customHeader = renderCustomHeader?.(fileDiff);
+  const prefix = renderHeaderPrefix?.(fileDiff);
+  const metadata = renderHeaderMetadata?.(fileDiff);
   return (
     <>
-      {prefix != null && <div slot={HEADER_PREFIX_SLOT_ID}>{prefix}</div>}
-      {metadata != null && <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>}
+      {customHeader != null ? (
+        <div slot={CUSTOM_HEADER_SLOT_ID}>{customHeader}</div>
+      ) : (
+        <>
+          {prefix != null && <div slot={HEADER_PREFIX_SLOT_ID}>{prefix}</div>}
+          {metadata != null && (
+            <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>
+          )}
+        </>
+      )}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
           <div key={index} slot={getLineAnnotationName(annotation)}>
@@ -74,7 +74,7 @@ export function renderDiffChildren<LAnnotation, T>({
         renderMergeConflictUtility != null &&
         getInstance != null &&
         actions.map((action) => {
-          if (action == null || fileDiff == null) {
+          if (action == null) {
             return undefined;
           }
           const slot = getSlotName(action, fileDiff);

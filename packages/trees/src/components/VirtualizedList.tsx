@@ -12,6 +12,7 @@ export interface VirtualizedListProps {
   itemCount: number;
   renderItem: (index: number) => JSX.Element | null;
   scrollToIndex?: number | null;
+  initialViewportHeight?: number | null;
   /**
    * Optional explicit row height in px. If omitted, resolves from
    * --ft-internal-row-height (fallback 30).
@@ -218,10 +219,26 @@ export function computeStickyWindowLayout({
   };
 }
 
+function renderRangeChildren(
+  range: VirtualRange,
+  renderItem: (index: number) => JSX.Element | null
+): JSX.Element[] {
+  const { start: startIndex, end: endIndex } = range;
+  const children: JSX.Element[] = [];
+  for (let index = startIndex; index <= endIndex; index++) {
+    const item = renderItem(index);
+    if (item != null) {
+      children.push(item);
+    }
+  }
+  return children;
+}
+
 export function VirtualizedList({
   itemCount,
   renderItem,
   scrollToIndex,
+  initialViewportHeight,
   itemHeight,
 }: VirtualizedListProps): JSX.Element {
   'use no memo';
@@ -229,11 +246,28 @@ export function VirtualizedList({
   const stickyOffsetRef = useRef<HTMLDivElement>(null);
   const stickyWindowRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
-  const [range, setRange] = useState<VirtualRange>(EMPTY_RANGE);
-  const [resolvedHeight, setResolvedHeight] = useState<number>(
-    itemHeight != null && itemHeight > 0 ? itemHeight : DEFAULT_ITEM_HEIGHT
+  const initialResolvedHeight =
+    itemHeight != null && itemHeight > 0 ? itemHeight : DEFAULT_ITEM_HEIGHT;
+  const hintedViewportHeight =
+    initialViewportHeight != null && initialViewportHeight > 0
+      ? initialViewportHeight
+      : 0;
+  const [range, setRange] = useState<VirtualRange>(() =>
+    hintedViewportHeight > 0
+      ? computeWindowRange({
+          scrollTop: 0,
+          viewportHeight: hintedViewportHeight,
+          offset: 0,
+          itemCount,
+          itemHeight: initialResolvedHeight,
+        })
+      : EMPTY_RANGE
   );
-  const [viewportHeight, setViewportHeight] = useState<number>(0);
+  const [resolvedHeight, setResolvedHeight] = useState<number>(
+    initialResolvedHeight
+  );
+  const [viewportHeight, setViewportHeight] =
+    useState<number>(hintedViewportHeight);
 
   // Find viewport and set up scroll/resize listeners
   useLayoutEffect(() => {
@@ -368,15 +402,6 @@ export function VirtualizedList({
     }
   }, [totalHeight, offsetHeight, windowHeight, stickyInset]);
 
-  const { start: startIndex, end: endIndex } = range;
-  const children: JSX.Element[] = [];
-  for (let i = startIndex; i <= endIndex; i++) {
-    const item = renderItem(i);
-    if (item != null) {
-      children.push(item);
-    }
-  }
-
   return (
     <div ref={containerRef} data-file-tree-virtualized-list="true">
       <div
@@ -385,7 +410,7 @@ export function VirtualizedList({
         aria-hidden="true"
       />
       <div ref={stickyWindowRef} data-file-tree-virtualized-sticky="true">
-        {children}
+        {renderRangeChildren(range, renderItem)}
       </div>
     </div>
   );

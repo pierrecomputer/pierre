@@ -24,6 +24,7 @@ import type {
   DiffsHighlighter,
   ExpansionDirections,
   FileDiffMetadata,
+  FileHeaderRenderMode,
   HunkData,
   HunkExpansionRegion,
   HunkSeparators,
@@ -34,10 +35,9 @@ import type {
   RenderRange,
   SupportedLanguages,
   ThemedDiffResult,
-  ThemeTypes,
 } from '../types';
+import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
-import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationElement as createDefaultAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
@@ -57,6 +57,7 @@ import {
   createHastElement,
 } from '../utils/hast_utils';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
+import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
@@ -105,6 +106,17 @@ interface ProcessContext {
   hunkData: HunkData[];
   pushToGutter(type: CodeColumnType, element: HASTElement): void;
   incrementRowCount(count?: number): void;
+}
+
+export interface DiffHunksRendererOptions extends BaseDiffOptions {
+  headerRenderMode?: FileHeaderRenderMode;
+}
+
+export interface DiffHunksRendererOptionsWithDefaults extends Omit<
+  BaseDiffOptionsWithDefaults,
+  'themeType'
+> {
+  headerRenderMode: FileHeaderRenderMode;
 }
 
 export interface UnifiedLineDecorationProps {
@@ -199,7 +211,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private renderCache: RenderedDiffASTCache | undefined;
 
   constructor(
-    public options: BaseDiffOptions = { theme: DEFAULT_THEMES },
+    public options: DiffHunksRendererOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
@@ -226,19 +238,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.workerManager?.cleanUpPendingTasks(this);
   }
 
-  public setOptions(options: BaseDiffOptions): void {
+  public setOptions(options: DiffHunksRendererOptions): void {
     this.options = options;
   }
 
-  private mergeOptions(options: Partial<BaseDiffOptions>) {
+  public mergeOptions(options: Partial<DiffHunksRendererOptions>): void {
     this.options = { ...this.options, ...options };
-  }
-
-  public setThemeType(themeType: ThemeTypes): void {
-    if (this.getOptionsWithDefaults().themeType === themeType) {
-      return;
-    }
-    this.mergeOptions({ themeType });
   }
 
   public expandHunk(
@@ -328,7 +333,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ctx: RenderedLineContext
   ) => SplitInjectedRowPlacement | undefined;
 
-  protected getOptionsWithDefaults(): BaseDiffOptionsWithDefaults {
+  protected getOptionsWithDefaults(): DiffHunksRendererOptionsWithDefaults {
     const {
       diffIndicators = 'bars',
       diffStyle = 'split',
@@ -345,7 +350,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength = 1000,
       overflow = 'scroll',
       theme = DEFAULT_THEMES,
-      themeType = 'system',
+      headerRenderMode = 'default',
       tokenizeMaxLineLength = 1000,
       useCSSClasses = false,
     } = this.options;
@@ -365,7 +370,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       maxLineDiffLength,
       overflow,
       theme: this.workerManager?.getDiffRenderOptions().theme ?? theme,
-      themeType,
+      headerRenderMode,
       tokenizeMaxLineLength,
       useCSSClasses,
     };
@@ -385,14 +390,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.diff = diff;
     const { options } = this.getRenderOptions(diff);
     let cache = this.workerManager?.getDiffResultCache(diff);
-    if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
+    if (cache != null && !areDiffRenderOptionsEqual(options, cache.options)) {
       cache = undefined;
     }
     this.renderCache ??= {
       diff,
-      // NOTE(amadeus): If we're hydrating, we can assume there was
-      // pre-rendered HTML, otherwise one should not be hydrating
-      highlighted: true,
+      highlighted: !isDiffPlainText(diff),
       options,
       result: cache?.result,
       renderRange: undefined,
@@ -401,11 +404,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.workerManager?.isWorkingPool() === true &&
       this.renderCache.result == null
     ) {
+      // We should only kick off a preload of the AST if we have a WorkerPool
       this.workerManager.highlightDiffAST(this, this.diff);
-    } else {
-      void this.asyncHighlight(diff).then(({ result, options }) => {
-        this.onHighlightSuccess(diff, result, options);
-      });
     }
   }
 
@@ -414,9 +414,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (this.workerManager?.isWorkingPool() === true) {
         return this.workerManager.getDiffRenderOptions();
       }
-      const { theme, tokenizeMaxLineLength, lineDiffType } =
+      const { theme, tokenizeMaxLineLength, lineDiffType, maxLineDiffLength } =
         this.getOptionsWithDefaults();
-      return { theme, tokenizeMaxLineLength, lineDiffType };
+      return { theme, tokenizeMaxLineLength, lineDiffType, maxLineDiffLength };
     })();
     this.getOptionsWithDefaults();
     const { renderCache } = this;
@@ -425,7 +425,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     if (
       diff !== renderCache.diff ||
-      !areRenderOptionsEqual(options, renderCache.options)
+      !areDiffRenderOptionsEqual(options, renderCache.options)
     ) {
       return { options, forceRender: true };
     }
@@ -462,8 +462,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (
         this.renderCache.result == null ||
         (!this.renderCache.highlighted &&
-          !areRenderRangesEqual(this.renderCache.renderRange, renderRange))
+          (diff !== this.renderCache.diff ||
+            !areRenderRangesEqual(this.renderCache.renderRange, renderRange)))
       ) {
+        this.renderCache.diff = diff;
         this.renderCache.result = this.workerManager.getPlainDiffAST(
           diff,
           renderRange.startingLine,
@@ -548,26 +550,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   protected createPreElement(
     split: boolean,
     totalLines: number,
-    themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined,
     customProperties?: CustomPreProperties
   ): HASTElement {
-    const {
-      diffIndicators,
-      disableBackground,
-      disableLineNumbers,
-      overflow,
-      themeType,
-    } = this.getOptionsWithDefaults();
+    const { diffIndicators, disableBackground, disableLineNumbers, overflow } =
+      this.getOptionsWithDefaults();
     return createPreElement({
       type: 'diff',
       diffIndicators,
       disableBackground,
       disableLineNumbers,
       overflow,
-      themeStyles,
       split,
-      themeType: baseThemeType ?? themeType,
       totalLines,
       customProperties,
     });
@@ -619,7 +612,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const triggerRenderUpdate =
       !this.renderCache.highlighted ||
-      !areRenderOptionsEqual(this.renderCache.options, options) ||
+      !areDiffRenderOptionsEqual(this.renderCache.options, options) ||
       this.renderCache.diff !== diff;
 
     this.renderCache = {
@@ -1100,9 +1093,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const preNode = this.createPreElement(
       deletionsContentAST != null && additionsContentAST != null,
-      totalLines,
-      themeStyles,
-      baseThemeType
+      totalLines
     );
 
     return {
@@ -1124,7 +1115,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themeStyles,
       baseThemeType,
       headerElement: !disableFileHeader
-        ? this.renderHeader(this.diff, themeStyles, baseThemeType)
+        ? this.renderHeader(this.diff)
         : undefined,
       totalLines,
       rowCount: context.rowCount,
@@ -1309,29 +1300,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { deletionSpan, additionSpan };
   }
 
-  private renderHeader(
-    diff: FileDiffMetadata,
-    themeStyles: string,
-    baseThemeType: 'light' | 'dark' | undefined
-  ): HASTElement {
-    const { themeType } = this.getOptionsWithDefaults();
+  private renderHeader(diff: FileDiffMetadata): HASTElement {
+    const { headerRenderMode } = this.getOptionsWithDefaults();
     return createFileHeaderElement({
       fileOrDiff: diff,
-      themeStyles,
-      themeType: baseThemeType ?? themeType,
+      mode: headerRenderMode,
     });
   }
-}
-
-function areRenderOptionsEqual(
-  optionsA: RenderDiffOptions,
-  optionsB: RenderDiffOptions
-): boolean {
-  return (
-    areThemesEqual(optionsA.theme, optionsB.theme) &&
-    optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength &&
-    optionsA.lineDiffType === optionsB.lineDiffType
-  );
 }
 
 function getModifiedLinesString(lines: number) {

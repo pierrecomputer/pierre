@@ -48,12 +48,8 @@ export function renderFileWithHighlighter(
   const lang = forcePlainText
     ? 'text'
     : (file.lang ?? getFiletypeFromFileName(file.name));
-  const baseThemeType = (() => {
-    if (typeof theme === 'string') {
-      return highlighter.getTheme(theme).type;
-    }
-    return undefined;
-  })();
+  const baseThemeType =
+    typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
   const themeStyles = getHighlighterThemeStyles({
     theme,
     highlighter,

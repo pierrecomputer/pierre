@@ -1,3 +1,4 @@
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadUnresolvedFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -95,8 +96,8 @@ export async function validateSession(token: string): Promise<Session | null> {
 `,
   },
   options: {
+    theme: DEFAULT_THEMES,
     themeType: 'dark',
-    theme: { light: 'pierre-light', dark: 'pierre-dark' },
     overflow: 'wrap',
     diffIndicators: 'none',
     unsafeCSS: CustomScrollbarCSS,

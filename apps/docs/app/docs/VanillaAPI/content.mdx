@@ -34,10 +34,15 @@ uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
 Header customization and collapsing behavior:
 
-- Use `renderHeaderMetadata` to render custom UI at the end of the file header
-  (after the diff stats).
-- Use `renderHeaderPrefix` to render custom UI at the start of the file header
-  (before the filename).
+- Use `renderHeaderPrefix` to render custom UI at the beginning of the built-in
+  `FileDiff` header, before the filename and icon, while keeping the default
+  header layout.
+- Use `renderHeaderMetadata` to render custom UI at the end of the built-in
+  `FileDiff` header, after the diff stats, while keeping the default header
+  layout.
+- Use `renderCustomHeader` when you want to replace the built-in header content
+  entirely.
+- In `File`, header callbacks receive `file: FileContents`.
 - Use `collapsed` in constructor options to hide file body content while keeping
   the file header visible.
 
