@@ -200,6 +200,11 @@ export const createTree = <T>(
 
       rebuildRootItemInstance();
 
+      // FileTree does not expose generic core feature overrides, so the hot
+      // rebuild path intentionally bypasses `tree.getItemsMeta()` and uses the
+      // packed traversal directly. If FileTree needs alternate visible-item
+      // derivation later, add a dedicated fast path here instead of routing
+      // every rebuild through the generic feature hook.
       const packedVisibleMeta = buildPackedVisibleItemMeta(treeInstance);
       itemMetaStore.indexById = packedVisibleMeta.indexById;
       itemMetaStore.parentIds = packedVisibleMeta.parentIds;

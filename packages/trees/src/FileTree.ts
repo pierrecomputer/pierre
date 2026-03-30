@@ -86,6 +86,7 @@ export type FileTreeCollision = {
 
 export interface FileTreeHandle {
   tree: TreeInstance<FileTreeNode>;
+  /** Lightweight path lookup used by FileTree state helpers. Not a full Map. */
   pathToId: PathToIdLookup;
   idToPath: IdToPathLookup;
   closeContextMenu?: () => void;
