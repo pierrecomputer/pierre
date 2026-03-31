@@ -127,7 +127,9 @@ function installDomConstructors() {
 class SpyFile extends File {
   renderCalls = 0;
 
-  public override render(_props: FileRenderProps<undefined>): boolean {
+  public override render(
+    _props: FileRenderProps<undefined, undefined>
+  ): boolean {
     this.renderCalls += 1;
     return true;
   }
@@ -140,7 +142,9 @@ class SpyFile extends File {
 class SpyFileDiff extends FileDiff {
   renderCalls = 0;
 
-  public override render(_props: FileDiffRenderProps<undefined>): boolean {
+  public override render(
+    _props: FileDiffRenderProps<undefined, undefined>
+  ): boolean {
     this.renderCalls += 1;
     return true;
   }
@@ -154,7 +158,7 @@ class SpyUnresolvedFile extends UnresolvedFile {
   renderCalls = 0;
 
   public override render(
-    _props: UnresolvedFileRenderProps<undefined>
+    _props: UnresolvedFileRenderProps<undefined, undefined>
   ): boolean {
     this.renderCalls += 1;
     return true;
@@ -268,7 +272,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const instance = new SpyFile({ collapsed: true });
-      const props: FileHydrateProps<undefined> = {
+      const props: FileHydrateProps<undefined, undefined> = {
         file,
         fileContainer: dom.createHydrationContainer(),
       };
@@ -285,7 +289,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const instance = new SpyFile();
-      const props: FileHydrateProps<undefined> = {
+      const props: FileHydrateProps<undefined, undefined> = {
         file,
         fileContainer: dom.createHydrationContainer(),
       };
@@ -306,7 +310,7 @@ describe('collapsed hydration', () => {
         disableFileHeader: true,
       });
       const fileContainer = dom.createHydrationContainer({ header: false });
-      const props: FileHydrateProps<undefined> = {
+      const props: FileHydrateProps<undefined, undefined> = {
         file,
         fileContainer,
       };
@@ -329,7 +333,7 @@ describe('collapsed hydration', () => {
         virtualizerState.virtualizer
       );
       const fileContainer = dom.createHydrationContainer();
-      const props: FileHydrateProps<undefined> = {
+      const props: FileHydrateProps<undefined, undefined> = {
         file,
         fileContainer,
       };
@@ -356,7 +360,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const instance = new SpyFileDiff({ collapsed: true });
-      const props: FileDiffHydrationProps<undefined> = {
+      const props: FileDiffHydrationProps<undefined, undefined> = {
         fileDiff,
         oldFile: file,
         newFile: file,
@@ -375,7 +379,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const instance = new SpyFileDiff();
-      const props: FileDiffHydrationProps<undefined> = {
+      const props: FileDiffHydrationProps<undefined, undefined> = {
         fileDiff,
         oldFile: file,
         newFile: file,
@@ -398,7 +402,7 @@ describe('collapsed hydration', () => {
         disableFileHeader: true,
       });
       const fileContainer = dom.createHydrationContainer({ header: false });
-      const props: FileDiffHydrationProps<undefined> = {
+      const props: FileDiffHydrationProps<undefined, undefined> = {
         fileDiff,
         oldFile: file,
         newFile: file,
@@ -423,7 +427,7 @@ describe('collapsed hydration', () => {
         virtualizerState.virtualizer
       );
       const fileContainer = dom.createHydrationContainer();
-      const props: FileDiffHydrationProps<undefined> = {
+      const props: FileDiffHydrationProps<undefined, undefined> = {
         oldFile: file,
         newFile: modifiedFile,
         fileContainer,
@@ -483,7 +487,7 @@ describe('collapsed hydration', () => {
         virtualizerState.virtualizer
       );
       const fileContainer = dom.createHydrationContainer();
-      const props: FileDiffHydrationProps<undefined> = {
+      const props: FileDiffHydrationProps<undefined, undefined> = {
         oldFile: null,
         newFile: modifiedFile,
         fileContainer,
@@ -518,7 +522,7 @@ describe('collapsed hydration', () => {
         virtualizerState.virtualizer
       );
       const fileContainer = dom.createHydrationContainer();
-      const props: FileDiffHydrationProps<undefined> = {
+      const props: FileDiffHydrationProps<undefined, undefined> = {
         oldFile: file,
         newFile: null,
         fileContainer,
@@ -555,7 +559,7 @@ describe('collapsed hydration', () => {
           return undefined;
         },
       });
-      const props: UnresolvedFileHydrationProps<undefined> = {
+      const props: UnresolvedFileHydrationProps<undefined, undefined> = {
         file: unresolvedFile,
         fileContainer: dom.createHydrationContainer(),
       };
@@ -573,7 +577,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const instance = new SpyUnresolvedFile();
-      const props: UnresolvedFileHydrationProps<undefined> = {
+      const props: UnresolvedFileHydrationProps<undefined, undefined> = {
         file: unresolvedFile,
         fileContainer: dom.createHydrationContainer(),
       };
@@ -590,7 +594,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const instance = new SpyUnresolvedFile({ collapsed: true });
-      const props: UnresolvedFileHydrationProps<undefined> = {
+      const props: UnresolvedFileHydrationProps<undefined, undefined> = {
         file: unresolvedFile,
         fileContainer: dom.createHydrationContainer({ header: false }),
       };
@@ -616,7 +620,7 @@ describe('collapsed hydration', () => {
         },
       });
       const fileContainer = dom.createHydrationContainer({ header: false });
-      const props: UnresolvedFileHydrationProps<undefined> = {
+      const props: UnresolvedFileHydrationProps<undefined, undefined> = {
         file: unresolvedFile,
         fileContainer,
       };

@@ -11,14 +11,23 @@ export type { FileContents };
 
 interface MultiFileDiffBaseProps<
   LAnnotation,
-> extends DiffBasePropsReact<LAnnotation> {
+  LDecoration,
+  LCaret,
+> extends DiffBasePropsReact<LAnnotation, LDecoration, LCaret> {
   disableWorkerPool?: boolean;
 }
 
-export type MultiFileDiffProps<LAnnotation> =
-  MultiFileDiffBaseProps<LAnnotation> & DiffFileInput;
+export type MultiFileDiffProps<
+  LAnnotation,
+  LDecoration = undefined,
+  LCaret = undefined,
+> = MultiFileDiffBaseProps<LAnnotation, LDecoration, LCaret> & DiffFileInput;
 
-export function MultiFileDiff<LAnnotation = undefined>({
+export function MultiFileDiff<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+  LCaret = undefined,
+>({
   oldFile,
   newFile,
   options,
@@ -26,6 +35,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   editStateKey,
   metrics,
   lineAnnotations,
+  decorations,
   selectedLines,
   className,
   style,
@@ -40,7 +50,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
+}: MultiFileDiffProps<LAnnotation, LDecoration, LCaret>): React.JSX.Element {
   const { fileDiff, ref, getHoveredLine, getAnnotationSlotName } =
     useFileDiffInstance({
       oldFile,
@@ -50,6 +60,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
       editStateKey,
       metrics,
       lineAnnotations,
+      decorations,
       selectedLines,
       prerenderedHTML,
       hasGutterRenderUtility: renderGutterUtility != null,

@@ -36,6 +36,7 @@ import type {
   EditorActiveLineOptions,
   EditorChangeEvent,
   FileContents,
+  FileDecorationItem,
   HighlightedToken,
   LineAnnotation,
   PostRenderPhase,
@@ -81,7 +82,7 @@ import { DiffsContainerLoaded } from './web-components';
 
 const EMPTY_STRINGS: string[] = [''];
 
-export interface FileRenderProps<LAnnotation> {
+export interface FileRenderProps<LAnnotation, LDecoration> {
   file: FileContents;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
@@ -89,11 +90,12 @@ export interface FileRenderProps<LAnnotation> {
   forceRender?: boolean;
   preventEmit?: boolean;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+  decorations?: FileDecorationItem<LDecoration>[];
   renderRange?: RenderRange;
 }
 
-export interface FileHydrateProps<LAnnotation> extends Omit<
-  FileRenderProps<LAnnotation>,
+export interface FileHydrateProps<LAnnotation, LDecoration> extends Omit<
+  FileRenderProps<LAnnotation, LDecoration>,
   'fileContainer'
 > {
   fileContainer: HTMLElement;
@@ -112,7 +114,7 @@ export type FileEditCompleteHandler<LAnnotation> = (
   event: FileEditCompleteEvent<LAnnotation>
 ) => EditCompletionDecision;
 
-export interface FileOptions<LAnnotation>
+export interface FileOptions<LAnnotation = undefined, LDecoration = undefined>
   extends BaseCodeOptions, InteractionManagerBaseOptions<'file'> {
   disableFileHeader?: boolean;
   renderHeaderPrefix?: RenderFileMetadata;
@@ -134,7 +136,7 @@ export interface FileOptions<LAnnotation>
 
   onPostRender?(
     node: HTMLElement,
-    instance: File<LAnnotation>,
+    instance: File<LAnnotation, LDecoration>,
     phase: PostRenderPhase
   ): unknown;
 
@@ -165,9 +167,10 @@ interface ColumnElements {
   content: HTMLElement;
 }
 
-interface HydrationSetup<LAnnotation> {
+interface HydrationSetup<LAnnotation, LDecoration> {
   file: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  decorations: FileDecorationItem<LDecoration>[] | undefined;
 }
 
 function createEditSessionFile(file: FileContents): FileContents {
@@ -192,6 +195,7 @@ let instanceId = -1;
 
 export class File<
   LAnnotation = undefined,
+  LDecoration = undefined,
 > implements DiffsEditableComponent<LAnnotation> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
@@ -224,13 +228,14 @@ export class File<
   protected headerFilenameSuffix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
 
-  protected fileRenderer: FileRenderer<LAnnotation>;
+  protected fileRenderer: FileRenderer<LAnnotation, LDecoration>;
   protected resizeManager: ResizeManager;
   protected interactionManager: InteractionManager<'file'>;
 
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
   protected lineAnnotations: LineAnnotation<LAnnotation>[] = [];
+  protected decorations: FileDecorationItem<LDecoration>[] = [];
   protected managersDirty = false;
 
   public file: FileContents | undefined;
@@ -248,11 +253,13 @@ export class File<
   protected editor: DiffsEditor<LAnnotation> | undefined;
 
   constructor(
-    public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    public options: FileOptions<LAnnotation, LDecoration> = {
+      theme: DEFAULT_THEMES,
+    },
     private workerManager?: WorkerPoolManager | undefined,
     private isContainerManaged = false
   ) {
-    this.fileRenderer = new FileRenderer<LAnnotation>(
+    this.fileRenderer = new FileRenderer<LAnnotation, LDecoration>(
       options,
       this.getAnnotationSlotName,
       this.handleHighlightRender,
@@ -398,7 +405,9 @@ export class File<
     this.rerender();
   }
 
-  public setOptions(options: FileOptions<LAnnotation> | undefined): void {
+  public setOptions(
+    options: FileOptions<LAnnotation, LDecoration> | undefined
+  ): void {
     if (options == null) return;
     this.options = options;
     this.cachedHeaderHTML = undefined;
@@ -409,7 +418,9 @@ export class File<
     this.interactionManager.setOptions(pluckInteractionOptions(this.options));
   }
 
-  private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
+  private mergeOptions(
+    options: Partial<FileOptions<LAnnotation, LDecoration>>
+  ): void {
     this.options = { ...this.options, ...options };
   }
 
@@ -536,6 +547,10 @@ export class File<
     return { ...this.options, ...this.fileRenderer.getEffectiveCodeOptions() };
   }
 
+  public setDecorations(decorations: FileDecorationItem<LDecoration>[]): void {
+    this.decorations = decorations;
+  }
+
   public flushManagers(): void {
     if (!this.managersDirty || this.pre == null) {
       this.managersDirty = false;
@@ -630,13 +645,14 @@ export class File<
     this.workerManager?.subscribeToThemeChanges(this);
   }
 
-  public hydrate(props: FileHydrateProps<LAnnotation>): void {
+  public hydrate(props: FileHydrateProps<LAnnotation, LDecoration>): void {
     const {
       fileContainer,
       prerenderedHTML,
       preventEmit = false,
       file,
       lineAnnotations,
+      decorations,
     } = props;
     if (!this.enabled) {
       throw new Error(
@@ -670,7 +686,7 @@ export class File<
     }
     // Otherwise orchestrate our setup.
     else {
-      this.hydrationSetup({ file, lineAnnotations });
+      this.hydrationSetup({ file, lineAnnotations, decorations });
     }
     if (!preventEmit) {
       this.emitPostRender();
@@ -732,11 +748,14 @@ export class File<
   protected hydrationSetup({
     file,
     lineAnnotations,
-  }: HydrationSetup<LAnnotation>): void {
+    decorations,
+  }: HydrationSetup<LAnnotation, LDecoration>): void {
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    this.decorations = decorations ?? this.decorations;
     this.file = file;
     this.fileRenderer.setOptions(getFileRendererOptions(this.options));
     this.syncInteractionOptions();
+    this.fileRenderer.setDecorations(this.decorations);
     if (this.pre == null) {
       return;
     }
@@ -1024,8 +1043,9 @@ export class File<
     containerWrapper,
     deferManagers = false,
     lineAnnotations,
+    decorations,
     renderRange,
-  }: FileRenderProps<LAnnotation>): boolean {
+  }: FileRenderProps<LAnnotation, LDecoration>): boolean {
     if (!this.enabled) {
       throw new Error(
         'File.render: attempting to call render after cleaned up'
@@ -1040,6 +1060,7 @@ export class File<
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const themeChanged = this.hasThemeChanged();
+    const nextDecorations = decorations;
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.getLatestAnnotations().length > 0)
@@ -1050,13 +1071,19 @@ export class File<
       this.updateExternalFile(file, lineAnnotations);
     }
     const latestFile = this.getLatestFile(file) ?? file;
+    const decorationsChanged =
+      nextDecorations != null &&
+      (nextDecorations.length > 0 || this.decorations.length > 0)
+        ? nextDecorations !== this.decorations
+        : false;
     if (
       !collapsed &&
       !forceRender &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
       !annotationsChanged &&
-      !themeChanged
+      !themeChanged &&
+      !decorationsChanged
     ) {
       return this.applyCachedThemeState(themeType);
     }
@@ -1070,7 +1097,11 @@ export class File<
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
+    if (nextDecorations != null) {
+      this.decorations = nextDecorations;
+    }
     this.fileRenderer.setLineAnnotations(this.getLatestAnnotations());
+    this.fileRenderer.setDecorations(this.decorations);
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;
@@ -1136,7 +1167,7 @@ export class File<
       if (
         !this.canPartiallyRender(
           forceRender,
-          annotationsChanged,
+          annotationsChanged || decorationsChanged,
           didFileChange ||
             themeChanged ||
             !areFileTargetsEqual(this.renderedFile, latestFile)

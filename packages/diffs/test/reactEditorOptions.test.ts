@@ -60,19 +60,19 @@ afterAll(async () => {
 });
 
 const ReactFileComponent = ReactFile as ComponentType<
-  ReactFileProps<undefined>
+  ReactFileProps<undefined, undefined>
 >;
 const ReactFileDiffComponent = ReactFileDiff as ComponentType<
-  ReactFileDiffProps<undefined>
+  ReactFileDiffProps<undefined, undefined>
 >;
 const EditProviderComponent = EditProvider as ComponentType<
   PropsWithChildren<EditProviderProps<undefined>>
 >;
 const MultiFileDiffComponent = MultiFileDiff as ComponentType<
-  MultiFileDiffProps<undefined>
+  MultiFileDiffProps<undefined, undefined>
 >;
 const PatchDiffComponent = PatchDiff as ComponentType<
-  PatchDiffProps<undefined>
+  PatchDiffProps<undefined, undefined>
 >;
 
 function createEditor(

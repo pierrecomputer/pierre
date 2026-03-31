@@ -1,6 +1,10 @@
 import type { FileOptions } from '../components/File';
 import { FileRenderer } from '../renderers/FileRenderer';
-import type { FileContents, LineAnnotation } from '../types';
+import type {
+  FileContents,
+  FileDecorationItem,
+  LineAnnotation,
+} from '../types';
 import {
   createStyleElement,
   createThemeStyleElement,
@@ -9,25 +13,39 @@ import { wrapThemeCSS } from '../utils/cssWrappers';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { renderHTML } from './renderHTML';
 
-export type PreloadFileOptions<LAnnotation> = {
+export type PreloadFileOptions<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+> = {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, LDecoration>;
   annotations?: LineAnnotation<LAnnotation>[];
+  decorations?: FileDecorationItem<LDecoration>[];
 };
 
-export interface PreloadedFileResult<LAnnotation> {
+export interface PreloadedFileResult<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+> {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, LDecoration>;
   annotations?: LineAnnotation<LAnnotation>[];
+  decorations?: FileDecorationItem<LDecoration>[];
   prerenderedHTML: string;
 }
 
-export async function preloadFile<LAnnotation = undefined>({
+export async function preloadFile<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+>({
   file,
   options,
   annotations,
-}: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
-  const fileRenderer = new FileRenderer<LAnnotation>({
+  decorations,
+}: PreloadFileOptions<LAnnotation, LDecoration>): Promise<
+  PreloadedFileResult<LAnnotation, LDecoration>
+> {
+  const fileRenderer = new FileRenderer<LAnnotation, LDecoration>({
     ...options,
     // Match the client's option snapshot: token callbacks imply the
     // transformer, so server markup hydrates into identical client renders.
@@ -39,6 +57,9 @@ export async function preloadFile<LAnnotation = undefined>({
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {
     fileRenderer.setLineAnnotations(annotations);
+  }
+  if (decorations !== undefined && decorations.length > 0) {
+    fileRenderer.setDecorations(decorations);
   }
 
   const fileResult = await fileRenderer.asyncRender(file);
@@ -68,6 +89,7 @@ export async function preloadFile<LAnnotation = undefined>({
     file,
     options,
     annotations,
+    decorations,
     prerenderedHTML: renderHTML(children),
   };
 }

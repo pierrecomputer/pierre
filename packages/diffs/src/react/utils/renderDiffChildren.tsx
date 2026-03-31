@@ -17,26 +17,47 @@ import {
 import { GutterUtilitySlotStyles, MergeConflictSlotStyles } from '../constants';
 import type { DiffBasePropsReact } from '../types';
 
-interface RenderDiffChildrenProps<LAnnotation, T> {
+interface RenderDiffChildrenProps<LAnnotation, LDecoration, T> {
   fileDiff: FileDiffMetadata;
   actions?: (MergeConflictDiffAction | undefined)[];
-  renderCustomHeader: DiffBasePropsReact<LAnnotation>['renderCustomHeader'];
-  renderHeaderPrefix: DiffBasePropsReact<LAnnotation>['renderHeaderPrefix'];
-  renderHeaderFilenameSuffix?: DiffBasePropsReact<LAnnotation>['renderHeaderFilenameSuffix'];
-  renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
-  renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
-  renderGutterUtility: DiffBasePropsReact<LAnnotation>['renderGutterUtility'];
+  renderCustomHeader: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration
+  >['renderCustomHeader'];
+  renderHeaderPrefix: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration
+  >['renderHeaderPrefix'];
+  renderHeaderFilenameSuffix?: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration
+  >['renderHeaderFilenameSuffix'];
+  renderHeaderMetadata: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration
+  >['renderHeaderMetadata'];
+  renderAnnotation: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration
+  >['renderAnnotation'];
+  renderGutterUtility: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration
+  >['renderGutterUtility'];
   renderMergeConflictUtility?(
     action: MergeConflictDiffAction,
     getInstance: () => T | undefined
   ): ReactNode;
-  lineAnnotations: DiffBasePropsReact<LAnnotation>['lineAnnotations'];
+  lineAnnotations: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration
+  >['lineAnnotations'];
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
   getInstance?(): T | undefined;
   getAnnotationSlotName?(annotation: DiffLineAnnotation<LAnnotation>): string;
 }
 
-export function renderDiffChildren<LAnnotation, T>({
+export function renderDiffChildren<LAnnotation, LDecoration, T>({
   fileDiff,
   actions,
   renderCustomHeader,
@@ -50,7 +71,7 @@ export function renderDiffChildren<LAnnotation, T>({
   getHoveredLine,
   getInstance,
   getAnnotationSlotName = getLineAnnotationName,
-}: RenderDiffChildrenProps<LAnnotation, T>): ReactNode {
+}: RenderDiffChildrenProps<LAnnotation, LDecoration, T>): ReactNode {
   const customHeader = renderCustomHeader?.(fileDiff);
   const prefix = renderHeaderPrefix?.(fileDiff);
   const suffix = renderHeaderFilenameSuffix?.(fileDiff);

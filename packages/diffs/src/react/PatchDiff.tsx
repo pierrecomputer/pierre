@@ -12,18 +12,25 @@ import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export interface PatchDiffProps<
   LAnnotation,
-> extends DiffBasePropsReact<LAnnotation> {
+  LDecoration = undefined,
+  LCaret = undefined,
+> extends DiffBasePropsReact<LAnnotation, LDecoration, LCaret> {
   patch: string;
   disableWorkerPool?: boolean;
 }
 
-export function PatchDiff<LAnnotation = undefined>({
+export function PatchDiff<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+  LCaret = undefined,
+>({
   patch,
   options,
   editorOptions,
   editStateKey,
   metrics,
   lineAnnotations,
+  decorations,
   selectedLines,
   className,
   style,
@@ -38,7 +45,7 @@ export function PatchDiff<LAnnotation = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: PatchDiffProps<LAnnotation>): React.JSX.Element {
+}: PatchDiffProps<LAnnotation, LDecoration, LCaret>): React.JSX.Element {
   const fileDiff = usePatch(patch);
   const { ref, getHoveredLine, getAnnotationSlotName } = useFileDiffInstance({
     fileDiff,
@@ -47,6 +54,7 @@ export function PatchDiff<LAnnotation = undefined>({
     editStateKey,
     metrics,
     lineAnnotations,
+    decorations,
     selectedLines,
     prerenderedHTML,
     hasGutterRenderUtility: renderGutterUtility != null,

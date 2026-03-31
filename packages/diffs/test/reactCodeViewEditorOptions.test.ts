@@ -45,7 +45,7 @@ afterAll(async () => {
 
 const ReactCodeViewComponent = CodeView as ComponentType<
   CodeViewProps<undefined> & {
-    ref?: Ref<CodeViewHandle<undefined>>;
+    ref?: Ref<CodeViewHandle<undefined, undefined>>;
   }
 >;
 const EditProviderComponent = EditProvider as ComponentType<
@@ -228,7 +228,7 @@ function makeDiffItem(id: string, edit = false): CodeViewItem<undefined> {
 
 function createCodeViewElement(
   props: CodeViewProps<undefined> & {
-    ref?: Ref<CodeViewHandle<undefined>>;
+    ref?: Ref<CodeViewHandle<undefined, undefined>>;
   }
 ): ReactElement {
   return createElement(ReactCodeViewComponent, {
@@ -321,7 +321,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const bypassFactory = mock((_options: EditorOptions<undefined>) =>
       createTrackedEditor(_options)
     );
@@ -562,7 +562,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const onItemEditComplete = mock(
       (
@@ -666,7 +666,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const onItemEditComplete = mock(
       (
@@ -730,7 +730,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     let root: Root | undefined;
 
@@ -821,7 +821,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const items = [
       makeFileItem('edited', { edit: true, lineCount: 30 }),
@@ -948,7 +948,7 @@ describe('React CodeView edit completion teardown', () => {
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const handle = createRef<CodeViewHandle<undefined>>();
+      const handle = createRef<CodeViewHandle<undefined, undefined>>();
       const { createEditor, editors } = createEditorHarness();
       const onItemEditComplete = mock(
         (
@@ -1007,7 +1007,7 @@ describe('React CodeView selection', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const items = [makeFileItem('a')];
     const initialSelection = {
@@ -1069,7 +1069,7 @@ describe('React CodeView selection', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const bypassOnSelectedLinesChange = mock(
       (_selection: CodeViewLineSelection | null) => {}
     );

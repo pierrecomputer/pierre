@@ -25,7 +25,7 @@ function makeItems(count = 12, lineCount = 20): CodeViewItem[] {
   );
 }
 
-function headerOption(): CodeViewOptions<undefined> {
+function headerOption(): CodeViewOptions<undefined, undefined> {
   return { renderCodeViewHeader: () => document.createElement('div') };
 }
 

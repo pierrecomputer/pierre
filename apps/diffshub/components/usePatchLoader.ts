@@ -60,7 +60,7 @@ interface UsePatchLoaderOptions {
   githubTokenVersion?: number | string;
   onLoadStart(): void;
   path: string;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 interface UsePatchLoaderResult {
@@ -529,7 +529,7 @@ function getLineHashApplyKey(viewerKey: number, hash: string): string {
 }
 
 function applyDiffsHubLineHashTarget(
-  viewer: CodeViewHandle<CommentMetadata>,
+  viewer: CodeViewHandle<CommentMetadata, undefined>,
   target: DiffsHubLineHashTarget
 ): boolean {
   const item = viewer.getItem(target.itemId);
@@ -566,7 +566,7 @@ function applyDiffsHubLineHashTarget(
 }
 
 function applyDiffsHubItemIdRename(
-  viewer: CodeViewHandle<CommentMetadata> | null,
+  viewer: CodeViewHandle<CommentMetadata, undefined> | null,
   rename: DiffsHubItemIdRename
 ): void {
   viewer?.updateItemId(rename.oldId, rename.newId);

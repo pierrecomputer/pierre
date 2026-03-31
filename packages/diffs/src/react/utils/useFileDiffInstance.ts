@@ -18,6 +18,7 @@ import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
 import type { EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
+  DiffDecorationItem,
   DiffLineAnnotation,
   DiffsEditor,
   FileContents,
@@ -60,14 +61,15 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
 }
 
-interface UseFileDiffInstanceProps<LAnnotation, LCaret> {
+interface UseFileDiffInstanceProps<LAnnotation, LDecoration, LCaret> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents | null;
   newFile?: FileContents | null;
-  options: FileDiffOptions<LAnnotation> | undefined;
+  options: FileDiffOptions<LAnnotation, LDecoration> | undefined;
   editorOptions: EditorOptions<LAnnotation, LCaret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  decorations: DiffDecorationItem<LDecoration>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
@@ -86,7 +88,7 @@ interface UseFileDiffInstanceReturn<LAnnotation> {
   getAnnotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
 }
 
-export function useFileDiffInstance<LAnnotation, LCaret>({
+export function useFileDiffInstance<LAnnotation, LDecoration, LCaret>({
   fileDiff,
   oldFile,
   newFile,
@@ -94,6 +96,7 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
   editorOptions,
   editStateKey,
   lineAnnotations,
+  decorations,
   selectedLines,
   prerenderedHTML,
   metrics,
@@ -105,6 +108,7 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
   onEditComplete: _onEditComplete,
 }: UseFileDiffInstanceProps<
   LAnnotation,
+  LDecoration,
   LCaret
 >): UseFileDiffInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
@@ -174,7 +178,9 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
     );
   }, [fileDiff, oldFile, newFile, options?.parseDiffOptions]);
   const instanceRef = useRef<
-    FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
+    | FileDiff<LAnnotation, LDecoration>
+    | VirtualizedFileDiff<LAnnotation, LDecoration>
+    | null
   >(null);
   const disposeEditorRef = useRef<() => void>(null);
   const getEditor = useStableCallback(() => {
@@ -226,6 +232,7 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
         fileDiff: effectiveFileDiff,
         fileContainer,
         lineAnnotations,
+        decorations,
         prerenderedHTML,
       });
     } else {
@@ -273,6 +280,7 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
       forceRender,
       fileDiff: resolved.fileDiff,
       lineAnnotations: resolved.lineAnnotations,
+      decorations,
     });
     if (selectedLines !== undefined) {
       instance.setSelectedLines(selectedLines);
@@ -357,24 +365,24 @@ function resolveAcceptedValues<LAnnotation>(
   return { fileDiff: resolvedFileDiff, lineAnnotations: resolvedAnnotations };
 }
 
-interface MergeFileDiffOptionsProps<LAnnotation> {
+interface MergeFileDiffOptionsProps<LAnnotation, LDecoration> {
   controlledSelection: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
   onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
   onEditComplete: FileDiffEditCompleteHandler<LAnnotation> | undefined;
-  options: FileDiffOptions<LAnnotation> | undefined;
+  options: FileDiffOptions<LAnnotation, LDecoration> | undefined;
 }
 
-function mergeFileDiffOptions<LAnnotation>({
+function mergeFileDiffOptions<LAnnotation, LDecoration>({
   options,
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
-}: MergeFileDiffOptionsProps<LAnnotation>):
-  | FileDiffOptions<LAnnotation>
+}: MergeFileDiffOptionsProps<LAnnotation, LDecoration>):
+  | FileDiffOptions<LAnnotation, LDecoration>
   | undefined {
   const needsReactOverrides =
     controlledSelection ||
@@ -401,8 +409,8 @@ function mergeFileDiffOptions<LAnnotation>({
   };
 }
 
-function applyEdit<LAnnotation>(
-  instance: FileDiff<LAnnotation>,
+function applyEdit<LAnnotation, LDecoration>(
+  instance: FileDiff<LAnnotation, LDecoration>,
   getEditor: () => DiffsEditor<LAnnotation>
 ): () => void {
   const editor = getEditor();

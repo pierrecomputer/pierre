@@ -13,7 +13,7 @@ import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
 type ThemedCodeViewComponent = <LAnnotation = undefined>(
   props: CodeViewProps<LAnnotation> & {
-    ref?: Ref<CodeViewHandle<LAnnotation>>;
+    ref?: Ref<CodeViewHandle<LAnnotation, undefined>>;
     theme?: DiffThemeInput;
   }
 ) => React.JSX.Element;
@@ -27,7 +27,7 @@ export const ThemedCodeView: ThemedCodeViewComponent = <
   theme,
   ...props
 }: CodeViewProps<LAnnotation> & {
-  ref?: Ref<CodeViewHandle<LAnnotation>>;
+  ref?: Ref<CodeViewHandle<LAnnotation, undefined>>;
   theme?: DiffThemeInput;
 }): React.JSX.Element => {
   const diffTheme = useDiffThemeProps(theme);

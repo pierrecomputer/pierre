@@ -22,6 +22,7 @@ import type {
   BaseDiffOptionsWithDefaults,
   CodeColumnType,
   CustomPreProperties,
+  DiffDecorationItem,
   DiffLineAnnotation,
   DiffsHighlighter,
   DiffsTextDocument,
@@ -235,7 +236,10 @@ export interface HunksRenderResult {
 
 let instanceId = -1;
 
-export class DiffHunksRenderer<LAnnotation = undefined> {
+export class DiffHunksRenderer<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+> {
   readonly __id: string = `diff-hunks-renderer:${++instanceId}`;
 
   private highlighter: DiffsHighlighter | undefined;
@@ -799,6 +803,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     diff.editSessionDirty = true;
   }
+
+  public setDecorations(
+    _decorations: readonly DiffDecorationItem<LDecoration>[]
+  ): void {}
 
   protected getUnifiedLineDecoration({
     lineType,

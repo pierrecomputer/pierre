@@ -36,7 +36,7 @@ class AutoScrollTester<LAnnotation> {
   private direction = 1;
 
   constructor(
-    private viewerRef: RefObject<CodeViewHandle<LAnnotation> | null>,
+    private viewerRef: RefObject<CodeViewHandle<LAnnotation, undefined> | null>,
     private onStateChange?: (running: boolean) => unknown
   ) {}
 
@@ -102,7 +102,7 @@ interface WorkerPoolStatusProps {
   expanded: boolean;
   onToggle(): void;
   themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 export const WorkerPoolStatus = memo(function WorkerPoolStatus({
@@ -146,7 +146,7 @@ interface StatsDisplayProps {
   onToggle(): void;
   stats: WorkerStats;
   themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 // Map worker pool status to a single icon component + color so the legend row
