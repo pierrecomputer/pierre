@@ -158,7 +158,10 @@ for (let i = 0; i <= lastMeaningfulIndex; i++) {
 We use a custom workspace script runner to make typing things out a little
 easier.
 
-`bun ws <project> <task>` `bun ws <project> <task> -- --some --flag`
+`bun ws <project> <task>` `bun ws <project> <task> --some --flag`
+
+`ws.ts` forwards arguments literally to the target script, so do not use a
+standalone `--` as an argument separator.
 
 Note that a few scripts exist at the root and usually operate against all
 packages. e.g. `bun run lint`
@@ -185,19 +188,19 @@ has Playwright E2E coverage for browser-specific behavior.
 
 ### Running Tests
 
-Examples:
+Examples (run these from the package directory):
 
 ```bash
 # diffs
-bun ws diffs test
+cd packages/diffs && bun test
 
 # trees
-bun ws trees test
-bun ws trees coverage
-bun ws trees test:e2e
+cd packages/trees && bun test
+cd packages/trees && bun run coverage
+cd packages/trees && bun run test:e2e
 
 # truncate
-bun ws truncate test
+cd packages/truncate && bun test
 ```
 
 ### Updating Snapshots
@@ -206,18 +209,6 @@ Update snapshots from the package directory:
 
 ```bash
 bun test -u
-```
-
-Or from the monorepo root with the workspace runner:
-
-```bash
-bun ws <project> test -- -u
-```
-
-For example:
-
-```bash
-bun ws diffs test -- -u
 ```
 
 ### Test Structure
