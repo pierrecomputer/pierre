@@ -161,10 +161,10 @@ easier.
 `bun ws <project> <task>` `bun ws <project> <task> --some --flag`
 
 `bun ws` forwards arguments through to the target script and does **not
-require** a standalone `--` to separate its own options from task arguments.
-You may still use `--` when a downstream tool expects it (for example, when
-using `bun run` with glob filters). The only special handling is that
-`-v` / `--verbose` is consumed by `ws.ts` itself and not forwarded on.
+require** a standalone `--` to separate its own options from task arguments. You
+may still use `--` when a downstream tool expects it (for example, when using
+`bun run` with glob filters). The only special handling is that `-v` /
+`--verbose` is consumed by `ws.ts` itself and not forwarded on.
 
 Note that a few scripts exist at the root and usually operate against all
 packages. e.g. `bun run lint`
