@@ -232,7 +232,7 @@
     "@octokit/rest": "22.0.0",
     "@pierre/icons": "0.1.0",
     "@pierre/storage": "0.0.10",
-    "@pierre/theme": "0.0.22",
+    "@pierre/theme": "0.0.28",
     "@playwright/test": "1.51.1",
     "@radix-ui/react-avatar": "1.1.10",
     "@radix-ui/react-dialog": "1.1.15",
@@ -609,7 +609,7 @@
 
     "@pierre/storage-elements-next": ["@pierre/storage-elements-next@workspace:packages/storage-elements-next"],
 
-    "@pierre/theme": ["@pierre/theme@0.0.22", "", {}, "sha512-ePUIdQRNGjrveELTU7fY89Xa7YGHHEy5Po5jQy/18lm32eRn96+tnYJEtFooGdffrx55KBUtOXfvVy/7LDFFhA=="],
+    "@pierre/theme": ["@pierre/theme@0.0.28", "", {}, "sha512-1j/H/fECBuc9dEvntdWI+l435HZapw+RCJTlqCA6BboQ5TjlnE005j/ROWutXIs8aq5OAc82JI2Kwk4A1WWBgw=="],
 
     "@pierre/trees": ["@pierre/trees@workspace:packages/trees"],
 

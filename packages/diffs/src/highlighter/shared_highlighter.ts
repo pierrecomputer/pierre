@@ -128,13 +128,11 @@ export async function disposeHighlighter(): Promise<void> {
 }
 
 registerCustomTheme('pierre-dark', async () => {
-  const m = await import('@pierre/theme/themes/pierre-dark.json');
-  const theme = (m.default ?? m) as unknown as ThemeRegistrationResolved;
+  const { default: theme } = await import('@pierre/theme/pierre-dark');
   return { ...theme, name: 'pierre-dark' } as ThemeRegistrationResolved;
 });
 
 registerCustomTheme('pierre-light', async () => {
-  const m = await import('@pierre/theme/themes/pierre-light.json');
-  const theme = (m.default ?? m) as unknown as ThemeRegistrationResolved;
+  const { default: theme } = await import('@pierre/theme/pierre-light');
   return { ...theme, name: 'pierre-light' } as ThemeRegistrationResolved;
 });

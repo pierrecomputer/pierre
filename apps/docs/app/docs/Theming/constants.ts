@@ -23,7 +23,13 @@ export const THEMING_PROJECT_STRUCTURE: ThemingConstant = {
 │   ├── palette.ts      # Color definitions (edit this!)
 │   ├── package-vsix.ts # Generates VS Code/Cursor extension
 │   └── theme.ts        # Token color mappings
-├── themes/             # Generated theme JSON files
+├── dist/               # Generated MJS modules (for Shiki)
+│   ├── index.mjs
+│   ├── pierre-dark.mjs
+│   ├── pierre-light.mjs
+│   ├── pierre-dark-vibrant.mjs
+│   └── pierre-light-vibrant.mjs
+├── themes/             # Generated JSON files (for VS Code)
 │   ├── pierre-dark.json
 │   ├── pierre-light.json
 │   ├── pierre-dark-vibrant.json
@@ -485,14 +491,18 @@ export const THEMING_REGISTER_THEME: ThemingConstant = {
     name: 'register-theme.ts',
     contents: `import { registerCustomTheme } from '@pierre/diffs';
 
-// Register your theme JSON files before rendering
-// The name must match the "name" field in your theme JSON
+// Register your theme files before rendering.
+// The name must match the "name" field in your theme.
 
-// Option 1: Import from your bundled theme files
+// Option 1: Import MJS theme modules (recommended)
+registerCustomTheme('my-theme-dark', () => import('my-theme/dark'));
+registerCustomTheme('my-theme-light', () => import('my-theme/light'));
+
+// Option 2: Import JSON theme files
 registerCustomTheme('my-theme-dark', () => import('./themes/my-theme-dark.json'));
 registerCustomTheme('my-theme-light', () => import('./themes/my-theme-light.json'));
 
-// Option 2: Fetch from a URL (for CDN-hosted themes)
+// Option 3: Fetch from a URL (for CDN-hosted themes)
 registerCustomTheme('my-theme-dark', async () => {
   const response = await fetch('/themes/my-theme-dark.json');
   return response.json();
