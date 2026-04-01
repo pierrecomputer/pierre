@@ -55,6 +55,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
+    "@pierre/tree-test-data": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

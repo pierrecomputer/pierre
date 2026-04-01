@@ -17,6 +17,7 @@
     "access": "public"
   },
   "scripts": {
+    "benchmark": "bun run ./scripts/benchmark.ts",
     "build": "echo 'unimplemented'",
     "dev": "echo 'unimplemented'",
     "test": "bun test",
@@ -24,6 +25,8 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@pierre/tree-test-data": "workspace:*",
+    "mitata": "catalog:",
     "typescript": "catalog:"
   }
 }

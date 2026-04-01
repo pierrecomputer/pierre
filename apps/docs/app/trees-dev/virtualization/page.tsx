@@ -1,5 +1,6 @@
 'use client';
 
+import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import { CONTEXT_MENU_SLOT_NAME, FileTree } from '@pierre/trees';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Root as ReactDomRoot } from 'react-dom/client';
@@ -10,13 +11,11 @@ import {
   makeDemoRenamingOptions,
   renderVanillaContextMenuSlot,
 } from '../_components/TreeDemoContextMenu';
-import {
-  linuxKernelAllFolders,
-  linuxKernelFiles,
-  linuxKernelReplicaNames,
-} from '../demo-data';
 
-const linuxKernelReplicaCount = linuxKernelReplicaNames.length;
+const linuxKernelWorkload = getVirtualizationWorkload('linux-5x');
+const linuxKernelFiles = linuxKernelWorkload.files;
+const linuxKernelAllFolders = linuxKernelWorkload.expandedFolders;
+const linuxKernelReplicaCount = linuxKernelWorkload.rootCount;
 
 export default function VirtualizationPage() {
   return (

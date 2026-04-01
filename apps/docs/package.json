@@ -23,6 +23,7 @@
     "@icons-pack/react-simple-icons": "catalog:",
     "@pierre/diffs": "workspace:*",
     "@pierre/icons": "catalog:",
+    "@pierre/tree-test-data": "workspace:*",
     "@pierre/trees": "workspace:*",
     "@pierre/truncate": "workspace:*",
     "@radix-ui/react-avatar": "catalog:",

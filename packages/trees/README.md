@@ -237,10 +237,8 @@ measured against both controlled and realistic inputs:
 
 - `tiny-flat`, `small-mixed`, `medium-balanced`, `large-wide`,
   `large-deep-chain`, `large-monorepo-shaped`, and `explicit-directories`
-- `fixture-linux-kernel-files`, loaded from
-  `apps/docs/app/trees-dev/linux-files.json`
-- `fixture-pierrejs-repo-snapshot`, a fixed snapshot of this repo at
-  `packages/trees/scripts/fixtures/fileListToTree-monorepo-snapshot.txt`
+- `fixture-linux-kernel-files`, loaded from `@pierre/tree-test-data`
+- `fixture-pierrejs-repo-snapshot`, loaded from `@pierre/tree-test-data`
 
 The benchmark records:
 

@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import {
+  linuxKernelFixture,
+  pierreSnapshotFiles,
+} from '@pierre/tree-test-data';
 
 import {
   forEachFolderInNormalizedPath,
@@ -19,35 +21,6 @@ export interface FileListToTreeBenchmarkCase extends FileListShapeSummary {
   // Optional source-of-truth expanded folder paths for realism-sensitive
   // workloads (e.g. trees-dev virtualization fixtures).
   expandedFolders?: string[];
-}
-
-const BENCHMARK_FIXTURE_PATH = resolve(
-  import.meta.dir,
-  '../fixtures/fileListToTree-monorepo-snapshot.txt'
-);
-// Cross-package dependency: this fixture lives in apps/docs because the dev
-// page also renders it. If that file moves, this path must be updated.
-const LINUX_KERNEL_FIXTURE_PATH = resolve(
-  import.meta.dir,
-  '../../../../apps/docs/app/trees-dev/linux-files.json'
-);
-
-interface LinuxKernelFixture {
-  files: string[];
-  folders: string[];
-}
-
-function readFixtureLines(path: string): string[] {
-  return readFileSync(path, 'utf-8')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
-
-// The docs app already ships this Linux kernel file list, so reusing it keeps
-// the benchmark tied to a real workload we exercise elsewhere in the repo.
-function readLinuxKernelFixture(path: string): LinuxKernelFixture {
-  return JSON.parse(readFileSync(path, 'utf-8')) as LinuxKernelFixture;
 }
 
 function pushRepeatedFiles(
@@ -309,8 +282,6 @@ export function getFileListToTreeBenchmarkCases(): FileListToTreeBenchmarkCase[]
     return cachedCases;
   }
 
-  const linuxKernelFixture = readLinuxKernelFixture(LINUX_KERNEL_FIXTURE_PATH);
-
   cachedCases = [
     createCase('tiny-flat', 'synthetic', buildTinyFlatFiles()),
     createCase('small-mixed', 'synthetic', buildSmallMixedFiles()),
@@ -333,11 +304,9 @@ export function getFileListToTreeBenchmarkCases(): FileListToTreeBenchmarkCase[]
       linuxKernelFixture.files,
       linuxKernelFixture.folders
     ),
-    createCase(
-      'fixture-pierrejs-repo-snapshot',
-      'fixture',
-      readFixtureLines(BENCHMARK_FIXTURE_PATH)
-    ),
+    createCase('fixture-pierrejs-repo-snapshot', 'fixture', [
+      ...pierreSnapshotFiles,
+    ]),
   ];
 
   return cachedCases;
