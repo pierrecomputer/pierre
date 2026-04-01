@@ -228,7 +228,10 @@ function createBenchmarkVirtualizedRoot(
       useLazyDataLoader,
       virtualize,
     } = fileTreeOptions;
-    const iconRemap = fileTreeOptions.icons?.remap;
+    const iconRemap =
+      typeof fileTreeOptions.icons === 'object'
+        ? fileTreeOptions.icons?.remap
+        : undefined;
 
     const remapIcon = useCallback(
       (

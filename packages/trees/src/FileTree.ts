@@ -1,6 +1,5 @@
-import type { FileTreeRootProps } from './components/Root';
-
 import { getBuiltInSpriteSheet, isColoredBuiltInIconSet } from './builtInIcons';
+import type { FileTreeRootProps } from './components/Root';
 import { FileTreeContainerLoaded } from './components/web-components';
 import {
   FILE_TREE_TAG_NAME,
