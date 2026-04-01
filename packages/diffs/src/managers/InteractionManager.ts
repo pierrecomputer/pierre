@@ -979,7 +979,6 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (this.hoveredToken == null) {
       return;
     }
-    this.hoveredToken.tokenElement.removeAttribute('data-token-hovered');
     this.hoveredToken = undefined;
   }
 
