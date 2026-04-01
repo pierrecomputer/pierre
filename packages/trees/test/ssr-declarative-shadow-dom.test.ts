@@ -530,7 +530,7 @@ describe('SSR + declarative shadow DOM', () => {
     const getIconHref = (fileName: string): string => {
       const button = Array.from(
         wrapper.querySelectorAll('button[data-type="item"]')
-      ).find((item) => item.textContent?.includes(fileName));
+      ).find((item) => item.getAttribute('aria-label') === fileName);
       expect(button).not.toBeUndefined();
       if (button == null) {
         throw new Error(`Expected file row for ${fileName}`);
@@ -580,7 +580,7 @@ describe('SSR + declarative shadow DOM', () => {
     const getIconHref = (fileName: string): string => {
       const button = Array.from(
         wrapper.querySelectorAll('button[data-type="item"]')
-      ).find((item) => item.textContent?.includes(fileName));
+      ).find((item) => item.getAttribute('aria-label') === fileName);
       expect(button).not.toBeUndefined();
       if (button == null) {
         throw new Error(`Expected file row for ${fileName}`);
@@ -663,7 +663,7 @@ describe('SSR + declarative shadow DOM', () => {
     const getIconHref = (fileName: string): string => {
       const button = Array.from(
         wrapper.querySelectorAll('button[data-type="item"]')
-      ).find((item) => item.textContent?.includes(fileName));
+      ).find((item) => item.getAttribute('aria-label') === fileName);
       expect(button).not.toBeUndefined();
       if (button == null) {
         throw new Error(`Expected file row for ${fileName}`);
