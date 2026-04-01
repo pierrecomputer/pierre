@@ -19,6 +19,7 @@
   "scripts": {
     "build": "echo 'unimplemented'",
     "dev": "echo 'unimplemented'",
+    "test": "bun test",
     "tsc": "tsgo --noEmit --pretty"
   },
   "dependencies": {},
