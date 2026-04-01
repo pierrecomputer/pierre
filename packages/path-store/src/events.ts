@@ -1,6 +1,6 @@
+import type { PathStoreEvent } from './public-types';
 import { createTransactionFrame } from './state';
 import type { PathStoreState, TransactionFrame } from './state';
-import type { PathStoreEvent } from './types';
 
 export function subscribe(
   state: PathStoreState,

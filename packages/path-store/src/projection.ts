@@ -6,10 +6,11 @@ import {
   recomputeCountsUpwardFrom,
   requireNode,
 } from './canonical';
+import type { NodeId } from './internal-types';
+import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import type { PathStoreEvent, PathStoreVisibleRow } from './public-types';
 import { getSegmentValue } from './segments';
 import type { PathStoreState } from './state';
-import type { NodeId, PathStoreEvent, PathStoreVisibleRow } from './types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './types';
 
 export function getVisibleCount(state: PathStoreState): number {
   return requireNode(state, state.snapshot.rootId).visibleSubtreeCount;

@@ -1,21 +1,20 @@
+import type { DirectoryChildIndex, NodeId } from './internal-types';
+import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
+import { PATH_STORE_NODE_FLAG_REMOVED } from './internal-types';
+import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
+import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import { PATH_STORE_NODE_KIND_FILE } from './internal-types';
 import { parseInputPath, parseLookupPath } from './path';
-import { getSegmentValue, internSegment } from './segments';
-import { compareSegmentSortKeys, getSegmentSortKey } from './sort';
-import type { MoveTarget, PathStoreState } from './state';
 import type {
-  DirectoryChildIndex,
-  NodeId,
   PathStoreCollisionStrategy,
   PathStoreCompareEntry,
   PathStoreEvent,
   PathStoreMoveOptions,
   PathStoreRemoveOptions,
-} from './types';
-import { PATH_STORE_NODE_FLAG_EXPLICIT } from './types';
-import { PATH_STORE_NODE_FLAG_REMOVED } from './types';
-import { PATH_STORE_NODE_FLAG_ROOT } from './types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './types';
-import { PATH_STORE_NODE_KIND_FILE } from './types';
+} from './public-types';
+import { getSegmentValue, internSegment } from './segments';
+import { compareSegmentSortKeys, getSegmentSortKey } from './sort';
+import type { MoveTarget, PathStoreState } from './state';
 
 export function listPaths(state: PathStoreState, path?: string): string[] {
   const nodeId = path == null ? state.snapshot.rootId : findNodeId(state, path);

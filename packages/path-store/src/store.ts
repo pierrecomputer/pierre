@@ -13,30 +13,30 @@ import {
   requireNode,
 } from './canonical';
 import { batchEvents, recordEvent, subscribe } from './events';
+import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import {
   collapsePath,
   expandPath,
   getVisibleCount,
   getVisibleSlice,
 } from './projection';
-import { createPathStoreState } from './state';
-import type { PathStoreState } from './state';
 import type {
-  PathStoreBuilderOptions,
   PathStoreConstructorOptions,
   PathStoreEvent,
   PathStoreMoveOptions,
   PathStoreOperation,
+  PathStoreOptions,
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
-} from './types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './types';
+} from './public-types';
+import { createPathStoreState } from './state';
+import type { PathStoreState } from './state';
 
 export class PathStore {
   readonly #state: PathStoreState;
 
   public constructor(options: PathStoreConstructorOptions = {}) {
-    const builder = PathStore.createBuilder(options);
+    const builder = new PathStoreBuilder(options);
     const inputPaths = options.paths ?? [];
 
     if (options.presorted === true) {
@@ -50,15 +50,9 @@ export class PathStore {
     this.initializeExpandedPaths(options.initialExpandedPaths);
   }
 
-  public static createBuilder(
-    options: PathStoreBuilderOptions = {}
-  ): PathStoreBuilder {
-    return new PathStoreBuilder(options);
-  }
-
   public static preparePaths(
     paths: readonly string[],
-    options: PathStoreBuilderOptions = {}
+    options: PathStoreOptions = {}
   ): string[] {
     return prepareCanonicalPaths(paths, options);
   }

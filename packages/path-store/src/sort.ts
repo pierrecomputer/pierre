@@ -1,11 +1,11 @@
 import type {
-  PathStoreCompareEntry,
   PreparedPath,
   SegmentSortKey,
   SegmentTable,
-} from './types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './types';
-import { PATH_STORE_NODE_KIND_FILE } from './types';
+} from './internal-types';
+import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import { PATH_STORE_NODE_KIND_FILE } from './internal-types';
+import type { PathStoreCompareEntry } from './public-types';
 
 const DIGIT_SEQUENCE_REGEX = /\d+/g;
 

@@ -1,5 +1,5 @@
+import type { SegmentId, SegmentTable } from './internal-types';
 import { createSegmentSortKey } from './sort';
-import type { SegmentId, SegmentTable } from './types';
 
 export const ROOT_SEGMENT_VALUE = '';
 

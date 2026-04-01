@@ -1,4 +1,4 @@
-import type { LookupPath, PreparedPath } from './types';
+import type { LookupPath, PreparedPath } from './internal-types';
 
 function splitCanonicalPath(inputPath: string): {
   hasTrailingSlash: boolean;

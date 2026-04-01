@@ -1,8 +1,6 @@
-export { PathStoreBuilder, preparePathEntries, preparePaths } from './builder';
 export { PathStore } from './store';
 export type {
   PathStoreCollisionStrategy,
-  PathStoreBuilderOptions,
   PathStoreCompareEntry,
   PathStoreConstructorOptions,
   PathStoreEvent,
@@ -13,5 +11,4 @@ export type {
   PathStorePathComparator,
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
-  PreparedPath,
-} from './types';
+} from './public-types';

@@ -1,4 +1,5 @@
-import type { NodeId, PathStoreEvent, PathStoreSnapshot } from './types';
+import type { NodeId, PathStoreSnapshot } from './internal-types';
+import type { PathStoreEvent } from './public-types';
 
 export interface TransactionFrame {
   readonly affectedAncestorIds: Set<NodeId>;

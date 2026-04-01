@@ -1,24 +1,26 @@
-import { resolvePathStoreOptions } from './options';
-import { parseInputPath } from './path';
-import { internSegment } from './segments';
-import { createSegmentTable } from './segments';
-import { comparePreparedPaths } from './sort';
 import type {
   DirectoryChildIndex,
   NodeId,
-  PathStoreBuilderOptions,
-  PathStoreCompareEntry,
   PathStoreNode,
-  PathStorePathComparator,
   PathStoreSnapshot,
   PreparedPath,
   ResolvedPathStoreOptions,
   SegmentId,
-} from './types';
-import { PATH_STORE_NODE_FLAG_EXPLICIT } from './types';
-import { PATH_STORE_NODE_FLAG_ROOT } from './types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './types';
-import { PATH_STORE_NODE_KIND_FILE } from './types';
+} from './internal-types';
+import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
+import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
+import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import { PATH_STORE_NODE_KIND_FILE } from './internal-types';
+import { resolvePathStoreOptions } from './options';
+import { parseInputPath } from './path';
+import type {
+  PathStoreCompareEntry,
+  PathStoreOptions,
+  PathStorePathComparator,
+} from './public-types';
+import { internSegment } from './segments';
+import { createSegmentTable } from './segments';
+import { comparePreparedPaths } from './sort';
 
 function createDirectoryChildIndex(): DirectoryChildIndex {
   return {
@@ -86,14 +88,14 @@ function getDirectoryDepth(preparedPath: PreparedPath): number {
 
 export function preparePaths(
   paths: readonly string[],
-  options: PathStoreBuilderOptions = {}
+  options: PathStoreOptions = {}
 ): string[] {
   return preparePathEntries(paths, options).map((entry) => entry.path);
 }
 
 export function preparePathEntries(
   paths: readonly string[],
-  options: PathStoreBuilderOptions = {}
+  options: PathStoreOptions = {}
 ): PreparedPath[] {
   const resolvedOptions = resolvePathStoreOptions(options);
   const preparedPaths = paths.map((path) => parseInputPath(path));
@@ -113,7 +115,7 @@ export class PathStoreBuilder {
   private readonly options: ResolvedPathStoreOptions;
   private readonly segmentTable = createSegmentTable();
 
-  public constructor(options: PathStoreBuilderOptions = {}) {
+  public constructor(options: PathStoreOptions = {}) {
     this.options = resolvePathStoreOptions(options);
     this.directories.set(0, createDirectoryChildIndex());
   }

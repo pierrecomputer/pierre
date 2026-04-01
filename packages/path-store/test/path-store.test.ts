@@ -1,11 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 
-import { PathStore, preparePaths } from '../src/index';
+import { PathStore } from '../src/index';
 
 describe('preparePaths', () => {
   test('sorts directories before files and uses natural segment order', () => {
     expect(
-      preparePaths(['b.txt', 'a/file.ts', 'a10.txt', 'a2.txt', 'a1.txt', 'a/'])
+      PathStore.preparePaths([
+        'b.txt',
+        'a/file.ts',
+        'a10.txt',
+        'a2.txt',
+        'a1.txt',
+        'a/',
+      ])
     ).toEqual(['a/', 'a/file.ts', 'a1.txt', 'a2.txt', 'a10.txt', 'b.txt']);
   });
 });

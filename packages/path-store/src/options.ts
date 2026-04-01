@@ -1,10 +1,8 @@
-import type {
-  PathStoreBuilderOptions,
-  ResolvedPathStoreOptions,
-} from './types';
+import type { ResolvedPathStoreOptions } from './internal-types';
+import type { PathStoreOptions } from './public-types';
 
 export function resolvePathStoreOptions(
-  options: PathStoreBuilderOptions = {}
+  options: PathStoreOptions = {}
 ): ResolvedPathStoreOptions {
   return {
     flattenEmptyDirectories: options.flattenEmptyDirectories ?? true,
