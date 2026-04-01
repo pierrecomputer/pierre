@@ -63,6 +63,7 @@ export interface PathStoreOptions {
 export interface PathStoreBuilderOptions extends PathStoreOptions {}
 
 export interface PathStoreConstructorOptions extends PathStoreOptions {
+  initialExpandedPaths?: readonly string[];
   paths?: readonly string[];
   presorted?: boolean;
 }

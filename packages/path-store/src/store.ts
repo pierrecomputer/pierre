@@ -34,10 +34,6 @@ interface MoveTarget {
   parentId: NodeId;
 }
 
-function createUnimplementedError(methodName: string): Error {
-  return new Error(`PathStore.${methodName}() is not implemented yet`);
-}
-
 function createTransactionFrame(explicit: boolean): TransactionFrame {
   return {
     affectedAncestorIds: new Set<NodeId>(),
@@ -51,6 +47,7 @@ export class PathStore {
   readonly #snapshot: PathStoreSnapshot;
   readonly #listeners = new Map<string, Set<(event: PathStoreEvent) => void>>();
   readonly #transactionStack: TransactionFrame[] = [];
+  readonly #expandedDirectoryIds = new Set<NodeId>();
   #activeNodeCount: number;
   #pathCacheVersion = 0;
 
@@ -65,6 +62,11 @@ export class PathStore {
     builder.appendPaths(preparedPaths);
     this.#snapshot = builder.finish();
     this.#activeNodeCount = this.#snapshot.nodes.length - 1;
+    this.recomputeCountsRecursive(this.#snapshot.rootId);
+
+    for (const expandedPath of options.initialExpandedPaths ?? []) {
+      this.expand(expandedPath);
+    }
   }
 
   public static createBuilder(
@@ -138,22 +140,87 @@ export class PathStore {
   }
 
   public getVisibleCount(): number {
-    throw createUnimplementedError('getVisibleCount');
+    return this.requireNode(this.#snapshot.rootId).visibleSubtreeCount;
   }
 
   public getVisibleSlice(
-    _start: number,
-    _end: number
+    start: number,
+    end: number
   ): readonly PathStoreVisibleRow[] {
-    throw createUnimplementedError('getVisibleSlice');
+    const totalVisibleCount = this.getVisibleCount();
+    if (totalVisibleCount <= 0 || end < start) {
+      return [];
+    }
+
+    const normalizedStart = Math.max(0, Math.min(start, totalVisibleCount - 1));
+    const normalizedEnd = Math.max(
+      normalizedStart,
+      Math.min(end, totalVisibleCount - 1)
+    );
+
+    const rows: PathStoreVisibleRow[] = [];
+    let currentNodeId = this.selectVisibleNode(normalizedStart);
+
+    for (
+      let visibleIndex = normalizedStart;
+      visibleIndex <= normalizedEnd && currentNodeId != null;
+      visibleIndex++
+    ) {
+      rows.push(this.materializeVisibleRow(currentNodeId));
+      currentNodeId = this.getNextVisibleNodeId(currentNodeId);
+    }
+
+    return rows;
   }
 
-  public expand(_path: string): void {
-    throw createUnimplementedError('expand');
+  public expand(path: string): void {
+    const directoryNodeId = this.findNodeId(path);
+    if (directoryNodeId == null) {
+      throw new Error(`Path does not exist: "${path}"`);
+    }
+
+    const directoryNode = this.requireNode(directoryNodeId);
+    if (directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      throw new Error(`Path is not a directory: "${path}"`);
+    }
+
+    if (this.#expandedDirectoryIds.has(directoryNodeId)) {
+      return;
+    }
+
+    this.#expandedDirectoryIds.add(directoryNodeId);
+    this.recomputeCountsUpwardFrom(directoryNodeId);
+    this.recordEvent({
+      affectedAncestorIds: this.collectAncestorIds(directoryNodeId),
+      affectedNodeIds: [directoryNodeId],
+      changeset: { path },
+      operation: 'expand',
+    });
   }
 
-  public collapse(_path: string): void {
-    throw createUnimplementedError('collapse');
+  public collapse(path: string): void {
+    const directoryNodeId = this.findNodeId(path);
+    if (directoryNodeId == null) {
+      throw new Error(`Path does not exist: "${path}"`);
+    }
+
+    const directoryNode = this.requireNode(directoryNodeId);
+    if (directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      throw new Error(`Path is not a directory: "${path}"`);
+    }
+
+    if (!this.#expandedDirectoryIds.has(directoryNodeId)) {
+      return;
+    }
+
+    this.#expandedDirectoryIds.delete(directoryNodeId);
+    this.recomputeCountsUpwardFrom(directoryNodeId);
+    this.recordEvent({
+      affectedAncestorIds: this.collectAncestorIds(directoryNodeId),
+      affectedNodeIds: [directoryNodeId],
+      changeset: { path },
+      operation: 'collapse',
+    });
   }
 
   public on(
@@ -797,6 +864,7 @@ export class PathStore {
     node.flags |= PATH_STORE_NODE_FLAG_REMOVED;
     node.pathCache = null;
     node.pathCacheVersion = -1;
+    this.#expandedDirectoryIds.delete(nodeId);
     this.#activeNodeCount--;
     removedNodeIds.push(nodeId);
     return removedNodeIds;
@@ -832,19 +900,7 @@ export class PathStore {
 
     while (currentNodeId != null) {
       const currentNode = this.requireNode(currentNodeId);
-      if (currentNode.kind === PATH_STORE_NODE_KIND_FILE) {
-        currentNode.subtreeNodeCount = 1;
-        currentNode.visibleSubtreeCount = 1;
-      } else {
-        const currentIndex = this.getDirectoryIndex(currentNodeId);
-        let subtreeNodeCount = 1;
-        for (const childId of currentIndex.childIds) {
-          subtreeNodeCount += this.requireNode(childId).subtreeNodeCount;
-        }
-
-        currentNode.subtreeNodeCount = subtreeNodeCount;
-        currentNode.visibleSubtreeCount = subtreeNodeCount;
-      }
+      this.recomputeNodeCounts(currentNodeId, currentNode);
 
       if (currentNodeId === this.#snapshot.rootId) {
         return;
@@ -852,6 +908,18 @@ export class PathStore {
 
       currentNodeId = currentNode.parentId;
     }
+  }
+
+  private recomputeCountsRecursive(nodeId: NodeId): void {
+    const currentNode = this.requireNode(nodeId);
+    if (currentNode.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+      const currentIndex = this.getDirectoryIndex(nodeId);
+      for (const childId of currentIndex.childIds) {
+        this.recomputeCountsRecursive(childId);
+      }
+    }
+
+    this.recomputeNodeCounts(nodeId, currentNode);
   }
 
   private recomputeDepths(nodeId: NodeId): void {
@@ -906,6 +974,151 @@ export class PathStore {
     }
 
     return false;
+  }
+
+  private recomputeNodeCounts(
+    nodeId: NodeId,
+    currentNode = this.requireNode(nodeId)
+  ): void {
+    if (currentNode.kind === PATH_STORE_NODE_KIND_FILE) {
+      currentNode.subtreeNodeCount = 1;
+      currentNode.visibleSubtreeCount = 1;
+      return;
+    }
+
+    const currentIndex = this.getDirectoryIndex(nodeId);
+    let subtreeNodeCount = 1;
+    let visibleChildCount = 0;
+    for (const childId of currentIndex.childIds) {
+      const childNode = this.requireNode(childId);
+      subtreeNodeCount += childNode.subtreeNodeCount;
+      visibleChildCount += childNode.visibleSubtreeCount;
+    }
+
+    currentNode.subtreeNodeCount = subtreeNodeCount;
+    if ((currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
+      currentNode.visibleSubtreeCount = visibleChildCount;
+      return;
+    }
+
+    currentNode.visibleSubtreeCount = this.#expandedDirectoryIds.has(nodeId)
+      ? 1 + visibleChildCount
+      : 1;
+  }
+
+  private selectVisibleNode(index: number): NodeId | null {
+    if (index < 0 || index >= this.getVisibleCount()) {
+      return null;
+    }
+
+    return this.selectVisibleNodeWithinDirectory(this.#snapshot.rootId, index);
+  }
+
+  private selectVisibleNodeWithinDirectory(
+    directoryNodeId: NodeId,
+    index: number
+  ): NodeId {
+    const directoryIndex = this.getDirectoryIndex(directoryNodeId);
+    let remainingIndex = index;
+
+    for (const childId of directoryIndex.childIds) {
+      const childNode = this.requireNode(childId);
+      if (remainingIndex < childNode.visibleSubtreeCount) {
+        return this.selectVisibleNodeWithinSubtree(childId, remainingIndex);
+      }
+
+      remainingIndex -= childNode.visibleSubtreeCount;
+    }
+
+    throw new Error(`Visible index ${String(index)} is out of range`);
+  }
+
+  private selectVisibleNodeWithinSubtree(
+    nodeId: NodeId,
+    index: number
+  ): NodeId {
+    const node = this.requireNode(nodeId);
+    if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      if (index === 0) {
+        return nodeId;
+      }
+
+      throw new Error(
+        `Visible index ${String(index)} is out of range for file`
+      );
+    }
+
+    if (index === 0) {
+      return nodeId;
+    }
+
+    if (!this.#expandedDirectoryIds.has(nodeId)) {
+      throw new Error(
+        `Visible index ${String(index)} is out of range for collapsed directory`
+      );
+    }
+
+    return this.selectVisibleNodeWithinDirectory(nodeId, index - 1);
+  }
+
+  private getNextVisibleNodeId(nodeId: NodeId): NodeId | null {
+    const node = this.requireNode(nodeId);
+    if (node.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+      const currentIndex = this.getDirectoryIndex(nodeId);
+      if (
+        this.#expandedDirectoryIds.has(nodeId) &&
+        currentIndex.childIds.length > 0
+      ) {
+        return currentIndex.childIds[0] ?? null;
+      }
+    }
+
+    let currentNodeId: NodeId = nodeId;
+    while (true) {
+      const currentNode = this.requireNode(currentNodeId);
+      if (currentNodeId === this.#snapshot.rootId) {
+        return null;
+      }
+
+      const parentId = currentNode.parentId;
+      const parentIndex = this.getDirectoryIndex(parentId);
+      const siblingIndex = parentIndex.childIds.indexOf(currentNodeId);
+      if (siblingIndex < 0) {
+        throw new Error(
+          `Child ${String(currentNodeId)} was not found in its parent index`
+        );
+      }
+
+      const nextSiblingId = parentIndex.childIds[siblingIndex + 1] ?? null;
+      if (nextSiblingId != null) {
+        return nextSiblingId;
+      }
+
+      currentNodeId = parentId;
+    }
+  }
+
+  private materializeVisibleRow(nodeId: NodeId): PathStoreVisibleRow {
+    const node = this.requireNode(nodeId);
+    const path = this.materializeNodePath(nodeId);
+    const name = getSegmentValue(this.#snapshot.segmentTable, node.nameId);
+    const hasChildren =
+      node.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+      this.getDirectoryIndex(nodeId).childIds.length > 0;
+
+    return {
+      depth: node.depth - 1,
+      hasChildren,
+      id: nodeId,
+      isExpanded:
+        node.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+        this.#expandedDirectoryIds.has(nodeId),
+      isFlattened: false,
+      isLoading: false,
+      kind: node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? 'directory' : 'file',
+      name,
+      path,
+    };
   }
 
   private buildPathPreview(parentId: NodeId, basename: string): string {

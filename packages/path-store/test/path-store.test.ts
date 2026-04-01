@@ -117,4 +117,69 @@ describe('PathStore', () => {
       'tmp/README.md',
     ]);
   });
+
+  test('computes visible counts and slices for collapsed and expanded trees', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx', 'tmp/'],
+    });
+
+    expect(store.getVisibleCount()).toBe(3);
+    expect(store.getVisibleSlice(0, 9).map((row) => row.path)).toEqual([
+      'src/',
+      'tmp/',
+      'README.md',
+    ]);
+
+    store.expand('src/');
+    expect(store.getVisibleCount()).toBe(5);
+    expect(store.getVisibleSlice(0, 9).map((row) => row.path)).toEqual([
+      'src/',
+      'src/components/',
+      'src/index.ts',
+      'tmp/',
+      'README.md',
+    ]);
+
+    store.expand('src/components/');
+    expect(store.getVisibleCount()).toBe(6);
+    expect(store.getVisibleSlice(1, 3).map((row) => row.path)).toEqual([
+      'src/components/',
+      'src/components/Button.tsx',
+      'src/index.ts',
+    ]);
+  });
+
+  test('supports initialExpandedPaths and keeps visible counts correct across mutation', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['src/', 'src/components/'],
+      paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+    });
+
+    expect(store.getVisibleSlice(0, 9).map((row) => row.path)).toEqual([
+      'src/',
+      'src/components/',
+      'src/components/Button.tsx',
+      'src/index.ts',
+      'README.md',
+    ]);
+
+    store.move('src/components/Button.tsx', 'Button.tsx');
+    expect(store.getVisibleSlice(0, 9).map((row) => row.path)).toEqual([
+      'src/',
+      'src/components/',
+      'src/index.ts',
+      'Button.tsx',
+      'README.md',
+    ]);
+
+    store.collapse('src/');
+    expect(store.getVisibleCount()).toBe(3);
+    expect(store.getVisibleSlice(0, 9).map((row) => row.path)).toEqual([
+      'src/',
+      'Button.tsx',
+      'README.md',
+    ]);
+  });
 });
