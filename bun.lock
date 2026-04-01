@@ -99,7 +99,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.1.7",
+      "version": "1.1.8",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -123,6 +123,13 @@
       "peerDependencies": {
         "react": "^18.3.1 || ^19.0.0",
         "react-dom": "^18.3.1 || ^19.0.0",
+      },
+    },
+    "packages/path-store": {
+      "name": "@pierre/path-store",
+      "version": "0.0.1-beta.1",
+      "devDependencies": {
+        "typescript": "catalog:",
       },
     },
     "packages/storage-elements": {
@@ -602,6 +609,8 @@
     "@pierre/docs": ["@pierre/docs@workspace:apps/docs"],
 
     "@pierre/icons": ["@pierre/icons@0.1.0", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-wZIUPQSAJ+iE+748Lbm/6AqhPLlyJ+xgqGNxWKQc89DAGg1Z7+OlJs8rC/uepcBtG2cZf220WpTYsNdkFZPtNQ=="],
+
+    "@pierre/path-store": ["@pierre/path-store@workspace:packages/path-store"],
 
     "@pierre/storage": ["@pierre/storage@0.0.10", "", { "dependencies": { "jose": "^5.10.0", "snakecase-keys": "^9.0.2" } }, "sha512-fDFrsnRiNTq7lpY56MGE4vRjYAHfTFLsxN18wbnxBlOk1XB1pxzgMfx5DwiqRcXs8+Gt2lmeXvlYAa1gGR4c7w=="],
 

@@ -1,0 +1,28 @@
+{
+  "name": "@pierre/path-store",
+  "version": "0.0.1-beta.1",
+  "license": "apache-2.0",
+  "files": [
+    "src",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "echo 'unimplemented'",
+    "dev": "echo 'unimplemented'",
+    "tsc": "tsgo --noEmit --pretty"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}
