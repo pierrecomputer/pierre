@@ -30,7 +30,6 @@ export interface PathStoreNode {
   kind: PathStoreNodeKind;
   depth: number;
   flags: number;
-  childIndexRef: number | null;
   subtreeNodeCount: number;
   visibleSubtreeCount: number;
   pathCache: string | null;
@@ -81,7 +80,6 @@ export interface PreparedPath {
 }
 
 export interface LookupPath {
-  rawPath: string;
   requiresDirectory: boolean;
   segments: readonly string[];
 }

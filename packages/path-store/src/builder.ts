@@ -51,7 +51,6 @@ function compareWithSortOption(
 
 function createRootNode(): PathStoreNode {
   return {
-    childIndexRef: 0,
     depth: 0,
     flags: PATH_STORE_NODE_FLAG_EXPLICIT | PATH_STORE_NODE_FLAG_ROOT,
     id: 0,
@@ -120,7 +119,11 @@ export class PathStoreBuilder {
   }
 
   public appendPaths(paths: readonly string[]): this {
-    for (const preparedPath of paths.map((path) => parseInputPath(path))) {
+    return this.appendPreparedPaths(paths.map((path) => parseInputPath(path)));
+  }
+
+  public appendPreparedPaths(preparedPaths: readonly PreparedPath[]): this {
+    for (const preparedPath of preparedPaths) {
       this.appendPreparedPath(preparedPath);
     }
 
@@ -240,7 +243,6 @@ export class PathStoreBuilder {
 
     const nodeId = this.nodes.length;
     this.nodes.push({
-      childIndexRef: null,
       depth: parentNode.depth + 1,
       flags: 0,
       id: nodeId,
@@ -279,9 +281,7 @@ export class PathStoreBuilder {
     }
 
     const nodeId = this.nodes.length;
-    const childIndexRef = this.directories.size;
     this.nodes.push({
-      childIndexRef,
       depth: parentNode.depth + 1,
       flags: 0,
       id: nodeId,

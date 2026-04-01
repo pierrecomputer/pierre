@@ -150,6 +150,27 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('continues visible slices after walking out of a nested expanded subtree', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['src/', 'src/components/'],
+      paths: [
+        'README.md',
+        'src/components/Button.tsx',
+        'src/index.ts',
+        'tmp/file.ts',
+      ],
+    });
+
+    expect(store.getVisibleSlice(1, 5).map((row) => row.path)).toEqual([
+      'src/components/',
+      'src/components/Button.tsx',
+      'src/index.ts',
+      'tmp/',
+      'README.md',
+    ]);
+  });
+
   test('supports initialExpandedPaths and keeps visible counts correct across mutation', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,
