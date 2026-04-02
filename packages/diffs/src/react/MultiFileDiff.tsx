@@ -39,8 +39,8 @@ export function MultiFileDiff<LAnnotation = undefined>({
   disableWorkerPool = false,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = useMemo(() => {
-    return parseDiffFromFile(oldFile, newFile);
-  }, [oldFile, newFile]);
+    return parseDiffFromFile(oldFile, newFile, options?.parseDiffOptions);
+  }, [oldFile, newFile, options?.parseDiffOptions]);
   const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
