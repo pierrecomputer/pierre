@@ -9,10 +9,13 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
+  CodeViewerDiffItem,
+  CodeViewerFileItem,
+  CodeViewerItem,
+  CodeViewerLineScrollTarget,
   CodeViewerMetrics,
+  CodeViewerScrollTarget,
   DiffLineAnnotation,
-  FileContents,
-  FileDiffMetadata,
   LineAnnotation,
   VirtualFileMetrics,
   VirtualWindowSpecs,
@@ -32,64 +35,44 @@ interface ScrollAnchor {
   lineOffset: number | undefined;
 }
 
+interface LineScrollPosition {
+  top: number;
+  height: number;
+}
+
 interface AdvancedVirtualizedBaseItem {
   /** Absolute top offset of this item inside the scroll content. */
   top: number;
   /** Total measured height reserved for this item. */
   height: number;
+  /** Root <diffs-container> node currently mounted for this item, only exists
+   * when rendered. */
+  element: HTMLElement | undefined;
 }
 
 interface AdvancedVirtualizedDiffItem<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
-  kind: 'diff';
-  /** Stable item identifier used for adding annotations (and maybe decorations
-   * in the future). */
-  id: string;
+  type: 'diff';
+  /** Latest item snapshot for this record. Controlled updates can replace it. */
+  item: CodeViewerDiffItem<LAnnotation>;
   /** Virtualized diff instance responsible for rendering this item. */
   instance: VirtualizedFileDiff<LAnnotation>;
-  /** Source diff payload used by the virtualized diff instance. */
-  fileDiff: FileDiffMetadata;
-  /** Root <diffs-container> node currently mounted for this item, only exists
-   * when rendered. */
-  element: HTMLElement | undefined;
-  /** Optional line annotations applied during render. */
-  annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
 interface AdvancedVirtualizedFileItem<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
-  kind: 'file';
-  /** Stable item identifier used for adding annotations (and maybe decorations
-   * in the future). */
-  id: string;
+  type: 'file';
+  /** Latest item snapshot for this record. Controlled updates can replace it. */
+  item: CodeViewerFileItem<LAnnotation>;
   /** Virtualized file instance responsible for rendering this item. */
   instance: VirtualizedFile<LAnnotation>;
-  /** Source file payload used by the virtualized file instance. */
-  file: FileContents;
-  /** Root <diffs-container> node currently mounted for this item, only exists
-   * when rendered. */
-  element: HTMLElement | undefined;
-  /** Optional line annotations applied during render. */
-  annotations?: LineAnnotation<LAnnotation>[];
 }
 
 type AdvancedVirtualizedItem<LAnnotation> =
   | AdvancedVirtualizedDiffItem<LAnnotation>
   | AdvancedVirtualizedFileItem<LAnnotation>;
-
-export interface AddFileDiffInput<LAnnotation> {
-  id: string;
-  fileDiff: FileDiffMetadata;
-  annotations?: DiffLineAnnotation<LAnnotation>[];
-}
-
-export interface AddFileInput<LAnnotation> {
-  id: string;
-  file: FileContents;
-  annotations?: LineAnnotation<LAnnotation>[];
-}
 
 export class CodeViewer<LAnnotation = undefined> {
   static __STOP = false;
@@ -106,9 +89,7 @@ export class CodeViewer<LAnnotation = undefined> {
     new Map();
   private instanceToItem: Map<object, AdvancedVirtualizedItem<LAnnotation>> =
     new Map();
-  private changedInstances: Set<
-    VirtualizedFileDiff<LAnnotation> | VirtualizedFile<LAnnotation>
-  > = new Set();
+  private changedItems: Set<AdvancedVirtualizedItem<LAnnotation>> = new Set();
   private scrollHeight = 0;
 
   private lastContainerHeight = -1;
@@ -153,7 +134,11 @@ export class CodeViewer<LAnnotation = undefined> {
     window.__TOGGLE = () => {
       if (CodeViewer.__STOP) {
         CodeViewer.__STOP = false;
-        this.scrollTo(CodeViewer.__lastScrollPosition, 'instant');
+        this.scrollTo({
+          type: 'position',
+          position: CodeViewer.__lastScrollPosition,
+          behavior: 'instant',
+        });
       } else {
         CodeViewer.__lastScrollPosition = this.getScrollTop();
         CodeViewer.__STOP = true;
@@ -189,6 +174,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.items.length = 0;
     this.idToItem.clear();
     this.instanceToItem.clear();
+    this.changedItems.clear();
     this.stickyContainer.textContent = '';
     this.stickyOffset.style.height = '';
     this.container?.style.removeProperty('height');
@@ -238,64 +224,53 @@ export class CodeViewer<LAnnotation = undefined> {
     }
   }
 
-  public scrollTo(top: number, behavior?: ScrollBehavior): void {
+  public scrollTo(target: CodeViewerScrollTarget): void {
     if (this.root == null) {
       return;
     }
+    const top = this.resolveScrollTargetTop(target);
     const clampedTop = Math.max(
       0,
       Math.min(top, Math.max(this.getScrollHeight() - this.getHeight(), 0))
     );
-    this.root.scrollTo({ top: clampedTop, behavior });
+    // NOTE(amadeus): We'll probably need to figure out how to make the smooth
+    // variation of this properly work in a way that can adjust scroll position
+    // target as we go - i.e. a spring based lad...
+    this.root.scrollTo({ top: clampedTop, behavior: target.behavior });
   }
 
-  public addCode(
-    input: AddFileDiffInput<LAnnotation> | AddFileInput<LAnnotation>
-  ): void {
-    if (this.idToItem.has(input.id)) {
-      throw new Error(`CodeViewer.addFileOrDiff: duplicate id "${input.id}"`);
+  public addItem(input: CodeViewerItem<LAnnotation>): void {
+    this.addItems([input]);
+  }
+
+  public addItems(inputs: readonly CodeViewerItem<LAnnotation>[]): void {
+    if (inputs.length === 0) {
+      return;
     }
-    const itemTop =
+
+    let nextTop =
       this.items.length === 0 ? 0 : this.scrollHeight + this.viewerMetrics.gap;
-    const item: AdvancedVirtualizedItem<LAnnotation> = (() => {
-      if ('fileDiff' in input) {
-        return {
-          kind: 'diff',
-          ...input,
-          instance: new VirtualizedFileDiff<LAnnotation>(
-            this.options,
-            this,
-            this.metrics,
-            this.workerManager,
-            this.isContainerManaged
-          ),
-          top: itemTop,
-          height: 0,
-          element: undefined,
-        };
+    for (const input of inputs) {
+      if (this.idToItem.has(input.id)) {
+        throw new Error(`CodeViewer.addItem: duplicate id "${input.id}"`);
       }
-      return {
-        kind: 'file',
-        ...input,
-        instance: new VirtualizedFile<LAnnotation>(
-          this.options as unknown as FileOptions<LAnnotation>,
-          this,
-          this.metrics,
-          this.workerManager,
-          this.isContainerManaged
-        ),
-        top: itemTop,
-        height: 0,
-        element: undefined,
-      };
-    })();
-    this.items.push(item);
-    this.idToItem.set(item.id, item);
-    this.instanceToItem.set(item.instance, item);
-    item.height = prepareItemInstance(item);
-    this.scrollHeight = itemTop + item.height;
+
+      const item = this.createItem(input, nextTop);
+      this.items.push(item);
+      this.idToItem.set(item.item.id, item);
+      this.instanceToItem.set(item.instance, item);
+      item.height = prepareItemInstance(item);
+      nextTop += item.height + this.viewerMetrics.gap;
+    }
+
+    this.scrollHeight = nextTop - this.viewerMetrics.gap;
     this.scrollDirty = true;
     this.render();
+  }
+
+  public setItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
+    this.reset();
+    this.addItems(items);
   }
 
   public setDiffAnnotations(
@@ -303,10 +278,14 @@ export class CodeViewer<LAnnotation = undefined> {
     annotations: DiffLineAnnotation<LAnnotation>[]
   ): void {
     const item = this.idToItem.get(id);
-    if (item == null || item.kind !== 'diff') {
+    if (item == null || item.type !== 'diff') {
       throw new Error(`CodeViewer.setDiffAnnotations: invalid diff id "${id}"`);
     }
-    item.annotations = annotations;
+    item.item = {
+      ...item.item,
+      annotations,
+    };
+    this.changedItems.add(item);
     this.render();
   }
 
@@ -315,10 +294,14 @@ export class CodeViewer<LAnnotation = undefined> {
     annotations: LineAnnotation<LAnnotation>[]
   ): void {
     const item = this.idToItem.get(id);
-    if (item == null || item.kind !== 'file') {
+    if (item == null || item.type !== 'file') {
       throw new Error(`CodeViewer.setFileAnnotations: invalid file id "${id}"`);
     }
-    item.annotations = annotations;
+    item.item = {
+      ...item.item,
+      annotations,
+    };
+    this.changedItems.add(item);
     this.scrollDirty = true;
     this.render();
   }
@@ -346,7 +329,7 @@ export class CodeViewer<LAnnotation = undefined> {
         'CodeViewer.instanceChanged: An instance has changed that is not registered'
       );
     }
-    this.changedInstances.add(instance);
+    this.changedItems.add(item);
     this.render();
   }
 
@@ -362,6 +345,99 @@ export class CodeViewer<LAnnotation = undefined> {
       );
     }
     return item.top;
+  }
+
+  private createItem(
+    input: CodeViewerItem<LAnnotation>,
+    top: number
+  ): AdvancedVirtualizedItem<LAnnotation> {
+    if (input.type === 'diff') {
+      return {
+        type: 'diff',
+        item: input,
+        instance: new VirtualizedFileDiff<LAnnotation>(
+          this.options,
+          this,
+          this.metrics,
+          this.workerManager,
+          this.isContainerManaged
+        ),
+        top,
+        height: 0,
+        element: undefined,
+      };
+    }
+
+    return {
+      type: 'file',
+      item: input,
+      instance: new VirtualizedFile<LAnnotation>(
+        this.options as unknown as FileOptions<LAnnotation>,
+        this,
+        this.metrics,
+        this.workerManager,
+        this.isContainerManaged
+      ),
+      top,
+      height: 0,
+      element: undefined,
+    };
+  }
+
+  private resolveScrollTargetTop(target: CodeViewerScrollTarget): number {
+    if (target.type === 'position') {
+      return target.position;
+    }
+
+    const item = this.idToItem.get(target.id);
+    if (item == null) {
+      throw new Error(`CodeViewer.scrollTo: unknown item id "${target.id}"`);
+    }
+
+    const linePosition = this.getLineScrollPosition(item, target);
+    if (linePosition == null) {
+      throw new Error(
+        `CodeViewer.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
+      );
+    }
+
+    const absoluteTop = item.top + linePosition.top;
+    const viewportHeight = this.getHeight();
+    const offset = target.offset ?? 0;
+
+    if (target.align === 'center') {
+      return absoluteTop - (viewportHeight - linePosition.height) / 2 + offset;
+    }
+    if (target.align === 'end') {
+      return absoluteTop - (viewportHeight - linePosition.height) + offset;
+    }
+    if (target.align === 'nearest') {
+      const currentTop = this.getScrollTop();
+      const currentBottom = currentTop + viewportHeight;
+      const startTop = absoluteTop - offset;
+      const endTop =
+        absoluteTop - (viewportHeight - linePosition.height) + offset;
+      if (startTop < currentTop) {
+        return startTop;
+      }
+      if (absoluteTop + linePosition.height + offset > currentBottom) {
+        return endTop;
+      }
+      return currentTop;
+    }
+
+    return absoluteTop - offset;
+  }
+
+  private getLineScrollPosition(
+    item: AdvancedVirtualizedItem<LAnnotation>,
+    target: CodeViewerLineScrollTarget
+  ): LineScrollPosition | undefined {
+    if (item.type === 'diff') {
+      return item.instance.getLinePosition(target.lineNumber, target.side);
+    }
+
+    return item.instance.getLinePosition(target.lineNumber);
   }
 
   private computeRenderRangeAndEmit = (): void => {
@@ -389,11 +465,11 @@ export class CodeViewer<LAnnotation = undefined> {
       overscrollSize: this.config.overscrollSize,
     });
 
-    if (this.changedInstances.size > 0) {
+    if (this.changedItems.size > 0) {
       this.recomputeLayout();
       // TODO(amadeus): May need to figure out a local height caching system to
       // avoid unnecessary re-computation with these instances
-      this.changedInstances.clear();
+      this.changedItems.clear();
     }
 
     const { top, bottom } = this.windowSpecs;
@@ -422,17 +498,16 @@ export class CodeViewer<LAnnotation = undefined> {
     // NOTE(amadeus): We'll probably want to figure out how to not have to
     // iterate through this entire array if not necessary? Maybe by hunking
     // into positional groups at some point
-    const updatedInstances = new Set<AdvancedVirtualizedItem<LAnnotation>>();
+    const updatedItems = new Set<AdvancedVirtualizedItem<LAnnotation>>();
     let startingIndex: number | undefined;
     let lastRenderedIndex = -1;
     for (const [itemIndex, item] of this.items.entries()) {
       const { instance } = item;
-      const specs = item;
       // We can stop iterating when we get to elements after the window
-      if (specs.top > bottom) {
+      if (item.top > bottom) {
         break;
       }
-      if (specs.top < top - specs.height) {
+      if (item.top < top - item.height) {
         continue;
       }
       startingIndex ??= itemIndex;
@@ -448,14 +523,14 @@ export class CodeViewer<LAnnotation = undefined> {
         }
         instance.virtualizedSetup();
         if (onRender(item, item.element)) {
-          updatedInstances.add(item);
+          updatedItems.add(item);
         }
         prevElement = item.element;
       }
       // Otherwise kick off a render as necessary
       else {
         if (onRender(item)) {
-          updatedInstances.add(item);
+          updatedItems.add(item);
         }
         prevElement = item.element;
       }
@@ -464,7 +539,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.renderState.firstIndex = startingIndex ?? -1;
     this.renderState.lastIndex = lastRenderedIndex;
 
-    this.reconcileRenderedItems(updatedInstances);
+    this.reconcileRenderedItems(updatedItems);
     this.updateStickyPositioning();
     this.scrollFix(anchor);
 
@@ -480,7 +555,7 @@ export class CodeViewer<LAnnotation = undefined> {
   };
 
   private reconcileRenderedItems(
-    updatedInstances?: Set<AdvancedVirtualizedItem<LAnnotation>>
+    updatedItems?: Set<AdvancedVirtualizedItem<LAnnotation>>
   ): void {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1) {
@@ -510,11 +585,7 @@ export class CodeViewer<LAnnotation = undefined> {
       }
       // If updatedInstances provided, only reconcile those. If not provided
       // (resize path), reconcile all rendered items.
-      if (
-        updatedInstances == null
-          ? index <= lastIndex
-          : updatedInstances.has(item)
-      ) {
+      if (updatedItems == null ? index <= lastIndex : updatedItems.has(item)) {
         if (item.instance.reconcileHeights()) {
           heightChanged = true;
           item.height = item.instance.getVirtualizedHeight();
@@ -754,12 +825,13 @@ export class CodeViewer<LAnnotation = undefined> {
         runningTop += this.viewerMetrics.gap;
       }
       item.top = runningTop;
-      if (item.kind === 'diff') {
-        item.height = item.instance.prepareVirtualizedItem(item.fileDiff);
+      if (item.type === 'diff') {
+        item.height = item.instance.prepareVirtualizedItem(item.item.fileDiff);
+        runningTop += item.height;
       } else {
-        item.height = item.instance.prepareVirtualizedItem(item.file);
+        item.height = item.instance.prepareVirtualizedItem(item.item.file);
+        runningTop += item.height;
       }
-      runningTop += item.height;
     }
     if (runningTop !== this.scrollHeight) {
       this.scrollDirty = true;
@@ -786,10 +858,10 @@ function prepareItemInstance<LAnnotation>(
   item: AdvancedVirtualizedItem<LAnnotation>
 ): number {
   item.instance.cleanUp(true);
-  if (item.kind === 'diff') {
-    return item.instance.prepareVirtualizedItem(item.fileDiff);
+  if (item.type === 'diff') {
+    return item.instance.prepareVirtualizedItem(item.item.fileDiff);
   } else {
-    return item.instance.prepareVirtualizedItem(item.file);
+    return item.instance.prepareVirtualizedItem(item.item.file);
   }
 }
 
@@ -797,17 +869,17 @@ function onRender<LAnnotation>(
   item: AdvancedVirtualizedItem<LAnnotation>,
   fileContainer?: HTMLElement
 ): boolean {
-  if (item.kind === 'diff') {
+  if (item.type === 'diff') {
     return item.instance.render({
       fileContainer,
-      fileDiff: item.fileDiff,
-      lineAnnotations: item.annotations,
+      fileDiff: item.item.fileDiff,
+      lineAnnotations: item.item.annotations,
     });
   } else {
     return item.instance.render({
       fileContainer,
-      file: item.file,
-      lineAnnotations: item.annotations,
+      file: item.item.file,
+      lineAnnotations: item.item.annotations,
     });
   }
 }

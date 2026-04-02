@@ -461,6 +461,48 @@ export type DiffLineAnnotation<T = undefined> = {
   lineNumber: number;
 } & OptionalMetadata<T>;
 
+export type CodeViewerItemVersion = string | number;
+
+export type CodeViewerFileItem<T = undefined> = {
+  id: string;
+  type: 'file';
+  file: FileContents;
+  annotations?: LineAnnotation<T>[];
+  version?: CodeViewerItemVersion;
+};
+
+export type CodeViewerDiffItem<T = undefined> = {
+  id: string;
+  type: 'diff';
+  fileDiff: FileDiffMetadata;
+  annotations?: DiffLineAnnotation<T>[];
+  version?: CodeViewerItemVersion;
+};
+
+export type CodeViewerItem<T = undefined> =
+  | CodeViewerFileItem<T>
+  | CodeViewerDiffItem<T>;
+
+export interface CodeViewerPositionScrollTarget {
+  type: 'position';
+  position: number;
+  behavior?: ScrollBehavior;
+}
+
+export interface CodeViewerLineScrollTarget {
+  type: 'line';
+  id: string;
+  lineNumber: number;
+  side?: SelectionSide;
+  align?: 'start' | 'center' | 'end' | 'nearest';
+  offset?: number;
+  behavior?: ScrollBehavior;
+}
+
+export type CodeViewerScrollTarget =
+  | CodeViewerPositionScrollTarget
+  | CodeViewerLineScrollTarget;
+
 export type MergeConflictResolution = 'current' | 'incoming' | 'both';
 
 export interface MergeConflictRegion {
