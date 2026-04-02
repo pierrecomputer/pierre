@@ -520,6 +520,10 @@ Header customization and collapsing behavior:
 - Use `options.collapsed` to hide file body content while keeping the file
   header visible.
 
+Token callbacks (`onTokenClick`, `onTokenEnter`, `onTokenLeave`) and
+`useTokenTransformer` are documented in [Token Hooks](#token-hooks), including
+examples, payload details, performance notes, and Worker Pool caveats.
+
 **File** (`file.tsx`):
 
 ```tsx
@@ -873,6 +877,33 @@ interface DiffOptions {
     // Fires when mouse leaves a line
   },
 
+  // See the Token Hooks section for examples, performance notes,
+  // and Worker Pool caveats.
+  // These APIs preserve more token-level DOM metadata, which increases DOM
+  // size and may have a performance impact on larger files.
+  // Experimental token callbacks. Useful for token-aware UIs such as
+  // LSP textDocument/hover tooltips or temporary token styling.
+  // lineCharStart is zero-based and lineCharEnd is end-exclusive.
+  // If both token and line click handlers are provided, both will fire.
+  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd, side }) {
+    // Fires when clicking a token in the code column
+  },
+  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, side, tokenElement }) {
+    // Use tokenElement for hover styling or tooltips
+  },
+  onTokenLeave({ tokenText, side, tokenElement }) {
+    // Clean up token-specific hover UI
+  },
+
+  // Include whitespace-only tokens in token callbacks (default: false)
+  enableTokenInteractionsOnWhitespace: false,
+
+  // Experimental: force token wrappers/data-char output even when no token
+  // callbacks are attached. Usually unnecessary unless you want custom styling.
+  // This also increases DOM size and may have a performance impact on 
+  // larger files.
+  useTokenTransformer: false,
+
   // Preferred: built-in gutter utility button (+)
   // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; options.enableGutterUtility does.
@@ -1143,6 +1174,33 @@ interface FileOptions {
     // Fires when mouse leaves a line
   },
 
+  // See the Token Hooks section for examples, performance notes,
+  // and Worker Pool caveats.
+  // These APIs preserve more token-level DOM metadata, which increases DOM
+  // size and may have a performance impact on larger files.
+  // Experimental token callbacks. Useful for token-aware UIs such as
+  // LSP textDocument/hover tooltips or temporary token styling.
+  // lineCharStart is zero-based and lineCharEnd is end-exclusive.
+  // If both token and line click handlers are provided, both will fire.
+  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd }) {
+    // Fires when clicking a token in the code column
+  },
+  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, tokenElement }) {
+    // Use tokenElement for hover styling or tooltips
+  },
+  onTokenLeave({ tokenText, tokenElement }) {
+    // Clean up token-specific hover UI
+  },
+
+  // Include whitespace-only tokens in token callbacks (default: false)
+  enableTokenInteractionsOnWhitespace: false,
+
+  // Experimental: force token wrappers/data-char output even when no token
+  // callbacks are attached. Usually unnecessary unless you want custom styling.
+  // This also increases DOM size and may have a performance impact on larger
+  // files.
+  useTokenTransformer: false,
+
   // Preferred: built-in gutter utility button (+)
   // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; options.enableGutterUtility does.
@@ -1369,6 +1427,10 @@ Header customization and collapsing behavior:
 - In `File`, header callbacks receive `file: FileContents`.
 - Use `collapsed` in constructor options to hide file body content while keeping
   the file header visible.
+
+Token callbacks (`onTokenClick`, `onTokenEnter`, `onTokenLeave`) and
+`useTokenTransformer` are documented in [Token Hooks](#token-hooks), including
+examples, payload details, performance notes, and Worker Pool caveats.
 
 #### Custom Hunk Separators
 
@@ -1668,6 +1730,26 @@ const instance = new FileDiff({
   // Fires when mouse leaves a line
   onLineLeave({ lineNumber, side }) {},
 
+  // See the Token Hooks section for examples, performance notes,
+  // and Worker Pool caveats.
+  // These APIs preserve more token-level DOM metadata, which increases DOM
+  // size and can have a noticeable cost on larger files.
+  // Experimental token callbacks. Useful for token-aware UIs such as
+  // LSP textDocument/hover tooltips or temporary token styling.
+  // lineCharStart is zero-based and lineCharEnd is end-exclusive.
+  // If both token and line click handlers are provided, both will fire.
+  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd, side }) {},
+  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, side, tokenElement }) {},
+  onTokenLeave({ tokenText, side, tokenElement }) {},
+
+  // Include whitespace-only tokens in token callbacks (default: false)
+  enableTokenInteractionsOnWhitespace: false,
+
+  // Experimental: force token wrappers/data-char output even when no token
+  // callbacks are attached. Usually unnecessary unless you want custom styling.
+  // This also increases DOM size and may impact larger files.
+  useTokenTransformer: false,
+
   // Preferred: built-in gutter utility button (+)
   // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; enableGutterUtility does.
@@ -1918,6 +2000,26 @@ const instance = new File({
 
   // Fires when mouse leaves a line
   onLineLeave({ lineNumber }) {},
+
+  // See the Token Hooks section for examples, performance notes,
+  // and Worker Pool caveats.
+  // These APIs preserve more token-level DOM metadata, which increases DOM
+  // size and may have a performance impact on larger files.
+  // Experimental token callbacks. Useful for token-aware UIs such as
+  // LSP textDocument/hover tooltips or temporary token styling.
+  // lineCharStart is zero-based and lineCharEnd is end-exclusive.
+  // If both token and line click handlers are provided, both will fire.
+  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd }) {},
+  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, tokenElement }) {},
+  onTokenLeave({ tokenText, tokenElement }) {},
+
+  // Include whitespace-only tokens in token callbacks (default: false)
+  enableTokenInteractionsOnWhitespace: false,
+
+  // Experimental: force token wrappers/data-char output even when no token
+  // callbacks are attached. Usually unnecessary unless you want custom styling.
+  // This also increases DOM size and may impact larger files.
+  useTokenTransformer: false,
 
   // Preferred: built-in gutter utility button (+)
   // No render callback needed; callback receives a SelectedLineRange.
@@ -3589,15 +3691,23 @@ automatically. If you're using the Vanilla JS APIs, we provide a
 `getOrCreateWorkerPoolSingleton` helper that ensures a single pool instance that
 you can then manually pass to all your File/FileDiff instances.
 
-> **Warning:** When using the worker pool, the `theme`, `lineDiffType`, and
-> `tokenizeMaxLineLength` render options are controlled by `WorkerPoolManager`,
-> not individual components. Passing these options into component instances will
-> be ignored. To change render options after WorkerPoolManager instantiates, use
-> the `setRenderOptions()` method on the `WorkerPoolManager`. **Note:** Changing
-> render options will force all mounted components to re-render and will clear
-> the render cache. If you need to control which Shiki engine is used, set
-> `preferredHighlighter` when initializing the pool (`'shiki-js'` by default,
-> `'shiki-wasm'` optional).
+> **Warning:** When using the worker pool, the `theme`, `lineDiffType`,
+> `tokenizeMaxLineLength`, and `useTokenTransformer` render options are
+> controlled by `WorkerPoolManager`, not individual components. Passing these
+> options into component instances will be ignored.
+
+To change render options after `WorkerPoolManager` instantiates, call
+`setRenderOptions()`. Changing render options will force mounted components to
+re-render and clear the render cache.
+
+If you need token callbacks or experimental token selectors such as `data-char`,
+enable `useTokenTransformer: true` on the worker pool itself. Worker pools can
+move highlighting work off the main thread, but they do not reduce the extra DOM
+size created by token metadata. For token callback behavior and performance
+tradeoffs, see [Token Hooks](#token-hooks).
+
+If you need to control which Shiki engine is used, set `preferredHighlighter`
+when initializing the pool (`'shiki-js'` by default, `'shiki-wasm'` optional).
 
 #### React
 
@@ -3669,6 +3779,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
+//   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
 //   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
 //   - langs?: SupportedLanguages[] - Array of languages to preload
@@ -3685,6 +3796,7 @@ poolManager.setRenderOptions(options)
 // Accepts: Partial<WorkerRenderingOptions>
 //   - theme?: DiffsThemeNames | ThemesType
 //   - lineDiffType?: 'word' | 'word-alt' | 'char'
+//   - maxLineDiffLength?: number
 //   - tokenizeMaxLineLength?: number
 // Omitted options will use defaults. WARNING: This forces all mounted
 // components to re-render and clears the render cache.
@@ -3775,7 +3887,7 @@ const fileV2 = { name: 'file.ts', contents: 'v2', cacheKey: 'file-v2' };
 // - Files/diffs with cacheKey are stored in an LRU cache after rendering
 // - Subsequent renders with the same cacheKey return cached results instantly
 // - No worker processing required for cache hits
-// - Cache is validated against render options (e.g., theme, lineDiffType)
+// - Cache is validated against render options (e.g., theme, lineDiffType, maxLineDiffLength)
 // - If options changed, cached result is skipped and re-rendered
 // - Cache is cleared when the pool is terminated
 
@@ -3918,6 +4030,8 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
       }}
       highlighterOptions={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        // Optional: skip inline line diffs for very long changed lines
+        // maxLineDiffLength: 1000,
         // Optional: pick the Shiki engine ('shiki-js' is default)
         // preferredHighlighter: 'shiki-wasm',
         // Optionally preload languages to avoid lazy-loading delays
@@ -3956,6 +4070,7 @@ function ThemeSwitcher() {
     // Any omitted options will use defaults:
     // - theme: { dark: 'pierre-dark', light: 'pierre-light' }
     // - lineDiffType: 'word-alt'
+    // - maxLineDiffLength: 1000
     // - tokenizeMaxLineLength: 1000
     void workerPool?.setRenderOptions({
       theme: { dark: 'github-dark', light: 'github-light' },
@@ -4035,6 +4150,8 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Optional: skip inline line diffs for very long changed lines
+    // maxLineDiffLength: 1000,
     // Optional: pick the Shiki engine ('shiki-js' is default)
     // preferredHighlighter: 'shiki-wasm',
     // Optionally preload languages to avoid lazy-loading delays
@@ -4060,6 +4177,7 @@ instance.render({ oldFile, newFile, containerWrapper: document.body });
 // It accepts a Partial<WorkerRenderingOptions>. Any omitted options will use defaults:
 // - theme: { dark: 'pierre-dark', light: 'pierre-light' }
 // - lineDiffType: 'word-alt'
+// - maxLineDiffLength: 1000
 // - tokenizeMaxLineLength: 1000
 await workerPool.setRenderOptions({
   theme: { dark: 'github-dark', light: 'github-light' },

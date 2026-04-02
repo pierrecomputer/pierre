@@ -57,6 +57,7 @@ import {
   STYLING_CODE_INLINE,
   STYLING_CODE_UNSAFE,
 } from './Styling/constants';
+import { TOKEN_HOOKS_REACT, TOKEN_HOOKS_VANILLA } from './TokenHooks/constants';
 import {
   HELPER_DIFF_ACCEPT_REJECT,
   HELPER_DIFF_ACCEPT_REJECT_REACT,
@@ -127,6 +128,7 @@ export default function DocsPage() {
           <UtilitiesSection />
           <StylingSection />
           <ThemingSection />
+          <TokenHooksSection />
           <WorkerPoolSection />
           <SSRSection />
         </div>
@@ -400,6 +402,21 @@ async function StylingSection() {
 async function ThemingSection() {
   const content = await renderMDX({
     filePath: 'docs/Theming/docs-content.mdx',
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function TokenHooksSection() {
+  const [reactTokenHooks, vanillaTokenHooks] = await Promise.all([
+    preloadFile(TOKEN_HOOKS_REACT),
+    preloadFile(TOKEN_HOOKS_VANILLA),
+  ]);
+  const content = await renderMDX({
+    filePath: 'docs/TokenHooks/content.mdx',
+    scope: {
+      reactTokenHooks,
+      vanillaTokenHooks,
+    },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

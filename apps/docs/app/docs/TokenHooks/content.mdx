@@ -1,0 +1,42 @@
+## Token Hooks
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  Token hooks are experimental and subject to change.
+</Notice>
+
+Token hooks let you attach callbacks to syntax-highlighted tokens for custom
+hover UI, and LSP `textDocument/hover` integrations.
+
+The shared prop tables in the React API and Vanilla JS API sections list the
+exact option names. This section covers behavior, examples, and performance
+tradeoffs.
+
+Available on:
+
+- React: `MultiFileDiff`, `PatchDiff`, `FileDiff`, and `File`
+- Vanilla JS: `FileDiff` and `File`
+
+Shared behavior:
+
+- `onTokenEnter`, `onTokenLeave`, and `onTokenClick` receive `tokenText`,
+  `lineNumber`, `lineCharStart`, `lineCharEnd`, and `tokenElement`. Diff
+  variants also receive `side`.
+- `lineCharStart` is zero-based and `lineCharEnd` is end-exclusive.
+- If both token and line click handlers are attached, both will fire.
+- Whitespace-only tokens are excluded unless
+  `enableTokenInteractionsOnWhitespace` is `true`.
+- `tokenElement` is usually the simplest way to apply temporary hover styles.
+- Set `useTokenTransformer: true` when you want token wrappers or experimental
+  selectors like `data-char` without token callbacks.
+- Enabling token metadata increases DOM size because more token wrappers and
+  attributes are preserved. On large files or many mounted diffs, this can have
+  a noticeable performance cost.
+- If you are using a [Worker Pool](#worker-pool), set
+  `useTokenTransformer: true` on `WorkerPoolManager`. Worker pools can move
+  highlighting work off the main thread, but they do not reduce the extra DOM
+  size created by token metadata.
+
+<TokenHookTabs
+  reactExample={reactTokenHooks}
+  vanillaExample={vanillaTokenHooks}
+/>

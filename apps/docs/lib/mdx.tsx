@@ -21,6 +21,7 @@ import {
   ComponentTabs,
   SharedPropTabs,
 } from '../app/docs/ReactAPI/ComponentTabs';
+import { TokenHookTabs } from '../app/docs/TokenHooks/ComponentTabs';
 import { AcceptRejectTabs } from '../app/docs/Utilities/AcceptRejectTabs';
 import {
   DiffHunksTabs,
@@ -67,6 +68,7 @@ const defaultComponents = {
   TreesCodeToggle,
   ComponentTabs,
   SharedPropTabs,
+  TokenHookTabs,
   AcceptRejectTabs,
   DiffHunksTabs,
   VanillaComponentTabs,

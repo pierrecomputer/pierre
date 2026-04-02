@@ -194,6 +194,33 @@ interface DiffOptions {
     // Fires when mouse leaves a line
   },
 
+  // See the Token Hooks section for examples, performance notes,
+  // and Worker Pool caveats.
+  // These APIs preserve more token-level DOM metadata, which increases DOM
+  // size and may have a performance impact on larger files.
+  // Experimental token callbacks. Useful for token-aware UIs such as
+  // LSP textDocument/hover tooltips or temporary token styling.
+  // lineCharStart is zero-based and lineCharEnd is end-exclusive.
+  // If both token and line click handlers are provided, both will fire.
+  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd, side }) {
+    // Fires when clicking a token in the code column
+  },
+  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, side, tokenElement }) {
+    // Use tokenElement for hover styling or tooltips
+  },
+  onTokenLeave({ tokenText, side, tokenElement }) {
+    // Clean up token-specific hover UI
+  },
+
+  // Include whitespace-only tokens in token callbacks (default: false)
+  enableTokenInteractionsOnWhitespace: false,
+
+  // Experimental: force token wrappers/data-char output even when no token
+  // callbacks are attached. Usually unnecessary unless you want custom styling.
+  // This also increases DOM size and may have a performance impact on 
+  // larger files.
+  useTokenTransformer: false,
+
   // Preferred: built-in gutter utility button (+)
   // No render callback needed; callback receives a SelectedLineRange.
   // Callback does not control visibility; options.enableGutterUtility does.
@@ -694,6 +721,33 @@ interface FileOptions {
   onLineLeave({ lineNumber }) {
     // Fires when mouse leaves a line
   },
+
+  // See the Token Hooks section for examples, performance notes,
+  // and Worker Pool caveats.
+  // These APIs preserve more token-level DOM metadata, which increases DOM
+  // size and may have a performance impact on larger files.
+  // Experimental token callbacks. Useful for token-aware UIs such as
+  // LSP textDocument/hover tooltips or temporary token styling.
+  // lineCharStart is zero-based and lineCharEnd is end-exclusive.
+  // If both token and line click handlers are provided, both will fire.
+  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd }) {
+    // Fires when clicking a token in the code column
+  },
+  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, tokenElement }) {
+    // Use tokenElement for hover styling or tooltips
+  },
+  onTokenLeave({ tokenText, tokenElement }) {
+    // Clean up token-specific hover UI
+  },
+
+  // Include whitespace-only tokens in token callbacks (default: false)
+  enableTokenInteractionsOnWhitespace: false,
+
+  // Experimental: force token wrappers/data-char output even when no token
+  // callbacks are attached. Usually unnecessary unless you want custom styling.
+  // This also increases DOM size and may have a performance impact on larger
+  // files.
+  useTokenTransformer: false,
 
   // Preferred: built-in gutter utility button (+)
   // No render callback needed; callback receives a SelectedLineRange.

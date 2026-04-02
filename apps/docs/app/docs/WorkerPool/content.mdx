@@ -119,16 +119,24 @@ automatically. If you're using the Vanilla JS APIs, we provide a
 you can then manually pass to all your File/FileDiff instances.
 
 <Notice icon={<IconInfoFill />} variant="warning">
-  When using the worker pool, the `theme`, `lineDiffType`, and
-  `tokenizeMaxLineLength` render options are controlled by `WorkerPoolManager`,
-  not individual components. Passing these options into component instances will
-  be ignored. To change render options after WorkerPoolManager instantiates, use
-  the `setRenderOptions()` method on the `WorkerPoolManager`. **Note:** Changing
-  render options will force all mounted components to re-render and will clear
-  the render cache. If you need to control which Shiki engine is used, set
-  `preferredHighlighter` when initializing the pool (`'shiki-js'` by default,
-  `'shiki-wasm'` optional).
+  When using the worker pool, the `theme`, `lineDiffType`,
+  `tokenizeMaxLineLength`, and `useTokenTransformer` render options are
+  controlled by `WorkerPoolManager`, not individual components. Passing these
+  options into component instances will be ignored.
 </Notice>
+
+To change render options after `WorkerPoolManager` instantiates, call
+`setRenderOptions()`. Changing render options will force mounted components to
+re-render and clear the render cache.
+
+If you need token callbacks or experimental token selectors such as `data-char`,
+enable `useTokenTransformer: true` on the worker pool itself. Worker pools can
+move highlighting work off the main thread, but they do not reduce the extra DOM
+size created by token metadata. For token callback behavior and performance
+tradeoffs, see [Token Hooks](#token-hooks).
+
+If you need to control which Shiki engine is used, set `preferredHighlighter`
+when initializing the pool (`'shiki-js'` by default, `'shiki-wasm'` optional).
 
 #### React
 
