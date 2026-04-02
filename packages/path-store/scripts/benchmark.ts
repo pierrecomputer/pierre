@@ -36,8 +36,11 @@ const ROOT_FILE_SEED_PATH = 'zz-benchmark-root-file.ts';
 const ROOT_FILE_RENAMED_PATH = 'zz-benchmark-root-file-renamed.ts';
 const HUMAN_BENCHMARK_NAME_MIN_WIDTH = 32;
 const HUMAN_BENCHMARK_NAME_MAX_WIDTH = 72;
+const HUMAN_PROGRESS_LABEL_WIDTH = 44;
 const LOCAL_VISIBLE_PATH_SEARCH_RADIUS = MUTATION_WINDOW_SIZE * 2;
 const VISIBLE_PATH_SEARCH_CHUNK_SIZE = 1_024;
+const ANSI_ENABLED = process.stdout.isTTY;
+const WAIT_INDICATOR_FRAMES = ['.  ', '.. ', '...'] as const;
 const BENCHMARK_INTENT =
   'Measure absolute path-store scenario latencies by workload and operation. Build and visible-read scenarios use presorted inputs everywhere except the standalone preparePaths benchmarks. Mutation scenarios measure commit plus the immediate store-side render contract: getVisibleCount() and getVisibleSlice(start, end), either for the changed window or for a preserved offscreen viewport.';
 
@@ -47,6 +50,7 @@ type ViewportMode = (typeof VIEWPORT_MODES)[number];
 type ScenarioCategory = 'prepare' | 'build' | 'visible' | 'e2e' | 'mutation';
 type MutationScenarioKind = (typeof MUTATION_SCENARIO_KINDS)[number];
 type MutationReadIntent = 'render-changed-window' | 'preserve-viewport';
+type MutationProgressPhase = 'warmup' | 'sample';
 
 interface BenchmarkCliOptions {
   filter?: RegExp;
@@ -82,6 +86,12 @@ interface MutationReadPlan {
   windowShifted: boolean;
 }
 
+interface ScenarioProgress {
+  completed: number;
+  phase: MutationProgressPhase;
+  total: number;
+}
+
 interface ScenarioManifest {
   afterPreview?: readonly string[];
   baselineWindowEnd?: number;
@@ -108,7 +118,9 @@ interface ScenarioManifest {
 
 interface BenchmarkScenario {
   manifest: ScenarioManifest;
-  measure: () => Promise<MeasuredRunStats>;
+  measure: (
+    progressReporter?: ((progress: ScenarioProgress) => void) | undefined
+  ) => Promise<MeasuredRunStats>;
   name: string;
 }
 
@@ -173,6 +185,22 @@ interface BenchmarkProfile {
   name: BenchmarkProfileName;
   visibleWindowSizes: readonly number[];
   workloadNames: readonly BenchmarkWorkloadName[];
+}
+
+const ANSI = {
+  bold: ANSI_ENABLED ? '\u001B[1m' : '',
+  cyan: ANSI_ENABLED ? '\u001B[36m' : '',
+  dim: ANSI_ENABLED ? '\u001B[2m' : '',
+  green: ANSI_ENABLED ? '\u001B[32m' : '',
+  reset: ANSI_ENABLED ? '\u001B[0m' : '',
+};
+
+function styleText(text: string, ...styles: readonly string[]): string {
+  if (!ANSI_ENABLED || styles.length === 0) {
+    return text;
+  }
+
+  return `${styles.join('')}${text}${ANSI.reset}`;
 }
 
 function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
@@ -722,43 +750,61 @@ function printHumanBenchmarkHeader(
   nameWidth: number
 ): void {
   if (context.cpu?.freq != null) {
-    console.log(`clk: ~${context.cpu.freq.toFixed(2)} GHz`);
+    console.log(
+      `${styleText('clk:', ANSI.dim)} ~${context.cpu.freq.toFixed(2)} GHz`
+    );
   }
   if (context.cpu?.name != null) {
-    console.log(`cpu: ${context.cpu.name}`);
+    console.log(`${styleText('cpu:', ANSI.dim)} ${context.cpu.name}`);
   }
   console.log(
-    `runtime: ${context.runtime}${context.version == null ? '' : ` ${context.version}`} (${context.arch})`
+    `${styleText('runtime:', ANSI.dim)} ${context.runtime}${context.version == null ? '' : ` ${context.version}`} (${context.arch})`
   );
-  console.log(`scenarios: ${formatCount(scenarioCount)}`);
+  console.log(
+    `${styleText('scenarios:', ANSI.dim)} ${formatCount(scenarioCount)}`
+  );
   console.log('');
 
   console.log(
-    `${'benchmark'.padEnd(nameWidth)} ${'avg'.padStart(10)} ${'wall'.padStart(10)} ${'(min … max)'.padStart(25)} ${'p75 / p99'.padStart(24)} ${'samples'.padStart(10)}`
+    styleText(
+      `${'benchmark'.padEnd(nameWidth)} ${'avg'.padStart(10)} ${'wall'.padStart(10)} ${'(min … max)'.padStart(25)} ${'p75 / p99'.padStart(24)} ${'samples'.padStart(10)}`,
+      ANSI.bold
+    )
   );
-  console.log('-'.repeat(nameWidth + 83));
+  console.log(styleText('-'.repeat(nameWidth + 83), ANSI.dim));
 }
 
-function printHumanBenchmarkStart(
+function printHumanBenchmarkBootBanner(
   cliOptions: BenchmarkCliOptions,
-  profile: BenchmarkProfile,
+  profile: BenchmarkProfile
+): void {
+  console.log(styleText('path-store benchmark', ANSI.bold, ANSI.cyan));
+  console.log(`${styleText('profile:', ANSI.dim)} ${profile.name}`);
+  console.log(
+    `${styleText('workloads:', ANSI.dim)} ${profile.workloadNames.join(', ')}`
+  );
+  console.log(
+    `${styleText('filter:', ANSI.dim)} ${cliOptions.filter?.source ?? 'none'}`
+  );
+  console.log(
+    `${styleText('samples:', ANSI.dim)} build=${formatCount(BUILD_SCENARIO_SAMPLE_COUNT)}, prepare/e2e=${formatCount(PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT)}, visible=${formatCount(VISIBLE_SCENARIO_SAMPLE_COUNT)}, mutation=${formatCount(MUTATION_SCENARIO_SAMPLE_COUNT)} (+ ${formatCount(MUTATION_SCENARIO_WARMUP_COUNT)} warmup, reused store)`
+  );
+  console.log(
+    `${styleText('input mode:', ANSI.dim)} presorted for all scenarios except prepare/*`
+  );
+  console.log(
+    `${styleText('boot:', ANSI.dim)} loading workloads and preparing scenarios...`
+  );
+  console.log('');
+}
+
+function printHumanBenchmarkPreparationSummary(
   selectedScenarioCount: number
 ): void {
-  console.log('Starting benchmark with settings:');
-  console.log(`  profile: ${profile.name}`);
-  console.log(`  workloads: ${profile.workloadNames.join(', ')}`);
-  console.log(`  scenarios: ${formatCount(selectedScenarioCount)}`);
-  console.log(`  filter: ${cliOptions.filter?.source ?? 'none'}`);
-  console.log('  sample counts:');
-  console.log(`    build: ${formatCount(BUILD_SCENARIO_SAMPLE_COUNT)}`);
   console.log(
-    `    prepare/e2e: ${formatCount(PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT)}`
+    `${styleText('prepared:', ANSI.dim)} ${formatCount(selectedScenarioCount)} scenarios`
   );
-  console.log(`    visible: ${formatCount(VISIBLE_SCENARIO_SAMPLE_COUNT)}`);
-  console.log(
-    `    mutation: ${formatCount(MUTATION_SCENARIO_SAMPLE_COUNT)} (+ ${formatCount(MUTATION_SCENARIO_WARMUP_COUNT)} warmup, reused store)`
-  );
-  console.log('  input mode: presorted for all scenarios except prepare/*');
+  console.log(`${styleText('run:', ANSI.dim)} collecting timing samples...`);
   console.log('');
 }
 
@@ -769,19 +815,115 @@ function printHumanBenchmarkRow(
   nameWidth: number
 ): void {
   const row = [
-    padBenchmarkLabel(label, nameWidth),
-    formatHumanDurationCell(stats.avg),
-    formatHumanWallTimeCell(wallTimeMs),
-    ` (${formatHumanDurationCell(stats.min).trim()} … ${formatHumanDurationCell(stats.max).trim()})`.padStart(
-      25
+    styleText(padBenchmarkLabel(label, nameWidth), ANSI.bold),
+    styleText(formatHumanDurationCell(stats.avg), ANSI.green),
+    styleText(formatHumanWallTimeCell(wallTimeMs), ANSI.cyan),
+    styleText(
+      ` (${formatHumanDurationCell(stats.min).trim()} … ${formatHumanDurationCell(stats.max).trim()})`.padStart(
+        25
+      ),
+      ANSI.dim
     ),
-    `${formatHumanDurationCell(stats.p75).trim()} / ${formatHumanDurationCell(stats.p99).trim()}`.padStart(
-      24
+    styleText(
+      `${formatHumanDurationCell(stats.p75).trim()} / ${formatHumanDurationCell(stats.p99).trim()}`.padStart(
+        24
+      ),
+      ANSI.dim
     ),
-    formatHumanSamplesCell(stats.ticks),
+    styleText(formatHumanSamplesCell(stats.ticks), ANSI.dim),
   ].join(' ');
 
   console.log(row);
+}
+
+function printHumanPreparationProgress(
+  index: number,
+  total: number,
+  scenarioName: string
+): void {
+  console.log(
+    `${styleText('· prepare', ANSI.dim)} [${index}/${total}] ${scenarioName}`
+  );
+}
+
+function printHumanMeasurementProgress(
+  index: number,
+  total: number,
+  scenarioName: string
+): void {
+  console.log(
+    `${styleText('› run', ANSI.dim)} [${index}/${total}] ${scenarioName}`
+  );
+}
+
+function clearHumanLiveLine(): void {
+  if (!process.stdout.isTTY) {
+    return;
+  }
+
+  process.stdout.clearLine?.(0);
+  process.stdout.cursorTo?.(0);
+}
+
+function formatHumanWaitIndicator(frame: number): string {
+  return WAIT_INDICATOR_FRAMES[frame % WAIT_INDICATOR_FRAMES.length] ?? '.  ';
+}
+
+function createHumanLiveMeasurementProgress(
+  index: number,
+  total: number,
+  scenarioName: string
+): {
+  stop: () => void;
+  update: (progress: ScenarioProgress) => void;
+} {
+  if (!process.stdout.isTTY) {
+    printHumanMeasurementProgress(index, total, scenarioName);
+    return {
+      stop() {},
+      update() {},
+    };
+  }
+
+  const startedAt = performance.now();
+  let frame = 0;
+  let latestProgress: ScenarioProgress | undefined;
+
+  const render = (): void => {
+    const elapsedMs = performance.now() - startedAt;
+    const prefix = `${styleText('› run', ANSI.dim)} [${index}/${total}] ${padBenchmarkLabel(
+      scenarioName,
+      HUMAN_PROGRESS_LABEL_WIDTH
+    )}`;
+    const progressLabel =
+      latestProgress == null
+        ? 'sampling'
+        : `${latestProgress.phase} ${latestProgress.completed}/${latestProgress.total}`;
+    const waitIndicator = formatHumanWaitIndicator(frame);
+
+    clearHumanLiveLine();
+    process.stdout.write(
+      `${styleText(waitIndicator, ANSI.cyan)} ${prefix} ${styleText(
+        formatDuration(elapsedMs * 1_000_000).padStart(10),
+        ANSI.cyan
+      )} ${styleText(progressLabel, ANSI.dim)}`
+    );
+    frame++;
+  };
+
+  render();
+  const intervalId = setInterval(render, 80);
+
+  return {
+    stop() {
+      clearInterval(intervalId);
+      clearHumanLiveLine();
+    },
+    update(progress) {
+      latestProgress = progress;
+      render();
+    },
+  };
 }
 
 function getScenarioSampleCount(category: ScenarioCategory): number {
@@ -909,7 +1051,8 @@ interface ReusedStoreMutationMeasurement {
 // Interactive edits happen against one long-lived store, so mutation timings
 // should reuse that store and only reset state between timed iterations.
 function measureMutationWithReusedStore(
-  measurement: ReusedStoreMutationMeasurement
+  measurement: ReusedStoreMutationMeasurement,
+  progressReporter?: ((progress: ScenarioProgress) => void) | undefined
 ): MeasuredRunStats {
   const store = measurement.createStore();
   const timings: number[] = [];
@@ -925,6 +1068,19 @@ function measureMutationWithReusedStore(
 
     do_not_optimize(result);
     measurement.reset(store);
+    progressReporter?.(
+      iteration < MUTATION_SCENARIO_WARMUP_COUNT
+        ? {
+            completed: iteration + 1,
+            phase: 'warmup',
+            total: MUTATION_SCENARIO_WARMUP_COUNT,
+          }
+        : {
+            completed: iteration + 1 - MUTATION_SCENARIO_WARMUP_COUNT,
+            phase: 'sample',
+            total: MUTATION_SCENARIO_SAMPLE_COUNT,
+          }
+    );
 
     if (iteration >= MUTATION_SCENARIO_WARMUP_COUNT) {
       timings.push(Number(endTime - startTime));
@@ -942,20 +1098,49 @@ async function runBenchmarksForHuman(
 
   printHumanBenchmarkHeader(context, scenarios.length, nameWidth);
 
-  const results = await measureScenariosSequentially(
-    scenarios,
-    (scenario, index, total) => {
-      console.log(`> [${index + 1}/${total}] ${scenario.name}`);
-    },
-    (result, index, total) => {
+  const results: Array<{
+    name: string;
+    stats: MeasuredRunStats;
+    wallTimeMs: number;
+  }> = [];
+
+  for (let index = 0; index < scenarios.length; index++) {
+    const scenario = scenarios[index];
+    if (scenario == null) {
+      continue;
+    }
+
+    const progress = createHumanLiveMeasurementProgress(
+      index + 1,
+      scenarios.length,
+      scenario.name
+    );
+    const wallTimeStart = performance.now();
+
+    try {
+      const stats = await scenario.measure((update) => {
+        progress.update(update);
+      });
+      const wallTimeMs = performance.now() - wallTimeStart;
+
+      progress.stop();
+      const result = {
+        name: scenario.name,
+        stats,
+        wallTimeMs,
+      };
+      results.push(result);
       printHumanBenchmarkRow(
-        `[${index + 1}/${total}] ${result.name}`,
+        `[${index + 1}/${scenarios.length}] ${result.name}`,
         result.stats,
         result.wallTimeMs,
         nameWidth
       );
+    } catch (error) {
+      progress.stop();
+      throw error;
     }
-  );
+  }
 
   return {
     results: {
@@ -1185,20 +1370,23 @@ function createRenameLeafScenarioFactory(
           windowStart: readPlan.bounds.start,
           workload: workload.name,
         },
-        measure() {
+        measure(progressReporter) {
           return Promise.resolve(
-            measureMutationWithReusedStore({
-              apply(store) {
-                store.move(targetPath, renamedPath);
-                return readVisibleWindow(store, readPlan.bounds);
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.move(targetPath, renamedPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.move(renamedPath, targetPath);
+                },
               },
-              createStore() {
-                return createExpandedStore(workload);
-              },
-              reset(store) {
-                store.move(renamedPath, targetPath);
-              },
-            })
+              progressReporter
+            )
           );
         },
         name,
@@ -1258,20 +1446,23 @@ function createDeleteLeafScenarioFactory(
           windowStart: readPlan.bounds.start,
           workload: workload.name,
         },
-        measure() {
+        measure(progressReporter) {
           return Promise.resolve(
-            measureMutationWithReusedStore({
-              apply(store) {
-                store.remove(targetPath);
-                return readVisibleWindow(store, readPlan.bounds);
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.remove(targetPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.add(targetPath);
+                },
               },
-              createStore() {
-                return createExpandedStore(workload);
-              },
-              reset(store) {
-                store.add(targetPath);
-              },
-            })
+              progressReporter
+            )
           );
         },
         name,
@@ -1334,20 +1525,23 @@ function createAddSiblingScenarioFactory(
           windowStart: readPlan.bounds.start,
           workload: workload.name,
         },
-        measure() {
+        measure(progressReporter) {
           return Promise.resolve(
-            measureMutationWithReusedStore({
-              apply(store) {
-                store.add(addedPath);
-                return readVisibleWindow(store, readPlan.bounds);
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.add(addedPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.remove(addedPath);
+                },
               },
-              createStore() {
-                return createExpandedStore(workload);
-              },
-              reset(store) {
-                store.remove(addedPath);
-              },
-            })
+              progressReporter
+            )
           );
         },
         name,
@@ -1416,20 +1610,23 @@ function createMoveLeafScenarioFactory(
           windowStart: readPlan.bounds.start,
           workload: workload.name,
         },
-        measure() {
+        measure(progressReporter) {
           return Promise.resolve(
-            measureMutationWithReusedStore({
-              apply(store) {
-                store.move(targetPath, destinationDirectory.path);
-                return readVisibleWindow(store, readPlan.bounds);
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.move(targetPath, destinationDirectory.path);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.move(movedPath, targetPath);
+                },
               },
-              createStore() {
-                return createExpandedStore(workload);
-              },
-              reset(store) {
-                store.move(movedPath, targetPath);
-              },
-            })
+              progressReporter
+            )
           );
         },
         name,
@@ -1499,22 +1696,25 @@ function createExpandDirectoryScenarioFactory(
           windowStart: readPlan.bounds.start,
           workload: workload.name,
         },
-        measure() {
+        measure(progressReporter) {
           return Promise.resolve(
-            measureMutationWithReusedStore({
-              apply(store) {
-                store.expand(targetPath);
-                return readVisibleWindow(store, readPlan.bounds);
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.expand(targetPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  const store = createExpandedStore(workload);
+                  store.collapse(targetPath);
+                  return store;
+                },
+                reset(store) {
+                  store.collapse(targetPath);
+                },
               },
-              createStore() {
-                const store = createExpandedStore(workload);
-                store.collapse(targetPath);
-                return store;
-              },
-              reset(store) {
-                store.collapse(targetPath);
-              },
-            })
+              progressReporter
+            )
           );
         },
         name,
@@ -1581,20 +1781,23 @@ function createRenameRootFileScenarioFactory(
           windowStart: readPlan.bounds.start,
           workload: workload.name,
         },
-        measure() {
+        measure(progressReporter) {
           return Promise.resolve(
-            measureMutationWithReusedStore({
-              apply(store) {
-                store.move(ROOT_FILE_SEED_PATH, ROOT_FILE_RENAMED_PATH);
-                return readVisibleWindow(store, readPlan.bounds);
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.move(ROOT_FILE_SEED_PATH, ROOT_FILE_RENAMED_PATH);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload, [ROOT_FILE_SEED_PATH]);
+                },
+                reset(store) {
+                  store.move(ROOT_FILE_RENAMED_PATH, ROOT_FILE_SEED_PATH);
+                },
               },
-              createStore() {
-                return createExpandedStore(workload, [ROOT_FILE_SEED_PATH]);
-              },
-              reset(store) {
-                store.move(ROOT_FILE_RENAMED_PATH, ROOT_FILE_SEED_PATH);
-              },
-            })
+              progressReporter
+            )
           );
         },
         name,
@@ -1660,20 +1863,23 @@ function createRenameRootDirectoryScenarioFactory(
           windowStart: readPlan.bounds.start,
           workload: workload.name,
         },
-        measure() {
+        measure(progressReporter) {
           return Promise.resolve(
-            measureMutationWithReusedStore({
-              apply(store) {
-                store.move(targetPath, renamedPath);
-                return readVisibleWindow(store, readPlan.bounds);
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.move(targetPath, renamedPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.move(renamedPath, targetPath);
+                },
               },
-              createStore() {
-                return createExpandedStore(workload);
-              },
-              reset(store) {
-                store.move(renamedPath, targetPath);
-              },
-            })
+              progressReporter
+            )
           );
         },
         name,
@@ -1750,6 +1956,11 @@ function createScenarioFactories(
 
 const cliOptions = parseArgs(process.argv.slice(2));
 const profile = resolveProfile(cliOptions);
+
+if (!cliOptions.json) {
+  printHumanBenchmarkBootBanner(cliOptions, profile);
+}
+
 const workloads: BenchmarkWorkload[] = profile.workloadNames.map(loadWorkload);
 const scenarioFactories = createScenarioFactories(profile, workloads);
 const selectedFactories = scenarioFactories.filter((factory) =>
@@ -1760,7 +1971,24 @@ if (selectedFactories.length === 0) {
   throw new Error('No benchmark scenarios matched the provided filter.');
 }
 
-const scenarios = selectedFactories.map((factory) => factory.build());
+const scenarios: BenchmarkScenario[] = [];
+
+for (let index = 0; index < selectedFactories.length; index++) {
+  const factory = selectedFactories[index];
+  if (factory == null) {
+    continue;
+  }
+
+  if (!cliOptions.json) {
+    printHumanPreparationProgress(
+      index + 1,
+      selectedFactories.length,
+      factory.name
+    );
+  }
+
+  scenarios.push(factory.build());
+}
 
 if (cliOptions.json) {
   const runOutput: BenchmarkRunOutput = {
@@ -1774,10 +2002,10 @@ if (cliOptions.json) {
 
   console.log(JSON.stringify(runOutput));
 } else {
-  printHumanBenchmarkStart(cliOptions, profile, selectedFactories.length);
+  printHumanBenchmarkPreparationSummary(selectedFactories.length);
   const humanRun = await runBenchmarksForHuman(scenarios);
   console.log('');
   console.log(
-    `Completed ${formatCount(humanRun.results.benchmarks.length)} scenarios. Use --json for detailed scenario metadata.`
+    `${styleText('Completed', ANSI.green, ANSI.bold)} ${formatCount(humanRun.results.benchmarks.length)} scenarios. Use --json for detailed scenario metadata.`
   );
 }
