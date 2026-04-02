@@ -32,7 +32,7 @@
 
       .meta {
         display: grid;
-        gap: 4px;
+        gap: 12px;
       }
 
       .controls {
@@ -61,13 +61,21 @@
         font: inherit;
       }
 
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
       button {
         border: 1px solid #111;
         background: #fff;
         color: inherit;
         cursor: pointer;
         font: inherit;
-        padding: 8px 12px;
+        font-size: 12px;
+        line-height: 1.2;
+        padding: 5px 8px;
       }
 
       button:disabled {
@@ -118,7 +126,34 @@
             />
             <span id="offset-value">0</span>
           </div>
-          <p id="status">Ready to load linux-5x.</p>
+        </div>
+        <div class="actions">
+          <button data-action-id="reset" disabled type="button">
+            Reset store
+          </button>
+          <button
+            data-action-id="collapse-visible-folder"
+            disabled
+            type="button"
+          >
+            Collapse visible folder
+          </button>
+          <button data-action-id="rename-visible-folder" disabled type="button">
+            Rename visible folder
+          </button>
+          <button data-action-id="delete-visible-folder" disabled type="button">
+            Delete visible folder
+          </button>
+          <button data-action-id="rename-visible-leaf" disabled type="button">
+            Rename visible leaf
+          </button>
+          <button
+            data-action-id="move-visible-folder-to-parent"
+            disabled
+            type="button"
+          >
+            Move visible folder to parent
+          </button>
         </div>
       </div>
       <div class="viewport">
