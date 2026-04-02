@@ -7,6 +7,7 @@ import {
   splitPath,
 } from './helpers.js';
 
+const DEFAULT_WORKLOAD_NAME = 'linux-5x';
 const MAX_VISIBLE_WINDOW_SIZE = 500;
 const DEFAULT_VISIBLE_WINDOW_SIZE = 30;
 const VISIBLE_PATH_SEARCH_CHUNK_SIZE = 512;
@@ -54,22 +55,36 @@ const offsetInput = document.querySelector('#offset');
 const offsetValueElement = document.querySelector('#offset-value');
 const renderButton = document.querySelector('#render-button');
 const rowsElement = document.querySelector('#rows');
+const workloadInput = document.querySelector('#workload');
 
 if (
   visibleCountInput == null ||
   offsetInput == null ||
   offsetValueElement == null ||
   renderButton == null ||
-  rowsElement == null
+  rowsElement == null ||
+  workloadInput == null
 ) {
   throw new Error('Missing demo root elements.');
 }
 
-const workload = getVirtualizationWorkload('linux-5x');
-
 let buildTimeMs = 0;
 /** @type {PathStore | null} */
 let currentStore = null;
+
+function getSelectedWorkloadName() {
+  if (!(workloadInput instanceof HTMLSelectElement)) {
+    return DEFAULT_WORKLOAD_NAME;
+  }
+
+  return workloadInput.value === ''
+    ? DEFAULT_WORKLOAD_NAME
+    : workloadInput.value;
+}
+
+function getSelectedWorkload() {
+  return getVirtualizationWorkload(getSelectedWorkloadName());
+}
 
 function logDemoMessage(message) {
   console.info(`[path-store demo] ${message}`);
@@ -480,6 +495,7 @@ const demoActionById = new Map(
 );
 
 function createStore() {
+  const workload = getSelectedWorkload();
   const buildStartedAt = performance.now();
   currentStore = new PathStore({
     initialExpansion: 'open',

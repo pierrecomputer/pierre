@@ -131,6 +131,7 @@
       "version": "0.0.1-beta.1",
       "devDependencies": {
         "@pierre/tree-test-data": "workspace:*",
+        "@playwright/test": "catalog:",
         "mitata": "catalog:",
         "typescript": "catalog:",
         "vite": "catalog:",
