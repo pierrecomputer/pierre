@@ -26,9 +26,9 @@ const QUICK_MUTATION_SCENARIO_KINDS = [
   'rename-root-directory',
 ] as const;
 const VISIBLE_SCENARIO_SAMPLE_COUNT = 10;
-const BUILD_SCENARIO_SAMPLE_COUNT = 5;
+const BUILD_SCENARIO_SAMPLE_COUNT = 20;
 const PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT = 3;
-const MUTATION_SCENARIO_SAMPLE_COUNT = 25;
+const MUTATION_SCENARIO_SAMPLE_COUNT = 100;
 const MUTATION_SCENARIO_WARMUP_COUNT = 5;
 const MUTATION_WINDOW_SIZE = 200;
 const PREVIEW_LIMIT = 12;
@@ -147,6 +147,11 @@ interface MitataBenchmarkResult {
 }
 
 interface MeasuredRunStats extends MitataRunStats {
+  p95: number;
+  samples: readonly number[];
+}
+
+interface RawMeasuredRunStats extends MitataRunStats {
   samples: readonly number[];
 }
 
@@ -767,11 +772,11 @@ function printHumanBenchmarkHeader(
 
   console.log(
     styleText(
-      `${'benchmark'.padEnd(nameWidth)} ${'avg'.padStart(10)} ${'wall'.padStart(10)} ${'(min … max)'.padStart(25)} ${'p75 / p99'.padStart(24)} ${'samples'.padStart(10)}`,
+      `${'benchmark'.padEnd(nameWidth)} ${'p50'.padStart(10)} ${'p95'.padStart(10)} ${'min'.padStart(10)} ${'max'.padStart(10)} ${'wall'.padStart(10)} ${'samples'.padStart(10)}`,
       ANSI.bold
     )
   );
-  console.log(styleText('-'.repeat(nameWidth + 83), ANSI.dim));
+  console.log(styleText('-'.repeat(nameWidth + 72), ANSI.dim));
 }
 
 function printHumanBenchmarkBootBanner(
@@ -810,26 +815,17 @@ function printHumanBenchmarkPreparationSummary(
 
 function printHumanBenchmarkRow(
   label: string,
-  stats: MitataRunStats,
+  stats: MeasuredRunStats,
   wallTimeMs: number,
   nameWidth: number
 ): void {
   const row = [
     styleText(padBenchmarkLabel(label, nameWidth), ANSI.bold),
-    styleText(formatHumanDurationCell(stats.avg), ANSI.green),
-    styleText(formatHumanWallTimeCell(wallTimeMs), ANSI.cyan),
-    styleText(
-      ` (${formatHumanDurationCell(stats.min).trim()} … ${formatHumanDurationCell(stats.max).trim()})`.padStart(
-        25
-      ),
-      ANSI.dim
-    ),
-    styleText(
-      `${formatHumanDurationCell(stats.p75).trim()} / ${formatHumanDurationCell(stats.p99).trim()}`.padStart(
-        24
-      ),
-      ANSI.dim
-    ),
+    styleText(formatHumanDurationCell(stats.p50), ANSI.green),
+    styleText(formatHumanDurationCell(stats.p95), ANSI.dim),
+    styleText(formatHumanDurationCell(stats.min), ANSI.dim),
+    styleText(formatHumanDurationCell(stats.max), ANSI.dim),
+    formatHumanWallTimeCell(wallTimeMs),
     styleText(formatHumanSamplesCell(stats.ticks), ANSI.dim),
   ].join(' ');
 
@@ -963,6 +959,18 @@ function sanitizeMeasuredRunStats(stats: MeasuredRunStats): MitataRunStats {
   };
 }
 
+function finalizeMeasuredRunStats(
+  stats: RawMeasuredRunStats
+): MeasuredRunStats {
+  const sortedSamples = [...stats.samples].sort((left, right) => left - right);
+
+  return {
+    ...stats,
+    p95: getPercentile(sortedSamples, 0.95),
+    samples: sortedSamples,
+  };
+}
+
 function createBenchmarkResult(
   alias: string,
   stats: MeasuredRunStats
@@ -998,12 +1006,14 @@ async function measureWithFixedSamples(
     innerGc?: boolean;
   } = {}
 ): Promise<MeasuredRunStats> {
-  return (await measure(target as never, {
-    inner_gc: options.innerGc === true,
-    max_samples: getScenarioSampleCount(category),
-    min_cpu_time: 0,
-    min_samples: getScenarioSampleCount(category),
-  })) as MeasuredRunStats;
+  return finalizeMeasuredRunStats(
+    (await measure(target as never, {
+      inner_gc: options.innerGc === true,
+      max_samples: getScenarioSampleCount(category),
+      min_cpu_time: 0,
+      min_samples: getScenarioSampleCount(category),
+    })) as RawMeasuredRunStats
+  );
 }
 
 function getPercentile(
@@ -1035,6 +1045,7 @@ function summarizeSamples(samples: readonly number[]): MeasuredRunStats {
     max: sortedSamples[sortedSamples.length - 1] ?? 0,
     min: sortedSamples[0] ?? 0,
     p50: getPercentile(sortedSamples, 0.5),
+    p95: getPercentile(sortedSamples, 0.95),
     p75: getPercentile(sortedSamples, 0.75),
     p99: getPercentile(sortedSamples, 0.99),
     samples: sortedSamples,
