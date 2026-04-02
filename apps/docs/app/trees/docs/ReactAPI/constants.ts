@@ -89,7 +89,7 @@ export function IconSetTree() {
       options={{
         id: 'icon-set-tree',
         icons: {
-          set: 'duo-tone',
+          set: 'standard',
           colored: true,
         },
       }}

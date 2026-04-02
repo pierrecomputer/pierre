@@ -16,6 +16,7 @@ const DEMO_PAGES = [
   { slug: 'drag-and-drop', label: 'Drag and Drop' },
   { slug: 'git-status', label: 'Git Status' },
   { slug: 'custom-icons', label: 'Custom Icons' },
+  { slug: 'icon-tiers', label: 'Icon Tiers' },
   { slug: 'header-slot', label: 'Header Slot' },
   { slug: 'context-menu', label: 'Context Menu' },
   { slug: 'virtualization', label: 'Virtualization' },

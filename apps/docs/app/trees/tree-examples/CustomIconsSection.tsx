@@ -17,42 +17,36 @@ const panelStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const simplePrerenderedHTML = preloadFileTree(
+const minimalPrerenderedHTML = preloadFileTree(
   {
     ...baseTreeOptions,
-    id: 'built-in-icons-simple',
+    id: 'built-in-icons-minimal',
     lockedPaths: ['package.json'],
-    icons: 'simple',
+    icons: 'minimal',
   },
   {
     initialExpandedItems: ['src', 'src/components'],
   }
 ).shadowHtml;
 
-const fileTypePrerenderedHTML = preloadFileTree(
+const defaultPrerenderedHTML = preloadFileTree(
   {
     ...baseTreeOptions,
-    id: 'built-in-icons-file-type',
+    id: 'built-in-icons-default',
     lockedPaths: ['package.json'],
-    icons: {
-      set: 'file-type',
-      colored: false,
-    },
+    icons: 'standard',
   },
   {
     initialExpandedItems: ['src', 'src/components'],
   }
 ).shadowHtml;
 
-const duoTonePrerenderedHTML = preloadFileTree(
+const completePrerenderedHTML = preloadFileTree(
   {
     ...baseTreeOptions,
-    id: 'built-in-icons-duo-tone',
+    id: 'built-in-icons-complete',
     lockedPaths: ['package.json'],
-    icons: {
-      set: 'duo-tone',
-      colored: true,
-    },
+    icons: 'complete',
   },
   {
     initialExpandedItems: ['src', 'src/components'],
@@ -67,12 +61,11 @@ export function CustomIconsSection() {
         title="Built-in icon sets"
         description={
           <>
-            Choose between the shipped <code>simple</code>,{' '}
-            <code>file-type</code>, and <code>duo-tone</code> icon sets. You can
-            also enable <code>colored: true</code>, override the built-in
-            palette with CSS variables like{' '}
-            <code>--trees-file-icon-color-javascript</code>, or fall back to a
-            fully custom sprite. See the{' '}
+            Choose between the shipped <code>minimal</code>,{' '}
+            <code>standard</code>, and <code>complete</code> icon tiers. Each
+            tier is cumulative. Override the built-in palette with CSS variables
+            like <code>--trees-file-icon-color-javascript</code>, or fall back
+            to a fully custom sprite. See the{' '}
             <a href="/preview/trees/docs#custom-icons" className="inline-link">
               FileTreeIconConfig docs
             </a>{' '}
@@ -85,21 +78,19 @@ export function CustomIconsSection() {
           <TreeExampleHeading
             icon={<IconFileTreeFill />}
             description={
-              <>
-                Generic built-ins with a single file glyph and no file-type map.
-              </>
+              <>Generic file, folder, and image icons with no file types.</>
             }
           >
-            Simple
+            Minimal
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
-            prerenderedHTML={simplePrerenderedHTML}
+            prerenderedHTML={minimalPrerenderedHTML}
             options={{
               ...baseTreeOptions,
-              id: 'built-in-icons-simple',
+              id: 'built-in-icons-minimal',
               lockedPaths: ['package.json'],
-              icons: 'simple',
+              icons: 'minimal',
             }}
             initialExpandedItems={['src', 'src/components']}
             style={panelStyle}
@@ -108,23 +99,18 @@ export function CustomIconsSection() {
         <div>
           <TreeExampleHeading
             icon={<IconFire />}
-            description={
-              <>Semantic file-type icons without any extra configuration.</>
-            }
+            description={<>Icons for common languages and file types.</>}
           >
-            File-type
+            Standard
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
-            prerenderedHTML={fileTypePrerenderedHTML}
+            prerenderedHTML={defaultPrerenderedHTML}
             options={{
               ...baseTreeOptions,
-              id: 'built-in-icons-file-type',
+              id: 'built-in-icons-default',
               lockedPaths: ['package.json'],
-              icons: {
-                set: 'file-type',
-                colored: false,
-              },
+              icons: 'standard',
             }}
             initialExpandedItems={['src', 'src/components']}
             style={panelStyle}
@@ -133,26 +119,18 @@ export function CustomIconsSection() {
         <div>
           <TreeExampleHeading
             icon={<IconBrush />}
-            description={
-              <>
-                With built-in semantic colors enabled via{' '}
-                <code>colored: true</code>.
-              </>
-            }
+            description={<>Full, colored suite with brands and frameworks.</>}
           >
-            Duo-tone
+            Complete
           </TreeExampleHeading>
           <FileTree
             className={DEFAULT_FILE_TREE_PANEL_CLASS}
-            prerenderedHTML={duoTonePrerenderedHTML}
+            prerenderedHTML={completePrerenderedHTML}
             options={{
               ...baseTreeOptions,
-              id: 'built-in-icons-duo-tone',
+              id: 'built-in-icons-complete',
               lockedPaths: ['package.json'],
-              icons: {
-                set: 'duo-tone',
-                colored: true,
-              },
+              icons: 'complete',
             }}
             initialExpandedItems={['src', 'src/components']}
             style={panelStyle}

@@ -229,7 +229,7 @@ export function Root({
         );
         if (builtInToken != null && normalizedIcons.set !== 'none') {
           return {
-            name: getBuiltInFileIconName(normalizedIcons.set, builtInToken),
+            name: getBuiltInFileIconName(builtInToken),
             remappedFrom: name,
             token: builtInToken,
           };

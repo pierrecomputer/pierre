@@ -137,7 +137,7 @@ const fileTree = new FileTree({
     'package.json',
   ],
   icons: {
-    set: 'file-type',
+    set: 'standard',
     colored: true,
   },
 });
