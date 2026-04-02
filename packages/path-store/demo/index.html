@@ -109,6 +109,7 @@
             <select id="workload">
               <option value="linux-5x">linux-5x</option>
               <option value="linux">linux</option>
+              <option value="demo-small">demo-small</option>
             </select>
           </div>
           <div class="field">
@@ -146,6 +147,9 @@
           >
             Collapse visible folder
           </button>
+          <button data-action-id="expand-visible-folder" disabled type="button">
+            Expand visible folder
+          </button>
           <button data-action-id="rename-visible-folder" disabled type="button">
             Rename visible folder
           </button>
@@ -155,12 +159,29 @@
           <button data-action-id="rename-visible-leaf" disabled type="button">
             Rename visible leaf
           </button>
+          <button data-action-id="delete-visible-leaf" disabled type="button">
+            Delete visible leaf
+          </button>
           <button
             data-action-id="move-visible-folder-to-parent"
             disabled
             type="button"
           >
             Move visible folder to parent
+          </button>
+          <button
+            data-action-id="move-visible-leaf-to-parent"
+            disabled
+            type="button"
+          >
+            Move visible leaf to parent
+          </button>
+          <button
+            data-action-id="collapse-folder-above-viewport"
+            disabled
+            type="button"
+          >
+            Collapse folder above viewport
           </button>
         </div>
       </div>

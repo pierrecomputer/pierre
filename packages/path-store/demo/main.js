@@ -3,6 +3,8 @@ import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import { PathStore } from '../src/index.ts';
 import {
   findMoveVisibleFolderToParentCandidate,
+  findMoveVisibleLeafToParentCandidate,
+  getMovePathToParentPlan,
   getMoveVisibleFolderToParentPlan,
   splitPath,
 } from './helpers.js';
@@ -295,6 +297,28 @@ function requireCollapsibleVisibleFolder(store, view, actionId) {
  * @param {string} actionId
  * @returns {PathStoreVisibleRow}
  */
+function requireExpandableVisibleFolder(store, view, actionId) {
+  const folder = findVisibleRow(
+    store,
+    view,
+    (row) =>
+      row.kind === 'directory' &&
+      row.hasChildren === true &&
+      row.isExpanded === false
+  );
+  if (folder == null) {
+    throw new Error(`No collapsed visible folder found for ${actionId}.`);
+  }
+
+  return folder;
+}
+
+/**
+ * @param {PathStore} store
+ * @param {DemoViewContext} view
+ * @param {string} actionId
+ * @returns {PathStoreVisibleRow}
+ */
 function requireVisibleLeaf(store, view, actionId) {
   const leaf = findVisibleRow(store, view, (row) => row.kind === 'file');
   if (leaf == null) {
@@ -302,6 +326,61 @@ function requireVisibleLeaf(store, view, actionId) {
   }
 
   return leaf;
+}
+
+/**
+ * Finds the last visible row before the current viewport whose predicate
+ * passes, so offscreen actions can target the nearest item above the window.
+ *
+ * @param {PathStore} store
+ * @param {number} beforeIndex
+ * @param {(row: PathStoreVisibleRow) => boolean} predicate
+ * @returns {PathStoreVisibleRow | null}
+ */
+function findVisibleRowBeforeIndex(store, beforeIndex, predicate) {
+  if (beforeIndex <= 0) {
+    return null;
+  }
+
+  for (
+    let end = beforeIndex - 1;
+    end >= 0;
+    end -= VISIBLE_PATH_SEARCH_CHUNK_SIZE
+  ) {
+    const start = Math.max(0, end - VISIBLE_PATH_SEARCH_CHUNK_SIZE + 1);
+    const rows = store.getVisibleSlice(start, end);
+
+    for (let index = rows.length - 1; index >= 0; index--) {
+      const row = rows[index];
+      if (row != null && predicate(row)) {
+        return row;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * @param {PathStore} store
+ * @param {DemoViewContext} view
+ * @param {string} actionId
+ * @returns {PathStoreVisibleRow}
+ */
+function requireCollapsibleFolderAboveViewport(store, view, actionId) {
+  const folder = findVisibleRowBeforeIndex(
+    store,
+    view.offset,
+    (row) =>
+      row.kind === 'directory' &&
+      row.hasChildren === true &&
+      row.isExpanded === true
+  );
+  if (folder == null) {
+    throw new Error(`No expanded folder above the viewport for ${actionId}.`);
+  }
+
+  return folder;
 }
 
 /**
@@ -339,6 +418,44 @@ function requireVisibleFolderWithGrandparent(store, view, actionId) {
 
   throw new Error(
     `No visible folder with a moveable parent found for ${actionId}.`
+  );
+}
+
+/**
+ * Finds the first visible file whose move-to-parent destination does not
+ * already exist, searching the current window first and then the wider tree.
+ *
+ * @param {PathStore} store
+ * @param {DemoViewContext} view
+ * @param {string} actionId
+ * @returns {PathStoreVisibleRow}
+ */
+function requireVisibleLeafWithGrandparent(store, view, actionId) {
+  const localMatch = findMoveVisibleLeafToParentCandidate(store, view.rows);
+  if (localMatch != null) {
+    return localMatch;
+  }
+
+  const visibleCount = store.getVisibleCount();
+
+  for (
+    let start = 0;
+    start < visibleCount;
+    start += VISIBLE_PATH_SEARCH_CHUNK_SIZE
+  ) {
+    const end = Math.min(
+      visibleCount - 1,
+      start + VISIBLE_PATH_SEARCH_CHUNK_SIZE - 1
+    );
+    const rows = store.getVisibleSlice(start, end);
+    const match = findMoveVisibleLeafToParentCandidate(store, rows);
+    if (match != null) {
+      return match;
+    }
+  }
+
+  throw new Error(
+    `No visible leaf with a moveable parent found for ${actionId}.`
   );
 }
 
@@ -411,6 +528,21 @@ const demoActions = [
     },
   },
   {
+    id: 'expand-visible-folder',
+    prepare(store, view) {
+      const folder = requireExpandableVisibleFolder(store, view, this.id);
+      return { path: folder.path };
+    },
+    run(store, prepared) {
+      const path = /** @type {string} */ (prepared.path);
+      store.expand(path);
+      return {
+        detail: `Last action: expanded ${path}`,
+        revealPath: path,
+      };
+    },
+  },
+  {
     id: 'rename-visible-folder',
     prepare(store, view) {
       const folder = requireVisibleFolder(store, view, this.id);
@@ -463,6 +595,20 @@ const demoActions = [
     },
   },
   {
+    id: 'delete-visible-leaf',
+    prepare(store, view) {
+      const leaf = requireVisibleLeaf(store, view, this.id);
+      return { path: leaf.path };
+    },
+    run(store, prepared) {
+      const path = /** @type {string} */ (prepared.path);
+      store.remove(path);
+      return {
+        detail: `Last action: deleted ${path}`,
+      };
+    },
+  },
+  {
     id: 'move-visible-folder-to-parent',
     prepare(store, view) {
       const source = requireVisibleFolderWithGrandparent(store, view, this.id);
@@ -485,6 +631,50 @@ const demoActions = [
       return {
         detail: `Last action: moved ${from} to parent ${destinationPath}`,
         revealPath: movedPath,
+      };
+    },
+  },
+  {
+    id: 'move-visible-leaf-to-parent',
+    prepare(store, view) {
+      const source = requireVisibleLeafWithGrandparent(store, view, this.id);
+      const movePlan = getMovePathToParentPlan(store, source.path);
+      if (movePlan == null) {
+        throw new Error(`No non-colliding move target found for ${this.id}.`);
+      }
+
+      return {
+        destinationPath: movePlan.destinationPath,
+        from: source.path,
+        movedPath: movePlan.movedPath,
+      };
+    },
+    run(store, prepared) {
+      const destinationPath = /** @type {string} */ (prepared.destinationPath);
+      const from = /** @type {string} */ (prepared.from);
+      const movedPath = /** @type {string} */ (prepared.movedPath);
+      store.move(from, destinationPath);
+      return {
+        detail: `Last action: moved ${from} to parent ${destinationPath}`,
+        revealPath: movedPath,
+      };
+    },
+  },
+  {
+    id: 'collapse-folder-above-viewport',
+    prepare(store, view) {
+      const folder = requireCollapsibleFolderAboveViewport(
+        store,
+        view,
+        this.id
+      );
+      return { path: folder.path };
+    },
+    run(store, prepared) {
+      const path = /** @type {string} */ (prepared.path);
+      store.collapse(path);
+      return {
+        detail: `Last action: collapsed above viewport ${path}`,
       };
     },
   },
@@ -517,7 +707,7 @@ function createStore() {
 async function boot() {
   renderButton.disabled = true;
   setActionButtonsDisabled(true);
-  logDemoMessage('Rendering linux-5x…');
+  logDemoMessage(`Rendering ${getSelectedWorkload().name}…`);
 
   try {
     await new Promise((resolve) => {

@@ -2,7 +2,7 @@ import linuxFixture from './linux-files.json';
 import pierreSnapshotFiles from './pierre-snapshot-files.json';
 
 /**
- * @typedef {'pierre-snapshot' | 'half-linux' | 'linux' | 'linux-5x' | 'linux-10x'} VirtualizationWorkloadName
+ * @typedef {'demo-small' | 'pierre-snapshot' | 'half-linux' | 'linux' | 'linux-5x' | 'linux-10x'} VirtualizationWorkloadName
  */
 
 /**
@@ -25,6 +25,7 @@ import pierreSnapshotFiles from './pierre-snapshot-files.json';
 
 /** @type {readonly VirtualizationWorkloadName[]} */
 export const VIRTUALIZATION_WORKLOAD_NAMES = [
+  'demo-small',
   'pierre-snapshot',
   'half-linux',
   'linux',
@@ -135,6 +136,16 @@ function createWorkload(name, label, files, expandedFolders, rootCount) {
 }
 
 const halfLinuxFiles = linuxFixture.files.filter((_, index) => index % 2 === 0);
+const demoSmallFiles = [
+  'alpha/docs/readme.md',
+  'alpha/src/app.ts',
+  'alpha/src/utils/math.ts',
+  'alpha/todo.txt',
+  'beta/archive/notes.txt',
+  'beta/keep.txt',
+  'gamma/logs/today.txt',
+  'zeta.md',
+];
 const linux5xWorkloadData = cloneFileTreeIntoRoots(
   linuxFixture.files,
   linuxFixture.folders,
@@ -148,6 +159,13 @@ const linux10xWorkloadData = cloneFileTreeIntoRoots(
 
 /** @type {Record<VirtualizationWorkloadName, VirtualizationWorkload>} */
 const workloadsByName = {
+  'demo-small': createWorkload(
+    'demo-small',
+    'Small demo workload',
+    demoSmallFiles,
+    deriveExpandedFolders(demoSmallFiles),
+    1
+  ),
   'pierre-snapshot': createWorkload(
     'pierre-snapshot',
     'Pierre repo snapshot',

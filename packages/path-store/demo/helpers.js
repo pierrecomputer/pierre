@@ -34,14 +34,14 @@ export function getMovedPathIntoDirectory(path, destinationDirectoryPath) {
 }
 
 /**
- * Returns the move-to-parent destination only when the folder is deep enough
- * and the moved path would not collide with an existing entry.
+ * Returns the move-to-parent destination only when the path is deep enough and
+ * the moved path would not collide with an existing entry.
  *
  * @param {PathStore} store
  * @param {string} path
  * @returns {{ destinationPath: string; movedPath: string } | null}
  */
-export function getMoveVisibleFolderToParentPlan(store, path) {
+export function getMovePathToParentPlan(store, path) {
   const parentPath = splitPath(path).parentPath;
   if (parentPath === '') {
     return null;
@@ -64,6 +64,18 @@ export function getMoveVisibleFolderToParentPlan(store, path) {
 }
 
 /**
+ * Returns the move-to-parent destination for a folder only when the moved path
+ * would not collide with an existing entry.
+ *
+ * @param {PathStore} store
+ * @param {string} path
+ * @returns {{ destinationPath: string; movedPath: string } | null}
+ */
+export function getMoveVisibleFolderToParentPlan(store, path) {
+  return path.endsWith('/') ? getMovePathToParentPlan(store, path) : null;
+}
+
+/**
  * Picks the first visible folder whose move-to-parent destination would not
  * collide with an existing path.
  *
@@ -77,6 +89,23 @@ export function findMoveVisibleFolderToParentCandidate(store, rows) {
       (row) =>
         row.kind === 'directory' &&
         getMoveVisibleFolderToParentPlan(store, row.path) != null
+    ) ?? null
+  );
+}
+
+/**
+ * Picks the first visible file whose move-to-parent destination would not
+ * collide with an existing path.
+ *
+ * @param {PathStore} store
+ * @param {readonly PathStoreVisibleRow[]} rows
+ * @returns {PathStoreVisibleRow | null}
+ */
+export function findMoveVisibleLeafToParentCandidate(store, rows) {
+  return (
+    rows.find(
+      (row) =>
+        row.kind === 'file' && getMovePathToParentPlan(store, row.path) != null
     ) ?? null
   );
 }

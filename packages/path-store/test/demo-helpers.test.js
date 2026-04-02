@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   findMoveVisibleFolderToParentCandidate,
+  findMoveVisibleLeafToParentCandidate,
+  getMovePathToParentPlan,
   getMoveVisibleFolderToParentPlan,
 } from '../demo/helpers.js';
 import { PathStore } from '../src/index.ts';
@@ -40,5 +42,30 @@ describe('demo helpers', () => {
     );
 
     expect(candidate?.path).toBe('linux-1/tools/perf/util/');
+  });
+
+  test('finds non-colliding move-to-parent plans for visible leaves', () => {
+    const store = new PathStore({
+      initialExpansion: 'open',
+      paths: [
+        'alpha/docs/readme.md',
+        'alpha/readme.md',
+        'alpha/src/app.ts',
+        'alpha/src/utils/math.ts',
+      ],
+    });
+
+    expect(getMovePathToParentPlan(store, 'alpha/docs/readme.md')).toBeNull();
+    expect(getMovePathToParentPlan(store, 'alpha/src/utils/math.ts')).toEqual({
+      destinationPath: 'alpha/src/',
+      movedPath: 'alpha/src/math.ts',
+    });
+
+    const visibleRows = store
+      .getVisibleSlice(0, store.getVisibleCount() - 1)
+      .filter((row) => row.path.startsWith('alpha/src/'));
+    const candidate = findMoveVisibleLeafToParentCandidate(store, visibleRows);
+
+    expect(candidate?.path).toBe('alpha/src/utils/math.ts');
   });
 });

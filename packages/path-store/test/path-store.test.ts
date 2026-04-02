@@ -2,6 +2,17 @@ import { describe, expect, test } from 'bun:test';
 
 import { PathStore } from '../src/index';
 
+const demoSmallPaths = [
+  'alpha/docs/readme.md',
+  'alpha/src/app.ts',
+  'alpha/src/utils/math.ts',
+  'alpha/todo.txt',
+  'beta/archive/notes.txt',
+  'beta/keep.txt',
+  'gamma/logs/today.txt',
+  'zeta.md',
+];
+
 function getVisiblePaths(
   store: PathStore,
   start = 0,
@@ -60,6 +71,13 @@ function assertMatchesRebuild(store: PathStore): void {
       getVisibleRowsSansIds(rebuiltStore, window.start, window.end)
     ).toEqual(getVisibleRowsSansIds(store, window.start, window.end));
   }
+}
+
+function createDemoSmallStore(): PathStore {
+  return new PathStore({
+    initialExpansion: 'open',
+    paths: demoSmallPaths,
+  });
 }
 
 describe('preparePaths', () => {
@@ -671,6 +689,90 @@ describe('PathStore', () => {
     store.add('z.ts');
 
     expect(store.list()).toEqual(['z.ts', 'dir/index.ts', 'b.ts', 'a.ts']);
+  });
+
+  test('restores exact visible rows when a collapsed folder is expanded again', () => {
+    const store = createDemoSmallStore();
+
+    expect(getVisiblePaths(store, 0, 3)).toEqual([
+      'alpha/',
+      'alpha/docs/',
+      'alpha/docs/readme.md',
+      'alpha/src/',
+    ]);
+
+    store.collapse('alpha/');
+    expect(getVisiblePaths(store, 0, 3)).toEqual([
+      'alpha/',
+      'beta/',
+      'beta/archive/',
+      'beta/archive/notes.txt',
+    ]);
+
+    store.expand('alpha/');
+    expect(getVisiblePaths(store, 0, 3)).toEqual([
+      'alpha/',
+      'alpha/docs/',
+      'alpha/docs/readme.md',
+      'alpha/src/',
+    ]);
+  });
+
+  test('deleting a visible leaf keeps the fixed offset window consistent', () => {
+    const store = createDemoSmallStore();
+
+    expect(getVisiblePaths(store, 2, 5)).toEqual([
+      'alpha/docs/readme.md',
+      'alpha/src/',
+      'alpha/src/utils/',
+      'alpha/src/utils/math.ts',
+    ]);
+
+    store.remove('alpha/docs/readme.md');
+
+    expect(getVisiblePaths(store, 2, 5)).toEqual([
+      'alpha/src/',
+      'alpha/src/utils/',
+      'alpha/src/utils/math.ts',
+      'alpha/src/app.ts',
+    ]);
+  });
+
+  test('moving a visible leaf to its parent produces the expected visible order', () => {
+    const store = createDemoSmallStore();
+
+    store.move('alpha/docs/readme.md', 'alpha/');
+
+    expect(getVisiblePaths(store, 0, 7)).toEqual([
+      'alpha/',
+      'alpha/docs/',
+      'alpha/src/',
+      'alpha/src/utils/',
+      'alpha/src/utils/math.ts',
+      'alpha/src/app.ts',
+      'alpha/readme.md',
+      'alpha/todo.txt',
+    ]);
+  });
+
+  test('collapsing a folder above the viewport shifts the fixed offset window', () => {
+    const store = createDemoSmallStore();
+
+    expect(getVisiblePaths(store, 8, 11)).toEqual([
+      'beta/',
+      'beta/archive/',
+      'beta/archive/notes.txt',
+      'beta/keep.txt',
+    ]);
+
+    store.collapse('alpha/src/utils/');
+
+    expect(getVisiblePaths(store, 8, 11)).toEqual([
+      'beta/archive/',
+      'beta/archive/notes.txt',
+      'beta/keep.txt',
+      'gamma/',
+    ]);
   });
 
   test('matches a rebuild-from-list after mixed mutations and projection changes', () => {

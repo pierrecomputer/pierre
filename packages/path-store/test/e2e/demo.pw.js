@@ -1,50 +1,60 @@
 import { expect, test } from '@playwright/test';
 
+const demoSmallVisibleRows = [
+  'alpha/',
+  'alpha/docs/',
+  'alpha/docs/readme.md',
+  'alpha/src/',
+  'alpha/src/utils/',
+  'alpha/src/utils/math.ts',
+  'alpha/src/app.ts',
+  'alpha/todo.txt',
+  'beta/',
+  'beta/archive/',
+  'beta/archive/notes.txt',
+  'beta/keep.txt',
+  'gamma/',
+  'gamma/logs/',
+  'gamma/logs/today.txt',
+  'zeta.md',
+];
+
+/**
+ * @typedef {import('@playwright/test').Locator} Locator
+ * @typedef {import('@playwright/test').Page} Page
+ */
+
+/**
+ * @param {Page} page
+ * @returns {Locator}
+ */
 function getRowsLocator(page) {
   return page.locator('#rows');
 }
 
+/**
+ * @param {Page} page
+ * @returns {Promise<string[]>}
+ */
 async function getRenderedRows(page) {
   const text = await getRowsLocator(page).innerText();
   return text === '' ? [] : text.split('\n');
 }
 
-async function getExpectedRows(page) {
-  return page.evaluate(() => {
-    const demo = window.pathStoreDemo;
-    if (demo == null || demo.store == null) {
-      return [];
-    }
-
-    const visibleCountInput = document.querySelector('#visible-count');
-    const offsetInput = document.querySelector('#offset');
-    if (
-      !(visibleCountInput instanceof HTMLInputElement) ||
-      !(offsetInput instanceof HTMLInputElement)
-    ) {
-      throw new Error('Missing demo controls.');
-    }
-
-    const visibleCount = Number(visibleCountInput.value);
-    const offset = Number(offsetInput.value);
-    const end = offset + visibleCount - 1;
-
-    return demo.store.getVisibleSlice(offset, end).map((row) => row.path);
-  });
+/**
+ * @param {Page} page
+ * @param {readonly string[]} expectedRows
+ * @returns {Promise<void>}
+ */
+async function expectRenderedRows(page, expectedRows) {
+  await expect.poll(() => getRenderedRows(page)).toEqual(expectedRows);
 }
 
-async function expectRenderedRowsToMatchStore(page) {
-  await expect
-    .poll(async () => ({
-      expected: await getExpectedRows(page),
-      rendered: await getRenderedRows(page),
-    }))
-    .toEqual({
-      expected: await getExpectedRows(page),
-      rendered: await getExpectedRows(page),
-    });
-}
-
+/**
+ * @param {Page} page
+ * @param {string} [workload]
+ * @returns {Promise<void>}
+ */
 async function renderDemo(page, workload = 'linux') {
   await page.goto('/');
   await expect(getRowsLocator(page)).toHaveText('');
@@ -55,11 +65,24 @@ async function renderDemo(page, workload = 'linux') {
 
   await expect
     .poll(() => getRenderedRows(page).then((rows) => rows.length))
-    .toBe(30);
+    .toBeGreaterThan(0);
   await expect(page.locator('#offset')).toBeEnabled();
-  await expectRenderedRowsToMatchStore(page);
 }
 
+/**
+ * @param {Page} page
+ * @param {number} value
+ * @returns {Promise<void>}
+ */
+async function setVisibleCount(page, value) {
+  await page.locator('#visible-count').fill(String(value));
+}
+
+/**
+ * @param {Page} page
+ * @param {number} value
+ * @returns {Promise<void>}
+ */
 async function setOffset(page, value) {
   await page.locator('#offset').evaluate((element, nextValue) => {
     if (!(element instanceof HTMLInputElement)) {
@@ -71,26 +94,12 @@ async function setOffset(page, value) {
   }, value);
 }
 
-async function prepareAction(page, actionId) {
-  return page.evaluate((nextActionId) => {
-    const demo = window.pathStoreDemo;
-    if (demo == null) {
-      throw new Error('Missing demo API.');
-    }
-
-    return {
-      prepared: demo.prepareAction(nextActionId).prepared,
-    };
-  }, actionId);
-}
-
-async function getCurrentVisibleCount(page) {
-  return page.evaluate(
-    () => window.pathStoreDemo?.store.getVisibleCount() ?? 0
-  );
-}
-
+/**
+ * @param {Page} page
+ * @returns {Error[]}
+ */
 function trackPageErrors(page) {
+  /** @type {Error[]} */
   const pageErrors = [];
   page.on('pageerror', (error) => {
     pageErrors.push(error);
@@ -98,131 +107,265 @@ function trackPageErrors(page) {
   return pageErrors;
 }
 
-test('renders the initial window and responds to visible-count and offset controls', async ({
-  page,
-}) => {
+/**
+ * @param {number} start
+ * @param {number} count
+ * @param {readonly string[]} [rows]
+ * @returns {string[]}
+ */
+function getWindowRows(start, count, rows = demoSmallVisibleRows) {
+  return rows.slice(start, start + count);
+}
+
+test('demo-small renders exact rows at different offsets', async ({ page }) => {
   const pageErrors = trackPageErrors(page);
 
-  await renderDemo(page);
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
 
-  await page.locator('#visible-count').fill('50');
-  await expect
-    .poll(() => getRenderedRows(page).then((rows) => rows.length))
-    .toBe(50);
-  await expectRenderedRowsToMatchStore(page);
+  await expectRenderedRows(page, getWindowRows(0, 4));
 
-  await setOffset(page, 200);
-  await expect(page.locator('#offset-value')).toHaveText('200');
-  await expectRenderedRowsToMatchStore(page);
+  await setOffset(page, 4);
+  await expect(page.locator('#offset-value')).toHaveText('4');
+  await expectRenderedRows(page, getWindowRows(4, 4));
+
+  await setOffset(page, 11);
+  await expect(page.locator('#offset-value')).toHaveText('11');
+  await expectRenderedRows(page, getWindowRows(11, 4));
 
   expect(pageErrors).toEqual([]);
 });
 
-test('collapse-visible-folder updates the rendered window', async ({
+test('demo-small collapse-visible-folder collapses the first visible folder without jumping oddly', async ({
   page,
 }) => {
   const pageErrors = trackPageErrors(page);
 
-  await renderDemo(page);
-
-  const beforeVisibleCount = await getCurrentVisibleCount(page);
-  const prepared = await prepareAction(page, 'collapse-visible-folder');
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await expectRenderedRows(page, getWindowRows(0, 4));
 
   await page.locator('[data-action-id="collapse-visible-folder"]').click();
 
-  await expectRenderedRowsToMatchStore(page);
-  expect(await getCurrentVisibleCount(page)).toBeLessThan(beforeVisibleCount);
-  expect(prepared.prepared.path).toEqual(expect.any(String));
+  await expectRenderedRows(page, [
+    'alpha/',
+    'beta/',
+    'beta/archive/',
+    'beta/archive/notes.txt',
+  ]);
   expect(pageErrors).toEqual([]);
 });
 
-test('rename-visible-folder updates the rendered window', async ({ page }) => {
-  const pageErrors = trackPageErrors(page);
-
-  await renderDemo(page);
-
-  const prepared = await prepareAction(page, 'rename-visible-folder');
-
-  await page.locator('[data-action-id="rename-visible-folder"]').click();
-
-  await expectRenderedRowsToMatchStore(page);
-  await expect
-    .poll(() => getRenderedRows(page))
-    .toContain(prepared.prepared.to);
-  expect(pageErrors).toEqual([]);
-});
-
-test('delete-visible-folder updates the rendered window', async ({ page }) => {
-  const pageErrors = trackPageErrors(page);
-
-  await renderDemo(page);
-
-  const prepared = await prepareAction(page, 'delete-visible-folder');
-  const deletedPath = prepared.prepared.path;
-
-  await page.locator('[data-action-id="delete-visible-folder"]').click();
-
-  await expectRenderedRowsToMatchStore(page);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        (path) => window.pathStoreDemo?.store.list(path).length ?? -1,
-        deletedPath
-      )
-    )
-    .toBe(0);
-  expect(pageErrors).toEqual([]);
-});
-
-test('rename-visible-leaf updates the rendered window', async ({ page }) => {
-  const pageErrors = trackPageErrors(page);
-
-  await renderDemo(page);
-
-  const prepared = await prepareAction(page, 'rename-visible-leaf');
-
-  await page.locator('[data-action-id="rename-visible-leaf"]').click();
-
-  await expectRenderedRowsToMatchStore(page);
-  await expect
-    .poll(() => getRenderedRows(page))
-    .toContain(prepared.prepared.to);
-  expect(pageErrors).toEqual([]);
-});
-
-test('move-visible-folder-to-parent can be repeated without collisions surfacing', async ({
+test('demo-small expand-visible-folder restores the collapsed rows in place', async ({
   page,
 }) => {
   const pageErrors = trackPageErrors(page);
 
-  await renderDemo(page);
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await page.locator('[data-action-id="collapse-visible-folder"]').click();
+  await expectRenderedRows(page, [
+    'alpha/',
+    'beta/',
+    'beta/archive/',
+    'beta/archive/notes.txt',
+  ]);
+
+  await page.locator('[data-action-id="expand-visible-folder"]').click();
+
+  await expectRenderedRows(page, getWindowRows(0, 4));
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small rename-visible-folder renames the first visible folder and its descendants in place', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await expectRenderedRows(page, getWindowRows(0, 4));
+
+  await page.locator('[data-action-id="rename-visible-folder"]').click();
+
+  await expectRenderedRows(page, [
+    'alpha-demo-renamed/',
+    'alpha-demo-renamed/docs/',
+    'alpha-demo-renamed/docs/readme.md',
+    'alpha-demo-renamed/src/',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small delete-visible-folder removes the first visible folder subtree', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await expectRenderedRows(page, getWindowRows(0, 4));
+
+  await page.locator('[data-action-id="delete-visible-folder"]').click();
+
+  await expectRenderedRows(page, [
+    'beta/',
+    'beta/archive/',
+    'beta/archive/notes.txt',
+    'beta/keep.txt',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small delete-visible-leaf removes the first visible file in the current window', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await setOffset(page, 2);
+  await expectRenderedRows(page, getWindowRows(2, 4));
+
+  await page.locator('[data-action-id="delete-visible-leaf"]').click();
+
+  await expectRenderedRows(page, [
+    'alpha/src/',
+    'alpha/src/utils/',
+    'alpha/src/utils/math.ts',
+    'alpha/src/app.ts',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small rename-visible-leaf renames the first visible file in the current window', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await setOffset(page, 2);
+  await expectRenderedRows(page, getWindowRows(2, 4));
+
+  await page.locator('[data-action-id="rename-visible-leaf"]').click();
+
+  await expectRenderedRows(page, [
+    'alpha/docs/readme-demo-renamed.md',
+    'alpha/src/',
+    'alpha/src/utils/',
+    'alpha/src/utils/math.ts',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small move-visible-leaf-to-parent reveals the moved file in the adjusted window', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await setOffset(page, 2);
+  await expectRenderedRows(page, getWindowRows(2, 4));
+
+  await page.locator('[data-action-id="move-visible-leaf-to-parent"]').click();
+
+  await expectRenderedRows(page, [
+    'alpha/src/utils/',
+    'alpha/src/utils/math.ts',
+    'alpha/src/app.ts',
+    'alpha/readme.md',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small move-visible-folder-to-parent reveals the moved folder at the same offset window', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await setOffset(page, 3);
+  await expectRenderedRows(page, getWindowRows(3, 4));
+
+  await page
+    .locator('[data-action-id="move-visible-folder-to-parent"]')
+    .click();
+
+  await expectRenderedRows(page, [
+    'alpha/src/',
+    'alpha/src/app.ts',
+    'alpha/utils/',
+    'alpha/utils/math.ts',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small collapse-folder-above-viewport shifts the fixed offset window', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await setOffset(page, 8);
+  await expectRenderedRows(page, getWindowRows(8, 4));
+
+  await page
+    .locator('[data-action-id="collapse-folder-above-viewport"]')
+    .click();
+
+  await expectRenderedRows(page, [
+    'beta/archive/',
+    'beta/archive/notes.txt',
+    'beta/keep.txt',
+    'gamma/',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small reset restores the exact baseline window after a mutation', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  const baselineRows = getWindowRows(0, 4);
+
+  await expectRenderedRows(page, baselineRows);
+  await page.locator('[data-action-id="rename-visible-leaf"]').click();
+  await expectRenderedRows(page, [
+    'alpha/',
+    'alpha/docs/',
+    'alpha/docs/readme-demo-renamed.md',
+    'alpha/src/',
+  ]);
+
+  await page.locator('[data-action-id="reset"]').click();
+
+  await expectRenderedRows(page, baselineRows);
+  expect(pageErrors).toEqual([]);
+});
+
+test('linux move-visible-folder-to-parent can be repeated without surfacing collisions', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'linux');
+  await setVisibleCount(page, 30);
 
   for (let index = 0; index < 4; index++) {
     await page
       .locator('[data-action-id="move-visible-folder-to-parent"]')
       .click();
-    await expectRenderedRowsToMatchStore(page);
+    await expect
+      .poll(() => getRenderedRows(page).then((rows) => rows.length))
+      .toBe(30);
   }
 
-  expect(pageErrors).toEqual([]);
-});
-
-test('reset store restores the baseline window after mutations', async ({
-  page,
-}) => {
-  const pageErrors = trackPageErrors(page);
-
-  await renderDemo(page);
-
-  const baselineRows = await getRenderedRows(page);
-
-  await page.locator('[data-action-id="rename-visible-leaf"]').click();
-  await expectRenderedRowsToMatchStore(page);
-  expect(await getRenderedRows(page)).not.toEqual(baselineRows);
-
-  await page.locator('[data-action-id="reset"]').click();
-
-  await expect.poll(() => getRenderedRows(page)).toEqual(baselineRows);
-  await expectRenderedRowsToMatchStore(page);
   expect(pageErrors).toEqual([]);
 });

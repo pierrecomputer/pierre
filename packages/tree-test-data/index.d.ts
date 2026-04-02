@@ -13,6 +13,7 @@ export interface VirtualizationWorkload {
 }
 
 export type VirtualizationWorkloadName =
+  | 'demo-small'
   | 'pierre-snapshot'
   | 'half-linux'
   | 'linux'
