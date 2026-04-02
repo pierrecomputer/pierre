@@ -30,19 +30,22 @@ import { Button } from '@/components/ui/button';
 import { renderMDX } from '@/lib/mdx';
 
 export const metadata: Metadata = {
-  title: 'Pierre Themes — Themes for Visual Studio Code, Cursor, and Shiki.',
+  title:
+    'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.',
   description:
-    'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, and Shiki.',
+    'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.',
   openGraph: {
-    title: 'Pierre Themes — Themes for Visual Studio Code, Cursor, and Shiki.',
+    title:
+      'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.',
     description:
-      'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, and Shiki.',
+      'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pierre Themes — Themes for Visual Studio Code, Cursor, and Shiki.',
+    title:
+      'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.',
     description:
-      'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, and Shiki.',
+      'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.',
   },
 };
 
@@ -112,7 +115,8 @@ export default async function ThemePage() {
         </h1>
         <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
           Beautiful light and dark themes, generated from a shared color
-          palette, for Visual Studio Code, Cursor, and Shiki. Built first for{' '}
+          palette, for Visual Studio Code, Cursor, Zed, and Shiki. Built first
+          for{' '}
           <Link
             href="https://diffs.com"
             target="_blank"
@@ -154,10 +158,16 @@ export default async function ThemePage() {
               <IconArrowUpRight />
             </Link>
           </Button>
-          <Button variant="outline" disabled className="opacity-50">
-            <IconBrandZed />
-            Zed
-            <span className="text-muted-foreground">(Soon)</span>
+          <Button asChild variant="outline">
+            <Link
+              href="https://zed.dev/extensions/pierre-theme"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <IconBrandZed />
+              Zed
+              <IconArrowUpRight />
+            </Link>
           </Button>
         </div>
       </section>
