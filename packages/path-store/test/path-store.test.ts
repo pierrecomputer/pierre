@@ -10,6 +10,58 @@ function getVisiblePaths(
   return store.getVisibleSlice(start, end).map((row) => row.path);
 }
 
+function getVisibleRowsSansIds(
+  store: PathStore,
+  start = 0,
+  end = Number.MAX_SAFE_INTEGER
+) {
+  return store.getVisibleSlice(start, end).map(({ id: _id, ...row }) => row);
+}
+
+function getExpandedDirectoryPaths(store: PathStore): string[] {
+  return store
+    .getVisibleSlice(0, Math.max(0, store.getVisibleCount() - 1))
+    .filter((row) => row.kind === 'directory' && row.isExpanded)
+    .map((row) => row.path);
+}
+
+function assertMatchesRebuild(store: PathStore): void {
+  const rebuiltStore = new PathStore({
+    flattenEmptyDirectories: false,
+    initialExpandedPaths: getExpandedDirectoryPaths(store),
+    paths: store.list(),
+    presorted: true,
+  });
+
+  expect(rebuiltStore.list()).toEqual(store.list());
+  expect(rebuiltStore.getVisibleCount()).toBe(store.getVisibleCount());
+
+  const visibleCount = store.getVisibleCount();
+  const windows =
+    visibleCount === 0
+      ? [{ end: 10, start: 0 }]
+      : [
+          { end: Math.min(visibleCount - 1, 49), start: 0 },
+          {
+            end: Math.min(
+              visibleCount - 1,
+              Math.max(0, Math.floor(visibleCount / 2) + 24)
+            ),
+            start: Math.max(0, Math.floor(visibleCount / 2) - 25),
+          },
+          {
+            end: visibleCount - 1,
+            start: Math.max(0, visibleCount - 50),
+          },
+        ];
+
+  for (const window of windows) {
+    expect(
+      getVisibleRowsSansIds(rebuiltStore, window.start, window.end)
+    ).toEqual(getVisibleRowsSansIds(store, window.start, window.end));
+  }
+}
+
 describe('preparePaths', () => {
   test('sorts directories before files and uses natural segment order', () => {
     expect(
@@ -23,9 +75,111 @@ describe('preparePaths', () => {
       ])
     ).toEqual(['a/', 'a/file.ts', 'a1.txt', 'a2.txt', 'a10.txt', 'b.txt']);
   });
+
+  test('supports custom sort comparators', () => {
+    const sort = (
+      left: { basename: string; isDirectory: boolean },
+      right: { basename: string; isDirectory: boolean }
+    ) => {
+      if (left.isDirectory !== right.isDirectory) {
+        return left.isDirectory ? 1 : -1;
+      }
+
+      return right.basename.localeCompare(left.basename);
+    };
+
+    expect(
+      PathStore.preparePaths(['b.ts', 'a.ts', 'dir/'], {
+        sort,
+      })
+    ).toEqual(['b.ts', 'a.ts', 'dir/']);
+  });
 });
 
 describe('PathStore', () => {
+  test('defaults to non-flattened directories and rejects flattening until it is implemented', () => {
+    expect(
+      getVisiblePaths(
+        new PathStore({
+          paths: ['src/index.ts'],
+        })
+      )
+    ).toEqual(['src/']);
+
+    expect(
+      () =>
+        new PathStore({
+          flattenEmptyDirectories: true,
+          paths: ['src/index.ts'],
+        })
+    ).toThrow('flattenEmptyDirectories is not implemented yet');
+  });
+
+  test('handles empty trees', () => {
+    const store = new PathStore();
+
+    expect(store.list()).toEqual([]);
+    expect(store.getVisibleCount()).toBe(0);
+    expect(store.getVisibleSlice(0, 10)).toEqual([]);
+  });
+
+  test('supports initialExpansion: "open" and collapse/expand overrides', () => {
+    const store = new PathStore({
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+    });
+
+    expect(getVisiblePaths(store, 0, 9)).toEqual([
+      'src/',
+      'src/lib/',
+      'src/lib/util.ts',
+      'src/index.ts',
+      'README.md',
+    ]);
+
+    store.collapse('src/');
+    expect(getVisiblePaths(store, 0, 9)).toEqual(['src/', 'README.md']);
+
+    store.expand('src/');
+    expect(getVisiblePaths(store, 0, 9)).toEqual([
+      'src/',
+      'src/lib/',
+      'src/lib/util.ts',
+      'src/index.ts',
+      'README.md',
+    ]);
+  });
+
+  test('supports numeric initialExpansion depth with explicit expanded overrides', () => {
+    const paths = ['README.md', 'src/index.ts', 'src/lib/util.ts'];
+
+    const store = new PathStore({
+      initialExpansion: 1,
+      paths,
+    });
+
+    expect(getVisiblePaths(store, 0, 9)).toEqual([
+      'src/',
+      'src/lib/',
+      'src/index.ts',
+      'README.md',
+    ]);
+
+    const overriddenStore = new PathStore({
+      initialExpansion: 1,
+      initialExpandedPaths: ['src/lib/'],
+      paths,
+    });
+
+    expect(getVisiblePaths(overriddenStore, 0, 9)).toEqual([
+      'src/',
+      'src/lib/',
+      'src/lib/util.ts',
+      'src/index.ts',
+      'README.md',
+    ]);
+  });
+
   test('lists canonical entries in canonical order', () => {
     const store = new PathStore({
       paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx', 'tmp/'],
@@ -41,7 +195,12 @@ describe('PathStore', () => {
       'src/components/Button.tsx',
       'src/index.ts',
     ]);
+    expect(store.list('src/')).toEqual([
+      'src/components/Button.tsx',
+      'src/index.ts',
+    ]);
     expect(store.list('tmp')).toEqual(['tmp/']);
+    expect(store.list('tmp/')).toEqual(['tmp/']);
     expect(store.list('missing')).toEqual([]);
   });
 
@@ -72,6 +231,16 @@ describe('PathStore', () => {
       'README.md',
     ]);
     expect(store.list('src/components')).toEqual(['src/components/Button.tsx']);
+  });
+
+  test('rejects duplicate additions', () => {
+    const store = new PathStore({
+      paths: ['src/index.ts'],
+    });
+
+    expect(() => store.add('src/index.ts')).toThrow(
+      'Path already exists: "src/index.ts"'
+    );
   });
 
   test('promotes emptied directories so canonical list round-trips', () => {
@@ -106,6 +275,29 @@ describe('PathStore', () => {
     expect(store.list()).toEqual(['src/index.ts', 'tmp/README.md']);
   });
 
+  test('rejects moving directories into descendants and missing parents', () => {
+    const store = new PathStore({
+      paths: ['src/index.ts', 'src/components/Button.tsx'],
+    });
+
+    expect(() => store.move('src/', 'src/components/')).toThrow(
+      'Cannot move a directory into one of its descendants'
+    );
+    expect(() => store.move('src/index.ts', 'missing/index.ts')).toThrow(
+      'Destination parent does not exist'
+    );
+  });
+
+  test('requires sorted input when presorted is true', () => {
+    expect(
+      () =>
+        new PathStore({
+          paths: ['b.ts', 'a.ts'],
+          presorted: true,
+        })
+    ).toThrow('Builder input must be sorted before appendPaths()');
+  });
+
   test('throws on collisions by default and can batch operations into one event', () => {
     const store = new PathStore({
       paths: ['README.md', 'src/index.ts', 'tmp/'],
@@ -131,6 +323,27 @@ describe('PathStore', () => {
       'src/index.ts',
       'tmp/README.md',
     ]);
+  });
+
+  test('supports nested batches and emits one top-level batch event', () => {
+    const store = new PathStore({
+      paths: ['src/old.ts', 'tmp/'],
+    });
+    const events: string[] = [];
+
+    store.on('*', (event) => {
+      events.push(event.operation);
+    });
+
+    store.batch(() => {
+      store.batch(() => {
+        store.move('src/old.ts', 'tmp/');
+      });
+      store.add('src/new.ts');
+    });
+
+    expect(events).toEqual(['batch']);
+    expect(store.list()).toEqual(['src/new.ts', 'tmp/old.ts']);
   });
 
   test('computes visible counts and slices for collapsed and expanded trees', () => {
@@ -161,10 +374,54 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('emits expand and collapse events with affected metadata', () => {
+    const store = new PathStore({
+      paths: ['src/index.ts', 'src/components/Button.tsx'],
+    });
+    const events: Array<{
+      affectedAncestorIds?: readonly number[];
+      affectedNodeIds?: readonly number[];
+      operation: string;
+      path?: string;
+    }> = [];
+
+    store.on('*', (event) => {
+      events.push({
+        affectedAncestorIds: event.affectedAncestorIds,
+        affectedNodeIds: event.affectedNodeIds,
+        operation: event.operation,
+        path:
+          typeof event.changeset?.path === 'string'
+            ? event.changeset.path
+            : undefined,
+      });
+    });
+
+    store.expand('src/');
+    store.collapse('src/');
+
+    expect(events).toEqual([
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        operation: 'expand',
+        path: 'src/',
+      },
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        operation: 'collapse',
+        path: 'src/',
+      },
+    ]);
+    expect(events[0]?.affectedNodeIds).toHaveLength(1);
+    expect(events[1]?.affectedNodeIds).toHaveLength(1);
+  });
+
   test('returns row metadata for the current visible window and clamps slice bounds', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,
-      initialExpandedPaths: ['src/'],
+      initialExpansion: 1,
       paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
     });
 
@@ -218,7 +475,7 @@ describe('PathStore', () => {
   test('updates visible rows immediately when adding and removing inside expanded directories', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,
-      initialExpandedPaths: ['src/'],
+      initialExpansion: 1,
       paths: ['README.md', 'src/index.ts'],
     });
 
@@ -258,7 +515,7 @@ describe('PathStore', () => {
   test('continues visible slices after walking out of a nested expanded subtree', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,
-      initialExpandedPaths: ['src/', 'src/components/'],
+      initialExpansion: 'open',
       paths: [
         'README.md',
         'src/components/Button.tsx',
@@ -272,14 +529,14 @@ describe('PathStore', () => {
       'src/components/Button.tsx',
       'src/index.ts',
       'tmp/',
-      'README.md',
+      'tmp/file.ts',
     ]);
   });
 
   test('preserves expansion state when moving an expanded directory subtree', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,
-      initialExpandedPaths: ['src/', 'src/components/', 'tmp/'],
+      initialExpansion: 'open',
       paths: ['README.md', 'src/components/Button.tsx', 'tmp/'],
     });
 
@@ -332,10 +589,24 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('keeps sibling positions correct after removing one child and moving another', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 1,
+      paths: ['src/a.ts', 'src/b.ts', 'src/c.ts'],
+    });
+
+    store.remove('src/b.ts');
+    store.move('src/c.ts', 'c.ts');
+
+    expect(getVisiblePaths(store, 0, 9)).toEqual(['src/', 'src/a.ts', 'c.ts']);
+    expect(store.list()).toEqual(['src/a.ts', 'c.ts']);
+  });
+
   test('supports watcher-style array batches and emits one batch event', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,
-      initialExpandedPaths: ['src/'],
+      initialExpansion: 1,
       paths: ['src/keep.ts', 'src/old.ts', 'tmp/'],
     });
     const events: string[] = [];
@@ -351,7 +622,12 @@ describe('PathStore', () => {
     ]);
 
     expect(events).toEqual(['batch']);
-    expect(getVisiblePaths(store)).toEqual(['src/', 'src/new.ts', 'tmp/']);
+    expect(getVisiblePaths(store)).toEqual([
+      'src/',
+      'src/new.ts',
+      'tmp/',
+      'tmp/old.ts',
+    ]);
     expect(store.list()).toEqual(['src/new.ts', 'tmp/old.ts']);
   });
 
@@ -374,5 +650,64 @@ describe('PathStore', () => {
     expect(events).toEqual(['move']);
     expect(store.list()).toEqual(['b.ts']);
     expect(store.getNodeCount()).toBe(1);
+  });
+
+  test('applies custom sort comparators to canonical listings and mutations', () => {
+    const sort = (
+      left: { basename: string; isDirectory: boolean },
+      right: { basename: string; isDirectory: boolean }
+    ) => {
+      if (left.isDirectory !== right.isDirectory) {
+        return left.isDirectory ? 1 : -1;
+      }
+
+      return right.basename.localeCompare(left.basename);
+    };
+    const store = new PathStore({
+      paths: ['b.ts', 'a.ts', 'dir/index.ts'],
+      sort,
+    });
+
+    store.add('z.ts');
+
+    expect(store.list()).toEqual(['z.ts', 'dir/index.ts', 'b.ts', 'a.ts']);
+  });
+
+  test('matches a rebuild-from-list after mixed mutations and projection changes', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: [
+        'README.md',
+        'src/components/Button.tsx',
+        'src/components/Input.tsx',
+        'src/index.ts',
+        'tmp/notes.txt',
+      ],
+    });
+
+    assertMatchesRebuild(store);
+
+    store.add('src/components/Modal.tsx');
+    assertMatchesRebuild(store);
+
+    store.move('src/components/Input.tsx', 'tmp/');
+    assertMatchesRebuild(store);
+
+    store.collapse('src/components/');
+    assertMatchesRebuild(store);
+
+    store.expand('src/components/');
+    assertMatchesRebuild(store);
+
+    store.remove('tmp/notes.txt');
+    assertMatchesRebuild(store);
+
+    store.batch((batchStore) => {
+      batchStore.move('src/components/', 'tmp/');
+      batchStore.add('docs/');
+      batchStore.add('docs/guide.md');
+    });
+    assertMatchesRebuild(store);
   });
 });

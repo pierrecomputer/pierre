@@ -41,6 +41,7 @@ export interface PathStoreNode {
 export interface DirectoryChildIndex {
   childIds: NodeId[];
   childIdByNameId: Map<SegmentId, NodeId>;
+  childPositionById: Map<NodeId, number>;
 }
 
 export interface ResolvedPathStoreOptions {

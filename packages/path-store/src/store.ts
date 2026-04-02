@@ -29,6 +29,7 @@ import type {
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
 } from './public-types';
+import { setDirectoryExpanded } from './state';
 import { createPathStoreState } from './state';
 import type { PathStoreState } from './state';
 
@@ -45,9 +46,12 @@ export class PathStore {
       builder.appendPreparedPaths(preparePathEntries(inputPaths, options));
     }
 
-    this.#state = createPathStoreState(builder.finish());
-    recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId);
+    this.#state = createPathStoreState(
+      builder.finish(),
+      options.initialExpansion ?? 'closed'
+    );
     this.initializeExpandedPaths(options.initialExpandedPaths);
+    recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId);
   }
 
   public static preparePaths(
@@ -163,9 +167,7 @@ export class PathStore {
         throw new Error(`Path is not a directory: "${path}"`);
       }
 
-      this.#state.expandedDirectoryIds.add(directoryNodeId);
+      setDirectoryExpanded(this.#state, directoryNodeId, true, directoryNode);
     }
-
-    recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId);
   }
 }

@@ -1,10 +1,10 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
-import { do_not_optimize, measure } from 'mitata';
+import { do_not_optimize } from 'mitata';
 import { cpus } from 'node:os';
+import { basename, resolve } from 'node:path';
 
 import { PathStore } from '../src/index';
 import type { PathStoreVisibleRow } from '../src/public-types';
-import { measureScenariosSequentially } from './benchmark-runner';
 
 const WORKLOAD_NAMES = ['linux-5x', 'linux-10x'] as const;
 const VIEWPORT_MODES = ['first', 'middle'] as const;
@@ -15,8 +15,11 @@ const QUICK_WORKLOAD_NAMES = ['linux-5x'] as const;
 const MUTATION_SCENARIO_KINDS = [
   'rename-leaf',
   'delete-leaf',
+  'delete-subtree',
   'add-sibling',
   'move-leaf',
+  'move-subtree',
+  'batch-visible-renames',
   'expand-directory',
   'rename-root-file',
   'rename-root-directory',
@@ -25,12 +28,19 @@ const QUICK_MUTATION_SCENARIO_KINDS = [
   'rename-leaf',
   'rename-root-directory',
 ] as const;
-const VISIBLE_SCENARIO_SAMPLE_COUNT = 10;
+const VISIBLE_SCENARIO_SAMPLE_COUNT = 50;
+const COLD_VISIBLE_SCENARIO_SAMPLE_COUNT = 10;
+const LIST_AND_SCROLL_SCENARIO_SAMPLE_COUNT = 10;
 const BUILD_SCENARIO_SAMPLE_COUNT = 20;
 const PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT = 3;
 const MUTATION_SCENARIO_SAMPLE_COUNT = 100;
+const DESTRUCTIVE_MUTATION_SCENARIO_SAMPLE_COUNT = 10;
 const MUTATION_SCENARIO_WARMUP_COUNT = 5;
+const TARGET_SHORT_SCENARIO_WALL_TIME_MS = 2_000;
+const MAX_DYNAMIC_SAMPLE_COUNT = 250_000;
 const MUTATION_WINDOW_SIZE = 200;
+const SCROLL_WINDOW_STEP = 24;
+const SCROLL_WINDOW_COUNT = 10;
 const PREVIEW_LIMIT = 12;
 const ROOT_FILE_SEED_PATH = 'zz-benchmark-root-file.ts';
 const ROOT_FILE_RENAMED_PATH = 'zz-benchmark-root-file-renamed.ts';
@@ -40,26 +50,47 @@ const HUMAN_PROGRESS_LABEL_WIDTH = 44;
 const LOCAL_VISIBLE_PATH_SEARCH_RADIUS = MUTATION_WINDOW_SIZE * 2;
 const VISIBLE_PATH_SEARCH_CHUNK_SIZE = 1_024;
 const ANSI_ENABLED = process.stdout.isTTY;
-const WAIT_INDICATOR_FRAMES = ['.  ', '.. ', '...'] as const;
 const BENCHMARK_INTENT =
   'Measure absolute path-store scenario latencies by workload and operation. Build and visible-read scenarios use presorted inputs everywhere except the standalone preparePaths benchmarks. Mutation scenarios measure commit plus the immediate store-side render contract: getVisibleCount() and getVisibleSlice(start, end), either for the changed window or for a preserved offscreen viewport.';
+const COMPARE_INTENT =
+  'Compare two path-store benchmark JSON runs and decide whether the candidate is meaningfully better than the baseline. Acceptance is based on p50 improvement, with a bootstrap 95% confidence interval when raw samples are available.';
+const COMPARE_CONFIDENCE_LEVEL = 0.95;
+const COMPARE_DEFAULT_MIN_EFFECT_PCT = 3;
+const COMPARE_DEFAULT_BOOTSTRAP_RESAMPLES = 1_000;
+const COMPARE_MAX_SAMPLE_POOL = 1_024;
 
 type BenchmarkWorkloadName = (typeof WORKLOAD_NAMES)[number];
 type BenchmarkProfileName = (typeof BENCHMARK_PROFILE_NAMES)[number];
 type ViewportMode = (typeof VIEWPORT_MODES)[number];
-type ScenarioCategory = 'prepare' | 'build' | 'visible' | 'e2e' | 'mutation';
+type ScenarioCategory =
+  | 'prepare'
+  | 'build'
+  | 'visible'
+  | 'visible-cold'
+  | 'scroll'
+  | 'list'
+  | 'e2e'
+  | 'mutation';
 type MutationScenarioKind = (typeof MUTATION_SCENARIO_KINDS)[number];
 type MutationReadIntent = 'render-changed-window' | 'preserve-viewport';
 type MutationProgressPhase = 'warmup' | 'sample';
 
 interface BenchmarkCliOptions {
+  bootstrapResamples: number;
+  compare?:
+    | {
+        baselinePath: string;
+        candidatePath: string;
+      }
+    | undefined;
   filter?: RegExp;
+  includeSamples: boolean;
   json: boolean;
+  minEffectPct: number;
   profile: BenchmarkProfileName;
 }
 
 interface BenchmarkWorkload {
-  expandedFolders: readonly string[];
   fileCount: number;
   fileCountLabel: string;
   getPreparedFiles: () => readonly string[];
@@ -67,6 +98,7 @@ interface BenchmarkWorkload {
   name: BenchmarkWorkloadName;
   rawFiles: readonly string[];
   rootCount: number;
+  rootDirectoryPaths: readonly string[];
 }
 
 interface WindowBounds {
@@ -89,7 +121,7 @@ interface MutationReadPlan {
 interface ScenarioProgress {
   completed: number;
   phase: MutationProgressPhase;
-  total: number;
+  total?: number;
 }
 
 interface ScenarioManifest {
@@ -102,6 +134,7 @@ interface ScenarioManifest {
   fileCount: number;
   name: string;
   notes?: readonly string[];
+  preparationTimeMs?: number;
   postMutationReadIntent?: MutationReadIntent;
   preview?: readonly string[];
   renderTargetPath?: string;
@@ -134,8 +167,10 @@ interface MitataRunStats {
   max: number;
   min: number;
   p50: number;
+  p95?: number;
   p75: number;
   p99: number;
+  samples?: readonly number[];
   ticks: number;
 }
 
@@ -143,15 +178,12 @@ interface MitataBenchmarkResult {
   alias: string;
   runs: Array<{
     stats: MitataRunStats;
+    wallTimeMs?: number;
   }>;
 }
 
 interface MeasuredRunStats extends MitataRunStats {
   p95: number;
-  samples: readonly number[];
-}
-
-interface RawMeasuredRunStats extends MitataRunStats {
   samples: readonly number[];
 }
 
@@ -173,9 +205,58 @@ interface BenchmarkRunOutput {
   generatedAt: string;
   intent: string;
   kind: 'path-store-benchmark-run';
+  preparationTimeMs: number;
   profile: BenchmarkProfileName;
   results: MitataJsonResult;
   scenarios: ScenarioManifest[];
+}
+
+interface BenchmarkCompareScenario {
+  accepted: boolean;
+  baseline: {
+    p50: number;
+    p95?: number;
+    samples: number;
+    wallTimeMs?: number;
+  };
+  candidate: {
+    p50: number;
+    p95?: number;
+    samples: number;
+    wallTimeMs?: number;
+  };
+  category?: ScenarioCategory;
+  ci95HighPct?: number;
+  ci95LowPct?: number;
+  classification: 'improved' | 'regressed' | 'inconclusive';
+  confidenceAvailable: boolean;
+  name: string;
+  notes?: readonly string[];
+  p50ImprovementPct: number;
+  p95ImprovementPct?: number;
+  statisticallySignificant: boolean;
+  workload?: BenchmarkWorkloadName;
+}
+
+interface BenchmarkCompareOutput {
+  baselineFile: string;
+  baselinePath: string;
+  bootstrapResamples: number;
+  candidateFile: string;
+  candidatePath: string;
+  comparedScenarios: BenchmarkCompareScenario[];
+  confidenceLevel: number;
+  generatedAt: string;
+  intent: string;
+  kind: 'path-store-benchmark-compare';
+  minEffectPct: number;
+  summary: {
+    accepted: number;
+    compared: number;
+    improved: number;
+    inconclusive: number;
+    regressed: number;
+  };
 }
 
 interface HumanBenchmarkRun {
@@ -209,8 +290,17 @@ function styleText(text: string, ...styles: readonly string[]): string {
 }
 
 function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
+  let bootstrapResamples = COMPARE_DEFAULT_BOOTSTRAP_RESAMPLES;
+  let compare:
+    | {
+        baselinePath: string;
+        candidatePath: string;
+      }
+    | undefined;
   let filter: RegExp | undefined;
+  let includeSamples = false;
   let json = false;
+  let minEffectPct = COMPARE_DEFAULT_MIN_EFFECT_PCT;
   let profile: BenchmarkProfileName = 'quick';
 
   for (let index = 0; index < argv.length; index++) {
@@ -223,6 +313,69 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
 
     if (argument === '--json') {
       json = true;
+      continue;
+    }
+
+    if (argument === '--samples') {
+      includeSamples = true;
+      continue;
+    }
+
+    if (argument === '--compare') {
+      const baselinePath = argv[index + 1];
+      const candidatePath = argv[index + 2];
+      if (
+        baselinePath == null ||
+        baselinePath.length === 0 ||
+        candidatePath == null ||
+        candidatePath.length === 0
+      ) {
+        throw new Error(
+          'Expected <baseline.json> <candidate.json> after --compare'
+        );
+      }
+
+      compare = {
+        baselinePath: resolve(baselinePath),
+        candidatePath: resolve(candidatePath),
+      };
+      index += 2;
+      continue;
+    }
+
+    if (argument === '--min-effect-pct') {
+      const value = argv[index + 1];
+      if (value == null || value.length === 0) {
+        throw new Error('Expected a value after --min-effect-pct');
+      }
+
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        throw new Error(
+          `Invalid --min-effect-pct value: ${value}. Expected a non-negative number.`
+        );
+      }
+
+      minEffectPct = parsed;
+      index++;
+      continue;
+    }
+
+    if (argument === '--bootstrap-resamples') {
+      const value = argv[index + 1];
+      if (value == null || value.length === 0) {
+        throw new Error('Expected a value after --bootstrap-resamples');
+      }
+
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error(
+          `Invalid --bootstrap-resamples value: ${value}. Expected a positive integer.`
+        );
+      }
+
+      bootstrapResamples = parsed;
+      index++;
       continue;
     }
 
@@ -268,13 +421,33 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
       console.log(
         '  --json             Emit a JSON wrapper with scenario metadata'
       );
+      console.log(
+        '  --samples          Include raw timing samples in JSON output'
+      );
+      console.log(
+        '  --compare <baseline.json> <candidate.json>  Compare two JSON runs'
+      );
+      console.log(
+        `  --min-effect-pct <n>  Minimum required p50 improvement for acceptance (default ${COMPARE_DEFAULT_MIN_EFFECT_PCT})`
+      );
+      console.log(
+        `  --bootstrap-resamples <n>  Bootstrap resample count for compare mode (default ${COMPARE_DEFAULT_BOOTSTRAP_RESAMPLES})`
+      );
       process.exit(0);
     }
 
     throw new Error(`Unknown benchmark argument: ${argument}`);
   }
 
-  return { filter, json, profile };
+  return {
+    bootstrapResamples,
+    compare,
+    filter,
+    includeSamples,
+    json,
+    minEffectPct,
+    profile,
+  };
 }
 
 const BENCHMARK_PROFILES: Record<BenchmarkProfileName, BenchmarkProfile> = {
@@ -316,7 +489,7 @@ function createExpandedStore(
 ): PathStore {
   const store = new PathStore({
     flattenEmptyDirectories: false,
-    initialExpandedPaths: workload.expandedFolders,
+    initialExpansion: 'open',
     paths: workload.getPreparedFiles(),
     presorted: true,
   });
@@ -355,6 +528,46 @@ function getWindowBounds(
     end: Math.min(visibleCount - 1, start + windowSize - 1),
     start,
   };
+}
+
+function getWindowBoundsAtStart(
+  visibleCount: number,
+  start: number,
+  windowSize: number
+): WindowBounds {
+  if (visibleCount <= 0) {
+    return { end: -1, start: 0 };
+  }
+
+  const clampedStart = Math.max(0, Math.min(start, visibleCount - 1));
+  return {
+    end: Math.min(visibleCount - 1, clampedStart + windowSize - 1),
+    start: clampedStart,
+  };
+}
+
+function getSequentialScrollBounds(
+  store: PathStore,
+  viewport: ViewportMode,
+  windowSize: number
+): readonly WindowBounds[] {
+  const visibleCount = store.getVisibleCount();
+  if (visibleCount <= 0) {
+    return [{ end: -1, start: 0 }];
+  }
+
+  const initialBounds = getWindowBounds(store, viewport, windowSize);
+  const bounds: WindowBounds[] = [initialBounds];
+
+  for (let index = 1; index < SCROLL_WINDOW_COUNT; index++) {
+    const nextStart = Math.min(
+      Math.max(0, visibleCount - windowSize),
+      initialBounds.start + index * SCROLL_WINDOW_STEP
+    );
+    bounds.push(getWindowBoundsAtStart(visibleCount, nextStart, windowSize));
+  }
+
+  return bounds;
 }
 
 function getWindowRows(
@@ -641,6 +854,28 @@ function requireRootDirectory(
   return row;
 }
 
+function requireSecondRootDirectoryPath(
+  workload: BenchmarkWorkload,
+  excludedPath: string,
+  scenarioName: string
+): string {
+  const path = workload.rootDirectoryPaths.find(
+    (candidate) => candidate !== excludedPath
+  );
+
+  if (path == null) {
+    throw new Error(`No second root directory available for ${scenarioName}`);
+  }
+
+  return path;
+}
+
+function getVisibleFiles(
+  rows: readonly PathStoreVisibleRow[]
+): readonly PathStoreVisibleRow[] {
+  return rows.filter((row) => row.kind === 'file');
+}
+
 function splitPath(path: string): {
   isDirectory: boolean;
   name: string;
@@ -680,11 +915,12 @@ function createSiblingPath(path: string, suffix: string): string {
   return renamePathWithSuffix(path, suffix);
 }
 
-function getMovedLeafPath(
+function getMovedPathIntoDirectory(
   path: string,
   destinationDirectoryPath: string
 ): string {
-  return `${destinationDirectoryPath}${splitPath(path).name}`;
+  const { isDirectory, name } = splitPath(path);
+  return `${destinationDirectoryPath}${name}${isDirectory ? '/' : ''}`;
 }
 
 function formatDuration(ns: number): string {
@@ -707,19 +943,19 @@ function formatCount(value: number): string {
   return value.toLocaleString();
 }
 
-function getHumanBenchmarkNameWidth(
-  scenarios: readonly BenchmarkScenario[]
+function getHumanBenchmarkFactoryNameWidth(
+  scenarioFactories: readonly BenchmarkScenarioFactory[]
 ): number {
   let maxWidth = HUMAN_BENCHMARK_NAME_MIN_WIDTH;
 
-  for (let index = 0; index < scenarios.length; index++) {
-    const scenario = scenarios[index];
-    if (scenario == null) {
+  for (let index = 0; index < scenarioFactories.length; index++) {
+    const factory = scenarioFactories[index];
+    if (factory == null) {
       continue;
     }
 
-    const prefix = `[${index + 1}/${scenarios.length}] `;
-    maxWidth = Math.max(maxWidth, prefix.length + scenario.name.length);
+    const prefix = `[${index + 1}/${scenarioFactories.length}] `;
+    maxWidth = Math.max(maxWidth, prefix.length + factory.name.length);
   }
 
   return Math.min(HUMAN_BENCHMARK_NAME_MAX_WIDTH, maxWidth);
@@ -772,11 +1008,11 @@ function printHumanBenchmarkHeader(
 
   console.log(
     styleText(
-      `${'benchmark'.padEnd(nameWidth)} ${'p50'.padStart(10)} ${'p95'.padStart(10)} ${'min'.padStart(10)} ${'max'.padStart(10)} ${'wall'.padStart(10)} ${'samples'.padStart(10)}`,
+      `${'benchmark'.padEnd(nameWidth)} ${'p50'.padStart(10)} ${'p95'.padStart(10)} ${'min'.padStart(10)} ${'max'.padStart(10)} ${'prep'.padStart(10)} ${'wall'.padStart(10)} ${'samples'.padStart(10)}`,
       ANSI.bold
     )
   );
-  console.log(styleText('-'.repeat(nameWidth + 72), ANSI.dim));
+  console.log(styleText('-'.repeat(nameWidth + 83), ANSI.dim));
 }
 
 function printHumanBenchmarkBootBanner(
@@ -792,7 +1028,10 @@ function printHumanBenchmarkBootBanner(
     `${styleText('filter:', ANSI.dim)} ${cliOptions.filter?.source ?? 'none'}`
   );
   console.log(
-    `${styleText('samples:', ANSI.dim)} build=${formatCount(BUILD_SCENARIO_SAMPLE_COUNT)}, prepare/e2e=${formatCount(PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT)}, visible=${formatCount(VISIBLE_SCENARIO_SAMPLE_COUNT)}, mutation=${formatCount(MUTATION_SCENARIO_SAMPLE_COUNT)} (+ ${formatCount(MUTATION_SCENARIO_WARMUP_COUNT)} warmup, reused store)`
+    `${styleText('base samples:', ANSI.dim)} build=${formatCount(BUILD_SCENARIO_SAMPLE_COUNT)}, prepare/e2e=${formatCount(PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT)}, visible=${formatCount(VISIBLE_SCENARIO_SAMPLE_COUNT)}, visible-cold=${formatCount(COLD_VISIBLE_SCENARIO_SAMPLE_COUNT)}, list/scroll=${formatCount(LIST_AND_SCROLL_SCENARIO_SAMPLE_COUNT)}, mutation=${formatCount(MUTATION_SCENARIO_SAMPLE_COUNT)} (+ ${formatCount(MUTATION_SCENARIO_WARMUP_COUNT)} warmup, reused store where possible; delete-subtree=${formatCount(DESTRUCTIVE_MUTATION_SCENARIO_SAMPLE_COUNT)} fresh-store samples)`
+  );
+  console.log(
+    `${styleText('short runs:', ANSI.dim)} scenarios under ${formatDuration(TARGET_SHORT_SCENARIO_WALL_TIME_MS * 1_000_000)} wall time scale sample counts upward toward that target`
   );
   console.log(
     `${styleText('input mode:', ANSI.dim)} presorted for all scenarios except prepare/*`
@@ -803,19 +1042,141 @@ function printHumanBenchmarkBootBanner(
   console.log('');
 }
 
-function printHumanBenchmarkPreparationSummary(
-  selectedScenarioCount: number
+function getHumanCompareNameWidth(
+  comparedScenarios: readonly BenchmarkCompareScenario[]
+): number {
+  let maxWidth = HUMAN_BENCHMARK_NAME_MIN_WIDTH;
+
+  for (let index = 0; index < comparedScenarios.length; index++) {
+    const scenario = comparedScenarios[index];
+    if (scenario == null) {
+      continue;
+    }
+
+    maxWidth = Math.max(maxWidth, scenario.name.length);
+  }
+
+  return Math.min(HUMAN_BENCHMARK_NAME_MAX_WIDTH, maxWidth);
+}
+
+function formatPercentCell(value: number, width = 10): string {
+  const prefix = value > 0 ? '+' : '';
+  return `${prefix}${value.toFixed(2)}%`.padStart(width);
+}
+
+function formatConfidenceCell(
+  lowPct: number | undefined,
+  highPct: number | undefined,
+  width = 24
+): string {
+  if (lowPct == null || highPct == null) {
+    return 'n/a'.padStart(width);
+  }
+
+  return `[${lowPct.toFixed(2)}%, ${highPct.toFixed(2)}%]`.padStart(width);
+}
+
+function formatComparisonStatus(
+  comparedScenario: BenchmarkCompareScenario
+): string {
+  const acceptedLabel = 'accept'.padStart(8);
+  const improveLabel = 'improve'.padStart(8);
+  const regressLabel = 'regress'.padStart(8);
+  const unclearLabel = 'unclear'.padStart(8);
+
+  if (comparedScenario.accepted) {
+    return styleText(acceptedLabel, ANSI.green, ANSI.bold);
+  }
+
+  switch (comparedScenario.classification) {
+    case 'improved':
+      return styleText(improveLabel, ANSI.green);
+    case 'regressed':
+      return regressLabel;
+    case 'inconclusive':
+      return styleText(unclearLabel, ANSI.dim);
+  }
+}
+
+function printHumanBenchmarkCompareHeader(
+  compareOutput: BenchmarkCompareOutput,
+  filterSource: string
+): void {
+  const nameWidth = getHumanCompareNameWidth(compareOutput.comparedScenarios);
+
+  console.log(styleText('path-store benchmark compare', ANSI.bold, ANSI.cyan));
+  console.log(
+    `${styleText('baseline:', ANSI.dim)} ${compareOutput.baselineFile}`
+  );
+  console.log(
+    `${styleText('candidate:', ANSI.dim)} ${compareOutput.candidateFile}`
+  );
+  console.log(`${styleText('filter:', ANSI.dim)} ${filterSource}`);
+  console.log(
+    `${styleText('acceptance:', ANSI.dim)} candidate p50 must improve by at least ${compareOutput.minEffectPct.toFixed(2)}%`
+  );
+  console.log(
+    `${styleText('confidence:', ANSI.dim)} ${compareOutput.confidenceLevel * 100}% bootstrap CI over median improvement (${formatCount(compareOutput.bootstrapResamples)} resamples when raw samples are available)`
+  );
+  console.log('');
+  console.log(
+    styleText(
+      `${'benchmark'.padEnd(nameWidth)} ${'base p50'.padStart(10)} ${'cand p50'.padStart(10)} ${'delta'.padStart(10)} ${'ci95'.padStart(24)} ${'p95'.padStart(10)} ${'status'.padStart(8)}`,
+      ANSI.bold
+    )
+  );
+  console.log(styleText('-'.repeat(nameWidth + 78), ANSI.dim));
+}
+
+function printHumanBenchmarkCompareRow(
+  comparedScenario: BenchmarkCompareScenario,
+  nameWidth: number
 ): void {
   console.log(
-    `${styleText('prepared:', ANSI.dim)} ${formatCount(selectedScenarioCount)} scenarios`
+    [
+      padBenchmarkLabel(comparedScenario.name, nameWidth),
+      formatHumanDurationCell(comparedScenario.baseline.p50),
+      formatHumanDurationCell(comparedScenario.candidate.p50),
+      formatPercentCell(comparedScenario.p50ImprovementPct),
+      formatConfidenceCell(
+        comparedScenario.ci95LowPct,
+        comparedScenario.ci95HighPct
+      ),
+      comparedScenario.p95ImprovementPct == null
+        ? 'n/a'.padStart(10)
+        : formatPercentCell(comparedScenario.p95ImprovementPct),
+      formatComparisonStatus(comparedScenario),
+    ].join(' ')
   );
-  console.log(`${styleText('run:', ANSI.dim)} collecting timing samples...`);
+}
+
+function printHumanBenchmarkCompareSummary(
+  compareOutput: BenchmarkCompareOutput,
+  filterSource: string
+): void {
+  const nameWidth = getHumanCompareNameWidth(compareOutput.comparedScenarios);
+
+  printHumanBenchmarkCompareHeader(compareOutput, filterSource);
+
+  for (let index = 0; index < compareOutput.comparedScenarios.length; index++) {
+    const scenario = compareOutput.comparedScenarios[index];
+    if (scenario == null) {
+      continue;
+    }
+
+    printHumanBenchmarkCompareRow(scenario, nameWidth);
+  }
+
   console.log('');
+  console.log(
+    `${styleText('summary:', ANSI.dim)} compared=${formatCount(compareOutput.summary.compared)}, accepted=${formatCount(compareOutput.summary.accepted)}, improved=${formatCount(compareOutput.summary.improved)}, regressed=${formatCount(compareOutput.summary.regressed)}, inconclusive=${formatCount(compareOutput.summary.inconclusive)}`
+  );
 }
 
 function printHumanBenchmarkRow(
   label: string,
   stats: MeasuredRunStats,
+  preparationTimeMs: number,
   wallTimeMs: number,
   nameWidth: number
 ): void {
@@ -825,21 +1186,12 @@ function printHumanBenchmarkRow(
     styleText(formatHumanDurationCell(stats.p95), ANSI.dim),
     styleText(formatHumanDurationCell(stats.min), ANSI.dim),
     styleText(formatHumanDurationCell(stats.max), ANSI.dim),
+    styleText(formatHumanWallTimeCell(preparationTimeMs), ANSI.dim),
     formatHumanWallTimeCell(wallTimeMs),
     styleText(formatHumanSamplesCell(stats.ticks), ANSI.dim),
   ].join(' ');
 
   console.log(row);
-}
-
-function printHumanPreparationProgress(
-  index: number,
-  total: number,
-  scenarioName: string
-): void {
-  console.log(
-    `${styleText('· prepare', ANSI.dim)} [${index}/${total}] ${scenarioName}`
-  );
 }
 
 function printHumanMeasurementProgress(
@@ -861,10 +1213,6 @@ function clearHumanLiveLine(): void {
   process.stdout.cursorTo?.(0);
 }
 
-function formatHumanWaitIndicator(frame: number): string {
-  return WAIT_INDICATOR_FRAMES[frame % WAIT_INDICATOR_FRAMES.length] ?? '.  ';
-}
-
 function createHumanLiveMeasurementProgress(
   index: number,
   total: number,
@@ -881,12 +1229,9 @@ function createHumanLiveMeasurementProgress(
     };
   }
 
-  const startedAt = performance.now();
-  let frame = 0;
   let latestProgress: ScenarioProgress | undefined;
 
   const render = (): void => {
-    const elapsedMs = performance.now() - startedAt;
     const prefix = `${styleText('› run', ANSI.dim)} [${index}/${total}] ${padBenchmarkLabel(
       scenarioName,
       HUMAN_PROGRESS_LABEL_WIDTH
@@ -894,25 +1239,18 @@ function createHumanLiveMeasurementProgress(
     const progressLabel =
       latestProgress == null
         ? 'sampling'
-        : `${latestProgress.phase} ${latestProgress.completed}/${latestProgress.total}`;
-    const waitIndicator = formatHumanWaitIndicator(frame);
+        : latestProgress.total == null
+          ? `${latestProgress.phase} ${latestProgress.completed}`
+          : `${latestProgress.phase} ${latestProgress.completed}/${latestProgress.total}`;
 
     clearHumanLiveLine();
-    process.stdout.write(
-      `${styleText(waitIndicator, ANSI.cyan)} ${prefix} ${styleText(
-        formatDuration(elapsedMs * 1_000_000).padStart(10),
-        ANSI.cyan
-      )} ${styleText(progressLabel, ANSI.dim)}`
-    );
-    frame++;
+    process.stdout.write(`${prefix} ${styleText(progressLabel, ANSI.dim)}`);
   };
 
   render();
-  const intervalId = setInterval(render, 80);
 
   return {
     stop() {
-      clearInterval(intervalId);
       clearHumanLiveLine();
     },
     update(progress) {
@@ -926,6 +1264,11 @@ function getScenarioSampleCount(category: ScenarioCategory): number {
   switch (category) {
     case 'visible':
       return VISIBLE_SCENARIO_SAMPLE_COUNT;
+    case 'visible-cold':
+      return COLD_VISIBLE_SCENARIO_SAMPLE_COUNT;
+    case 'scroll':
+    case 'list':
+      return LIST_AND_SCROLL_SCENARIO_SAMPLE_COUNT;
     case 'mutation':
       return MUTATION_SCENARIO_SAMPLE_COUNT;
     case 'build':
@@ -953,67 +1296,81 @@ function sanitizeMeasuredRunStats(stats: MeasuredRunStats): MitataRunStats {
     max: stats.max,
     min: stats.min,
     p50: stats.p50,
+    p95: stats.p95,
     p75: stats.p75,
     p99: stats.p99,
     ticks: stats.ticks,
   };
 }
 
-function finalizeMeasuredRunStats(
-  stats: RawMeasuredRunStats
-): MeasuredRunStats {
-  const sortedSamples = [...stats.samples].sort((left, right) => left - right);
-
-  return {
-    ...stats,
-    p95: getPercentile(sortedSamples, 0.95),
-    samples: sortedSamples,
-  };
-}
-
 function createBenchmarkResult(
   alias: string,
-  stats: MeasuredRunStats
+  stats: MeasuredRunStats,
+  wallTimeMs: number,
+  includeSamples: boolean
 ): MitataBenchmarkResult {
+  const sanitizedStats = sanitizeMeasuredRunStats(stats);
+  if (includeSamples) {
+    sanitizedStats.samples = stats.samples;
+  }
+
   return {
     alias,
     runs: [
       {
-        stats: sanitizeMeasuredRunStats(stats),
+        stats: sanitizedStats,
+        wallTimeMs,
       },
     ],
   };
 }
 
 async function runBenchmarksForJson(
-  scenarios: readonly BenchmarkScenario[]
-): Promise<MitataJsonResult> {
-  const results = await measureScenariosSequentially(scenarios);
+  scenarioFactories: readonly BenchmarkScenarioFactory[],
+  includeSamples: boolean
+): Promise<{
+  preparationTimeMs: number;
+  results: MitataJsonResult;
+  scenarios: ScenarioManifest[];
+}> {
+  const benchmarks: MitataJsonResult['benchmarks'] = [];
+  const manifests: ScenarioManifest[] = [];
+  let preparationTimeMs = 0;
+
+  for (let index = 0; index < scenarioFactories.length; index++) {
+    const factory = scenarioFactories[index];
+    if (factory == null) {
+      continue;
+    }
+
+    const scenarioPreparationStartedAt = performance.now();
+    const scenario = factory.build();
+    const scenarioPreparationTimeMs =
+      performance.now() - scenarioPreparationStartedAt;
+    preparationTimeMs += scenarioPreparationTimeMs;
+    scenario.manifest.preparationTimeMs = scenarioPreparationTimeMs;
+    manifests.push(scenario.manifest);
+
+    const wallTimeStart = performance.now();
+    const stats = await scenario.measure();
+    const wallTimeMs = performance.now() - wallTimeStart;
+
+    benchmarks.push(
+      createBenchmarkResult(scenario.name, stats, wallTimeMs, includeSamples)
+    );
+
+    maybeCollectGarbage();
+  }
 
   return {
-    benchmarks: results.map((result) =>
-      createBenchmarkResult(result.name, result.stats)
-    ),
-    context: getBenchmarkContext(),
-    layout: [{ name: null, types: [] }],
+    preparationTimeMs,
+    results: {
+      benchmarks,
+      context: getBenchmarkContext(),
+      layout: [{ name: null, types: [] }],
+    },
+    scenarios: manifests,
   };
-}
-
-async function measureWithFixedSamples(
-  target: unknown,
-  category: ScenarioCategory,
-  options: {
-    innerGc?: boolean;
-  } = {}
-): Promise<MeasuredRunStats> {
-  return finalizeMeasuredRunStats(
-    (await measure(target as never, {
-      inner_gc: options.innerGc === true,
-      max_samples: getScenarioSampleCount(category),
-      min_cpu_time: 0,
-      min_samples: getScenarioSampleCount(category),
-    })) as RawMeasuredRunStats
-  );
 }
 
 function getPercentile(
@@ -1053,10 +1410,595 @@ function summarizeSamples(samples: readonly number[]): MeasuredRunStats {
   };
 }
 
+function computeImprovementPct(
+  baselineNs: number,
+  candidateNs: number
+): number {
+  if (baselineNs <= 0) {
+    return 0;
+  }
+
+  return ((baselineNs - candidateNs) / baselineNs) * 100;
+}
+
+function hashStringSeed(text: string): number {
+  let hash = 2_166_136_261;
+
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return hash >>> 0;
+}
+
+function createDeterministicRandom(seed: number): () => number {
+  let state = seed >>> 0;
+
+  return () => {
+    state += 0x6d2b79f5;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+// Compare mode only needs the overall sample distribution shape, so it uses a
+// stratified subset when runs captured very large sample arrays.
+function getCompareSamplePool(samples: readonly number[]): number[] {
+  const sortedSamples = [...samples].sort((left, right) => left - right);
+  if (sortedSamples.length <= COMPARE_MAX_SAMPLE_POOL) {
+    return sortedSamples;
+  }
+
+  const pool: number[] = [];
+  const lastIndex = sortedSamples.length - 1;
+
+  for (let index = 0; index < COMPARE_MAX_SAMPLE_POOL; index++) {
+    const sampleIndex = Math.round(
+      (index / (COMPARE_MAX_SAMPLE_POOL - 1)) * lastIndex
+    );
+    const sample = sortedSamples[sampleIndex];
+    if (sample == null) {
+      continue;
+    }
+
+    pool.push(sample);
+  }
+
+  return pool;
+}
+
+function getMedianFromSortedSamples(samples: readonly number[]): number {
+  return getPercentile(samples, 0.5);
+}
+
+function createBootstrapMedianSample(
+  sourceSamples: readonly number[],
+  random: () => number
+): number {
+  const resampled = new Array<number>(sourceSamples.length);
+
+  for (let index = 0; index < sourceSamples.length; index++) {
+    const sampledIndex = Math.floor(random() * sourceSamples.length);
+    resampled[index] = sourceSamples[sampledIndex] ?? 0;
+  }
+
+  resampled.sort((left, right) => left - right);
+  return getMedianFromSortedSamples(resampled);
+}
+
+function getBootstrapMedianImprovementCI(
+  scenarioName: string,
+  baselineSamples: readonly number[],
+  candidateSamples: readonly number[],
+  bootstrapResamples: number
+):
+  | {
+      ci95HighPct: number;
+      ci95LowPct: number;
+      notes?: readonly string[];
+    }
+  | undefined {
+  if (baselineSamples.length < 2 || candidateSamples.length < 2) {
+    return undefined;
+  }
+
+  const baselinePool = getCompareSamplePool(baselineSamples);
+  const candidatePool = getCompareSamplePool(candidateSamples);
+  const random = createDeterministicRandom(hashStringSeed(scenarioName));
+  const improvementSamples: number[] = [];
+
+  for (let index = 0; index < bootstrapResamples; index++) {
+    const baselineMedian = createBootstrapMedianSample(baselinePool, random);
+    const candidateMedian = createBootstrapMedianSample(candidatePool, random);
+    improvementSamples.push(
+      computeImprovementPct(baselineMedian, candidateMedian)
+    );
+  }
+
+  improvementSamples.sort((left, right) => left - right);
+
+  const notes: string[] = [];
+  if (
+    baselinePool.length !== baselineSamples.length ||
+    candidatePool.length !== candidateSamples.length
+  ) {
+    notes.push(
+      `Bootstrap confidence uses stratified ${formatCount(Math.max(baselinePool.length, candidatePool.length))}-sample pools from larger raw sample arrays.`
+    );
+  }
+
+  return {
+    ci95HighPct: getPercentile(
+      improvementSamples,
+      1 - (1 - COMPARE_CONFIDENCE_LEVEL) / 2
+    ),
+    ci95LowPct: getPercentile(
+      improvementSamples,
+      (1 - COMPARE_CONFIDENCE_LEVEL) / 2
+    ),
+    notes: notes.length === 0 ? undefined : notes,
+  };
+}
+
+function getComparisonClassification(
+  p50ImprovementPct: number,
+  ci95LowPct: number | undefined,
+  ci95HighPct: number | undefined
+): 'improved' | 'regressed' | 'inconclusive' {
+  if (ci95LowPct != null && ci95HighPct != null) {
+    if (ci95LowPct > 0) {
+      return 'improved';
+    }
+
+    if (ci95HighPct < 0) {
+      return 'regressed';
+    }
+
+    return 'inconclusive';
+  }
+
+  if (p50ImprovementPct > 0) {
+    return 'improved';
+  }
+
+  if (p50ImprovementPct < 0) {
+    return 'regressed';
+  }
+
+  return 'inconclusive';
+}
+
+function getComparisonAcceptance(
+  p50ImprovementPct: number,
+  ci95LowPct: number | undefined,
+  minEffectPct: number
+): boolean {
+  if (ci95LowPct != null) {
+    return ci95LowPct >= minEffectPct;
+  }
+
+  return p50ImprovementPct >= minEffectPct;
+}
+
+function getComparisonSignificance(
+  ci95LowPct: number | undefined,
+  ci95HighPct: number | undefined
+): boolean {
+  if (ci95LowPct == null || ci95HighPct == null) {
+    return false;
+  }
+
+  return ci95LowPct > 0 || ci95HighPct < 0;
+}
+
+function getScenarioManifestByName(
+  runOutput: BenchmarkRunOutput
+): Map<string, ScenarioManifest> {
+  return new Map(
+    runOutput.scenarios.map((scenario) => [scenario.name, scenario])
+  );
+}
+
+function createCompareScenario(
+  name: string,
+  baselineRun: MitataBenchmarkResult['runs'][number],
+  candidateRun: MitataBenchmarkResult['runs'][number],
+  baselineManifest: ScenarioManifest | undefined,
+  candidateManifest: ScenarioManifest | undefined,
+  options: Pick<BenchmarkCliOptions, 'bootstrapResamples' | 'minEffectPct'>
+): BenchmarkCompareScenario {
+  const baselineStats = baselineRun.stats;
+  const candidateStats = candidateRun.stats;
+  const p50ImprovementPct = computeImprovementPct(
+    baselineStats.p50,
+    candidateStats.p50
+  );
+  const p95ImprovementPct =
+    baselineStats.p95 != null && candidateStats.p95 != null
+      ? computeImprovementPct(baselineStats.p95, candidateStats.p95)
+      : undefined;
+
+  const bootstrapCI = getBootstrapMedianImprovementCI(
+    name,
+    baselineStats.samples ?? [],
+    candidateStats.samples ?? [],
+    options.bootstrapResamples
+  );
+
+  const notes: string[] = [];
+  if (bootstrapCI?.notes != null) {
+    notes.push(...bootstrapCI.notes);
+  }
+
+  if (baselineStats.samples == null || candidateStats.samples == null) {
+    notes.push(
+      'Raw samples are unavailable, so confidence intervals are omitted. Re-run benchmarks with --json --samples for confidence-aware comparisons.'
+    );
+  }
+
+  const ci95LowPct = bootstrapCI?.ci95LowPct;
+  const ci95HighPct = bootstrapCI?.ci95HighPct;
+
+  return {
+    accepted: getComparisonAcceptance(
+      p50ImprovementPct,
+      ci95LowPct,
+      options.minEffectPct
+    ),
+    baseline: {
+      p50: baselineStats.p50,
+      p95: baselineStats.p95,
+      samples: baselineStats.ticks,
+      wallTimeMs: baselineRun.wallTimeMs,
+    },
+    candidate: {
+      p50: candidateStats.p50,
+      p95: candidateStats.p95,
+      samples: candidateStats.ticks,
+      wallTimeMs: candidateRun.wallTimeMs,
+    },
+    category: candidateManifest?.category ?? baselineManifest?.category,
+    ci95HighPct,
+    ci95LowPct,
+    classification: getComparisonClassification(
+      p50ImprovementPct,
+      ci95LowPct,
+      ci95HighPct
+    ),
+    confidenceAvailable: ci95LowPct != null && ci95HighPct != null,
+    name,
+    notes: notes.length === 0 ? undefined : notes,
+    p50ImprovementPct,
+    p95ImprovementPct,
+    statisticallySignificant: getComparisonSignificance(
+      ci95LowPct,
+      ci95HighPct
+    ),
+    workload: candidateManifest?.workload ?? baselineManifest?.workload,
+  };
+}
+
+// Compare mode reads two prior benchmark runs, matches scenarios by name, and
+// reports a simple accept/reject signal that an optimization loop can consume.
+async function createBenchmarkCompareOutput(
+  baselinePath: string,
+  candidatePath: string,
+  options: Pick<
+    BenchmarkCliOptions,
+    'bootstrapResamples' | 'filter' | 'minEffectPct'
+  >
+): Promise<BenchmarkCompareOutput> {
+  const baselineOutput = (await Bun.file(
+    baselinePath
+  ).json()) as BenchmarkRunOutput;
+  const candidateOutput = (await Bun.file(
+    candidatePath
+  ).json()) as BenchmarkRunOutput;
+
+  if (baselineOutput.kind !== 'path-store-benchmark-run') {
+    throw new Error(
+      `Expected a path-store benchmark run in ${baselinePath}, got ${String(baselineOutput.kind)}`
+    );
+  }
+
+  if (candidateOutput.kind !== 'path-store-benchmark-run') {
+    throw new Error(
+      `Expected a path-store benchmark run in ${candidatePath}, got ${String(candidateOutput.kind)}`
+    );
+  }
+
+  const baselineBenchmarks = new Map(
+    baselineOutput.results.benchmarks.map((benchmark) => [
+      benchmark.alias,
+      benchmark,
+    ])
+  );
+  const candidateBenchmarks = new Map(
+    candidateOutput.results.benchmarks.map((benchmark) => [
+      benchmark.alias,
+      benchmark,
+    ])
+  );
+  const baselineManifests = getScenarioManifestByName(baselineOutput);
+  const candidateManifests = getScenarioManifestByName(candidateOutput);
+
+  const scenarioNames = [...baselineBenchmarks.keys()]
+    .filter((name) => candidateBenchmarks.has(name))
+    .filter((name) =>
+      options.filter == null ? true : options.filter.test(name)
+    )
+    .sort((left, right) => left.localeCompare(right));
+
+  if (scenarioNames.length === 0) {
+    throw new Error(
+      'No shared benchmark scenarios matched the provided filter.'
+    );
+  }
+
+  const comparedScenarios = scenarioNames.map((name) => {
+    const baselineBenchmark = baselineBenchmarks.get(name);
+    const candidateBenchmark = candidateBenchmarks.get(name);
+    const baselineRun = baselineBenchmark?.runs[0];
+    const candidateRun = candidateBenchmark?.runs[0];
+
+    if (baselineRun == null || candidateRun == null) {
+      throw new Error(`Missing benchmark run data for scenario ${name}`);
+    }
+
+    return createCompareScenario(
+      name,
+      baselineRun,
+      candidateRun,
+      baselineManifests.get(name),
+      candidateManifests.get(name),
+      options
+    );
+  });
+
+  return {
+    baselineFile: basename(baselinePath),
+    baselinePath,
+    bootstrapResamples: options.bootstrapResamples,
+    candidateFile: basename(candidatePath),
+    candidatePath,
+    comparedScenarios,
+    confidenceLevel: COMPARE_CONFIDENCE_LEVEL,
+    generatedAt: new Date().toISOString(),
+    intent: COMPARE_INTENT,
+    kind: 'path-store-benchmark-compare',
+    minEffectPct: options.minEffectPct,
+    summary: {
+      accepted: comparedScenarios.filter((scenario) => scenario.accepted)
+        .length,
+      compared: comparedScenarios.length,
+      improved: comparedScenarios.filter(
+        (scenario) => scenario.classification === 'improved'
+      ).length,
+      inconclusive: comparedScenarios.filter(
+        (scenario) => scenario.classification === 'inconclusive'
+      ).length,
+      regressed: comparedScenarios.filter(
+        (scenario) => scenario.classification === 'regressed'
+      ).length,
+    },
+  };
+}
+
+interface FreshSampleMeasurement<TSample> {
+  createSample: () => TSample;
+  destroySample?: (sample: TSample) => void;
+  runSample: (sample: TSample) => unknown;
+}
+
 interface ReusedStoreMutationMeasurement {
   apply: (store: PathStore) => unknown;
   createStore: () => PathStore;
   reset: (store: PathStore) => void;
+}
+
+function maybeCollectGarbage(): void {
+  const runtime = Bun as unknown as {
+    gc?: (force?: boolean) => void;
+  };
+  runtime.gc?.(true);
+}
+
+function createProgressEmitter(
+  progressReporter?: ((progress: ScenarioProgress) => void) | undefined
+): {
+  report: (progress: ScenarioProgress) => void;
+} {
+  let lastReportAt = 0;
+
+  return {
+    report(progress) {
+      if (progressReporter == null) {
+        return;
+      }
+
+      const now = performance.now();
+      const shouldReport =
+        progress.completed === 0 ||
+        progress.completed === progress.total ||
+        now - lastReportAt >= 50;
+
+      if (!shouldReport) {
+        return;
+      }
+
+      lastReportAt = now;
+      progressReporter(progress);
+    },
+  };
+}
+
+function measureFunctionSamples(
+  bench: () => unknown,
+  sampleCount: number,
+  options: {
+    innerGc?: boolean;
+    warmupCount?: number;
+  } = {},
+  progressReporter?: ((progress: ScenarioProgress) => void) | undefined
+): MeasuredRunStats {
+  const progress = createProgressEmitter(progressReporter);
+  const warmupCount = options.warmupCount ?? 0;
+
+  if (warmupCount > 0) {
+    progress.report({
+      completed: 0,
+      phase: 'warmup',
+      total: warmupCount,
+    });
+
+    for (let warmupIndex = 0; warmupIndex < warmupCount; warmupIndex++) {
+      do_not_optimize(bench());
+      progress.report({
+        completed: warmupIndex + 1,
+        phase: 'warmup',
+        total: warmupCount,
+      });
+
+      if (options.innerGc === true) {
+        maybeCollectGarbage();
+      }
+    }
+  }
+
+  if (options.innerGc === true) {
+    maybeCollectGarbage();
+  }
+
+  progress.report({
+    completed: 0,
+    phase: 'sample',
+    total: sampleCount,
+  });
+
+  const timings: number[] = [];
+  const measurementStartedAt = performance.now();
+  let sampleIndex = 0;
+
+  while (sampleIndex < MAX_DYNAMIC_SAMPLE_COUNT) {
+    const startTime = process.hrtime.bigint();
+    const result = bench();
+    const endTime = process.hrtime.bigint();
+
+    do_not_optimize(result);
+    timings.push(Number(endTime - startTime));
+    sampleIndex++;
+
+    const elapsedMs = performance.now() - measurementStartedAt;
+    const reachedMinimum = sampleIndex >= sampleCount;
+
+    progress.report({
+      completed: sampleIndex,
+      phase: 'sample',
+      total: reachedMinimum ? undefined : sampleCount,
+    });
+
+    if (options.innerGc === true) {
+      maybeCollectGarbage();
+    }
+
+    if (reachedMinimum && elapsedMs >= TARGET_SHORT_SCENARIO_WALL_TIME_MS) {
+      break;
+    }
+  }
+
+  return summarizeSamples(timings);
+}
+
+function measureFreshSampleBench<TSample>(
+  measurement: FreshSampleMeasurement<TSample>,
+  sampleCount: number,
+  options: {
+    innerGc?: boolean;
+    warmupCount?: number;
+  } = {},
+  progressReporter?: ((progress: ScenarioProgress) => void) | undefined
+): MeasuredRunStats {
+  const progress = createProgressEmitter(progressReporter);
+  const warmupCount = options.warmupCount ?? 0;
+
+  if (warmupCount > 0) {
+    progress.report({
+      completed: 0,
+      phase: 'warmup',
+      total: warmupCount,
+    });
+
+    for (let warmupIndex = 0; warmupIndex < warmupCount; warmupIndex++) {
+      const sample = measurement.createSample();
+
+      try {
+        do_not_optimize(measurement.runSample(sample));
+      } finally {
+        measurement.destroySample?.(sample);
+      }
+
+      progress.report({
+        completed: warmupIndex + 1,
+        phase: 'warmup',
+        total: warmupCount,
+      });
+
+      if (options.innerGc === true) {
+        maybeCollectGarbage();
+      }
+    }
+  }
+
+  if (options.innerGc === true) {
+    maybeCollectGarbage();
+  }
+
+  progress.report({
+    completed: 0,
+    phase: 'sample',
+    total: sampleCount,
+  });
+
+  const timings: number[] = [];
+  const measurementStartedAt = performance.now();
+  let sampleIndex = 0;
+
+  while (sampleIndex < MAX_DYNAMIC_SAMPLE_COUNT) {
+    const sample = measurement.createSample();
+
+    try {
+      const startTime = process.hrtime.bigint();
+      const result = measurement.runSample(sample);
+      const endTime = process.hrtime.bigint();
+
+      do_not_optimize(result);
+      timings.push(Number(endTime - startTime));
+    } finally {
+      measurement.destroySample?.(sample);
+    }
+    sampleIndex++;
+
+    const elapsedMs = performance.now() - measurementStartedAt;
+    const reachedMinimum = sampleIndex >= sampleCount;
+
+    progress.report({
+      completed: sampleIndex,
+      phase: 'sample',
+      total: reachedMinimum ? undefined : sampleCount,
+    });
+
+    if (options.innerGc === true) {
+      maybeCollectGarbage();
+    }
+
+    if (reachedMinimum && elapsedMs >= TARGET_SHORT_SCENARIO_WALL_TIME_MS) {
+      break;
+    }
+  }
+
+  return summarizeSamples(timings);
 }
 
 // Interactive edits happen against one long-lived store, so mutation timings
@@ -1067,34 +2009,60 @@ function measureMutationWithReusedStore(
 ): MeasuredRunStats {
   const store = measurement.createStore();
   const timings: number[] = [];
+  const progress = createProgressEmitter(progressReporter);
+
+  progress.report({
+    completed: 0,
+    phase: 'warmup',
+    total: MUTATION_SCENARIO_WARMUP_COUNT,
+  });
 
   for (
-    let iteration = 0;
-    iteration < MUTATION_SCENARIO_WARMUP_COUNT + MUTATION_SCENARIO_SAMPLE_COUNT;
-    iteration++
+    let warmupIndex = 0;
+    warmupIndex < MUTATION_SCENARIO_WARMUP_COUNT;
+    warmupIndex++
   ) {
+    const result = measurement.apply(store);
+
+    do_not_optimize(result);
+    measurement.reset(store);
+    progress.report({
+      completed: warmupIndex + 1,
+      phase: 'warmup',
+      total: MUTATION_SCENARIO_WARMUP_COUNT,
+    });
+  }
+
+  progress.report({
+    completed: 0,
+    phase: 'sample',
+    total: MUTATION_SCENARIO_SAMPLE_COUNT,
+  });
+
+  const measurementStartedAt = performance.now();
+  let sampleIndex = 0;
+
+  while (sampleIndex < MAX_DYNAMIC_SAMPLE_COUNT) {
     const startTime = process.hrtime.bigint();
     const result = measurement.apply(store);
     const endTime = process.hrtime.bigint();
 
     do_not_optimize(result);
     measurement.reset(store);
-    progressReporter?.(
-      iteration < MUTATION_SCENARIO_WARMUP_COUNT
-        ? {
-            completed: iteration + 1,
-            phase: 'warmup',
-            total: MUTATION_SCENARIO_WARMUP_COUNT,
-          }
-        : {
-            completed: iteration + 1 - MUTATION_SCENARIO_WARMUP_COUNT,
-            phase: 'sample',
-            total: MUTATION_SCENARIO_SAMPLE_COUNT,
-          }
-    );
+    timings.push(Number(endTime - startTime));
+    sampleIndex++;
 
-    if (iteration >= MUTATION_SCENARIO_WARMUP_COUNT) {
-      timings.push(Number(endTime - startTime));
+    const elapsedMs = performance.now() - measurementStartedAt;
+    const reachedMinimum = sampleIndex >= MUTATION_SCENARIO_SAMPLE_COUNT;
+
+    progress.report({
+      completed: sampleIndex,
+      phase: 'sample',
+      total: reachedMinimum ? undefined : MUTATION_SCENARIO_SAMPLE_COUNT,
+    });
+
+    if (reachedMinimum && elapsedMs >= TARGET_SHORT_SCENARIO_WALL_TIME_MS) {
+      break;
     }
   }
 
@@ -1102,28 +2070,37 @@ function measureMutationWithReusedStore(
 }
 
 async function runBenchmarksForHuman(
-  scenarios: readonly BenchmarkScenario[]
-): Promise<HumanBenchmarkRun> {
+  scenarioFactories: readonly BenchmarkScenarioFactory[]
+): Promise<HumanBenchmarkRun & { preparationTimeMs: number }> {
   const context = getBenchmarkContext();
-  const nameWidth = getHumanBenchmarkNameWidth(scenarios);
+  const nameWidth = getHumanBenchmarkFactoryNameWidth(scenarioFactories);
 
-  printHumanBenchmarkHeader(context, scenarios.length, nameWidth);
+  printHumanBenchmarkHeader(context, scenarioFactories.length, nameWidth);
 
   const results: Array<{
     name: string;
+    preparationTimeMs: number;
     stats: MeasuredRunStats;
     wallTimeMs: number;
   }> = [];
+  let preparationTimeMs = 0;
 
-  for (let index = 0; index < scenarios.length; index++) {
-    const scenario = scenarios[index];
-    if (scenario == null) {
+  for (let index = 0; index < scenarioFactories.length; index++) {
+    const factory = scenarioFactories[index];
+    if (factory == null) {
       continue;
     }
 
+    const scenarioPreparationStartedAt = performance.now();
+    const scenario = factory.build();
+    const scenarioPreparationTimeMs =
+      performance.now() - scenarioPreparationStartedAt;
+    preparationTimeMs += scenarioPreparationTimeMs;
+    scenario.manifest.preparationTimeMs = scenarioPreparationTimeMs;
+
     const progress = createHumanLiveMeasurementProgress(
       index + 1,
-      scenarios.length,
+      scenarioFactories.length,
       scenario.name
     );
     const wallTimeStart = performance.now();
@@ -1137,16 +2114,19 @@ async function runBenchmarksForHuman(
       progress.stop();
       const result = {
         name: scenario.name,
+        preparationTimeMs: scenarioPreparationTimeMs,
         stats,
         wallTimeMs,
       };
       results.push(result);
       printHumanBenchmarkRow(
-        `[${index + 1}/${scenarios.length}] ${result.name}`,
+        `[${index + 1}/${scenarioFactories.length}] ${result.name}`,
         result.stats,
+        result.preparationTimeMs,
         result.wallTimeMs,
         nameWidth
       );
+      maybeCollectGarbage();
     } catch (error) {
       progress.stop();
       throw error;
@@ -1154,9 +2134,15 @@ async function runBenchmarksForHuman(
   }
 
   return {
+    preparationTimeMs,
     results: {
       benchmarks: results.map((result) =>
-        createBenchmarkResult(result.name, result.stats)
+        createBenchmarkResult(
+          result.name,
+          result.stats,
+          result.wallTimeMs,
+          false
+        )
       ),
       context,
       layout: [{ name: null, types: [] }],
@@ -1169,7 +2155,6 @@ function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
   let preparedFiles: readonly string[] | undefined;
 
   return {
-    expandedFolders: workload.expandedFolders,
     fileCount: workload.files.length,
     fileCountLabel: workload.fileCountLabel,
     getPreparedFiles() {
@@ -1180,7 +2165,32 @@ function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
     name: workloadName,
     rawFiles: workload.files,
     rootCount: workload.rootCount,
+    rootDirectoryPaths: getRootDirectoryPaths(workload.files),
   };
+}
+
+// Large root-level scenarios need canonical root paths even when the first
+// visible window only covers the first expanded root subtree.
+function getRootDirectoryPaths(paths: readonly string[]): readonly string[] {
+  const rootDirectories: string[] = [];
+  const seen = new Set<string>();
+
+  for (const path of paths) {
+    const slashIndex = path.indexOf('/');
+    if (slashIndex === -1) {
+      continue;
+    }
+
+    const rootDirectoryPath = path.slice(0, slashIndex + 1);
+    if (seen.has(rootDirectoryPath)) {
+      continue;
+    }
+
+    seen.add(rootDirectoryPath);
+    rootDirectories.push(rootDirectoryPath);
+  }
+
+  return rootDirectories;
 }
 
 function createPrepareScenarioFactory(
@@ -1198,10 +2208,14 @@ function createPrepareScenarioFactory(
           name,
           workload: workload.name,
         },
-        measure() {
-          return measureWithFixedSamples(
-            () => do_not_optimize(PathStore.preparePaths(workload.rawFiles)),
-            'prepare'
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () => do_not_optimize(PathStore.preparePaths(workload.rawFiles)),
+              getScenarioSampleCount('prepare'),
+              {},
+              progressReporter
+            )
           );
         },
         name,
@@ -1218,24 +2232,64 @@ function createBuildScenarioFactory(
   return {
     name,
     build() {
-      const previewStore = createExpandedStore(workload);
+      const previewVisibleCount =
+        createExpandedStore(workload).getVisibleCount();
 
       return {
         manifest: {
           category: 'build',
           fileCount: workload.fileCount,
           name,
+          visibleCount: previewVisibleCount,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () => {
+                const store = createExpandedStore(workload);
+                return do_not_optimize(store.getNodeCount());
+              },
+              getScenarioSampleCount('build'),
+              { innerGc: true, warmupCount: 2 },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createListScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `list/${workload.name}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const preview = previewStore.list().slice(0, PREVIEW_LIMIT);
+
+      return {
+        manifest: {
+          category: 'list',
+          fileCount: workload.fileCount,
+          name,
+          preview,
           visibleCount: previewStore.getVisibleCount(),
           workload: workload.name,
         },
-        measure() {
-          return measureWithFixedSamples(
-            () => {
-              const store = createExpandedStore(workload);
-              return do_not_optimize(store.getNodeCount());
-            },
-            'build',
-            { innerGc: true }
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () => do_not_optimize(previewStore.list()),
+              getScenarioSampleCount('list'),
+              { innerGc: true },
+              progressReporter
+            )
           );
         },
         name,
@@ -1271,10 +2325,122 @@ function createVisibleScenarioFactory(
           windowStart: bounds.start,
           workload: workload.name,
         },
-        measure() {
-          return measureWithFixedSamples(
-            () => do_not_optimize(readVisibleWindow(store, bounds)),
-            'visible'
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () => do_not_optimize(readVisibleWindow(store, bounds)),
+              getScenarioSampleCount('visible'),
+              {},
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createColdVisibleScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode,
+  windowSize: number
+): BenchmarkScenarioFactory {
+  const name = `visible-cold-${viewport}/${workload.name}/${windowSize}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const bounds = getWindowBounds(previewStore, viewport, windowSize);
+      const read = readVisibleWindow(previewStore, bounds);
+
+      return {
+        manifest: {
+          category: 'visible-cold',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Creates a fresh expanded store for each timed visible read.',
+          ],
+          preview: getPreview(read.rows),
+          viewport,
+          visibleCount: read.visibleCount,
+          windowEnd: bounds.end,
+          windowSize,
+          windowStart: bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFreshSampleBench(
+              {
+                createSample() {
+                  return createExpandedStore(workload);
+                },
+                runSample(store) {
+                  return do_not_optimize(readVisibleWindow(store, bounds));
+                },
+              },
+              getScenarioSampleCount('visible-cold'),
+              { innerGc: true },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createSequentialScrollScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode,
+  windowSize: number
+): BenchmarkScenarioFactory {
+  const name = `scroll-${viewport}/${workload.name}/${windowSize}`;
+
+  return {
+    name,
+    build() {
+      const store = createExpandedStore(workload);
+      const boundsList = getSequentialScrollBounds(store, viewport, windowSize);
+      const preview = getPreview(
+        getWindowRows(store, boundsList[0] ?? { end: -1, start: 0 })
+      );
+
+      return {
+        manifest: {
+          category: 'scroll',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            `Reads ${formatCount(boundsList.length)} consecutive windows with a ${formatCount(SCROLL_WINDOW_STEP)}-row step.`,
+          ],
+          preview,
+          viewport,
+          visibleCount: store.getVisibleCount(),
+          windowEnd: (boundsList[boundsList.length - 1] ?? boundsList[0])?.end,
+          windowSize,
+          windowStart: boundsList[0]?.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () => {
+                let lastRead: VisibleWindowRead = { rows: [], visibleCount: 0 };
+                for (const bounds of boundsList) {
+                  lastRead = readVisibleWindow(store, bounds);
+                }
+
+                return do_not_optimize(lastRead);
+              },
+              getScenarioSampleCount('scroll'),
+              {},
+              progressReporter
+            )
           );
         },
         name,
@@ -1310,15 +2476,18 @@ function createEndToEndScenarioFactory(
           windowStart: bounds.start,
           workload: workload.name,
         },
-        measure() {
-          return measureWithFixedSamples(
-            () => {
-              const store = createExpandedStore(workload);
-              const nextBounds = getWindowBounds(store, viewport, windowSize);
-              return do_not_optimize(readVisibleWindow(store, nextBounds));
-            },
-            'e2e',
-            { innerGc: true }
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () => {
+                const store = createExpandedStore(workload);
+                const nextBounds = getWindowBounds(store, viewport, windowSize);
+                return do_not_optimize(readVisibleWindow(store, nextBounds));
+              },
+              getScenarioSampleCount('e2e'),
+              { innerGc: true },
+              progressReporter
+            )
           );
         },
         name,
@@ -1583,7 +2752,10 @@ function createMoveLeafScenarioFactory(
         targetPath,
         name
       );
-      const movedPath = getMovedLeafPath(targetPath, destinationDirectory.path);
+      const movedPath = getMovedPathIntoDirectory(
+        targetPath,
+        destinationDirectory.path
+      );
 
       const simulationStore = createExpandedStore(workload);
       simulationStore.move(targetPath, destinationDirectory.path);
@@ -1634,6 +2806,286 @@ function createMoveLeafScenarioFactory(
                 },
                 reset(store) {
                   store.move(movedPath, targetPath);
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createDeleteSubtreeScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode
+): BenchmarkScenarioFactory {
+  const name = `mutate/delete-subtree/${viewport}/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const baselineRead = readVisibleWindow(previewStore, baselineBounds);
+      const targetPath = requireRootDirectory(previewStore, name).path;
+
+      const simulationStore = createExpandedStore(workload);
+      simulationStore.remove(targetPath, { recursive: true });
+      const readPlan =
+        viewport === 'first'
+          ? createRenderChangedWindowPlan(
+              simulationStore,
+              baselineBounds,
+              MUTATION_WINDOW_SIZE,
+              []
+            )
+          : createPreservedViewportReadPlan(baselineBounds);
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(baselineRead.rows),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Uses a fresh store per timed sample because subtree restoration is intentionally excluded from the measurement.',
+          ],
+          postMutationReadIntent: readPlan.intent,
+          targetPath,
+          targetVisible: hasVisiblePath(baselineRead.rows, targetPath),
+          viewport,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFreshSampleBench(
+              {
+                createSample() {
+                  return createExpandedStore(workload);
+                },
+                runSample(store) {
+                  store.remove(targetPath, { recursive: true });
+                  return do_not_optimize(
+                    readVisibleWindow(store, readPlan.bounds)
+                  );
+                },
+              },
+              DESTRUCTIVE_MUTATION_SCENARIO_SAMPLE_COUNT,
+              { innerGc: true },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createMoveSubtreeScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode
+): BenchmarkScenarioFactory {
+  const name = `mutate/move-subtree/${viewport}/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const baselineRead = readVisibleWindow(previewStore, baselineBounds);
+      const targetPath = requireRootDirectory(previewStore, name).path;
+      const destinationPath = requireSecondRootDirectoryPath(
+        workload,
+        targetPath,
+        name
+      );
+      const movedPath = getMovedPathIntoDirectory(targetPath, destinationPath);
+
+      const simulationStore = createExpandedStore(workload);
+      simulationStore.move(targetPath, destinationPath);
+      const readPlan =
+        viewport === 'first'
+          ? createRenderChangedWindowPlan(
+              simulationStore,
+              baselineBounds,
+              MUTATION_WINDOW_SIZE,
+              [movedPath]
+            )
+          : createPreservedViewportReadPlan(baselineBounds);
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(baselineRead.rows),
+          category: 'mutation',
+          destinationPath: movedPath,
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            `Moved expanded subtree into root directory ${destinationPath}.`,
+          ],
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath,
+          targetVisible: hasVisiblePath(baselineRead.rows, targetPath),
+          viewport,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.move(targetPath, destinationPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.move(movedPath, targetPath);
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createBatchVisibleRenamesScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode
+): BenchmarkScenarioFactory {
+  const name = `mutate/batch-visible-renames/${viewport}/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const baselineRead = readVisibleWindow(previewStore, baselineBounds);
+      const targetFiles = getVisibleFiles(baselineRead.rows).slice(0, 16);
+      if (targetFiles.length === 0) {
+        throw new Error(`No visible files available for ${name}`);
+      }
+
+      const renamedPairs = targetFiles.map((row, index) => ({
+        from: row.path,
+        to: renamePathWithSuffix(row.path, `batch-${index + 1}`),
+      }));
+      const destinationPaths = renamedPairs.map((pair) => pair.to);
+
+      const simulationStore = createExpandedStore(workload);
+      simulationStore.batch(
+        renamedPairs.map((pair) => ({
+          from: pair.from,
+          to: pair.to,
+          type: 'move' as const,
+        }))
+      );
+      const readPlan = createRenderChangedWindowPlan(
+        simulationStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        destinationPaths
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(baselineRead.rows),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            `Renames ${formatCount(renamedPairs.length)} visible files in one batch.`,
+          ],
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath: renamedPairs[0]?.from,
+          targetVisible: true,
+          viewport,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.batch(
+                    renamedPairs.map((pair) => ({
+                      from: pair.from,
+                      to: pair.to,
+                      type: 'move' as const,
+                    }))
+                  );
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.batch(
+                    renamedPairs.map((pair) => ({
+                      from: pair.to,
+                      to: pair.from,
+                      type: 'move' as const,
+                    }))
+                  );
                 },
               },
               progressReporter
@@ -1910,6 +3362,8 @@ function createScenarioFactories(
       factories.push(createPrepareScenarioFactory(workload));
     }
 
+    factories.push(createListScenarioFactory(workload));
+
     if (profile.includeBuild) {
       factories.push(createBuildScenarioFactory(workload));
     }
@@ -1918,6 +3372,12 @@ function createScenarioFactories(
       for (const viewport of VIEWPORT_MODES) {
         factories.push(
           createVisibleScenarioFactory(workload, viewport, windowSize)
+        );
+        factories.push(
+          createColdVisibleScenarioFactory(workload, viewport, windowSize)
+        );
+        factories.push(
+          createSequentialScrollScenarioFactory(workload, viewport, windowSize)
         );
         if (profile.includeEndToEnd) {
           factories.push(
@@ -1936,11 +3396,26 @@ function createScenarioFactories(
           case 'delete-leaf':
             factories.push(createDeleteLeafScenarioFactory(workload, viewport));
             break;
+          case 'delete-subtree':
+            factories.push(
+              createDeleteSubtreeScenarioFactory(workload, viewport)
+            );
+            break;
           case 'add-sibling':
             factories.push(createAddSiblingScenarioFactory(workload, viewport));
             break;
           case 'move-leaf':
             factories.push(createMoveLeafScenarioFactory(workload, viewport));
+            break;
+          case 'move-subtree':
+            factories.push(
+              createMoveSubtreeScenarioFactory(workload, viewport)
+            );
+            break;
+          case 'batch-visible-renames':
+            factories.push(
+              createBatchVisibleRenamesScenarioFactory(workload, viewport)
+            );
             break;
           case 'expand-directory':
             factories.push(
@@ -1966,57 +3441,61 @@ function createScenarioFactories(
 }
 
 const cliOptions = parseArgs(process.argv.slice(2));
-const profile = resolveProfile(cliOptions);
 
-if (!cliOptions.json) {
-  printHumanBenchmarkBootBanner(cliOptions, profile);
-}
+if (cliOptions.compare != null) {
+  const compareOutput = await createBenchmarkCompareOutput(
+    cliOptions.compare.baselinePath,
+    cliOptions.compare.candidatePath,
+    cliOptions
+  );
 
-const workloads: BenchmarkWorkload[] = profile.workloadNames.map(loadWorkload);
-const scenarioFactories = createScenarioFactories(profile, workloads);
-const selectedFactories = scenarioFactories.filter((factory) =>
-  cliOptions.filter == null ? true : cliOptions.filter.test(factory.name)
-);
-
-if (selectedFactories.length === 0) {
-  throw new Error('No benchmark scenarios matched the provided filter.');
-}
-
-const scenarios: BenchmarkScenario[] = [];
-
-for (let index = 0; index < selectedFactories.length; index++) {
-  const factory = selectedFactories[index];
-  if (factory == null) {
-    continue;
-  }
-
-  if (!cliOptions.json) {
-    printHumanPreparationProgress(
-      index + 1,
-      selectedFactories.length,
-      factory.name
+  if (cliOptions.json) {
+    console.log(JSON.stringify(compareOutput));
+  } else {
+    printHumanBenchmarkCompareSummary(
+      compareOutput,
+      cliOptions.filter?.source ?? 'none'
     );
   }
-
-  scenarios.push(factory.build());
-}
-
-if (cliOptions.json) {
-  const runOutput: BenchmarkRunOutput = {
-    generatedAt: new Date().toISOString(),
-    intent: BENCHMARK_INTENT,
-    kind: 'path-store-benchmark-run',
-    profile: profile.name,
-    results: await runBenchmarksForJson(scenarios),
-    scenarios: scenarios.map((scenario) => scenario.manifest),
-  };
-
-  console.log(JSON.stringify(runOutput));
 } else {
-  printHumanBenchmarkPreparationSummary(selectedFactories.length);
-  const humanRun = await runBenchmarksForHuman(scenarios);
-  console.log('');
-  console.log(
-    `${styleText('Completed', ANSI.green, ANSI.bold)} ${formatCount(humanRun.results.benchmarks.length)} scenarios. Use --json for detailed scenario metadata.`
+  const profile = resolveProfile(cliOptions);
+
+  if (!cliOptions.json) {
+    printHumanBenchmarkBootBanner(cliOptions, profile);
+  }
+
+  const workloads: BenchmarkWorkload[] =
+    profile.workloadNames.map(loadWorkload);
+  const scenarioFactories = createScenarioFactories(profile, workloads);
+  const selectedFactories = scenarioFactories.filter((factory) =>
+    cliOptions.filter == null ? true : cliOptions.filter.test(factory.name)
   );
+
+  if (selectedFactories.length === 0) {
+    throw new Error('No benchmark scenarios matched the provided filter.');
+  }
+
+  if (cliOptions.json) {
+    const jsonRun = await runBenchmarksForJson(
+      selectedFactories,
+      cliOptions.includeSamples
+    );
+    const runOutput: BenchmarkRunOutput = {
+      generatedAt: new Date().toISOString(),
+      intent: BENCHMARK_INTENT,
+      kind: 'path-store-benchmark-run',
+      preparationTimeMs: jsonRun.preparationTimeMs,
+      profile: profile.name,
+      results: jsonRun.results,
+      scenarios: jsonRun.scenarios,
+    };
+
+    console.log(JSON.stringify(runOutput));
+  } else {
+    const humanRun = await runBenchmarksForHuman(selectedFactories);
+    console.log('');
+    console.log(
+      `${styleText('Completed', ANSI.green, ANSI.bold)} ${formatCount(humanRun.results.benchmarks.length)} scenarios. Use --json for detailed scenario metadata.`
+    );
+  }
 }

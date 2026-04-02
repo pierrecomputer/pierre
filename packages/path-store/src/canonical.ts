@@ -14,6 +14,7 @@ import type {
 } from './public-types';
 import { getSegmentValue, internSegment } from './segments';
 import { compareSegmentSortKeys, getSegmentSortKey } from './sort';
+import { isDirectoryExpanded } from './state';
 import type { MoveTarget, PathStoreState } from './state';
 
 export function listPaths(state: PathStoreState, path?: string): string[] {
@@ -354,26 +355,72 @@ function collectCanonicalEntries(
   state: PathStoreState,
   nodeId: NodeId
 ): string[] {
-  const node = state.snapshot.nodes[nodeId];
-  if (node === undefined || (node.flags & PATH_STORE_NODE_FLAG_REMOVED) !== 0) {
+  const rootNode = state.snapshot.nodes[nodeId];
+  if (
+    rootNode === undefined ||
+    (rootNode.flags & PATH_STORE_NODE_FLAG_REMOVED) !== 0
+  ) {
     return [];
   }
 
-  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (rootNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
     return [materializeNodePath(state, nodeId)];
   }
 
-  const directoryIndex = getDirectoryIndex(state, nodeId);
-  if (directoryIndex.childIds.length === 0) {
-    return (node.flags & PATH_STORE_NODE_FLAG_EXPLICIT) !== 0 &&
-      (node.flags & PATH_STORE_NODE_FLAG_ROOT) === 0
+  if (getDirectoryIndex(state, nodeId).childIds.length === 0) {
+    return (rootNode.flags & PATH_STORE_NODE_FLAG_EXPLICIT) !== 0 &&
+      (rootNode.flags & PATH_STORE_NODE_FLAG_ROOT) === 0
       ? [materializeNodePath(state, nodeId)]
       : [];
   }
 
   const entries: string[] = [];
-  for (const childId of directoryIndex.childIds) {
-    entries.push(...collectCanonicalEntries(state, childId));
+
+  const stack: Array<{ childIndex: number; nodeId: NodeId }> = [
+    { childIndex: 0, nodeId },
+  ];
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1];
+    if (frame == null) {
+      break;
+    }
+
+    const currentNode = state.snapshot.nodes[frame.nodeId];
+    if (
+      currentNode === undefined ||
+      (currentNode.flags & PATH_STORE_NODE_FLAG_REMOVED) !== 0
+    ) {
+      stack.pop();
+      continue;
+    }
+
+    if (currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      entries.push(materializeNodePath(state, frame.nodeId));
+      stack.pop();
+      continue;
+    }
+
+    const currentIndex = getDirectoryIndex(state, frame.nodeId);
+    if (currentIndex.childIds.length === 0) {
+      if (
+        (currentNode.flags & PATH_STORE_NODE_FLAG_EXPLICIT) !== 0 &&
+        (currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) === 0
+      ) {
+        entries.push(materializeNodePath(state, frame.nodeId));
+      }
+
+      stack.pop();
+      continue;
+    }
+
+    const nextChildId = currentIndex.childIds[frame.childIndex];
+    if (nextChildId == null) {
+      stack.pop();
+      continue;
+    }
+
+    frame.childIndex++;
+    stack.push({ childIndex: 0, nodeId: nextChildId });
   }
 
   return entries;
@@ -436,6 +483,7 @@ function createDirectoryNode(
   state.snapshot.directories.set(nodeId, {
     childIds: [],
     childIdByNameId: new Map(),
+    childPositionById: new Map(),
   });
   insertChildReference(state, parentId, nodeId);
   state.activeNodeCount++;
@@ -475,6 +523,48 @@ function createFileNode(
   return nodeId;
 }
 
+function updateChildPositionsFrom(
+  index: DirectoryChildIndex,
+  startIndex: number
+): void {
+  for (
+    let position = startIndex;
+    position < index.childIds.length;
+    position++
+  ) {
+    const childId = index.childIds[position];
+    if (childId != null) {
+      index.childPositionById.set(childId, position);
+    }
+  }
+}
+
+function findChildInsertIndex(
+  state: PathStoreState,
+  parentIndex: DirectoryChildIndex,
+  childId: NodeId
+): number {
+  let low = 0;
+  let high = parentIndex.childIds.length;
+
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    const existingChildId = parentIndex.childIds[middle];
+    if (existingChildId == null) {
+      high = middle;
+      continue;
+    }
+
+    if (compareSiblingNodes(state, childId, existingChildId) < 0) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+
+  return low;
+}
+
 function insertChildReference(
   state: PathStoreState,
   parentId: NodeId,
@@ -484,15 +574,9 @@ function insertChildReference(
   const childNode = requireNode(state, childId);
   parentIndex.childIdByNameId.set(childNode.nameId, childId);
 
-  let insertIndex = parentIndex.childIds.length;
-  for (let index = 0; index < parentIndex.childIds.length; index++) {
-    if (compareSiblingNodes(state, childId, parentIndex.childIds[index]) < 0) {
-      insertIndex = index;
-      break;
-    }
-  }
-
+  const insertIndex = findChildInsertIndex(state, parentIndex, childId);
   parentIndex.childIds.splice(insertIndex, 0, childId);
+  updateChildPositionsFrom(parentIndex, insertIndex);
 }
 
 function removeChildReference(
@@ -502,11 +586,13 @@ function removeChildReference(
   childNameId: number
 ): void {
   const parentIndex = getDirectoryIndex(state, parentId);
+  const childIndex = parentIndex.childPositionById.get(childId) ?? -1;
   parentIndex.childIdByNameId.delete(childNameId);
+  parentIndex.childPositionById.delete(childId);
 
-  const childIndex = parentIndex.childIds.indexOf(childId);
   if (childIndex >= 0) {
     parentIndex.childIds.splice(childIndex, 1);
+    updateChildPositionsFrom(parentIndex, childIndex);
   }
 }
 
@@ -676,24 +762,48 @@ function handleMoveCollision(
 }
 
 function removeSubtree(state: PathStoreState, nodeId: NodeId): NodeId[] {
-  const node = requireNode(state, nodeId);
   const removedNodeIds: NodeId[] = [];
+  const stack: Array<{ nodeId: NodeId; visitedChildren: boolean }> = [
+    { nodeId, visitedChildren: false },
+  ];
 
-  if (node.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
-    const directoryIndex = getDirectoryIndex(state, nodeId);
-    for (const childId of [...directoryIndex.childIds]) {
-      removedNodeIds.push(...removeSubtree(state, childId));
+  while (stack.length > 0) {
+    const frame = stack.pop();
+    if (frame == null) {
+      break;
     }
 
-    state.snapshot.directories.delete(nodeId);
+    const node = requireNode(state, frame.nodeId);
+    if (frame.visitedChildren || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      if (node.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+        state.snapshot.directories.delete(frame.nodeId);
+      }
+
+      node.flags |= PATH_STORE_NODE_FLAG_REMOVED;
+      node.pathCache = null;
+      node.pathCacheVersion = -1;
+      state.collapsedDirectoryIds.delete(frame.nodeId);
+      state.expandedDirectoryIds.delete(frame.nodeId);
+      state.activeNodeCount--;
+      removedNodeIds.push(frame.nodeId);
+      continue;
+    }
+
+    stack.push({ nodeId: frame.nodeId, visitedChildren: true });
+
+    const directoryIndex = getDirectoryIndex(state, frame.nodeId);
+    for (
+      let childIndex = directoryIndex.childIds.length - 1;
+      childIndex >= 0;
+      childIndex--
+    ) {
+      const childId = directoryIndex.childIds[childIndex];
+      if (childId != null) {
+        stack.push({ nodeId: childId, visitedChildren: false });
+      }
+    }
   }
 
-  node.flags |= PATH_STORE_NODE_FLAG_REMOVED;
-  node.pathCache = null;
-  node.pathCacheVersion = -1;
-  state.expandedDirectoryIds.delete(nodeId);
-  state.activeNodeCount--;
-  removedNodeIds.push(nodeId);
   return removedNodeIds;
 }
 
@@ -789,7 +899,11 @@ function recomputeNodeCounts(
     return;
   }
 
-  currentNode.visibleSubtreeCount = state.expandedDirectoryIds.has(nodeId)
+  currentNode.visibleSubtreeCount = isDirectoryExpanded(
+    state,
+    nodeId,
+    currentNode
+  )
     ? 1 + visibleChildCount
     : 1;
 }

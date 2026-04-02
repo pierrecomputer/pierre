@@ -81,6 +81,12 @@ Secondary benchmarks still matter, but are not the primary optimization target:
 - wide-directory random access
 - bursty watcher transactions
 
+Current implementation note:
+
+- `flattenEmptyDirectories` is still a Phase 5 feature and currently throws if
+  enabled so the store does not silently claim flattened behavior it does not
+  provide yet.
+
 For mutation scenarios, the benchmark contract should explicitly model the next
 store-side read the UI would perform after the mutation commits:
 
@@ -907,10 +913,19 @@ Stress tests should prioritize:
 Primary benchmark families should include:
 
 - sorted ingest throughput
+- full canonical `list()` materialization
 - mutation plus `getVisibleCount()`
 - mutation plus `getVisibleSlice(start, end)` for a 200-row window
 - cold visible jump to a distant window
 - sequential scrolling through windows
+
+The current harness implements these as distinct scenario families:
+
+- warm visible reads against a long-lived store
+- cold visible reads against a fresh store per timed sample
+- sequential scroll windows with repeated nearby `getVisibleSlice()` calls
+- full canonical `list()` materialization against a long-lived store
+- end-to-end build plus first/middle window reads
 
 For mutation families, the timed section should measure:
 
@@ -937,6 +952,23 @@ Important mutation cases include:
 - recursive delete of large subtree
 - large transaction from watcher-like changes
 
+The current harness models these with:
+
+- leaf rename, delete, add, and move
+- expand-directory
+- root file rename
+- root directory rename
+- expanded subtree move
+- recursive subtree delete
+- watcher-style batched visible renames
+
+Large destructive subtree deletes use a fresh store per timed sample because
+restoring the deleted subtree is intentionally excluded from the measured path.
+Mutation families that can be inverted cheaply still reuse a long-lived store
+between samples. Because the destructive delete path must rebuild fresh state,
+its sample budget is intentionally lower than the reused-store interactive
+mutation scenarios.
+
 For each important mutation, prefer benchmarking both:
 
 - a changed-window read where the edited region is expected to render next
@@ -953,6 +985,25 @@ Also measure:
 - async child insertion cost
 
 These should inform tradeoffs, but not override the main visible-window target.
+
+### Automated Compare Loop
+
+For optimization loops, the intended inner workflow is:
+
+1. Run a filtered benchmark for the single target scenario.
+2. Emit JSON with raw samples.
+3. Compare candidate vs baseline offline.
+
+The compare tool should:
+
+- treat one filtered scenario as the primary optimization target
+- allow a small guardrail set of nearby scenarios
+- report p50 improvement as the main decision signal
+- also report p95 improvement as a guardrail
+- accept a candidate only when the bootstrap 95% confidence interval for median
+  improvement clears the configured minimum effect size
+
+This keeps the inner loop fast while still avoiding noisy one-off wins.
 
 ## Prior-Art Alignment
 
@@ -994,6 +1045,8 @@ The main rejected primary directions are:
 ### Phase 3: Visible Projection
 
 - expansion state
+- default expansion policy via `initialExpansion: 'closed' | 'open' | number`
+- explicit expansion overrides via `initialExpandedPaths`
 - visible subtree counts
 - `getVisibleCount()`
 - `select(k)` baseline

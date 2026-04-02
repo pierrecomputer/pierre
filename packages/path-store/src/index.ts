@@ -5,6 +5,7 @@ export type {
   PathStoreConstructorOptions,
   PathStoreEvent,
   PathStoreFlattenedRowSegment,
+  PathStoreInitialExpansion,
   PathStoreMoveOptions,
   PathStoreOperation,
   PathStoreOptions,

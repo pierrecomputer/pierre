@@ -26,7 +26,16 @@ function createDirectoryChildIndex(): DirectoryChildIndex {
   return {
     childIds: [],
     childIdByNameId: new Map<SegmentId, NodeId>(),
+    childPositionById: new Map<NodeId, number>(),
   };
+}
+
+function appendChildReference(
+  index: DirectoryChildIndex,
+  childId: NodeId
+): void {
+  index.childPositionById.set(childId, index.childIds.length);
+  index.childIds.push(childId);
 }
 
 function createCompareEntry(preparedPath: PreparedPath): PathStoreCompareEntry {
@@ -258,7 +267,7 @@ export class PathStoreBuilder {
     });
 
     parentIndex.childIdByNameId.set(nameId, nodeId);
-    parentIndex.childIds.push(nodeId);
+    appendChildReference(parentIndex, nodeId);
     return nodeId;
   }
 
@@ -297,7 +306,7 @@ export class PathStoreBuilder {
     });
 
     parentIndex.childIdByNameId.set(nameId, nodeId);
-    parentIndex.childIds.push(nodeId);
+    appendChildReference(parentIndex, nodeId);
     this.directories.set(nodeId, createDirectoryChildIndex());
     return nodeId;
   }

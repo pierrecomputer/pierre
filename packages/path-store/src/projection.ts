@@ -10,6 +10,7 @@ import type { NodeId } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import type { PathStoreEvent, PathStoreVisibleRow } from './public-types';
 import { getSegmentValue } from './segments';
+import { isDirectoryExpanded, setDirectoryExpanded } from './state';
 import type { PathStoreState } from './state';
 
 export function getVisibleCount(state: PathStoreState): number {
@@ -61,11 +62,11 @@ export function expandPath(
     throw new Error(`Path is not a directory: "${path}"`);
   }
 
-  if (state.expandedDirectoryIds.has(directoryNodeId)) {
+  if (isDirectoryExpanded(state, directoryNodeId, directoryNode)) {
     return null;
   }
 
-  state.expandedDirectoryIds.add(directoryNodeId);
+  setDirectoryExpanded(state, directoryNodeId, true, directoryNode);
   recomputeCountsUpwardFrom(state, directoryNodeId);
   return {
     affectedAncestorIds: collectAncestorIds(state, directoryNodeId),
@@ -89,11 +90,11 @@ export function collapsePath(
     throw new Error(`Path is not a directory: "${path}"`);
   }
 
-  if (!state.expandedDirectoryIds.has(directoryNodeId)) {
+  if (!isDirectoryExpanded(state, directoryNodeId, directoryNode)) {
     return null;
   }
 
-  state.expandedDirectoryIds.delete(directoryNodeId);
+  setDirectoryExpanded(state, directoryNodeId, false, directoryNode);
   recomputeCountsUpwardFrom(state, directoryNodeId);
   return {
     affectedAncestorIds: collectAncestorIds(state, directoryNodeId),
@@ -152,7 +153,7 @@ function selectVisibleNodeWithinSubtree(
     return nodeId;
   }
 
-  if (!state.expandedDirectoryIds.has(nodeId)) {
+  if (!isDirectoryExpanded(state, nodeId, node)) {
     throw new Error(
       `Visible index ${String(index)} is out of range for collapsed directory`
     );
@@ -170,7 +171,7 @@ function getNextVisibleNodeId(
   if (node.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
     const currentIndex = getDirectoryIndex(state, nodeId);
     if (
-      state.expandedDirectoryIds.has(nodeId) &&
+      isDirectoryExpanded(state, nodeId, node) &&
       currentIndex.childIds.length > 0
     ) {
       return currentIndex.childIds[0] ?? null;
@@ -186,7 +187,7 @@ function getNextVisibleNodeId(
 
     const parentId = currentNode.parentId;
     const parentIndex = getDirectoryIndex(state, parentId);
-    const siblingIndex = parentIndex.childIds.indexOf(currentNodeId);
+    const siblingIndex = parentIndex.childPositionById.get(currentNodeId) ?? -1;
     if (siblingIndex < 0) {
       throw new Error(
         `Child ${String(currentNodeId)} was not found in its parent index`
@@ -219,7 +220,7 @@ function materializeVisibleRow(
     id: nodeId,
     isExpanded:
       node.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
-      state.expandedDirectoryIds.has(nodeId),
+      isDirectoryExpanded(state, nodeId, node),
     isFlattened: false,
     isLoading: false,
     kind: node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? 'directory' : 'file',

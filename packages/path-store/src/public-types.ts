@@ -16,7 +16,10 @@ export interface PathStoreOptions {
   sort?: 'default' | PathStorePathComparator;
 }
 
+export type PathStoreInitialExpansion = 'closed' | 'open' | number;
+
 export interface PathStoreConstructorOptions extends PathStoreOptions {
+  initialExpansion?: PathStoreInitialExpansion;
   initialExpandedPaths?: readonly string[];
   paths?: readonly string[];
   presorted?: boolean;

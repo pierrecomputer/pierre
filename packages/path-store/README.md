@@ -5,6 +5,28 @@ Underlying data structure to be used to power a file tree UI.
 For the detailed architecture and implementation plan, see
 [IMPLEMENTATION.md](./IMPLEMENTATION.md).
 
+Current limitation:
+
+- `flattenEmptyDirectories` is not implemented yet and currently throws if set
+  to `true`.
+
+Current useful API:
+
+- `initialExpansion` can seed directory visibility as `'closed'`, `'open'`, or a
+  numeric depth, with `initialExpandedPaths` acting as explicit overrides on
+  top.
+
+Benchmark workflow:
+
+- `bun ws path-store benchmark -- --filter '^visible-middle/linux-5x/200$'`
+- `bun ws path-store benchmark -- --filter '^visible-middle/linux-5x/200$' --json --samples`
+- `bun ws path-store benchmark -- --compare baseline.json candidate.json`
+
+Use `--json --samples` when you want confidence-aware comparisons for an
+automated optimization loop. Compare mode accepts a candidate when the p50
+improvement clears the configured threshold and its bootstrap confidence
+interval stays on the improvement side.
+
 ## Goals
 
 - Fast ingestion of very large simple string path inputs
