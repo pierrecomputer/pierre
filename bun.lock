@@ -133,6 +133,7 @@
         "@pierre/tree-test-data": "workspace:*",
         "mitata": "catalog:",
         "typescript": "catalog:",
+        "vite": "catalog:",
       },
     },
     "packages/storage-elements": {

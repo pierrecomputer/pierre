@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>path-store demo</title>
+    <style>
+      :root {
+        color: #111;
+        font-family:
+          ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
+          'Liberation Mono', monospace;
+        line-height: 1.4;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #fafafa;
+      }
+
+      h1,
+      p {
+        margin: 0;
+      }
+
+      .app {
+        display: grid;
+        gap: 16px;
+        max-width: 960px;
+      }
+
+      .meta {
+        display: grid;
+        gap: 4px;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .field label {
+        font-size: 12px;
+      }
+
+      .field input[type='number'] {
+        width: 72px;
+      }
+
+      .field input[type='number'],
+      .field input[type='range'] {
+        font: inherit;
+      }
+
+      button {
+        border: 1px solid #111;
+        background: #fff;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        padding: 8px 12px;
+      }
+
+      button:disabled {
+        cursor: progress;
+        opacity: 0.7;
+      }
+
+      .viewport {
+        border: 1px solid #111;
+        background: #fff;
+        min-height: 480px;
+        padding: 12px;
+      }
+
+      .rows {
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="meta">
+        <h1>path-store demo</h1>
+        <div class="controls">
+          <button id="render-button" type="button">Render</button>
+          <div class="field">
+            <label for="visible-count">Visible</label>
+            <input
+              id="visible-count"
+              type="number"
+              min="1"
+              max="500"
+              value="30"
+            />
+          </div>
+          <div class="field">
+            <label for="offset">Offset</label>
+            <input
+              id="offset"
+              type="range"
+              min="0"
+              max="0"
+              step="1"
+              value="0"
+              disabled
+            />
+            <span id="offset-value">0</span>
+          </div>
+          <p id="status">Ready to load linux-5x.</p>
+        </div>
+      </div>
+      <div class="viewport">
+        <div class="rows" id="rows"></div>
+      </div>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

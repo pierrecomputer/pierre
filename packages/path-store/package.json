@@ -18,8 +18,8 @@
   },
   "scripts": {
     "benchmark": "bun run ./scripts/benchmark.ts",
-    "build": "echo 'unimplemented'",
-    "dev": "echo 'unimplemented'",
+    "build": "bun run vite build demo",
+    "dev": "bun run vite demo --host 127.0.0.1 --port 4175",
     "test": "bun test",
     "tsc": "tsgo --noEmit --pretty"
   },
@@ -27,6 +27,7 @@
   "devDependencies": {
     "@pierre/tree-test-data": "workspace:*",
     "mitata": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }
