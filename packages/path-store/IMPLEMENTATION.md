@@ -81,6 +81,27 @@ Secondary benchmarks still matter, but are not the primary optimization target:
 - wide-directory random access
 - bursty watcher transactions
 
+For mutation scenarios, the benchmark contract should explicitly model the next
+store-side read the UI would perform after the mutation commits:
+
+- `getVisibleCount()`
+- `getVisibleSlice(start, end)`
+
+Mutation scenarios should declare which of these two read models they are
+simulating:
+
+- `render-changed-window` The post-mutation window must include the changed row
+  or changed region. If the original viewport still contains that region, reuse
+  it. If not, shift the window only as much as needed to bring the changed
+  region back into view.
+- `preserve-viewport` The post-mutation window is intentionally kept at the
+  original viewport to measure the cost of offscreen changes while the current
+  view stays live.
+
+This distinction is important because "time until the changed thing can render"
+and "time until an unrelated viewport stays responsive" are both useful, but
+they answer different questions.
+
 ## Design Summary
 
 The current recommended shape is:
@@ -891,6 +912,15 @@ Primary benchmark families should include:
 - cold visible jump to a distant window
 - sequential scrolling through windows
 
+For mutation families, the timed section should measure:
+
+1. apply the mutation
+2. read `getVisibleCount()`
+3. read `getVisibleSlice(start, end)` using the declared read model
+
+The benchmark should not silently depend on whichever window happened to be
+convenient during scenario setup.
+
 ### Important Mutation Benchmarks
 
 Do not over-focus on trivial leaf cases.
@@ -906,6 +936,12 @@ Important mutation cases include:
 - move expanded subtree
 - recursive delete of large subtree
 - large transaction from watcher-like changes
+
+For each important mutation, prefer benchmarking both:
+
+- a changed-window read where the edited region is expected to render next
+- a preserved-viewport read where the current viewport is far away from the
+  edited region
 
 ### Secondary Benchmarks
 
