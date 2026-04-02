@@ -17,7 +17,10 @@ export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
 // These options are shared by MultiFileDiff, PatchDiff, and FileDiff.
 // Pass them via the \`options\` prop.
 
-import type { FileDiff as FileDiffClass } from '@pierre/diffs';
+import type {
+  DiffTokenEventBaseProps,
+  FileDiff as FileDiffClass,
+} from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 
 <MultiFileDiff
@@ -202,13 +205,26 @@ interface DiffOptions {
   // LSP textDocument/hover tooltips or temporary token styling.
   // lineCharStart is zero-based and lineCharEnd is end-exclusive.
   // If both token and line click handlers are provided, both will fire.
-  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd, side }) {
+  onTokenClick({
+    tokenText,
+    lineNumber,
+    lineCharStart,
+    lineCharEnd,
+    side,
+  }: DiffTokenEventBaseProps) {
     // Fires when clicking a token in the code column
   },
-  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, side, tokenElement }) {
+  onTokenEnter({
+    tokenText,
+    lineNumber,
+    lineCharStart,
+    lineCharEnd,
+    side,
+    tokenElement,
+  }: DiffTokenEventBaseProps) {
     // Use tokenElement for hover styling or tooltips
   },
-  onTokenLeave({ tokenText, side, tokenElement }) {
+  onTokenLeave({ tokenText, side, tokenElement }: DiffTokenEventBaseProps) {
     // Clean up token-specific hover UI
   },
 
@@ -217,7 +233,7 @@ interface DiffOptions {
 
   // Experimental: force token wrappers/data-char output even when no token
   // callbacks are attached. Usually unnecessary unless you want custom styling.
-  // This also increases DOM size and may have a performance impact on 
+  // This also increases DOM size and may have a performance impact on
   // larger files.
   useTokenTransformer: false,
 
@@ -606,7 +622,7 @@ export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
 // ============================================================
 // Pass these via the \`options\` prop on the File component.
 
-import type { File as FileClass } from '@pierre/diffs';
+import type { File as FileClass, TokenEventBase } from '@pierre/diffs';
 import { File } from '@pierre/diffs/react';
 
 <File
@@ -730,13 +746,24 @@ interface FileOptions {
   // LSP textDocument/hover tooltips or temporary token styling.
   // lineCharStart is zero-based and lineCharEnd is end-exclusive.
   // If both token and line click handlers are provided, both will fire.
-  onTokenClick({ tokenText, lineNumber, lineCharStart, lineCharEnd }) {
+  onTokenClick({
+    tokenText,
+    lineNumber,
+    lineCharStart,
+    lineCharEnd,
+  }: TokenEventBase) {
     // Fires when clicking a token in the code column
   },
-  onTokenEnter({ tokenText, lineNumber, lineCharStart, lineCharEnd, tokenElement }) {
+  onTokenEnter({
+    tokenText,
+    lineNumber,
+    lineCharStart,
+    lineCharEnd,
+    tokenElement,
+  }: TokenEventBase) {
     // Use tokenElement for hover styling or tooltips
   },
-  onTokenLeave({ tokenText, tokenElement }) {
+  onTokenLeave({ tokenText, tokenElement }: TokenEventBase) {
     // Clean up token-specific hover UI
   },
 
