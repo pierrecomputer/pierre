@@ -2,6 +2,7 @@
 
 import {
   CodeViewer,
+  type CodeViewerItem,
   DEFAULT_THEMES,
   type DiffLineAnnotation,
   parsePatchFiles,
@@ -139,6 +140,7 @@ export function AdvancedDiff() {
 
       console.time('-- computing layout');
       let fileIndex = 0;
+      const items: CodeViewerItem<CommentMetadata>[] = [];
       for (const patch of parsedPatches) {
         for (const fileDiff of patch.files) {
           const id = `${fileIndex++}`;
@@ -165,13 +167,15 @@ export function AdvancedDiff() {
               },
             });
           }
-          codeViewerRef.current.addCode({
+          items.push({
             id,
+            type: 'diff',
             fileDiff,
             annotations: annotations.length > 0 ? annotations : undefined,
           });
         }
       }
+      codeViewerRef.current.addItems(items);
       console.timeEnd('-- computing layout');
       // DEBUG AREA
       // window.scrollTo({ top: 4762353 });

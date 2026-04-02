@@ -4,6 +4,7 @@ import type {
   FileDiffMetadata,
   RenderRange,
   RenderWindow,
+  SelectionSide,
   StickySpecs,
   VirtualFileMetrics,
 } from '../types';
@@ -191,6 +192,119 @@ export class VirtualizedFileDiff<
     this.top = this.getVirtualizedTop();
     this.computeApproximateSize();
     return this.height;
+  }
+
+  public getLinePosition(
+    lineNumber: number,
+    side: SelectionSide = 'additions'
+  ): { top: number; height: number } | undefined {
+    if (this.fileDiff == null) {
+      return undefined;
+    }
+
+    const targetLineIndexes = this.getLineIndex(lineNumber, side);
+    if (targetLineIndexes == null) {
+      return undefined;
+    }
+
+    const {
+      disableFileHeader = false,
+      expandUnchanged = false,
+      collapsed = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      hunkSeparators = 'line-info',
+    } = this.options;
+    const { diffHeaderHeight, hunkSeparatorHeight, spacing } = this.metrics;
+    const diffStyle = this.getDiffStyle();
+    const separatorGap =
+      hunkSeparators !== 'simple' &&
+      hunkSeparators !== 'metadata' &&
+      hunkSeparators !== 'line-info-basic'
+        ? spacing
+        : 0;
+    const targetLineIndex =
+      diffStyle === 'split' ? targetLineIndexes[1] : targetLineIndexes[0];
+    let top = disableFileHeader ? spacing : diffHeaderHeight;
+
+    if (collapsed) {
+      return { top, height: 0 };
+    }
+
+    let position: { top: number; height: number } | undefined;
+    iterateOverDiff({
+      diff: this.fileDiff,
+      diffStyle,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+      callback: ({
+        hunkIndex,
+        collapsedBefore,
+        collapsedAfter,
+        deletionLine,
+        additionLine,
+      }) => {
+        const lineIndex =
+          diffStyle === 'split'
+            ? (additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex)
+            : (additionLine?.unifiedLineIndex ??
+              deletionLine?.unifiedLineIndex);
+        if (lineIndex == null) {
+          throw new Error(
+            'VirtualizedFileDiff.getLinePosition: missing line index data'
+          );
+        }
+
+        if (collapsedBefore > 0) {
+          if (hunkIndex > 0) {
+            top += separatorGap;
+          }
+          if (
+            targetLineIndex >= lineIndex - collapsedBefore &&
+            targetLineIndex < lineIndex
+          ) {
+            position = {
+              top,
+              height: hunkSeparatorHeight,
+            };
+            return true;
+          }
+          top += hunkSeparatorHeight + separatorGap;
+        }
+
+        const lineHeight = this.getLineHeight(
+          lineIndex,
+          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false)
+        );
+        if (lineIndex === targetLineIndex) {
+          position = {
+            top,
+            height: lineHeight,
+          };
+          return true;
+        }
+        top += lineHeight;
+
+        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+          if (
+            targetLineIndex > lineIndex &&
+            targetLineIndex <= lineIndex + collapsedAfter
+          ) {
+            position = {
+              top: top + separatorGap,
+              height: hunkSeparatorHeight,
+            };
+            return true;
+          }
+          top += separatorGap + hunkSeparatorHeight;
+        }
+
+        return false;
+      },
+    });
+
+    return position;
   }
 
   public getVirtualizedHeight(): number {

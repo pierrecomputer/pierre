@@ -165,6 +165,48 @@ export class VirtualizedFile<
     return this.height;
   }
 
+  public getLinePosition(
+    lineNumber: number
+  ): { top: number; height: number } | undefined {
+    if (this.file == null) {
+      return undefined;
+    }
+
+    const { disableFileHeader = false, collapsed = false } = this.options;
+    const lines = this.getOrCreateLineCache(this.file);
+    const lastLineIndex = getLastVisibleLineIndex(lines);
+    let top = disableFileHeader
+      ? this.metrics.spacing
+      : this.metrics.diffHeaderHeight;
+
+    if (collapsed || lastLineIndex < 0) {
+      return { top, height: 0 };
+    }
+
+    const clampedLineIndex = Math.min(
+      Math.max(lineNumber - 1, 0),
+      lastLineIndex
+    );
+    const { overflow = 'scroll' } = this.options;
+    const { lineHeight } = this.metrics;
+
+    if (overflow === 'scroll' && this.lineAnnotations.length === 0) {
+      return {
+        top: top + clampedLineIndex * lineHeight,
+        height: lineHeight,
+      };
+    }
+
+    for (let lineIndex = 0; lineIndex < clampedLineIndex; lineIndex++) {
+      top += this.getLineHeight(lineIndex, false);
+    }
+
+    return {
+      top,
+      height: this.getLineHeight(clampedLineIndex, false),
+    };
+  }
+
   public getVirtualizedHeight(): number {
     return this.height;
   }
@@ -536,4 +578,19 @@ export class VirtualizedFile<
       bufferAfter,
     };
   }
+}
+
+function getLastVisibleLineIndex(lines: string[]): number {
+  const lastLine = lines.at(-1);
+  if (
+    lastLine == null ||
+    lastLine === '' ||
+    lastLine === '\n' ||
+    lastLine === '\r\n' ||
+    lastLine === '\r'
+  ) {
+    return lines.length - 2;
+  }
+
+  return lines.length - 1;
 }
