@@ -15,6 +15,10 @@ import {
 import { batchEvents, recordEvent, subscribe } from './events';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import {
+  getBenchmarkInstrumentation,
+  withBenchmarkPhase,
+} from './internal/benchmarkInstrumentation';
+import {
   collapsePath,
   expandPath,
   getVisibleCount,
@@ -37,21 +41,44 @@ export class PathStore {
   readonly #state: PathStoreState;
 
   public constructor(options: PathStoreConstructorOptions = {}) {
-    const builder = new PathStoreBuilder(options);
+    const instrumentation = getBenchmarkInstrumentation(options);
+    const builder = withBenchmarkPhase(
+      instrumentation,
+      'store.builder.create',
+      () => new PathStoreBuilder(options)
+    );
     const inputPaths = options.paths ?? [];
 
     if (options.presorted === true) {
       builder.appendPaths(inputPaths);
     } else {
-      builder.appendPreparedPaths(preparePathEntries(inputPaths, options));
+      builder.appendPreparedPaths(
+        withBenchmarkPhase(instrumentation, 'store.preparePathEntries', () =>
+          preparePathEntries(inputPaths, options)
+        )
+      );
     }
 
-    this.#state = createPathStoreState(
-      builder.finish(),
-      options.initialExpansion ?? 'closed'
+    this.#state = withBenchmarkPhase(
+      instrumentation,
+      'store.state.create',
+      () =>
+        createPathStoreState(
+          withBenchmarkPhase(instrumentation, 'store.builder.finish', () =>
+            builder.finish()
+          ),
+          options.initialExpansion ?? 'closed',
+          instrumentation
+        )
     );
-    this.initializeExpandedPaths(options.initialExpandedPaths);
-    recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId);
+    withBenchmarkPhase(
+      instrumentation,
+      'store.state.initializeExpandedPaths',
+      () => this.initializeExpandedPaths(options.initialExpandedPaths)
+    );
+    withBenchmarkPhase(instrumentation, 'store.state.recomputeCounts', () =>
+      recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId)
+    );
   }
 
   public static preparePaths(
@@ -62,15 +89,21 @@ export class PathStore {
   }
 
   public list(path?: string): string[] {
-    return listPaths(this.#state, path);
+    return withBenchmarkPhase(this.#state.instrumentation, 'store.list', () =>
+      listPaths(this.#state, path)
+    );
   }
 
   public add(path: string): void {
-    recordEvent(this.#state, addPath(this.#state, path));
+    withBenchmarkPhase(this.#state.instrumentation, 'store.add', () => {
+      recordEvent(this.#state, addPath(this.#state, path));
+    });
   }
 
   public remove(path: string, options: PathStoreRemoveOptions = {}): void {
-    recordEvent(this.#state, removePath(this.#state, path, options));
+    withBenchmarkPhase(this.#state.instrumentation, 'store.remove', () => {
+      recordEvent(this.#state, removePath(this.#state, path, options));
+    });
   }
 
   public move(
@@ -78,10 +111,12 @@ export class PathStore {
     toPath: string,
     options: PathStoreMoveOptions = {}
   ): void {
-    const event = movePath(this.#state, fromPath, toPath, options);
-    if (event != null) {
-      recordEvent(this.#state, event);
-    }
+    withBenchmarkPhase(this.#state.instrumentation, 'store.move', () => {
+      const event = movePath(this.#state, fromPath, toPath, options);
+      if (event != null) {
+        recordEvent(this.#state, event);
+      }
+    });
   }
 
   public batch(
@@ -112,28 +147,40 @@ export class PathStore {
   }
 
   public getVisibleCount(): number {
-    return getVisibleCount(this.#state);
+    return withBenchmarkPhase(
+      this.#state.instrumentation,
+      'store.getVisibleCount',
+      () => getVisibleCount(this.#state)
+    );
   }
 
   public getVisibleSlice(
     start: number,
     end: number
   ): readonly PathStoreVisibleRow[] {
-    return getVisibleSlice(this.#state, start, end);
+    return withBenchmarkPhase(
+      this.#state.instrumentation,
+      'store.getVisibleSlice',
+      () => getVisibleSlice(this.#state, start, end)
+    );
   }
 
   public expand(path: string): void {
-    const event = expandPath(this.#state, path);
-    if (event != null) {
-      recordEvent(this.#state, event);
-    }
+    withBenchmarkPhase(this.#state.instrumentation, 'store.expand', () => {
+      const event = expandPath(this.#state, path);
+      if (event != null) {
+        recordEvent(this.#state, event);
+      }
+    });
   }
 
   public collapse(path: string): void {
-    const event = collapsePath(this.#state, path);
-    if (event != null) {
-      recordEvent(this.#state, event);
-    }
+    withBenchmarkPhase(this.#state.instrumentation, 'store.collapse', () => {
+      const event = collapsePath(this.#state, path);
+      if (event != null) {
+        recordEvent(this.#state, event);
+      }
+    });
   }
 
   public on(

@@ -12,7 +12,16 @@ import {
 const DEFAULT_WORKLOAD_NAME = 'linux-5x';
 const MAX_VISIBLE_WINDOW_SIZE = 500;
 const DEFAULT_VISIBLE_WINDOW_SIZE = 30;
+const PROFILE_END_LABEL = 'path-store-demo-profile-end';
+const PROFILE_END_MARK_NAME = 'path-store-demo-profile-end';
+const PROFILE_START_LABEL = 'path-store-demo-profile-start';
+const PROFILE_START_MARK_NAME = 'path-store-demo-profile-start';
 const VISIBLE_PATH_SEARCH_CHUNK_SIZE = 512;
+const searchParams = new URLSearchParams(window.location.search);
+const instrumentationEnabled = searchParams.get('instrumentation') === '1';
+const benchmarkModulePromise = instrumentationEnabled
+  ? import('./profile/benchmarkInstrumentation.js')
+  : null;
 
 /**
  * @typedef {import('../src/public-types').PathStoreVisibleRow} PathStoreVisibleRow
@@ -51,6 +60,59 @@ const VISIBLE_PATH_SEARCH_CHUNK_SIZE = 512;
  * }} PreparedDemoAction
  */
 
+/**
+ * @typedef {{
+ *   duration: number;
+ *   startTime: number;
+ * }} DemoLongTaskEntry
+ */
+
+/**
+ * @typedef {{
+ *   counters: Record<string, number>;
+ *   heap: {
+ *     jsHeapSizeLimitBytes: number;
+ *     totalJSHeapSizeAfterBytes: number;
+ *     usedJSHeapSizeAfterBytes: number;
+ *     usedJSHeapSizeBeforeBytes: number;
+ *     usedJSHeapSizeDeltaBytes: number;
+ *   } | null;
+ *   phases: Array<{
+ *     count: number;
+ *     durationMs: number;
+ *     name: string;
+ *     selfDurationMs: number;
+ *   }>;
+ * }} DemoBenchmarkInstrumentationSummary
+ */
+
+/**
+ * @typedef {{
+ *   attach: <TValue extends object>(value: TValue) => TValue;
+ *   instrumentation: {
+ *     measurePhase: <TValue>(name: string, fn: () => TValue) => TValue;
+ *     setCounter: (name: string, value: number) => void;
+ *   };
+ *   readHeapSnapshot: () => {
+ *     jsHeapSizeLimit: number;
+ *     totalJSHeapSize: number;
+ *     usedJSHeapSize: number;
+ *   } | null;
+ *   summarize: (
+ *     heapBefore: {
+ *       jsHeapSizeLimit: number;
+ *       totalJSHeapSize: number;
+ *       usedJSHeapSize: number;
+ *     } | null,
+ *     heapAfter: {
+ *       jsHeapSizeLimit: number;
+ *       totalJSHeapSize: number;
+ *       usedJSHeapSize: number;
+ *     } | null
+ *   ) => DemoBenchmarkInstrumentationSummary;
+ * }} DemoBenchmarkCollector
+ */
+
 const actionButtons = document.querySelectorAll('button[data-action-id]');
 const visibleCountInput = document.querySelector('#visible-count');
 const offsetInput = document.querySelector('#offset');
@@ -73,6 +135,31 @@ if (
 let buildTimeMs = 0;
 /** @type {PathStore | null} */
 let currentStore = null;
+/** @type {DemoLongTaskEntry[]} */
+const longTaskEntries = [];
+const longTaskObserver =
+  typeof PerformanceObserver !== 'undefined' &&
+  PerformanceObserver.supportedEntryTypes?.includes('longtask')
+    ? new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          longTaskEntries.push({
+            duration: entry.duration,
+            startTime: entry.startTime,
+          });
+        }
+      })
+    : null;
+
+longTaskObserver?.observe({ type: 'longtask', buffered: true });
+
+async function createBenchmarkCollector() {
+  if (benchmarkModulePromise == null) {
+    return null;
+  }
+
+  const { createBenchmarkInstrumentation } = await benchmarkModulePromise;
+  return createBenchmarkInstrumentation();
+}
 
 function getSelectedWorkloadName() {
   if (!(workloadInput instanceof HTMLSelectElement)) {
@@ -90,6 +177,23 @@ function getSelectedWorkload() {
 
 function logDemoMessage(message) {
   console.info(`[path-store demo] ${message}`);
+}
+
+function clearProfileSummary() {
+  delete window.__pathStoreDemoProfile;
+  performance.clearMarks(PROFILE_START_MARK_NAME);
+  performance.clearMarks(PROFILE_END_MARK_NAME);
+}
+
+function getTaskOverlapMs(entry, startTime, endTime) {
+  const overlapStart = Math.max(entry.startTime, startTime);
+  const overlapEnd = Math.min(entry.startTime + entry.duration, endTime);
+  return Math.max(0, overlapEnd - overlapStart);
+}
+
+async function waitForPaint() {
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await new Promise((resolve) => requestAnimationFrame(resolve));
 }
 
 /**
@@ -168,7 +272,12 @@ function getViewContext(store, preferredOffset = undefined) {
  * @param {number | undefined} [preferredOffset]
  * @returns {DemoViewContext | null}
  */
-function renderCurrentWindow(preferredOffset = undefined) {
+/**
+ * @param {number | undefined} [preferredOffset]
+ * @param {DemoBenchmarkCollector | null | undefined} [benchmark]
+ * @returns {DemoViewContext | null}
+ */
+function renderCurrentWindow(preferredOffset = undefined, benchmark = null) {
   if (currentStore == null) {
     rowsElement.textContent = '';
     offsetInput.disabled = true;
@@ -177,25 +286,169 @@ function renderCurrentWindow(preferredOffset = undefined) {
     return null;
   }
 
-  const view = getViewContext(currentStore, preferredOffset);
+  const view =
+    benchmark == null
+      ? getViewContext(currentStore, preferredOffset)
+      : benchmark.instrumentation.measurePhase(
+          'page.renderWindow.getViewContext',
+          () => getViewContext(currentStore, preferredOffset)
+        );
   const maxOffset = Math.max(0, view.visibleCount - view.requestedVisibleCount);
 
   offsetInput.disabled = false;
   offsetInput.max = String(maxOffset);
   setOffsetValue(view.offset);
-  rowsElement.textContent = view.rows
-    .map(
-      /**
-       * @param {PathStoreVisibleRow} row
-       */
-      (row) => row.path
-    )
-    .join('\n');
+  const rowsText =
+    benchmark == null
+      ? view.rows
+          .map(
+            /**
+             * @param {PathStoreVisibleRow} row
+             */
+            (row) => row.path
+          )
+          .join('\n')
+      : benchmark.instrumentation.measurePhase(
+          'page.renderWindow.joinRowsText',
+          () =>
+            view.rows
+              .map(
+                /**
+                 * @param {PathStoreVisibleRow} row
+                 */
+                (row) => row.path
+              )
+              .join('\n')
+        );
+  if (benchmark != null) {
+    benchmark.instrumentation.setCounter(
+      'workload.renderedRows',
+      view.rows.length
+    );
+    benchmark.instrumentation.setCounter(
+      'workload.totalVisibleRows',
+      view.visibleCount
+    );
+  }
+  if (benchmark == null) {
+    rowsElement.textContent = rowsText;
+  } else {
+    benchmark.instrumentation.measurePhase(
+      'page.renderWindow.setTextContent',
+      () => {
+        rowsElement.textContent = rowsText;
+      }
+    );
+  }
   logDemoMessage(
     `Showing ${view.rows.length} visible paths starting at ${view.offset} out of ${view.visibleCount.toLocaleString()}.`
   );
 
   return view;
+}
+
+function getSelectedWorkloadSummary() {
+  const workload = getSelectedWorkload();
+
+  return {
+    expandedFolderCount: workload.expandedFolders.length,
+    fileCount: workload.files.length,
+    label: workload.label,
+    name: workload.name,
+  };
+}
+
+/**
+ * @param {string} actionId
+ * @returns {string}
+ */
+function getActionLabel(actionId) {
+  if (actionId === 'render') {
+    return 'Render';
+  }
+
+  const button = document.querySelector(`button[data-action-id="${actionId}"]`);
+  if (!(button instanceof HTMLButtonElement)) {
+    return actionId;
+  }
+
+  const label = button.textContent?.trim();
+  return label == null || label === '' ? actionId : label;
+}
+
+/**
+ * Builds the page-level summary object that the Chrome profiler script reads
+ * back after render or mutation work completes.
+ *
+ * @param {{
+ *   actionId: string;
+ *   afterView: DemoViewContext;
+ *   beforeView?: DemoViewContext | null;
+ *   detail: string;
+ *   instrumentation?: DemoBenchmarkInstrumentationSummary | null;
+ *   startedAt: number;
+ *   visibleRowsReadyAt: number;
+ * }} params
+ */
+function createPageProfileSummary({
+  actionId,
+  afterView,
+  beforeView = null,
+  detail,
+  instrumentation = null,
+  startedAt,
+  visibleRowsReadyAt,
+}) {
+  const renderEndTime = performance.now();
+  const renderLongTasks = longTaskEntries
+    .map((entry) => ({
+      ...entry,
+      overlapMs: getTaskOverlapMs(entry, startedAt, renderEndTime),
+    }))
+    .filter((entry) => entry.overlapMs > 0);
+  const longTaskCount = renderLongTasks.length;
+  const longTaskTotalMs = renderLongTasks.reduce((total, entry) => {
+    return total + entry.overlapMs;
+  }, 0);
+  const longestLongTaskMs = renderLongTasks.reduce((longest, entry) => {
+    return Math.max(longest, entry.overlapMs);
+  }, 0);
+  const afterRows = afterView.rows.map(
+    /**
+     * @param {PathStoreVisibleRow} row
+     */
+    (row) => row.path
+  );
+  const beforeRows =
+    beforeView?.rows.map(
+      /**
+       * @param {PathStoreVisibleRow} row
+       */
+      (row) => row.path
+    ) ?? null;
+
+  return {
+    action: {
+      id: actionId,
+      label: getActionLabel(actionId),
+    },
+    afterRows,
+    beforeRows,
+    beforeVisibleCount: beforeView?.visibleCount ?? null,
+    detail,
+    longTaskCount,
+    longTaskTotalMs,
+    longestLongTaskMs,
+    postPaintReadyMs: renderEndTime - startedAt,
+    renderedRowCount: afterRows.length,
+    requestedVisibleCount: afterView.requestedVisibleCount,
+    resultText: `${detail}. Post-paint ready ${(renderEndTime - startedAt).toFixed(1)}ms. Visible rows ready ${(visibleRowsReadyAt - startedAt).toFixed(1)}ms. Rendered rows ${afterRows.length}. Long tasks ${longTaskCount}.`,
+    instrumentation,
+    visibleCount: afterView.visibleCount,
+    visibleRowsReadyMs: visibleRowsReadyAt - startedAt,
+    windowOffset: afterView.offset,
+    workload: getSelectedWorkloadSummary(),
+  };
 }
 
 /**
@@ -684,24 +937,104 @@ const demoActionById = new Map(
   demoActions.map((action) => [action.id, action])
 );
 
-function createStore() {
+/**
+ * @param {DemoBenchmarkCollector | null | undefined} [benchmark]
+ */
+function createStore(benchmark = null) {
   const workload = getSelectedWorkload();
   const buildStartedAt = performance.now();
-  currentStore = new PathStore({
-    initialExpansion: 'open',
-    paths: workload.files,
-  });
+  const storeOptions =
+    benchmark == null
+      ? {
+          initialExpansion: 'open',
+          paths: workload.files,
+        }
+      : benchmark.attach({
+          initialExpansion: 'open',
+          paths: workload.files,
+        });
+  if (benchmark != null) {
+    benchmark.instrumentation.setCounter(
+      'workload.inputFiles',
+      workload.files.length
+    );
+    benchmark.instrumentation.setCounter(
+      'workload.expandedFolders',
+      workload.expandedFolders.length
+    );
+  }
+  currentStore =
+    benchmark == null
+      ? new PathStore(storeOptions)
+      : benchmark.instrumentation.measurePhase(
+          'page.createStore',
+          () => new PathStore(storeOptions)
+        );
   buildTimeMs = performance.now() - buildStartedAt;
+  const visibleRowCount =
+    benchmark == null ? currentStore.getVisibleCount().toLocaleString() : null;
   logDemoMessage(
-    `Loaded ${workload.label} in ${buildTimeMs.toFixed(1)}ms with ${currentStore.getVisibleCount().toLocaleString()} visible rows.`
+    visibleRowCount == null
+      ? `Loaded ${workload.label} in ${buildTimeMs.toFixed(1)}ms.`
+      : `Loaded ${workload.label} in ${buildTimeMs.toFixed(1)}ms with ${visibleRowCount} visible rows.`
   );
 
   window.pathStoreDemo = {
-    prepareAction,
-    runPreparedAction,
+    ...window.pathStoreDemo,
     store: currentStore,
     workload,
   };
+}
+
+function renderStoreForSetup(preferredOffset = undefined) {
+  createStore();
+  return renderCurrentWindow(preferredOffset);
+}
+
+async function profileRenderStore() {
+  renderButton.disabled = true;
+  setActionButtonsDisabled(true);
+  clearProfileSummary();
+  const benchmark = await createBenchmarkCollector();
+
+  const startedAt = performance.now();
+  const heapBefore = benchmark?.readHeapSnapshot() ?? null;
+  performance.mark(PROFILE_START_MARK_NAME);
+  console.timeStamp(PROFILE_START_LABEL);
+
+  try {
+    createStore(benchmark);
+    const afterView =
+      benchmark == null
+        ? renderCurrentWindow(0)
+        : benchmark.instrumentation.measurePhase('page.renderWindow', () =>
+            renderCurrentWindow(0, benchmark)
+          );
+    if (afterView == null) {
+      throw new Error('Failed to render the store.');
+    }
+
+    const visibleRowsReadyAt = performance.now();
+    await waitForPaint();
+    const heapAfter = benchmark?.readHeapSnapshot() ?? null;
+    performance.mark(PROFILE_END_MARK_NAME);
+    console.timeStamp(PROFILE_END_LABEL);
+
+    const profile = createPageProfileSummary({
+      actionId: 'render',
+      afterView,
+      detail: `Rendered ${getSelectedWorkloadSummary().label}`,
+      instrumentation: benchmark?.summarize(heapBefore, heapAfter) ?? null,
+      startedAt,
+      visibleRowsReadyAt,
+    });
+
+    window.__pathStoreDemoProfile = profile;
+    return profile;
+  } finally {
+    renderButton.disabled = false;
+    setActionButtonsDisabled(currentStore == null);
+  }
 }
 
 async function boot() {
@@ -752,20 +1085,82 @@ function prepareAction(actionId) {
   };
 }
 
+function prepareProfileAction(actionId) {
+  applyProfileActionSetup(actionId);
+  return prepareAction(actionId).prepared;
+}
+
+/**
+ * Some profiled demo actions need untimed setup so they have a meaningful
+ * target. This runs before tracing starts and only adjusts the demo state
+ * enough to make the requested action available.
+ *
+ * @param {string} actionId
+ */
+function applyProfileActionSetup(actionId) {
+  if (currentStore == null) {
+    throw new Error('Render the store before preparing profile actions.');
+  }
+
+  if (actionId === 'expand-visible-folder') {
+    const view = getViewContext(currentStore);
+    try {
+      requireExpandableVisibleFolder(currentStore, view, actionId);
+      return;
+    } catch {
+      const folder = requireCollapsibleVisibleFolder(
+        currentStore,
+        view,
+        actionId
+      );
+      currentStore.collapse(folder.path);
+      renderCurrentWindow(view.offset);
+      return;
+    }
+  }
+
+  if (actionId === 'collapse-folder-above-viewport') {
+    const currentView = getViewContext(currentStore);
+    const visibleCount = currentStore.getVisibleCount();
+    const targetOffset =
+      currentView.offset > 0
+        ? currentView.offset
+        : Math.min(
+            Math.max(1, currentView.requestedVisibleCount),
+            Math.max(1, visibleCount - 1)
+          );
+    renderCurrentWindow(targetOffset);
+  }
+}
+
 /**
  * @param {PreparedDemoAction} preparedAction
  * @returns {DemoActionResult}
  */
 function runPreparedAction(preparedAction) {
+  return runPreparedActionWithBenchmark(preparedAction, null).actionResult;
+}
+
+/**
+ * Runs a prepared action and then rerenders the relevant window, optionally
+ * recording nested benchmark phases for the profile collector.
+ *
+ * @param {PreparedDemoAction} preparedAction
+ * @param {DemoBenchmarkCollector | null | undefined} [benchmark]
+ * @returns {{ actionResult: DemoActionResult; afterView: DemoViewContext | null }}
+ */
+function runPreparedActionWithBenchmark(preparedAction, benchmark = null) {
   if (currentStore == null) {
     throw new Error('Render the store before running demo actions.');
   }
 
   const startedAt = performance.now();
-  const actionResult = preparedAction.action.run(
-    currentStore,
-    preparedAction.prepared
-  );
+  const actionResult =
+    benchmark == null
+      ? preparedAction.action.run(currentStore, preparedAction.prepared)
+      : benchmark.instrumentation.measurePhase('page.action.run', () =>
+          preparedAction.action.run(currentStore, preparedAction.prepared)
+        );
   const preferredOffset =
     actionResult.revealPath == null
       ? preparedAction.view.offset
@@ -779,9 +1174,99 @@ function runPreparedAction(preparedAction) {
   logDemoMessage(
     `${actionResult.detail} in ${(performance.now() - startedAt).toFixed(1)}ms.`
   );
-  renderCurrentWindow(preferredOffset);
+  const afterView =
+    benchmark == null
+      ? renderCurrentWindow(preferredOffset)
+      : benchmark.instrumentation.measurePhase('page.action.renderWindow', () =>
+          renderCurrentWindow(preferredOffset, benchmark)
+        );
 
-  return actionResult;
+  return {
+    actionResult,
+    afterView,
+  };
+}
+
+async function profilePreparedAction(actionId, prepared) {
+  if (currentStore == null) {
+    throw new Error('Render the store before running demo actions.');
+  }
+
+  const action = demoActionById.get(actionId);
+  if (action == null) {
+    throw new Error(`Unknown demo action: ${actionId}`);
+  }
+
+  const beforeView = getViewContext(currentStore);
+  const benchmark = await createBenchmarkCollector();
+  const preparedAction = {
+    action,
+    prepared,
+    view: beforeView,
+  };
+
+  clearProfileSummary();
+  const startedAt = performance.now();
+  const heapBefore = benchmark?.readHeapSnapshot() ?? null;
+  performance.mark(PROFILE_START_MARK_NAME);
+  console.timeStamp(PROFILE_START_LABEL);
+
+  const { actionResult, afterView } = runPreparedActionWithBenchmark(
+    preparedAction,
+    benchmark
+  );
+  if (afterView == null) {
+    throw new Error('Failed to rerender the window after the action.');
+  }
+  const visibleRowsReadyAt = performance.now();
+  await waitForPaint();
+  const heapAfter = benchmark?.readHeapSnapshot() ?? null;
+  performance.mark(PROFILE_END_MARK_NAME);
+  console.timeStamp(PROFILE_END_LABEL);
+
+  const profile = createPageProfileSummary({
+    actionId,
+    afterView,
+    beforeView,
+    detail: actionResult.detail,
+    instrumentation: benchmark?.summarize(heapBefore, heapAfter) ?? null,
+    startedAt,
+    visibleRowsReadyAt,
+  });
+
+  window.__pathStoreDemoProfile = profile;
+  return profile;
+}
+
+function configureDemo({ offset, visibleCount, workloadName }) {
+  if (typeof workloadName === 'string' && workloadName !== '') {
+    workloadInput.value = workloadName;
+  }
+
+  if (Number.isFinite(visibleCount)) {
+    visibleCountInput.value = String(
+      Math.max(1, Math.min(MAX_VISIBLE_WINDOW_SIZE, Math.trunc(visibleCount)))
+    );
+  }
+
+  if (Number.isFinite(offset)) {
+    setOffsetValue(Math.max(0, Math.trunc(offset)));
+  }
+
+  return {
+    offset: getParsedInputNumber(offsetInput, 0),
+    visibleCount: getRequestedVisibleCount(),
+    workloadName: getSelectedWorkloadName(),
+  };
+}
+
+function getDemoState() {
+  return {
+    hasStore: currentStore != null,
+    offset: getParsedInputNumber(offsetInput, 0),
+    visibleCount: getRequestedVisibleCount(),
+    workload: getSelectedWorkloadSummary(),
+  };
 }
 
 renderButton.addEventListener('click', () => {
@@ -823,3 +1308,17 @@ for (let index = 0; index < actionButtons.length; index++) {
     }
   });
 }
+
+window.pathStoreDemo = {
+  configureDemo,
+  getState: getDemoState,
+  prepareAction,
+  prepareProfileAction,
+  profilePreparedAction,
+  profileRenderStore,
+  renderStoreForSetup,
+  runPreparedAction,
+  store: currentStore,
+  workload: null,
+};
+window.__pathStoreDemoFixtureReady = true;

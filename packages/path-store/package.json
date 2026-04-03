@@ -20,6 +20,7 @@
     "benchmark": "bun run ./scripts/benchmark.ts",
     "build": "bun run vite build demo",
     "dev": "bun run vite demo --host 127.0.0.1 --port 4175",
+    "profile:demo": "bun run ./scripts/profileDemo.ts",
     "test": "bun test",
     "test:demo": "(bun ./test/e2e/check-playwright-binary.js || bun run test:demo:installbinary) && bunx playwright test -c test/e2e/playwright.config.js",
     "test:demo:installbinary": "bunx playwright@1.51.1 install chromium",

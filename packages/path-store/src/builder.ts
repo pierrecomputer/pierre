@@ -11,6 +11,12 @@ import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import { PATH_STORE_NODE_KIND_FILE } from './internal-types';
+import {
+  getBenchmarkInstrumentation,
+  setBenchmarkCounter,
+  withBenchmarkPhase,
+} from './internal/benchmarkInstrumentation';
+import type { BenchmarkInstrumentation } from './internal/benchmarkInstrumentation';
 import { resolvePathStoreOptions } from './options';
 import { parseInputPath } from './path';
 import type {
@@ -107,10 +113,18 @@ export function preparePathEntries(
   options: PathStoreOptions = {}
 ): PreparedPath[] {
   const resolvedOptions = resolvePathStoreOptions(options);
-  const preparedPaths = paths.map((path) => parseInputPath(path));
+  const instrumentation = getBenchmarkInstrumentation(options);
+  setBenchmarkCounter(instrumentation, 'workload.inputFiles', paths.length);
+  const preparedPaths = withBenchmarkPhase(
+    instrumentation,
+    'store.preparePathEntries.parse',
+    () => paths.map((path) => parseInputPath(path))
+  );
 
-  preparedPaths.sort((left, right) =>
-    compareWithSortOption(left, right, resolvedOptions.sort)
+  withBenchmarkPhase(instrumentation, 'store.preparePathEntries.sort', () =>
+    preparedPaths.sort((left, right) =>
+      compareWithSortOption(left, right, resolvedOptions.sort)
+    )
   );
 
   return preparedPaths;
@@ -122,27 +136,43 @@ export class PathStoreBuilder {
   private lastPreparedPath: PreparedPath | null = null;
   private readonly nodes: PathStoreNode[] = [createRootNode()];
   private readonly options: ResolvedPathStoreOptions;
+  private readonly instrumentation: BenchmarkInstrumentation | null;
   private readonly segmentTable = createSegmentTable();
 
   public constructor(options: PathStoreOptions = {}) {
+    this.instrumentation = getBenchmarkInstrumentation(options);
     this.options = resolvePathStoreOptions(options);
     this.directories.set(0, createDirectoryChildIndex());
   }
 
   public appendPaths(paths: readonly string[]): this {
-    return this.appendPreparedPaths(paths.map((path) => parseInputPath(path)));
+    return withBenchmarkPhase(
+      this.instrumentation,
+      'store.builder.appendPaths.parse',
+      () => this.appendPreparedPaths(paths.map((path) => parseInputPath(path)))
+    );
   }
 
   public appendPreparedPaths(preparedPaths: readonly PreparedPath[]): this {
-    for (const preparedPath of preparedPaths) {
-      this.appendPreparedPath(preparedPath);
-    }
+    withBenchmarkPhase(
+      this.instrumentation,
+      'store.builder.appendPreparedPaths',
+      () => {
+        for (const preparedPath of preparedPaths) {
+          this.appendPreparedPath(preparedPath);
+        }
+      }
+    );
 
     return this;
   }
 
   public finish(): PathStoreSnapshot {
-    this.computeSubtreeCounts(0);
+    withBenchmarkPhase(
+      this.instrumentation,
+      'store.builder.computeSubtreeCounts',
+      () => this.computeSubtreeCounts(0)
+    );
     return {
       directories: this.directories,
       nodes: this.nodes,

@@ -22,6 +22,13 @@ Benchmark workflow:
 - `bun ws path-store benchmark -- --filter '^visible-middle/linux-5x/200$' --json --samples`
 - `bun ws path-store benchmark -- --compare baseline.json candidate.json`
 
+Chrome profiler workflow:
+
+- `bun ws path-store profile:demo`
+- `bun ws path-store profile:demo -- --all-actions`
+- `bun ws path-store profile:demo -- --action rename-visible-folder --runs 5`
+- `bun ws path-store profile:demo -- --workload demo-small --action collapse-folder-above-viewport --visible-count 30 --offset 8`
+
 Use `--json --samples` when you want confidence-aware comparisons for an
 automated optimization loop. Compare mode accepts a candidate when the p50
 improvement clears the configured threshold and its bootstrap confidence

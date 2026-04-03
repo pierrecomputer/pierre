@@ -5,6 +5,7 @@ import type {
 } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import type { BenchmarkInstrumentation } from './internal/benchmarkInstrumentation';
 import type { PathStoreEvent, PathStoreInitialExpansion } from './public-types';
 
 export interface TransactionFrame {
@@ -24,6 +25,7 @@ export interface PathStoreState {
   collapsedDirectoryIds: Set<NodeId>;
   defaultExpansion: PathStoreInitialExpansion;
   expandedDirectoryIds: Set<NodeId>;
+  instrumentation: BenchmarkInstrumentation | null;
   listeners: Map<string, Set<(event: PathStoreEvent) => void>>;
   pathCacheVersion: number;
   snapshot: PathStoreSnapshot;
@@ -32,13 +34,15 @@ export interface PathStoreState {
 
 export function createPathStoreState(
   snapshot: PathStoreSnapshot,
-  initialExpansion: PathStoreInitialExpansion = 'closed'
+  initialExpansion: PathStoreInitialExpansion = 'closed',
+  instrumentation: BenchmarkInstrumentation | null = null
 ): PathStoreState {
   return {
     activeNodeCount: snapshot.nodes.length - 1,
     collapsedDirectoryIds: new Set<NodeId>(),
     defaultExpansion: resolveInitialExpansion(initialExpansion),
     expandedDirectoryIds: new Set<NodeId>(),
+    instrumentation,
     listeners: new Map<string, Set<(event: PathStoreEvent) => void>>(),
     pathCacheVersion: 0,
     snapshot,

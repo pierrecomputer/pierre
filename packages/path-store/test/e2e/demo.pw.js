@@ -25,6 +25,10 @@ const demoSmallVisibleRows = [
  */
 
 /**
+ * @typedef {Record<string, unknown>} DemoPreparedAction
+ */
+
+/**
  * @param {Page} page
  * @returns {Locator}
  */
@@ -177,6 +181,41 @@ test('demo-small expand-visible-folder restores the collapsed rows in place', as
   expect(pageErrors).toEqual([]);
 });
 
+test('demo-small profile prepare can expand a folder from the default fully-expanded state', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+
+  /** @type {DemoPreparedAction} */
+  const prepared = await page.evaluate(() => {
+    return /** @type {DemoPreparedAction} */ (
+      window.pathStoreDemo.prepareProfileAction('expand-visible-folder')
+    );
+  });
+
+  await expectRenderedRows(page, [
+    'alpha/',
+    'beta/',
+    'beta/archive/',
+    'beta/archive/notes.txt',
+  ]);
+
+  await page.evaluate((nextPrepared) => {
+    return /** @type {Promise<unknown>} */ (
+      window.pathStoreDemo.profilePreparedAction(
+        'expand-visible-folder',
+        nextPrepared
+      )
+    );
+  }, prepared);
+
+  await expectRenderedRows(page, getWindowRows(0, 4));
+  expect(pageErrors).toEqual([]);
+});
+
 test('demo-small rename-visible-folder renames the first visible folder and its descendants in place', async ({
   page,
 }) => {
@@ -322,6 +361,44 @@ test('demo-small collapse-folder-above-viewport shifts the fixed offset window',
     'beta/archive/notes.txt',
     'beta/keep.txt',
     'gamma/',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small profile prepare can collapse a folder above the viewport from offset zero', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+
+  /** @type {DemoPreparedAction} */
+  const prepared = await page.evaluate(() => {
+    return /** @type {DemoPreparedAction} */ (
+      window.pathStoreDemo.prepareProfileAction(
+        'collapse-folder-above-viewport'
+      )
+    );
+  });
+
+  await expect(page.locator('#offset-value')).toHaveText('4');
+  await expectRenderedRows(page, getWindowRows(4, 4));
+
+  await page.evaluate((nextPrepared) => {
+    return /** @type {Promise<unknown>} */ (
+      window.pathStoreDemo.profilePreparedAction(
+        'collapse-folder-above-viewport',
+        nextPrepared
+      )
+    );
+  }, prepared);
+
+  await expectRenderedRows(page, [
+    'alpha/todo.txt',
+    'beta/',
+    'beta/archive/',
+    'beta/archive/notes.txt',
   ]);
   expect(pageErrors).toEqual([]);
 });
