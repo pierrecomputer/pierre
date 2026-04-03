@@ -5,7 +5,12 @@ import {
   rebuildVisibleChildChunks,
   updateChildPositionsFrom,
 } from './child-index';
-import type { DirectoryChildIndex, NodeId } from './internal-types';
+import { getFlattenedChildDirectoryId } from './flatten';
+import type {
+  DirectoryChildIndex,
+  NodeId,
+  PathStoreNode,
+} from './internal-types';
 import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
 import { PATH_STORE_NODE_FLAG_REMOVED } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
@@ -364,7 +369,10 @@ export function getDirectoryIndex(
   return directoryIndex;
 }
 
-export function requireNode(state: PathStoreState, nodeId: NodeId) {
+export function requireNode(
+  state: PathStoreState,
+  nodeId: NodeId
+): PathStoreNode {
   const node = state.snapshot.nodes[nodeId];
   if (node === undefined || (node.flags & PATH_STORE_NODE_FLAG_REMOVED) !== 0) {
     throw new Error(`Unknown node ID: ${String(nodeId)}`);
@@ -924,7 +932,9 @@ function recomputeNodeCounts(
     nodeId,
     currentNode
   )
-    ? 1 + visibleChildCount
+    ? getFlattenedChildDirectoryId(state, nodeId) == null
+      ? 1 + visibleChildCount
+      : visibleChildCount
     : 1;
 }
 

@@ -114,6 +114,7 @@ const benchmarkModulePromise = instrumentationEnabled
  */
 
 const actionButtons = document.querySelectorAll('button[data-action-id]');
+const flattenInput = document.querySelector('#flatten-directories');
 const visibleCountInput = document.querySelector('#visible-count');
 const offsetInput = document.querySelector('#offset');
 const offsetValueElement = document.querySelector('#offset-value');
@@ -122,6 +123,7 @@ const rowsElement = document.querySelector('#rows');
 const workloadInput = document.querySelector('#workload');
 
 if (
+  flattenInput == null ||
   visibleCountInput == null ||
   offsetInput == null ||
   offsetValueElement == null ||
@@ -173,6 +175,12 @@ function getSelectedWorkloadName() {
 
 function getSelectedWorkload() {
   return getVirtualizationWorkload(getSelectedWorkloadName());
+}
+
+function getFlattenEmptyDirectoriesEnabled() {
+  return (
+    flattenInput instanceof HTMLInputElement && flattenInput.checked === true
+  );
 }
 
 function logDemoMessage(message) {
@@ -353,6 +361,7 @@ function getSelectedWorkloadSummary() {
   return {
     expandedFolderCount: workload.expandedFolders.length,
     fileCount: workload.files.length,
+    flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
     label: workload.label,
     name: workload.name,
   };
@@ -942,14 +951,17 @@ const demoActionById = new Map(
  */
 function createStore(benchmark = null) {
   const workload = getSelectedWorkload();
+  const flattenEmptyDirectories = getFlattenEmptyDirectoriesEnabled();
   const buildStartedAt = performance.now();
   const storeOptions =
     benchmark == null
       ? {
+          flattenEmptyDirectories,
           initialExpansion: 'open',
           paths: workload.files,
         }
       : benchmark.attach({
+          flattenEmptyDirectories,
           initialExpansion: 'open',
           paths: workload.files,
         });
@@ -1238,9 +1250,18 @@ async function profilePreparedAction(actionId, prepared) {
   return profile;
 }
 
-function configureDemo({ offset, visibleCount, workloadName }) {
+function configureDemo({
+  flattenEmptyDirectories,
+  offset,
+  visibleCount,
+  workloadName,
+}) {
   if (typeof workloadName === 'string' && workloadName !== '') {
     workloadInput.value = workloadName;
+  }
+
+  if (typeof flattenEmptyDirectories === 'boolean') {
+    flattenInput.checked = flattenEmptyDirectories;
   }
 
   if (Number.isFinite(visibleCount)) {
@@ -1254,6 +1275,7 @@ function configureDemo({ offset, visibleCount, workloadName }) {
   }
 
   return {
+    flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
     offset: getParsedInputNumber(offsetInput, 0),
     visibleCount: getRequestedVisibleCount(),
     workloadName: getSelectedWorkloadName(),
@@ -1262,6 +1284,7 @@ function configureDemo({ offset, visibleCount, workloadName }) {
 
 function getDemoState() {
   return {
+    flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
     hasStore: currentStore != null,
     offset: getParsedInputNumber(offsetInput, 0),
     visibleCount: getRequestedVisibleCount(),
@@ -1275,6 +1298,16 @@ renderButton.addEventListener('click', () => {
 
 visibleCountInput.addEventListener('input', () => {
   renderCurrentWindow();
+});
+
+flattenInput.addEventListener('input', () => {
+  if (currentStore == null) {
+    return;
+  }
+
+  const currentOffset = getParsedInputNumber(offsetInput, 0);
+  createStore();
+  renderCurrentWindow(currentOffset);
 });
 
 offsetInput.addEventListener('input', () => {

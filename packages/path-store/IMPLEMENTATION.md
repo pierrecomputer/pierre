@@ -83,9 +83,10 @@ Secondary benchmarks still matter, but are not the primary optimization target:
 
 Current implementation note:
 
-- `flattenEmptyDirectories` is still a Phase 5 feature and currently throws if
-  enabled so the store does not silently claim flattened behavior it does not
-  provide yet.
+- `flattenEmptyDirectories` now flattens single-child directory chains in the
+  visible projection while preserving canonical topology and path-first
+  mutations. It now defaults to enabled, with explicit `false` used in tests and
+  fixtures that need canonical one-directory-per-row visibility.
 
 For mutation scenarios, the benchmark contract should explicitly model the next
 store-side read the UI would perform after the mutation commits:

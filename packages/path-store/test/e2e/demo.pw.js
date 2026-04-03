@@ -57,14 +57,20 @@ async function expectRenderedRows(page, expectedRows) {
 /**
  * @param {Page} page
  * @param {string} [workload]
+ * @param {boolean} [flattenDirectories]
  * @returns {Promise<void>}
  */
-async function renderDemo(page, workload = 'linux') {
+async function renderDemo(
+  page,
+  workload = 'linux',
+  flattenDirectories = false
+) {
   await page.goto('/');
   await expect(getRowsLocator(page)).toHaveText('');
   await expect(page.locator('#offset')).toBeDisabled();
 
   await page.locator('#workload').selectOption(workload);
+  await page.locator('#flatten-directories').setChecked(flattenDirectories);
   await page.getByRole('button', { name: 'Render' }).click();
 
   await expect
@@ -73,6 +79,30 @@ async function renderDemo(page, workload = 'linux') {
   await expect(page.locator('#offset')).toBeEnabled();
 }
 
+test('demo defaults flatten on before the first render', async ({ page }) => {
+  const pageErrors = trackPageErrors(page);
+
+  await page.goto('/');
+  await expect(page.locator('#flatten-directories')).toBeChecked();
+
+  await page.locator('#workload').selectOption('demo-small');
+  await page.getByRole('button', { name: 'Render' }).click();
+  await expect
+    .poll(() => getRenderedRows(page).then((rows) => rows.length))
+    .toBeGreaterThan(0);
+  await expect(page.locator('#offset')).toBeEnabled();
+  await setVisibleCount(page, 4);
+  await setOffset(page, 11);
+
+  await expectRenderedRows(page, [
+    'beta/keep.txt',
+    'gamma/logs/',
+    'gamma/logs/today.txt',
+    'zeta.md',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
 /**
  * @param {Page} page
  * @param {number} value
@@ -80,6 +110,15 @@ async function renderDemo(page, workload = 'linux') {
  */
 async function setVisibleCount(page, value) {
   await page.locator('#visible-count').fill(String(value));
+}
+
+/**
+ * @param {Page} page
+ * @param {boolean} enabled
+ * @returns {Promise<void>}
+ */
+async function setFlattenDirectories(page, enabled) {
+  await page.locator('#flatten-directories').setChecked(enabled);
 }
 
 /**
@@ -140,6 +179,41 @@ test('demo-small renders exact rows at different offsets', async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
+test('demo-small flatten toggle changes the rendered window exactly as expected', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await setOffset(page, 11);
+
+  await expectRenderedRows(page, [
+    'beta/keep.txt',
+    'gamma/',
+    'gamma/logs/',
+    'gamma/logs/today.txt',
+  ]);
+
+  await setFlattenDirectories(page, true);
+  await expectRenderedRows(page, [
+    'beta/keep.txt',
+    'gamma/logs/',
+    'gamma/logs/today.txt',
+    'zeta.md',
+  ]);
+
+  await setFlattenDirectories(page, false);
+  await expectRenderedRows(page, [
+    'beta/keep.txt',
+    'gamma/',
+    'gamma/logs/',
+    'gamma/logs/today.txt',
+  ]);
+
+  expect(pageErrors).toEqual([]);
+});
+
 test('demo-small collapse-visible-folder collapses the first visible folder without jumping oddly', async ({
   page,
 }) => {
@@ -156,6 +230,33 @@ test('demo-small collapse-visible-folder collapses the first visible folder with
     'beta/',
     'beta/archive/',
     'beta/archive/notes.txt',
+  ]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small collapse-visible-folder works on a flattened directory row', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await setOffset(page, 11);
+  await setFlattenDirectories(page, true);
+  await expectRenderedRows(page, [
+    'beta/keep.txt',
+    'gamma/logs/',
+    'gamma/logs/today.txt',
+    'zeta.md',
+  ]);
+
+  await page.locator('[data-action-id="collapse-visible-folder"]').click();
+
+  await expectRenderedRows(page, [
+    'beta/archive/notes.txt',
+    'beta/keep.txt',
+    'gamma/logs/',
+    'zeta.md',
   ]);
   expect(pageErrors).toEqual([]);
 });

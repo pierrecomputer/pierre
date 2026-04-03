@@ -492,7 +492,7 @@ function createExpandedStore(
   seededPaths: readonly string[] = []
 ): PathStore {
   const store = new PathStore({
-    flattenEmptyDirectories: false,
+    flattenEmptyDirectories: true,
     initialExpansion: 'open',
     paths: workload.getPreparedFiles(),
     presorted: true,

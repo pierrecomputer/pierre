@@ -7,12 +7,22 @@ import {
   requireNode,
 } from './canonical';
 import { selectChildIndexByVisibleIndex } from './child-index';
+import {
+  collectFlattenedDirectoryChainIds,
+  getFlattenedTerminalDirectoryId,
+} from './flatten';
 import type { NodeId } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import type { PathStoreEvent, PathStoreVisibleRow } from './public-types';
 import { getSegmentValue } from './segments';
 import { isDirectoryExpanded, setDirectoryExpanded } from './state';
 import type { PathStoreState } from './state';
+
+interface VisibleRowCursor {
+  headNodeId: NodeId;
+  terminalNodeId: NodeId;
+  visibleDepth: number;
+}
 
 export function getVisibleCount(state: PathStoreState): number {
   return requireNode(state, state.snapshot.rootId).visibleSubtreeCount;
@@ -35,15 +45,15 @@ export function getVisibleSlice(
   );
 
   const rows: PathStoreVisibleRow[] = [];
-  let currentNodeId = selectVisibleNode(state, normalizedStart);
+  let currentCursor = selectVisibleRow(state, normalizedStart);
 
   for (
     let visibleIndex = normalizedStart;
-    visibleIndex <= normalizedEnd && currentNodeId != null;
+    visibleIndex <= normalizedEnd && currentCursor != null;
     visibleIndex++
   ) {
-    rows.push(materializeVisibleRow(state, currentNodeId));
-    currentNodeId = getNextVisibleNodeId(state, currentNodeId);
+    rows.push(materializeVisibleRow(state, currentCursor));
+    currentCursor = getNextVisibleRowCursor(state, currentCursor);
   }
 
   return rows;
@@ -105,22 +115,28 @@ export function collapsePath(
   };
 }
 
-function selectVisibleNode(
+function selectVisibleRow(
   state: PathStoreState,
   index: number
-): NodeId | null {
+): VisibleRowCursor | null {
   if (index < 0 || index >= getVisibleCount(state)) {
     return null;
   }
 
-  return selectVisibleNodeWithinDirectory(state, state.snapshot.rootId, index);
+  return selectVisibleRowWithinDirectory(
+    state,
+    state.snapshot.rootId,
+    index,
+    -1
+  );
 }
 
-function selectVisibleNodeWithinDirectory(
+function selectVisibleRowWithinDirectory(
   state: PathStoreState,
   directoryNodeId: NodeId,
-  index: number
-): NodeId {
+  index: number,
+  parentVisibleDepth: number
+): VisibleRowCursor {
   const directoryIndex = getDirectoryIndex(state, directoryNodeId);
   const { childIndex, localVisibleIndex } = selectChildIndexByVisibleIndex(
     state.snapshot.nodes,
@@ -129,56 +145,106 @@ function selectVisibleNodeWithinDirectory(
   );
   const childId = directoryIndex.childIds[childIndex];
   if (childId != null) {
-    return selectVisibleNodeWithinSubtree(state, childId, localVisibleIndex);
+    return selectVisibleRowWithinSubtree(
+      state,
+      childId,
+      localVisibleIndex,
+      parentVisibleDepth + 1
+    );
   }
 
   throw new Error(`Visible index ${String(index)} is out of range`);
 }
 
-function selectVisibleNodeWithinSubtree(
+function selectVisibleRowWithinSubtree(
   state: PathStoreState,
   nodeId: NodeId,
-  index: number
-): NodeId {
+  index: number,
+  visibleDepth: number
+): VisibleRowCursor {
   const node = requireNode(state, nodeId);
   if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
     if (index === 0) {
-      return nodeId;
+      return {
+        headNodeId: nodeId,
+        terminalNodeId: nodeId,
+        visibleDepth,
+      };
     }
 
     throw new Error(`Visible index ${String(index)} is out of range for file`);
   }
 
+  const currentCursor = createVisibleRowCursor(state, nodeId, visibleDepth);
   if (index === 0) {
-    return nodeId;
+    return currentCursor;
   }
 
-  if (!isDirectoryExpanded(state, nodeId, node)) {
+  const terminalNode = requireNode(state, currentCursor.terminalNodeId);
+  if (
+    terminalNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
+    !isDirectoryExpanded(state, currentCursor.terminalNodeId, terminalNode)
+  ) {
     throw new Error(
       `Visible index ${String(index)} is out of range for collapsed directory`
     );
   }
 
-  return selectVisibleNodeWithinDirectory(state, nodeId, index - 1);
+  return selectVisibleRowWithinDirectory(
+    state,
+    currentCursor.terminalNodeId,
+    index - 1,
+    currentCursor.visibleDepth
+  );
+}
+
+function createVisibleRowCursor(
+  state: PathStoreState,
+  nodeId: NodeId,
+  visibleDepth: number
+): VisibleRowCursor {
+  const node = requireNode(state, nodeId);
+  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    return {
+      headNodeId: nodeId,
+      terminalNodeId: nodeId,
+      visibleDepth,
+    };
+  }
+
+  return {
+    headNodeId: nodeId,
+    terminalNodeId: getFlattenedTerminalDirectoryId(state, nodeId),
+    visibleDepth,
+  };
 }
 
 // Walks the visible preorder sequence without materializing the full row list.
-function getNextVisibleNodeId(
+function getNextVisibleRowCursor(
   state: PathStoreState,
-  nodeId: NodeId
-): NodeId | null {
-  const node = requireNode(state, nodeId);
-  if (node.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
-    const currentIndex = getDirectoryIndex(state, nodeId);
+  currentCursor: VisibleRowCursor
+): VisibleRowCursor | null {
+  const terminalNode = requireNode(state, currentCursor.terminalNodeId);
+  if (terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+    const currentIndex = getDirectoryIndex(state, currentCursor.terminalNodeId);
     if (
-      isDirectoryExpanded(state, nodeId, node) &&
+      isDirectoryExpanded(state, currentCursor.terminalNodeId, terminalNode) &&
       currentIndex.childIds.length > 0
     ) {
-      return currentIndex.childIds[0] ?? null;
+      const firstChildId = currentIndex.childIds[0];
+      return firstChildId == null
+        ? null
+        : selectVisibleRowWithinSubtree(
+            state,
+            firstChildId,
+            0,
+            currentCursor.visibleDepth + 1
+          );
     }
   }
 
-  let currentNodeId: NodeId = nodeId;
+  let currentNodeId: NodeId = currentCursor.terminalNodeId;
+  let currentVisibleDepth = currentCursor.visibleDepth;
   while (true) {
     const currentNode = requireNode(state, currentNodeId);
     if (currentNodeId === state.snapshot.rootId) {
@@ -196,7 +262,16 @@ function getNextVisibleNodeId(
 
     const nextSiblingId = parentIndex.childIds[siblingIndex + 1] ?? null;
     if (nextSiblingId != null) {
-      return nextSiblingId;
+      return selectVisibleRowWithinSubtree(
+        state,
+        nextSiblingId,
+        0,
+        currentVisibleDepth
+      );
+    }
+
+    if (currentNodeId === currentCursor.headNodeId) {
+      currentVisibleDepth--;
     }
 
     currentNodeId = parentId;
@@ -205,25 +280,46 @@ function getNextVisibleNodeId(
 
 function materializeVisibleRow(
   state: PathStoreState,
-  nodeId: NodeId
+  cursor: VisibleRowCursor
 ): PathStoreVisibleRow {
-  const node = requireNode(state, nodeId);
-  const path = materializeNodePath(state, nodeId);
-  const name = getSegmentValue(state.snapshot.segmentTable, node.nameId);
+  const terminalNode = requireNode(state, cursor.terminalNodeId);
+  const path = materializeNodePath(state, cursor.terminalNodeId);
+  const name = getSegmentValue(
+    state.snapshot.segmentTable,
+    terminalNode.nameId
+  );
   const hasChildren =
-    node.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
-    getDirectoryIndex(state, nodeId).childIds.length > 0;
+    terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+    getDirectoryIndex(state, cursor.terminalNodeId).childIds.length > 0;
+  const isFlattened = cursor.headNodeId !== cursor.terminalNodeId;
+  const flattenedSegments = isFlattened
+    ? collectFlattenedDirectoryChainIds(state, cursor.headNodeId).map(
+        (nodeId) => {
+          const node = requireNode(state, nodeId);
+          return {
+            isTerminal: nodeId === cursor.terminalNodeId,
+            name: getSegmentValue(state.snapshot.segmentTable, node.nameId),
+            nodeId,
+            path: materializeNodePath(state, nodeId),
+          };
+        }
+      )
+    : undefined;
 
   return {
-    depth: node.depth - 1,
+    depth: cursor.visibleDepth,
+    flattenedSegments,
     hasChildren,
-    id: nodeId,
+    id: cursor.terminalNodeId,
     isExpanded:
-      node.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
-      isDirectoryExpanded(state, nodeId, node),
-    isFlattened: false,
+      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+      isDirectoryExpanded(state, cursor.terminalNodeId, terminalNode),
+    isFlattened,
     isLoading: false,
-    kind: node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? 'directory' : 'file',
+    kind:
+      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY
+        ? 'directory'
+        : 'file',
     name,
     path,
   };

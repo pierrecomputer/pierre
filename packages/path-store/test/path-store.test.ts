@@ -37,19 +37,63 @@ function getVisibleRowsSansIds(
   start = 0,
   end = Number.MAX_SAFE_INTEGER
 ) {
-  return store.getVisibleSlice(start, end).map(({ id: _id, ...row }) => row);
+  return store.getVisibleSlice(start, end).map(({ id: _id, ...row }) => ({
+    ...row,
+    flattenedSegments: row.flattenedSegments?.map(
+      ({ nodeId: _segmentNodeId, ...segment }) => segment
+    ),
+  }));
 }
 
 function getExpandedDirectoryPaths(store: PathStore): string[] {
-  return store
-    .getVisibleSlice(0, Math.max(0, store.getVisibleCount() - 1))
-    .filter((row) => row.kind === 'directory' && row.isExpanded)
-    .map((row) => row.path);
+  const expandedPaths = new Set<string>();
+
+  for (const row of store.getVisibleSlice(
+    0,
+    Math.max(0, store.getVisibleCount() - 1)
+  )) {
+    if (row.kind !== 'directory') {
+      continue;
+    }
+
+    if (row.isFlattened && row.flattenedSegments != null) {
+      for (
+        let segmentIndex = 0;
+        segmentIndex < row.flattenedSegments.length - 1;
+        segmentIndex++
+      ) {
+        const segment = row.flattenedSegments[segmentIndex];
+        if (segment != null) {
+          expandedPaths.add(segment.path);
+        }
+      }
+
+      const terminalSegment =
+        row.flattenedSegments[row.flattenedSegments.length - 1];
+      if (row.isExpanded && terminalSegment != null) {
+        expandedPaths.add(terminalSegment.path);
+      }
+      continue;
+    }
+
+    if (row.isExpanded) {
+      expandedPaths.add(row.path);
+    }
+  }
+
+  return [...expandedPaths];
 }
 
-function assertMatchesRebuild(store: PathStore): void {
+function assertMatchesRebuild(
+  store: PathStore,
+  {
+    flattenEmptyDirectories = false,
+  }: {
+    flattenEmptyDirectories?: boolean;
+  } = {}
+): void {
   const rebuiltStore = new PathStore({
-    flattenEmptyDirectories: false,
+    flattenEmptyDirectories,
     initialExpandedPaths: getExpandedDirectoryPaths(store),
     paths: store.list(),
     presorted: true,
@@ -86,6 +130,7 @@ function assertMatchesRebuild(store: PathStore): void {
 
 function createDemoSmallStore(): PathStore {
   return new PathStore({
+    flattenEmptyDirectories: false,
     initialExpansion: 'open',
     paths: demoSmallPaths,
   });
@@ -126,22 +171,193 @@ describe('preparePaths', () => {
 });
 
 describe('PathStore', () => {
-  test('defaults to non-flattened directories and rejects flattening until it is implemented', () => {
+  test('defaults to flattened directories and can be disabled', () => {
     expect(
       getVisiblePaths(
         new PathStore({
-          paths: ['src/index.ts'],
+          initialExpansion: 'open',
+          paths: ['src/lib/index.ts'],
         })
       )
-    ).toEqual(['src/']);
+    ).toEqual(['src/lib/', 'src/lib/index.ts']);
 
     expect(
-      () =>
+      getVisiblePaths(
         new PathStore({
-          flattenEmptyDirectories: true,
-          paths: ['src/index.ts'],
+          flattenEmptyDirectories: false,
+          initialExpansion: 'open',
+          paths: ['src/lib/index.ts'],
         })
-    ).toThrow('flattenEmptyDirectories is not implemented yet');
+      )
+    ).toEqual(['src/', 'src/lib/', 'src/lib/index.ts']);
+  });
+
+  test('flattens single-child directory chains when enabled', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: demoSmallPaths,
+    });
+
+    expect(store.getVisibleCount()).toBe(15);
+    expect(getVisiblePaths(store, 11, 14)).toEqual([
+      'beta/keep.txt',
+      'gamma/logs/',
+      'gamma/logs/today.txt',
+      'zeta.md',
+    ]);
+    expect(getVisibleRowsSansIds(store, 12, 12)).toEqual([
+      {
+        depth: 0,
+        flattenedSegments: [
+          {
+            isTerminal: false,
+            name: 'gamma',
+            path: 'gamma/',
+          },
+          {
+            isTerminal: true,
+            name: 'logs',
+            path: 'gamma/logs/',
+          },
+        ],
+        hasChildren: true,
+        isExpanded: true,
+        isFlattened: true,
+        isLoading: false,
+        kind: 'directory',
+        name: 'logs',
+        path: 'gamma/logs/',
+      },
+    ]);
+    expect(getVisibleRowsSansIds(store, 13, 13)).toEqual([
+      {
+        depth: 1,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        name: 'today.txt',
+        path: 'gamma/logs/today.txt',
+      },
+    ]);
+  });
+
+  test('reports projected depth for descendants under flattened rows', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: ['src/lib/index.ts'],
+    });
+
+    expect(getVisibleRowsSansIds(store, 0, 1)).toEqual([
+      {
+        depth: 0,
+        flattenedSegments: [
+          {
+            isTerminal: false,
+            name: 'src',
+            path: 'src/',
+          },
+          {
+            isTerminal: true,
+            name: 'lib',
+            path: 'src/lib/',
+          },
+        ],
+        hasChildren: true,
+        isExpanded: true,
+        isFlattened: true,
+        isLoading: false,
+        kind: 'directory',
+        name: 'lib',
+        path: 'src/lib/',
+      },
+      {
+        depth: 1,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        name: 'index.ts',
+        path: 'src/lib/index.ts',
+      },
+    ]);
+  });
+
+  test('restores projected depth after collapsing and re-expanding a flattened row', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: ['src/lib/index.ts'],
+    });
+
+    store.collapse('src/lib/');
+    expect(getVisibleRowsSansIds(store, 0, 0)).toEqual([
+      {
+        depth: 0,
+        flattenedSegments: [
+          {
+            isTerminal: false,
+            name: 'src',
+            path: 'src/',
+          },
+          {
+            isTerminal: true,
+            name: 'lib',
+            path: 'src/lib/',
+          },
+        ],
+        hasChildren: true,
+        isExpanded: false,
+        isFlattened: true,
+        isLoading: false,
+        kind: 'directory',
+        name: 'lib',
+        path: 'src/lib/',
+      },
+    ]);
+
+    store.expand('src/lib/');
+    expect(getVisibleRowsSansIds(store, 0, 1)).toEqual([
+      {
+        depth: 0,
+        flattenedSegments: [
+          {
+            isTerminal: false,
+            name: 'src',
+            path: 'src/',
+          },
+          {
+            isTerminal: true,
+            name: 'lib',
+            path: 'src/lib/',
+          },
+        ],
+        hasChildren: true,
+        isExpanded: true,
+        isFlattened: true,
+        isLoading: false,
+        kind: 'directory',
+        name: 'lib',
+        path: 'src/lib/',
+      },
+      {
+        depth: 1,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        name: 'index.ts',
+        path: 'src/lib/index.ts',
+      },
+    ]);
   });
 
   test('handles empty trees', () => {
@@ -784,6 +1000,159 @@ describe('PathStore', () => {
       'beta/keep.txt',
       'gamma/',
     ]);
+  });
+
+  test('splits and rejoins flattened chains when siblings are added and removed', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: ['a/b/c/file.ts'],
+    });
+
+    expect(getVisibleRowsSansIds(store, 0, 9)).toEqual([
+      {
+        depth: 0,
+        flattenedSegments: [
+          {
+            isTerminal: false,
+            name: 'a',
+            path: 'a/',
+          },
+          {
+            isTerminal: false,
+            name: 'b',
+            path: 'a/b/',
+          },
+          {
+            isTerminal: true,
+            name: 'c',
+            path: 'a/b/c/',
+          },
+        ],
+        hasChildren: true,
+        isExpanded: true,
+        isFlattened: true,
+        isLoading: false,
+        kind: 'directory',
+        name: 'c',
+        path: 'a/b/c/',
+      },
+      {
+        depth: 1,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        name: 'file.ts',
+        path: 'a/b/c/file.ts',
+      },
+    ]);
+    assertMatchesRebuild(store, { flattenEmptyDirectories: true });
+
+    store.add('a/b/peer.ts');
+    expect(getVisibleRowsSansIds(store, 0, 9)).toEqual([
+      {
+        depth: 0,
+        flattenedSegments: [
+          {
+            isTerminal: false,
+            name: 'a',
+            path: 'a/',
+          },
+          {
+            isTerminal: true,
+            name: 'b',
+            path: 'a/b/',
+          },
+        ],
+        hasChildren: true,
+        isExpanded: true,
+        isFlattened: true,
+        isLoading: false,
+        kind: 'directory',
+        name: 'b',
+        path: 'a/b/',
+      },
+      {
+        depth: 1,
+        flattenedSegments: undefined,
+        hasChildren: true,
+        isExpanded: true,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'directory',
+        name: 'c',
+        path: 'a/b/c/',
+      },
+      {
+        depth: 2,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        name: 'file.ts',
+        path: 'a/b/c/file.ts',
+      },
+      {
+        depth: 1,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        name: 'peer.ts',
+        path: 'a/b/peer.ts',
+      },
+    ]);
+    assertMatchesRebuild(store, { flattenEmptyDirectories: true });
+
+    store.remove('a/b/peer.ts');
+    expect(getVisibleRowsSansIds(store, 0, 9)).toEqual([
+      {
+        depth: 0,
+        flattenedSegments: [
+          {
+            isTerminal: false,
+            name: 'a',
+            path: 'a/',
+          },
+          {
+            isTerminal: false,
+            name: 'b',
+            path: 'a/b/',
+          },
+          {
+            isTerminal: true,
+            name: 'c',
+            path: 'a/b/c/',
+          },
+        ],
+        hasChildren: true,
+        isExpanded: true,
+        isFlattened: true,
+        isLoading: false,
+        kind: 'directory',
+        name: 'c',
+        path: 'a/b/c/',
+      },
+      {
+        depth: 1,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        name: 'file.ts',
+        path: 'a/b/c/file.ts',
+      },
+    ]);
+    assertMatchesRebuild(store, { flattenEmptyDirectories: true });
   });
 
   test('selects middle windows correctly inside wide roots and wide directories', () => {

@@ -7,8 +7,10 @@ For the detailed architecture and implementation plan, see
 
 Current limitation:
 
-- `flattenEmptyDirectories` is not implemented yet and currently throws if set
-  to `true`.
+- `flattenEmptyDirectories` flattens single-child directory chains in the
+  visible projection while leaving canonical topology unchanged. It defaults to
+  `true`; pass `false` to disable it when you want one row per canonical
+  directory.
 
 Current useful API:
 
