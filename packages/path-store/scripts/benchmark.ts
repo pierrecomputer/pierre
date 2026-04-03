@@ -8,6 +8,7 @@ import type { PathStoreVisibleRow } from '../src/public-types';
 
 const WORKLOAD_NAMES = ['linux-5x', 'linux-10x'] as const;
 const PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME = 'wide-directory-5k' as const;
+const PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME = 'flatten-chain-5k' as const;
 const VIEWPORT_MODES = ['first', 'middle'] as const;
 const VISIBLE_WINDOW_SIZES = [30, 100, 200, 500] as const;
 const QUICK_VISIBLE_WINDOW_SIZES = [30, 200] as const;
@@ -63,7 +64,8 @@ const COMPARE_MAX_SAMPLE_POOL = 1_024;
 
 type BenchmarkWorkloadName =
   | (typeof WORKLOAD_NAMES)[number]
-  | typeof PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME;
+  | typeof PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME
+  | typeof PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME;
 type BenchmarkProfileName = (typeof BENCHMARK_PROFILE_NAMES)[number];
 type ViewportMode = (typeof VIEWPORT_MODES)[number];
 type ScenarioCategory =
@@ -2159,6 +2161,10 @@ function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
     return createWideDirectoryWorkload();
   }
 
+  if (workloadName === PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME) {
+    return createFlattenChainWorkload();
+  }
+
   const workload = getVirtualizationWorkload(workloadName);
   let preparedFiles: readonly string[] | undefined;
 
@@ -2196,6 +2202,36 @@ function createWideDirectoryWorkload(): BenchmarkWorkload {
     rawFiles,
     rootCount: 1,
     rootDirectoryPaths: ['wide/'],
+  };
+}
+
+function createFlattenChainWorkload(): BenchmarkWorkload {
+  const bucketCount = 50;
+  const chainsPerBucket = 100;
+  const rawFiles = Array.from(
+    { length: bucketCount * chainsPerBucket },
+    (_, index) => {
+      const bucketIndex = Math.floor(index / chainsPerBucket) + 1;
+      const chainIndex = (index % chainsPerBucket) + 1;
+      const bucketName = `bucket-${String(bucketIndex).padStart(2, '0')}`;
+      const chainName = `chain-${String(chainIndex).padStart(3, '0')}`;
+      return `${bucketName}/${chainName}/one/two/three/four/file.ts`;
+    }
+  );
+  let preparedFiles: readonly string[] | undefined;
+
+  return {
+    fileCount: rawFiles.length,
+    fileCountLabel: `${rawFiles.length.toLocaleString()} files in repeated flattenable chains`,
+    getPreparedFiles() {
+      preparedFiles ??= PathStore.preparePaths(rawFiles);
+      return preparedFiles;
+    },
+    label: 'Synthetic flatten-heavy fixture',
+    name: PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME,
+    rawFiles,
+    rootCount: bucketCount,
+    rootDirectoryPaths: getRootDirectoryPaths(rawFiles),
   };
 }
 
@@ -3473,6 +3509,13 @@ function createScenarioFactories(
     );
     factories.push(
       createVisibleScenarioFactory(wideDirectoryWorkload, 'middle', 200)
+    );
+
+    const flattenChainWorkload = loadWorkload(
+      PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME
+    );
+    factories.push(
+      createVisibleScenarioFactory(flattenChainWorkload, 'middle', 200)
     );
   }
 

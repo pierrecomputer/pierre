@@ -106,6 +106,7 @@ interface PageLoadEventFiredParams {
 }
 
 interface PageWorkloadSummary {
+  flattenEmptyDirectories: boolean;
   name: string;
   label: string;
   fileCount: number;
@@ -332,6 +333,8 @@ const DOMINANT_EVENT_IGNORED_PREFIXES = ['V8.GC_'];
 const INTERNAL_CPU_PROFILE_URL_SNIPPETS = [
   '/node_modules/',
   '/.vite/deps/',
+  'benchmarkInstrumentation',
+  '/src/internal/benchmarkInstrumentation.ts',
   'extensions::',
   'native ',
   'node:',
@@ -1969,6 +1972,18 @@ function formatPhaseLabel(name: string): string {
       return '    - getVisibleCount';
     case 'store.getVisibleSlice':
       return '    - getVisibleSlice';
+    case 'store.getVisibleSlice.selectFirstRow':
+      return '      - Select first row';
+    case 'store.getVisibleSlice.selectChildIndex':
+      return '        - Select child index';
+    case 'store.getVisibleSlice.advanceCursor':
+      return '      - Advance cursor';
+    case 'store.getVisibleSlice.materializeRow':
+      return '      - Materialize row';
+    case 'store.getVisibleSlice.flatten.resolveTerminalDirectory':
+      return '        - Resolve flattened terminal';
+    case 'store.getVisibleSlice.flatten.collectSegments':
+      return '        - Collect flattened segments';
     case 'store.add':
       return '  - store.add';
     case 'store.remove':
@@ -1981,6 +1996,12 @@ function formatPhaseLabel(name: string): string {
       return '  - store.collapse';
     case 'store.list':
       return '  - store.list';
+    case 'store.recomputeCountsUpwardFrom':
+      return '    - Recompute counts upward';
+    case 'store.recomputeNodeCounts':
+      return '      - Recompute node counts';
+    case 'store.recomputeNodeCounts.rebuildChildAggregates':
+      return '        - Rebuild child aggregates';
     default:
       return name;
   }
@@ -2029,6 +2050,12 @@ function createPhaseRows(
   pushPhase('page.renderWindow.getViewContext');
   pushPhase('store.getVisibleCount');
   pushPhase('store.getVisibleSlice');
+  pushPhase('store.getVisibleSlice.selectFirstRow');
+  pushPhase('store.getVisibleSlice.selectChildIndex');
+  pushPhase('store.getVisibleSlice.materializeRow');
+  pushPhase('store.getVisibleSlice.flatten.resolveTerminalDirectory');
+  pushPhase('store.getVisibleSlice.flatten.collectSegments');
+  pushPhase('store.getVisibleSlice.advanceCursor');
   pushPhase('page.renderWindow.joinRowsText');
   pushPhase('page.renderWindow.setTextContent');
 
@@ -2038,6 +2065,9 @@ function createPhaseRows(
   pushPhase('store.move');
   pushPhase('store.expand');
   pushPhase('store.collapse');
+  pushPhase('store.recomputeCountsUpwardFrom');
+  pushPhase('store.recomputeNodeCounts');
+  pushPhase('store.recomputeNodeCounts.rebuildChildAggregates');
   pushPhase('store.list');
   pushPhase('page.action.renderWindow');
 
@@ -2211,6 +2241,41 @@ function printRunHumanSummary(
     );
   }
 
+  const instrumentationCounters = result.page.instrumentation?.counters ?? {};
+  const counterDefinitions = [
+    ['Input files', instrumentationCounters['workload.inputFiles']],
+    ['Expanded folders', instrumentationCounters['workload.expandedFolders']],
+    ['Rendered rows', instrumentationCounters['workload.renderedRows']],
+    ['Visible rows read', instrumentationCounters['workload.visibleRowsRead']],
+    [
+      'Total visible rows',
+      instrumentationCounters['workload.totalVisibleRows'],
+    ],
+    [
+      'Flattened rows read',
+      instrumentationCounters['workload.flattenedRowsRead'],
+    ],
+    [
+      'Flattened segments read',
+      instrumentationCounters['workload.flattenedSegmentsRead'],
+    ],
+  ].filter(([, value]) => typeof value === 'number') as Array<[string, number]>;
+
+  if (counterDefinitions.length > 0) {
+    console.log('');
+    console.log('Counters');
+    console.log(
+      createTable(
+        ['Metric', 'Value'],
+        counterDefinitions.map(([label, value]) => [label, formatCount(value)]),
+        {
+          alignments: ['left', 'right'],
+          maxWidths: [28, 18],
+        }
+      )
+    );
+  }
+
   if (
     showDominantTraceEvents &&
     result.trace.available &&
@@ -2324,6 +2389,10 @@ function printScenarioHumanSummary(
     [
       'Expanded folders',
       formatCount(scenarioOutput.scenario.workload.expandedFolderCount),
+    ],
+    [
+      'Flatten directories',
+      scenarioOutput.scenario.workload.flattenEmptyDirectories ? 'on' : 'off',
     ],
     ['Window size', formatCount(config.visibleCount)],
     ['Offset', formatCount(config.offset)],

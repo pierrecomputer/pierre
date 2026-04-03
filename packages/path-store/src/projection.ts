@@ -13,6 +13,10 @@ import {
 } from './flatten';
 import type { NodeId } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import {
+  setBenchmarkCounter,
+  withBenchmarkPhase,
+} from './internal/benchmarkInstrumentation';
 import type { PathStoreEvent, PathStoreVisibleRow } from './public-types';
 import { getSegmentValue } from './segments';
 import { isDirectoryExpanded, setDirectoryExpanded } from './state';
@@ -33,6 +37,7 @@ export function getVisibleSlice(
   start: number,
   end: number
 ): readonly PathStoreVisibleRow[] {
+  const instrumentation = state.instrumentation;
   const totalVisibleCount = getVisibleCount(state);
   if (totalVisibleCount <= 0 || end < start) {
     return [];
@@ -44,18 +49,65 @@ export function getVisibleSlice(
     Math.min(end, totalVisibleCount - 1)
   );
 
+  if (instrumentation == null) {
+    const rows: PathStoreVisibleRow[] = [];
+    let currentCursor = selectVisibleRow(state, normalizedStart);
+
+    for (
+      let visibleIndex = normalizedStart;
+      visibleIndex <= normalizedEnd && currentCursor != null;
+      visibleIndex++
+    ) {
+      const row = materializeVisibleRow(state, currentCursor);
+      rows.push(row);
+      currentCursor = getNextVisibleRowCursor(state, currentCursor);
+    }
+
+    return rows;
+  }
+
   const rows: PathStoreVisibleRow[] = [];
-  let currentCursor = selectVisibleRow(state, normalizedStart);
+  let flattenedRowCount = 0;
+  let flattenedSegmentCount = 0;
+  let currentCursor = withBenchmarkPhase(
+    instrumentation,
+    'store.getVisibleSlice.selectFirstRow',
+    () => selectVisibleRow(state, normalizedStart)
+  );
 
   for (
     let visibleIndex = normalizedStart;
     visibleIndex <= normalizedEnd && currentCursor != null;
     visibleIndex++
   ) {
-    rows.push(materializeVisibleRow(state, currentCursor));
-    currentCursor = getNextVisibleRowCursor(state, currentCursor);
+    const row = withBenchmarkPhase(
+      instrumentation,
+      'store.getVisibleSlice.materializeRow',
+      () => materializeVisibleRow(state, currentCursor as VisibleRowCursor)
+    );
+    rows.push(row);
+    if (row.isFlattened) {
+      flattenedRowCount++;
+      flattenedSegmentCount += row.flattenedSegments?.length ?? 0;
+    }
+    currentCursor = withBenchmarkPhase(
+      instrumentation,
+      'store.getVisibleSlice.advanceCursor',
+      () => getNextVisibleRowCursor(state, currentCursor as VisibleRowCursor)
+    );
   }
 
+  setBenchmarkCounter(instrumentation, 'workload.visibleRowsRead', rows.length);
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.flattenedRowsRead',
+    flattenedRowCount
+  );
+  setBenchmarkCounter(
+    instrumentation,
+    'workload.flattenedSegmentsRead',
+    flattenedSegmentCount
+  );
   return rows;
 }
 
@@ -138,11 +190,24 @@ function selectVisibleRowWithinDirectory(
   parentVisibleDepth: number
 ): VisibleRowCursor {
   const directoryIndex = getDirectoryIndex(state, directoryNodeId);
-  const { childIndex, localVisibleIndex } = selectChildIndexByVisibleIndex(
-    state.snapshot.nodes,
-    directoryIndex,
-    index
-  );
+  const instrumentation = state.instrumentation;
+  const { childIndex, localVisibleIndex } =
+    instrumentation == null
+      ? selectChildIndexByVisibleIndex(
+          state.snapshot.nodes,
+          directoryIndex,
+          index
+        )
+      : withBenchmarkPhase(
+          instrumentation,
+          'store.getVisibleSlice.selectChildIndex',
+          () =>
+            selectChildIndexByVisibleIndex(
+              state.snapshot.nodes,
+              directoryIndex,
+              index
+            )
+        );
   const childId = directoryIndex.childIds[childIndex];
   if (childId != null) {
     return selectVisibleRowWithinSubtree(
@@ -212,9 +277,21 @@ function createVisibleRowCursor(
     };
   }
 
+  if (state.instrumentation == null) {
+    return {
+      headNodeId: nodeId,
+      terminalNodeId: getFlattenedTerminalDirectoryId(state, nodeId),
+      visibleDepth,
+    };
+  }
+
   return {
     headNodeId: nodeId,
-    terminalNodeId: getFlattenedTerminalDirectoryId(state, nodeId),
+    terminalNodeId: withBenchmarkPhase(
+      state.instrumentation,
+      'store.getVisibleSlice.flatten.resolveTerminalDirectory',
+      () => getFlattenedTerminalDirectoryId(state, nodeId)
+    ),
     visibleDepth,
   };
 }
@@ -292,18 +369,39 @@ function materializeVisibleRow(
     terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
     getDirectoryIndex(state, cursor.terminalNodeId).childIds.length > 0;
   const isFlattened = cursor.headNodeId !== cursor.terminalNodeId;
+  const instrumentation = state.instrumentation;
   const flattenedSegments = isFlattened
-    ? collectFlattenedDirectoryChainIds(state, cursor.headNodeId).map(
-        (nodeId) => {
-          const node = requireNode(state, nodeId);
-          return {
-            isTerminal: nodeId === cursor.terminalNodeId,
-            name: getSegmentValue(state.snapshot.segmentTable, node.nameId),
-            nodeId,
-            path: materializeNodePath(state, nodeId),
-          };
-        }
-      )
+    ? instrumentation == null
+      ? collectFlattenedDirectoryChainIds(state, cursor.headNodeId).map(
+          (nodeId) => {
+            const node = requireNode(state, nodeId);
+            return {
+              isTerminal: nodeId === cursor.terminalNodeId,
+              name: getSegmentValue(state.snapshot.segmentTable, node.nameId),
+              nodeId,
+              path: materializeNodePath(state, nodeId),
+            };
+          }
+        )
+      : withBenchmarkPhase(
+          instrumentation,
+          'store.getVisibleSlice.flatten.collectSegments',
+          () =>
+            collectFlattenedDirectoryChainIds(state, cursor.headNodeId).map(
+              (nodeId) => {
+                const node = requireNode(state, nodeId);
+                return {
+                  isTerminal: nodeId === cursor.terminalNodeId,
+                  name: getSegmentValue(
+                    state.snapshot.segmentTable,
+                    node.nameId
+                  ),
+                  nodeId,
+                  path: materializeNodePath(state, nodeId),
+                };
+              }
+            )
+        )
     : undefined;
 
   return {
