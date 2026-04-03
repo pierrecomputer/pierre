@@ -3,7 +3,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-describe('path-store benchmark CLI', () => {
+// This is a good test to run locally to make sure changes to the benchmark tool
+// dont break these tests, but it's not a runtime test for the library and it's quite
+// slow to run, so we don't run it by default in the test suite.
+describe.skip('path-store benchmark CLI', () => {
   test('emits JSON for a filtered smoke run', async () => {
     const {
       FORCE_COLOR: _forceColor,
