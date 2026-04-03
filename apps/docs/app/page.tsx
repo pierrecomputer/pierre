@@ -26,6 +26,8 @@ import { SHIKI_THEMES } from './diff-examples/ShikiThemes/constants';
 import { ShikiThemes } from './diff-examples/ShikiThemes/ShikiThemes';
 import { SPLIT_UNIFIED } from './diff-examples/SplitUnified/constants';
 import { SplitUnified } from './diff-examples/SplitUnified/SplitUnified';
+import { TOKEN_HOVER_EXAMPLE } from './diff-examples/TokenHover/constants';
+import { TokenHover } from './diff-examples/TokenHover/TokenHover';
 import { HeadingAnchors } from './docs/HeadingAnchors';
 import { Hero } from './Hero';
 import type { ProductId } from './product-config';
@@ -54,6 +56,7 @@ export default function Home() {
           <AnnotationsSection />
           <AcceptRejectSection />
           <LineSelectionSection />
+          <TokenHoverSection />
           <ArbitraryFilesSection />
         </section>
         <PierreCompanySection />
@@ -129,6 +132,14 @@ async function LineSelectionSection() {
   return (
     <LineSelection
       prerenderedDiff={await preloadMultiFileDiff(LINE_SELECTION_EXAMPLE)}
+    />
+  );
+}
+
+async function TokenHoverSection() {
+  return (
+    <TokenHover
+      prerenderedDiff={await preloadMultiFileDiff(TOKEN_HOVER_EXAMPLE)}
     />
   );
 }
