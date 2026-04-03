@@ -13,6 +13,17 @@ const demoSmallPaths = [
   'zeta.md',
 ];
 
+function createWideRootFilePaths(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `item${index + 1}.ts`);
+}
+
+function createWideDirectoryPaths(count: number): string[] {
+  return Array.from(
+    { length: count },
+    (_, index) => `wide/item${index + 1}.ts`
+  );
+}
+
 function getVisiblePaths(
   store: PathStore,
   start = 0,
@@ -773,6 +784,109 @@ describe('PathStore', () => {
       'beta/keep.txt',
       'gamma/',
     ]);
+  });
+
+  test('selects middle windows correctly inside wide roots and wide directories', () => {
+    const wideRootStore = new PathStore({
+      initialExpansion: 'open',
+      paths: createWideRootFilePaths(160),
+    });
+    const wideDirectoryStore = new PathStore({
+      initialExpansion: 'open',
+      paths: createWideDirectoryPaths(160),
+    });
+
+    expect(getVisiblePaths(wideRootStore, 95, 99)).toEqual([
+      'item96.ts',
+      'item97.ts',
+      'item98.ts',
+      'item99.ts',
+      'item100.ts',
+    ]);
+    expect(getVisiblePaths(wideDirectoryStore, 95, 99)).toEqual([
+      'wide/item95.ts',
+      'wide/item96.ts',
+      'wide/item97.ts',
+      'wide/item98.ts',
+      'wide/item99.ts',
+    ]);
+  });
+
+  test('matches a rebuild after wide-directory mutations cross chunk boundaries', () => {
+    const store = new PathStore({
+      initialExpansion: 'open',
+      paths: createWideDirectoryPaths(160),
+    });
+
+    store.remove('wide/item32.ts');
+    store.move('wide/item97.ts', 'wide/item97-renamed.ts');
+    store.add('wide/item161.ts');
+    store.collapse('wide/');
+    store.expand('wide/');
+
+    expect(getVisiblePaths(store, 94, 99)).toEqual([
+      'wide/item95.ts',
+      'wide/item96.ts',
+      'wide/item97-renamed.ts',
+      'wide/item98.ts',
+      'wide/item99.ts',
+      'wide/item100.ts',
+    ]);
+    assertMatchesRebuild(store);
+  });
+
+  test('crosses the chunk threshold cleanly when adding and removing children', () => {
+    const store = new PathStore({
+      initialExpansion: 'open',
+      paths: createWideDirectoryPaths(63),
+    });
+
+    expect(getVisiblePaths(store, 30, 35)).toEqual([
+      'wide/item30.ts',
+      'wide/item31.ts',
+      'wide/item32.ts',
+      'wide/item33.ts',
+      'wide/item34.ts',
+      'wide/item35.ts',
+    ]);
+
+    store.add('wide/item64.ts');
+    expect(getVisiblePaths(store, 61, 64)).toEqual([
+      'wide/item61.ts',
+      'wide/item62.ts',
+      'wide/item63.ts',
+      'wide/item64.ts',
+    ]);
+    assertMatchesRebuild(store);
+
+    store.remove('wide/item64.ts');
+    expect(getVisiblePaths(store, 61, 63)).toEqual([
+      'wide/item61.ts',
+      'wide/item62.ts',
+      'wide/item63.ts',
+    ]);
+    assertMatchesRebuild(store);
+  });
+
+  test('matches a rebuild after wide root mutations', () => {
+    const store = new PathStore({
+      initialExpansion: 'open',
+      paths: createWideRootFilePaths(160),
+    });
+
+    store.remove('item32.ts');
+    store.move('item97.ts', 'item97-renamed.ts');
+    store.add('item161.ts');
+
+    expect(getVisiblePaths(store, 94, 99)).toEqual([
+      'item96.ts',
+      'item97-renamed.ts',
+      'item98.ts',
+      'item99.ts',
+      'item100.ts',
+      'item101.ts',
+    ]);
+    assertMatchesRebuild(store);
   });
 
   test('matches a rebuild-from-list after mixed mutations and projection changes', () => {

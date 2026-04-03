@@ -42,6 +42,9 @@ export interface DirectoryChildIndex {
   childIds: NodeId[];
   childIdByNameId: Map<SegmentId, NodeId>;
   childPositionById: Map<NodeId, number>;
+  childVisibleChunkSums: number[] | null;
+  totalChildSubtreeNodeCount: number;
+  totalChildVisibleSubtreeCount: number;
 }
 
 export interface ResolvedPathStoreOptions {

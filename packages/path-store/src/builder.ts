@@ -1,3 +1,5 @@
+import { appendChildReference, createDirectoryChildIndex } from './child-index';
+import { rebuildDirectoryChildAggregates } from './child-index';
 import type {
   DirectoryChildIndex,
   NodeId,
@@ -5,7 +7,6 @@ import type {
   PathStoreSnapshot,
   PreparedPath,
   ResolvedPathStoreOptions,
-  SegmentId,
 } from './internal-types';
 import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
@@ -27,22 +28,6 @@ import type {
 import { internSegment } from './segments';
 import { createSegmentTable } from './segments';
 import { comparePreparedPaths } from './sort';
-
-function createDirectoryChildIndex(): DirectoryChildIndex {
-  return {
-    childIds: [],
-    childIdByNameId: new Map<SegmentId, NodeId>(),
-    childPositionById: new Map<NodeId, number>(),
-  };
-}
-
-function appendChildReference(
-  index: DirectoryChildIndex,
-  childId: NodeId
-): void {
-  index.childPositionById.set(childId, index.childIds.length);
-  index.childIds.push(childId);
-}
 
 function createCompareEntry(preparedPath: PreparedPath): PathStoreCompareEntry {
   return {
@@ -390,6 +375,10 @@ export class PathStoreBuilder {
       subtreeNodeCount += this.computeSubtreeCounts(childId);
     }
 
+    // Children already have final counts from the recursive descent above, so
+    // the directory can derive its cached child aggregates before writing its
+    // own subtree totals.
+    rebuildDirectoryChildAggregates(this.nodes, directoryIndex);
     node.subtreeNodeCount = subtreeNodeCount;
     node.visibleSubtreeCount = subtreeNodeCount;
     return subtreeNodeCount;

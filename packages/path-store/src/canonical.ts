@@ -1,3 +1,10 @@
+import {
+  applyChildAggregateDelta,
+  createDirectoryChildIndex,
+  rebuildDirectoryChildAggregates,
+  rebuildVisibleChildChunks,
+  updateChildPositionsFrom,
+} from './child-index';
 import type { DirectoryChildIndex, NodeId } from './internal-types';
 import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
 import { PATH_STORE_NODE_FLAG_REMOVED } from './internal-types';
@@ -238,13 +245,30 @@ export function recomputeCountsUpwardFrom(
 
   while (currentNodeId != null) {
     const currentNode = requireNode(state, currentNodeId);
+    const previousSubtreeNodeCount = currentNode.subtreeNodeCount;
+    const previousVisibleSubtreeCount = currentNode.visibleSubtreeCount;
     recomputeNodeCounts(state, currentNodeId, currentNode);
 
     if (currentNodeId === state.snapshot.rootId) {
       return;
     }
 
-    currentNodeId = currentNode.parentId;
+    const subtreeNodeDelta =
+      currentNode.subtreeNodeCount - previousSubtreeNodeCount;
+    const visibleSubtreeDelta =
+      currentNode.visibleSubtreeCount - previousVisibleSubtreeCount;
+    const parentId = currentNode.parentId;
+
+    if (subtreeNodeDelta !== 0 || visibleSubtreeDelta !== 0) {
+      applyChildAggregateDelta(
+        getDirectoryIndex(state, parentId),
+        currentNodeId,
+        subtreeNodeDelta,
+        visibleSubtreeDelta
+      );
+    }
+
+    currentNodeId = parentId;
   }
 }
 
@@ -260,7 +284,7 @@ export function recomputeCountsRecursive(
     }
   }
 
-  recomputeNodeCounts(state, nodeId, currentNode);
+  recomputeNodeCounts(state, nodeId, currentNode, true);
 }
 
 export function collectAncestorIds(
@@ -480,11 +504,7 @@ function createDirectoryNode(
     subtreeNodeCount: 1,
     visibleSubtreeCount: 1,
   });
-  state.snapshot.directories.set(nodeId, {
-    childIds: [],
-    childIdByNameId: new Map(),
-    childPositionById: new Map(),
-  });
+  state.snapshot.directories.set(nodeId, createDirectoryChildIndex());
   insertChildReference(state, parentId, nodeId);
   state.activeNodeCount++;
   return nodeId;
@@ -523,22 +543,6 @@ function createFileNode(
   return nodeId;
 }
 
-function updateChildPositionsFrom(
-  index: DirectoryChildIndex,
-  startIndex: number
-): void {
-  for (
-    let position = startIndex;
-    position < index.childIds.length;
-    position++
-  ) {
-    const childId = index.childIds[position];
-    if (childId != null) {
-      index.childPositionById.set(childId, position);
-    }
-  }
-}
-
 function findChildInsertIndex(
   state: PathStoreState,
   parentIndex: DirectoryChildIndex,
@@ -573,10 +577,17 @@ function insertChildReference(
   const parentIndex = getDirectoryIndex(state, parentId);
   const childNode = requireNode(state, childId);
   parentIndex.childIdByNameId.set(childNode.nameId, childId);
+  applyChildAggregateDelta(
+    parentIndex,
+    childId,
+    childNode.subtreeNodeCount,
+    childNode.visibleSubtreeCount
+  );
 
   const insertIndex = findChildInsertIndex(state, parentIndex, childId);
   parentIndex.childIds.splice(insertIndex, 0, childId);
   updateChildPositionsFrom(parentIndex, insertIndex);
+  rebuildVisibleChildChunks(state.snapshot.nodes, parentIndex);
 }
 
 function removeChildReference(
@@ -589,10 +600,20 @@ function removeChildReference(
   const childIndex = parentIndex.childPositionById.get(childId) ?? -1;
   parentIndex.childIdByNameId.delete(childNameId);
   parentIndex.childPositionById.delete(childId);
+  const childNode = state.snapshot.nodes[childId];
+  if (childNode != null) {
+    applyChildAggregateDelta(
+      parentIndex,
+      childId,
+      -childNode.subtreeNodeCount,
+      -childNode.visibleSubtreeCount
+    );
+  }
 
   if (childIndex >= 0) {
     parentIndex.childIds.splice(childIndex, 1);
     updateChildPositionsFrom(parentIndex, childIndex);
+    rebuildVisibleChildChunks(state.snapshot.nodes, parentIndex);
   }
 }
 
@@ -876,7 +897,8 @@ function isAncestor(
 function recomputeNodeCounts(
   state: PathStoreState,
   nodeId: NodeId,
-  currentNode = requireNode(state, nodeId)
+  currentNode = requireNode(state, nodeId),
+  rebuildChildAggregates = false
 ): void {
   if (currentNode.kind === PATH_STORE_NODE_KIND_FILE) {
     currentNode.subtreeNodeCount = 1;
@@ -885,13 +907,11 @@ function recomputeNodeCounts(
   }
 
   const currentIndex = getDirectoryIndex(state, nodeId);
-  let subtreeNodeCount = 1;
-  let visibleChildCount = 0;
-  for (const childId of currentIndex.childIds) {
-    const childNode = requireNode(state, childId);
-    subtreeNodeCount += childNode.subtreeNodeCount;
-    visibleChildCount += childNode.visibleSubtreeCount;
+  if (rebuildChildAggregates) {
+    rebuildDirectoryChildAggregates(state.snapshot.nodes, currentIndex);
   }
+  const subtreeNodeCount = 1 + currentIndex.totalChildSubtreeNodeCount;
+  const visibleChildCount = currentIndex.totalChildVisibleSubtreeCount;
 
   currentNode.subtreeNodeCount = subtreeNodeCount;
   if ((currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {

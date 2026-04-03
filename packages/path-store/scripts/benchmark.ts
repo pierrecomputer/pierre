@@ -7,6 +7,7 @@ import { PathStore } from '../src/index';
 import type { PathStoreVisibleRow } from '../src/public-types';
 
 const WORKLOAD_NAMES = ['linux-5x', 'linux-10x'] as const;
+const PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME = 'wide-directory-5k' as const;
 const VIEWPORT_MODES = ['first', 'middle'] as const;
 const VISIBLE_WINDOW_SIZES = [30, 100, 200, 500] as const;
 const QUICK_VISIBLE_WINDOW_SIZES = [30, 200] as const;
@@ -44,6 +45,7 @@ const SCROLL_WINDOW_COUNT = 10;
 const PREVIEW_LIMIT = 12;
 const ROOT_FILE_SEED_PATH = 'zz-benchmark-root-file.ts';
 const ROOT_FILE_RENAMED_PATH = 'zz-benchmark-root-file-renamed.ts';
+const PHASE_4_WIDE_DIRECTORY_FILE_COUNT = 5_000;
 const HUMAN_BENCHMARK_NAME_MIN_WIDTH = 32;
 const HUMAN_BENCHMARK_NAME_MAX_WIDTH = 72;
 const HUMAN_PROGRESS_LABEL_WIDTH = 44;
@@ -59,7 +61,9 @@ const COMPARE_DEFAULT_MIN_EFFECT_PCT = 3;
 const COMPARE_DEFAULT_BOOTSTRAP_RESAMPLES = 1_000;
 const COMPARE_MAX_SAMPLE_POOL = 1_024;
 
-type BenchmarkWorkloadName = (typeof WORKLOAD_NAMES)[number];
+type BenchmarkWorkloadName =
+  | (typeof WORKLOAD_NAMES)[number]
+  | typeof PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME;
 type BenchmarkProfileName = (typeof BENCHMARK_PROFILE_NAMES)[number];
 type ViewportMode = (typeof VIEWPORT_MODES)[number];
 type ScenarioCategory =
@@ -2151,6 +2155,10 @@ async function runBenchmarksForHuman(
 }
 
 function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
+  if (workloadName === PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME) {
+    return createWideDirectoryWorkload();
+  }
+
   const workload = getVirtualizationWorkload(workloadName);
   let preparedFiles: readonly string[] | undefined;
 
@@ -2166,6 +2174,28 @@ function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
     rawFiles: workload.files,
     rootCount: workload.rootCount,
     rootDirectoryPaths: getRootDirectoryPaths(workload.files),
+  };
+}
+
+function createWideDirectoryWorkload(): BenchmarkWorkload {
+  const rawFiles = Array.from(
+    { length: PHASE_4_WIDE_DIRECTORY_FILE_COUNT },
+    (_, index) => `wide/item${index + 1}.ts`
+  );
+  let preparedFiles: readonly string[] | undefined;
+
+  return {
+    fileCount: rawFiles.length,
+    fileCountLabel: `${rawFiles.length.toLocaleString()} files in one wide directory`,
+    getPreparedFiles() {
+      preparedFiles ??= PathStore.preparePaths(rawFiles);
+      return preparedFiles;
+    },
+    label: 'Synthetic wide directory fixture',
+    name: PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME,
+    rawFiles,
+    rootCount: 1,
+    rootDirectoryPaths: ['wide/'],
   };
 }
 
@@ -3435,6 +3465,15 @@ function createScenarioFactories(
         }
       }
     }
+  }
+
+  if (profile.name === 'full') {
+    const wideDirectoryWorkload = loadWorkload(
+      PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME
+    );
+    factories.push(
+      createVisibleScenarioFactory(wideDirectoryWorkload, 'middle', 200)
+    );
   }
 
   return factories;

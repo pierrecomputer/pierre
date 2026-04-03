@@ -6,6 +6,7 @@ import {
   recomputeCountsUpwardFrom,
   requireNode,
 } from './canonical';
+import { selectChildIndexByVisibleIndex } from './child-index';
 import type { NodeId } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import type { PathStoreEvent, PathStoreVisibleRow } from './public-types';
@@ -121,15 +122,14 @@ function selectVisibleNodeWithinDirectory(
   index: number
 ): NodeId {
   const directoryIndex = getDirectoryIndex(state, directoryNodeId);
-  let remainingIndex = index;
-
-  for (const childId of directoryIndex.childIds) {
-    const childNode = requireNode(state, childId);
-    if (remainingIndex < childNode.visibleSubtreeCount) {
-      return selectVisibleNodeWithinSubtree(state, childId, remainingIndex);
-    }
-
-    remainingIndex -= childNode.visibleSubtreeCount;
+  const { childIndex, localVisibleIndex } = selectChildIndexByVisibleIndex(
+    state.snapshot.nodes,
+    directoryIndex,
+    index
+  );
+  const childId = directoryIndex.childIds[childIndex];
+  if (childId != null) {
+    return selectVisibleNodeWithinSubtree(state, childId, localVisibleIndex);
   }
 
   throw new Error(`Visible index ${String(index)} is out of range`);
